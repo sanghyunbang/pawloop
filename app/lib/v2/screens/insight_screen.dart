@@ -3,7 +3,7 @@ import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../theme/insight_data.dart';
 import '../widgets/aurora.dart';
-import 'me_screen.dart';
+import '../widgets/profile_avatar.dart';
 
 /// 마음 흐름 (insight) — 오늘/주간 차트 + 통계 + 나를 바꿔준 곳.
 class InsightScreen extends StatefulWidget {
@@ -75,17 +75,7 @@ class _InsightScreenState extends State<InsightScreen> {
           Text('내가 나를 알아가는 곳', style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
         ]),
         const Spacer(),
-        GestureDetector(
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MeScreen())),
-          child: Container(
-            width: 44, height: 44, alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFD9C2), Color(0xFFE9C9FF)]),
-            ),
-            child: const Text('t', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
-          ),
-        ),
+        const ProfileAvatar(size: 44),
       ]);
 
   Widget _statsCard() {
@@ -394,7 +384,7 @@ class _InsightScreenState extends State<InsightScreen> {
 
 }
 
-/// 주간 마음 캔들 차트.
+/// 주간 마음 캔들 차트(수제). 그라데이션 몸통 + 둥근 심지 + 오늘 강조.
 class _CandlePainter extends CustomPainter {
   double _yOf(double sc, double h) => (100 - sc) / 100 * h;
 
@@ -403,45 +393,57 @@ class _CandlePainter extends CustomPainter {
     final h = size.height;
     final tp = TextPainter(textDirection: TextDirection.ltr);
 
-    // 가이드선 + 라벨
+    // 점선 가이드선 + 우측 라벨
     final gridPaint = Paint()
-      ..color = const Color(0x33836FFF)
+      ..color = const Color(0x2E836FFF)
       ..strokeWidth = 1;
     for (final (sc, label) in kGridLines) {
       final y = _yOf(sc.toDouble(), h);
       double x = 0;
       while (x < size.width - 4) {
         canvas.drawLine(Offset(x, y), Offset(x + 4, y), gridPaint);
-        x += 8;
+        x += 9;
       }
       tp.text = TextSpan(text: label, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: Color(0xFFBBB3CC)));
       tp.layout();
       tp.paint(canvas, Offset(size.width - tp.width - 1, y - tp.height - 1));
     }
 
-    // 캔들
     final colW = size.width / kWeekCandles.length;
     for (int i = 0; i < kWeekCandles.length; i++) {
       final d = kWeekCandles[i];
-      final col = d.up ? const Color(0xFF33BFA6) : const Color(0xFFFF6B7E);
+      final up = d.up;
+      final c1 = up ? const Color(0xFF3FD0B0) : const Color(0xFFFF7E90);
+      final c2 = up ? const Color(0xFF22A892) : const Color(0xFFEF5468);
       final cx = (i + 0.5) * colW;
+      final today = i == kTodayCandle;
 
-      // 심지
+      // 심지(둥근 끝)
       final wt = _yOf(d.h.toDouble(), h);
       final wb = _yOf(d.l.toDouble(), h);
-      final wickPaint = Paint()..color = col.withOpacity(0.45);
       canvas.drawRRect(
         RRect.fromRectAndRadius(Rect.fromLTWH(cx - 1.5, wt, 3, wb - wt), const Radius.circular(2)),
-        wickPaint,
+        Paint()..color = c2.withOpacity(0.4),
       );
 
-      // 몸통
-      final bt = _yOf(d.o.toDouble(), h) < _yOf(d.c.toDouble(), h) ? _yOf(d.o.toDouble(), h) : _yOf(d.c.toDouble(), h);
-      final bh = (_yOf(d.o.toDouble(), h) - _yOf(d.c.toDouble(), h)).abs().clamp(5.0, h);
-      final bodyRect = RRect.fromRectAndRadius(Rect.fromLTWH(cx - 6.5, bt, 13, bh), const Radius.circular(4));
-      canvas.drawRRect(bodyRect, Paint()..color = col);
-      if (i == kTodayCandle) {
-        canvas.drawRRect(bodyRect, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2);
+      // 몸통(세로 그라데이션)
+      final yo = _yOf(d.o.toDouble(), h), yc = _yOf(d.c.toDouble(), h);
+      final bt = yo < yc ? yo : yc;
+      final bh = (yo - yc).abs().clamp(6.0, h);
+      final bodyRect = Rect.fromLTWH(cx - 7, bt, 14, bh);
+      final bodyRRect = RRect.fromRectAndRadius(bodyRect, const Radius.circular(5));
+      if (today) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(bodyRect.inflate(3), const Radius.circular(7)),
+          Paint()..color = c1.withOpacity(0.22)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        );
+      }
+      canvas.drawRRect(
+        bodyRRect,
+        Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [c1, c2]).createShader(bodyRect),
+      );
+      if (today) {
+        canvas.drawRRect(bodyRRect, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2);
       }
     }
   }
@@ -449,3 +451,4 @@ class _CandlePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _CandlePainter oldDelegate) => false;
 }
+
