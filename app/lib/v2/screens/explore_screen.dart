@@ -1,5 +1,5 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../theme/places.dart';
@@ -19,6 +19,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
   int? exEmo; // null = 전체, 아니면 to == exEmo
   bool pet = false;
   late String view = widget.initialView; // 'list' | 'map'
+  NaverMapController? _mapCtrl;
+
+  void _applyFilter(VoidCallback fn) {
+    setState(fn);
+    _refreshMarkers();
+  }
 
   List<Place> get _filtered {
     var list = kPlaces.where((p) => exEmo == null || p.to == exEmo);
@@ -75,7 +81,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       final on = exEmo == idx;
       final grad = idx == null ? null : kEmotions[idx].grad;
       return GestureDetector(
-        onTap: () => setState(() => exEmo = idx),
+        onTap: () => _applyFilter(() => exEmo = idx),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           decoration: BoxDecoration(
@@ -94,7 +100,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     }
 
     Widget petChip() => GestureDetector(
-          onTap: () => setState(() => pet = !pet),
+          onTap: () => _applyFilter(() => pet = !pet),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             decoration: BoxDecoration(
@@ -374,14 +380,22 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Widget _mapStack() {
-    final list = _filtered;
     return Stack(children: [
-      // 스타일라이즈드 맵 배경
+      // 실제 네이버 지도
       Positioned.fill(
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-          color: const Color(0xFFEFEAF6),
-          child: CustomPaint(painter: _MapPainter()),
+        child: NaverMap(
+          options: const NaverMapViewOptions(
+            initialCameraPosition: NCameraPosition(target: NLatLng(37.5446, 127.018), zoom: 11.4),
+            locationButtonEnable: true,
+            locale: Locale('ko'),
+            scaleBarEnable: false,
+            minZoom: 9,
+            maxZoom: 17,
+          ),
+          onMapReady: (c) {
+            _mapCtrl = c;
+            _refreshMarkers();
+          },
         ),
       ),
       // 안내 배너
@@ -401,43 +415,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
           ),
         ),
-      ),
-      // 핀들
-      LayoutBuilder(builder: (context, c) {
-        return Stack(children: [
-          for (int i = 0; i < list.length; i++)
-            Positioned(
-              left: list[i].x / 100 * c.maxWidth - 24,
-              top: list[i].y / 100 * c.maxHeight - 54,
-              child: _AnimatedPin(
-                emotion: kEmotions[list[i].to],
-                pet: list[i].pet,
-                tempoMs: 2600 + i * 430,
-                onTap: () => _showPlaceCard(list[i]),
-              ),
-            ),
-          // 내 위치
-          Positioned(
-            left: 0.5 * c.maxWidth - 7,
-            top: 0.45 * c.maxHeight - 7,
-            child: Container(
-              width: 14, height: 14,
-              decoration: BoxDecoration(
-                color: const Color(0xFF4A90FF), shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2.5),
-                boxShadow: const [BoxShadow(color: Color(0x554A90FF), blurRadius: 8)],
-              ),
-            ),
-          ),
-        ]);
-      }),
-      // 줌/위치 버튼
-      Positioned(
-        right: 16, top: 90,
-        child: Column(children: [
-          _mapBtn(Icons.add), const SizedBox(height: 1), _mapBtn(Icons.remove),
-          const SizedBox(height: 10), _mapBtn(Icons.my_location),
-        ]),
       ),
       // 범례
       Positioned(left: 16, bottom: 78, child: _legend()),
@@ -463,17 +440,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
     ]);
   }
 
-  Widget _mapBtn(IconData icon) {
-    return Container(
-      width: 40, height: 40,
-      margin: const EdgeInsets.symmetric(vertical: 0),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: const Color(0xF2FFFFFF), borderRadius: BorderRadius.circular(11),
-        boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 8, offset: Offset(0, 2))],
-      ),
-      child: Icon(icon, size: 21, color: T.textSecondary),
-    );
+  Future<void> _refreshMarkers() async {
+    final c = _mapCtrl;
+    if (c == null) return;
+    await c.clearOverlays();
+    final markers = <NAddableOverlay>{};
+    for (final p in _filtered) {
+      final m = NMarker(
+        id: p.name,
+        position: NLatLng(p.lat, p.lng),
+        iconTintColor: kEmotions[p.to].c2,
+      );
+      m.setOnTapListener((_) => _showPlaceCard(p));
+      markers.add(m);
+    }
+    if (markers.isNotEmpty) await c.addOverlayAll(markers);
   }
 
   Widget _legend() {
@@ -499,118 +480,4 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-}
-
-/// 천천히 부유하는 핀 (핀마다 다른 템포). pet=true면 발바닥 배지.
-class _AnimatedPin extends StatefulWidget {
-  final Emotion emotion;
-  final bool pet;
-  final int tempoMs;
-  final VoidCallback onTap;
-  const _AnimatedPin({required this.emotion, required this.pet, required this.tempoMs, required this.onTap});
-  @override
-  State<_AnimatedPin> createState() => _AnimatedPinState();
-}
-
-class _AnimatedPinState extends State<_AnimatedPin> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: Duration(milliseconds: widget.tempoMs))..repeat();
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final e = widget.emotion;
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, __) {
-        final dy = math.sin(_c.value * 2 * math.pi) * 6;
-        return Transform.translate(
-          offset: Offset(0, dy),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onTap,
-            child: SizedBox(
-            width: 50,
-            height: 72,
-            child: Stack(clipBehavior: Clip.none, alignment: Alignment.topCenter, children: [
-              Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    gradient: e.grad,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2.5),
-                    boxShadow: [BoxShadow(color: e.c2.withOpacity(0.5), blurRadius: 12, offset: const Offset(0, 5))],
-                  ),
-                  child: Text(e.emoji, style: const TextStyle(fontSize: 20)),
-                ),
-                Transform.translate(
-                  offset: const Offset(0, -4),
-                  child: Icon(Icons.arrow_drop_down, color: e.c2, size: 22),
-                ),
-              ]),
-              if (widget.pet)
-                Positioned(
-                  right: 0,
-                  top: -3,
-                  child: Container(
-                    width: 19,
-                    height: 19,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 4)],
-                    ),
-                    child: const Text('🐾', style: TextStyle(fontSize: 10)),
-                  ),
-                ),
-            ]),
-          )),
-        );
-      },
-    );
-  }
-}
-
-/// 스타일라이즈드 맵 배경 (격자 + 부드러운 색 띠).
-class _MapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    // 부드러운 색 띠
-    final bands = [
-      [const Color(0x33FFD8A8), const Offset(0, 0), const Offset(1, 0.35)],
-      [const Color(0x2A9EE2C4), const Offset(0, 0.45), const Offset(1, 0.8)],
-      [const Color(0x269EC3FF), const Offset(0.2, 0.7), const Offset(1, 1)],
-    ];
-    for (final b in bands) {
-      final color = b[0] as Color;
-      final p1 = b[1] as Offset, p2 = b[2] as Offset;
-      final paint = Paint()
-        ..shader = LinearGradient(colors: [color, color.withOpacity(0)]).createShader(
-            Rect.fromLTWH(0, p1.dy * size.height, size.width, (p2.dy - p1.dy) * size.height))
-        ..style = PaintingStyle.fill;
-      canvas.drawRect(Rect.fromLTRB(0, p1.dy * size.height, size.width, p2.dy * size.height), paint);
-    }
-    // 격자
-    final grid = Paint()
-      ..color = const Color(0x14785AA0)
-      ..strokeWidth = 1;
-    const step = 40.0;
-    for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
-    }
-    for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
