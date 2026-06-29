@@ -39,6 +39,7 @@ class HeatTripV2App extends StatelessWidget {
       title: 'Heat Trip',
       theme: ThemeData(
         useMaterial3: true,
+        fontFamily: 'Pretendard',
         scaffoldBackgroundColor: const Color(0xFFF3E8F9),
       ),
       home: const MainShell(),

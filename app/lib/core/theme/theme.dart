@@ -28,6 +28,7 @@ BottomNavigationBarThemeData bottomNavigationTheme() {
 ThemeData theme() {
   return ThemeData(
     useMaterial3: true,
+    fontFamily: 'Pretendard',
     scaffoldBackgroundColor: Colors.white,
     shadowColor: Colors.transparent,
 
