@@ -4,6 +4,7 @@ import 'today_screen.dart';
 import 'explore_screen.dart';
 import 'feed_screen.dart';
 import 'insight_screen.dart';
+import 'myrecords_screen.dart';
 
 /// 루트 탭 상태. 푸시된 화면(result 등)에서도 탭을 바꿀 수 있게 전역 보관.
 class RootTab {
@@ -85,8 +86,8 @@ class _ShellNav extends StatelessWidget {
             Expanded(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 GestureDetector(
-                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('기록 작성(create) 화면은 곧 추가됩니다'), duration: Duration(milliseconds: 1400)),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const MyRecordsScreen()),
                   ),
                   child: Container(
                     width: 48, height: 48,
