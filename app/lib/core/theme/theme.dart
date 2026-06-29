@@ -79,7 +79,7 @@ ThemeData theme() {
       selectedShadowColor: Colors.transparent,
     ),
 
-    bottomAppBarTheme: const BottomAppBarTheme(
+    bottomAppBarTheme: const BottomAppBarThemeData(
       elevation: 0,
       color: Colors.white,
       surfaceTintColor: Colors.transparent,

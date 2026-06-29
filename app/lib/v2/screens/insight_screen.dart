@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../theme/insight_data.dart';
@@ -265,7 +266,7 @@ class _InsightScreenState extends State<InsightScreen> {
           _legend(const Color(0xFFFF6B7E), '내려감'),
         ]),
         const SizedBox(height: 10),
-        SizedBox(height: 188, child: CustomPaint(size: Size.infinite, painter: _CandlePainter())),
+        SizedBox(height: 188, child: _candleChart()),
         const SizedBox(height: 4),
         Row(children: [
           for (int i = 0; i < kWeekCandles.length; i++)
@@ -280,6 +281,51 @@ class _InsightScreenState extends State<InsightScreen> {
             ),
         ]),
       ]),
+    );
+  }
+
+  // 주간 마음 캔들 — fl_chart CandlestickChart.
+  Widget _candleChart() {
+    const up = Color(0xFF33BFA6), down = Color(0xFFFF6B7E);
+    return CandlestickChart(
+      CandlestickChartData(
+        minY: 0, maxY: 100,
+        minX: -0.5, maxX: kWeekCandles.length - 0.5,
+        candlestickSpots: [
+          for (int i = 0; i < kWeekCandles.length; i++)
+            CandlestickSpot(
+              x: i.toDouble(),
+              open: kWeekCandles[i].o.toDouble(),
+              high: kWeekCandles[i].h.toDouble(),
+              low: kWeekCandles[i].l.toDouble(),
+              close: kWeekCandles[i].c.toDouble(),
+            ),
+        ],
+        candlestickPainter: DefaultCandlestickPainter(
+          candlestickStyleProvider: (spot, index) {
+            final col = kWeekCandles[index].up ? up : down;
+            final today = index == kTodayCandle;
+            return CandlestickStyle(
+              lineColor: col.withValues(alpha: 0.45),
+              lineWidth: 3,
+              bodyStrokeColor: today ? Colors.white : col,
+              bodyStrokeWidth: today ? 2 : 0,
+              bodyFillColor: col,
+              bodyWidth: 15,
+              bodyRadius: 4,
+            );
+          },
+        ),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: 25,
+          getDrawingHorizontalLine: (_) => const FlLine(color: Color(0x33836FFF), strokeWidth: 1, dashArray: [4, 5]),
+        ),
+        titlesData: const FlTitlesData(show: false),
+        borderData: FlBorderData(show: false),
+        candlestickTouchData: CandlestickTouchData(enabled: false),
+      ),
     );
   }
 
@@ -384,71 +430,4 @@ class _InsightScreenState extends State<InsightScreen> {
 
 }
 
-/// 주간 마음 캔들 차트(수제). 그라데이션 몸통 + 둥근 심지 + 오늘 강조.
-class _CandlePainter extends CustomPainter {
-  double _yOf(double sc, double h) => (100 - sc) / 100 * h;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final h = size.height;
-    final tp = TextPainter(textDirection: TextDirection.ltr);
-
-    // 점선 가이드선 + 우측 라벨
-    final gridPaint = Paint()
-      ..color = const Color(0x2E836FFF)
-      ..strokeWidth = 1;
-    for (final (sc, label) in kGridLines) {
-      final y = _yOf(sc.toDouble(), h);
-      double x = 0;
-      while (x < size.width - 4) {
-        canvas.drawLine(Offset(x, y), Offset(x + 4, y), gridPaint);
-        x += 9;
-      }
-      tp.text = TextSpan(text: label, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: Color(0xFFBBB3CC)));
-      tp.layout();
-      tp.paint(canvas, Offset(size.width - tp.width - 1, y - tp.height - 1));
-    }
-
-    final colW = size.width / kWeekCandles.length;
-    for (int i = 0; i < kWeekCandles.length; i++) {
-      final d = kWeekCandles[i];
-      final up = d.up;
-      final c1 = up ? const Color(0xFF3FD0B0) : const Color(0xFFFF7E90);
-      final c2 = up ? const Color(0xFF22A892) : const Color(0xFFEF5468);
-      final cx = (i + 0.5) * colW;
-      final today = i == kTodayCandle;
-
-      // 심지(둥근 끝)
-      final wt = _yOf(d.h.toDouble(), h);
-      final wb = _yOf(d.l.toDouble(), h);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(cx - 1.5, wt, 3, wb - wt), const Radius.circular(2)),
-        Paint()..color = c2.withOpacity(0.4),
-      );
-
-      // 몸통(세로 그라데이션)
-      final yo = _yOf(d.o.toDouble(), h), yc = _yOf(d.c.toDouble(), h);
-      final bt = yo < yc ? yo : yc;
-      final bh = (yo - yc).abs().clamp(6.0, h);
-      final bodyRect = Rect.fromLTWH(cx - 7, bt, 14, bh);
-      final bodyRRect = RRect.fromRectAndRadius(bodyRect, const Radius.circular(5));
-      if (today) {
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(bodyRect.inflate(3), const Radius.circular(7)),
-          Paint()..color = c1.withOpacity(0.22)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-        );
-      }
-      canvas.drawRRect(
-        bodyRRect,
-        Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [c1, c2]).createShader(bodyRect),
-      );
-      if (today) {
-        canvas.drawRRect(bodyRRect, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CandlePainter oldDelegate) => false;
-}
 
