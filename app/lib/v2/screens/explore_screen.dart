@@ -4,6 +4,8 @@ import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../theme/places.dart';
 import '../widgets/aurora.dart';
+import 'place_detail_screen.dart';
+import 'create_screen.dart';
 
 /// 탐색 (explore) — 리스트/지도 토글. 핀/카드 = 다녀온 뒤의 마음(A→B).
 class ExploreScreen extends StatefulWidget {
@@ -195,10 +197,89 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
+  void _openPlace(Place p) => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => PlaceDetailScreen(place: p)),
+      );
+
+  void _showPlaceCard(Place p) {
+    final to = kEmotions[p.to], from = kEmotions[p.from];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+        padding: EdgeInsets.fromLTRB(20, 16, 20, 18 + MediaQuery.of(sheetCtx).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 56, height: 56, alignment: Alignment.center,
+              decoration: BoxDecoration(gradient: to.grad, borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: to.c2.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 5))]),
+              child: Text(to.emoji, style: const TextStyle(fontSize: 26)),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Flexible(child: Text(p.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary))),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(color: to.c2.withOpacity(0.14), borderRadius: BorderRadius.circular(9)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.trending_up, size: 12, color: to.c2),
+                      const SizedBox(width: 2),
+                      Text('+${p.lift}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: to.c2)),
+                    ]),
+                  ),
+                ]),
+                const SizedBox(height: 3),
+                Text('${p.cat} · ${p.dist}', style: const TextStyle(fontSize: 12.5, color: T.textMuted)),
+              ]),
+            ),
+            GestureDetector(onTap: () => Navigator.pop(sheetCtx), child: const Icon(Icons.close, size: 22, color: Color(0xFFBBB3CC))),
+          ]),
+          const SizedBox(height: 12),
+          Text(p.line, style: const TextStyle(fontSize: 13.5, height: 1.45, color: Color(0xCC463C64))),
+          const SizedBox(height: 12),
+          Row(children: [
+            _miniDot(from), const SizedBox(width: 6),
+            const Icon(Icons.arrow_forward, size: 14, color: T.textMuted), const SizedBox(width: 6),
+            _miniDot(to), const SizedBox(width: 8),
+            Text('${from.label} → ${to.label}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
+          ]),
+          const SizedBox(height: 16),
+          Row(children: [
+            GestureDetector(
+              onTap: () { Navigator.pop(sheetCtx); _openPlace(p); },
+              child: const Padding(padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12), child: Text('더보기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textSecondary))),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () { Navigator.pop(sheetCtx); Navigator.of(context).push(MaterialPageRoute(builder: (_) => CreateScreen(initialPlace: p))); },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 13),
+                decoration: BoxDecoration(gradient: to.grad, borderRadius: BorderRadius.circular(14),
+                    boxShadow: [BoxShadow(color: to.c2.withOpacity(0.4), blurRadius: 14, offset: const Offset(0, 6))]),
+                child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                  Icon(Icons.edit, size: 17, color: Colors.white),
+                  SizedBox(width: 7),
+                  Text('기록', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Colors.white)),
+                ]),
+              ),
+            ),
+          ]),
+        ]),
+      ),
+    );
+  }
+
   Widget _placeCard(Place p) {
     final to = kEmotions[p.to];
     final from = kEmotions[p.from];
-    return GlassCard(
+    return GestureDetector(
+      onTap: () => _openPlace(p),
+      child: GlassCard(
       padding: const EdgeInsets.all(14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -245,7 +326,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           Text('${p.n}명 호전', style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
         ]),
       ]),
-    );
+    ));
   }
 
   Widget _miniDot(Emotion e) {
@@ -332,6 +413,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 emotion: kEmotions[list[i].to],
                 pet: list[i].pet,
                 tempoMs: 2600 + i * 430,
+                onTap: () => _showPlaceCard(list[i]),
               ),
             ),
           // 내 위치
@@ -424,7 +506,8 @@ class _AnimatedPin extends StatefulWidget {
   final Emotion emotion;
   final bool pet;
   final int tempoMs;
-  const _AnimatedPin({required this.emotion, required this.pet, required this.tempoMs});
+  final VoidCallback onTap;
+  const _AnimatedPin({required this.emotion, required this.pet, required this.tempoMs, required this.onTap});
   @override
   State<_AnimatedPin> createState() => _AnimatedPinState();
 }
@@ -447,7 +530,10 @@ class _AnimatedPinState extends State<_AnimatedPin> with SingleTickerProviderSta
         final dy = math.sin(_c.value * 2 * math.pi) * 6;
         return Transform.translate(
           offset: Offset(0, dy),
-          child: SizedBox(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onTap,
+            child: SizedBox(
             width: 50,
             height: 72,
             child: Stack(clipBehavior: Clip.none, alignment: Alignment.topCenter, children: [
@@ -486,7 +572,7 @@ class _AnimatedPinState extends State<_AnimatedPin> with SingleTickerProviderSta
                   ),
                 ),
             ]),
-          ),
+          )),
         );
       },
     );

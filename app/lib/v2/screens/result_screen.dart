@@ -5,6 +5,7 @@ import '../theme/situations.dart';
 import '../theme/places.dart';
 import '../widgets/aurora.dart';
 import 'main_shell.dart';
+import 'place_detail_screen.dart';
 
 /// 마음 분석 결과 (result) — 조언 + 집단 인사이트 + 장소 추천(A→B) + 피드백.
 class ResultScreen extends StatefulWidget {
@@ -157,7 +158,9 @@ class _ResultScreenState extends State<ResultScreen> {
     final to = kEmotions[p.to];
     final from = kEmotions[p.from];
     final recLine = tip != null ? '비슷한 상황에 추천돼요 · $tip' : '비슷한 마음에 추천돼요';
-    return GlassCard(
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlaceDetailScreen(place: p))),
+      child: GlassCard(
       padding: const EdgeInsets.all(14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -207,7 +210,7 @@ class _ResultScreenState extends State<ResultScreen> {
           Text('${p.n}명 호전', style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
         ]),
       ]),
-    );
+    ));
   }
 
   Widget _miniDot(Emotion e) => Container(

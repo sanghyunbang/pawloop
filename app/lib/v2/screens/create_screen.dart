@@ -9,7 +9,8 @@ import 'pin_picker_screen.dart';
 
 /// 기록 작성 (create) — 장소일기/심플일기. 도착→떠날 감정, 상황, 공개설정.
 class CreateScreen extends StatefulWidget {
-  const CreateScreen({super.key});
+  final Place? initialPlace; // 장소 상세 "여기서 장소일기 쓰기"에서 prefill
+  const CreateScreen({super.key, this.initialPlace});
   @override
   State<CreateScreen> createState() => _CreateScreenState();
 }
@@ -21,6 +22,17 @@ class _CreateScreenState extends State<CreateScreen> {
   String? placeName;
   int cFrom = 2; // 불안
   int cTo = 4; // 평온
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.initialPlace;
+    if (p != null) {
+      placeName = p.name;
+      cFrom = p.from;
+      cTo = p.to;
+    }
+  }
   int cSitu = 0; // 취업·진로
   bool cPublic = true;
   final Set<String> cComms = {'취업·진로'};
