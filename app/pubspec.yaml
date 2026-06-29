@@ -95,6 +95,7 @@ flutter:
     - assets/icons/naver.svg
     - assets/Logo4.png
     - assets/
+    - assets/emoji/
     - .env
     - assets/terms/terms_ko.md
     - assets/terms/privacy_ko.md

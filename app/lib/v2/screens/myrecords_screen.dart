@@ -180,7 +180,7 @@ class MyRecordsScreen extends StatelessWidget {
             width: 36, height: 36, alignment: Alignment.center,
             decoration: BoxDecoration(shape: BoxShape.circle, gradient: to.grad,
                 boxShadow: [BoxShadow(color: to.c2.withOpacity(0.33), blurRadius: 10, offset: const Offset(0, 4))]),
-            child: Text(to.emoji, style: const TextStyle(fontSize: 16)),
+            child: to.icon(22.4),
           ),
           const SizedBox(width: 11),
           Expanded(child: Text(r.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary))),
@@ -221,6 +221,6 @@ class MyRecordsScreen extends StatelessWidget {
         width: 26, height: 26, alignment: Alignment.center,
         decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad,
             boxShadow: [BoxShadow(color: e.c2.withOpacity(0.33), blurRadius: 8, offset: const Offset(0, 3))]),
-        child: Text(e.emoji, style: const TextStyle(fontSize: 12)),
+        child: e.icon(16.8),
       );
 }

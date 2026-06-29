@@ -285,7 +285,7 @@ class _CreateScreenState extends State<CreateScreen> {
         width: s, height: s, alignment: Alignment.center,
         decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad,
             boxShadow: [BoxShadow(color: e.c2.withOpacity(0.38), blurRadius: 10, offset: const Offset(0, 4))]),
-        child: Text(e.emoji, style: TextStyle(fontSize: s * 0.45)),
+        child: e.icon((s * 0.45) * 1.4),
       );
 
   Widget _emoGrid(int selected, void Function(int) onPick) {
@@ -306,7 +306,7 @@ class _CreateScreenState extends State<CreateScreen> {
             boxShadow: on ? [BoxShadow(color: e.c2.withOpacity(0.32), blurRadius: 12, offset: const Offset(0, 5))] : null,
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(e.emoji, style: const TextStyle(fontSize: 15)),
+            e.icon(21),
             const SizedBox(width: 5),
             Text(e.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? Colors.white : T.textSecondary)),
           ]),
@@ -616,7 +616,7 @@ class _CreateScreenState extends State<CreateScreen> {
                             width: 40, height: 40, alignment: Alignment.center,
                             decoration: BoxDecoration(gradient: to.grad, borderRadius: BorderRadius.circular(12),
                                 boxShadow: [BoxShadow(color: to.c2.withOpacity(0.27), blurRadius: 10, offset: const Offset(0, 4))]),
-                            child: Text(to.emoji, style: const TextStyle(fontSize: 18)),
+                            child: to.icon(25.2),
                           ),
                           const SizedBox(width: 12),
                           Expanded(

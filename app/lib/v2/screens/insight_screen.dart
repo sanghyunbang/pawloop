@@ -197,7 +197,7 @@ class _InsightScreenState extends State<InsightScreen> {
       Container(
         width: 30, height: 30, alignment: Alignment.center,
         decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-        child: Text(e.emoji, style: const TextStyle(fontSize: 14)),
+        child: e.icon(19.6),
       ),
       const SizedBox(height: 6),
       Text(e.label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: T.textSecondary)),
@@ -227,7 +227,7 @@ class _InsightScreenState extends State<InsightScreen> {
       Container(
         width: 36, height: 36, alignment: Alignment.center,
         decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-        child: Text(e.emoji, style: const TextStyle(fontSize: 16)),
+        child: e.icon(22.4),
       ),
       const SizedBox(width: 12),
       Expanded(
@@ -349,7 +349,7 @@ class _InsightScreenState extends State<InsightScreen> {
     Widget dot(Emotion e, double s) => Container(
           width: s, height: s, alignment: Alignment.center,
           decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-          child: Text(e.emoji, style: TextStyle(fontSize: s * 0.5)));
+          child: e.icon((s * 0.5) * 1.4));
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 13),
       decoration: BoxDecoration(
@@ -359,7 +359,7 @@ class _InsightScreenState extends State<InsightScreen> {
         Container(
           width: 44, height: 44, alignment: Alignment.center,
           decoration: BoxDecoration(gradient: t.grad, borderRadius: BorderRadius.circular(13)),
-          child: Text(t.emoji, style: const TextStyle(fontSize: 18)),
+          child: t.icon(25.2),
         ),
         const SizedBox(width: 11),
         Expanded(

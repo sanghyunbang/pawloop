@@ -116,7 +116,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     Widget dot(Emotion e) => Container(
           width: 24, height: 24, alignment: Alignment.center,
           decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-          child: Text(e.emoji, style: const TextStyle(fontSize: 12)));
+          child: e.icon(16.8));
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [

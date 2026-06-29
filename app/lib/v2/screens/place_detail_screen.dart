@@ -83,7 +83,7 @@ class PlaceDetailScreen extends StatelessWidget {
               width: 60, height: 60, alignment: Alignment.center,
               decoration: BoxDecoration(gradient: to.grad, borderRadius: BorderRadius.circular(18),
                   boxShadow: [BoxShadow(color: to.c2.withOpacity(0.33), blurRadius: 14, offset: const Offset(0, 6))]),
-              child: Text(to.emoji, style: const TextStyle(fontSize: 26)),
+              child: to.icon(36.4),
             ),
             if (place.pet)
               Positioned(
@@ -240,6 +240,6 @@ class PlaceDetailScreen extends StatelessWidget {
   Widget _dot(Emotion e, double s) => Container(
         width: s, height: s, alignment: Alignment.center,
         decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-        child: Text(e.emoji, style: TextStyle(fontSize: s * 0.5)),
+        child: e.icon((s * 0.5) * 1.4),
       );
 }

@@ -8,7 +8,8 @@ class Emotion {
   final Color c1;
   final Color c2;
   final String desc;
-  const Emotion(this.label, this.emoji, this.c1, this.c2, this.desc);
+  final String asset; // Fluent Emoji 3D (플랫폼 통일)
+  const Emotion(this.label, this.emoji, this.c1, this.c2, this.desc, this.asset);
 
   /// 140deg 그라데이션 (핸드오프 grad()).
   LinearGradient get grad => LinearGradient(
@@ -16,15 +17,19 @@ class Emotion {
         end: const Alignment(0.8, 1),
         colors: [c1, c2],
       );
+
+  /// iOS/Android 통일 감정 아이콘(Fluent Emoji). [size]는 시스템 이모지 fontSize와
+  /// 비슷하게 보이도록 살짝 키워 쓰는 게 자연스럽다(약 1.4배).
+  Widget icon(double size) => Image.asset(asset, width: size, height: size, gaplessPlayback: true, filterQuality: FilterQuality.medium);
 }
 
 const List<Emotion> kEmotions = [
-  Emotion('기쁨', '😊', Color(0xFFFFD86E), Color(0xFFFF8F63), '햇살처럼 번지는 따뜻함'),
-  Emotion('슬픔', '😢', Color(0xFF8FB6FF), Color(0xFF5B79F5), '천천히 흘려보내도 괜찮아요'),
-  Emotion('불안', '😰', Color(0xFFBBA0FF), Color(0xFF7E68F0), '잠시 숨을 고르는 시간'),
-  Emotion('분노', '😡', Color(0xFFFF9180), Color(0xFFFF566E), '뜨겁게 일렁이는 마음'),
-  Emotion('평온', '😌', Color(0xFF7FE6CC), Color(0xFF33BFA6), '잔잔하게 가라앉은 하루'),
-  Emotion('설렘', '✨', Color(0xFFFF9FCF), Color(0xFFCE7DF5), '두근거리며 설레는 순간'),
+  Emotion('기쁨', '😊', Color(0xFFFFD86E), Color(0xFFFF8F63), '햇살처럼 번지는 따뜻함', 'assets/emoji/joy.png'),
+  Emotion('슬픔', '😢', Color(0xFF8FB6FF), Color(0xFF5B79F5), '천천히 흘려보내도 괜찮아요', 'assets/emoji/sad.png'),
+  Emotion('불안', '😰', Color(0xFFBBA0FF), Color(0xFF7E68F0), '잠시 숨을 고르는 시간', 'assets/emoji/anxious.png'),
+  Emotion('분노', '😡', Color(0xFFFF9180), Color(0xFFFF566E), '뜨겁게 일렁이는 마음', 'assets/emoji/anger.png'),
+  Emotion('평온', '😌', Color(0xFF7FE6CC), Color(0xFF33BFA6), '잔잔하게 가라앉은 하루', 'assets/emoji/calm.png'),
+  Emotion('설렘', '✨', Color(0xFFFF9FCF), Color(0xFFCE7DF5), '두근거리며 설레는 순간', 'assets/emoji/excited.png'),
 ];
 
 /// 감정의 세기 라벨.

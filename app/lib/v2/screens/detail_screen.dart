@@ -152,7 +152,7 @@ class _DetailScreenState extends State<DetailScreen> {
                 border: Border.all(color: i == emo ? Colors.transparent : const Color(0x66FFFFFF)),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text(kEmotions[i].emoji, style: const TextStyle(fontSize: 15)),
+                kEmotions[i].icon(21),
                 const SizedBox(width: 5),
                 Text(kEmotions[i].label,
                     style: TextStyle(

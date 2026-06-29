@@ -169,7 +169,7 @@ class _ResultScreenState extends State<ResultScreen> {
             height: 54,
             alignment: Alignment.center,
             decoration: BoxDecoration(gradient: to.grad, borderRadius: BorderRadius.circular(16)),
-            child: Text(to.emoji, style: const TextStyle(fontSize: 25)),
+            child: to.icon(35),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -218,7 +218,7 @@ class _ResultScreenState extends State<ResultScreen> {
         height: 22,
         alignment: Alignment.center,
         decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-        child: Text(e.emoji, style: const TextStyle(fontSize: 11)),
+        child: e.icon(15.4),
       );
 
   Widget _feedbackCard() {

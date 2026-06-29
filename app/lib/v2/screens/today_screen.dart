@@ -130,7 +130,7 @@ class _TodayScreenState extends State<TodayScreen> {
               : null,
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(em.emoji, style: const TextStyle(fontSize: 14)),
+          em.icon(19.6),
           const SizedBox(width: 5),
           Text(em.label,
               style: TextStyle(
@@ -204,7 +204,7 @@ class _TodayScreenState extends State<TodayScreen> {
                       height: 24,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(shape: BoxShape.circle, gradient: kEmotions[i].grad),
-                      child: Text(kEmotions[i].emoji, style: const TextStyle(fontSize: 12)),
+                      child: kEmotions[i].icon(16.8),
                     ),
                     const SizedBox(width: 5),
                   ],

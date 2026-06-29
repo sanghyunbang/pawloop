@@ -202,7 +202,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 border: Border.all(color: on ? Colors.transparent : const Color(0x1F8C7BFF)),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (idx != null) ...[Text(kEmotions[idx].emoji, style: const TextStyle(fontSize: 15)), const SizedBox(width: 5)],
+                if (idx != null) ...[kEmotions[idx].icon(21), const SizedBox(width: 5)],
                 Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: on ? Colors.white : T.textSecondary)),
               ]),
             ),
@@ -349,7 +349,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               width: 56, height: 56, alignment: Alignment.center,
               decoration: BoxDecoration(gradient: to.grad, borderRadius: BorderRadius.circular(16),
                   boxShadow: [BoxShadow(color: to.c2.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 5))]),
-              child: Text(to.emoji, style: const TextStyle(fontSize: 26)),
+              child: to.icon(36.4),
             ),
             const SizedBox(width: 13),
             Expanded(
@@ -422,7 +422,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             height: 56,
             alignment: Alignment.center,
             decoration: BoxDecoration(gradient: to.grad, borderRadius: BorderRadius.circular(16)),
-            child: Text(to.emoji, style: const TextStyle(fontSize: 26)),
+            child: to.icon(36.4),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -469,7 +469,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       height: 22,
       alignment: Alignment.center,
       decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-      child: Text(e.emoji, style: const TextStyle(fontSize: 11)),
+      child: e.icon(15.4),
     );
   }
 
@@ -605,7 +605,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               border: Border.all(color: Colors.white, width: 3),
               boxShadow: [BoxShadow(color: e.c2.withOpacity(0.55), blurRadius: 5, offset: const Offset(0, 2))],
             ),
-            child: Text(e.emoji, style: const TextStyle(fontSize: 22)),
+            child: e.icon(30.8),
           ),
         ),
       ),

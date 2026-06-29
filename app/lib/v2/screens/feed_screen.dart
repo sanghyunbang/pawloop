@@ -171,7 +171,7 @@ class _FeedScreenState extends State<FeedScreen> {
         height: 24,
         alignment: Alignment.center,
         decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-        child: Text(e.emoji, style: const TextStyle(fontSize: 12)),
+        child: e.icon(16.8),
       );
 
   Widget _shift(CommunityPost p) {
