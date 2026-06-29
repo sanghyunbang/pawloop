@@ -56,7 +56,6 @@ class _FeedScreenState extends State<FeedScreen> {
                 ],
               ),
             ),
-            _bottomNav(),
           ]),
         ),
       ),
@@ -136,7 +135,7 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Text(e.emoji, style: const TextStyle(fontSize: 12)),
       );
 
-  Widget _shift(CommunityPost p, {double dot = 24}) {
+  Widget _shift(CommunityPost p) {
     final f = kEmotions[p.from], t = kEmotions[p.to];
     return Row(mainAxisSize: MainAxisSize.min, children: [
       _miniDot(f),
@@ -258,40 +257,4 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  Widget _bottomNav() {
-    const accent = Color(0xFF8E7BFF);
-    Widget item(IconData icon, String label, bool active) => Expanded(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 23, color: active ? accent : T.textMuted),
-            const SizedBox(height: 3),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: active ? FontWeight.w800 : FontWeight.w500, color: active ? accent : T.textMuted)),
-          ]),
-        );
-    return Container(
-      padding: EdgeInsets.fromLTRB(14, 10, 14, 8 + MediaQuery.of(context).padding.bottom),
-      decoration: const BoxDecoration(
-        color: Color(0xE6FFFFFF),
-        border: Border(top: BorderSide(color: Color(0x22785AA0))),
-      ),
-      child: Row(children: [
-        item(Icons.wb_sunny_outlined, '오늘', false),
-        item(Icons.explore_outlined, '탐색', false),
-        Expanded(
-          child: Center(
-            child: Container(
-              width: 48, height: 48,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFF9FCF), Color(0xFFFF8FA8)]),
-                boxShadow: [BoxShadow(color: Color(0x4DFF8FA8), blurRadius: 14, offset: Offset(0, 6))],
-              ),
-              child: const Icon(Icons.edit, color: Colors.white, size: 24),
-            ),
-          ),
-        ),
-        item(Icons.chat_bubble_outline, '커뮤니티', true),
-        item(Icons.show_chart, '흐름', false),
-      ]),
-    );
-  }
 }

@@ -32,12 +32,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
-          child: Column(
-            children: [
-              Expanded(child: view == 'list' ? _listView() : _mapView()),
-              _bottomNav(),
-            ],
-          ),
+          child: view == 'list' ? _listView() : _mapView(),
         ),
       ),
     );
@@ -422,42 +417,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  Widget _bottomNav() {
-    const accent = Color(0xFF33BFA6);
-    Widget item(IconData icon, String label, bool active) => Expanded(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 23, color: active ? accent : T.textMuted),
-            const SizedBox(height: 3),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: active ? FontWeight.w800 : FontWeight.w500, color: active ? accent : T.textMuted)),
-          ]),
-        );
-    return Container(
-      padding: EdgeInsets.fromLTRB(14, 10, 14, 8 + MediaQuery.of(context).padding.bottom),
-      decoration: const BoxDecoration(
-        color: Color(0xE6FFFFFF),
-        border: Border(top: BorderSide(color: Color(0x22785AA0))),
-      ),
-      child: Row(children: [
-        item(Icons.wb_sunny_outlined, '오늘', false),
-        item(Icons.explore_outlined, '탐색', true),
-        Expanded(
-          child: Center(
-            child: Container(
-              width: 48, height: 48,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFF9FCF), Color(0xFFFF8FA8)]),
-                boxShadow: [BoxShadow(color: Color(0x4DFF8FA8), blurRadius: 14, offset: Offset(0, 6))],
-              ),
-              child: const Icon(Icons.edit, color: Colors.white, size: 24),
-            ),
-          ),
-        ),
-        item(Icons.chat_bubble_outline, '커뮤니티', false),
-        item(Icons.show_chart, '흐름', false),
-      ]),
-    );
-  }
 }
 
 /// 천천히 부유하는 핀 (핀마다 다른 템포). pet=true면 발바닥 배지.

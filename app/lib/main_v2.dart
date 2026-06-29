@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'v2/screens/today_screen.dart';
+import 'v2/screens/main_shell.dart';
 
 /// v2 디자인 진입점.
 /// 실행: flutter run -t lib/main_v2.dart
@@ -17,7 +17,7 @@ class HeatTripV2App extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFF3E8F9),
       ),
-      home: const TodayScreen(),
+      home: const MainShell(),
     );
   }
 }

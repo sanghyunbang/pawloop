@@ -4,7 +4,7 @@ import '../theme/emotions.dart';
 import '../theme/situations.dart';
 import '../theme/places.dart';
 import '../widgets/aurora.dart';
-import 'explore_screen.dart';
+import 'main_shell.dart';
 
 /// 마음 분석 결과 (result) — 조언 + 집단 인사이트 + 장소 추천(A→B) + 피드백.
 class ResultScreen extends StatefulWidget {
@@ -277,9 +277,7 @@ class _ResultScreenState extends State<ResultScreen> {
             ]),
           ),
         );
-    void go(String view) => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => ExploreScreen(initialView: view)),
-        );
+    void go(String view) => RootTab.go(context, 1, exView: view);
     return Column(children: [
       bar(Icons.map_outlined, '지도에서 더 둘러보기', () => go('map')),
       const SizedBox(height: 10),
