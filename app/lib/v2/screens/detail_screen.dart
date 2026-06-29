@@ -3,6 +3,7 @@ import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../theme/situations.dart';
 import '../widgets/aurora.dart';
+import 'analyzing_screen.dart';
 
 /// 마음 입력 (detail) — design_refactor 'detail' 스크린 재현.
 class DetailScreen extends StatefulWidget {
@@ -280,7 +281,9 @@ class _DetailScreenState extends State<DetailScreen> {
 
   Widget _analyzeBtn(Emotion e) {
     return GestureDetector(
-      onTap: () {}, // TODO: → analyzing → result
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => AnalyzingScreen(emo: emo, situ: situ)),
+      ),
       child: Container(
         height: 56,
         alignment: Alignment.center,

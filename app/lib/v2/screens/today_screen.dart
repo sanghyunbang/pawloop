@@ -3,6 +3,7 @@ import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../widgets/aurora.dart';
 import 'detail_screen.dart';
+import 'analyzing_screen.dart';
 
 /// 오늘 화면 — design_refactor 핸드오프 'today' 스크린 재현.
 class TodayScreen extends StatefulWidget {
@@ -28,6 +29,12 @@ class _TodayScreenState extends State<TodayScreen> {
   void _openDetail() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => DetailScreen(initialEmo: emo)),
+    );
+  }
+
+  void _openAnalyzing() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => AnalyzingScreen(emo: emo)),
     );
   }
 
@@ -217,7 +224,7 @@ class _TodayScreenState extends State<TodayScreen> {
     return Row(children: [
       Expanded(child: _btn(icon: Icons.edit_note, label: '기록하기', gradient: e.grad, onTap: () {})),
       const SizedBox(width: 11),
-      Expanded(child: _btn(icon: Icons.favorite_border, label: '위로받기', gradient: null, onTap: _openDetail)),
+      Expanded(child: _btn(icon: Icons.favorite_border, label: '위로받기', gradient: null, onTap: _openAnalyzing)),
     ]);
   }
 

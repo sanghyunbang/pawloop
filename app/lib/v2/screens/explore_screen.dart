@@ -7,7 +7,8 @@ import '../widgets/aurora.dart';
 
 /// 탐색 (explore) — 리스트/지도 토글. 핀/카드 = 다녀온 뒤의 마음(A→B).
 class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({super.key});
+  final String initialView; // 'list' | 'map'
+  const ExploreScreen({super.key, this.initialView = 'list'});
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
 }
@@ -15,7 +16,7 @@ class ExploreScreen extends StatefulWidget {
 class _ExploreScreenState extends State<ExploreScreen> {
   int? exEmo; // null = 전체, 아니면 to == exEmo
   bool pet = false;
-  String view = 'list'; // 'list' | 'map'
+  late String view = widget.initialView; // 'list' | 'map'
 
   List<Place> get _filtered {
     var list = kPlaces.where((p) => exEmo == null || p.to == exEmo);
