@@ -573,19 +573,43 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Future<void> _refreshMarkers() async {
     final c = _mapCtrl;
-    if (c == null) return;
+    if (c == null || !mounted) return;
     await c.clearOverlays();
     final markers = <NAddableOverlay>{};
     for (final p in _filtered) {
-      final m = NMarker(
-        id: p.name,
-        position: NLatLng(p.lat, p.lng),
-        iconTintColor: kEmotions[p.to].c2,
-      );
+      final icon = await _markerIcon(p);
+      final m = NMarker(id: p.name, position: NLatLng(p.lat, p.lng), icon: icon);
       m.setOnTapListener((_) => _showPlaceCard(p));
       markers.add(m);
     }
     if (markers.isNotEmpty) await c.addOverlayAll(markers);
+  }
+
+  /// 감정색 오브 마커(플랫폼 통일 — Flutter 위젯을 이미지로 렌더).
+  Future<NOverlayImage> _markerIcon(Place p) async {
+    final e = kEmotions[p.to];
+    return NOverlayImage.fromWidget(
+      context: context,
+      size: const Size(52, 52),
+      widget: SizedBox(
+        width: 52,
+        height: 52,
+        child: Center(
+          child: Container(
+            width: 46,
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: e.grad,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: [BoxShadow(color: e.c2.withOpacity(0.55), blurRadius: 5, offset: const Offset(0, 2))],
+            ),
+            child: Text(e.emoji, style: const TextStyle(fontSize: 22)),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _legend() {

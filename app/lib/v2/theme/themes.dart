@@ -27,8 +27,21 @@ const List<AppThemeDef> kThemes = [
   AppThemeDef('모노', Color(0xFFEEEFF4), Color(0xFFE2E2EC), Color(0xFFC7CCDC), Color(0xFFD5CBE4), Color(0xFFCDE0D9)),
 ];
 
-/// 현재 배경 테마 인덱스 (전역). AuroraBackground가 구독해 앱 전체에 반영.
+/// 프로필 테두리 색 후보.
+const List<Color> kAvatarBorders = [
+  Color(0xFF8E7BFF), // 라일락
+  Color(0xFFFF7A59), // 코랄
+  Color(0xFF33BFA6), // 민트
+  Color(0xFF5B79F5), // 블루
+  Color(0xFFFF6B9D), // 핑크
+  Color(0xFFFFC44D), // 옐로
+];
+
+/// 현재 배경 테마 인덱스 + 프로필 테두리 색 (전역). 위젯들이 구독해 앱 전체에 반영.
 class AppThemeCtl {
   static final ValueNotifier<int> index = ValueNotifier<int>(0);
   static AppThemeDef get current => kThemes[index.value];
+
+  /// 프로필 아바타 테두리 색.
+  static final ValueNotifier<Color> avatarBorder = ValueNotifier<Color>(const Color(0xFF8E7BFF));
 }

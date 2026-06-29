@@ -16,7 +16,8 @@ class TodayScreen extends StatefulWidget {
 class _TodayScreenState extends State<TodayScreen> {
   int emo = 4; // 평온
   int intensity = 2; // 보통
-  final List<int> todayLog = [2, 1];
+  // 오늘의 감정 기록(0부터). 추후 백엔드(GET /records?today)에서 채움.
+  final List<int> todayLog = [];
 
   static const _weekdays = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -194,18 +195,20 @@ class _TodayScreenState extends State<TodayScreen> {
             style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
         const SizedBox(width: 10),
         Expanded(
-          child: Row(children: [
-            for (final i in todayLog) ...[
-              Container(
-                width: 24,
-                height: 24,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(shape: BoxShape.circle, gradient: kEmotions[i].grad),
-                child: Text(kEmotions[i].emoji, style: const TextStyle(fontSize: 12)),
-              ),
-              const SizedBox(width: 5),
-            ],
-          ]),
+          child: todayLog.isEmpty
+              ? const Text('아직 기록이 없어요', style: TextStyle(fontSize: 12.5, color: Color(0x8C463C64)))
+              : Row(children: [
+                  for (final i in todayLog) ...[
+                    Container(
+                      width: 24,
+                      height: 24,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(shape: BoxShape.circle, gradient: kEmotions[i].grad),
+                      child: Text(kEmotions[i].emoji, style: const TextStyle(fontSize: 12)),
+                    ),
+                    const SizedBox(width: 5),
+                  ],
+                ]),
         ),
         Text('${todayLog.length}번 기록',
             style: const TextStyle(fontSize: 11.5, color: Color(0x8C463C64))),

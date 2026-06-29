@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
+import '../theme/themes.dart';
 import '../widgets/aurora.dart';
 
 /// 프로필 수정 (edit).
@@ -62,7 +63,9 @@ class _EditScreenState extends State<EditScreen> {
                 padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
                 children: [
                   Center(child: _avatar()),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
+                  _borderPicker(),
+                  const SizedBox(height: 20),
                   _field('닉네임', _nick, counter: true),
                   const SizedBox(height: 18),
                   _field('이름', _name),
@@ -106,12 +109,16 @@ class _EditScreenState extends State<EditScreen> {
   Widget _avatar() => SizedBox(
         width: 88, height: 88,
         child: Stack(clipBehavior: Clip.none, children: [
-          Container(
-            width: 88, height: 88, alignment: Alignment.center,
-            decoration: const BoxDecoration(shape: BoxShape.circle,
-                gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFD9C2), Color(0xFFE9C9FF)]),
-                boxShadow: [BoxShadow(color: Color(0x66D89BFF), blurRadius: 28, offset: Offset(0, 12))]),
-            child: const Text('t', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)),
+          ValueListenableBuilder<Color>(
+            valueListenable: AppThemeCtl.avatarBorder,
+            builder: (_, border, __) => Container(
+              width: 88, height: 88, alignment: Alignment.center,
+              decoration: BoxDecoration(shape: BoxShape.circle,
+                  gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFD9C2), Color(0xFFE9C9FF)]),
+                  border: Border.all(color: border, width: 3.5),
+                  boxShadow: [BoxShadow(color: border.withOpacity(0.4), blurRadius: 22, offset: const Offset(0, 8))]),
+              child: const Text('t', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)),
+            ),
           ),
           Positioned(
             right: -2, bottom: -2,
@@ -123,6 +130,31 @@ class _EditScreenState extends State<EditScreen> {
           ),
         ]),
       );
+
+  Widget _borderPicker() {
+    return ValueListenableBuilder<Color>(
+      valueListenable: AppThemeCtl.avatarBorder,
+      builder: (_, sel, __) => Column(children: [
+        const Text('프로필 테두리 색', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: T.textSecondary)),
+        const SizedBox(height: 11),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          for (final c in kAvatarBorders)
+            GestureDetector(
+              onTap: () => AppThemeCtl.avatarBorder.value = c,
+              child: Container(
+                width: 32, height: 32,
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: c,
+                  border: Border.all(color: sel.value == c.value ? const Color(0xFF2C2740) : const Color(0x33000000), width: sel.value == c.value ? 3 : 1),
+                ),
+              ),
+            ),
+        ]),
+      ]),
+    );
+  }
 
   Widget _field(String label, TextEditingController ctrl, {bool counter = false}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -3,14 +3,13 @@ import '../theme/app_tokens.dart';
 import '../theme/themes.dart';
 import '../theme/records_data.dart';
 import '../widgets/aurora.dart';
+import '../widgets/profile_avatar.dart';
 import 'edit_screen.dart';
 import 'myrecords_screen.dart';
 
 /// 프로필 (me) — 아바타 + 배경 테마 선택(앱 전체) + 메뉴.
 class MeScreen extends StatelessWidget {
   const MeScreen({super.key});
-
-  static const _avatarGrad = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFD9C2), Color(0xFFE9C9FF)]);
 
   @override
   Widget build(BuildContext context) {
@@ -40,12 +39,7 @@ class MeScreen extends StatelessWidget {
                 children: [
                   // 아바타 + 이름
                   Column(children: [
-                    Container(
-                      width: 88, height: 88, alignment: Alignment.center,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, gradient: _avatarGrad,
-                          boxShadow: [BoxShadow(color: Color(0x66D89BFF), blurRadius: 28, offset: Offset(0, 12))]),
-                      child: const Text('t', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, color: Colors.white)),
-                    ),
+                    const ProfileAvatar(size: 88, tappable: false),
                     const SizedBox(height: 13),
                     const Text('tester', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: T.textPrimary)),
                     const SizedBox(height: 3),
