@@ -54,20 +54,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
       children: [
-        const Text('탐색', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: T.textPrimary)),
-        const SizedBox(height: 4),
-        const Text.rich(TextSpan(children: [
-          TextSpan(text: '어떤 마음이 ', style: TextStyle(fontSize: 13.5, color: Color(0xC2463C64))),
-          TextSpan(text: '되고 싶나요?', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF8E7BFF))),
-          TextSpan(text: ' 그 변화를 도와준 곳들이에요.', style: TextStyle(fontSize: 13.5, color: Color(0xC2463C64))),
-        ])),
-        const SizedBox(height: 14),
-        _emoFilters(),
-        const SizedBox(height: 10),
-        _petPill(full: true),
+        const Text('탐색', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
         const SizedBox(height: 12),
         _searchRow(),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
+        _emoFilters(),
+        const SizedBox(height: 16),
         FutureBuilder<List<RemotePlace>>(
           future: _remote,
           builder: (context, snap) {
@@ -140,7 +132,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  Widget _emoFilters({bool withPet = false}) {
+  Widget _emoFilters() {
     Widget chip(String label, int? idx) {
       final on = exEmo == idx;
       final grad = idx == null ? null : kEmotions[idx].grad;
@@ -182,37 +174,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ),
         );
 
-    return Wrap(spacing: 8, runSpacing: 8, children: [
-      chip('전체', null),
-      for (int i = 0; i < kEmotions.length; i++) chip(kEmotions[i].label, i),
-      if (withPet) petChip(),
-    ]);
-  }
-
-  Widget _petPill({bool full = false}) {
-    final w = GestureDetector(
-      onTap: () => setState(() => pet = !pet),
-      child: Container(
-        width: full ? double.infinity : null,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          gradient: pet
-              ? const LinearGradient(colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)])
-              : null,
-          color: pet ? null : const Color(0xC2FFFFFF),
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: pet ? Colors.transparent : const Color(0x66FFFFFF)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text('🐾', style: const TextStyle(fontSize: 14)),
-          const SizedBox(width: 6),
-          Text('반려동물 동반',
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: pet ? Colors.white : T.textSecondary)),
-        ]),
-      ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(children: [
+        chip('전체', null),
+        for (int i = 0; i < kEmotions.length; i++) ...[const SizedBox(width: 8), chip(kEmotions[i].label, i)],
+        const SizedBox(width: 8),
+        petChip(),
+      ]),
     );
-    return w;
   }
 
   Widget _searchRow() {
@@ -437,7 +408,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-        child: _emoFilters(withPet: true),
+        child: _emoFilters(),
       ),
       Expanded(child: _mapStack()),
     ]);
