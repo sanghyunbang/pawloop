@@ -4,6 +4,7 @@ import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../theme/places.dart';
 import '../widgets/aurora.dart';
+import '../data/explore_repository.dart';
 import 'place_detail_screen.dart';
 import 'create_screen.dart';
 
@@ -20,6 +21,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   bool pet = false;
   late String view = widget.initialView; // 'list' | 'map'
   NaverMapController? _mapCtrl;
+  late final Future<List<RemotePlace>> _remote = ExploreRepository().fetchPlaces();
 
   void _applyFilter(VoidCallback fn) {
     setState(fn);
@@ -66,13 +68,75 @@ class _ExploreScreenState extends State<ExploreScreen> {
         const SizedBox(height: 12),
         _searchRow(),
         const SizedBox(height: 14),
-        for (final p in list) ...[_placeCard(p), const SizedBox(height: 12)],
-        if (list.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(child: Text('해당하는 곳이 아직 없어요.', style: TextStyle(color: T.textMuted))),
-          ),
+        FutureBuilder<List<RemotePlace>>(
+          future: _remote,
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 36),
+                child: Center(child: CircularProgressIndicator(color: Color(0xFF8E7BFF))),
+              );
+            }
+            final remote = snap.data ?? const <RemotePlace>[];
+            if (snap.hasError || remote.isEmpty) {
+              // 폴백: 큐레이션 더미(A→B)
+              return Column(children: [
+                for (final p in list) ...[_placeCard(p), const SizedBox(height: 12)],
+              ]);
+            }
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: const [
+                Icon(Icons.cloud_done, size: 15, color: Color(0xFF33BFA6)),
+                SizedBox(width: 5),
+                Text('실시간 장소 · 백엔드 연동', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF2E9E88))),
+              ]),
+              const SizedBox(height: 10),
+              for (final rp in remote) ...[_remoteCard(rp), const SizedBox(height: 12)],
+            ]);
+          },
+        ),
       ],
+    );
+  }
+
+  Widget _imgFallback() => Container(
+        width: 64, height: 64,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFF0E6FA), Color(0xFFE0D2F0)]),
+        ),
+        child: const Icon(Icons.image_outlined, size: 24, color: Color(0xFFB6A8D0)),
+      );
+
+  Widget _remoteCard(RemotePlace rp) {
+    return GlassCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: rp.image.isNotEmpty
+              ? Image.network(rp.image, width: 64, height: 64, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _imgFallback())
+              : _imgFallback(),
+        ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(rp.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(height: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: const Color(0x148E7BFF), borderRadius: BorderRadius.circular(8)),
+              child: Text(rp.categoryLabel, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF8E7BFF))),
+            ),
+            if (rp.region.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Text(rp.region, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: T.textMuted)),
+            ],
+          ]),
+        ),
+        const Icon(Icons.chevron_right, size: 20, color: Color(0xFFCABFDC)),
+      ]),
     );
   }
 
