@@ -3,6 +3,7 @@ import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../theme/insight_data.dart';
 import '../widgets/aurora.dart';
+import 'me_screen.dart';
 
 /// 마음 흐름 (insight) — 오늘/주간 차트 + 통계 + 나를 바꿔준 곳.
 class InsightScreen extends StatefulWidget {
@@ -74,13 +75,16 @@ class _InsightScreenState extends State<InsightScreen> {
           Text('내가 나를 알아가는 곳', style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
         ]),
         const Spacer(),
-        Container(
-          width: 44, height: 44, alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFD9C2), Color(0xFFE9C9FF)]),
+        GestureDetector(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MeScreen())),
+          child: Container(
+            width: 44, height: 44, alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFD9C2), Color(0xFFE9C9FF)]),
+            ),
+            child: const Text('t', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
           ),
-          child: const Text('t', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
         ),
       ]);
 

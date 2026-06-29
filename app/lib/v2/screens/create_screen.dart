@@ -5,6 +5,7 @@ import '../theme/situations.dart';
 import '../theme/places.dart';
 import '../theme/community.dart';
 import '../widgets/aurora.dart';
+import 'pin_picker_screen.dart';
 
 /// 기록 작성 (create) — 장소일기/심플일기. 도착→떠날 감정, 상황, 공개설정.
 class CreateScreen extends StatefulWidget {
@@ -562,9 +563,12 @@ class _CreateScreenState extends State<CreateScreen> {
                   ),
                 ),
               GestureDetector(
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(sheetCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('지도에서 직접 찍기는 곧 추가됩니다'), duration: Duration(milliseconds: 1400)));
+                  final res = await Navigator.of(context).push<String>(
+                    MaterialPageRoute(builder: (_) => const PinPickerScreen()),
+                  );
+                  if (res != null && mounted) setState(() => placeName = res);
                 },
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 12),

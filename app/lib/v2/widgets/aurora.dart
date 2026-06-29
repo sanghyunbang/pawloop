@@ -3,9 +3,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
+import '../theme/themes.dart';
 
 /// 라일락 베이스 + 은은한 오라 블롭 배경.
-/// 실제 디자인은 매우 부드러우므로 블롭 투명도를 낮게 유지한다.
+/// 전역 [AppThemeCtl]를 구독 → 배경 테마 변경 시 앱 전체에 반영.
 class AuroraBackground extends StatelessWidget {
   final Widget child;
   final Emotion? tint;
@@ -13,25 +14,31 @@ class AuroraBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        const Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [T.lilacTop, T.lilacBottom],
+    return ValueListenableBuilder<int>(
+      valueListenable: AppThemeCtl.index,
+      builder: (_, ti, __) {
+        final th = kThemes[ti];
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [th.baseTop, th.baseBottom],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        _blob(const Alignment(-0.9, -1.0), 520, T.auroraPeach, 0.30),
-        _blob(const Alignment(1.05, -0.9), 480, T.auroraLilac, 0.26),
-        _blob(const Alignment(0.0, 1.15), 560, T.auroraMint, 0.22),
-        if (tint != null) _blob(const Alignment(0.0, -0.5), 420, tint!.c1, 0.22),
-        child,
-      ],
+            _blob(const Alignment(-0.9, -1.0), 520, th.blob1, 0.30),
+            _blob(const Alignment(1.05, -0.9), 480, th.blob2, 0.26),
+            _blob(const Alignment(0.0, 1.15), 560, th.blob3, 0.22),
+            if (tint != null) _blob(const Alignment(0.0, -0.5), 420, tint!.c1, 0.22),
+            child,
+          ],
+        );
+      },
     );
   }
 
