@@ -47,7 +47,7 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+                padding: EdgeInsets.fromLTRB(20, 6, 20, MediaQuery.of(context).padding.bottom + 100),
                 children: [
                   for (final p in _posts) ...[
                     view == 'card' ? _card(p) : _row(p),

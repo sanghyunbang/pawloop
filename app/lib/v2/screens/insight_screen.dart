@@ -37,7 +37,7 @@ class _InsightScreenState extends State<InsightScreen> {
           child: Column(children: [
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 100),
                 children: [
                   _header(),
                   const SizedBox(height: 18),

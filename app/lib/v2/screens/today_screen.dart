@@ -48,7 +48,7 @@ class _TodayScreenState extends State<TodayScreen> {
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 14, 22, 8),
+            padding: EdgeInsets.fromLTRB(22, 14, 22, MediaQuery.of(context).padding.bottom + 102),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

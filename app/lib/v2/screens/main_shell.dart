@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import 'today_screen.dart';
@@ -30,22 +31,30 @@ class MainShell extends StatelessWidget {
       body: ValueListenableBuilder<int>(
         valueListenable: RootTab.index,
         builder: (_, i, __) {
+          final Widget screen;
           switch (i) {
             case 1:
-              return ValueListenableBuilder<String>(
+              screen = ValueListenableBuilder<String>(
                 valueListenable: RootTab.exploreView,
                 builder: (_, v, __) => ExploreScreen(key: ValueKey(v), initialView: v),
               );
+              break;
             case 2:
-              return const FeedScreen();
+              screen = const FeedScreen();
+              break;
             case 3:
-              return const InsightScreen();
+              screen = const InsightScreen();
+              break;
             default:
-              return const TodayScreen();
+              screen = const TodayScreen();
           }
+          // 떠 있는 바텀네비를 본문 위에 오버레이(배경 끊김 없이, 항상 보임).
+          return Stack(children: [
+            Positioned.fill(child: screen),
+            const Align(alignment: Alignment.bottomCenter, child: _ShellNav()),
+          ]);
         },
       ),
-      bottomNavigationBar: const _ShellNav(),
     );
   }
 }
@@ -74,35 +83,58 @@ class _ShellNav extends StatelessWidget {
                 ]),
               ),
             );
-        return Container(
-          padding: EdgeInsets.fromLTRB(14, 10, 14, 8 + MediaQuery.of(context).padding.bottom),
-          decoration: const BoxDecoration(
-            color: Color(0xE6FFFFFF),
-            border: Border(top: BorderSide(color: Color(0x22785AA0))),
-          ),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            item(Icons.wb_sunny_outlined, '오늘', 0),
-            item(Icons.explore_outlined, '탐색', 1),
-            Expanded(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                GestureDetector(
+        final bottom = MediaQuery.of(context).padding.bottom;
+        return SizedBox(
+          height: bottom + 100,
+          child: Stack(clipBehavior: Clip.none, children: [
+            // 떠 있는 글래스 알약
+            Positioned(
+              left: 16, right: 16, bottom: bottom + 8,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                  child: Container(
+                    height: 66,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xAAFFFFFF),
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(color: const Color(0xC7FFFFFF)),
+                      boxShadow: const [BoxShadow(color: Color(0x2E5A4690), blurRadius: 30, offset: Offset(0, 12))],
+                    ),
+                    child: Row(children: [
+                      item(Icons.wb_sunny_outlined, '오늘', 0),
+                      item(Icons.explore_outlined, '탐색', 1),
+                      const SizedBox(width: 56),
+                      item(Icons.chat_bubble_outline, '커뮤니티', 2),
+                      item(Icons.show_chart, '흐름', 3),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+            // 솟은 가운데 기록(+) 버튼
+            Positioned(
+              left: 0, right: 0, bottom: bottom + 38,
+              child: Center(
+                child: GestureDetector(
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const MyRecordsScreen()),
                   ),
                   child: Container(
-                    width: 48, height: 48,
-                    decoration: const BoxDecoration(
+                    width: 58, height: 58,
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFF9FCF), Color(0xFFFF8FA8)]),
-                      boxShadow: [BoxShadow(color: Color(0x4DFF8FA8), blurRadius: 14, offset: Offset(0, 6))],
+                      gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)]),
+                      border: Border.all(color: const Color(0xA6FFFFFF), width: 3),
+                      boxShadow: const [BoxShadow(color: Color(0x80D89BFF), blurRadius: 22, offset: Offset(0, 10))],
                     ),
-                    child: const Icon(Icons.edit, color: Colors.white, size: 24),
+                    child: const Icon(Icons.edit, color: Colors.white, size: 25),
                   ),
                 ),
-              ]),
+              ),
             ),
-            item(Icons.chat_bubble_outline, '커뮤니티', 2),
-            item(Icons.show_chart, '흐름', 3),
           ]),
         );
       },

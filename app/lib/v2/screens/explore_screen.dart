@@ -23,11 +23,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
   NaverMapController? _mapCtrl;
   late final Future<List<RemotePlace>> _remote = ExploreRepository().fetchPlaces();
 
-  void _applyFilter(VoidCallback fn) {
-    setState(fn);
-    _refreshMarkers();
-  }
-
   List<Place> get _filtered {
     var list = kPlaces.where((p) => exEmo == null || p.to == exEmo);
     if (pet) list = list.where((p) => p.pet);
@@ -52,13 +47,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _listView() {
     final list = _filtered;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 100),
       children: [
         const Text('탐색', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
         const SizedBox(height: 12),
         _searchRow(),
         const SizedBox(height: 10),
-        _emoFilters(),
+        _filterBar(),
         const SizedBox(height: 16),
         FutureBuilder<List<RemotePlace>>(
           future: _remote,
@@ -100,89 +95,182 @@ class _ExploreScreenState extends State<ExploreScreen> {
       );
 
   Widget _remoteCard(RemotePlace rp) {
-    return GlassCard(
-      padding: const EdgeInsets.all(12),
-      child: Row(children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: rp.image.isNotEmpty
-              ? Image.network(rp.image, width: 64, height: 64, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _imgFallback())
-              : _imgFallback(),
-        ),
-        const SizedBox(width: 13),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(rp.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
-            const SizedBox(height: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: const Color(0x148E7BFF), borderRadius: BorderRadius.circular(8)),
-              child: Text(rp.categoryLabel, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF8E7BFF))),
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreateScreen())),
+      child: GlassCard(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: rp.image.isNotEmpty
+                  ? Image.network(rp.image, width: 60, height: 60, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _imgFallback())
+                  : _imgFallback(),
             ),
-            if (rp.region.isNotEmpty) ...[
-              const SizedBox(height: 5),
-              Text(rp.region, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: T.textMuted)),
-            ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(rp.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                const SizedBox(height: 5),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: const Color(0x148E7BFF), borderRadius: BorderRadius.circular(8)),
+                  child: Text(rp.categoryLabel, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF8E7BFF))),
+                ),
+                if (rp.region.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(rp.region, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: T.textMuted)),
+                ],
+              ]),
+            ),
+            const Icon(Icons.chevron_right, size: 20, color: Color(0xFFCABFDC)),
           ]),
-        ),
-        const Icon(Icons.chevron_right, size: 20, color: Color(0xFFCABFDC)),
-      ]),
+          const SizedBox(height: 11),
+          Container(height: 1, color: const Color(0x148C7BFF)),
+          const SizedBox(height: 9),
+          // 빈 상태: 아직 감정 기록이 없는 장소 → 첫 기록 유도
+          Row(children: const [
+            Text('🌱', style: TextStyle(fontSize: 13)),
+            SizedBox(width: 6),
+            Expanded(child: Text('아직 마음 기록이 없어요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64)))),
+            Text('첫 기록 남기기', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF8E7BFF))),
+            SizedBox(width: 2),
+            Icon(Icons.arrow_forward, size: 13, color: Color(0xFF8E7BFF)),
+          ]),
+        ]),
+      ),
     );
   }
 
-  Widget _emoFilters() {
-    Widget chip(String label, int? idx) {
-      final on = exEmo == idx;
-      final grad = idx == null ? null : kEmotions[idx].grad;
-      return GestureDetector(
-        onTap: () => _applyFilter(() => exEmo = idx),
+  // 필터 버튼(누르면 시트). 가로 스크롤 대신.
+  Widget _filterBar() {
+    final parts = <String>[];
+    if (exEmo != null) parts.add(kEmotions[exEmo!].label);
+    if (pet) parts.add('반려동물');
+    final active = parts.isNotEmpty;
+    final label = active ? parts.join(' · ') : '필터';
+    return Row(children: [
+      GestureDetector(
+        onTap: _openFilterSheet,
+        behavior: HitTestBehavior.opaque,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            gradient: on ? grad : null,
-            color: on ? (grad == null ? const Color(0xFF8E7BFF) : null) : const Color(0xC2FFFFFF),
+            gradient: active ? const LinearGradient(colors: [Color(0xFFC8A0FF), Color(0xFF9E7BFF)]) : null,
+            color: active ? null : const Color(0xC9FFFFFF),
             borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: on ? Colors.transparent : const Color(0x66FFFFFF)),
+            border: Border.all(color: active ? Colors.transparent : const Color(0x73FFFFFF)),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (idx != null) ...[Text(kEmotions[idx].emoji, style: const TextStyle(fontSize: 14)), const SizedBox(width: 5)],
-            Text(label,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? Colors.white : T.textSecondary)),
+            Icon(Icons.tune, size: 17, color: active ? Colors.white : T.textSecondary),
+            const SizedBox(width: 7),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: active ? Colors.white : T.textSecondary)),
+            const SizedBox(width: 5),
+            Icon(Icons.expand_more, size: 17, color: active ? const Color(0xCCFFFFFF) : T.textMuted),
           ]),
         ),
-      );
-    }
+      ),
+      const Spacer(),
+    ]);
+  }
 
-    Widget petChip() => GestureDetector(
-          onTap: () => _applyFilter(() => pet = !pet),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              gradient: pet ? const LinearGradient(colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)]) : null,
-              color: pet ? null : const Color(0xC2FFFFFF),
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: pet ? Colors.transparent : const Color(0x66FFFFFF)),
+  void _openFilterSheet() {
+    int? tmpEmo = exEmo;
+    bool tmpPet = pet;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(builder: (sheetCtx, setSheet) {
+        Widget chip(String label, int? idx) {
+          final on = tmpEmo == idx;
+          final grad = idx == null ? null : kEmotions[idx].grad;
+          return GestureDetector(
+            onTap: () => setSheet(() => tmpEmo = idx),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: on ? grad : null,
+                color: on ? (grad == null ? const Color(0xFF8E7BFF) : null) : const Color(0xFFF1ECF7),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: on ? Colors.transparent : const Color(0x1F8C7BFF)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (idx != null) ...[Text(kEmotions[idx].emoji, style: const TextStyle(fontSize: 15)), const SizedBox(width: 5)],
+                Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: on ? Colors.white : T.textSecondary)),
+              ]),
             ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Text('🐾', style: TextStyle(fontSize: 14)),
-              const SizedBox(width: 5),
-              Text('반려동물',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: pet ? Colors.white : T.textSecondary)),
-            ]),
-          ),
-        );
+          );
+        }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(children: [
-        chip('전체', null),
-        for (int i = 0; i < kEmotions.length; i++) ...[const SizedBox(width: 8), chip(kEmotions[i].label, i)],
-        const SizedBox(width: 8),
-        petChip(),
-      ]),
+        return Container(
+          decoration: const BoxDecoration(color: Color(0xFAFCFAFF), borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 18 + MediaQuery.of(sheetCtx).padding.bottom),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 42, height: 5, decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)))),
+            const SizedBox(height: 16),
+            const Text('어떤 마음이 되고 싶나요?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(height: 4),
+            const Text('되고 싶은 마음을 고르면 그 변화를 도와준 곳을 보여드려요.', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
+            const SizedBox(height: 14),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              chip('전체', null),
+              for (int i = 0; i < kEmotions.length; i++) chip(kEmotions[i].label, i),
+            ]),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () => setSheet(() => tmpPet = !tmpPet),
+              behavior: HitTestBehavior.opaque,
+              child: Row(children: [
+                const Text('🐾', style: TextStyle(fontSize: 16)),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('반려동물 동반 가능', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: T.textSecondary))),
+                Container(
+                  width: 46, height: 28,
+                  alignment: tmpPet ? Alignment.centerRight : Alignment.centerLeft,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: tmpPet ? const Color(0xFF8E7BFF) : const Color(0x33836FFF),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Container(width: 22, height: 22, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 18),
+            Row(children: [
+              GestureDetector(
+                onTap: () => setSheet(() { tmpEmo = null; tmpPet = false; }),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  decoration: BoxDecoration(color: const Color(0xFFF1ECF7), borderRadius: BorderRadius.circular(14)),
+                  child: const Text('초기화', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textSecondary)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() { exEmo = tmpEmo; pet = tmpPet; });
+                    _refreshMarkers();
+                    Navigator.pop(sheetCtx);
+                  },
+                  child: Container(
+                    height: 50,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(begin: Alignment(-0.7, -1), end: Alignment(0.7, 1), colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)]),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Text('적용', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+                  ),
+                ),
+              ),
+            ]),
+          ]),
+        );
+      }),
     );
   }
 
@@ -408,7 +496,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-        child: _emoFilters(),
+        child: _filterBar(),
       ),
       Expanded(child: _mapStack()),
     ]);
@@ -452,10 +540,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
         ),
       ),
       // 범례
-      Positioned(left: 16, bottom: 78, child: _legend()),
+      Positioned(left: 16, bottom: 168, child: _legend()),
       // 하단 CTA
       Positioned(
-        left: 40, right: 40, bottom: 18,
+        left: 40, right: 40, bottom: 108,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 13),
           alignment: Alignment.center,
