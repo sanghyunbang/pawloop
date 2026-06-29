@@ -18,41 +18,63 @@ class AuroraBackground extends StatelessWidget {
       valueListenable: AppThemeCtl.index,
       builder: (_, ti, __) {
         final th = kThemes[ti];
-        return Stack(
-          children: [
+        final e = tint;
+        if (e != null) {
+          // 감정 화면: 감정색이 오브(중앙 상단)에서 화면 전체로 번지는 배경.
+          return Stack(children: [
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [th.baseTop, th.baseBottom],
+                    colors: [
+                      Color.lerp(Colors.white, e.c1, 0.14)!,
+                      Color.lerp(th.baseBottom, e.c2, 0.20)!,
+                    ],
                   ),
                 ),
               ),
             ),
-            _blob(const Alignment(-0.9, -1.0), 520, th.blob1, 0.30),
-            _blob(const Alignment(1.05, -0.9), 480, th.blob2, 0.26),
-            _blob(const Alignment(0.0, 1.15), 560, th.blob3, 0.22),
-            if (tint != null) _blob(const Alignment(0.0, -0.5), 420, tint!.c1, 0.22),
+            _glow(const Alignment(0.0, -0.34), 1.05, e.c1, 0.55), // 오브 글로우(핵심)
+            _glow(const Alignment(-0.95, -1.0), 0.95, e.c1, 0.40), // 상단 좌
+            _glow(const Alignment(1.0, -0.75), 0.90, e.c2, 0.38), // 상단 우
+            _glow(const Alignment(0.0, 1.2), 1.10, e.c2, 0.30), // 하단
             child,
-          ],
-        );
+          ]);
+        }
+        // 비감정 화면: 테마 오로라(은은하지만 또렷하게 퍼지도록).
+        return Stack(children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [th.baseTop, th.baseBottom],
+                ),
+              ),
+            ),
+          ),
+          _glow(const Alignment(-0.9, -0.95), 0.95, th.blob1, 0.50),
+          _glow(const Alignment(1.0, -0.8), 0.90, th.blob2, 0.42),
+          _glow(const Alignment(0.0, 1.2), 1.10, th.blob3, 0.40),
+          child,
+        ]);
       },
     );
   }
 
-  Widget _blob(Alignment a, double size, Color color, double opacity) {
-    return Align(
-      alignment: a,
-      child: Container(
-        width: size,
-        height: size,
+  /// 화면 전체를 채우는 부드러운 방사형 글로우.
+  Widget _glow(Alignment center, double radius, Color color, double opacity) {
+    return Positioned.fill(
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
           gradient: RadialGradient(
+            center: center,
+            radius: radius,
             colors: [color.withOpacity(opacity), color.withOpacity(0)],
-            stops: const [0.0, 0.7],
+            stops: const [0.0, 0.78],
           ),
         ),
       ),

@@ -47,68 +47,59 @@ class _TodayScreenState extends State<TodayScreen> {
         tint: e,
         child: SafeArea(
           bottom: false,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                  children: [
-                    Text(_dateLabel,
-                        style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
-                            color: Color(0xBD463C69))),
-                    const SizedBox(height: 8),
-                    const Text('오늘, 어떤 마음에\n가까운가요?',
-                        style: TextStyle(
-                            fontSize: 27,
-                            height: 1.25,
-                            letterSpacing: -0.5,
-                            fontWeight: FontWeight.w800,
-                            color: T.textPrimary)),
-                    const SizedBox(height: 10),
-                    Center(child: FloatingOrb(emotion: e, size: 188)),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: Column(children: [
-                        Text(e.label,
-                            style: const TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                color: T.textPrimary)),
-                        const SizedBox(height: 5),
-                        Text(e.desc,
-                            style: const TextStyle(
-                                fontSize: 14, color: Color(0xBD463C64))),
-                      ]),
-                    ),
-                    const SizedBox(height: 20),
-                    _chips(),
-                    const SizedBox(height: 18),
-                    GlassCard(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(children: [
-                        _intensity(e),
-                        const SizedBox(height: 16),
-                        _todayRecord(),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(_dateLabel,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: 0.3, color: Color(0xBD463C69))),
+                const SizedBox(height: 6),
+                const Text('오늘, 어떤 마음에\n가까운가요?',
+                    style: TextStyle(fontSize: 25, height: 1.25, letterSpacing: -0.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                // 오브 + 라벨 (남는 공간을 채워 화면 한 장에 맞춤)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FloatingOrb(emotion: e, size: 152),
                         const SizedBox(height: 14),
-                        _ctas(e),
-                        const SizedBox(height: 8),
-                        _detailLink(),
-                      ]),
+                        Text(e.label, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                        const SizedBox(height: 4),
+                        Text(e.desc, style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+                      ],
                     ),
+                  ),
+                ),
+                _chips(),
+                const SizedBox(height: 16),
+                _intensity(e),
+                const SizedBox(height: 13),
+                _todayRecord(),
+                const SizedBox(height: 12),
+                _ctas(e),
+                const SizedBox(height: 4),
+                _detailLink(),
               ],
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 
   Widget _chips() {
-    return Wrap(
-      spacing: 9,
-      runSpacing: 9,
-      alignment: WrapAlignment.center,
-      children: [for (int i = 0; i < kEmotions.length; i++) _chip(i)],
-    );
+    Widget row(int a, int b, int c) => Row(children: [
+          Expanded(child: _chip(a)),
+          const SizedBox(width: 9),
+          Expanded(child: _chip(b)),
+          const SizedBox(width: 9),
+          Expanded(child: _chip(c)),
+        ]);
+    return Column(children: [row(0, 1, 2), const SizedBox(height: 9), row(3, 4, 5)]);
   }
 
   Widget _chip(int i) {
@@ -118,22 +109,22 @@ class _TodayScreenState extends State<TodayScreen> {
       onTap: () => setState(() => emo = i),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
         decoration: BoxDecoration(
           gradient: on ? em.grad : null,
-          color: on ? null : const Color(0xC2FFFFFF),
+          color: on ? null : const Color(0xC9FFFFFF),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: on ? Colors.transparent : const Color(0x66FFFFFF)),
+          border: Border.all(color: on ? Colors.transparent : const Color(0x73FFFFFF)),
           boxShadow: on
               ? [BoxShadow(color: em.c2.withOpacity(0.35), blurRadius: 14, offset: const Offset(0, 6))]
               : null,
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(em.emoji, style: const TextStyle(fontSize: 16)),
-          const SizedBox(width: 6),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(em.emoji, style: const TextStyle(fontSize: 15)),
+          const SizedBox(width: 5),
           Text(em.label,
               style: TextStyle(
-                  fontSize: 13.5,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: on ? Colors.white : T.textSecondary)),
         ]),
