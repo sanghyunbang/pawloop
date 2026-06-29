@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/app/navigator_keys.dart';
 import 'package:heat_trip_flutter/core/widgets/layout/main_nav_shell.dart';
 import 'package:heat_trip_flutter/features/bookmark/bookmark_routes.dart';
+import 'package:heat_trip_flutter/v2/screens/main_shell.dart';
 
 // tabs
 import 'package:heat_trip_flutter/features/start/start_routes.dart';
@@ -16,8 +18,10 @@ import 'package:heat_trip_flutter/features/emotion_map/emotion_map_routes.dart';
 
 final GoRouter appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
-  initialLocation: '/start',
+  // v2 디자인을 정식 진입으로 승격. (구 /start 셸은 아래에 보존 — 로그인/구화면 참조용)
+  initialLocation: '/home',
   routes: [
+    GoRoute(path: '/home', builder: (context, state) => const MainShell()),
     ...startRoutes,
     ...authRoutes,
     StatefulShellRoute.indexedStack(
