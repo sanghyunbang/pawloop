@@ -30,24 +30,19 @@ class _FeedScreenState extends State<FeedScreen> {
           bottom: false,
           child: Column(children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  const Text('커뮤니티', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                  const Spacer(),
-                  _viewToggle(),
-                ]),
-                const SizedBox(height: 4),
-                const Text('비슷한 마음을 가진 사람들과 이야기를 나눠요.',
-                    style: TextStyle(fontSize: 13, color: Color(0xC2463C64))),
-                const SizedBox(height: 14),
-                _catFilters(),
-                const SizedBox(height: 8),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: Row(children: [
+                const Text('커뮤니티', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                const Spacer(),
+                _viewToggle(),
               ]),
             ),
+            const SizedBox(height: 10),
+            _catFilters(),
+            const SizedBox(height: 8),
             Expanded(
               child: ListView(
-                padding: EdgeInsets.fromLTRB(20, 6, 20, MediaQuery.of(context).padding.bottom + 100),
+                padding: EdgeInsets.fromLTRB(12, 4, 12, MediaQuery.of(context).padding.bottom + 100),
                 children: [
                   for (final p in _posts) ...[
                     view == 'card' ? _card(p) : _row(p),
@@ -89,23 +84,35 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _catFilters() {
-    return Wrap(spacing: 8, runSpacing: 8, children: [
-      for (final c in kCommunities)
-        GestureDetector(
-          onTap: () => setState(() => feedCat = c),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              gradient: feedCat == c ? _pink : null,
-              color: feedCat == c ? null : const Color(0xC2FFFFFF),
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: feedCat == c ? Colors.transparent : const Color(0x66FFFFFF)),
+    // 한 줄 가로 스크롤(얇게). 카테고리 탭 스트립.
+    return SizedBox(
+      height: 34,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: kCommunities.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 7),
+        itemBuilder: (_, i) {
+          final c = kCommunities[i];
+          final on = feedCat == c;
+          return GestureDetector(
+            onTap: () => setState(() => feedCat = c),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: on ? _pink : null,
+                color: on ? null : const Color(0xC9FFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: on ? Colors.transparent : const Color(0x66FFFFFF)),
+              ),
+              child: Text(c,
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: on ? Colors.white : T.textSecondary)),
             ),
-            child: Text(c,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: feedCat == c ? Colors.white : T.textSecondary)),
-          ),
-        ),
-    ]);
+          );
+        },
+      ),
+    );
   }
 
   void _open(CommunityPost p) => Navigator.of(context).push(

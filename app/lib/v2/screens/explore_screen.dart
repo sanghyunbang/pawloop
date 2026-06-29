@@ -470,35 +470,36 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   // ───────────── 지도 뷰 ─────────────
   Widget _mapView() {
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-        child: Row(children: [
-          Expanded(
-            child: Container(
-              height: 46,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xCCFFFFFF),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0x66FFFFFF)),
+    // 지도는 화면을 꽉 채우고, 검색/필터는 그 위에 얇게 떠 있음(개방감).
+    return Stack(children: [
+      Positioned.fill(child: _mapStack()),
+      Positioned(
+        top: 6, left: 16, right: 16,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+              child: Container(
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xF2FFFFFF),
+                  borderRadius: BorderRadius.circular(13),
+                  boxShadow: const [BoxShadow(color: Color(0x1F5A4690), blurRadius: 14, offset: Offset(0, 5))],
+                ),
+                child: const Row(children: [
+                  Icon(Icons.search, size: 18, color: T.textMuted),
+                  SizedBox(width: 8),
+                  Text('이 지역에서 찾기...', style: TextStyle(fontSize: 13.5, color: T.textMuted)),
+                ]),
               ),
-              child: const Row(children: [
-                Icon(Icons.search, size: 20, color: T.textMuted),
-                SizedBox(width: 8),
-                Text('이 지역에서 찾기...', style: TextStyle(fontSize: 14, color: T.textMuted)),
-              ]),
             ),
-          ),
-          const SizedBox(width: 10),
-          _viewToggle(),
+            const SizedBox(width: 9),
+            _viewToggle(),
+          ]),
+          const SizedBox(height: 8),
+          _filterBar(),
         ]),
       ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-        child: _filterBar(),
-      ),
-      Expanded(child: _mapStack()),
     ]);
   }
 
@@ -521,9 +522,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
           },
         ),
       ),
-      // 안내 배너
+      // 안내 배너 (떠 있는 검색/필터 아래에)
       Positioned(
-        top: 10,
+        top: 112,
         left: 20,
         right: 20,
         child: Center(

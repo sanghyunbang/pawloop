@@ -92,14 +92,14 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Widget _chips() {
-    Widget row(int a, int b, int c) => Row(children: [
-          Expanded(child: _chip(a)),
-          const SizedBox(width: 9),
-          Expanded(child: _chip(b)),
-          const SizedBox(width: 9),
-          Expanded(child: _chip(c)),
+    Widget row(int a, int b, int c) => Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          _chip(a),
+          const SizedBox(width: 10),
+          _chip(b),
+          const SizedBox(width: 10),
+          _chip(c),
         ]);
-    return Column(children: [row(0, 1, 2), const SizedBox(height: 9), row(3, 4, 5)]);
+    return Column(children: [row(0, 1, 2), const SizedBox(height: 10), row(3, 4, 5)]);
   }
 
   Widget _chip(int i) {
@@ -109,7 +109,7 @@ class _TodayScreenState extends State<TodayScreen> {
       onTap: () => setState(() => emo = i),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
           gradient: on ? em.grad : null,
           color: on ? null : const Color(0xC9FFFFFF),
