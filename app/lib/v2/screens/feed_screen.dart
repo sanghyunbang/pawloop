@@ -189,7 +189,10 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _card(CommunityPost p) {
-    return GlassCard(
+    return GestureDetector(
+      onTap: () => _open(p),
+      behavior: HitTestBehavior.opaque,
+      child: GlassCard(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -240,6 +243,7 @@ class _FeedScreenState extends State<FeedScreen> {
           ]),
         ),
       ]),
+      ),
     );
   }
 

@@ -68,19 +68,22 @@ class _TodayScreenState extends State<TodayScreen> {
                   const SizedBox(width: 12),
                   const ProfileAvatar(),
                 ]),
-                // 오브 + 라벨 (남는 공간을 채워 화면 한 장에 맞춤)
+                // 오브 + 라벨 (남는 공간을 채움. 화면이 짧으면 FittedBox가 자동 축소 → 오버플로우 방지)
                 Expanded(
                   child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FloatingOrb(emotion: e, size: 152),
-                        const SizedBox(height: 14),
-                        Text(e.label, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                        const SizedBox(height: 4),
-                        Text(e.desc, style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
-                      ],
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FloatingOrb(emotion: e, size: 152),
+                          const SizedBox(height: 14),
+                          Text(e.label, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                          const SizedBox(height: 4),
+                          Text(e.desc, style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+                        ],
+                      ),
                     ),
                   ),
                 ),
