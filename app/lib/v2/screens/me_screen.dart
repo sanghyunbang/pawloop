@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../theme/themes.dart';
+import '../theme/records_data.dart';
 import '../widgets/aurora.dart';
 import 'edit_screen.dart';
+import 'myrecords_screen.dart';
 
 /// 프로필 (me) — 아바타 + 배경 테마 선택(앱 전체) + 메뉴.
 class MeScreen extends StatelessWidget {
@@ -50,6 +52,8 @@ class MeScreen extends StatelessWidget {
                     const Text('localtest@example.com', style: TextStyle(fontSize: 13, color: Color(0x99463C64))),
                   ]),
                   const SizedBox(height: 18),
+                  _statsCard(context),
+                  const SizedBox(height: 16),
                   _themeCard(),
                   const SizedBox(height: 18),
                   _menuCard(context),
@@ -133,10 +137,39 @@ class MeScreen extends StatelessWidget {
         padding: EdgeInsets.zero,
         child: Column(children: [
           row(Icons.edit, '프로필 편집', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditScreen()))),
+          row(Icons.article_outlined, '내 기록', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
+          row(Icons.forum_outlined, '내가 쓴 글', onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('아직 쓴 글이 없어요 · 기록을 공개로 작성하면 여기에 모여요'), duration: Duration(milliseconds: 1800)),
+              )),
           row(Icons.bookmark_border, '북마크', onTap: () {}),
           row(Icons.logout, '로그아웃', color: const Color(0xFFFF6B7E), border: false, onTap: () {}),
         ]),
       ),
+    );
+  }
+
+  Widget _statsCard(BuildContext context) {
+    Widget cell(String value, String label, VoidCallback? onTap) => Expanded(
+          child: GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: Column(children: [
+              Text(value, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF8E7BFF))),
+              const SizedBox(height: 3),
+              Text(label, style: const TextStyle(fontSize: 12, color: Color(0x9E463C64))),
+            ]),
+          ),
+        );
+    Widget div() => Container(width: 1, height: 34, color: const Color(0x1F8C7BFF));
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+      child: Row(children: [
+        cell('${kMyRecords.length}', '기록', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
+        div(),
+        cell('0', '쓴 글', null),
+        div(),
+        cell('0', '북마크', null),
+      ]),
     );
   }
 }

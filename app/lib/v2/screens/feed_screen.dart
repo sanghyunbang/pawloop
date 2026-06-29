@@ -3,6 +3,7 @@ import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../theme/community.dart';
 import '../widgets/aurora.dart';
+import '../widgets/profile_avatar.dart';
 import 'post_detail_screen.dart';
 
 /// 커뮤니티 (feed) — 비슷한 마음의 장소일기. 카드/리스트 토글.
@@ -35,6 +36,8 @@ class _FeedScreenState extends State<FeedScreen> {
                 const Text('커뮤니티', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: T.textPrimary)),
                 const Spacer(),
                 _viewToggle(),
+                const SizedBox(width: 10),
+                const ProfileAvatar(),
               ]),
             ),
             const SizedBox(height: 10),
@@ -83,34 +86,63 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  // 카테고리: 가로로 무한정 늘지 않도록 버튼 + 시트(확장 가능).
   Widget _catFilters() {
-    // 한 줄 가로 스크롤(얇게). 카테고리 탭 스트립.
-    return SizedBox(
-      height: 34,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: kCommunities.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 7),
-        itemBuilder: (_, i) {
-          final c = kCommunities[i];
-          final on = feedCat == c;
-          return GestureDetector(
-            onTap: () => setState(() => feedCat = c),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                gradient: on ? _pink : null,
-                color: on ? null : const Color(0xC9FFFFFF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: on ? Colors.transparent : const Color(0x66FFFFFF)),
-              ),
-              child: Text(c,
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: on ? Colors.white : T.textSecondary)),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(children: [
+        GestureDetector(
+          onTap: _openCatSheet,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xCCFFFFFF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0x66FFFFFF)),
             ),
-          );
-        },
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.tune, size: 16, color: T.textSecondary),
+              const SizedBox(width: 7),
+              Text(feedCat, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
+              const SizedBox(width: 5),
+              const Icon(Icons.expand_more, size: 16, color: T.textMuted),
+            ]),
+          ),
+        ),
+        const Spacer(),
+      ]),
+    );
+  }
+
+  void _openCatSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        decoration: const BoxDecoration(color: Color(0xFAFCFAFF), borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 18 + MediaQuery.of(sheetCtx).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 42, height: 5, decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)))),
+          const SizedBox(height: 16),
+          const Text('카테고리', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 14),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final c in kCommunities)
+              GestureDetector(
+                onTap: () { setState(() => feedCat = c); Navigator.pop(sheetCtx); },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: feedCat == c ? _pink : null,
+                    color: feedCat == c ? null : const Color(0xFFF1ECF7),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Text(c, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: feedCat == c ? Colors.white : T.textSecondary)),
+                ),
+              ),
+          ]),
+        ]),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../widgets/aurora.dart';
+import '../widgets/profile_avatar.dart';
 import 'detail_screen.dart';
 import 'analyzing_screen.dart';
 
@@ -52,12 +53,20 @@ class _TodayScreenState extends State<TodayScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(_dateLabel,
-                    style: const TextStyle(
-                        fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: 0.3, color: Color(0xBD463C69))),
-                const SizedBox(height: 6),
-                const Text('오늘, 어떤 마음에\n가까운가요?',
-                    style: TextStyle(fontSize: 25, height: 1.25, letterSpacing: -0.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(_dateLabel,
+                          style: const TextStyle(
+                              fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: 0.3, color: Color(0xBD463C69))),
+                      const SizedBox(height: 6),
+                      const Text('오늘, 어떤 마음에\n가까운가요?',
+                          style: TextStyle(fontSize: 25, height: 1.25, letterSpacing: -0.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                    ]),
+                  ),
+                  const SizedBox(width: 12),
+                  const ProfileAvatar(),
+                ]),
                 // 오브 + 라벨 (남는 공간을 채워 화면 한 장에 맞춤)
                 Expanded(
                   child: Center(
@@ -109,7 +118,7 @@ class _TodayScreenState extends State<TodayScreen> {
       onTap: () => setState(() => emo = i),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 23, vertical: 10),
         decoration: BoxDecoration(
           gradient: on ? em.grad : null,
           color: on ? null : const Color(0xC9FFFFFF),

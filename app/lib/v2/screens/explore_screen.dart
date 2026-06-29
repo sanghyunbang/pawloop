@@ -4,6 +4,7 @@ import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../theme/places.dart';
 import '../widgets/aurora.dart';
+import '../widgets/profile_avatar.dart';
 import '../data/explore_repository.dart';
 import 'place_detail_screen.dart';
 import 'create_screen.dart';
@@ -49,7 +50,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return ListView(
       padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 100),
       children: [
-        const Text('탐색', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
+        Row(children: const [
+          Text('탐색', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          Spacer(),
+          ProfileAvatar(),
+        ]),
         const SizedBox(height: 12),
         _searchRow(),
         const SizedBox(height: 10),
@@ -495,6 +500,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
             const SizedBox(width: 9),
             _viewToggle(),
+            const SizedBox(width: 9),
+            const ProfileAvatar(size: 40),
           ]),
           const SizedBox(height: 8),
           _filterBar(),
