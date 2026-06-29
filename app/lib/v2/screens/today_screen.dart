@@ -48,7 +48,7 @@ class _TodayScreenState extends State<TodayScreen> {
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: EdgeInsets.fromLTRB(22, 14, 22, MediaQuery.of(context).padding.bottom + 102),
+            padding: EdgeInsets.fromLTRB(22, 14, 22, MediaQuery.of(context).padding.bottom + 126),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -81,7 +81,7 @@ class _TodayScreenState extends State<TodayScreen> {
                 _todayRecord(),
                 const SizedBox(height: 12),
                 _ctas(e),
-                const SizedBox(height: 4),
+                const SizedBox(height: 12),
                 _detailLink(),
               ],
             ),
@@ -109,22 +109,22 @@ class _TodayScreenState extends State<TodayScreen> {
       onTap: () => setState(() => emo = i),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         decoration: BoxDecoration(
           gradient: on ? em.grad : null,
           color: on ? null : const Color(0xC9FFFFFF),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(13),
           border: Border.all(color: on ? Colors.transparent : const Color(0x73FFFFFF)),
           boxShadow: on
-              ? [BoxShadow(color: em.c2.withOpacity(0.35), blurRadius: 14, offset: const Offset(0, 6))]
+              ? [BoxShadow(color: em.c2.withOpacity(0.32), blurRadius: 12, offset: const Offset(0, 5))]
               : null,
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(em.emoji, style: const TextStyle(fontSize: 15)),
+          Text(em.emoji, style: const TextStyle(fontSize: 14)),
           const SizedBox(width: 5),
           Text(em.label,
               style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                   color: on ? Colors.white : T.textSecondary)),
         ]),
