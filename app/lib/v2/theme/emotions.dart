@@ -33,6 +33,10 @@ const List<String> kLevels = ['아주 약함', '약함', '보통', '강함', '�
 /// 현재 감정 → 추천(위로) 목표 감정. (핸드오프 SOOTHE)
 const List<int> kSoothe = [5, 0, 4, 4, 4, 5];
 
+/// 감정별 기분 점수(0~100). 캔들/막대 차트용. (핸드오프 SCORE)
+/// 기쁨84 · 슬픔25 · 불안38 · 분노12 · 평온66 · 설렘90
+const List<int> kScore = [84, 25, 38, 12, 66, 90];
+
 /// 상황 미선택(빠른 위로) 시 감정별 일반 위로 문구. (핸드오프 GENERIC)
 const List<String> kGenericComfort = [
   '좋은 기분은 나눌수록 커져요. 이 마음을 이어갈 곳으로 안내할게요.',
