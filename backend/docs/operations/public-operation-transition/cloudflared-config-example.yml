@@ -1,0 +1,11 @@
+﻿# Example only
+# Created: 2026-03-18 00:54:24 +09:00
+# Replace every placeholder before real use.
+
+tunnel: REPLACE_WITH_TUNNEL_ID
+credentials-file: /path/to/cloudflared/REPLACE_WITH_TUNNEL_ID.json
+
+ingress:
+  - hostname: api.example.com
+    service: http://127.0.0.1:80
+  - service: http_status:404

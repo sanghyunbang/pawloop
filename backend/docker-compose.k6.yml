@@ -1,0 +1,25 @@
+services:
+  k6-explore-smoke:
+    image: grafana/k6:0.54.0
+    profiles:
+      - k6
+    environment:
+      BASE_URL: ${K6_BASE_URL:-http://app:8080}
+      VUS: ${K6_VUS:-1}
+      DURATION: ${K6_DURATION:-30s}
+      SLEEP_SECONDS: ${K6_SLEEP_SECONDS:-0.2}
+      K6_PROMETHEUS_RW_SERVER_URL: ${K6_PROMETHEUS_RW_SERVER_URL:-http://prometheus:9090/api/v1/write}
+      K6_PROMETHEUS_RW_TREND_STATS: ${K6_PROMETHEUS_RW_TREND_STATS:-p(95),p(99),min,max}
+      SEARCH_QUERIES: ${K6_SEARCH_QUERIES:-한옥마을,해수욕장,카페거리,감천문화마을}
+    volumes:
+      - ./k6:/scripts:ro
+    command:
+      - run
+      - -o
+      - experimental-prometheus-rw
+      - --tag
+      - testid=${K6_TEST_ID:-local-explore-smoke}
+      - /scripts/domains/explore/explore-read-baseline.js
+    depends_on:
+      - app
+      - prometheus

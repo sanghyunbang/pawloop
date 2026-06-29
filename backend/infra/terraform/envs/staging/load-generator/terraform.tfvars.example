@@ -1,0 +1,29 @@
+aws_region  = "ap-northeast-2"
+name_prefix = "heat-trip-staging"
+
+vpc_id    = "vpc-xxxxxxxxxxxxxxxxx"
+subnet_id = "subnet-xxxxxxxxxxxxxxxxx"
+key_name  = "change-me-keypair"
+
+instance_type       = "t3.small"
+root_volume_size_gb = 30
+
+allowed_ssh_cidr_blocks = [
+  "203.0.113.10/32"
+]
+
+repo_url    = "https://github.com/<owner>/<repo>.git"
+repo_branch = "k6-load-tests"
+
+backend_base_url = "http://10.0.1.10:8080"
+
+# 선택값. k6 env에 ACCESS_TOKEN 또는 테스트 계정 정보가 있으면 사용한다.
+# Parameter 값은 BASE_URL=..., VUS=..., DURATION=... 같은 env 파일 형식이다.
+k6_env_ssm_parameter_name = ""
+
+default_vus      = 20
+default_duration = "10m"
+
+tags = {
+  Owner = "change-me"
+}

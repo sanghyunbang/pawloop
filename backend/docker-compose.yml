@@ -1,0 +1,44 @@
+services:
+  app:
+    build: .
+    container_name: heattrip-backend
+    env_file:
+      - .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
+      - SERVER_ADDRESS=0.0.0.0
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-heat_trip_db}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER:-heattrip}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
+    ports:
+      - "${APP_PUBLISHED_HOST:-127.0.0.1}:${APP_PUBLISHED_PORT:-8080}:8080"
+    depends_on:
+      - mysql
+    volumes:
+      - ./config:/config
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: heattrip-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-heat_trip_db}
+      MYSQL_USER: ${MYSQL_USER:-heattrip}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command: >
+      mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci --max_allowed_packet=16777216 --innodb-ft-min-token-size=2
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    ports:
+      - "${MYSQL_PUBLISHED_HOST:-127.0.0.1}:${MYSQL_PUBLISHED_PORT:-3307}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$$MYSQL_USER -p$$MYSQL_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

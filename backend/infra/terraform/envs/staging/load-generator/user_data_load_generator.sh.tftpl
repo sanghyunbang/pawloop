@@ -1,0 +1,46 @@
+mkdir -p /opt/heattrip-load
+cd /opt/heattrip-load
+
+if [ ! -d repo/.git ]; then
+  git clone --branch "${repo_branch}" "${repo_url}" repo
+else
+  cd repo
+  git fetch origin "${repo_branch}"
+  git checkout "${repo_branch}"
+  git pull --ff-only origin "${repo_branch}"
+  cd ..
+fi
+
+if [ -n "${k6_env_ssm_parameter_name}" ]; then
+  aws ssm get-parameter \
+    --name "${k6_env_ssm_parameter_name}" \
+    --with-decryption \
+    --query "Parameter.Value" \
+    --output text > /opt/heattrip-load/k6.env
+else
+  cat > /opt/heattrip-load/k6.env <<EOF
+BASE_URL=${backend_base_url}
+VUS=${default_vus}
+DURATION=${default_duration}
+EOF
+fi
+
+chmod 600 /opt/heattrip-load/k6.env
+
+cat > /usr/local/bin/run-heattrip-k6 <<'SCRIPT'
+#!/bin/bash
+set -euo pipefail
+
+SCENARIO="$${1:-domains/explore/explore-read-baseline.js}"
+
+cd /opt/heattrip-load/repo
+docker run --rm \
+  --network host \
+  --env-file /opt/heattrip-load/k6.env \
+  -v "$PWD/k6:/scripts:ro" \
+  grafana/k6:0.54.0 \
+  run "/scripts/$${SCENARIO}"
+SCRIPT
+
+chmod +x /usr/local/bin/run-heattrip-k6
+

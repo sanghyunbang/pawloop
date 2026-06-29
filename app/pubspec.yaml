@@ -1,0 +1,127 @@
+name: heat_trip_flutter
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 2.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  geolocator: ^13.0.1
+
+  flutter:
+    sdk: flutter
+
+  intl: ^0.18.1
+  http: ^1.4.0
+  flutter_secure_storage: ^9.2.4
+  table_calendar: ^3.0.9
+
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.2.0
+  image_picker: ^1.1.2
+
+  # 소셜 로그인 관련
+  flutter_web_auth_2: ^4.1.0
+  shared_preferences: ^2.5.3
+
+  # # 딥링크 : 앱을 외부(브라우저)에서 특정 화면으로 직접 여는 URL
+  # uni_links: ^0.5.4
+
+  # env관련
+  flutter_dotenv: ^5.2.1
+
+  # 페이지 속의 페이지 라우터
+  go_router: ^16.1.0
+  provider: ^6.1.5
+
+  visibility_detector: ^0.4.0+2
+  flutter_animate: ^4.5.2
+  iconsax: ^0.0.8
+
+  flutter_staggered_grid_view: ^0.7.0
+  url_launcher: ^6.3.2
+  cached_network_image: ^3.3.1
+
+  # 지도 SDK (네이버 Dynamic Map) — F1-4/F2-1
+  flutter_naver_map: ^1.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  # 플러터 아이콘 관련
+  flutter_launcher_icons: ^0.13.1
+
+# 아이콘 설정 (최상위에 1개)
+flutter_launcher_icons:
+  # 모바일
+  android: true
+  ios: true
+
+  # 기본 아이콘(비적응형·iOS/웹/데스크톱 백업)
+  image_path: "assets/icons/app_icon_1024.png"
+
+  # Android 적응형 아이콘
+  adaptive_icon_foreground: "assets/icons/app_icon_foreground_1024.png"
+  adaptive_icon_background: "assets/icons/app_icon_background_1024.png"
+
+  # 웹 아이콘 (bool이 아니라 map 이어야 함)
+  web:
+    generate: true
+    image_path: "assets/icons/app_icon_1024.png"
+    background_color: "#ffffff"
+    theme_color: "#ffffff"
+
+  # Windows 아이콘
+  windows:
+    generate: true
+    image_path: "assets/icons/app_icon_1024.png"
+
+  # macOS 아이콘
+  macos:
+    generate: true
+    image_path: "assets/icons/app_icon_1024.png"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/google.svg
+    - assets/icons/kakao.svg
+    - assets/icons/naver.svg
+    - assets/Logo4.png
+    - assets/
+    - .env
+    - assets/terms/terms_ko.md
+    - assets/terms/privacy_ko.md
+    - assets/terms/marketing_ko.md
+
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  # fonts:
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+  #       - asset: fonts/Schyler-Italic.ttf
+  #         style: italic
+  #   - family: Trajan Pro
+  #     fonts:
+  #       - asset: fonts/TrajanPro.ttf
+  #       - asset: fonts/TrajanPro_Bold.ttf
+  #         weight: 700
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/to/font-from-package

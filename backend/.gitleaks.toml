@@ -1,0 +1,23 @@
+title = "Heat Trip Backend Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Allow documented example config files"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)application-private\.properties\.example$'''
+]
+
+[[allowlists]]
+description = "Allow common placeholders used in sample configs and docs"
+regexTarget = "match"
+regexes = [
+  '''change-me''',
+  '''example\.com''',
+  '''127\.0\.0\.1''',
+  '''localhost''',
+  '''heat-trip-alert-bot''',
+  '''gpt-4\.1-mini'''
+]

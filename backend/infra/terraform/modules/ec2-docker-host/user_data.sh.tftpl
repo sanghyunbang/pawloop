@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+
+hostnamectl set-hostname "${hostname}"
+
+dnf update -y
+dnf install -y docker git awscli
+dnf install -y docker-compose-plugin || true
+
+systemctl enable --now docker
+usermod -aG docker ec2-user || true
+
+mkdir -p /opt/heattrip
+
+${startup_commands}

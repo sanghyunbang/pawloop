@@ -1,0 +1,49 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: heattrip-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.14.0
+    container_name: heattrip-mysqld-exporter
+    environment:
+      DATA_SOURCE_NAME: "${MYSQL_USER:-heattrip}:${MYSQL_PASSWORD}@(mysql:3306)/${MYSQL_DATABASE:-heat_trip_db}"
+    ports:
+      - "127.0.0.1:9104:9104"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: heattrip-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-grafana-password}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

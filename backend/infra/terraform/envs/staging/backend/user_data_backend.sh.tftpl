@@ -1,0 +1,29 @@
+mkdir -p /opt/heattrip-backend
+cd /opt/heattrip-backend
+
+if [ ! -d repo/.git ]; then
+  git clone --branch "${repo_branch}" "${repo_url}" repo
+else
+  cd repo
+  git fetch origin "${repo_branch}"
+  git checkout "${repo_branch}"
+  git pull --ff-only origin "${repo_branch}"
+  cd ..
+fi
+
+cd /opt/heattrip-backend/repo
+
+if [ -n "${app_env_ssm_parameter_name}" ]; then
+  aws ssm get-parameter \
+    --name "${app_env_ssm_parameter_name}" \
+    --with-decryption \
+    --query "Parameter.Value" \
+    --output text > .env
+  chmod 600 .env
+else
+  cp .env.example .env
+  echo "WARNING: .env was copied from .env.example. Replace it before production-like tests." >&2
+fi
+
+docker compose ${compose_files} up -d --build
+

@@ -1,0 +1,39 @@
+# === Heat Trip 모노레포 루트 .gitignore ===
+# app/ 와 backend/ 자체 .gitignore 도 함께 적용됨. 아래는 이중 방어(belt & suspenders).
+
+# --- 비밀: 절대 커밋 금지 ---
+**/.env
+**/.env.*
+!**/.env.example
+**/application-private.properties
+**/key.properties
+**/*.keystore
+**/*.jks
+**/*.p12
+**/*.pem
+**/*secret*.json
+**/google-services.json
+
+# --- 빌드 산출물 ---
+**/build/
+**/.gradle/
+**/.dart_tool/
+**/bin/
+**/ephemeral/
+**/.plugin_symlinks/
+
+# --- Node (tools 등) ---
+**/node_modules/
+
+# --- IDE / OS ---
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- 로그 / 임시 ---
+*.log
+tmp/
+*.tmp

@@ -1,0 +1,31 @@
+aws_region  = "ap-northeast-2"
+name_prefix = "heat-trip-staging"
+
+vpc_id    = "vpc-xxxxxxxxxxxxxxxxx"
+subnet_id = "subnet-xxxxxxxxxxxxxxxxx"
+key_name  = "change-me-keypair"
+
+instance_type       = "t3.medium"
+root_volume_size_gb = 40
+
+allowed_ssh_cidr_blocks = [
+  "203.0.113.10/32"
+]
+
+# VPC CIDR 또는 Loader private subnet CIDR를 권장한다. staging에서도 0.0.0.0/0은 쓰지 않는다.
+backend_app_allowed_cidr_blocks = [
+  "10.0.0.0/16"
+]
+
+repo_url    = "https://github.com/<owner>/<repo>.git"
+repo_branch = "k6-load-tests"
+
+# backend .env 전체 내용을 SSM Parameter Store SecureString으로 저장한다.
+# Loader 접근이 필요하면 해당 .env에 APP_PUBLISHED_HOST=0.0.0.0을 포함한다.
+app_env_ssm_parameter_name = "/heat-trip/staging/backend/env"
+
+enable_observability = true
+
+tags = {
+  Owner = "change-me"
+}

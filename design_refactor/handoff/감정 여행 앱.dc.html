@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+<defs><linearGradient id="tg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF9E7D"/><stop offset="1" stop-color="#D89BFF"/></linearGradient></defs>
+<rect width="100" height="100" rx="22" fill="url(#tg)"/>
+<circle cx="50" cy="46" r="20" fill="#fff" fill-opacity="0.92"/>
+<circle cx="50" cy="46" r="20" fill="url(#tg)" fill-opacity="0.25"/>
+<path d="M38 74 h24" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-opacity="0.9"/>
+</svg>
+</template>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font-family: 'Pretendard', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+.msr { font-family: 'Material Symbols Rounded'; font-weight: 400; font-style: normal; line-height: 1; display: inline-block; -webkit-font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; }
+.scrl::-webkit-scrollbar { width: 0; height: 0; }
+.scrl { scrollbar-width: none; }
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-13px); } }
+@keyframes pulseGlow { 0%,100% { opacity: .55; transform: translate(-50%,-50%) scale(1); } 50% { opacity: .85; transform: translate(-50%,-50%) scale(1.07); } }
+@keyframes pinFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes ripple { 0% { transform: translate(-50%,-50%) scale(.5); opacity: .55; } 100% { transform: translate(-50%,-50%) scale(2.6); opacity: 0; } }
+</style>
+</helmet>
+
+<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:30px; background:radial-gradient(120% 90% at 20% 0%, #e8def4 0%, transparent 55%), radial-gradient(110% 80% at 95% 100%, #f1ddd4 0%, transparent 50%), #e2ddec;">
+  <div style="{{ frameStyle }}">
+    <div style="{{ screenBg }}"></div>
+
+    <div class="scrl" style="position:absolute; inset:0; overflow-y:auto; z-index:10;">
+
+      <!-- ========== TODAY ========== -->
+      <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+        <div style="min-height:846px; padding:66px 24px 122px; display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <div style="font-size:12.5px; font-weight:600; color:rgba(70,60,105,.74); letter-spacing:.04em;">2026. 06. 29 월요일</div>
+            <div style="font-size:27px; font-weight:700; color:#2c2740; line-height:1.2; letter-spacing:-.02em; margin-top:8px;">오늘, 어떤 마음에<br>가까운가요?</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:16px; margin:8px 0;">
+            <div style="position:relative; width:150px; height:150px; display:flex; align-items:center; justify-content:center;">
+              <div style="{{ today.glowStyle }}"></div>
+              <div style="{{ today.orbStyle }}"></div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:26px; font-weight:700; color:#2c2740; letter-spacing:-.01em;">{{ today.emo.label }}</div>
+              <div style="font-size:14px; color:rgba(70,60,100,.74); margin-top:5px;">{{ today.emo.desc }}</div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:13px;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:9px;">
+              <sc-for list="{{ today.chips }}" as="chip" hint-placeholder-count="6">
+                <div style="{{ chip.style }}" onClick="{{ chip.onClick }}"><span style="font-size:16px;">{{ chip.emoji }}</span><span>{{ chip.label }}</span></div>
+              </sc-for>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:13px; font-weight:600; color:#574f6e;">감정의 세기</span>
+                <span style="{{ today.badgeStyle }}">{{ today.lvlWord }}</span>
+              </div>
+              <div style="display:flex; align-items:flex-end; gap:8px; height:46px;">
+                <sc-for list="{{ today.ints }}" as="seg" hint-placeholder-count="5"><div style="{{ seg.style }}" onClick="{{ seg.onClick }}"></div></sc-for>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:9px; background:var(--cbg); border:1px solid var(--cbd); border-radius:15px; padding:10px 13px;">
+              <span style="font-size:12px; font-weight:700; color:#574f6e; white-space:nowrap;">오늘 기록</span>
+              <div style="display:flex; gap:5px; flex:1; align-items:center;"><sc-for list="{{ today.dots }}" as="d" hint-placeholder-count="3"><div style="{{ d.style }}"><span style="font-size:11px;">{{ d.emoji }}</span></div></sc-for></div>
+              <span style="font-size:11.5px; color:rgba(70,60,100,.55); white-space:nowrap;">{{ today.count }}</span>
+            </div>
+            <div style="display:flex; gap:10px;">
+              <div style="flex:1;"><div style="{{ today.ctaStyle }}" onClick="{{ today.onLog }}"><span class="msr" style="font-size:20px;">{{ today.logIcon }}</span><span>{{ today.logLabel }}</span></div></div>
+              <div style="flex:1;"><div style="{{ today.ctaSecondary }}" onClick="{{ today.onCta }}"><span class="msr" style="font-size:19px;">favorite</span><span>위로받기</span></div></div>
+            </div>
+            <div onClick="{{ today.onDetail }}" style="display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; padding:2px;"><span style="font-size:13px; font-weight:600; color:rgba(70,60,100,.7);">더 정확히 입력하기</span><span class="msr" style="font-size:17px; color:rgba(70,60,100,.7);">arrow_forward</span></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== DETAIL (situation input) ========== -->
+      <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:0 0 40px;">
+          <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; padding:60px 22px 16px; background:linear-gradient(180deg, rgba(247,240,251,.94) 60%, transparent);">
+            <div onClick="{{ onBack }}" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:13px; background:var(--cbg); border:1px solid var(--cbd);"><span class="msr" style="font-size:22px; color:#2c2740;">arrow_back</span></div>
+            <span style="font-size:17px; font-weight:700; color:#2c2740;">마음 입력</span>
+          </div>
+          <div style="padding:6px 22px 0; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; gap:13px; align-items:center; background:linear-gradient(140deg, rgba(255,158,125,.16), rgba(216,155,255,.14)); border:1px solid rgba(216,155,255,.3); border-radius:var(--cr); padding:16px;">
+              <div style="width:44px; height:44px; flex-shrink:0; border-radius:14px; display:flex; align-items:center; justify-content:center; background:linear-gradient(140deg,#FF9E7D,#D89BFF); box-shadow:0 8px 18px rgba(216,155,255,.4);"><span class="msr" style="font-size:24px; color:#fff;">auto_awesome</span></div>
+              <div><div style="font-size:14.5px; font-weight:700; color:#2c2740;">마음을 자세히 들려주세요</div><div style="font-size:12.5px; color:rgba(70,60,100,.72); margin-top:3px; line-height:1.45;">AI가 맥락을 읽고, 꼭 맞는 위로와 장소를 찾아드려요.</div></div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="font-size:14.5px; font-weight:700; color:#2c2740; margin-bottom:12px;">지금 마음</div>
+              <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;"><sc-for list="{{ today.chips }}" as="chip" hint-placeholder-count="6"><div style="{{ chip.style }}" onClick="{{ chip.onClick }}"><span style="font-size:15px;">{{ chip.emoji }}</span><span>{{ chip.label }}</span></div></sc-for></div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="font-size:14.5px; font-weight:700; color:#2c2740;">무엇이 마음을 움직였나요?</div>
+              <div style="font-size:12px; color:rgba(70,60,100,.66); margin-top:3px; margin-bottom:13px;">상황을 알려주면 AI가 훨씬 정확하게 도와줘요.</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px;"><sc-for list="{{ situChips }}" as="st" hint-placeholder-count="6"><div style="{{ st.style }}" onClick="{{ st.onClick }}"><span class="msr" style="{{ st.icStyle }}">{{ st.icon }}</span><span>{{ st.label }}</span></div></sc-for></div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1); display:flex; flex-direction:column; gap:18px;">
+              <div style="font-size:14.5px; font-weight:700; color:#2c2740;">지금 컨디션</div>
+              <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:11px;"><span style="font-size:12.5px; font-weight:600; color:#574f6e;">에너지</span><span style="font-size:11.5px; color:#9b93b3;">피곤함 — 활기참</span></div><div style="position:relative; height:8px; border-radius:999px; background:rgba(120,90,160,.13);"><div style="{{ energyFill }}"></div><div style="{{ energyKnob }}"></div></div></div>
+              <div><div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:11px;"><span style="font-size:12.5px; font-weight:600; color:#574f6e;">사교성</span><span style="font-size:11.5px; color:#9b93b3;">혼자 — 함께</span></div><div style="position:relative; height:8px; border-radius:999px; background:rgba(120,90,160,.13);"><div style="{{ socialFill }}"></div><div style="{{ socialKnob }}"></div></div></div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="display:flex; align-items:center; gap:6px; font-size:14.5px; font-weight:700; color:#2c2740; margin-bottom:10px;">자유롭게<span class="msr" style="font-size:16px; color:#D89BFF;">auto_awesome</span></div>
+              <div style="background:rgba(255,255,255,.7); border:1px solid rgba(140,123,255,.18); border-radius:14px; padding:14px 15px; font-size:14px; color:#9b93b3; line-height:1.6; min-height:86px;">무슨 일이 있었는지 편하게 적어주세요. AI가 맥락을 함께 읽어요.</div>
+            </div>
+            <div style="{{ today.ctaStyle }}" onClick="{{ onStartDetail }}"><span class="msr" style="font-size:20px;">auto_awesome</span><span>분석 시작하기</span></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== ANALYZING ========== -->
+      <sc-if value="{{ isAnalyzing }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:30px; padding:66px 32px 122px;">
+          <div style="position:relative; width:170px; height:170px; display:flex; align-items:center; justify-content:center;"><div style="{{ analyzeGlow }}"></div><div style="{{ analyzeOrb }}"></div></div>
+          <div style="text-align:center;"><div style="font-size:21px; font-weight:700; color:#2c2740; letter-spacing:-.01em;">마음을 분석하고 있어요</div><div style="font-size:13.5px; color:rgba(70,60,100,.72); margin-top:7px; line-height:1.5;">AI가 당신의 기록과 비슷한 상황을<br>함께 살펴보고 있어요.</div></div>
+          <div style="width:100%; max-width:280px; display:flex; flex-direction:column; gap:14px; background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px;">
+            <sc-for list="{{ analyzeSteps }}" as="st" hint-placeholder-count="3"><div style="display:flex; align-items:center; gap:11px;"><span class="msr" style="{{ st.iconStyle }}">{{ st.icon }}</span><span style="{{ st.textStyle }}">{{ st.text }}</span></div></sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== RESULT ========== -->
+      <sc-if value="{{ isResult }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:0 0 40px;">
+          <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; padding:60px 22px 16px; background:linear-gradient(180deg, rgba(247,240,251,.94) 60%, transparent);">
+            <div onClick="{{ onBack }}" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:13px; background:var(--cbg); border:1px solid var(--cbd);"><span class="msr" style="font-size:22px; color:#2c2740;">arrow_back</span></div>
+            <span style="font-size:17px; font-weight:700; color:#2c2740;">마음 분석 결과</span>
+          </div>
+          <div style="padding:4px 22px 0; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; align-items:center; gap:6px;"><span class="msr" style="font-size:17px; color:#D89BFF;">auto_awesome</span><span style="font-size:12.5px; font-weight:600; color:rgba(70,60,100,.72);">AI가 당신의 상황을 분석했어요</span></div>
+            <div style="{{ result.adviceCardStyle }}">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:13px;"><div style="{{ result.orbStyle }}"></div><span style="{{ result.situChip }}"><span class="msr" style="font-size:14px;">{{ result.situIcon }}</span>{{ result.situLabel }}</span></div>
+              <div style="font-size:16px; font-weight:600; color:#2c2740; line-height:1.6; letter-spacing:-.01em;">{{ result.advice }}</div>
+              <sc-if value="{{ result.isQuick }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ result.onDetail }}" style="display:flex; align-items:center; gap:6px; margin-top:14px; padding-top:14px; border-top:1px solid rgba(140,123,255,.16); cursor:pointer;"><span class="msr" style="font-size:18px; color:#FF7A59;">tune</span><span style="font-size:12.5px; font-weight:700; color:#FF7A59;">상황을 알려주면 더 꼭 맞는 위로를 드려요</span><span class="msr" style="font-size:16px; color:#FF7A59;">arrow_forward</span></div>
+              </sc-if>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="display:flex; align-items:center; gap:7px; margin-bottom:10px;"><span class="msr" style="font-size:19px; color:#8E7BFF;">groups</span><span style="font-size:14px; font-weight:700; color:#2c2740;">비슷한 상황의 사람들</span></div>
+              <div style="font-size:13.5px; color:rgba(60,52,90,.84); line-height:1.6;">{{ result.insight }}</div>
+              <div style="margin-top:13px;"><span style="{{ result.tipStyle }}"><span class="msr" style="font-size:15px;">recommend</span>{{ result.tip }}</span></div>
+            </div>
+            <div style="font-size:16px; font-weight:700; color:#2c2740; margin:6px 2px 0;">지금 가면 좋은 곳</div>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <sc-for list="{{ recPlaces }}" as="p" hint-placeholder-count="3">
+                <div onClick="{{ p.onClick }}" style="cursor:pointer; background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:15px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+                  <div style="display:flex; gap:13px;">
+                    <div style="{{ p.thumb }}"><span style="font-size:23px;">{{ p.toEmoji }}</span></div>
+                    <div style="flex:1; min-width:0;">
+                      <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:15.5px; font-weight:700; color:#2c2740;">{{ p.name }}</span><span style="{{ p.liftStyle }}"><span class="msr" style="font-size:13px;">trending_up</span>{{ p.liftPct }}</span></div>
+                      <div style="font-size:12px; color:rgba(70,60,100,.66); margin-top:3px;">{{ p.cat }} · {{ p.dist }}</div>
+                      <div style="font-size:12.5px; color:rgba(60,52,90,.78); margin-top:7px; line-height:1.45;">{{ p.reason }}</div>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid rgba(140,123,255,.12);"><div style="{{ p.fromDot }}"><span style="font-size:13px;">{{ p.fromEmoji }}</span></div><span class="msr" style="font-size:16px; color:#bbb3cc;">arrow_forward</span><div style="{{ p.toDot }}"><span style="font-size:13px;">{{ p.toEmoji }}</span></div><span style="font-size:12.5px; font-weight:700; color:#3a3550; margin-left:2px;">{{ p.shiftLabel }}</span><span style="flex:1;"></span><span style="font-size:11.5px; color:rgba(70,60,100,.6);">{{ p.nText }}</span></div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="font-size:13.5px; font-weight:700; color:#2c2740; text-align:center;">이 추천이 마음에 들었나요?</div>
+              <div style="display:flex; gap:10px; margin-top:13px;"><div style="{{ result.goodStyle }}" onClick="{{ result.onGood }}"><span class="msr" style="font-size:18px;">thumb_up</span>도움돼요</div><div style="{{ result.badStyle }}" onClick="{{ result.onBad }}"><span class="msr" style="font-size:18px;">thumb_down</span>글쎄요</div></div>
+              <sc-if value="{{ result.hasFb }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:6px; justify-content:center; margin-top:12px; font-size:12px; color:#8E7BFF;"><span class="msr" style="font-size:15px;">auto_awesome</span>{{ result.fbMsg }}</div></sc-if>
+              <div style="font-size:11px; color:rgba(70,60,100,.5); text-align:center; margin-top:10px;">선택할수록 추천이 당신에게 더 똑똑해져요</div>
+            </div>
+            <div onClick="{{ result.onMore }}" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:16px; border-radius:18px; background:var(--cbg); border:1px solid var(--cbd); color:#574f6e; font-size:14.5px; font-weight:700; cursor:pointer;"><span class="msr" style="font-size:20px; color:#8E7BFF;">map</span>지도에서 더 둘러보기</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== INSIGHT (흐름 tab) ========== -->
+      <sc-if value="{{ isInsight }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:64px 22px 122px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div><div style="font-size:26px; font-weight:700; color:#2c2740; letter-spacing:-.02em;">마음 흐름</div><div style="font-size:13px; color:rgba(70,60,100,.7); margin-top:4px;">내가 나를 알아가는 곳</div></div>
+            <div onClick="{{ onProfile }}" style="width:44px; height:44px; border-radius:50%; background:linear-gradient(145deg,#FFD9C2,#E9C9FF); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; color:#fff; box-shadow:0 8px 18px rgba(216,155,255,.34); cursor:pointer;">t</div>
+          </div>
+          <div style="display:flex; margin-top:18px; background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:20px 10px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+            <div style="flex:1; text-align:center; cursor:pointer;" onClick="{{ onTipTotal }}"><div style="{{ statStyle }}">7</div><div style="display:flex; align-items:center; justify-content:center; gap:3px; font-size:12px; color:rgba(70,60,100,.62); margin-top:4px;">총 기록<span class="msr" style="font-size:13px; color:#bbb3cc;">info</span></div></div>
+            <div style="width:1px; background:rgba(140,123,255,.14);"></div>
+            <div style="flex:1; text-align:center; cursor:pointer;" onClick="{{ onTipBetter }}"><div style="{{ statStyle }}">8/10</div><div style="display:flex; align-items:center; justify-content:center; gap:3px; font-size:12px; color:rgba(70,60,100,.62); margin-top:4px;">나아진 비율<span class="msr" style="font-size:13px; color:#bbb3cc;">info</span></div></div>
+            <div style="width:1px; background:rgba(140,123,255,.14);"></div>
+            <div style="flex:1; text-align:center; cursor:pointer;" onClick="{{ onTipPlaces }}"><div style="{{ statStyle }}">5곳</div><div style="display:flex; align-items:center; justify-content:center; gap:3px; font-size:12px; color:rgba(70,60,100,.62); margin-top:4px;">나의 장소<span class="msr" style="font-size:13px; color:#bbb3cc;">info</span></div></div>
+          </div>
+          <sc-if value="{{ statTipOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; gap:9px; margin-top:10px; background:linear-gradient(140deg, rgba(142,123,255,.1), rgba(216,155,255,.08)); border:1px solid rgba(142,123,255,.22); border-radius:16px; padding:13px 15px;">
+              <span class="msr" style="font-size:18px; color:#8E7BFF; flex-shrink:0;">info</span>
+              <div><div style="font-size:12.5px; font-weight:700; color:#2c2740;">{{ statTipTitle }}</div><div style="font-size:12.5px; color:rgba(60,52,90,.8); line-height:1.5; margin-top:3px;">{{ statTipText }}</div></div>
+            </div>
+          </sc-if>
+          <div style="display:flex; flex-direction:column; gap:14px; margin-top:14px;">
+            <div style="display:flex; gap:6px; background:var(--cbg); border:1px solid var(--cbd); border-radius:16px; padding:5px;"><div style="{{ chartTogWeek }}" onClick="{{ onChartWeek }}">주간</div><div style="{{ chartTogDay }}" onClick="{{ onChartDay }}">오늘</div></div>
+
+            <sc-if value="{{ chartWeek }}" hint-placeholder-val="{{ true }}">
+              <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px 18px 14px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+                <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:15px; font-weight:700; color:#2c2740;">이번 주 마음 캔들</span><div style="display:flex; align-items:center; gap:11px;"><span style="display:flex; align-items:center; gap:4px; font-size:11px; color:#574f6e;"><span style="width:9px; height:9px; border-radius:2px; background:#33BFA6;"></span>좋아짐</span><span style="display:flex; align-items:center; gap:4px; font-size:11px; color:#574f6e;"><span style="width:9px; height:9px; border-radius:2px; background:#FF6B7E;"></span>내려감</span></div></div>
+                <div style="position:relative; margin-top:6px;">
+                  <div style="{{ chartAreaStyle }}">
+                    <sc-for list="{{ gridLines }}" as="g" hint-placeholder-count="3"><div style="{{ g.lineStyle }}"></div><div style="{{ g.labStyle }}">{{ g.label }}</div></sc-for>
+                    <div style="{{ candleRow }}"><sc-for list="{{ candleCols }}" as="c" hint-placeholder-count="7"><div style="{{ c.colStyle }}"><div style="{{ c.wick }}"></div><div style="{{ c.body }}"></div></div></sc-for></div>
+                  </div>
+                  <div style="display:flex; gap:2px;"><sc-for list="{{ candleCols }}" as="c" hint-placeholder-count="7"><div style="flex:1; text-align:center;"><span style="{{ c.labStyle }}">{{ c.lab }}</span></div></sc-for></div>
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"><sc-for list="{{ weekStats }}" as="w" hint-placeholder-count="4"><div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:18px; padding:15px 16px; box-shadow:0 8px 20px rgba(90,70,130,.08);"><div style="font-size:12px; color:rgba(70,60,100,.62);">{{ w.label }}</div><div style="{{ statStyle }}; margin-top:5px;">{{ w.value }}</div></div></sc-for></div>
+              <div style="display:flex; gap:11px; background:linear-gradient(140deg, rgba(142,123,255,.12), rgba(216,155,255,.1)); border:1px solid rgba(142,123,255,.24); border-radius:var(--cr); padding:16px;"><span class="msr" style="font-size:21px; color:#8E7BFF; flex-shrink:0;">insights</span><div><div style="font-size:12px; font-weight:700; color:#8E7BFF; margin-bottom:3px;">AI 패턴 분석</div><div style="font-size:13px; color:rgba(60,52,90,.84); line-height:1.55;">{{ chartInsight }}</div></div></div>
+            </sc-if>
+
+            <sc-if value="{{ chartDay }}" hint-placeholder-val="{{ false }}">
+              <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+                <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:15px; font-weight:700; color:#2c2740;">오늘의 한 컷</span><span style="{{ dayChangeStyle }}"><span class="msr" style="font-size:15px;">trending_up</span>{{ dayChangeText }}</span></div>
+                <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:16px;"><sc-for list="{{ ohlc }}" as="o" hint-placeholder-count="4"><div style="display:flex; flex-direction:column; align-items:center; gap:7px;"><span style="font-size:11px; font-weight:700; color:#9b93b3;">{{ o.k }}</span><div style="{{ o.dot }}"><span style="font-size:13px;">{{ o.emoji }}</span></div><span style="font-size:11.5px; font-weight:600; color:#574f6e;">{{ o.label }}</span></div></sc-for></div>
+              </div>
+              <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+                <div style="font-size:14.5px; font-weight:700; color:#2c2740; margin-bottom:15px;">하루의 흐름</div>
+                <div style="display:flex; flex-direction:column; gap:15px;"><sc-for list="{{ intraday }}" as="d" hint-placeholder-count="4"><div style="display:flex; align-items:center; gap:12px;"><span style="font-size:12px; font-weight:600; color:#9b93b3; width:32px;">{{ d.time }}</span><div style="{{ d.dot }}"><span style="font-size:16px;">{{ d.emoji }}</span></div><div style="flex:1;"><div style="font-size:13px; font-weight:600; color:#3a3550; margin-bottom:6px;">{{ d.label }}</div><div style="{{ d.bar }}"></div></div></div></sc-for></div>
+              </div>
+            </sc-if>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:20px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;"><span style="font-size:15px; font-weight:700; color:#2c2740;">나를 바꿔준 곳</span><span style="font-size:12px; color:rgba(70,60,100,.6);">자주 마음이 나아진 장소</span></div>
+              <div style="display:flex; flex-direction:column;">
+                <sc-for list="{{ myShifts }}" as="m" hint-placeholder-count="3">
+                  <div style="display:flex; align-items:center; gap:11px; padding:13px 0; border-bottom:1px solid rgba(140,123,255,.1);">
+                    <div style="{{ m.thumb }}"><span style="font-size:18px;">{{ m.toEmoji }}</span></div>
+                    <div style="flex:1; min-width:0;"><div style="font-size:14.5px; font-weight:700; color:#2c2740;">{{ m.name }}</div><div style="display:flex; align-items:center; gap:6px; margin-top:5px;"><div style="{{ m.fromDot }}"><span style="font-size:11px;">{{ m.fromEmoji }}</span></div><span class="msr" style="font-size:14px; color:#bbb3cc;">arrow_forward</span><div style="{{ m.toDot }}"><span style="font-size:11px;">{{ m.toEmoji }}</span></div><span style="font-size:12px; font-weight:600; color:#574f6e; margin-left:2px;">{{ m.shiftLabel }}</span></div></div>
+                    <span style="font-size:12px; font-weight:700; color:rgba(70,60,100,.5);">{{ m.count }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== EXPLORE : LIST ========== -->
+      <sc-if value="{{ exList }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:64px 0 122px;">
+          <div style="padding:0 22px;"><div style="font-size:26px; font-weight:700; color:#2c2740; letter-spacing:-.02em;">탐색</div><div style="font-size:13px; color:rgba(70,60,100,.7); margin-top:5px;">어떤 마음이 <b style="color:#8E7BFF;">되고 싶나요?</b> 그 변화를 도와준 곳들이에요.</div></div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; padding:14px 22px 4px;">
+            <div style="{{ exAllStyle }}" onClick="{{ onExAll }}">전체</div>
+            <sc-for list="{{ exFilter }}" as="chip" hint-placeholder-count="6"><div style="{{ chip.style }}" onClick="{{ chip.onClick }}"><span style="font-size:15px;">{{ chip.emoji }}</span><span>{{ chip.label }}</span></div></sc-for>
+          </div>
+          <div style="padding:8px 22px 0;"><div style="{{ exPetStyle }}" onClick="{{ onExPet }}"><span style="font-size:14px;">🐾</span><span>반려동물 동반</span></div></div>
+          <div style="padding:10px 22px 0; display:flex; gap:10px; align-items:center;">
+            <div style="flex:1; display:flex; align-items:center; gap:9px; background:var(--cbg); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border:1px solid var(--cbd); border-radius:15px; padding:12px 15px; box-shadow:0 6px 18px rgba(90,70,130,.08);"><span class="msr" style="font-size:20px; color:#9b93b3;">search</span><span style="font-size:14px; color:#9b93b3;">카페, 공원, 산책...</span></div>
+            <div style="display:flex; background:var(--cbg); border:1px solid var(--cbd); border-radius:14px; padding:4px;"><div style="{{ exTogList }}" onClick="{{ onExList }}"><span class="msr" style="font-size:18px;">view_agenda</span></div><div style="{{ exTogMap }}" onClick="{{ onExMap }}"><span class="msr" style="font-size:18px;">map</span></div></div>
+          </div>
+          <div style="padding:16px 22px 0; display:flex; flex-direction:column; gap:12px;">
+            <sc-for list="{{ places }}" as="p" hint-placeholder-count="4">
+              <div onClick="{{ p.onClick }}" style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:15px; box-shadow:0 10px 26px rgba(90,70,130,.1); cursor:pointer;">
+                <div style="display:flex; gap:13px;">
+                  <div style="{{ p.thumb }}"><span style="font-size:24px;">{{ p.toEmoji }}</span><sc-if value="{{ p.pet }}" hint-placeholder-val="{{ false }}"><div style="{{ petBadge }}">🐾</div></sc-if></div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:16px; font-weight:700; color:#2c2740;">{{ p.name }}</span><span style="{{ p.liftStyle }}"><span class="msr" style="font-size:13px;">trending_up</span>{{ p.liftPct }}</span></div>
+                    <div style="font-size:12.5px; color:rgba(70,60,100,.66); margin-top:3px;">{{ p.cat }} · {{ p.dist }}</div>
+                    <div style="font-size:12.5px; color:rgba(60,52,90,.78); margin-top:8px; line-height:1.45;">{{ p.line }}</div>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:13px; padding-top:13px; border-top:1px solid rgba(140,123,255,.12);">
+                  <div style="{{ p.fromDot }}"><span style="font-size:13px;">{{ p.fromEmoji }}</span></div>
+                  <span class="msr" style="font-size:16px; color:#bbb3cc;">arrow_forward</span>
+                  <div style="{{ p.toDot }}"><span style="font-size:13px;">{{ p.toEmoji }}</span></div>
+                  <span style="font-size:12.5px; font-weight:700; color:#3a3550; margin-left:2px;">{{ p.shiftLabel }}</span>
+                  <span style="flex:1;"></span>
+                  <span style="font-size:11.5px; color:rgba(70,60,100,.6);">{{ p.nText }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== PLACE DETAIL ========== -->
+      <sc-if value="{{ isPlaceDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:0 0 40px;">
+          <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; padding:60px 22px 16px; background:linear-gradient(180deg, rgba(247,240,251,.94) 60%, transparent);">
+            <div onClick="{{ onBack }}" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:13px; background:var(--cbg); border:1px solid var(--cbd);"><span class="msr" style="font-size:22px; color:#2c2740;">arrow_back</span></div>
+            <span style="font-size:17px; font-weight:700; color:#2c2740;">장소</span>
+          </div>
+          <div style="padding:4px 22px 0; display:flex; flex-direction:column; gap:14px;">
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="display:flex; gap:14px; align-items:center;">
+                <div style="{{ placeDetail.thumb }}"><span style="font-size:26px;">{{ placeDetail.toEmoji }}</span><sc-if value="{{ placeDetail.pet }}" hint-placeholder-val="{{ false }}"><div style="{{ petBadge }}">🐾</div></sc-if></div>
+                <div style="flex:1; min-width:0;"><div style="display:flex; align-items:center; gap:8px;"><span style="font-size:18px; font-weight:700; color:#2c2740;">{{ placeDetail.name }}</span><span style="{{ placeDetail.liftStyle }}"><span class="msr" style="font-size:13px;">trending_up</span>{{ placeDetail.liftPct }}</span></div><div style="font-size:12.5px; color:rgba(70,60,100,.66); margin-top:3px;">{{ placeDetail.cat }} · {{ placeDetail.dist }}</div></div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; margin-top:14px; padding-top:14px; border-top:1px solid rgba(140,123,255,.12);"><div style="{{ placeDetail.fromDot }}"><span style="font-size:14px;">{{ placeDetail.fromEmoji }}</span></div><span class="msr" style="font-size:17px; color:#bbb3cc;">arrow_forward</span><div style="{{ placeDetail.toDot }}"><span style="font-size:14px;">{{ placeDetail.toEmoji }}</span></div><span style="font-size:13px; font-weight:700; color:#3a3550; margin-left:2px;">{{ placeDetail.shiftLabel }}</span><span style="flex:1;"></span><span style="font-size:11.5px; color:rgba(70,60,100,.6);">{{ placeDetail.nText }}</span></div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="display:flex; align-items:center; gap:7px; margin-bottom:10px;"><span class="msr" style="font-size:19px; color:#FF7A59;">tips_and_updates</span><span style="font-size:14.5px; font-weight:700; color:#2c2740;">이곳은</span></div>
+              <div style="font-size:13.5px; color:rgba(60,52,90,.84); line-height:1.65;">{{ placeDetail.about }}</div>
+              <div style="display:flex; gap:9px; margin-top:14px;">
+                <a href="{{ placeDetail.naverUrl }}" target="_blank" rel="noopener" style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px; padding:11px; border-radius:13px; background:rgba(255,255,255,.7); border:1px solid var(--cbd); color:#574f6e; font-size:12.5px; font-weight:700; text-decoration:none;"><span class="msr" style="font-size:16px; color:#33BFA6;">map</span>네이버 지도</a>
+                <a href="{{ placeDetail.googleUrl }}" target="_blank" rel="noopener" style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px; padding:11px; border-radius:13px; background:rgba(255,255,255,.7); border:1px solid var(--cbd); color:#574f6e; font-size:12.5px; font-weight:700; text-decoration:none;"><span class="msr" style="font-size:16px; color:#5B79F5;">map</span>구글 지도</a>
+              </div>
+            </div>
+            <div style="{{ today.ctaStyle }}" onClick="{{ placeDetail.onRecord }}"><span class="msr" style="font-size:20px;">edit</span><span>여기서 장소일기 쓰기</span></div>
+            <div style="display:flex; align-items:center; gap:7px; margin:6px 2px 0;"><span class="msr" style="font-size:19px; color:#8E7BFF;">menu_book</span><span style="font-size:16px; font-weight:700; color:#2c2740;">이곳의 장소일기</span></div>
+            <sc-if value="{{ placeHasDiaries }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <sc-for list="{{ placeDiaries }}" as="d" hint-placeholder-count="2">
+                  <div onClick="{{ d.onClick }}" style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:16px; box-shadow:0 10px 26px rgba(90,70,130,.1); cursor:pointer;">
+                    <div style="display:flex; align-items:center; gap:9px;"><div style="{{ d.avatar }}">{{ d.initial }}</div><span style="font-size:14.5px; font-weight:700; color:#2c2740;">{{ d.nick }}</span><span style="flex:1;"></span><span style="font-size:11.5px; color:rgba(70,60,100,.5);">{{ d.date }}</span></div>
+                    <div style="display:flex; align-items:center; gap:7px; margin-top:10px;"><div style="{{ d.fromDot }}"><span style="font-size:11px;">{{ d.fromEmoji }}</span></div><span class="msr" style="font-size:14px; color:#bbb3cc;">arrow_forward</span><div style="{{ d.toDot }}"><span style="font-size:11px;">{{ d.toEmoji }}</span></div><span style="font-size:12px; font-weight:700; color:#3a3550; margin-left:2px;">{{ d.shiftLabel }}</span></div>
+                    <div style="font-size:13.5px; color:rgba(60,52,90,.82); margin-top:11px; line-height:1.55;">{{ d.story }}</div>
+                    <div style="display:flex; align-items:center; gap:5px; margin-top:11px;"><span class="msr" style="font-size:16px; color:#bbb3cc;">chat_bubble_outline</span><span style="font-size:12px; color:rgba(70,60,100,.6);">댓글 {{ d.cmtCount }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ placeNoDiaries }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:34px 20px; background:var(--cbg); border:1px solid var(--cbd); border-radius:var(--cr);"><span class="msr" style="font-size:34px; color:#cabfdc;">menu_book</span><span style="font-size:13.5px; color:rgba(70,60,100,.66); text-align:center; line-height:1.5;">아직 공개된 장소일기가 없어요.<br>첫 기록을 남겨보세요.</span></div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== POST DETAIL ========== -->
+      <sc-if value="{{ isPostDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:0 0 40px;">
+          <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; padding:60px 22px 16px; background:linear-gradient(180deg, rgba(247,240,251,.94) 60%, transparent);">
+            <div onClick="{{ onBack }}" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:13px; background:var(--cbg); border:1px solid var(--cbd);"><span class="msr" style="font-size:22px; color:#2c2740;">arrow_back</span></div>
+            <span style="font-size:17px; font-weight:700; color:#2c2740;">장소일기</span>
+          </div>
+          <div style="padding:4px 22px 0; display:flex; flex-direction:column; gap:14px;">
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="display:flex; align-items:center; gap:11px;"><div style="{{ post.avatar }}">{{ post.initial }}</div><div style="flex:1;"><div style="font-size:15.5px; font-weight:700; color:#2c2740;">{{ post.nick }}</div><div style="display:flex; align-items:center; gap:4px; font-size:12px; color:rgba(70,60,100,.6); margin-top:2px;"><span class="msr" style="font-size:14px;">place</span>{{ post.loc }}</div></div><span style="font-size:11.5px; color:rgba(70,60,100,.5);">{{ post.date }}</span></div>
+              <div style="display:flex; align-items:center; gap:8px; margin-top:14px;"><div style="{{ post.fromDot }}"><span style="font-size:13px;">{{ post.fromEmoji }}</span></div><span class="msr" style="font-size:16px; color:#bbb3cc;">arrow_forward</span><div style="{{ post.toDot }}"><span style="font-size:13px;">{{ post.toEmoji }}</span></div><span style="font-size:12.5px; font-weight:700; color:#3a3550; margin-left:2px;">{{ post.shiftLabel }}</span></div>
+              <div style="font-size:18px; font-weight:700; color:#2c2740; margin-top:14px; letter-spacing:-.01em;">{{ post.title }}</div>
+              <div style="font-size:14.5px; color:rgba(55,48,82,.9); margin-top:8px; line-height:1.7;">{{ post.story }}</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:7px; margin:6px 2px 0;"><span class="msr" style="font-size:19px; color:#8E7BFF;">forum</span><span style="font-size:15px; font-weight:700; color:#2c2740;">댓글 {{ commentCount }}</span></div>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <sc-for list="{{ comments }}" as="cm" hint-placeholder-count="2">
+                <div style="display:flex; gap:11px; align-items:flex-start; background:var(--cbg); border:1px solid var(--cbd); border-radius:18px; padding:14px;">
+                  <div style="{{ cm.dot }}">{{ cm.initial }}</div>
+                  <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:700; color:#2c2740;">{{ cm.nick }}</div><div style="font-size:13.5px; color:rgba(60,52,90,.84); margin-top:4px; line-height:1.5;">{{ cm.text }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="position:absolute; left:16px; right:16px; bottom:18px; z-index:10; display:flex; align-items:center; gap:9px; background:rgba(252,250,255,.97); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,.85); border-radius:18px; padding:8px 8px 8px 16px; box-shadow:0 12px 30px rgba(40,30,70,.18);">
+            <input value="{{ commentText }}" onInput="{{ onComment }}" placeholder="따뜻한 한마디를 남겨보세요" style="flex:1; min-width:0; border:none; outline:none; background:transparent; font-size:14px; color:#2c2740; font-family:inherit;" />
+            <div onClick="{{ onAddComment }}" style="width:40px; height:40px; flex-shrink:0; border-radius:13px; background:linear-gradient(140deg,#FF9E7D,#D89BFF); display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 8px 18px rgba(216,155,255,.4);"><span class="msr" style="font-size:20px; color:#fff;">send</span></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== EXPLORE : MAP ========== -->
+      <sc-if value="{{ exMap }}" hint-placeholder-val="{{ false }}">
+        <div style="position:relative; height:846px; overflow:hidden;">
+          <div style="{{ mapBgStyle }}">
+            <div style="position:absolute; top:30%; left:-12%; width:130%; height:64px; background:rgba(255,200,140,.32); transform:rotate(-11deg); filter:blur(1px);"></div>
+            <div style="position:absolute; top:57%; left:-12%; width:130%; height:40px; background:rgba(150,195,255,.3); transform:rotate(7deg); filter:blur(1px);"></div>
+            <div style="position:absolute; top:0; left:62%; width:46px; height:120%; background:rgba(170,225,200,.34); transform:rotate(9deg); filter:blur(1px);"></div>
+            <sc-for list="{{ mapPins }}" as="pin" hint-placeholder-count="6"><div style="{{ pin.pos }}" onClick="{{ pin.onClick }}"><div style="position:relative;"><div style="{{ pin.bubble }}">{{ pin.content }}</div><sc-if value="{{ pin.pet }}" hint-placeholder-val="{{ false }}"><div style="{{ pin.petBadge }}">🐾</div></sc-if></div><div style="{{ pin.tailStyle }}"></div></div></sc-for>
+            <div style="position:absolute; left:48%; top:53%; width:18px; height:18px; z-index:5;">
+              <div style="position:absolute; top:50%; left:50%; width:18px; height:18px; border-radius:50%; background:rgba(110,139,255,.4); animation:ripple 2.4s ease-out infinite;"></div>
+              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; background:#6E8BFF; border:2.5px solid #fff; box-shadow:0 3px 8px rgba(110,139,255,.6);"></div>
+            </div>
+          </div>
+          <div style="position:absolute; top:62px; left:16px; right:16px; z-index:20; display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; gap:9px; align-items:center;">
+              <div style="flex:1; display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.82); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.85); border-radius:16px; padding:12px 15px; box-shadow:0 10px 26px rgba(90,70,130,.16);"><span class="msr" style="font-size:20px; color:#9b93b3;">search</span><span style="font-size:14px; color:#9b93b3;">이 지역에서 찾기...</span></div>
+              <div style="display:flex; background:rgba(255,255,255,.82); border:1px solid rgba(255,255,255,.85); border-radius:14px; padding:4px; box-shadow:0 10px 26px rgba(90,70,130,.16);"><div style="{{ exTogList }}" onClick="{{ onExList }}"><span class="msr" style="font-size:18px;">view_agenda</span></div><div style="{{ exTogMap }}" onClick="{{ onExMap }}"><span class="msr" style="font-size:18px;">map</span></div></div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <div style="{{ exMapAllStyle }}" onClick="{{ onExAll }}">전체</div>
+              <sc-for list="{{ exFilter }}" as="chip" hint-placeholder-count="6"><div style="{{ chip.mapStyle }}" onClick="{{ chip.onClick }}"><span style="font-size:14px;">{{ chip.emoji }}</span><span>{{ chip.label }}</span></div></sc-for>
+              <div style="{{ exPetStyleMap }}" onClick="{{ onExPet }}"><span style="font-size:13px;">🐾</span><span>반려동물</span></div>
+            </div>
+            <sc-if value="{{ hasCtx }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.86); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.9); border-radius:14px; padding:9px 13px; box-shadow:0 10px 26px rgba(90,70,130,.18);">
+                <div style="{{ ctx.fromDot }}"><span style="font-size:12px;">{{ ctx.fromEmoji }}</span></div>
+                <span class="msr" style="font-size:15px; color:#bbb3cc;">arrow_forward</span>
+                <div style="{{ ctx.toDot }}"><span style="font-size:12px;">{{ ctx.toEmoji }}</span></div>
+                <span style="font-size:12px; color:#574f6e; line-height:1.35;">{{ ctx.text }}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ noCtx }}" hint-placeholder-val="{{ true }}">
+              <div style="align-self:flex-start; display:flex; align-items:center; gap:7px; background:rgba(255,255,255,.82); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.85); border-radius:14px; padding:8px 13px; box-shadow:0 8px 22px rgba(90,70,130,.14);"><span style="{{ domDot }}"></span><span style="font-size:12.5px; color:#574f6e;">이 동네는 주로 마음을 <b style="{{ domStyle }}">{{ domLabel }}</b>으로 이끌어요 {{ domEmoji }}</span></div>
+            </sc-if>
+          </div>
+          <div style="position:absolute; right:16px; top:344px; z-index:20; display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; flex-direction:column; background:rgba(255,255,255,.85); border:1px solid rgba(255,255,255,.85); border-radius:14px; overflow:hidden; box-shadow:0 8px 22px rgba(90,70,130,.16);"><div style="width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-bottom:1px solid rgba(140,123,255,.14);"><span class="msr" style="font-size:22px; color:#574f6e;">add</span></div><div style="width:42px; height:42px; display:flex; align-items:center; justify-content:center;"><span class="msr" style="font-size:22px; color:#574f6e;">remove</span></div></div>
+            <div style="width:42px; height:42px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.85); border:1px solid rgba(255,255,255,.85); border-radius:14px; box-shadow:0 8px 22px rgba(90,70,130,.16);"><span class="msr" style="font-size:22px; color:#8E7BFF;">my_location</span></div>
+          </div>
+          <div style="position:absolute; left:16px; bottom:182px; z-index:20; background:rgba(255,255,255,.85); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.85); border-radius:14px; padding:11px 13px; box-shadow:0 8px 22px rgba(90,70,130,.16);">
+            <div style="font-size:10.5px; font-weight:700; color:#574f6e; margin-bottom:8px;">핀 색 = 다녀온 뒤의 마음</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"><sc-for list="{{ legend }}" as="lg" hint-placeholder-count="6"><div style="display:flex; align-items:center; gap:6px;"><div style="{{ lg.dot }}"></div><span style="font-size:11px; color:#574f6e;">{{ lg.label }}</span></div></sc-for></div>
+          </div>
+          <sc-if value="{{ pinSelected }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; left:16px; right:16px; bottom:96px; z-index:25; background:rgba(255,255,255,.93); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px); border:1px solid rgba(255,255,255,.9); border-radius:24px; padding:16px; box-shadow:0 18px 40px rgba(90,70,130,.24);">
+              <div style="display:flex; gap:13px;">
+                <div style="{{ sel.thumb }}"><span style="font-size:26px;">{{ sel.toEmoji }}</span></div>
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:16px; font-weight:700; color:#2c2740;">{{ sel.name }}</span><span style="{{ sel.liftStyle }}"><span class="msr" style="font-size:13px;">trending_up</span>{{ sel.liftPct }}</span></div>
+                  <div style="font-size:12px; color:rgba(70,60,100,.66); margin-top:3px;">{{ sel.cat }} · {{ sel.dist }}</div>
+                  <div style="font-size:12.5px; color:rgba(60,52,90,.8); margin-top:7px; line-height:1.4;">{{ sel.line }}</div>
+                </div>
+                <div onClick="{{ onClosePin }}" style="position:absolute; top:14px; right:14px;"><span class="msr" style="font-size:20px; color:#bbb3cc;">close</span></div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:11px; margin-top:13px; padding-top:13px; border-top:1px solid rgba(140,123,255,.12);">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div style="{{ sel.fromDot }}"><span style="font-size:13px;">{{ sel.fromEmoji }}</span></div>
+                  <span class="msr" style="font-size:16px; color:#bbb3cc;">arrow_forward</span>
+                  <div style="{{ sel.toDot }}"><span style="font-size:13px;">{{ sel.toEmoji }}</span></div>
+                  <span style="font-size:13px; font-weight:700; color:#3a3550; margin-left:2px;">{{ sel.shiftLabel }}</span>
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <div style="{{ sel.openBtn }}" onClick="{{ sel.onOpen }}">더보기</div>
+                  <div style="{{ sel.btn }}" onClick="{{ sel.onRecord }}"><span class="msr" style="font-size:16px;">edit</span>기록</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ pinNone }}" hint-placeholder-val="{{ true }}">
+            <div style="position:absolute; left:50%; bottom:106px; transform:translateX(-50%); z-index:25; display:flex; align-items:center; gap:8px; background:linear-gradient(140deg,#FF9E7D,#D89BFF); color:#fff; font-size:13.5px; font-weight:700; padding:13px 20px; border-radius:18px; box-shadow:0 14px 32px rgba(216,155,255,.5);"><span class="msr" style="font-size:18px;">touch_app</span>핀을 눌러 마음의 변화를 확인하세요</div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ========== CREATE ========== -->
+      <sc-if value="{{ isCreate }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:0 0 40px;">
+          <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; padding:60px 22px 16px; background:linear-gradient(180deg, rgba(247,240,251,.94) 60%, transparent);">
+            <div onClick="{{ onBack }}" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:13px; background:var(--cbg); border:1px solid var(--cbd);"><span class="msr" style="font-size:22px; color:#2c2740;">arrow_back</span></div>
+            <span style="font-size:17px; font-weight:700; color:#2c2740;">기록 작성</span>
+            <span style="font-size:15px; font-weight:700; color:#8E7BFF;">저장</span>
+          </div>
+          <div style="padding:6px 22px 0; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; gap:6px; background:var(--cbg); border:1px solid var(--cbd); border-radius:16px; padding:5px;"><div style="{{ createTogPlace }}" onClick="{{ onCreatePlace }}">장소일기</div><div style="{{ createTogDiary }}" onClick="{{ onCreateDiary }}">심플일기</div></div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1); display:flex; flex-direction:column; gap:14px;">
+              <div><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:8px;">제목</div><div style="background:rgba(255,255,255,.7); border:1px solid rgba(140,123,255,.18); border-radius:14px; padding:13px 15px; font-size:14px; color:#9b93b3;">예: 서울숲에서 숨 고른 오후</div></div>
+              <div style="display:flex; gap:12px;">
+                <div style="flex:1;"><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:8px;">날짜</div><div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,.7); border:1px solid rgba(140,123,255,.18); border-radius:14px; padding:13px 15px; font-size:14px; color:#3a3550;">06.29<span class="msr" style="font-size:18px; color:#9b93b3;">calendar_month</span></div></div>
+                <sc-if value="{{ createPlace }}" hint-placeholder-val="{{ true }}"><div style="flex:1;"><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:8px;">장소</div><div onClick="{{ onOpenPlacePicker }}" style="display:flex; align-items:center; gap:7px; background:rgba(255,255,255,.7); border:1px solid rgba(140,123,255,.18); border-radius:14px; padding:13px 12px 13px 15px; font-size:14px; color:#3a3550; cursor:pointer;"><span class="msr" style="font-size:17px; color:#FF9E7D;">place</span><span style="flex:1;">{{ createPlaceName }}</span><span class="msr" style="font-size:18px; color:#bbb3cc;">expand_more</span></div></div></sc-if>
+              </div>
+            </div>
+            <sc-if value="{{ createPlace }}" hint-placeholder-val="{{ true }}">
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1); display:flex; flex-direction:column; gap:16px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:15px; font-weight:700; color:#2c2740;">이곳에서 마음의 변화</span><span style="font-size:11.5px; color:rgba(70,60,100,.6);">이 기록이 다른 사람의 길잡이가 돼요</span></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px; border-radius:16px; background:rgba(255,255,255,.55); border:1px solid rgba(140,123,255,.16);">
+                <div style="{{ cShift.fromDot }}"><span style="font-size:18px;">{{ cShift.fromEmoji }}</span></div>
+                <span class="msr" style="font-size:20px; color:#bbb3cc;">arrow_forward</span>
+                <div style="{{ cShift.toDot }}"><span style="font-size:18px;">{{ cShift.toEmoji }}</span></div>
+                <span style="flex:1;"></span>
+                <span style="font-size:14px; font-weight:700; color:#3a3550;">{{ cShift.shiftLabel }}</span>
+              </div>
+              <div><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:10px;">도착했을 때의 마음</div><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;"><sc-for list="{{ fromChips }}" as="chip" hint-placeholder-count="6"><div style="{{ chip.style }}" onClick="{{ chip.onClick }}"><span style="font-size:15px;">{{ chip.emoji }}</span><span>{{ chip.label }}</span></div></sc-for></div></div>
+              <div><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:10px;">떠날 때의 마음</div><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;"><sc-for list="{{ toChips }}" as="chip" hint-placeholder-count="6"><div style="{{ chip.style }}" onClick="{{ chip.onClick }}"><span style="font-size:15px;">{{ chip.emoji }}</span><span>{{ chip.label }}</span></div></sc-for></div></div>
+              <div><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:8px;">날씨</div><div style="display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.7); border:1px solid rgba(140,123,255,.18); border-radius:14px; padding:13px 15px; font-size:14px; color:#3a3550;"><span class="msr" style="font-size:19px; color:#FF9E7D;">partly_cloudy_day</span>맑음 · 24°C</div></div>
+            </div>
+            </sc-if>
+            <sc-if value="{{ createDiary }}" hint-placeholder-val="{{ false }}">
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1); display:flex; flex-direction:column; gap:16px;">
+              <div style="font-size:15px; font-weight:700; color:#2c2740;">오늘 마음의 변화</div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px; border-radius:16px; background:rgba(255,255,255,.55); border:1px solid rgba(140,123,255,.16);"><div style="{{ cShift.fromDot }}"><span style="font-size:18px;">{{ cShift.fromEmoji }}</span></div><span class="msr" style="font-size:20px; color:#bbb3cc;">arrow_forward</span><div style="{{ cShift.toDot }}"><span style="font-size:18px;">{{ cShift.toEmoji }}</span></div><span style="flex:1;"></span><span style="font-size:14px; font-weight:700; color:#3a3550;">{{ cShift.shiftLabel }}</span></div>
+              <div><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:10px;">하루 시작 마음</div><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;"><sc-for list="{{ fromChips }}" as="chip" hint-placeholder-count="6"><div style="{{ chip.style }}" onClick="{{ chip.onClick }}"><span style="font-size:15px;">{{ chip.emoji }}</span><span>{{ chip.label }}</span></div></sc-for></div></div>
+              <div><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:10px;">지금 마음</div><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;"><sc-for list="{{ toChips }}" as="chip" hint-placeholder-count="6"><div style="{{ chip.style }}" onClick="{{ chip.onClick }}"><span style="font-size:15px;">{{ chip.emoji }}</span><span>{{ chip.label }}</span></div></sc-for></div></div>
+              <div><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:8px;">날씨</div><div style="display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.7); border:1px solid rgba(140,123,255,.18); border-radius:14px; padding:13px 15px; font-size:14px; color:#3a3550;"><span class="msr" style="font-size:19px; color:#FF9E7D;">partly_cloudy_day</span>맑음 · 24°C</div></div>
+            </div>
+            </sc-if>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="display:flex; align-items:center; gap:6px; font-size:15px; font-weight:700; color:#2c2740;">무엇이 마음을 움직였나요?<span class="msr" style="font-size:16px; color:#D89BFF;">auto_awesome</span></div>
+              <div style="font-size:12px; color:rgba(70,60,100,.66); margin-top:3px; margin-bottom:13px;">AI 추천과 마음 패턴 분석에 함께 쓰여요.</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px;"><sc-for list="{{ situChips }}" as="st" hint-placeholder-count="6"><div style="{{ st.style }}" onClick="{{ st.onClick }}"><span class="msr" style="{{ st.icStyle }}">{{ st.icon }}</span><span>{{ st.label }}</span></div></sc-for></div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="font-size:15px; font-weight:700; color:#2c2740; margin-bottom:14px;">사진</div>
+              <div style="display:flex; gap:10px;"><div style="width:74px; height:74px; border-radius:16px; border:1.5px dashed rgba(140,123,255,.35); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:#9b8fc4;"><span class="msr" style="font-size:22px;">add_a_photo</span><span style="font-size:10px; font-weight:600;">추가</span></div><div style="width:74px; height:74px; border-radius:16px; background:linear-gradient(150deg,#FFD9C2,#E9D4FF);"></div><div style="width:74px; height:74px; border-radius:16px; background:linear-gradient(150deg,#D4ECFF,#D9F5EC);"></div></div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="font-size:15px; font-weight:700; color:#2c2740; margin-bottom:12px;">오늘의 이야기</div>
+              <div style="background:rgba(255,255,255,.7); border:1px solid rgba(140,123,255,.18); border-radius:14px; padding:14px 15px; font-size:14px; color:#9b93b3; line-height:1.6; min-height:96px;">무엇이 마음을 움직였는지 천천히 적어보세요...</div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:13px;"><span class="msr" style="font-size:21px; color:#8E7BFF;">{{ pubIcon }}</span><div style="flex:1;"><div style="font-size:14.5px; font-weight:700; color:#2c2740;">공개 설정</div><div style="font-size:12px; color:rgba(70,60,100,.62); margin-top:2px;">{{ pubDesc }}</div></div></div>
+              <div style="display:flex; gap:6px; background:rgba(255,255,255,.6); border:1px solid var(--cbd); border-radius:14px; padding:5px;"><div style="{{ pubTogPublic }}" onClick="{{ onPublicOn }}">공개</div><div style="{{ pubTogPrivate }}" onClick="{{ onPublicOff }}">나만 보기</div></div>
+              <sc-if value="{{ showCommPicker }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:14px;"><div style="font-size:12.5px; font-weight:600; color:#574f6e; margin-bottom:10px;">어느 커뮤니티에 올릴까요? <span style="color:#9b93b3; font-weight:500;">(복수 선택)</span></div><div style="display:flex; flex-wrap:wrap; gap:7px;"><sc-for list="{{ communityChips }}" as="cc" hint-placeholder-count="6"><div style="{{ cc.style }}" onClick="{{ cc.onClick }}">{{ cc.label }}</div></sc-for></div></div>
+              </sc-if>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; padding:17px; border-radius:20px; background:linear-gradient(140deg,#FF9E7D,#D89BFF); color:#fff; font-size:16px; font-weight:700; box-shadow:0 16px 34px rgba(216,155,255,.45);"><span class="msr" style="font-size:21px;">check</span>기록 저장하기</div>
+          </div>
+          <sc-if value="{{ placePickerOpen }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closePlacePicker }}" style="position:absolute; inset:0; z-index:70; background:rgba(30,22,48,.34);"></div>
+            <div style="position:absolute; left:0; right:0; bottom:0; z-index:71; background:rgba(252,250,255,.98); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border-radius:28px 28px 0 0; box-shadow:0 -16px 44px rgba(40,30,70,.26); padding:16px 18px 30px; max-height:76%; display:flex; flex-direction:column;">
+              <div style="width:42px; height:5px; border-radius:3px; background:rgba(40,30,70,.18); margin:0 auto 14px;"></div>
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;"><span style="font-size:17px; font-weight:700; color:#2c2740;">어디였나요?</span><span onClick="{{ closePlacePicker }}" class="msr" style="font-size:22px; color:#bbb3cc; cursor:pointer;">close</span></div>
+              <div style="font-size:12.5px; color:rgba(70,60,100,.66); margin-bottom:12px;">다녀온 곳을 고르면 그곳의 마음 변화를 함께 기록해요.</div>
+              <div style="display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.85); border:1px solid rgba(140,123,255,.18); border-radius:14px; padding:12px 14px; margin-bottom:10px;"><span class="msr" style="font-size:19px; color:#9b93b3;">search</span><input value="{{ placeQuery }}" onInput="{{ onPlaceQuery }}" placeholder="장소 검색" style="flex:1; min-width:0; border:none; outline:none; background:transparent; font-size:14px; color:#2c2740; font-family:inherit;" /></div>
+              <sc-if value="{{ hasFreeQuery }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ onChooseFree }}" style="display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.7); border:1px dashed rgba(140,123,255,.4); border-radius:14px; padding:12px 14px; margin-bottom:12px; cursor:pointer;"><span class="msr" style="font-size:19px; color:#8E7BFF;">edit_location_alt</span><span style="font-size:13.5px; font-weight:700; color:#2c2740;">‘{{ placeQuery }}’(으)로 기록하기</span></div>
+              </sc-if>
+              <div onClick="{{ onOpenPinPicker }}" style="display:flex; align-items:center; gap:9px; background:linear-gradient(140deg, rgba(255,158,125,.16), rgba(216,155,255,.14)); border:1px solid rgba(216,155,255,.3); border-radius:14px; padding:12px 14px; margin-bottom:12px; cursor:pointer;"><span class="msr" style="font-size:20px; color:#FF7A59;">add_location_alt</span><span style="font-size:13.5px; font-weight:700; color:#2c2740;">찾는 곳이 없나요? 지도에서 직접 찍기</span><span class="msr" style="font-size:18px; color:#bbb3cc; margin-left:auto;">chevron_right</span></div>
+              <div class="scrl" style="overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+                <sc-for list="{{ placeOptions }}" as="po" hint-placeholder-count="6">
+                  <div onClick="{{ po.onClick }}" style="display:flex; align-items:center; gap:12px; padding:11px; border-radius:16px; background:rgba(255,255,255,.7); border:1px solid var(--cbd); cursor:pointer;">
+                    <div style="{{ po.thumb }}"><span style="font-size:18px;">{{ po.toEmoji }}</span></div>
+                    <div style="flex:1; min-width:0;"><div style="font-size:14.5px; font-weight:700; color:#2c2740;">{{ po.name }}</div><div style="font-size:12px; color:rgba(70,60,100,.62); margin-top:2px;">{{ po.cat }} · {{ po.dist }}</div></div>
+                    <span class="msr" style="font-size:20px; color:#cabfdc;">chevron_right</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ pinPickerOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; inset:0; z-index:72; overflow:hidden;">
+              <div onClick="{{ onDropPin }}" style="{{ pinMapStyle }}">
+                <div style="position:absolute; top:30%; left:-12%; width:130%; height:64px; background:rgba(255,200,140,.32); transform:rotate(-11deg);"></div>
+                <div style="position:absolute; top:57%; left:-12%; width:130%; height:40px; background:rgba(150,195,255,.3); transform:rotate(7deg);"></div>
+                <div style="position:absolute; top:0; left:62%; width:46px; height:120%; background:rgba(170,225,200,.34); transform:rotate(9deg);"></div>
+                <sc-if value="{{ hasDrop }}" hint-placeholder-val="{{ false }}"><div style="{{ dropMarker }}"><span class="msr" style="font-size:42px; color:#FF566E;">location_on</span></div></sc-if>
+              </div>
+              <div style="position:absolute; top:58px; left:16px; right:16px; z-index:6; display:flex; align-items:center; gap:12px;">
+                <div onClick="{{ closePinPicker }}" style="width:40px; height:40px; border-radius:13px; background:rgba(255,255,255,.88); border:1px solid rgba(255,255,255,.85); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 22px rgba(90,70,130,.16); cursor:pointer;"><span class="msr" style="font-size:22px; color:#2c2740;">arrow_back</span></div>
+                <span style="font-size:15px; font-weight:700; color:#2c2740; background:rgba(255,255,255,.88); padding:10px 14px; border-radius:13px; box-shadow:0 8px 22px rgba(90,70,130,.16);">다녀온 위치 찍기</span>
+              </div>
+              <sc-if value="{{ noDrop }}" hint-placeholder-val="{{ true }}">
+                <div style="position:absolute; top:48%; left:50%; transform:translate(-50%,-50%); z-index:6; display:flex; align-items:center; gap:7px; background:rgba(255,255,255,.92); border-radius:16px; padding:12px 18px; box-shadow:0 10px 26px rgba(90,70,130,.2); pointer-events:none;"><span class="msr" style="font-size:20px; color:#FF7A59;">touch_app</span><span style="font-size:13.5px; font-weight:700; color:#2c2740;">지도를 눌러 위치를 찍어주세요</span></div>
+              </sc-if>
+              <div style="position:absolute; left:16px; right:16px; bottom:24px; z-index:6; background:rgba(252,250,255,.97); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,.85); border-radius:22px; padding:16px; box-shadow:0 16px 40px rgba(40,30,70,.22); display:flex; flex-direction:column; gap:13px;">
+                <sc-if value="{{ hasDrop }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:9px;"><span class="msr" style="font-size:20px; color:#FF566E;">my_location</span><div style="flex:1;"><div style="font-size:13.5px; font-weight:700; color:#2c2740;">내가 찍은 위치</div><div style="font-size:11.5px; color:rgba(70,60,100,.6); margin-top:2px;">{{ dropLatText }} · {{ dropLngText }}</div></div></div>
+                </sc-if>
+                <div style="{{ confirmPinStyle }}" onClick="{{ onConfirmPin }}"><span class="msr" style="font-size:19px;">check</span>이 위치로 기록하기</div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ========== FEED ========== -->
+      <sc-if value="{{ isFeed }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:64px 22px 122px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="font-size:26px; font-weight:700; color:#2c2740; letter-spacing:-.02em;">커뮤니티</div>
+            <div style="display:flex; background:var(--cbg); border:1px solid var(--cbd); border-radius:13px; padding:3px;"><div style="{{ feedViewFeed }}" onClick="{{ onFeedFeed }}"><span class="msr" style="font-size:18px;">view_agenda</span></div><div style="{{ feedViewBoard }}" onClick="{{ onFeedBoard }}"><span class="msr" style="font-size:18px;">format_list_bulleted</span></div></div>
+          </div>
+          <div style="font-size:13px; color:rgba(70,60,100,.7); margin-top:5px;">비슷한 마음을 가진 사람들과 이야기를 나눠요.</div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
+            <sc-for list="{{ feedCats }}" as="fc" hint-placeholder-count="7"><div style="{{ fc.style }}" onClick="{{ fc.onClick }}">{{ fc.label }}</div></sc-for>
+          </div>
+          <sc-if value="{{ feedIsFeed }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:14px; margin-top:16px;">
+            <sc-for list="{{ community }}" as="c" hint-placeholder-count="4">
+              <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+                <div style="display:flex; align-items:center; gap:10px;"><div style="{{ c.avatar }}">{{ c.initial }}</div><div style="flex:1; min-width:0;"><div style="font-size:15px; font-weight:700; color:#2c2740;">{{ c.nick }}</div><div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:4px;"><sc-for list="{{ c.catBadges }}" as="cb" hint-placeholder-count="1"><span style="{{ cb.style }}">{{ cb.label }}</span></sc-for><sc-if value="{{ c.hasLoc }}" hint-placeholder-val="{{ false }}"><span style="{{ c.placeBadge }}"><span class="msr" style="font-size:12px;">place</span>{{ c.loc }}</span></sc-if></div></div><span style="font-size:11.5px; color:rgba(70,60,100,.5);">{{ c.date }}</span></div>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:13px;"><div style="{{ c.fromDot }}"><span style="font-size:12px;">{{ c.fromEmoji }}</span></div><span class="msr" style="font-size:15px; color:#bbb3cc;">arrow_forward</span><div style="{{ c.toDot }}"><span style="font-size:12px;">{{ c.toEmoji }}</span></div><span style="font-size:12.5px; font-weight:700; color:#3a3550; margin-left:2px;">{{ c.shiftLabel }}</span></div>
+                <div style="font-size:15.5px; font-weight:700; color:#2c2740; margin-top:12px;">{{ c.title }}</div>
+                <div style="font-size:14px; color:rgba(55,48,82,.9); margin-top:6px; line-height:1.6;">{{ c.story }}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;"><sc-for list="{{ c.reactions }}" as="rx" hint-placeholder-count="3"><div style="{{ rx.style }}" onClick="{{ rx.onClick }}"><span style="font-size:14px;">{{ rx.emoji }}</span><span>{{ rx.text }}</span></div></sc-for></div>
+                <div onClick="{{ c.onClick }}" style="display:flex; align-items:center; gap:6px; margin-top:14px; padding-top:13px; border-top:1px solid rgba(140,123,255,.12); cursor:pointer;"><span class="msr" style="font-size:17px; color:#8E7BFF;">chat_bubble_outline</span><span style="font-size:12.5px; font-weight:700; color:#574f6e;">댓글 {{ c.cmtCount }}개 · 자세히 보기</span><span class="msr" style="font-size:17px; color:#bbb3cc; margin-left:auto;">chevron_right</span></div>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ feedIsBoard }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
+            <sc-for list="{{ community }}" as="c" hint-placeholder-count="7">
+              <div onClick="{{ c.onClick }}" style="display:flex; align-items:center; gap:12px; background:var(--cbg); border:1px solid var(--cbd); border-radius:15px; padding:13px 14px; cursor:pointer;">
+                <div style="display:flex; align-items:center; gap:3px; flex-shrink:0;"><div style="{{ c.boardFromDot }}"><span style="font-size:15px;">{{ c.fromEmoji }}</span></div><span class="msr" style="font-size:15px; color:#cabfdc;">arrow_forward</span><div style="{{ c.boardToDot }}"><span style="font-size:15px;">{{ c.toEmoji }}</span></div></div>
+                <div style="flex:1; min-width:0;"><div style="font-size:14px; font-weight:700; color:#2c2740; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.title }}</div><div style="display:flex; align-items:center; gap:7px; margin-top:4px;"><span style="{{ c.catBadge }}">{{ c.community }}</span><span style="display:flex; align-items:center; gap:3px; font-size:11px; color:rgba(70,60,100,.55);"><span class="msr" style="font-size:13px;">chat_bubble_outline</span>{{ c.cmtCount }}</span></div></div>
+                <span class="msr" style="font-size:19px; color:#cabfdc;">chevron_right</span>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ========== MY RECORDS ========== -->
+      <sc-if value="{{ isMyRecords }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:0 0 40px;">
+          <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; padding:60px 22px 16px; background:linear-gradient(180deg, rgba(247,240,251,.94) 60%, transparent);">
+            <div onClick="{{ onBack }}" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:13px; background:var(--cbg); border:1px solid var(--cbd);"><span class="msr" style="font-size:22px; color:#2c2740;">arrow_back</span></div>
+            <span style="font-size:17px; font-weight:700; color:#2c2740;">내 기록</span>
+          </div>
+          <div style="padding:4px 22px 0; display:flex; flex-direction:column; gap:14px;">
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:24px; padding:20px; box-shadow:0 10px 28px rgba(90,70,130,.1);">
+              <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:16px; font-weight:700; color:#2c2740;">2026년 6월 감정 캘린더</span><span style="display:flex; align-items:center; gap:4px; font-size:11.5px; font-weight:700; color:#FF7A59; background:rgba(255,122,89,.13); padding:5px 10px; border-radius:11px;"><span class="msr" style="font-size:15px;">local_fire_department</span>연속 2일</span></div>
+              <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:16px; text-align:center;">
+                <div style="font-size:11px; font-weight:700; color:#FF8A6E; padding-bottom:6px;">일</div><div style="font-size:11px; font-weight:600; color:#9b93b3; padding-bottom:6px;">월</div><div style="font-size:11px; font-weight:600; color:#9b93b3; padding-bottom:6px;">화</div><div style="font-size:11px; font-weight:600; color:#9b93b3; padding-bottom:6px;">수</div><div style="font-size:11px; font-weight:600; color:#9b93b3; padding-bottom:6px;">목</div><div style="font-size:11px; font-weight:600; color:#9b93b3; padding-bottom:6px;">금</div><div style="font-size:11px; font-weight:600; color:#9b93b3; padding-bottom:6px;">토</div>
+                <sc-for list="{{ calendar }}" as="d" hint-placeholder-count="35"><div style="{{ d.cell }}">{{ d.day }}</div></sc-for>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; padding:16px; border-radius:18px; background:linear-gradient(140deg,#FF9E7D,#D89BFF); color:#fff; font-size:15.5px; font-weight:700; cursor:pointer; box-shadow:0 14px 30px rgba(216,155,255,.45);" onClick="{{ onWrite }}"><span class="msr" style="font-size:21px;">edit</span>새 기록 쓰기</div>
+            <div style="font-size:16px; font-weight:700; color:#2c2740; margin:8px 2px 0;">전체 기록</div>
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <sc-for list="{{ records }}" as="r" hint-placeholder-count="2">
+                <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+                  <div style="display:flex; align-items:center; gap:11px;"><div style="{{ r.avatar }}"><span style="font-size:15px;">{{ r.toEmoji }}</span></div><span style="flex:1; font-size:16px; font-weight:700; color:#2c2740;">{{ r.name }}</span><span class="msr" style="font-size:20px; color:#bbb3cc;">more_horiz</span></div>
+                  <div style="display:flex; align-items:center; gap:14px; margin-top:12px; font-size:12.5px; color:rgba(70,60,100,.66);"><span style="display:flex; align-items:center; gap:5px;"><span class="msr" style="font-size:16px;">calendar_today</span>{{ r.date }}</span><span style="display:flex; align-items:center; gap:5px;"><span class="msr" style="font-size:16px;">place</span>{{ r.loc }}</span></div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:12px;"><div style="{{ r.fromDot }}"><span style="font-size:12px;">{{ r.fromEmoji }}</span></div><span class="msr" style="font-size:15px; color:#bbb3cc;">arrow_forward</span><div style="{{ r.toDot }}"><span style="font-size:12px;">{{ r.toEmoji }}</span></div><span style="font-size:12px; font-weight:700; color:#3a3550; margin-left:2px;">{{ r.shiftLabel }}</span><span style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:#574f6e; margin-left:auto;"><span class="msr" style="font-size:15px; color:#FF9E7D;">wb_sunny</span>{{ r.weather }}</span></div>
+                  <div style="font-size:13.5px; color:rgba(60,52,90,.82); margin-top:13px; line-height:1.55;">{{ r.story }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== ME (profile) ========== -->
+      <sc-if value="{{ isMe }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:0 0 40px;">
+          <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; padding:60px 22px 16px; background:linear-gradient(180deg, rgba(247,240,251,.94) 60%, transparent);">
+            <div onClick="{{ onBack }}" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:13px; background:var(--cbg); border:1px solid var(--cbd);"><span class="msr" style="font-size:22px; color:#2c2740;">arrow_back</span></div>
+            <span style="font-size:17px; font-weight:700; color:#2c2740;">프로필</span>
+          </div>
+          <div style="padding:12px 22px 0; display:flex; flex-direction:column; gap:18px;">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:13px; padding:6px 0 2px;">
+              <div style="width:88px; height:88px; border-radius:50%; background:linear-gradient(145deg,#FFD9C2,#E9C9FF); display:flex; align-items:center; justify-content:center; font-size:34px; font-weight:700; color:#fff; box-shadow:0 12px 28px rgba(216,155,255,.4);">t</div>
+              <div style="text-align:center;"><div style="font-size:20px; font-weight:700; color:#2c2740;">tester</div><div style="font-size:13px; color:rgba(70,60,100,.6); margin-top:3px;">localtest@example.com</div></div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); padding:18px; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;"><span style="font-size:15px; font-weight:700; color:#2c2740;">배경 테마</span><span style="font-size:12px; color:rgba(70,60,100,.6);">나에게 맞는 분위기로</span></div>
+              <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:9px;">
+                <sc-for list="{{ themeOptions }}" as="t" hint-placeholder-count="5"><div onClick="{{ t.onClick }}" style="cursor:pointer;"><div style="{{ t.swatch }}"></div><div style="{{ t.labStyle }}">{{ t.label }}</div></div></sc-for>
+              </div>
+            </div>
+            <div style="background:var(--cbg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--cbd); border-radius:var(--cr); overflow:hidden; box-shadow:0 10px 26px rgba(90,70,130,.1);">
+              <div onClick="{{ onEdit }}" style="display:flex; align-items:center; gap:13px; padding:17px 20px; border-bottom:1px solid rgba(140,123,255,.1);"><span class="msr" style="font-size:21px; color:#574f6e;">edit</span><span style="flex:1; font-size:14.5px; font-weight:600; color:#2c2740;">프로필 편집</span><span class="msr" style="font-size:20px; color:#bbb3cc;">chevron_right</span></div>
+              <div style="display:flex; align-items:center; gap:13px; padding:17px 20px; border-bottom:1px solid rgba(140,123,255,.1);"><span class="msr" style="font-size:21px; color:#574f6e;">bookmark</span><span style="flex:1; font-size:14.5px; font-weight:600; color:#2c2740;">북마크</span><span class="msr" style="font-size:20px; color:#bbb3cc;">chevron_right</span></div>
+              <div style="display:flex; align-items:center; gap:13px; padding:17px 20px;"><span class="msr" style="font-size:21px; color:#FF6B7E;">logout</span><span style="flex:1; font-size:14.5px; font-weight:600; color:#FF6B7E;">로그아웃</span><span class="msr" style="font-size:20px; color:#FF6B7E;">chevron_right</span></div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== EDIT ========== -->
+      <sc-if value="{{ isEdit }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:846px; padding:0 0 40px;">
+          <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; padding:60px 22px 16px; background:linear-gradient(180deg, rgba(247,240,251,.94) 60%, transparent);">
+            <div onClick="{{ onBack }}" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:13px; background:var(--cbg); border:1px solid var(--cbd);"><span class="msr" style="font-size:22px; color:#2c2740;">arrow_back</span></div>
+            <span style="font-size:17px; font-weight:700; color:#2c2740;">프로필 수정</span>
+          </div>
+          <div style="padding:8px 22px 0; display:flex; flex-direction:column; gap:18px;">
+            <div style="display:flex; justify-content:center;"><div style="position:relative; width:88px; height:88px;"><div style="width:88px; height:88px; border-radius:50%; background:linear-gradient(145deg,#FFD9C2,#E9C9FF); display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; color:#fff; box-shadow:0 12px 28px rgba(216,155,255,.4);">t</div><div style="position:absolute; right:-2px; bottom:-2px; width:32px; height:32px; border-radius:50%; background:#8E7BFF; display:flex; align-items:center; justify-content:center; border:3px solid #f7f0fb;"><span class="msr" style="font-size:16px; color:#fff;">edit</span></div></div></div>
+            <div style="display:flex; flex-direction:column; gap:6px;"><span style="font-size:12.5px; font-weight:600; color:#574f6e; padding-left:4px;">닉네임</span><div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,.62); border:1px solid rgba(140,123,255,.2); border-radius:14px; padding:14px 16px; font-size:15px; color:#2c2740;">tester<span style="font-size:12px; color:#bbb3cc;">6/20</span></div></div>
+            <div style="display:flex; flex-direction:column; gap:6px;"><span style="font-size:12.5px; font-weight:600; color:#574f6e; padding-left:4px;">이름</span><div style="background:rgba(255,255,255,.62); border:1px solid rgba(140,123,255,.2); border-radius:14px; padding:14px 16px; font-size:15px; color:#2c2740;">tester</div></div>
+            <div style="display:flex; flex-direction:column; gap:6px;"><span style="font-size:12.5px; font-weight:600; color:#574f6e; padding-left:4px;">이메일</span><div style="background:rgba(255,255,255,.62); border:1px solid rgba(140,123,255,.2); border-radius:14px; padding:14px 16px; font-size:15px; color:#2c2740;">localtest@example.com</div></div>
+            <div><div style="font-size:13.5px; font-weight:700; color:#2c2740; margin-bottom:12px;">성별</div><div style="display:flex; gap:12px;"><sc-for list="{{ genders }}" as="g" hint-placeholder-count="3"><div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px;" onClick="{{ g.onClick }}"><div style="{{ g.ring }}"><span class="msr" style="{{ g.icStyle }}">{{ g.icon }}</span></div><span style="font-size:12.5px; font-weight:600; color:#574f6e;">{{ g.label }}</span></div></sc-for></div></div>
+            <div style="display:flex; align-items:center; gap:12px; color:#bbb3cc;"><div style="flex:1; height:1px; background:rgba(140,123,255,.15);"></div><span style="font-size:12px; font-weight:600;">선택사항</span><div style="flex:1; height:1px; background:rgba(140,123,255,.15);"></div></div>
+            <div style="background:rgba(255,255,255,.62); border:1px solid rgba(140,123,255,.2); border-radius:14px; padding:14px 16px; font-size:15px; color:#9b93b3;">나이</div>
+            <div><div style="font-size:13.5px; font-weight:700; color:#2c2740; margin-bottom:12px;">여행 타입 <span style="font-size:12px; font-weight:500; color:#9b93b3;">(선택)</span></div><div style="display:flex; flex-wrap:wrap; gap:10px;"><sc-for list="{{ travels }}" as="t" hint-placeholder-count="4"><div style="{{ t.style }}" onClick="{{ t.onClick }}"><span class="msr" style="font-size:18px;">{{ t.icon }}</span><span>{{ t.label }}</span></div></sc-for></div></div>
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:8px; padding:17px; border-radius:20px; background:linear-gradient(140deg,#FF9E7D,#D89BFF); color:#fff; font-size:16px; font-weight:700; box-shadow:0 16px 34px rgba(216,155,255,.45);">저장하기</div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- ===== STATUS ===== -->
+    <div style="position:absolute; top:0; left:0; right:0; height:54px; background:linear-gradient(180deg, rgba(247,240,251,.8), transparent); z-index:38; pointer-events:none;"></div>
+    <div style="position:absolute; top:0; left:0; right:0; height:54px; display:flex; align-items:center; justify-content:space-between; padding:20px 30px 0; z-index:40;"><span style="font-size:15px; font-weight:600; color:#2c2740;">9:41</span><div style="display:flex; align-items:center; gap:7px;"><span class="msr" style="font-size:17px; color:#2c2740;">wifi</span><span class="msr" style="font-size:17px; color:#2c2740;">battery_full</span></div></div>
+
+    <!-- ===== NAV ===== -->
+    <sc-if value="{{ showNav }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute; left:16px; right:16px; bottom:16px; height:66px; background:rgba(255,255,255,.66); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px); border:1px solid rgba(255,255,255,.78); border-radius:26px; box-shadow:0 14px 34px rgba(90,70,140,.18); display:flex; align-items:center; justify-content:space-between; padding:0 26px; z-index:45;">
+        <sc-for list="{{ navL }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="display:flex; flex-direction:column; align-items:center; gap:3px;"><span class="msr" style="{{ t.icon }}">{{ t.gly }}</span><span style="{{ t.lab }}">{{ t.label }}</span></div></sc-for>
+        <div style="width:52px;"></div>
+        <sc-for list="{{ navR }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="display:flex; flex-direction:column; align-items:center; gap:3px;"><span class="msr" style="{{ t.icon }}">{{ t.gly }}</span><span style="{{ t.lab }}">{{ t.label }}</span></div></sc-for>
+      </div>
+      <div onClick="{{ onCreate }}" style="position:absolute; left:50%; bottom:46px; transform:translateX(-50%); width:58px; height:58px; border-radius:50%; background:linear-gradient(145deg,#FF9E7D,#D89BFF); display:flex; align-items:center; justify-content:center; box-shadow:0 14px 30px rgba(216,155,255,.5); border:3px solid rgba(255,255,255,.65); z-index:46;"><span class="msr" style="font-size:25px; color:#fff;">edit</span></div>
+    </sc-if>
+
+    <div style="position:absolute; top:12px; left:50%; transform:translateX(-50%); width:120px; height:34px; background:#0c0a12; border-radius:20px; z-index:60;"></div>
+    <div style="position:absolute; bottom:9px; left:50%; transform:translateX(-50%); width:130px; height:5px; border-radius:3px; background:rgba(40,30,70,.22); z-index:60;"></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;startScreen&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;오늘&quot;, &quot;options&quot;: [&quot;오늘&quot;, &quot;탐색&quot;, &quot;피드&quot;, &quot;흐름&quot;, &quot;나&quot;, &quot;기록작성&quot;, &quot;마음입력&quot;, &quot;분석중&quot;, &quot;추천결과&quot;, &quot;프로필수정&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;미리보기&quot; },
+  &quot;emotion&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;평온&quot;, &quot;options&quot;: [&quot;기쁨&quot;, &quot;슬픔&quot;, &quot;불안&quot;, &quot;분노&quot;, &quot;평온&quot;, &quot;설렘&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;미리보기&quot; },
+  &quot;exploreDefault&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;지도&quot;, &quot;options&quot;: [&quot;목록&quot;, &quot;지도&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;미리보기&quot; },
+  &quot;feedDefault&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;내 기록&quot;, &quot;options&quot;: [&quot;내 기록&quot;, &quot;곁에&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;미리보기&quot; },
+  &quot;pinMode&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;도착 감정&quot;, &quot;options&quot;: [&quot;도착 감정&quot;, &quot;개선율&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;지도&quot; },
+  &quot;vividness&quot;: { &quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 1.2, &quot;min&quot;: 0.7, &quot;max&quot;: 1.6, &quot;step&quot;: 0.05, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;무드 &amp; 색감&quot; },
+  &quot;glassOpacity&quot;: { &quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 0.55, &quot;min&quot;: 0.35, &quot;max&quot;: 0.85, &quot;step&quot;: 0.05, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;무드 &amp; 색감&quot; },
+  &quot;cardRadius&quot;: { &quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 22, &quot;min&quot;: 14, &quot;max&quot;: 32, &quot;step&quot;: 2, &quot;unit&quot;: &quot;px&quot;, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;무드 &amp; 색감&quot; },
+  &quot;communityName&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;곁에&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;피드&quot; },
+  &quot;orbFloat&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;동작&quot; },
+  &quot;pinPulse&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;동작&quot; }
+}">
+class Component extends DCLogic {
+  state = { screen: 'today', emo: 4, intensity: 3, exEmo: null, exView: 'map', cFrom: 2, cTo: 4, cComms: { '취업·진로': true }, exPet: false, createType: 'place', createPlaceName: '', placeQuery: '', placePickerOpen: false, pinPickerOpen: false, dropX: null, dropY: null, dropLat: null, dropLng: null, dEmo: 4, todayLog: [{ emo: 2 }, { emo: 1 }], logged: false, gender: 1, travel: { 0: true }, feedTab: 'mine', feedCat: '전체', feedView: 'feed', tip: null, theme: '라일락', detailPlace: null, detailPost: null, postFrom: 'feed', commentText: '', addedComments: {}, cPublic: true, pin: null, fromCtx: null, reactions: {}, cSitu: 0, energy: 75, social: 65, resultFrom: 'quick', resultSitu: null, analyzeStep: 0, fb: null, chartView: 'week', synced: false };
+
+  EMO = [
+    { label: '기쁨', emoji: '😊', c1: '#FFD86E', c2: '#FF8F63', desc: '햇살처럼 번지는 따뜻함' },
+    { label: '슬픔', emoji: '😢', c1: '#8FB6FF', c2: '#5B79F5', desc: '천천히 흘려보내도 괜찮아요' },
+    { label: '불안', emoji: '😰', c1: '#BBA0FF', c2: '#7E68F0', desc: '잠시 숨을 고르는 시간' },
+    { label: '분노', emoji: '😡', c1: '#FF9180', c2: '#FF566E', desc: '뜨겁게 일렁이는 마음' },
+    { label: '평온', emoji: '😌', c1: '#7FE6CC', c2: '#33BFA6', desc: '잔잔하게 가라앉은 하루' },
+    { label: '설렘', emoji: '✨', c1: '#FF9FCF', c2: '#CE7DF5', desc: '두근거리며 설레는 순간' },
+  ];
+  LVL = ['아주 약함', '약함', '보통', '강함', '아주 강함'];
+  SOOTHE = { 0: 5, 1: 0, 2: 4, 3: 4, 4: 4, 5: 5 };
+  SCORE = [84, 25, 38, 12, 66, 90];
+  GENERIC = [
+    '좋은 기분은 나눌수록 커져요. 이 마음을 이어갈 곳으로 안내할게요.',
+    '슬픔은 천천히 흘려보내도 괜찮아요. 오늘은 나에게 다정한 하루를 선물해요.',
+    '잠시 숨을 고르면, 흔들리던 마음도 천천히 가라앉아요. 차분한 곳들을 모았어요.',
+    '뜨거운 마음은 바람을 쐬면 한결 가벼워져요. 탁 트인 곳으로 안내할게요.',
+    '지금의 평온이 오래 머물도록, 잔잔한 곳들을 골라봤어요.',
+    '설렘이 가득한 날, 그 두근거림을 더해줄 곳으로 떠나봐요.',
+  ];
+  SITU = [
+    { icon: 'work', label: '취업·진로', advice: '취업은 떨어져도 끝이 아니라, 부족한 점을 발견하고 다시 다듬어가는 과정이에요. 오늘의 흔들림은 그만큼 진심이라는 증거예요.', insight: '취업 고민을 겪은 1,240명 중 78%가 가볍게 몸을 움직인 뒤 마음이 한결 가벼워졌어요.', tip: '몸을 움직이는 산책' },
+    { icon: 'favorite', label: '연애·관계', advice: '사람은 또 다른 사람을 통해 다시 치유받을 수 있어요. 좋은 인연은 준비된 마음에 찾아오니, 지금은 나를 다정히 돌보는 시간으로.', insight: '관계로 마음 쓴 980명은 사람의 온기가 있는 공간에서 위로를 가장 많이 얻었어요.', tip: '온기 있는 공간' },
+    { icon: 'business_center', label: '일·업무', advice: '끝나지 않을 것 같은 일도 결국 지나가요. 잠시 화면에서 눈을 떼고, 시야를 넓혀줄 풍경 앞에 서보는 건 어때요.', insight: '번아웃을 호소한 1,500명은 탁 트인 전망에서 가장 빠르게 회복했어요.', tip: '탁 트인 전망' },
+    { icon: 'person', label: '외로움', advice: '혼자라는 느낌이 들 때일수록, 느슨하게 사람들 사이에 머무는 것만으로 마음이 데워져요.', insight: '외로움을 적은 사람들의 64%가 적당히 북적이는 카페·서점에서 위안을 찾았어요.', tip: '느슨한 북적임' },
+    { icon: 'spa', label: '번아웃', advice: '몸과 마음이 보내는 신호예요. 무리하지 말고, 천천히 숨을 고를 수 있는 곳으로 떠나봐요.', insight: '비슷한 컨디션의 사람들은 물가나 숲의 잔잔한 곳에서 회복이 빨랐어요.', tip: '물가·숲' },
+    { icon: 'cloud', label: '막연함', advice: '이유를 꼭 알지 않아도 괜찮아요. 마음이 흐릿한 날엔, 발길 닿는 대로 걷는 것도 좋은 답이 돼요.', insight: '기분이 막연했던 사람들은 정처 없는 산책 뒤 가장 자주 평온을 되찾았어요.', tip: '발길 닿는 산책' },
+  ];
+  SIG = 'linear-gradient(140deg,#FF9E7D,#D89BFF)';
+  THEMES = {
+    '라일락': { stops: [['#FFC79E', .82, '120% 85% at 12% 0%', 48], ['#D4B0FF', .7, '115% 75% at 96% 6%', 46], ['#9EE2C4', .64, '135% 95% at 50% 112%', 54]], base: 'linear-gradient(180deg,#F3E8F9 0%,#E4D6F0 100%)' },
+    '블루': { stops: [['#9EC3FF', .82, '120% 85% at 14% 0%', 48], ['#A8B6FF', .66, '115% 78% at 94% 6%', 46], ['#9FE0E6', .6, '135% 95% at 50% 112%', 54]], base: 'linear-gradient(180deg,#E8EFFA 0%,#DBE3F4 100%)' },
+    '민트': { stops: [['#9DE9C9', .8, '120% 85% at 12% 0%', 48], ['#A8DCF2', .64, '115% 78% at 95% 6%', 46], ['#DCE9A6', .56, '135% 95% at 50% 112%', 54]], base: 'linear-gradient(180deg,#E6F3EC 0%,#D6EAE1 100%)' },
+    '코랄': { stops: [['#FFB892', .84, '120% 85% at 14% 0%', 48], ['#FF9FBE', .64, '115% 80% at 92% 8%', 46], ['#FFD79A', .62, '140% 100% at 50% 112%', 56]], base: 'linear-gradient(180deg,#FBE9E4 0%,#F4DBDD 100%)' },
+    '모노': { stops: [['#C7CCDC', .72, '120% 85% at 14% 0%', 48], ['#D5CBE4', .6, '115% 78% at 92% 6%', 46], ['#CDE0D9', .5, '135% 95% at 50% 112%', 54]], base: 'linear-gradient(180deg,#EEEFF4 0%,#E2E2EC 100%)' },
+  };
+
+  hx(a) { const n = Math.max(0, Math.min(255, Math.round(a * 255))); return n.toString(16).padStart(2, '0'); }
+  orb(e) { return `linear-gradient(145deg, ${e.c1} 0%, ${e.c2} 100%)`; }
+  grad(e) { return `linear-gradient(140deg, ${e.c1}, ${e.c2})`; }
+  emoDot(i, sz) { const em = this.EMO[i]; return { width: sz + 'px', height: sz + 'px', borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: this.grad(em), boxShadow: `0 3px 8px ${em.c2}55, inset 0 1px 2px rgba(255,255,255,.5)` }; }
+  liftPill(i) { const em = this.EMO[i]; return { display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 800, color: em.c2, background: em.c2 + '22', padding: '3px 8px', borderRadius: '9px', whiteSpace: 'nowrap' }; }
+  shiftLabel(from, to) { return from === to ? this.EMO[to].label + ' 유지' : this.EMO[from].label + ' → ' + this.EMO[to].label; }
+  tx(d) {
+    return {
+      fromEmoji: this.EMO[d.from].emoji, toEmoji: this.EMO[d.to].emoji,
+      fromDot: this.emoDot(d.from, 26), toDot: this.emoDot(d.to, 26),
+      shiftLabel: this.shiftLabel(d.from, d.to),
+      liftPct: '+' + d.lift + '%', liftStyle: this.liftPill(d.to),
+      nText: d.n + '명 호전', name: d.name, cat: d.cat, dist: d.dist, line: d.line,
+    };
+  }
+
+  baseBg(theme, v) {
+    const m = this.THEMES[theme] || this.THEMES['라일락'];
+    const parts = m.stops.map(([hex, a, pos, end]) => `radial-gradient(${pos}, ${hex}${this.hx(Math.min(1, a * v))} 0%, transparent ${end}%)`);
+    parts.push(m.base);
+    return parts.join(', ');
+  }
+  todayBg(e, v, theme) {
+    const m = this.THEMES[theme] || this.THEMES['라일락'];
+    return [
+      `radial-gradient(135% 100% at 20% 4%, ${e.c1}${this.hx(Math.min(1, .6 * v))} 0%, transparent 50%)`,
+      `radial-gradient(120% 90% at 92% 16%, ${e.c2}${this.hx(Math.min(1, .46 * v))} 0%, transparent 48%)`,
+      `radial-gradient(150% 130% at 50% 118%, ${e.c1}${this.hx(Math.min(1, .4 * v))} 0%, transparent 55%)`,
+      m.base
+    ].join(', ');
+  }
+  mapBg() {
+    return [
+      'repeating-linear-gradient(0deg, rgba(120,103,235,.06) 0 1px, transparent 1px 46px)',
+      'repeating-linear-gradient(90deg, rgba(120,103,235,.06) 0 1px, transparent 1px 46px)',
+      'radial-gradient(120% 90% at 28% 18%, #ECE5F8 0%, transparent 60%)',
+      'radial-gradient(100% 80% at 82% 82%, #E2F0EA 0%, transparent 60%)',
+      'linear-gradient(160deg,#EDE7F6 0%,#E6F0EA 100%)'
+    ].join(', ');
+  }
+
+  chipStyle(active, em, map) {
+    const base = { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '9px 14px', borderRadius: '15px', cursor: 'pointer', transition: 'all .25s', fontSize: '14px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' };
+    if (active) return { ...base, background: this.grad(em), color: '#fff', border: '1px solid rgba(255,255,255,.55)', boxShadow: `0 9px 22px ${em.c2}66`, transform: 'translateY(-2px)' };
+    if (map) return { ...base, background: 'rgba(255,255,255,.82)', color: '#574f6e', border: '1px solid rgba(255,255,255,.85)', boxShadow: '0 6px 16px rgba(90,70,130,.12)' };
+    return { ...base, background: 'var(--cbg)', color: '#574f6e', border: '1px solid var(--cbd)', boxShadow: '0 5px 14px rgba(90,70,130,.07)' };
+  }
+  intStyle(filled, em, h) { return { flex: 1, height: h + 'px', borderRadius: '7px', cursor: 'pointer', transition: 'all .25s', background: filled ? `linear-gradient(160deg, ${em.c1}, ${em.c2})` : 'rgba(120,90,160,.13)', boxShadow: filled ? `0 6px 14px ${em.c2}55` : 'none' }; }
+  segStyle(active) {
+    const base = { display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all .2s', width: '36px', height: '32px', borderRadius: '11px' };
+    if (active) return { ...base, background: this.SIG, color: '#fff', boxShadow: '0 6px 16px rgba(216,155,255,.4)' };
+    return { ...base, color: '#9b93b3' };
+  }
+  feedTog(active) {
+    const base = { flex: 1, textAlign: 'center', padding: '10px', borderRadius: '12px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', transition: 'all .2s' };
+    if (active) return { ...base, background: this.SIG, color: '#fff', boxShadow: '0 8px 20px rgba(216,155,255,.4)' };
+    return { ...base, color: '#9b93b3' };
+  }
+  allChip(active, map) {
+    const base = { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '9px 16px', borderRadius: '15px', cursor: 'pointer', transition: 'all .25s', fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' };
+    if (active) return { ...base, background: this.SIG, color: '#fff', border: '1px solid rgba(255,255,255,.55)', boxShadow: '0 9px 22px rgba(216,155,255,.4)', transform: 'translateY(-2px)' };
+    if (map) return { ...base, background: 'rgba(255,255,255,.82)', color: '#574f6e', border: '1px solid rgba(255,255,255,.85)', boxShadow: '0 6px 16px rgba(90,70,130,.12)' };
+    return { ...base, background: 'var(--cbg)', color: '#574f6e', border: '1px solid var(--cbd)', boxShadow: '0 5px 14px rgba(90,70,130,.07)' };
+  }
+  navItem(gly, label, active, onClick) {
+    const col = active ? '#8E7BFF' : 'rgba(90,80,120,.5)';
+    return { gly, label, onClick, icon: `font-family:'Material Symbols Rounded'; font-size:23px; color:${col};`, lab: `font-size:10px; font-weight:${active ? 700 : 600}; color:${col};` };
+  }
+
+  go(s) { this.setState({ screen: s }); }
+  pickEmo(i) { this.setState({ emo: i, logged: false }); }
+  logMood() { this.setState(s => ({ todayLog: [...s.todayLog, { emo: s.emo }], logged: true })); }
+  setCreateType(t) { this.setState({ createType: t }); }
+  recordAt(name, from, to) { this.setState({ screen: 'create', createType: 'place', createPlaceName: name, cFrom: from, cTo: to, pin: null }); }
+  openPlacePicker() { this.setState({ placePickerOpen: true }); }
+  closePlacePicker() { this.setState({ placePickerOpen: false }); }
+  choosePlace(name, from, to) { this.setState({ createPlaceName: name, cFrom: from, cTo: to, placePickerOpen: false }); }
+  setPlaceQuery(e) { this.setState({ placeQuery: e.target.value }); }
+  chooseFreePlace() { const q = this.state.placeQuery.trim(); if (!q) return; this.setState({ createPlaceName: q, placePickerOpen: false, placeQuery: '' }); }
+  openPinPicker() { this.setState({ pinPickerOpen: true, placePickerOpen: false }); }
+  closePinPicker() { this.setState({ pinPickerOpen: false, placePickerOpen: true }); }
+  onDropPin(e) { const t = e.currentTarget.getBoundingClientRect(); const x = Math.max(0, Math.min(1, (e.clientX - t.left) / t.width)); const y = Math.max(0, Math.min(1, (e.clientY - t.top) / t.height)); this.setState({ dropX: x * 100, dropY: y * 100, dropLat: 37.58 - y * 0.085, dropLng: 126.96 + x * 0.11 }); }
+  confirmPin() { if (this.state.dropLat == null) return; this.setState({ createPlaceName: '내가 찍은 위치', placePickerOpen: false, pinPickerOpen: false }); }
+  pickDEmo(i) { this.setState({ dEmo: i }); }
+  setInt(n) { this.setState({ intensity: n }); }
+  pickExEmo(i) { this.setState({ exEmo: this.state.exEmo === i ? null : i, pin: null, fromCtx: null }); }
+  setExView(v) { this.setState({ exView: v, pin: null }); }
+  setCFrom(i) { this.setState({ cFrom: i }); }
+  setCTo(i) { this.setState({ cTo: i }); }
+  pickGender(i) { this.setState({ gender: i }); }
+  toggleTravel(i) { const t = { ...this.state.travel }; if (t[i]) delete t[i]; else t[i] = true; this.setState({ travel: t }); }
+  setFeed(t) { this.setState({ feedTab: t }); }
+  setFeedCat(c) { this.setState({ feedCat: c }); }
+  setFeedView(v) { this.setState({ feedView: v }); }
+  setTheme(t) { this.setState({ theme: t }); }
+  toggleTip(k) { this.setState({ tip: this.state.tip === k ? null : k }); }
+  openPlace(i) { this.setState({ screen: 'placeDetail', detailPlace: i, pin: null }); }
+  openPost(i, from) { this.setState({ screen: 'postDetail', detailPost: i, postFrom: from }); }
+  setComment(e) { this.setState({ commentText: e.target.value }); }
+  addComment() { const t = this.state.commentText.trim(); if (!t) return; const id = this.state.detailPost; const a = { ...this.state.addedComments }; a[id] = [...(a[id] || []), t]; this.setState({ addedComments: a, commentText: '' }); }
+  setCPublic(v) { this.setState({ cPublic: v }); }
+  toggleCComm(c) { const m = { ...this.state.cComms }; if (m[c]) delete m[c]; else m[c] = true; this.setState({ cComms: m }); }
+  toggleExPet() { this.setState({ exPet: !this.state.exPet, pin: null }); }
+  selectPin(i) { this.setState({ pin: i }); }
+  toggleRx(ci, ri) { const k = ci + '-' + ri; const r = { ...this.state.reactions }; if (r[k]) delete r[k]; else r[k] = true; this.setState({ reactions: r }); }
+  soothe() { const f = this.state.emo; this.setState({ fromCtx: f, exEmo: this.SOOTHE[f], pin: null, screen: 'explore', exView: 'map' }); }
+  startAnalyze(mode) {
+    if (this._t) clearTimeout(this._t); if (this._i) clearInterval(this._i);
+    const situ = mode === 'detail' ? this.state.cSitu : null;
+    this.setState({ screen: 'analyzing', analyzeStep: 0, resultFrom: mode, resultSitu: situ, fb: null });
+    this._i = setInterval(() => this.setState(s => ({ analyzeStep: Math.min(3, s.analyzeStep + 1) })), 560);
+    this._t = setTimeout(() => { if (this._i) clearInterval(this._i); this.setState({ screen: 'result' }); }, 2100);
+  }
+  pickSitu(i) { this.setState({ cSitu: i }); }
+  setChartView(v) { this.setState({ chartView: v }); }
+  setFb(v) { this.setState({ fb: v }); }
+  componentWillUnmount() { if (this._t) clearTimeout(this._t); if (this._i) clearInterval(this._i); }
+
+  applyProps(p) {
+    const sm = { '오늘': 'today', '탐색': 'explore', '피드': 'feed', '나': 'me', '기록작성': 'create', '마음입력': 'detail', '분석중': 'analyzing', '추천결과': 'result', '흐름': 'insight', '프로필수정': 'edit' };
+    const ns = {};
+    if (p.startScreen) ns.screen = sm[p.startScreen] || 'today';
+    if (p.emotion) { const i = this.EMO.findIndex(e => e.label === p.emotion); if (i >= 0) ns.emo = i; }
+    if (p.exploreDefault) ns.exView = p.exploreDefault === '지도' ? 'map' : 'list';
+    if (p.feedDefault) ns.feedTab = p.feedDefault === '내 기록' ? 'mine' : 'community';
+    return ns;
+  }
+  componentDidMount() { this.setState({ ...this.applyProps(this.props), synced: true }); }
+  componentDidUpdate(prev) {
+    const keys = ['startScreen', 'emotion', 'exploreDefault', 'feedDefault'];
+    if (keys.some(k => prev[k] !== this.props[k])) this.setState(this.applyProps(this.props));
+  }
+
+  renderVals() {
+    const s = this.state;
+    const p = this.props;
+    const v = p.vividness ?? 1.2;
+    const theme = s.theme;
+    const glass = p.glassOpacity ?? 0.55;
+    const radius = (p.cardRadius ?? 22) + 'px';
+    const commName = p.communityName ?? '곁에';
+    const orbFloat = p.orbFloat ?? true;
+    const pinPulse = p.pinPulse ?? true;
+    const pinMode = p.pinMode ?? '도착 감정';
+    const e = this.EMO[s.emo];
+    const screen = s.screen;
+    const explore = screen === 'explore';
+
+    // place = { from, to, lift, n, x, y, name, cat, dist, line }
+    const mapData = [
+      { from: 2, to: 4, lift: 82, n: 240, x: 27, y: 46, name: '서울숲', cat: '공원 · 산책', dist: '1.8km', pet: true, line: '불안했던 마음이 천천히 가라앉는 호숫가 숲길', about: '넓은 숲과 호숫가 산책로가 이어져 생각을 비우기 좋아요. 사슴 방사장을 지나 갤러리 카페에서 천천히 시간을 보내면, 들끓던 마음이 차분히 가라앉아요. 혼자 걷기에도, 가볍게 머물기에도 좋은 곳.' },
+      { from: 1, to: 0, lift: 74, n: 156, x: 46, y: 31, name: '성수 연무장길', cat: '카페 거리', dist: '1.1km', pet: true, line: '가라앉은 기분을 환기시키는 볕 좋은 골목', about: '햇살 좋은 카페와 작은 편집숍이 이어진 골목이에요. 천천히 걸으며 사람 구경을 하다 보면 울적했던 기분이 환기돼요. 좋아하는 음료 한 잔과 함께하는 산책을 추천해요.' },
+      { from: 4, to: 5, lift: 69, n: 128, x: 67, y: 43, name: '디뮤지엄', cat: '전시 · 문화', dist: '2.3km', pet: false, line: '잔잔하던 마음에 설렘을 더하는 전시 공간', about: '감각적인 기획 전시가 자주 열리는 공간이에요. 새로운 시각적 자극이 평온하던 마음에 설렘을 더해줘요. 천천히 작품을 둘러보며 영감을 얻기 좋아요.' },
+      { from: 3, to: 4, lift: 77, n: 184, x: 40, y: 63, name: '한강 뚝섬', cat: '강변 · 노을', dist: '2.7km', pet: true, line: '들끓던 마음을 바람에 식히는 강변', about: '탁 트인 강과 노을이 펼쳐지는 곳. 자전거를 타거나 돗자리를 펴고 바람을 맞으면 들끓던 마음이 한결 식어요. 해 질 무렵에 가면 더 좋아요.' },
+      { from: 1, to: 0, lift: 65, n: 92, x: 75, y: 60, name: '을지로 골목', cat: '펍 · 모임', dist: '3.2km', pet: false, line: '적적한 저녁을 채우는 사람들의 온기', about: '오래된 골목 사이 작은 술집과 모임 공간이 모여 있어요. 사람들의 두런두런한 온기 속에 머물다 보면 적적했던 마음이 풀려요. 가까운 사람과 함께 가기 좋은 곳.' },
+      { from: 2, to: 4, lift: 80, n: 147, x: 57, y: 75, name: '남산 둘레길', cat: '숲길 · 전망', dist: '3.5km', pet: true, line: '숨을 고르며 마음을 정리하는 전망 길', about: '완만한 숲길과 도시 전망이 어우러진 길이에요. 숨을 고르며 천천히 걷다 보면 불안한 생각이 차분히 정리돼요. 머리가 복잡한 날 걷기를 추천해요.' },
+    ];
+    const exPet = s.exPet;
+    let filtered = mapData.slice().sort((a, b) => b.lift - a.lift);
+    if (s.exEmo != null) { const f = filtered.filter(d => d.to === s.exEmo); filtered = f.length ? f : mapData.slice().sort((a, b) => b.lift - a.lift); }
+    if (exPet) filtered = filtered.filter(d => d.pet);
+
+    const wsum = {};
+    mapData.forEach(d => { wsum[d.to] = (wsum[d.to] || 0) + d.n; });
+    const domTo = +Object.keys(wsum).reduce((a, b) => wsum[b] > wsum[a] ? b : a);
+    const domE = this.EMO[domTo];
+
+    const calMap = { 12: 4, 15: 0, 18: 5, 21: 1, 24: 2, 26: 4, 27: 0 };
+    const calendar = [{ day: '', cell: {} }];
+    for (let d = 1; d <= 30; d++) {
+      const em = calMap[d]; const isT = d === 29;
+      calendar.push({ day: d, cell: em != null
+        ? { width: '34px', height: '34px', margin: '0 auto', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', fontWeight: 700, color: '#fff', background: this.grad(this.EMO[em]), boxShadow: `0 5px 13px ${this.EMO[em].c2}66`, border: isT ? '2.5px solid #FF7A59' : 'none' }
+        : { width: '34px', height: '34px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', color: '#9b93b3' } });
+    }
+
+    const records = [
+      { name: '서울숲 아침 산책', date: '6월 12일', loc: '서울숲', from: 2, to: 4, weather: '맑음 22°', story: '면접 생각에 불안했는데, 숲을 한 바퀴 걷고 나니 마음이 한결 가벼워졌다.' },
+      { name: '성수동 카페 나들이', date: '6월 15일', loc: '성수동', from: 1, to: 0, weather: '구름 24°', story: '울적한 날이었는데 볕 드는 창가에서 라떼 한 잔에 기분이 풀렸다.' },
+    ];
+
+    const RX = [{ emoji: '🫂', label: '나도 그랬어' }, { emoji: '💪', label: '응원해' }, { emoji: '🌿', label: '평온해 보여' }];
+    const COMMUNITIES = ['전체', '취업·진로', '연애·관계', '일·업무', '외로움', '번아웃', '마이펫', '막연함'];
+    const CATCOLOR = { '취업·진로': '#5B79F5', '연애·관계': '#FF6B7E', '일·업무': '#FF8F63', '외로움': '#7E68F0', '번아웃': '#33BFA6', '마이펫': '#FF9E7D', '막연함': '#9b8fc4' };
+    const communityData = [
+      { nick: '빗소리', title: '면접 전날, 서울숲에서', community: '취업·진로', from: 2, to: 4, loc: '서울숲', story: '면접 전날 불안에 잠 못 들다 서울숲을 걸었어요. 호숫가를 한 바퀴 도니 마음이 천천히 가라앉았어요.', base: [1, 0, 2], cmts: [{ nick: '온기', text: '저도 여기서 위로받았어요 🌿' }, { nick: '민트', text: '내일 면접 잘 보길 응원해요!' }] },
+      { nick: '밤샘러', title: '스무 번째 탈락, 그래도 버팁니다', community: '취업·진로', from: 3, to: 2, loc: null, story: '벌써 스무 번째 탈락이에요. 그래도 오늘 또 이력서를 고쳐 써봅니다. 다들 어떻게 버티세요?', base: [4, 3, 0], cmts: [{ nick: '합격기원', text: '그 꾸준함이 결국 빛 봐요.' }] },
+      { nick: '워킹독맘', title: '야근 끝, 강아지와 밤 산책', community: '번아웃', communities: ['번아웃', '마이펫'], from: 3, to: 4, loc: '한강 뚝섬', story: '야근으로 지친 날, 강아지랑 강변을 걷다 보니 쌓였던 스트레스가 스르륵 풀렸어요. 반려견은 나의 번아웃 치료제.', base: [3, 2, 2], cmts: [{ nick: '집사', text: '우리도 야간 산책해요 🐶' }, { nick: '댕댕맘', text: '강변 산책 최고죠' }] },
+      { nick: '익명', title: '3년 연애가 끝났어요', community: '연애·관계', from: 1, to: 1, loc: null, story: '3년 만난 사람과 헤어졌어요. 시간이 약이라는 말, 정말일까요.', base: [6, 2, 1], cmts: [{ nick: '토닥', text: '천천히 흘려보내도 괜찮아요.' }, { nick: '봄날', text: '저도 그랬어요. 분명 나아져요.' }] },
+      { nick: '두근', title: '화가 머리끝까지 났던 날', community: '번아웃', from: 3, to: 4, loc: '서울숲', story: '화가 머리끝까지 났던 날, 벤치에 앉아 바람을 맞으니 신기하게 풀렸다.', base: [3, 1, 0], cmts: [{ nick: '바다', text: '바람이 약이죠' }] },
+      { nick: '하루', title: '혼자인 오후를 채운 라떼 한 잔', community: '외로움', from: 1, to: 0, loc: '성수 연무장길', story: '울적한 오후, 볕 좋은 골목 카페에서 라떼 한 잔에 기분이 환기됐어요.', base: [1, 0, 0], cmts: [] },
+      { nick: '익명', title: '좋아하는 전시 앞에서', community: '막연함', from: 4, to: 5, loc: '디뮤지엄', story: '평온하던 마음이 좋아하는 전시 앞에서 설렘으로 가득 찼어요.', base: [0, 2, 0], cmts: [] },
+      { nick: '온기', title: '강바람에 화를 식히고', community: '번아웃', from: 3, to: 4, loc: '한강 뚝섬', story: '화가 잔뜩 났던 날, 강바람 맞으니 거짓말처럼 풀렸다.', base: [2, 1, 1], cmts: [{ nick: '빗소리', text: '노을 시간에 가면 더 좋아요!' }] },
+      { nick: '바람', title: '복잡한 머리, 남산 둘레길에서', community: '막연함', from: 2, to: 4, loc: '남산 둘레길', story: '복잡한 생각을 잔뜩 안고 올랐는데, 트인 전망을 보니 마음이 정리됐어요.', base: [0, 1, 0], cmts: [] },
+      { nick: '댕댕맘', title: '강아지와 노을 산책', community: '마이펫', from: 2, to: 4, loc: '한강 뚝섬', story: '불안한 하루였는데 우리 강아지랑 강변을 걸으니 마음이 사르르 풀렸어요. 역시 산책이 최고.', base: [2, 1, 3], cmts: [{ nick: '집사', text: '댕댕이 사진 보고 싶어요 🐶' }] },
+      { nick: '냥집사', title: '고양이가 무릎에 올라온 밤', community: '마이펫', from: 1, to: 0, loc: null, story: '울적해서 멍하니 있는데 고양이가 슬그머니 무릎에 올라왔어요. 그 온기에 눈물이 핑.', base: [3, 0, 2], cmts: [] },
+    ];
+
+    const myShiftsData = [
+      { from: 2, to: 4, name: '서울숲', count: '3회' },
+      { from: 1, to: 0, name: '성수동 책방', count: '2회' },
+      { from: 3, to: 4, name: '한강 뚝섬', count: '2회' },
+    ];
+
+    const genderDefs = [{ icon: 'female', label: '여성' }, { icon: 'male', label: '남성' }, { icon: 'transgender', label: '기타' }];
+    const travelDefs = [{ icon: 'self_improvement', label: '힐링' }, { icon: 'directions_run', label: '액티비티' }, { icon: 'palette', label: '문화·예술' }, { icon: 'restaurant', label: '미식' }];
+
+    const sel = s.pin != null ? mapData[s.pin] : null;
+    const dp = s.detailPlace != null ? mapData[s.detailPlace] : null;
+    const pd = s.detailPost != null ? communityData[s.detailPost] : null;
+    const selE = sel ? this.EMO[sel.to] : e;
+
+    const recTo = this.SOOTHE[s.emo];
+    const recSame = recTo === s.emo;
+
+    return {
+      frameStyle: { width: '392px', height: '846px', borderRadius: '48px', position: 'relative', overflow: 'hidden', boxShadow: '0 50px 110px rgba(40,30,70,.32), 0 10px 30px rgba(40,30,70,.16)', background: '#000', '--cbg': `rgba(255,255,255,${glass})`, '--cbd': 'rgba(255,255,255,.74)', '--cr': radius },
+      screenBg: { position: 'absolute', inset: 0, background: screen === 'today' ? this.todayBg(e, v, theme) : this.baseBg(theme, v), transition: 'background .6s ease' },
+      isToday: screen === 'today', exList: explore && s.exView === 'list', exMap: explore && s.exView === 'map',
+      isCreate: screen === 'create', isFeed: screen === 'feed', isMe: screen === 'me', isEdit: screen === 'edit',
+      isDetail: screen === 'detail', isAnalyzing: screen === 'analyzing', isResult: screen === 'result', isChart: screen === 'chart', isInsight: screen === 'insight', isPlaceDetail: screen === 'placeDetail', isPostDetail: screen === 'postDetail', isMyRecords: screen === 'myRecords',
+      showNav: ['today', 'explore', 'feed', 'insight'].includes(screen),
+      mapBgStyle: { position: 'absolute', inset: 0, background: this.mapBg() },
+
+      today: {
+        emo: e, lvlWord: this.LVL[s.intensity - 1], same: recSame, toColor: this.EMO[recTo].c2, recIcon: recSame ? 'spa' : 'arrow_forward',
+        recText: recSame ? `${e.label}을(를) 더 깊이 지켜줄 곳을 찾아드릴게요` : `${e.label}을(를) ${this.EMO[recTo].label}으로 이끌어 준 곳들이 있어요`,
+        ctaLabel: recSame ? '이 마음 이어가기' : '이 마음, 위로받기',
+        hintStyle: { display: 'flex', alignItems: 'center', gap: '7px', justifyContent: 'center', fontSize: '12.5px', fontWeight: 600, color: '#574f6e', background: 'var(--cbg)', border: '1px solid var(--cbd)', borderRadius: '14px', padding: '11px 14px' },
+        glowStyle: { position: 'absolute', width: '208px', height: '208px', borderRadius: '50%', top: '50%', left: '50%', background: this.orb(e), filter: 'blur(44px)', opacity: .6, animation: orbFloat ? 'pulseGlow 5s ease-in-out infinite' : 'none' },
+        orbStyle: { position: 'relative', width: '150px', height: '150px', borderRadius: '50%', background: this.orb(e), boxShadow: `0 26px 50px ${e.c2}5e, inset -12px -15px 34px ${e.c2}55, inset 12px 14px 26px rgba(255,255,255,.55)`, animation: orbFloat ? 'floaty 6s ease-in-out infinite' : 'none' },
+        badgeStyle: { fontSize: '12px', fontWeight: 700, color: '#fff', background: this.grad(e), padding: '4px 11px', borderRadius: '11px', boxShadow: `0 4px 12px ${e.c2}55` },
+        ctaStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '17px', borderRadius: '20px', background: this.orb(e), color: '#fff', fontSize: '16px', fontWeight: 700, cursor: 'pointer', boxShadow: `0 16px 34px ${e.c2}5e` },
+        onCta: () => this.startAnalyze('quick'), onDetail: () => this.go('detail'), onLog: () => this.logMood(),
+        logLabel: s.logged ? '기록됨' : '기록하기', logIcon: s.logged ? 'check_circle' : 'add_task',
+        ctaSecondary: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '15px', borderRadius: '18px', background: 'var(--cbg)', border: '1px solid var(--cbd)', color: '#574f6e', fontSize: '15px', fontWeight: 700, cursor: 'pointer' },
+        dots: s.todayLog.map(l => ({ emoji: this.EMO[l.emo].emoji, style: this.emoDot(l.emo, 24) })), count: s.todayLog.length + '번 기록',
+        chips: this.EMO.map((em, i) => ({ label: em.label, emoji: em.emoji, style: this.chipStyle(i === s.emo, em, false), onClick: () => this.pickEmo(i) })),
+        ints: [0, 1, 2, 3, 4].map(i => ({ style: this.intStyle(i < s.intensity, e, 12 + i * 7), onClick: () => this.setInt(i + 1) })),
+      },
+
+      exFilter: this.EMO.map((em, i) => ({ label: em.label, emoji: em.emoji, style: this.chipStyle(i === s.exEmo, em, false), mapStyle: this.chipStyle(i === s.exEmo, em, true), onClick: () => this.pickExEmo(i) })),
+      exTogList: this.segStyle(s.exView === 'list'), exTogMap: this.segStyle(s.exView === 'map'),
+      onExList: () => this.setExView('list'), onExMap: () => this.setExView('map'),
+      exAllStyle: this.allChip(s.exEmo == null, false), exMapAllStyle: this.allChip(s.exEmo == null, true),
+      onExAll: () => this.setState({ exEmo: null, pin: null, fromCtx: null }),
+      exPetStyle: this.allChip(s.exPet, false), exPetStyleMap: this.allChip(s.exPet, true), onExPet: () => this.toggleExPet(),
+      petBadge: { position: 'absolute', right: '-4px', bottom: '-4px', width: '20px', height: '20px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', boxShadow: '0 2px 6px rgba(0,0,0,.2)' },
+      places: filtered.map(d => { const t = this.tx(d); return { ...t, pet: !!d.pet, onClick: () => this.openPlace(mapData.indexOf(d)), thumb: { position: 'relative', width: '54px', height: '54px', borderRadius: '16px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: this.grad(this.EMO[d.to]), boxShadow: `inset 0 2px 6px rgba(255,255,255,.5), 0 6px 14px ${this.EMO[d.to].c2}44` } }; }),
+      mapPins: mapData.map((d, i) => ({ d, i })).filter(o => !exPet || o.d.pet).map(({ d, i }) => { const te = this.EMO[d.to]; const on = s.pin === i; const sz = on ? 46 : 40; return {
+        content: pinMode === '개선율' ? d.lift : te.emoji, pet: !!d.pet,
+        petBadge: { position: 'absolute', right: '-5px', top: '-3px', width: '19px', height: '19px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', boxShadow: '0 2px 5px rgba(0,0,0,.25)' },
+        pos: { position: 'absolute', left: d.x + '%', top: d.y + '%', transform: 'translate(-50%,-100%)', cursor: 'pointer', zIndex: on ? 8 : 4, display: 'flex', flexDirection: 'column', alignItems: 'center' },
+        bubble: { minWidth: sz + 'px', height: sz + 'px', padding: '0 6px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: pinMode === '개선율' ? '13px' : '19px', fontWeight: 700, color: '#fff', background: this.grad(te), boxShadow: `0 8px 18px ${te.c2}88, inset 0 2px 4px rgba(255,255,255,.45)`, border: on ? '3px solid #fff' : '2px solid rgba(255,255,255,.8)', transition: 'all .2s', animation: pinPulse ? `pinFloat ${2.6 + (i % 3) * 0.4}s ease-in-out ${i * 0.2}s infinite` : 'none' },
+        tailStyle: { width: 0, height: 0, marginTop: '-2px', borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: `7px solid ${te.c2}` },
+        onClick: () => this.selectPin(i) }; }),
+      legend: this.EMO.map(em => ({ label: em.label, dot: { width: '11px', height: '11px', borderRadius: '50%', background: this.grad(em) } })),
+      domLabel: domE.label, domEmoji: domE.emoji, domStyle: { color: domE.c2, fontWeight: 800 }, domDot: { width: '10px', height: '10px', borderRadius: '50%', background: this.grad(domE) },
+      hasCtx: s.fromCtx != null, noCtx: s.fromCtx == null,
+      ctx: s.fromCtx != null ? { fromEmoji: this.EMO[s.fromCtx].emoji, toEmoji: this.EMO[this.SOOTHE[s.fromCtx]].emoji, fromDot: this.emoDot(s.fromCtx, 24), toDot: this.emoDot(this.SOOTHE[s.fromCtx], 24), text: `지금의 ${this.EMO[s.fromCtx].label}을(를) ${this.EMO[this.SOOTHE[s.fromCtx]].label}으로 이끌어 준 곳들이에요` } : {},
+      pinSelected: sel != null, pinNone: sel == null,
+      sel: sel ? { ...this.tx(sel), onRecord: () => this.recordAt(sel.name, sel.from, sel.to), onOpen: () => this.openPlace(s.pin), thumb: { width: '58px', height: '58px', borderRadius: '17px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: this.grad(selE), boxShadow: `inset 0 2px 6px rgba(255,255,255,.5), 0 6px 14px ${selE.c2}44` }, openBtn: { flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '5px', padding: '10px 13px', borderRadius: '13px', background: 'rgba(255,255,255,.7)', border: '1px solid var(--cbd)', color: '#574f6e', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }, btn: { flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '5px', padding: '10px 13px', borderRadius: '13px', background: this.grad(selE), color: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', boxShadow: `0 8px 18px ${selE.c2}55` } } : {},
+      onClosePin: () => this.setState({ pin: null }),
+
+      cShift: { fromEmoji: this.EMO[s.cFrom].emoji, toEmoji: this.EMO[s.cTo].emoji, fromDot: this.emoDot(s.cFrom, 40), toDot: this.emoDot(s.cTo, 40), shiftLabel: this.shiftLabel(s.cFrom, s.cTo) },
+      fromChips: this.EMO.map((em, i) => ({ label: em.label, emoji: em.emoji, style: this.chipStyle(i === s.cFrom, em, false), onClick: () => this.setCFrom(i) })),
+      toChips: this.EMO.map((em, i) => ({ label: em.label, emoji: em.emoji, style: this.chipStyle(i === s.cTo, em, false), onClick: () => this.setCTo(i) })),
+      createPlace: s.createType === 'place', createDiary: s.createType === 'diary',
+      createPlaceName: s.createPlaceName || '장소 선택', placeChosen: !!s.createPlaceName,
+      onOpenPlacePicker: () => this.openPlacePicker(), closePlacePicker: () => this.closePlacePicker(), placePickerOpen: s.placePickerOpen,
+      placeQuery: s.placeQuery, onPlaceQuery: (e) => this.setPlaceQuery(e), hasFreeQuery: s.placeQuery.trim().length > 0, onChooseFree: () => this.chooseFreePlace(),
+      placeOptions: (s.placeQuery.trim() ? mapData.filter(d => d.name.includes(s.placeQuery.trim())) : mapData).map(d => ({ name: d.name, cat: d.cat, dist: d.dist, toEmoji: this.EMO[d.to].emoji, onClick: () => this.choosePlace(d.name, d.from, d.to), thumb: { width: '40px', height: '40px', borderRadius: '12px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: this.grad(this.EMO[d.to]), boxShadow: `0 5px 12px ${this.EMO[d.to].c2}44` } })),
+      pinPickerOpen: s.pinPickerOpen, onOpenPinPicker: () => this.openPinPicker(), closePinPicker: () => this.closePinPicker(),
+      onDropPin: (e) => this.onDropPin(e), hasDrop: s.dropLat != null, noDrop: s.dropLat == null,
+      pinMapStyle: { position: 'absolute', inset: 0, background: this.mapBg(), cursor: 'crosshair' },
+      dropMarker: { position: 'absolute', left: (s.dropX || 50) + '%', top: (s.dropY || 50) + '%', transform: 'translate(-50%,-100%)', zIndex: 5, pointerEvents: 'none', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,.3))' },
+      dropLatText: s.dropLat != null ? ('위도 ' + s.dropLat.toFixed(5)) : '', dropLngText: s.dropLng != null ? ('경도 ' + s.dropLng.toFixed(5)) : '',
+      onConfirmPin: () => this.confirmPin(),
+      confirmPinStyle: s.dropLat != null
+        ? { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '16px', borderRadius: '18px', background: 'linear-gradient(140deg,#FF9E7D,#D89BFF)', color: '#fff', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 14px 30px rgba(216,155,255,.45)' }
+        : { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '16px', borderRadius: '18px', background: 'rgba(120,90,160,.16)', color: '#9b93b3', fontSize: '15px', fontWeight: 700 },
+      createTogPlace: this.feedTog(s.createType === 'place'), createTogDiary: this.feedTog(s.createType === 'diary'),
+      onCreatePlace: () => this.setCreateType('place'), onCreateDiary: () => this.setCreateType('diary'),
+      diaryChips: this.EMO.map((em, i) => ({ label: em.label, emoji: em.emoji, style: this.chipStyle(i === s.dEmo, em, false), onClick: () => this.pickDEmo(i) })),
+
+      communityName: commName,
+      feedMine: s.feedTab === 'mine', feedComm: s.feedTab === 'community',
+      feedTogMine: this.feedTog(s.feedTab === 'mine'), feedTogComm: this.feedTog(s.feedTab === 'community'),
+      onFeedMine: () => this.setFeed('mine'), onFeedComm: () => this.setFeed('community'),
+      calendar,
+      records: records.map(r => { const t = this.tx({ from: r.from, to: r.to, lift: 0, n: 0, name: r.name, cat: '', dist: '', line: '' }); return { name: r.name, date: r.date, loc: r.loc, story: r.story, weather: r.weather, fromEmoji: t.fromEmoji, toEmoji: t.toEmoji, fromDot: this.emoDot(r.from, 24), toDot: this.emoDot(r.to, 24), shiftLabel: t.shiftLabel, avatar: { width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: this.grad(this.EMO[r.to]), boxShadow: `0 4px 10px ${this.EMO[r.to].c2}55` } }; }),
+      feedIsFeed: s.feedView === 'feed', feedIsBoard: s.feedView === 'board',
+      feedViewFeed: this.segStyle(s.feedView === 'feed'), feedViewBoard: this.segStyle(s.feedView === 'board'),
+      onFeedFeed: () => this.setFeedView('feed'), onFeedBoard: () => this.setFeedView('board'),
+      feedCats: COMMUNITIES.map(c => ({ label: c, onClick: () => this.setFeedCat(c), style: (c === s.feedCat)
+        ? { display: 'flex', alignItems: 'center', padding: '9px 15px', borderRadius: '14px', cursor: 'pointer', fontSize: '13.5px', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: this.SIG, color: '#fff', boxShadow: '0 8px 20px rgba(216,155,255,.4)' }
+        : { display: 'flex', alignItems: 'center', padding: '9px 15px', borderRadius: '14px', cursor: 'pointer', fontSize: '13.5px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, background: 'var(--cbg)', color: '#574f6e', border: '1px solid var(--cbd)' } })),
+      community: communityData.map((c, ci) => ({ c, ci })).filter(o => s.feedCat === '전체' || (o.c.communities || [o.c.community]).includes(s.feedCat)).map(o => { const c = o.c, ci = o.ci; const t = this.tx({ from: c.from, to: c.to, lift: 0, n: 0, name: '', cat: '', dist: '', line: '' }); const cc = CATCOLOR[c.community] || '#8E7BFF'; return {
+        catBadges: (c.communities || [c.community]).map(cat => { const k = CATCOLOR[cat] || '#8E7BFF'; return { label: cat, style: { display: 'inline-flex', alignItems: 'center', fontSize: '11px', fontWeight: 700, color: k, background: k + '1f', padding: '3px 9px', borderRadius: '9px' } }; }),
+        nick: c.nick, title: c.title, loc: c.loc, hasLoc: !!c.loc, community: c.community, date: '2026.06.27',
+        boardFromDot: this.emoDot(c.from, 30), boardToDot: this.emoDot(c.to, 30),
+        catBadge: { display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: cc, background: cc + '1f', padding: '3px 9px', borderRadius: '9px' },
+        placeBadge: { display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 600, color: '#574f6e', background: 'rgba(255,255,255,.6)', border: '1px solid var(--cbd)', padding: '3px 9px', borderRadius: '9px' },
+        story: c.story, onClick: () => this.openPost(ci, 'feed'), cmtCount: (c.cmts.length + ((s.addedComments[ci] || []).length)) + '',
+        fromEmoji: t.fromEmoji, toEmoji: t.toEmoji, fromDot: this.emoDot(c.from, 24), toDot: this.emoDot(c.to, 24), shiftLabel: t.shiftLabel,
+        avatar: { width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 700, color: '#fff', background: this.grad(this.EMO[c.to]), boxShadow: `0 4px 10px ${this.EMO[c.to].c2}55` }, initial: c.nick.slice(0, 1),
+        reactions: RX.map((r, ri) => { const active = !!s.reactions[ci + '-' + ri]; const cnt = c.base[ri] + (active ? 1 : 0); const ce = this.EMO[c.to]; const b = { display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 11px', borderRadius: '13px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', transition: 'all .2s', whiteSpace: 'nowrap', flexShrink: 0 }; return { emoji: r.emoji, text: cnt > 0 ? r.label + ' ' + cnt : r.label, onClick: () => this.toggleRx(ci, ri), style: active ? { ...b, background: ce.c2 + '24', color: ce.c2, border: '1px solid ' + ce.c2 + '88' } : { ...b, background: 'rgba(255,255,255,.6)', color: '#574f6e', border: '1px solid rgba(255,255,255,.72)' } }; }),
+      }; }),
+
+      statStyle: { fontSize: '21px', fontWeight: 800, background: this.SIG, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' },
+      myShifts: myShiftsData.map(m => { const t = this.tx({ from: m.from, to: m.to, lift: 0, n: 0, name: m.name, cat: '', dist: '', line: '' }); return { name: m.name, count: m.count, fromEmoji: t.fromEmoji, toEmoji: t.toEmoji, fromDot: this.emoDot(m.from, 22), toDot: this.emoDot(m.to, 22), shiftLabel: t.shiftLabel, thumb: { width: '44px', height: '44px', borderRadius: '13px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: this.grad(this.EMO[m.to]), boxShadow: `0 5px 12px ${this.EMO[m.to].c2}44` } }; }),
+
+      genders: genderDefs.map((g, i) => { const active = i === s.gender; return { label: g.label, icon: g.icon, onClick: () => this.pickGender(i), icStyle: `font-family:'Material Symbols Rounded'; font-size:26px; color:${active ? '#FF7A59' : '#9b93b3'};`, ring: `width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .2s; background:${active ? 'rgba(255,122,89,.12)' : 'rgba(255,255,255,.5)'}; border:1.5px solid ${active ? '#FF7A59' : 'rgba(140,123,255,.2)'};` }; }),
+      travels: travelDefs.map((t, i) => { const active = !!s.travel[i]; return { label: t.label, icon: t.icon, onClick: () => this.toggleTravel(i), style: active ? { display: 'flex', alignItems: 'center', gap: '7px', padding: '10px 16px', borderRadius: '15px', cursor: 'pointer', fontSize: '14px', fontWeight: 700, background: this.SIG, color: '#fff', boxShadow: '0 8px 20px rgba(216,155,255,.4)' } : { display: 'flex', alignItems: 'center', gap: '7px', padding: '10px 16px', borderRadius: '15px', cursor: 'pointer', fontSize: '14px', fontWeight: 600, background: 'rgba(255,255,255,.55)', color: '#574f6e', border: '1px solid rgba(255,255,255,.72)' } }; }),
+
+      // ===== DETAIL (situation input) =====
+      situChips: this.SITU.map((st, i) => { const on = i === s.cSitu; return { label: st.label, icon: st.icon, onClick: () => this.pickSitu(i), icStyle: `font-family:'Material Symbols Rounded'; font-size:20px; color:${on ? '#FF7A59' : '#9b8fc4'};`, style: on
+        ? { display: 'flex', alignItems: 'center', gap: '9px', padding: '13px 14px', borderRadius: '15px', cursor: 'pointer', fontSize: '13.5px', fontWeight: 700, background: 'rgba(255,122,89,.14)', border: '1.5px solid #FF7A59', color: '#FF7A59' }
+        : { display: 'flex', alignItems: 'center', gap: '9px', padding: '13px 14px', borderRadius: '15px', cursor: 'pointer', fontSize: '13.5px', fontWeight: 600, background: 'rgba(255,255,255,.6)', border: '1px solid var(--cbd)', color: '#574f6e' } }; }),
+      energyFill: { position: 'absolute', left: 0, top: 0, bottom: 0, width: s.energy + '%', borderRadius: '999px', background: this.SIG },
+      energyKnob: { position: 'absolute', top: '50%', left: s.energy + '%', transform: 'translate(-50%,-50%)', width: '18px', height: '18px', borderRadius: '50%', background: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,.22)', border: '2px solid #FF7A59' },
+      socialFill: { position: 'absolute', left: 0, top: 0, bottom: 0, width: s.social + '%', borderRadius: '999px', background: this.SIG },
+      socialKnob: { position: 'absolute', top: '50%', left: s.social + '%', transform: 'translate(-50%,-50%)', width: '18px', height: '18px', borderRadius: '50%', background: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,.22)', border: '2px solid #FF7A59' },
+      onStartDetail: () => this.startAnalyze('detail'),
+
+      // ===== ANALYZING =====
+      analyzeGlow: { position: 'absolute', width: '260px', height: '260px', borderRadius: '50%', top: '50%', left: '50%', background: this.orb(e), filter: 'blur(50px)', opacity: .6, animation: 'pulseGlow 2.4s ease-in-out infinite' },
+      analyzeOrb: { width: '150px', height: '150px', borderRadius: '50%', background: this.orb(e), boxShadow: `0 30px 60px ${e.c2}5e, inset -12px -16px 34px ${e.c2}55, inset 12px 14px 26px rgba(255,255,255,.55)`, animation: 'floaty 3s ease-in-out infinite' },
+      analyzeSteps: ['지금의 마음을 읽고 있어요', '비슷한 상황의 1,240명을 살펴보는 중', '꼭 맞는 위로와 장소를 고르는 중'].map((t, i) => { const done = i < s.analyzeStep; const active = i === s.analyzeStep; return { text: t, icon: done ? 'check_circle' : (active ? 'autorenew' : 'radio_button_unchecked'), iconStyle: `font-family:'Material Symbols Rounded'; font-size:21px; color:${done ? '#33BFA6' : (active ? '#FF7A59' : '#cabfdc')};`, textStyle: `font-size:13.5px; font-weight:${(active || done) ? 700 : 500}; color:${(done || active) ? '#2c2740' : '#9b93b3'};` }; }),
+
+      // ===== RESULT =====
+      ...(() => {
+        const rTarget = this.SOOTHE[s.emo];
+        const rSitu = s.resultSitu != null ? this.SITU[s.resultSitu] : null;
+        let rp = mapData.filter(d => d.to === rTarget).sort((a, b) => b.lift - a.lift);
+        if (rp.length < 3) { rp = rp.concat(mapData.filter(d => d.to !== rTarget).sort((a, b) => b.lift - a.lift)).slice(0, 3); } else { rp = rp.slice(0, 3); }
+        return {
+          result: {
+            situLabel: rSitu ? rSitu.label : (e.label + '한 마음'),
+            situIcon: rSitu ? rSitu.icon : 'auto_awesome',
+            situChip: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', fontWeight: 700, color: '#FF7A59', background: 'rgba(255,122,89,.13)', padding: '4px 10px', borderRadius: '10px' },
+            advice: rSitu ? rSitu.advice : this.GENERIC[s.emo],
+            isQuick: rSitu == null,
+            insight: rSitu ? rSitu.insight : '비슷한 마음을 기록한 사람들의 73%가 이런 곳에서 위로를 얻었어요.',
+            tip: rSitu ? rSitu.tip : this.EMO[rTarget].label + ' 찾기',
+            tipStyle: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 700, color: this.EMO[rTarget].c2, background: this.EMO[rTarget].c2 + '20', padding: '6px 12px', borderRadius: '11px' },
+            adviceCardStyle: { background: `linear-gradient(150deg, ${e.c1}26, ${e.c2}1a)`, border: `1px solid ${e.c2}3a`, borderRadius: 'var(--cr)', padding: '20px', boxShadow: '0 10px 26px rgba(90,70,130,.1)' },
+            orbStyle: { width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0, background: this.orb(e), boxShadow: `0 6px 14px ${e.c2}66, inset -3px -4px 8px ${e.c2}44, inset 3px 3px 6px rgba(255,255,255,.55)` },
+            onDetail: () => this.go('detail'),
+            onMore: () => this.soothe(),
+            fbGood: s.fb === 'good', fbBad: s.fb === 'bad', hasFb: s.fb != null,
+            onGood: () => this.setFb('good'), onBad: () => this.setFb('bad'),
+            goodStyle: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '11px', borderRadius: '14px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all .2s', background: s.fb === 'good' ? 'rgba(51,191,166,.16)' : 'rgba(255,255,255,.6)', color: s.fb === 'good' ? '#22a892' : '#574f6e', border: '1px solid ' + (s.fb === 'good' ? '#33BFA6' : 'var(--cbd)') },
+            badStyle: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '11px', borderRadius: '14px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all .2s', background: s.fb === 'bad' ? 'rgba(255,107,126,.14)' : 'rgba(255,255,255,.6)', color: s.fb === 'bad' ? '#FF6B7E' : '#574f6e', border: '1px solid ' + (s.fb === 'bad' ? '#FF6B7E' : 'var(--cbd)') },
+            fbMsg: s.fb ? (s.fb === 'good' ? '고마워요! 다음 추천이 더 정확해질 거예요.' : '알겠어요. 다른 결의 장소를 다시 찾아볼게요.') : '',
+          },
+          recPlaces: rp.map(d => { const t = this.tx(d); return { ...t, onClick: () => this.recordAt(d.name, d.from, d.to), reason: rSitu ? ('비슷한 상황에 추천돼요 · ' + rSitu.tip) : d.line, thumb: { width: '52px', height: '52px', borderRadius: '15px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: this.grad(this.EMO[d.to]), boxShadow: `inset 0 2px 6px rgba(255,255,255,.5), 0 6px 14px ${this.EMO[d.to].c2}44` } }; }),
+        };
+      })(),
+
+      // ===== CHART =====
+      chartWeek: s.chartView === 'week', chartDay: s.chartView === 'day',
+      chartTogWeek: this.feedTog(s.chartView === 'week'), chartTogDay: this.feedTog(s.chartView === 'day'),
+      onChartWeek: () => this.setChartView('week'), onChartDay: () => this.setChartView('day'),
+      onChart: () => this.go('chart'),
+      ...(() => {
+        const chartH = 188; const yOf = sc => (100 - sc) / 100 * chartH;
+        const WEEK = [{ lab: '월', o: 45, c: 66, h: 70, l: 40 }, { lab: '화', o: 66, c: 52, h: 72, l: 48 }, { lab: '수', o: 50, c: 80, h: 84, l: 46 }, { lab: '목', o: 80, c: 64, h: 84, l: 60 }, { lab: '금', o: 60, c: 84, h: 90, l: 56 }, { lab: '토', o: 84, c: 88, h: 92, l: 80 }, { lab: '일', o: 38, c: 84, h: 84, l: 25 }];
+        const candleCols = WEEK.map(d => { const up = d.c >= d.o; const col = up ? '#33BFA6' : '#FF6B7E'; const bt = Math.min(yOf(d.o), yOf(d.c)); const bh = Math.max(5, Math.abs(yOf(d.o) - yOf(d.c))); const wt = yOf(d.h); const wh = yOf(d.l) - yOf(d.h); const today = d.lab === '일'; return { lab: d.lab, colStyle: { flex: 1, position: 'relative', height: chartH + 'px' }, body: { position: 'absolute', left: '50%', transform: 'translateX(-50%)', width: '13px', top: bt + 'px', height: bh + 'px', background: col, borderRadius: '4px', boxShadow: `0 4px 10px ${col}66`, border: today ? '2px solid #fff' : 'none' }, wick: { position: 'absolute', left: '50%', transform: 'translateX(-50%)', width: '3px', top: wt + 'px', height: wh + 'px', background: col, borderRadius: '2px', opacity: .45 }, labStyle: `font-size:11px; font-weight:${today ? 800 : 600}; color:${today ? '#FF7A59' : '#9b93b3'};` }; });
+        const gridLines = [[84, '기쁨·설렘'], [66, '평온'], [30, '불안·슬픔']].map(([sc, lb]) => ({ label: lb, lineStyle: { position: 'absolute', left: 0, right: 0, top: yOf(sc) + 'px', borderTop: '1px dashed rgba(140,123,255,.2)' }, labStyle: { position: 'absolute', right: '2px', top: (yOf(sc) - 7) + 'px', fontSize: '9.5px', fontWeight: 600, color: '#bbb3cc' } }));
+        const DAY = [{ t: '아침', emo: 2 }, { t: '점심', emo: 1 }, { t: '오후', emo: 4 }, { t: '저녁', emo: 0 }];
+        const ds = DAY.map(x => this.SCORE[x.emo]); const open = ds[0], close = ds[ds.length - 1], hi = Math.max(...ds), lo = Math.min(...ds);
+        const ohlc = [['시', open], ['고', hi], ['저', lo], ['종', close]].map(([k, sc]) => { const ei = this.SCORE.indexOf(sc); const em = this.EMO[ei]; return { k, label: em.label, emoji: em.emoji, dot: this.emoDot(ei, 26) }; });
+        const dc = close - open;
+        const weekStats = [{ label: '주간 평균 기분', value: '74점' }, { label: '최고의 날', value: '토요일' }, { label: '가장 흔들린 날', value: '일요일' }, { label: '나아진 날', value: '5일' }];
+        return {
+          candleCols, gridLines, chartAreaStyle: { position: 'relative', height: chartH + 'px', margin: '8px 0 6px' }, candleRow: { display: 'flex', alignItems: 'stretch', height: chartH + 'px', gap: '2px' },
+          weekStats: weekStats.map(w => ({ label: w.label, value: w.value })),
+          chartInsight: '이번 주, 당신의 마음은 아침에 가장 자주 흔들렸고 오후를 지나며 회복됐어요.',
+          intraday: DAY.map(x => { const em = this.EMO[x.emo]; const sc = this.SCORE[x.emo]; return { time: x.t, label: em.label, emoji: em.emoji, dot: this.emoDot(x.emo, 36), bar: { width: sc + '%', height: '8px', borderRadius: '999px', background: this.grad(em) } }; }),
+          ohlc, dayChangeText: (dc >= 0 ? '+' : '') + dc + (dc >= 0 ? ' 호전' : ' 하락'), dayChangeStyle: { display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12.5px', fontWeight: 800, color: dc >= 0 ? '#22a892' : '#FF6B7E', background: (dc >= 0 ? 'rgba(51,191,166,.14)' : 'rgba(255,107,126,.14)'), padding: '4px 11px', borderRadius: '11px' },
+        };
+      })(),
+
+      navL: [this.navItem('light_mode', '오늘', screen === 'today', () => this.go('today')), this.navItem('explore', '탐색', screen === 'explore', () => this.go('explore'))],
+      navR: [this.navItem('forum', '커뮤니티', screen === 'feed', () => this.go('feed')), this.navItem('monitoring', '흐름', screen === 'insight', () => this.go('insight'))],
+      onCreate: () => this.go('myRecords'),
+      onWrite: () => this.go('create'),
+      onBack: () => { const m = { edit: 'me', me: 'insight', detail: 'today', result: 'today', create: 'myRecords', myRecords: 'today', placeDetail: 'explore', postDetail: (s.postFrom === 'place' ? 'placeDetail' : 'feed') }; this.go(m[s.screen] || 'today'); },
+      onProfile: () => this.go('me'),
+      statTipOpen: s.tip != null,
+      statTipTitle: s.tip === 'total' ? '총 기록' : s.tip === 'better' ? '나아진 비율' : s.tip === 'places' ? '나의 장소' : '',
+      statTipText: s.tip === 'total' ? '지금까지 남긴 마음 기록의 총 개수예요.' : s.tip === 'better' ? '마음을 기록한 10번 중, 떠날 무렵 도착했을 때보다 나아져 있던 적이 8번이에요. 장소와 시간이 내 마음을 얼마나 자주 풀어줬는지 보여줘요.' : s.tip === 'places' ? '마음의 변화를 기록한 장소의 수예요.' : '',
+      onTipTotal: () => this.toggleTip('total'), onTipBetter: () => this.toggleTip('better'), onTipPlaces: () => this.toggleTip('places'),
+      pubTogPublic: this.feedTog(s.cPublic), pubTogPrivate: this.feedTog(!s.cPublic), onPublicOn: () => this.setCPublic(true), onPublicOff: () => this.setCPublic(false),
+      pubIcon: s.cPublic ? 'public' : 'lock', pubDesc: s.cPublic ? '커뮤니티에 공유돼요' : '나만 볼 수 있어요', showCommPicker: s.cPublic,
+      communityChips: COMMUNITIES.slice(1).map(c => { const cc = CATCOLOR[c] || '#8E7BFF'; const on = !!s.cComms[c]; return { label: c, onClick: () => this.toggleCComm(c), style: on
+        ? { display: 'inline-flex', alignItems: 'center', padding: '8px 13px', borderRadius: '13px', cursor: 'pointer', fontSize: '12.5px', fontWeight: 700, whiteSpace: 'nowrap', color: '#fff', background: cc, boxShadow: `0 6px 14px ${cc}66` }
+        : { display: 'inline-flex', alignItems: 'center', padding: '8px 13px', borderRadius: '13px', cursor: 'pointer', fontSize: '12.5px', fontWeight: 600, whiteSpace: 'nowrap', color: '#574f6e', background: 'rgba(255,255,255,.6)', border: '1px solid var(--cbd)' } }; }),
+      placeDetail: dp ? { name: dp.name, cat: dp.cat, dist: dp.dist, liftPct: '+' + dp.lift + '%', liftStyle: this.liftPill(dp.to), fromEmoji: this.EMO[dp.from].emoji, toEmoji: this.EMO[dp.to].emoji, fromDot: this.emoDot(dp.from, 28), toDot: this.emoDot(dp.to, 28), shiftLabel: this.shiftLabel(dp.from, dp.to), nText: dp.n + '명의 발자취', pet: !!dp.pet, about: dp.about, naverUrl: 'https://map.naver.com/p/search/' + encodeURIComponent(dp.name), googleUrl: 'https://www.google.com/maps/search/' + encodeURIComponent(dp.name), onRecord: () => this.recordAt(dp.name, dp.from, dp.to), thumb: { position: 'relative', width: '60px', height: '60px', borderRadius: '18px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: this.grad(this.EMO[dp.to]), boxShadow: `0 8px 18px ${this.EMO[dp.to].c2}55` } } : {},
+      placeDiaries: dp ? communityData.map((c, ci) => ({ c, ci })).filter(o => o.c.loc === dp.name).map(o => { const c = o.c; return { nick: c.nick, story: c.story, date: '2026.06.27', fromDot: this.emoDot(c.from, 22), toDot: this.emoDot(c.to, 22), fromEmoji: this.EMO[c.from].emoji, toEmoji: this.EMO[c.to].emoji, shiftLabel: this.shiftLabel(c.from, c.to), cmtCount: (c.cmts.length + ((s.addedComments[o.ci] || []).length)) + '', onClick: () => this.openPost(o.ci, 'place'), avatar: { width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: '#fff', background: this.grad(this.EMO[c.to]), boxShadow: `0 4px 10px ${this.EMO[c.to].c2}55` }, initial: c.nick.slice(0, 1) }; }) : [],
+      placeHasDiaries: dp ? communityData.some(c => c.loc === dp.name) : false,
+      placeNoDiaries: dp ? !communityData.some(c => c.loc === dp.name) : false,
+      post: pd ? { nick: pd.nick, title: pd.title, loc: pd.loc, story: pd.story, date: '2026.06.27', fromDot: this.emoDot(pd.from, 26), toDot: this.emoDot(pd.to, 26), fromEmoji: this.EMO[pd.from].emoji, toEmoji: this.EMO[pd.to].emoji, shiftLabel: this.shiftLabel(pd.from, pd.to), avatar: { width: '42px', height: '42px', borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '17px', fontWeight: 700, color: '#fff', background: this.grad(this.EMO[pd.to]), boxShadow: `0 5px 12px ${this.EMO[pd.to].c2}55` }, initial: pd.nick.slice(0, 1) } : {},
+      comments: pd ? pd.cmts.concat((s.addedComments[s.detailPost] || []).map(t => ({ nick: '나', text: t, me: true }))).map(cm => ({ nick: cm.nick, text: cm.text, initial: cm.nick.slice(0, 1), dot: { width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: '#fff', background: cm.me ? this.SIG : 'linear-gradient(145deg,#C9B2FF,#8E7BFF)' } })) : [],
+      commentCount: pd ? (pd.cmts.length + ((s.addedComments[s.detailPost] || []).length)) + '' : '0',
+      commentText: s.commentText, onComment: (e) => this.setComment(e), onAddComment: () => this.addComment(),
+      themeOptions: Object.keys(this.THEMES).map(k => { const st = this.THEMES[k].stops; const on = k === s.theme; return { label: k, onClick: () => this.setTheme(k), swatch: { width: '100%', height: '46px', borderRadius: '14px', background: `linear-gradient(145deg, ${st[0][0]} 0%, ${st[1][0]} 55%, ${st[2][0]} 100%)`, border: on ? '2.5px solid #2c2740' : '1px solid rgba(140,123,255,.2)', boxShadow: on ? '0 8px 18px rgba(90,70,130,.22)' : '0 4px 10px rgba(90,70,130,.08)', transition: 'all .2s' }, labStyle: `font-size:12px; font-weight:${on ? 800 : 600}; color:${on ? '#2c2740' : '#9b93b3'}; margin-top:7px; text-align:center;` }; }),
+      onEdit: () => this.go('edit'),
+    };
+  }
+}
+</script>
+</body>
+</html>

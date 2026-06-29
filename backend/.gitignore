@@ -1,0 +1,80 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# 실제 민감한 설정 파일 무시
+/src/main/resources/application-private.properties
+application-private.properties
+/config/
+.env
+.env.*
+!.env.example
+
+### VS Code ###
+.vscode/
+
+# === app data (do not commit) ===
+# 모든 모듈의 src/main/resources/data/ 및 src/test/resources/data/ 아래 파일 무시
+**/src/main/resources/data/**
+**/src/test/resources/data/**
+
+# local-only history rewrite artifacts
+replacements.txt
+
+# local-only ops workflows
+.github/workflows/deploy-backend.yml
+.github/workflows/smoke.yml
+
+# Terraform local state and secrets
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+!*.tfvars.example
+infra/terraform/**/backend.tf
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Local observability and load-test outputs
+prometheus/data/
+grafana/data/
+k6/results/
+*.k6.json

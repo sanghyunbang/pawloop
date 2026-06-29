@@ -1,0 +1,9 @@
+.git
+build/
+bin/
+.gradle/
+config/
+application-private.properties
+.env
+*.iml
+*.log

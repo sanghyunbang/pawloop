@@ -1,0 +1,11 @@
+# 로컬에서 backend.tf로 복사한 뒤, 본인 AWS 계정의 remote state bucket으로 바꾼다.
+# 계정별 backend 설정은 커밋하지 않는다.
+terraform {
+  backend "s3" {
+    bucket         = "change-me-terraform-state-bucket"
+    key            = "heat-trip/staging/backend/terraform.tfstate"
+    region         = "ap-northeast-2"
+    dynamodb_table = "change-me-terraform-locks"
+    encrypt        = true
+  }
+}

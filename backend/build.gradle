@@ -1,0 +1,120 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.5.4'
+	id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.jetbrains.kotlin.jvm'
+    id 'jacoco'
+	id "org.jetbrains.kotlin.plugin.spring" version '2.2.20'
+}
+
+group = 'com.heattrip'
+version = '2.0.0'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencyManagement {
+	imports {
+		mavenBom 'org.springframework.ai:spring-ai-bom:1.0.0'
+	}
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    // Lombok (먼저 처리되어야 함)
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // MapStruct (Lombok 이후 처리)
+    implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+    
+    // Lombok ↔ MapStruct 바인딩 (마지막에 추가)
+    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+	
+	implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	compileOnly 'org.projectlombok:lombok'
+	runtimeOnly 'com.mysql:mysql-connector-j'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.security:spring-security-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+	// JWT 관련 의존성
+	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+	// webFlux -> api호출 관련
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+	// AWS S3
+	// implementation 'software.amazon.awssdk:s3:2.20.89'
+	implementation ('com.amazonaws:aws-java-sdk-s3:1.12.574') {
+		exclude group: 'commons-logging', module: 'commons-logging'
+	}
+
+	// csv 주입 관련
+	implementation ('com.opencsv:opencsv:5.9') {
+		exclude group: 'commons-logging', module: 'commons-logging'
+	}
+
+
+    // Swagger (springdoc)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+
+    // 잭슨 어노테이션
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.core:jackson-annotations'
+
+    // Spring AI (OpenAI)
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+
+	// Kotlin
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    implementation "org.jetbrains.kotlin:kotlin-reflect"
+    implementation "com.fasterxml.jackson.module:jackson-module-kotlin"
+	implementation "org.jetbrains.kotlin:kotlin-stdlib"
+
+	// TEST관련
+	testRuntimeOnly 'com.h2database:h2'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        html.required = true
+        xml.required = true
+        csv.required = false
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['-parameters']
+}

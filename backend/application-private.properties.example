@@ -1,0 +1,5 @@
+# Legacy note:
+# Runtime secrets are now configured with environment variables in `.env`.
+# Use `.env.example` as the current template.
+#
+# This file is kept only so older documentation links do not break.
