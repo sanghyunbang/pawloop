@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../theme/app_tokens.dart';
 import '../theme/emotions.dart';
 import '../widgets/aurora.dart';
@@ -62,7 +63,18 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> with SingleTickerProv
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                FloatingOrb(emotion: e, size: 188),
+                SizedBox(
+                  width: 270,
+                  height: 270,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // 마음을 살피는 펄스(자체 제작 Lottie).
+                      Lottie.asset('assets/lottie/pulse.json', width: 270, height: 270, repeat: true, fit: BoxFit.contain),
+                      FloatingOrb(emotion: e, size: 172),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 26),
                 const Text('마음을 분석하고 있어요',
                     style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: T.textPrimary)),

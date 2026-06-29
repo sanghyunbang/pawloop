@@ -96,6 +96,7 @@ flutter:
     - assets/Logo4.png
     - assets/
     - assets/emoji/
+    - assets/lottie/
     - .env
     - assets/terms/terms_ko.md
     - assets/terms/privacy_ko.md
