@@ -30,4 +30,8 @@ class Env {
   /// 네이버 지도 Dynamic Map Client ID (.env: NAVER_MAP_CLIENT_ID).
   /// 모바일 지도 SDK는 Client ID만 사용(시크릿 불필요). 패키지명 허용목록으로 보호됨.
   static String get naverMapClientId => dotenv.env['NAVER_MAP_CLIENT_ID'] ?? '';
+
+  /// 공공데이터포털(관광공사) 서비스키. 이미 인코딩된 형태라 그대로 쿼리에 붙인다.
+  /// (.env: YOUR_DECODING_SERVICE_KEY — 명칭과 달리 인코딩키가 들어있음)
+  static String get tourServiceKey => dotenv.env['YOUR_DECODING_SERVICE_KEY'] ?? '';
 }

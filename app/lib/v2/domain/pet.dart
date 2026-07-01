@@ -13,17 +13,21 @@ class PetCategory {
   const PetCategory(this.key, this.label, this.color, this.icon);
 }
 
+/// 관광공사 반려동물 동반여행(KTO) contenttypeid 기반 카테고리. key = contenttypeid.
 const List<PetCategory> kPetCategories = [
-  PetCategory('cafe', '동반카페', Color(0xFFFF9E5E), Icons.local_cafe_rounded),
-  PetCategory('food', '식당', Color(0xFFFF6E7F), Icons.restaurant_rounded),
-  PetCategory('park', '공원', Color(0xFF57C98A), Icons.park_rounded),
-  PetCategory('trail', '산책로', Color(0xFF33BFA6), Icons.directions_walk_rounded),
-  PetCategory('vet', '병원', Color(0xFF5B8DEF), Icons.local_hospital_rounded),
-  PetCategory('shop', '펫샵', Color(0xFF9B7BFF), Icons.storefront_rounded),
+  PetCategory('12', '여행지', Color(0xFF57C98A), Icons.park_rounded),
+  PetCategory('39', '카페·식당', Color(0xFFFF7E6B), Icons.restaurant_rounded),
+  PetCategory('28', '레포츠', Color(0xFF33BFA6), Icons.directions_walk_rounded),
+  PetCategory('32', '숙박', Color(0xFF5B8DEF), Icons.hotel_rounded),
+  PetCategory('38', '쇼핑', Color(0xFF9B7BFF), Icons.storefront_rounded),
+  PetCategory('14', '문화', Color(0xFFEFA13C), Icons.museum_rounded),
 ];
 
-PetCategory petCategory(String key) =>
-    kPetCategories.firstWhere((c) => c.key == key, orElse: () => kPetCategories.first);
+/// contenttypeid → 카테고리. 미지정/기타는 여행지로.
+PetCategory petCatByType(String? contentTypeId) => kPetCategories.firstWhere(
+      (c) => c.key == contentTypeId,
+      orElse: () => const PetCategory('0', '기타', Color(0xFF8E86A8), Icons.place_rounded),
+    );
 
 /// 견종 크기.
 enum DogSize {
