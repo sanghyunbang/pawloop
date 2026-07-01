@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
+import 'package:geolocator/geolocator.dart';
 import '../theme/app_tokens.dart';
+import '../data/location_service.dart';
 import 'create_screen.dart';
 
 /// 실시간 산책 트래킹 (더미 시뮬레이션).
@@ -21,11 +23,13 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
 
   NaverMapController? _ctrl;
   Timer? _timer;
+  StreamSubscription<Position>? _posSub;
   bool _paused = false;
+  bool _real = false; // true = 실제 GPS, false = 시뮬(위치 불가 시 폴백)
   int _seconds = 0;
   double _km = 0;
 
-  // 더미 경로(서울숲 근처 루프) — 시뮬레이션으로 한 점씩 그린다.
+  // 더미 경로(서울숲 근처 루프) — 위치 불가 시 시뮬레이션으로 한 점씩 그린다.
   late final List<NLatLng> _route = _makeRoute();
   final List<NLatLng> _path = [];
   int _idx = 0;
@@ -44,26 +48,50 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _posSub?.cancel();
     super.dispose();
   }
 
-  void _start() {
-    _path.add(_route[0]);
+  Future<void> _start() async {
+    // 경과 시간 초시계(실제/시뮬 공통).
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_paused || !mounted) return;
-      setState(() {
-        _seconds++;
-        if (_idx < _route.length - 1) {
-          _idx++;
-          final prev = _route[_idx - 1], cur = _route[_idx];
-          _km += _dist(prev, cur);
-          _path.add(cur);
-        }
-      });
-      _drawPath();
-      final head = _path.last;
-      _ctrl?.updateCamera(NCameraUpdate.withParams(target: head));
+      setState(() => _seconds++);
+      if (!_real) _advanceSim();
     });
+    // 실제 위치 시도 → 되면 GPS 스트림, 안 되면 시뮬.
+    final pos = await LocationService.current();
+    if (!mounted) return;
+    if (pos != null) {
+      _real = true;
+      _path.add(NLatLng(pos.latitude, pos.longitude));
+      await _ctrl?.updateCamera(NCameraUpdate.withParams(target: _path.last, zoom: 16));
+      await _drawPath();
+      _posSub = LocationService.stream().listen((p) {
+        if (_paused || !mounted) return;
+        final cur = NLatLng(p.latitude, p.longitude);
+        setState(() {
+          if (_path.isNotEmpty) _km += _dist(_path.last, cur);
+          _path.add(cur);
+        });
+        _drawPath();
+        _ctrl?.updateCamera(NCameraUpdate.withParams(target: cur));
+      });
+    } else {
+      _path.add(_route[0]); // 시뮬 시작점
+    }
+  }
+
+  // 시뮬 모드: 더미 경로를 한 점씩 진행.
+  void _advanceSim() {
+    if (_idx >= _route.length - 1) return;
+    setState(() {
+      _idx++;
+      _km += _dist(_route[_idx - 1], _route[_idx]);
+      _path.add(_route[_idx]);
+    });
+    _drawPath();
+    _ctrl?.updateCamera(NCameraUpdate.withParams(target: _path.last));
   }
 
   double _dist(NLatLng a, NLatLng b) {

@@ -3,6 +3,7 @@ import 'package:flutter_naver_map/flutter_naver_map.dart';
 import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
 import '../data/pet_places_repository.dart';
+import '../data/location_service.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 
@@ -29,7 +30,17 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    // 현위치 확보 → 실패 시 서울 시청 유지.
+    final pos = await LocationService.current();
+    if (mounted && pos != null) {
+      _center = NLatLng(pos.latitude, pos.longitude);
+      await _mapCtrl?.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
+    }
+    await _load();
   }
 
   Future<void> _load() async {
@@ -366,6 +377,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ),
           onMapReady: (c) {
             _mapCtrl = c;
+            c.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
             _refreshMarkers();
           },
         ),
