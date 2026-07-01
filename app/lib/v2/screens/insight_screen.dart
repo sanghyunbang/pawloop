@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../theme/app_tokens.dart';
-import '../theme/emotions.dart';
-import '../theme/insight_data.dart';
+import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 
-/// 마음 흐름 (insight) — 오늘/주간 차트 + 통계 + 나를 바꿔준 곳.
+/// 산책 통계 (insight) — 이번 주 요약 + 주간 거리 막대그래프 + 자주 가는 곳.
 class InsightScreen extends StatefulWidget {
   const InsightScreen({super.key});
   @override
@@ -14,17 +13,31 @@ class InsightScreen extends StatefulWidget {
 }
 
 class _InsightScreenState extends State<InsightScreen> {
-  String chartView = 'day'; // 'day' | 'week'
-  String? tip; // 'total' | 'better' | 'places'
-
-  static const _sig = LinearGradient(
+  static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1), end: Alignment(0.8, 1),
-    colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)],
+    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
   );
-  static const _pink = LinearGradient(colors: [Color(0xFFFF8FB0), Color(0xFFFF9FCF)]);
+
+  // 이번 주 파생 지표.
+  double get _totalKm => kWeekKm.fold(0.0, (a, b) => a + b);
+  int get _walkCount => kWeekKm.where((v) => v > 0).length;
+  double get _avgKm => _walkCount == 0 ? 0 : _totalKm / _walkCount;
+  double get _maxKm =>
+      kWeekKm.fold(0.0, (a, b) => b > a ? b : a);
+
+  /// kWalks의 place 빈도 상위 3.
+  List<MapEntry<String, int>> get _topPlaces {
+    final counts = <String, int>{};
+    for (final w in kWalks) {
+      counts[w.place] = (counts[w.place] ?? 0) + 1;
+    }
+    final list = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return list.take(3).toList();
+  }
 
   Widget _gradNum(String v, {double size = 21}) => ShaderMask(
-        shaderCallback: (r) => _sig.createShader(r),
+        shaderCallback: (r) => _warm.createShader(r),
         child: Text(v, style: TextStyle(fontSize: size, fontWeight: FontWeight.w800, color: Colors.white)),
       );
 
@@ -35,35 +48,18 @@ class _InsightScreenState extends State<InsightScreen> {
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
-          child: Column(children: [
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 100),
-                children: [
-                  _header(),
-                  const SizedBox(height: 18),
-                  _statsCard(),
-                  if (tip != null) ...[const SizedBox(height: 10), _tipBox()],
-                  const SizedBox(height: 14),
-                  _toggle(),
-                  const SizedBox(height: 14),
-                  if (chartView == 'day') ...[
-                    _todayCutCard(),
-                    const SizedBox(height: 14),
-                    _dayFlowCard(),
-                  ] else ...[
-                    _candleCard(),
-                    const SizedBox(height: 14),
-                    _weekStatsGrid(),
-                    const SizedBox(height: 14),
-                    _aiCard(),
-                  ],
-                  const SizedBox(height: 14),
-                  _myShiftsCard(),
-                ],
-              ),
-            ),
-          ]),
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 100),
+            children: [
+              _header(),
+              const SizedBox(height: 18),
+              _summaryCard(),
+              const SizedBox(height: 14),
+              _weekChartCard(),
+              const SizedBox(height: 14),
+              _topPlacesCard(),
+            ],
+          ),
         ),
       ),
     );
@@ -71,331 +67,189 @@ class _InsightScreenState extends State<InsightScreen> {
 
   Widget _header() => Row(children: [
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-          Text('마음 흐름', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          Text('산책 통계', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: T.textPrimary)),
           SizedBox(height: 4),
-          Text('내가 나를 알아가는 곳', style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
+          Text('우리 아이 활동 기록', style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
         ]),
         const Spacer(),
         const ProfileAvatar(size: 44),
       ]);
 
-  Widget _statsCard() {
-    Widget cell(InsightStat s) => Expanded(
-          child: GestureDetector(
-            onTap: () => setState(() => tip = tip == s.tipKey ? null : s.tipKey),
-            behavior: HitTestBehavior.opaque,
-            child: Column(children: [
-              _gradNum(s.value),
-              const SizedBox(height: 4),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text(s.label, style: const TextStyle(fontSize: 12, color: Color(0x9E463C64))),
-                const SizedBox(width: 3),
-                const Icon(Icons.info_outline, size: 13, color: Color(0xFFBBB3CC)),
-              ]),
-            ]),
-          ),
+  // ── 이번 주 요약 ─────────────────────────────────
+  Widget _summaryCard() {
+    Widget cell(String value, String label) => Expanded(
+          child: Column(children: [
+            _gradNum(value),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 12, color: Color(0x9E463C64))),
+          ]),
         );
     Widget div() => Container(width: 1, height: 38, color: const Color(0x248C7BFF));
     return GlassCard(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-      child: Row(children: [cell(kInsightStats[0]), div(), cell(kInsightStats[1]), div(), cell(kInsightStats[2])]),
-    );
-  }
-
-  Widget _tipBox() {
-    final (title, text) = kStatTips[tip]!;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(15, 13, 15, 13),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0x1A8E7BFF), Color(0x14D89BFF)]),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0x388E7BFF)),
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.info, size: 18, color: Color(0xFF8E7BFF)),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
-            const SizedBox(height: 3),
-            Text(text, style: const TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xCC3C345A))),
-          ]),
-        ),
+      child: Row(children: [
+        cell('${_totalKm.toStringAsFixed(1)}km', '총 거리'),
+        div(),
+        cell('$_walkCount회', '산책 횟수'),
+        div(),
+        cell('${_avgKm.toStringAsFixed(1)}km', '평균 거리'),
       ]),
     );
   }
 
-  Widget _toggle() {
-    Widget seg(String v, String label) {
-      final on = chartView == v;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => setState(() => chartView = v),
-          child: Container(
-            height: 42,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(gradient: on ? _pink : null, borderRadius: BorderRadius.circular(12)),
-            child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: on ? Colors.white : T.textSecondary)),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: const Color(0xC2FFFFFF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0x66FFFFFF)),
-      ),
-      child: Row(children: [seg('week', '주간'), seg('day', '오늘')]),
-    );
-  }
-
-  // ── 오늘 ─────────────────────────────────────────
-  ({List<int> ohlc, int change}) _ohlc() {
-    final ds = kDayFlow.map((e) => kScore[e.$2]).toList();
-    final open = ds.first, close = ds.last;
-    final hi = ds.reduce((a, b) => a > b ? a : b);
-    final lo = ds.reduce((a, b) => a < b ? a : b);
-    return (ohlc: [open, hi, lo, close], change: close - open);
-  }
-
-  Widget _todayCutCard() {
-    final r = _ohlc();
-    const keys = ['시', '고', '저', '종'];
+  // ── 주간 거리 막대그래프 ─────────────────────────
+  Widget _weekChartCard() {
     return GlassCard(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Text('오늘의 한 컷', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: T.textPrimary)),
+          const Text('주간 산책 거리', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: T.textPrimary)),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
-            decoration: BoxDecoration(color: const Color(0x2433BFA6), borderRadius: BorderRadius.circular(11)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.trending_up, size: 15, color: Color(0xFF22A892)),
-              const SizedBox(width: 4),
-              Text('${r.change >= 0 ? '+' : ''}${r.change} ${r.change >= 0 ? '호전' : '하락'}',
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF22A892))),
-            ]),
-          ),
+          const Text('단위 km', style: TextStyle(fontSize: 11, color: T.textMuted)),
         ]),
-        const SizedBox(height: 16),
+        const SizedBox(height: 6),
         Row(children: [
-          for (int i = 0; i < 4; i++)
-            Expanded(child: _ohlcCol(keys[i], kScore.indexOf(r.ohlc[i]))),
+          const Icon(Icons.circle, size: 9, color: Color(0xFFFF7E8A)),
+          const SizedBox(width: 5),
+          const Text('오늘', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+          const SizedBox(width: 12),
+          Container(width: 9, height: 9, decoration: BoxDecoration(color: const Color(0x668C7BFF), borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 5),
+          const Text('평일', style: TextStyle(fontSize: 11, color: T.textMuted)),
         ]),
-      ]),
-    );
-  }
-
-  Widget _ohlcCol(String k, int emoIdx) {
-    final e = kEmotions[emoIdx];
-    return Column(children: [
-      Text(k, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: T.textMuted)),
-      const SizedBox(height: 7),
-      Container(
-        width: 30, height: 30, alignment: Alignment.center,
-        decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-        child: e.icon(19.6),
-      ),
-      const SizedBox(height: 6),
-      Text(e.label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: T.textSecondary)),
-    ]);
-  }
-
-  Widget _dayFlowCard() {
-    return GlassCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('하루의 흐름', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
         const SizedBox(height: 16),
-        for (int i = 0; i < kDayFlow.length; i++) ...[
-          if (i > 0) const SizedBox(height: 15),
-          _dayFlowRow(kDayFlow[i].$1, kDayFlow[i].$2),
-        ],
+        SizedBox(height: 190, child: _barChart()),
       ]),
     );
   }
 
-  Widget _dayFlowRow(String time, int emoIdx) {
-    final e = kEmotions[emoIdx];
-    final sc = kScore[emoIdx];
-    return Row(children: [
-      SizedBox(width: 32, child: Text(time, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: T.textMuted))),
-      const SizedBox(width: 12),
-      Container(
-        width: 36, height: 36, alignment: Alignment.center,
-        decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-        child: e.icon(22.4),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(e.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF3A3550))),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: double.infinity,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: sc / 100,
-                child: Container(
-                  height: 8,
-                  decoration: BoxDecoration(gradient: e.grad, borderRadius: BorderRadius.circular(999)),
+  Widget _barChart() {
+    final maxY = (_maxKm <= 0 ? 1.0 : _maxKm) * 1.25;
+    const todayColor = Color(0xFFFF7E8A);
+    const otherColor = Color(0x8C9E8FE8);
+
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        minY: 0,
+        maxY: maxY,
+        barTouchData: BarTouchData(
+          enabled: true,
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => const Color(0xF0453C69),
+            tooltipBorderRadius: BorderRadius.circular(10),
+            tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            getTooltipItem: (group, groupIdx, rod, rodIdx) => BarTooltipItem(
+              '${kWeekDayLabels[group.x]}요일\n',
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+              children: [
+                TextSpan(
+                  text: '${rod.toY.toStringAsFixed(1)} km',
+                  style: const TextStyle(color: Color(0xFFFFD9C2), fontWeight: FontWeight.w800, fontSize: 13),
                 ),
-              ),
+              ],
             ),
           ),
-        ]),
-      ),
-    ]);
-  }
-
-  // ── 주간 ─────────────────────────────────────────
-  Widget _candleCard() {
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Text('이번 주 마음 캔들', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: T.textPrimary)),
-          const Spacer(),
-          _legend(const Color(0xFF33BFA6), '좋아짐'),
-          const SizedBox(width: 11),
-          _legend(const Color(0xFFFF6B7E), '내려감'),
-        ]),
-        const SizedBox(height: 10),
-        SizedBox(height: 188, child: _candleChart()),
-        const SizedBox(height: 4),
-        Row(children: [
-          for (int i = 0; i < kWeekCandles.length; i++)
-            Expanded(
-              child: Center(
-                child: Text(kWeekCandles[i].lab,
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: i == kTodayCandle ? FontWeight.w800 : FontWeight.w600,
-                        color: i == kTodayCandle ? const Color(0xFFFF7A59) : T.textMuted)),
-              ),
-            ),
-        ]),
-      ]),
-    );
-  }
-
-  // 주간 마음 캔들 — fl_chart CandlestickChart.
-  Widget _candleChart() {
-    const up = Color(0xFF33BFA6), down = Color(0xFFFF6B7E);
-    return CandlestickChart(
-      CandlestickChartData(
-        minY: 0, maxY: 100,
-        minX: -0.5, maxX: kWeekCandles.length - 0.5,
-        candlestickSpots: [
-          for (int i = 0; i < kWeekCandles.length; i++)
-            CandlestickSpot(
-              x: i.toDouble(),
-              open: kWeekCandles[i].o.toDouble(),
-              high: kWeekCandles[i].h.toDouble(),
-              low: kWeekCandles[i].l.toDouble(),
-              close: kWeekCandles[i].c.toDouble(),
-            ),
-        ],
-        candlestickPainter: DefaultCandlestickPainter(
-          candlestickStyleProvider: (spot, index) {
-            final col = kWeekCandles[index].up ? up : down;
-            final today = index == kTodayCandle;
-            return CandlestickStyle(
-              lineColor: col.withValues(alpha: 0.45),
-              lineWidth: 3,
-              bodyStrokeColor: today ? Colors.white : col,
-              bodyStrokeWidth: today ? 2 : 0,
-              bodyFillColor: col,
-              bodyWidth: 15,
-              bodyRadius: 4,
-            );
-          },
         ),
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
-          horizontalInterval: 25,
-          getDrawingHorizontalLine: (_) => const FlLine(color: Color(0x33836FFF), strokeWidth: 1, dashArray: [4, 5]),
+          horizontalInterval: maxY / 4,
+          getDrawingHorizontalLine: (_) =>
+              const FlLine(color: Color(0x1F8C7BFF), strokeWidth: 1, dashArray: [4, 5]),
         ),
-        titlesData: const FlTitlesData(show: false),
-        borderData: FlBorderData(show: false),
-        candlestickTouchData: CandlestickTouchData(enabled: false),
-      ),
-    );
-  }
-
-  Widget _legend(Color c, String label) => Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 9, height: 9, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: T.textSecondary)),
-      ]);
-
-  Widget _weekStatsGrid() {
-    Widget cell((String, String) w) => Expanded(
-          child: GlassCard(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(w.$1, style: const TextStyle(fontSize: 12, color: Color(0x9E463C64))),
-              const SizedBox(height: 5),
-              _gradNum(w.$2),
-            ]),
+        titlesData: FlTitlesData(
+          show: true,
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              interval: maxY / 4,
+              getTitlesWidget: (value, meta) {
+                if (value <= 0.01) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Text(value.toStringAsFixed(0),
+                      style: const TextStyle(fontSize: 10, color: T.textMuted)),
+                );
+              },
+            ),
           ),
-        );
-    return Column(children: [
-      Row(children: [cell(kWeekStats[0]), const SizedBox(width: 10), cell(kWeekStats[1])]),
-      const SizedBox(height: 10),
-      Row(children: [cell(kWeekStats[2]), const SizedBox(width: 10), cell(kWeekStats[3])]),
-    ]);
-  }
-
-  Widget _aiCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0x1F8E7BFF), Color(0x1AD89BFF)]),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0x3D8E7BFF)),
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.insights, size: 21, color: Color(0xFF8E7BFF)),
-        const SizedBox(width: 11),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('AI 패턴 분석', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF8E7BFF))),
-            const SizedBox(height: 3),
-            Text(kChartInsight, style: const TextStyle(fontSize: 13, height: 1.55, color: Color(0xD63C345A))),
-          ]),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 26,
+              getTitlesWidget: (value, meta) {
+                final i = value.toInt();
+                if (i < 0 || i >= kWeekDayLabels.length) return const SizedBox.shrink();
+                final today = i == kWalkTodayIdx;
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    kWeekDayLabels[i],
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: today ? FontWeight.w800 : FontWeight.w600,
+                      color: today ? const Color(0xFFFF7A59) : T.textMuted,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         ),
-      ]),
+        borderData: FlBorderData(show: false),
+        barGroups: [
+          for (int i = 0; i < kWeekKm.length; i++)
+            BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: kWeekKm[i],
+                  width: 18,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                  color: i == kWalkTodayIdx ? null : otherColor,
+                  gradient: i == kWalkTodayIdx
+                      ? const LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Color(0xFFFFA96B), todayColor],
+                        )
+                      : null,
+                  backDrawRodData: BackgroundBarChartRodData(
+                    show: true,
+                    toY: maxY,
+                    color: const Color(0x0F8C7BFF),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 
-  // ── 공통 ─────────────────────────────────────────
-  Widget _myShiftsCard() {
+  // ── 자주 가는 곳 ─────────────────────────────────
+  Widget _topPlacesCard() {
+    final top = _topPlaces;
     return GlassCard(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: const [
-          Text('나를 바꿔준 곳', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: T.textPrimary)),
+          Text('자주 가는 곳', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: T.textPrimary)),
           Spacer(),
-          Text('자주 마음이 나아진 장소', style: TextStyle(fontSize: 12, color: Color(0x99463C64))),
+          Text('산책 기록 기준', style: TextStyle(fontSize: 12, color: Color(0x99463C64))),
         ]),
-        for (int i = 0; i < kMyShifts.length; i++) _shiftRow(kMyShifts[i], i < kMyShifts.length - 1),
+        const SizedBox(height: 4),
+        for (int i = 0; i < top.length; i++)
+          _placeRow(i + 1, top[i].key, top[i].value, i < top.length - 1),
       ]),
     );
   }
 
-  Widget _shiftRow(MyShift m, bool border) {
-    final f = kEmotions[m.from], t = kEmotions[m.to];
-    Widget dot(Emotion e, double s) => Container(
-          width: s, height: s, alignment: Alignment.center,
-          decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-          child: e.icon((s * 0.5) * 1.4));
+  Widget _placeRow(int rank, String place, int count, bool border) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 13),
       decoration: BoxDecoration(
@@ -403,31 +257,26 @@ class _InsightScreenState extends State<InsightScreen> {
       ),
       child: Row(children: [
         Container(
-          width: 44, height: 44, alignment: Alignment.center,
-          decoration: BoxDecoration(gradient: t.grad, borderRadius: BorderRadius.circular(13)),
-          child: t.icon(25.2),
+          width: 34, height: 34, alignment: Alignment.center,
+          decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(11)),
+          child: Text('$rank', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
         ),
-        const SizedBox(width: 11),
+        const SizedBox(width: 12),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(m.name, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
-            const SizedBox(height: 5),
-            Row(children: [
-              dot(f, 22),
-              const SizedBox(width: 6),
-              const Icon(Icons.arrow_forward, size: 14, color: Color(0xFFBBB3CC)),
-              const SizedBox(width: 6),
-              dot(t, 22),
-              const SizedBox(width: 8),
-              Text('${f.label} → ${t.label}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: T.textSecondary)),
-            ]),
+          child: Text(place, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: const Color(0x1AFF7E8A), borderRadius: BorderRadius.circular(10)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.directions_walk_rounded, size: 13, color: Color(0xFFE07A4E)),
+            const SizedBox(width: 3),
+            Text('$count회', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
           ]),
         ),
-        Text(m.count, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0x80463C64))),
       ]),
     );
   }
-
 }
-
-

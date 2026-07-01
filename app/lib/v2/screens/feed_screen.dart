@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
-import '../theme/emotions.dart';
-import '../theme/community.dart';
+import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import 'post_detail_screen.dart';
 
-/// 커뮤니티 (feed) — 비슷한 마음의 장소일기. 카드/리스트 토글.
+/// 커뮤니티 (feed) — 반려인들의 산책·동반장소·건강 이야기. 카드/리스트 토글.
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
   @override
@@ -14,13 +13,16 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  String feedCat = '전체';
+  String feedBoard = '전체';
   String view = 'card'; // 'card' | 'list'
 
-  static const _pink = LinearGradient(colors: [Color(0xFFFF8FB0), Color(0xFFFF9FCF)]);
+  static const _warm = LinearGradient(
+    begin: Alignment(-0.8, -1), end: Alignment(0.8, 1),
+    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+  );
 
-  List<CommunityPost> get _posts =>
-      kCommunityPosts.where((p) => feedCat == '전체' || p.cats.contains(feedCat)).toList();
+  List<PetPost> get _posts =>
+      kPetPosts.where((p) => feedBoard == '전체' || p.board == feedBoard).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -40,8 +42,16 @@ class _FeedScreenState extends State<FeedScreen> {
                 const ProfileAvatar(),
               ]),
             ),
+            const SizedBox(height: 4),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 15),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('우리 아이들 이야기', style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
+              ),
+            ),
             const SizedBox(height: 10),
-            _catFilters(),
+            _boardFilter(),
             const SizedBox(height: 8),
             Expanded(
               child: ListView(
@@ -69,7 +79,7 @@ class _FeedScreenState extends State<FeedScreen> {
           width: 42,
           height: 36,
           alignment: Alignment.center,
-          decoration: BoxDecoration(gradient: on ? _pink : null, borderRadius: BorderRadius.circular(11)),
+          decoration: BoxDecoration(gradient: on ? _warm : null, borderRadius: BorderRadius.circular(11)),
           child: Icon(icon, size: 20, color: on ? Colors.white : T.textMuted),
         ),
       );
@@ -86,13 +96,13 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  // 카테고리: 가로로 무한정 늘지 않도록 버튼 + 시트(확장 가능).
-  Widget _catFilters() {
+  // 보드 필터: 가로로 무한정 늘지 않도록 '전체 ▾' 버튼 + 바텀시트.
+  Widget _boardFilter() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(children: [
         GestureDetector(
-          onTap: _openCatSheet,
+          onTap: _openBoardSheet,
           behavior: HitTestBehavior.opaque,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -104,18 +114,20 @@ class _FeedScreenState extends State<FeedScreen> {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.tune, size: 16, color: T.textSecondary),
               const SizedBox(width: 7),
-              Text(feedCat, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
+              Text(feedBoard, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
               const SizedBox(width: 5),
               const Icon(Icons.expand_more, size: 16, color: T.textMuted),
             ]),
           ),
         ),
         const Spacer(),
+        Text('${_posts.length}개의 글',
+            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textMuted)),
       ]),
     );
   }
 
-  void _openCatSheet() {
+  void _openBoardSheet() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -125,20 +137,20 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Center(child: Container(width: 42, height: 5, decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)))),
           const SizedBox(height: 16),
-          const Text('카테고리', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const Text('게시판', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
           const SizedBox(height: 14),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final c in kCommunities)
+            for (final b in kPetBoards)
               GestureDetector(
-                onTap: () { setState(() => feedCat = c); Navigator.pop(sheetCtx); },
+                onTap: () { setState(() => feedBoard = b); Navigator.pop(sheetCtx); },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                   decoration: BoxDecoration(
-                    gradient: feedCat == c ? _pink : null,
-                    color: feedCat == c ? null : const Color(0xFFF1ECF7),
+                    gradient: feedBoard == b ? _warm : null,
+                    color: feedBoard == b ? null : const Color(0xFFF1ECF7),
                     borderRadius: BorderRadius.circular(13),
                   ),
-                  child: Text(c, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: feedCat == c ? Colors.white : T.textSecondary)),
+                  child: Text(b, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: feedBoard == b ? Colors.white : T.textSecondary)),
                 ),
               ),
           ]),
@@ -147,93 +159,89 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  void _open(CommunityPost p) => Navigator.of(context).push(
+  void _open(PetPost p) => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => PostDetailScreen(post: p)),
       );
 
-  Widget _avatar(CommunityPost p, double size) => Container(
+  // 닉네임 원형 아바타 (닉 첫 글자, 따뜻한 그라데이션).
+  Widget _avatar(PetPost p, double size) => Container(
         width: size,
         height: size,
         alignment: Alignment.center,
-        decoration: BoxDecoration(shape: BoxShape.circle, gradient: kEmotions[p.to].grad),
+        decoration: const BoxDecoration(shape: BoxShape.circle, gradient: _warm),
         child: Text(p.nick.characters.first,
             style: TextStyle(fontSize: size * 0.42, fontWeight: FontWeight.w800, color: Colors.white)),
       );
 
-  Widget _catChip(String c) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: catColor(c).withOpacity(0.14), borderRadius: BorderRadius.circular(8)),
-        child: Text(c, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: catColor(c))),
-      );
-
-  Widget _miniDot(Emotion e) => Container(
-        width: 24,
-        height: 24,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad),
-        child: e.icon(16.8),
-      );
-
-  Widget _shift(CommunityPost p) {
-    final f = kEmotions[p.from], t = kEmotions[p.to];
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      _miniDot(f),
-      const SizedBox(width: 6),
-      const Icon(Icons.arrow_forward, size: 14, color: T.textMuted),
-      const SizedBox(width: 6),
-      _miniDot(t),
-      const SizedBox(width: 8),
-      Text('${f.label} → ${t.label}',
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
-    ]);
+  // 보드별 색.
+  Color _boardColor(String board) {
+    switch (board) {
+      case '산책로 후기':
+        return const Color(0xFF33BFA6);
+      case '동반장소':
+        return const Color(0xFFFF7E6B);
+      case '건강·병원':
+        return const Color(0xFF5B8DEF);
+      case '자유':
+        return const Color(0xFF9B7BFF);
+      case '자랑':
+        return const Color(0xFFEFA13C);
+      default:
+        return const Color(0xFFFF8F63);
+    }
   }
 
-  Widget _card(CommunityPost p) {
+  Widget _boardChip(String board) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(color: _boardColor(board).withValues(alpha: 0.14), borderRadius: BorderRadius.circular(8)),
+        child: Text(board, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _boardColor(board))),
+      );
+
+  Widget _card(PetPost p) {
     return GestureDetector(
       onTap: () => _open(p),
       behavior: HitTestBehavior.opaque,
       child: GlassCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _avatar(p, 40),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Text(p.nick, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                const Spacer(),
-                const Text('2026.06.27', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _avatar(p, 40),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Text(p.nick, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                  const Spacer(),
+                  Text(p.date, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+                ]),
+                const SizedBox(height: 5),
+                Row(children: [
+                  _boardChip(p.board),
+                  if (p.loc != null) ...[
+                    const SizedBox(width: 7),
+                    const Icon(Icons.place_outlined, size: 13, color: T.textMuted),
+                    const SizedBox(width: 2),
+                    Text(p.loc!, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+                  ],
+                ]),
               ]),
-              const SizedBox(height: 5),
-              Row(children: [
-                _catChip(p.community),
-                if (p.loc != null) ...[
-                  const SizedBox(width: 7),
-                  const Icon(Icons.place_outlined, size: 13, color: T.textMuted),
-                  const SizedBox(width: 2),
-                  Text(p.loc!, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
-                ],
-              ]),
-            ]),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        _shift(p),
-        const SizedBox(height: 11),
-        Text(p.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
-        const SizedBox(height: 5),
-        Text(p.story, style: const TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xCC463C64))),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          for (int i = 0; i < 3; i++) _reactionChip(i, p.base[i]),
-        ]),
-        const SizedBox(height: 12),
-        Container(height: 1, color: const Color(0x14785AA0)),
-        const SizedBox(height: 10),
-        GestureDetector(
-          onTap: () => _open(p),
-          child: Row(children: [
+            ),
+          ]),
+          const SizedBox(height: 12),
+          Text(p.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 5),
+          Text(p.body,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xCC463C64))),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (int i = 0; i < kPetReactions.length; i++) _reactionChip(i, p.reactions[i]),
+          ]),
+          const SizedBox(height: 12),
+          Container(height: 1, color: const Color(0x14785AA0)),
+          const SizedBox(height: 10),
+          Row(children: [
             const Icon(Icons.chat_bubble_outline, size: 16, color: T.textMuted),
             const SizedBox(width: 6),
             Text('댓글 ${p.commentCount}개 · 자세히 보기',
@@ -241,8 +249,7 @@ class _FeedScreenState extends State<FeedScreen> {
             const Spacer(),
             const Icon(Icons.chevron_right, size: 18, color: T.textMuted),
           ]),
-        ),
-      ]),
+        ]),
       ),
     );
   }
@@ -256,9 +263,7 @@ class _FeedScreenState extends State<FeedScreen> {
         border: Border.all(color: const Color(0x66FFFFFF)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text(kReactionEmojis[i], style: const TextStyle(fontSize: 13)),
-        const SizedBox(width: 5),
-        Text(kReactionLabels[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.textSecondary)),
+        Text(kPetReactions[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.textSecondary)),
         if (count > 0) ...[
           const SizedBox(width: 5),
           Text('$count', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: T.textMuted)),
@@ -267,18 +272,14 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  Widget _row(CommunityPost p) {
-    final f = kEmotions[p.from], t = kEmotions[p.to];
+  Widget _row(PetPost p) {
     return GestureDetector(
       onTap: () => _open(p),
+      behavior: HitTestBehavior.opaque,
       child: GlassCard(
         padding: const EdgeInsets.fromLTRB(13, 12, 12, 12),
         child: Row(children: [
-          _miniDot(f),
-          const SizedBox(width: 5),
-          const Icon(Icons.arrow_forward, size: 13, color: T.textMuted),
-          const SizedBox(width: 5),
-          _miniDot(t),
+          _avatar(p, 40),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -286,7 +287,16 @@ class _FeedScreenState extends State<FeedScreen> {
                   style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
               const SizedBox(height: 5),
               Row(children: [
-                _catChip(p.community),
+                _boardChip(p.board),
+                if (p.loc != null) ...[
+                  const SizedBox(width: 7),
+                  const Icon(Icons.place_outlined, size: 12, color: T.textMuted),
+                  const SizedBox(width: 2),
+                  Flexible(
+                    child: Text(p.loc!, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+                  ),
+                ],
                 const SizedBox(width: 8),
                 const Icon(Icons.chat_bubble_outline, size: 13, color: T.textMuted),
                 const SizedBox(width: 3),
@@ -299,5 +309,4 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
     );
   }
-
 }

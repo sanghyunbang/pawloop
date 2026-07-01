@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
-import '../theme/themes.dart';
-import '../theme/records_data.dart';
+import '../domain/pet.dart';
 import '../widgets/aurora.dart';
-import '../widgets/profile_avatar.dart';
 import 'edit_screen.dart';
 import 'myrecords_screen.dart';
 
-/// 프로필 (me) — 아바타 + 배경 테마 선택(앱 전체) + 메뉴.
+/// 프로필 (me) — 우리 아이(강아지) 프로필 + 산책 활동 요약 + 메뉴.
+/// (감정 도메인 제거, 반려/산책 중심)
 class MeScreen extends StatelessWidget {
   const MeScreen({super.key});
+
+  static const _warm = LinearGradient(
+    begin: Alignment(-0.8, -1),
+    end: Alignment(0.8, 1),
+    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -18,40 +23,41 @@ class MeScreen extends StatelessWidget {
       body: AuroraBackground(
         child: SafeArea(
           child: Column(children: [
+            // 헤더
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
               child: Row(children: [
                 GestureDetector(
                   onTap: () => Navigator.of(context).maybePop(),
                   child: Container(
-                    width: 40, height: 40, alignment: Alignment.center,
-                    decoration: BoxDecoration(color: const Color(0xB3FFFFFF), borderRadius: BorderRadius.circular(13), border: Border.all(color: const Color(0x80FFFFFF))),
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xB3FFFFFF),
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(color: const Color(0x80FFFFFF)),
+                    ),
                     child: const Icon(Icons.arrow_back, size: 22, color: T.textPrimary),
                   ),
                 ),
                 const SizedBox(width: 14),
-                const Text('프로필', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                const Text('내 프로필', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
               ]),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
-                children: [
-                  // 아바타 + 이름
-                  Column(children: [
-                    const ProfileAvatar(size: 88, tappable: false),
-                    const SizedBox(height: 13),
-                    const Text('tester', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: T.textPrimary)),
-                    const SizedBox(height: 3),
-                    const Text('localtest@example.com', style: TextStyle(fontSize: 13, color: Color(0x99463C64))),
-                  ]),
-                  const SizedBox(height: 18),
-                  _statsCard(context),
-                  const SizedBox(height: 16),
-                  _themeCard(),
-                  const SizedBox(height: 18),
-                  _menuCard(context),
-                ],
+              child: ValueListenableBuilder<DogProfile>(
+                valueListenable: kMyDog,
+                builder: (_, dog, __) => ListView(
+                  padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
+                  children: [
+                    _dogHeader(dog),
+                    const SizedBox(height: 18),
+                    _statsCard(context),
+                    const SizedBox(height: 18),
+                    _menuCard(context),
+                  ],
+                ),
               ),
             ),
           ]),
@@ -60,52 +66,85 @@ class MeScreen extends StatelessWidget {
     );
   }
 
-  Widget _themeCard() {
-    return GlassCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: const [
-          Text('배경 테마', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
-          Spacer(),
-          Text('나에게 맞는 분위기로', style: TextStyle(fontSize: 12, color: Color(0x99463C64))),
-        ]),
-        const SizedBox(height: 14),
-        ValueListenableBuilder<int>(
-          valueListenable: AppThemeCtl.index,
-          builder: (_, sel, __) => Row(
-            children: [
-              for (int i = 0; i < kThemes.length; i++) ...[
-                if (i > 0) const SizedBox(width: 9),
-                Expanded(child: _swatch(i, sel == i)),
-              ],
-            ],
-          ),
+  // ───────────── 우리 아이 프로필 ─────────────
+  Widget _dogHeader(DogProfile dog) {
+    return Column(children: [
+      // 원형 그라데이션 배경 위 강아지 아바타
+      Container(
+        width: 96,
+        height: 96,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)]),
+          boxShadow: [BoxShadow(color: Color(0x55FF9E7D), blurRadius: 30, offset: Offset(0, 14))],
         ),
-      ]),
-    );
-  }
-
-  Widget _swatch(int i, bool on) {
-    final th = kThemes[i];
-    return GestureDetector(
-      onTap: () => AppThemeCtl.index.value = i,
-      child: Column(children: [
+        child: Image.asset(dog.avatarAsset, width: 62, height: 62, gaplessPlayback: true),
+      ),
+      const SizedBox(height: 14),
+      Text(dog.name, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: T.textPrimary)),
+      const SizedBox(height: 5),
+      Text('${dog.breed} · ${dog.ageLabel} · ${dog.size.label}',
+          style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+      if (dog.neutered) ...[
+        const SizedBox(height: 9),
         Container(
-          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
           decoration: BoxDecoration(
-            gradient: th.swatch,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: on ? const Color(0xFF2C2740) : const Color(0x332C2740), width: on ? 2.5 : 1),
-            boxShadow: on
-                ? const [BoxShadow(color: Color(0x385A4682), blurRadius: 18, offset: Offset(0, 8))]
-                : const [BoxShadow(color: Color(0x145A4682), blurRadius: 10, offset: Offset(0, 4))],
+            color: const Color(0xFF57C98A).withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(20),
           ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: const [
+            Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF3EA772)),
+            SizedBox(width: 5),
+            Text('중성화 완료', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF3EA772))),
+          ]),
         ),
-        const SizedBox(height: 7),
-        Text(th.name, style: TextStyle(fontSize: 12, fontWeight: on ? FontWeight.w800 : FontWeight.w600, color: on ? T.textPrimary : T.textMuted)),
-      ]),
+      ],
+    ]);
+  }
+
+  // ───────────── 산책 활동 요약 ─────────────
+  Widget _statsCard(BuildContext context) {
+    final totalKm = kWalks.fold<double>(0, (s, w) => s + w.km);
+    final weekKm = kWeekKm.fold<double>(0, (s, v) => s + v);
+
+    Widget cell(String value, String label) => Expanded(
+          child: Column(children: [
+            Text(value, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(height: 3),
+            Text(label, style: const TextStyle(fontSize: 12, color: Color(0x9E463C64))),
+          ]),
+        );
+    Widget div() => Container(width: 1, height: 34, color: const Color(0x1F8C7BFF));
+
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen())),
+      behavior: HitTestBehavior.opaque,
+      child: GlassCard(
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+        child: Column(children: [
+          Row(children: [
+            cell('${kWalks.length}회', '총 산책'),
+            div(),
+            cell('${totalKm.toStringAsFixed(1)}km', '총 거리'),
+            div(),
+            cell('${weekKm.toStringAsFixed(1)}km', '이번주'),
+          ]),
+          const SizedBox(height: 12),
+          Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: const [
+            Icon(Icons.article_outlined, size: 14, color: Color(0xFFFF8F63)),
+            SizedBox(width: 5),
+            Text('산책 기록 보기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+            SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 16, color: Color(0xFFE07A4E)),
+          ]),
+        ]),
+      ),
     );
   }
 
+  // ───────────── 메뉴 ─────────────
   Widget _menuCard(BuildContext context) {
     Widget row(IconData icon, String label, {Color? color, bool border = true, VoidCallback? onTap}) {
       final c = color ?? T.textPrimary;
@@ -125,45 +164,53 @@ class MeScreen extends StatelessWidget {
       );
     }
 
+    void snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), duration: const Duration(milliseconds: 1800)),
+        );
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(T.radius),
       child: GlassCard(
         padding: EdgeInsets.zero,
         child: Column(children: [
-          row(Icons.edit, '프로필 편집', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditScreen()))),
-          row(Icons.article_outlined, '내 기록', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
-          row(Icons.forum_outlined, '내가 쓴 글', onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('아직 쓴 글이 없어요 · 기록을 공개로 작성하면 여기에 모여요'), duration: Duration(milliseconds: 1800)),
-              )),
-          row(Icons.bookmark_border, '북마크', onTap: () {}),
-          row(Icons.logout, '로그아웃', color: const Color(0xFFFF6B7E), border: false, onTap: () {}),
+          _menuBanner(context),
+          row(Icons.pets_outlined, '프로필 편집',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditScreen()))),
+          row(Icons.article_outlined, '내 산책 기록',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
+          row(Icons.bookmark_border, '북마크', onTap: () => snack('저장한 장소가 아직 없어요 · 지도에서 마음에 드는 곳을 담아보세요')),
+          row(Icons.logout, '로그아웃', color: const Color(0xFFFF6B7E), border: false, onTap: () => snack('로그아웃되었습니다')),
         ]),
       ),
     );
   }
 
-  Widget _statsCard(BuildContext context) {
-    Widget cell(String value, String label, VoidCallback? onTap) => Expanded(
-          child: GestureDetector(
-            onTap: onTap,
-            behavior: HitTestBehavior.opaque,
-            child: Column(children: [
-              Text(value, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF8E7BFF))),
-              const SizedBox(height: 3),
-              Text(label, style: const TextStyle(fontSize: 12, color: Color(0x9E463C64))),
+  // 메뉴 상단 따뜻한 배너 (프로필 편집 유도).
+  Widget _menuBanner(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditScreen())),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: _warm,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: const Color(0xFFFF7E8A).withValues(alpha: 0.28), blurRadius: 16, offset: const Offset(0, 8))],
+        ),
+        child: Row(children: const [
+          Icon(Icons.pets, size: 22, color: Colors.white),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('우리 아이 정보 관리', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Colors.white)),
+              SizedBox(height: 2),
+              Text('견종 · 나이 · 크기를 수정할 수 있어요', style: TextStyle(fontSize: 12, color: Color(0xE6FFFFFF))),
             ]),
           ),
-        );
-    Widget div() => Container(width: 1, height: 34, color: const Color(0x1F8C7BFF));
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
-      child: Row(children: [
-        cell('${kMyRecords.length}', '기록', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
-        div(),
-        cell('0', '쓴 글', null),
-        div(),
-        cell('0', '북마크', null),
-      ]),
+          Icon(Icons.chevron_right, size: 20, color: Colors.white),
+        ]),
+      ),
     );
   }
 }

@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
-import '../theme/emotions.dart';
-import '../theme/records_data.dart';
+import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import 'create_screen.dart';
 
-/// 내 기록 (myRecords) — 감정 캘린더 + 전체 기록.
+/// 내 기록 (myRecords) — 산책 기록. 이번 달 요약 + 전체 산책 리스트.
 class MyRecordsScreen extends StatelessWidget {
   const MyRecordsScreen({super.key});
 
-  static const _weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+  static const _warm = LinearGradient(
+    begin: Alignment(-0.7, -1),
+    end: Alignment(0.7, 1),
+    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+  );
 
   @override
   Widget build(BuildContext context) {
+    // 이번 달 요약 집계
+    final totalKm = kWalks.fold<double>(0, (s, w) => s + w.km);
+    final totalCount = kWalks.length;
+    final totalMinutes = kWalks.fold<int>(0, (s, w) => s + w.minutes);
+
     return Scaffold(
       backgroundColor: T.lilacTop,
       body: AuroraBackground(
@@ -24,20 +32,22 @@ class MyRecordsScreen extends StatelessWidget {
               child: Row(children: [
                 _backBtn(context),
                 const SizedBox(width: 14),
-                const Text('내 기록', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                const Text('산책 기록',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
               ]),
             ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
                 children: [
-                  _calendarCard(),
+                  _summaryCard(totalKm, totalCount, totalMinutes),
                   const SizedBox(height: 14),
-                  _writeButton(context),
-                  const SizedBox(height: 20),
-                  const Text('전체 기록', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                  _recordButton(context),
+                  const SizedBox(height: 22),
+                  const Text('전체 산책',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
                   const SizedBox(height: 12),
-                  for (final r in kMyRecords) ...[_recordCard(r), const SizedBox(height: 14)],
+                  for (final w in kWalks) ...[_walkCard(w), const SizedBox(height: 12)],
                 ],
               ),
             ),
@@ -50,7 +60,9 @@ class MyRecordsScreen extends StatelessWidget {
   Widget _backBtn(BuildContext context) => GestureDetector(
         onTap: () => Navigator.of(context).maybePop(),
         child: Container(
-          width: 40, height: 40, alignment: Alignment.center,
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: const Color(0xB3FFFFFF),
             borderRadius: BorderRadius.circular(13),
@@ -60,167 +72,128 @@ class MyRecordsScreen extends StatelessWidget {
         ),
       );
 
-  // ── 감정 캘린더 ──────────────────────────────
-  Widget _calendarCard() {
+  // ── 이번 달 요약 ──────────────────────────────
+  Widget _summaryCard(double totalKm, int totalCount, int totalMinutes) {
+    Widget cell(String v, String label) => Expanded(
+          child: Column(children: [
+            Text(v, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(height: 3),
+            Text(label, style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+          ]),
+        );
+    Widget div() => Container(width: 1, height: 34, color: const Color(0x1F8C7BFF));
+
     return GlassCard(
       radius: 24,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Expanded(
-            child: Text(kCalTitle, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
-          ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(color: const Color(0x21FF7A59), borderRadius: BorderRadius.circular(11)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.local_fire_department, size: 15, color: Color(0xFFFF7A59)),
-              const SizedBox(width: 3),
-              Text('연속 $kCalStreak일', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFFFF7A59))),
-            ]),
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: _warm,
+              borderRadius: BorderRadius.circular(11),
+              boxShadow: const [BoxShadow(color: Color(0x55FF7E8A), blurRadius: 12, offset: Offset(0, 5))],
+            ),
+            child: const Icon(Icons.pets, size: 18, color: Colors.white),
           ),
+          const SizedBox(width: 10),
+          const Text('이번 달 산책',
+              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
         ]),
         const SizedBox(height: 16),
-        // 요일 헤더
         Row(children: [
-          for (int i = 0; i < 7; i++)
-            Expanded(
-              child: Center(
-                child: Text(_weekdays[i],
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: i == 0 ? FontWeight.w700 : FontWeight.w600,
-                        color: i == 0 ? const Color(0xFFFF8A6E) : T.textMuted)),
-              ),
-            ),
+          cell('${totalKm.toStringAsFixed(1)}km', '총 거리'),
+          div(),
+          cell('$totalCount회', '산책 횟수'),
+          div(),
+          cell('$totalMinutes분', '총 시간'),
         ]),
-        const SizedBox(height: 8),
-        _grid(),
       ]),
     );
   }
 
-  Widget _grid() {
-    // 앞 빈칸 + 1~30일
-    final cells = <Widget>[];
-    for (int i = 0; i < kCalLeadBlanks; i++) {
-      cells.add(const SizedBox());
-    }
-    for (int d = 1; d <= kCalDays; d++) {
-      cells.add(_dayCell(d));
-    }
-    final rows = <Widget>[];
-    for (int i = 0; i < cells.length; i += 7) {
-      final week = cells.sublist(i, (i + 7).clamp(0, cells.length));
-      while (week.length < 7) {
-        week.add(const SizedBox());
-      }
-      rows.add(Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(children: [for (final c in week) Expanded(child: Center(child: c))]),
-      ));
-    }
-    return Column(children: rows);
-  }
-
-  Widget _dayCell(int d) {
-    final emoIdx = kCalEmotions[d];
-    final isToday = d == kCalToday;
-    if (emoIdx != null) {
-      final e = kEmotions[emoIdx];
-      return Container(
-        width: 34, height: 34, alignment: Alignment.center,
-        decoration: BoxDecoration(
-          gradient: e.grad,
-          shape: BoxShape.circle,
-          border: isToday ? Border.all(color: const Color(0xFFFF7A59), width: 2.5) : null,
-          boxShadow: [BoxShadow(color: e.c2.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5))],
-        ),
-        child: Text('$d', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.white)),
-      );
-    }
-    return Container(
-      width: 34, height: 34, alignment: Alignment.center,
-      decoration: isToday
-          ? BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFFF7A59), width: 2))
-          : null,
-      child: Text('$d', style: const TextStyle(fontSize: 12.5, color: T.textMuted)),
-    );
-  }
-
-  // ── 새 기록 쓰기 ─────────────────────────────
-  Widget _writeButton(BuildContext context) {
+  // ── 산책 기록하기 버튼 ────────────────────────
+  Widget _recordButton(BuildContext context) {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreateScreen())),
       child: Container(
         height: 56,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(begin: Alignment(-0.7, -1), end: Alignment(0.7, 1), colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)]),
+          gradient: _warm,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: const [BoxShadow(color: Color(0x73D89BFF), blurRadius: 24, offset: Offset(0, 12))],
+          boxShadow: const [BoxShadow(color: Color(0x66FF7E8A), blurRadius: 24, offset: Offset(0, 12))],
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: const [
-          Icon(Icons.edit, size: 20, color: Colors.white),
+          Icon(Icons.add_location_alt_outlined, size: 21, color: Colors.white),
           SizedBox(width: 8),
-          Text('새 기록 쓰기', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: Colors.white)),
+          Text('산책 기록하기',
+              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: Colors.white)),
         ]),
       ),
     );
   }
 
-  // ── 전체 기록 카드 ───────────────────────────
-  Widget _recordCard(MyRecord r) {
-    final from = kEmotions[r.from], to = kEmotions[r.to];
-    final sunny = r.weather.contains('맑');
+  // ── 산책 기록 카드 ───────────────────────────
+  Widget _walkCard(WalkLog w) {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
-            width: 36, height: 36, alignment: Alignment.center,
-            decoration: BoxDecoration(shape: BoxShape.circle, gradient: to.grad,
-                boxShadow: [BoxShadow(color: to.c2.withOpacity(0.33), blurRadius: 10, offset: const Offset(0, 4))]),
-            child: to.icon(22.4),
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: _warm,
+              boxShadow: const [BoxShadow(color: Color(0x40FF7E8A), blurRadius: 10, offset: Offset(0, 4))],
+            ),
+            child: const Icon(Icons.directions_walk_rounded, size: 20, color: Colors.white),
           ),
           const SizedBox(width: 11),
-          Expanded(child: Text(r.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary))),
-          const Icon(Icons.more_horiz, size: 20, color: Color(0xFFBBB3CC)),
-        ]),
-        const SizedBox(height: 12),
-        Row(children: [
-          const Icon(Icons.calendar_today, size: 14, color: Color(0xA8463C64)),
-          const SizedBox(width: 4),
-          Text(r.date, style: const TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
-          const SizedBox(width: 14),
-          const Icon(Icons.place, size: 14, color: Color(0xA8463C64)),
-          const SizedBox(width: 4),
-          Text(r.loc, style: const TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
-        ]),
-        const SizedBox(height: 12),
-        Row(children: [
-          _dot(from),
-          const SizedBox(width: 6),
-          const Icon(Icons.arrow_forward, size: 15, color: Color(0xFFBBB3CC)),
-          const SizedBox(width: 6),
-          _dot(to),
-          const SizedBox(width: 8),
-          Text(r.from == r.to ? '${to.label} 유지' : '${from.label} → ${to.label}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF3A3550))),
-          const Spacer(),
-          Icon(sunny ? Icons.wb_sunny : Icons.cloud, size: 15, color: const Color(0xFFFF9E7D)),
-          const SizedBox(width: 4),
-          Text(r.weather, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: T.textSecondary)),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(w.place,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
+              const SizedBox(height: 3),
+              Row(children: [
+                const Icon(Icons.calendar_today, size: 12.5, color: Color(0xA8463C64)),
+                const SizedBox(width: 4),
+                Text(w.date, style: const TextStyle(fontSize: 12, color: Color(0xA8463C64))),
+              ]),
+            ]),
+          ),
         ]),
         const SizedBox(height: 13),
-        Text(r.story, style: const TextStyle(fontSize: 13.5, height: 1.55, color: Color(0xD13C345A))),
+        Row(children: [
+          _stat(Icons.straighten, '${w.km.toStringAsFixed(1)}km'),
+          const SizedBox(width: 8),
+          _stat(Icons.schedule, '${w.minutes}분'),
+          const SizedBox(width: 8),
+          _stat(Icons.speed, w.pace),
+        ]),
+        if (w.memo.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(w.memo, style: const TextStyle(fontSize: 13.5, height: 1.55, color: Color(0xD13C345A))),
+        ],
       ]),
     );
   }
 
-  Widget _dot(Emotion e) => Container(
-        width: 26, height: 26, alignment: Alignment.center,
-        decoration: BoxDecoration(shape: BoxShape.circle, gradient: e.grad,
-            boxShadow: [BoxShadow(color: e.c2.withOpacity(0.33), blurRadius: 8, offset: const Offset(0, 3))]),
-        child: e.icon(16.8),
+  Widget _stat(IconData icon, String label) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0x14FF7E8A),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 13.5, color: const Color(0xFFE07A4E)),
+          const SizedBox(width: 5),
+          Text(label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+        ]),
       );
 }
