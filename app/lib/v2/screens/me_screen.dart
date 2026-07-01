@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
+import '../data/auth_state.dart';
 import 'edit_screen.dart';
 import 'myrecords_screen.dart';
+import 'login_screen.dart';
 
 /// 프로필 (me) — 우리 아이(강아지) 프로필 + 산책 활동 요약 + 메뉴.
 /// (감정 도메인 제거, 반려/산책 중심)
@@ -179,7 +181,14 @@ class MeScreen extends StatelessWidget {
           row(Icons.article_outlined, '내 산책 기록',
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
           row(Icons.bookmark_border, '북마크', onTap: () => snack('저장한 장소가 아직 없어요 · 지도에서 마음에 드는 곳을 담아보세요')),
-          row(Icons.logout, '로그아웃', color: const Color(0xFFFF6B7E), border: false, onTap: () => snack('로그아웃되었습니다')),
+          ValueListenableBuilder<bool>(
+            valueListenable: AuthState.loggedIn,
+            builder: (_, logged, __) => logged
+                ? row(Icons.logout, '로그아웃', color: const Color(0xFFFF6B7E), border: false,
+                    onTap: () async { await AuthState.logout(); snack('로그아웃되었습니다'); })
+                : row(Icons.login, '로그인 / 회원가입', color: const Color(0xFF5B8DEF), border: false,
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()))),
+          ),
         ]),
       ),
     );

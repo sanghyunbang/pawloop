@@ -28,6 +28,8 @@ import 'package:heat_trip_flutter/core/theme/theme.dart';
 import 'package:heat_trip_flutter/shared/media/media.dart';
 // ★ 토큰 저장 서비스 (Bearer 주입에 사용)
 import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
+// 전역 로그인 상태
+import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 
 Future<void> main() async {
   // 비동기 초기화 전에 바인딩
@@ -57,6 +59,9 @@ Future<void> main() async {
   } else {
     debugPrint('[NaverMap] NAVER_MAP_CLIENT_ID 미설정 — 지도 비활성');
   }
+
+  // 저장된 토큰으로 로그인 상태 복원
+  await AuthState.init();
 
   // Flutter 위젯 트리에서 발생한 모든 에러를 콘솔로
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -130,7 +135,7 @@ class HeatTrip extends StatelessWidget {
         ),
       ],
       child: MaterialApp.router(
-        title: '여행의 온도',
+        title: 'Pawloop',
         debugShowCheckedModeBanner: false,
         theme: theme(),
         routerConfig: appRouter,
