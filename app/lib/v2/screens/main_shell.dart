@@ -5,7 +5,7 @@ import 'today_screen.dart';
 import 'explore_screen.dart';
 import 'feed_screen.dart';
 import 'insight_screen.dart';
-import 'myrecords_screen.dart';
+import 'walk_tracking_screen.dart';
 
 /// 루트 탭 상태. 푸시된 화면(result 등)에서도 탭을 바꿀 수 있게 전역 보관.
 class RootTab {
@@ -120,7 +120,7 @@ class _ShellNav extends StatelessWidget {
               child: Center(
                 child: GestureDetector(
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const MyRecordsScreen()),
+                    MaterialPageRoute(builder: (_) => const WalkTrackingScreen()),
                   ),
                   child: Container(
                     width: 58, height: 58,

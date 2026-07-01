@@ -13,7 +13,8 @@ class PetCategory {
   const PetCategory(this.key, this.label, this.color, this.icon);
 }
 
-/// 관광공사 반려동물 동반여행(KTO) contenttypeid 기반 카테고리. key = contenttypeid.
+/// 지도 카테고리. KTO(관광공사) 반려동반은 contenttypeid(숫자 key),
+/// 병원/펫샵/산책로는 별도 공공데이터 레이어(문자 key — 현재 더미).
 const List<PetCategory> kPetCategories = [
   PetCategory('12', '여행지', Color(0xFF57C98A), Icons.park_rounded),
   PetCategory('39', '카페·식당', Color(0xFFFF7E6B), Icons.restaurant_rounded),
@@ -21,7 +22,13 @@ const List<PetCategory> kPetCategories = [
   PetCategory('32', '숙박', Color(0xFF5B8DEF), Icons.hotel_rounded),
   PetCategory('38', '쇼핑', Color(0xFF9B7BFF), Icons.storefront_rounded),
   PetCategory('14', '문화', Color(0xFFEFA13C), Icons.museum_rounded),
+  PetCategory('vet', '병원', Color(0xFF4C9AFF), Icons.local_hospital_rounded),
+  PetCategory('shop', '펫샵', Color(0xFFB07BFF), Icons.pets_rounded),
+  PetCategory('trail', '산책로', Color(0xFF2FB89B), Icons.route_rounded),
 ];
+
+/// KTO 외 별도 레이어(공공데이터 예정) key.
+const Set<String> kLayerKeys = {'vet', 'shop', 'trail'};
 
 /// contenttypeid → 카테고리. 미지정/기타는 여행지로.
 PetCategory petCatByType(String? contentTypeId) => kPetCategories.firstWhere(

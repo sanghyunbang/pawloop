@@ -43,8 +43,34 @@ class _ExploreScreenState extends State<ExploreScreen> {
     _refreshMarkers();
   }
 
-  List<PetPlace> get _filtered =>
-      _catFilter == null ? _places : _places.where((p) => p.contentTypeId == _catFilter).toList();
+  List<PetPlace> get _filtered {
+    if (_catFilter == 'trail') return const []; // 산책로는 선(폴리라인)으로 표시
+    if (_catFilter == 'vet' || _catFilter == 'shop') return _dummyLayer(_catFilter!);
+    if (_catFilter == null) return _places;
+    return _places.where((p) => p.contentTypeId == _catFilter).toList();
+  }
+
+  bool get _isLayer => _catFilter != null && kLayerKeys.contains(_catFilter);
+
+  // ── 병원/펫샵/산책로 더미 레이어 (실제론 LOCALDATA·두루누비 공공데이터) ──
+  List<PetPlace> _dummyLayer(String k) => k == 'vet' ? _dummyVet : _dummyShop;
+
+  static const List<PetPlace> _dummyVet = [
+    PetPlace(contentId: 'v1', title: '서울숲동물병원', contentTypeId: 'vet', addr: '서울 성동구 왕십리로 66', image: '', tel: '02-000-0000', lat: 37.5462, lng: 127.0388, distM: 320),
+    PetPlace(contentId: 'v2', title: '성수24시동물의료센터', contentTypeId: 'vet', addr: '서울 성동구 성수이로 118', image: '', tel: '02-000-0001', lat: 37.5445, lng: 127.0559, distM: 900),
+    PetPlace(contentId: 'v3', title: '한강동물병원', contentTypeId: 'vet', addr: '서울 광진구 자양로 12', image: '', tel: '02-000-0002', lat: 37.5348, lng: 127.0663, distM: 1600),
+  ];
+  static const List<PetPlace> _dummyShop = [
+    PetPlace(contentId: 's1', title: '멍냥마트 성수점', contentTypeId: 'shop', addr: '서울 성동구 연무장길 33', image: '', tel: '', lat: 37.5423, lng: 127.0555, distM: 850),
+    PetPlace(contentId: 's2', title: '보리네 펫살롱', contentTypeId: 'shop', addr: '서울 성동구 서울숲2길 18', image: '', tel: '', lat: 37.5471, lng: 127.0413, distM: 400),
+  ];
+
+  // 더미 산책로(서울숲 강변 코스).
+  static const List<NLatLng> _trailCoords = [
+    NLatLng(37.5448, 127.0374), NLatLng(37.5455, 127.0402), NLatLng(37.5451, 127.0435),
+    NLatLng(37.5432, 127.0461), NLatLng(37.5418, 127.0492), NLatLng(37.5427, 127.0521),
+    NLatLng(37.5446, 127.0538),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -76,18 +102,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
         const SizedBox(height: 10),
         _catChips(),
         const SizedBox(height: 14),
-        if (_loading)
+        if (_loading && !_isLayer)
           const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator(color: Color(0xFFFF8F63))))
+        else if (_catFilter == 'trail')
+          _trailCard()
         else if (_filtered.isEmpty)
           _emptyBox()
         else ...[
           Row(children: [
-            const Icon(Icons.pets, size: 15, color: Color(0xFFFF8F63)),
+            Icon(_isLayer ? petCatByType(_catFilter).icon : Icons.pets, size: 15, color: _isLayer ? petCatByType(_catFilter).color : const Color(0xFFFF8F63)),
             const SizedBox(width: 5),
-            Text('반려동반 가능 · ${_filtered.length}곳',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+            Text('${_isLayer ? petCatByType(_catFilter).label : "반려동반 가능"} · ${_filtered.length}곳',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _isLayer ? petCatByType(_catFilter).color : const Color(0xFFE07A4E))),
             const Spacer(),
-            const Text('관광공사', style: TextStyle(fontSize: 10.5, color: T.textMuted)),
+            Text(_isLayer ? '공공데이터 (더미)' : '관광공사', style: const TextStyle(fontSize: 10.5, color: T.textMuted)),
           ]),
           const SizedBox(height: 10),
           for (final p in _filtered) ...[_placeCard(p), const SizedBox(height: 12)],
@@ -106,6 +134,52 @@ class _ExploreScreenState extends State<ExploreScreen> {
           const Text('지도를 움직이거나 필터를 바꿔보세요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
         ]),
       );
+
+  // 산책로 레이어 카드(더미 — 실제론 두루누비 걷기여행길).
+  Widget _trailCard() {
+    const trailColor = Color(0xFF2FB89B);
+    Widget item(String name, String len, String tag) => GestureDetector(
+          onTap: () => setState(() => view = 'map'),
+          child: GlassCard(
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              Container(
+                width: 46, height: 46, alignment: Alignment.center,
+                decoration: BoxDecoration(color: trailColor.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(13)),
+                child: const Icon(Icons.route_rounded, color: trailColor, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                  const SizedBox(height: 5),
+                  Row(children: [
+                    const Icon(Icons.straighten, size: 12, color: T.textMuted),
+                    const SizedBox(width: 3),
+                    Text(len, style: const TextStyle(fontSize: 12, color: T.textMuted)),
+                    const SizedBox(width: 10),
+                    Text(tag, style: const TextStyle(fontSize: 12, color: trailColor, fontWeight: FontWeight.w700)),
+                  ]),
+                ]),
+              ),
+              const Icon(Icons.chevron_right, size: 20, color: Color(0xFFCABFDC)),
+            ]),
+          ),
+        );
+    return Column(children: [
+      Row(children: [
+        const Icon(Icons.route_rounded, size: 15, color: trailColor),
+        const SizedBox(width: 5),
+        const Text('산책로 · 2곳', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: trailColor)),
+        const Spacer(),
+        const Text('공공데이터 (더미)', style: TextStyle(fontSize: 10.5, color: T.textMuted)),
+      ]),
+      const SizedBox(height: 10),
+      item('서울숲 강변 산책 코스', '2.6km', '반려동반 · 완만'),
+      const SizedBox(height: 12),
+      item('중랑천 물길 산책로', '4.1km', '반려동반 · 평지'),
+    ]);
+  }
 
   Widget _imgFallback(PetCategory cat) => Container(
         width: 64, height: 64, alignment: Alignment.center,
@@ -319,6 +393,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final c = _mapCtrl;
     if (c == null || !mounted) return;
     await c.clearOverlays();
+    if (_catFilter == 'trail') {
+      await c.addOverlay(NPolylineOverlay(id: 'trail', coords: _trailCoords, color: const Color(0xFF2FB89B), width: 6));
+      await c.addOverlay(NMarker(id: 'trail-start', position: _trailCoords.first, icon: await _markerIcon(petCatByType('trail'))));
+      await c.updateCamera(NCameraUpdate.withParams(target: const NLatLng(37.5436, 127.0456), zoom: 14));
+      return;
+    }
     final markers = <NAddableOverlay>{};
     for (final p in _filtered) {
       final icon = await _markerIcon(p.category);
@@ -327,6 +407,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
       markers.add(m);
     }
     if (markers.isNotEmpty) await c.addOverlayAll(markers);
+    // 병원/펫샵 레이어 선택 시 해당 위치로 카메라 이동(더미 데이터가 있는 곳).
+    if (_isLayer && _filtered.isNotEmpty) {
+      final f = _filtered.first;
+      await c.updateCamera(NCameraUpdate.withParams(target: NLatLng(f.lat, f.lng), zoom: 14));
+    }
   }
 
   /// 카테고리색 핀(플랫폼 통일 — Flutter 위젯 렌더).
