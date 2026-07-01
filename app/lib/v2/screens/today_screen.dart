@@ -1,102 +1,79 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
-import '../theme/emotions.dart';
+import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
-import 'detail_screen.dart';
-import 'analyzing_screen.dart';
+import 'main_shell.dart';
+import 'myrecords_screen.dart';
 
-/// 오늘 화면 — design_refactor 핸드오프 'today' 스크린 재현.
-class TodayScreen extends StatefulWidget {
+/// 홈 — 우리 아이 · 오늘 산책 · 근처 동반 장소. (감정 도메인 제거, 강아지 산책 중심)
+class TodayScreen extends StatelessWidget {
   const TodayScreen({super.key});
-  @override
-  State<TodayScreen> createState() => _TodayScreenState();
-}
 
-class _TodayScreenState extends State<TodayScreen> {
-  int emo = 4; // 평온
-  int intensity = 2; // 보통
-  // 오늘의 감정 기록(0부터). 추후 백엔드(GET /records?today)에서 채움.
-  final List<int> todayLog = [];
-
-  static const _weekdays = ['월', '화', '수', '목', '금', '토', '일'];
+  static const _warm = LinearGradient(
+    begin: Alignment(-0.8, -1), end: Alignment(0.8, 1),
+    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+  );
 
   String get _dateLabel {
+    const w = ['월', '화', '수', '목', '금', '토', '일'];
     final n = DateTime.now();
-    final w = _weekdays[(n.weekday - 1) % 7];
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${n.year}. ${two(n.month)}. ${two(n.day)} $w요일';
-  }
-
-  void _openDetail() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DetailScreen(initialEmo: emo)),
-    );
-  }
-
-  void _openAnalyzing() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => AnalyzingScreen(emo: emo)),
-    );
+    return '${n.year}. ${n.month.toString().padLeft(2, '0')}. ${n.day.toString().padLeft(2, '0')} ${w[n.weekday - 1]}요일';
   }
 
   @override
   Widget build(BuildContext context) {
-    final e = kEmotions[emo];
     return Scaffold(
       backgroundColor: T.lilacTop,
       body: AuroraBackground(
-        tint: e,
         child: SafeArea(
           bottom: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(22, 14, 22, MediaQuery.of(context).padding.bottom + 126),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child: ValueListenableBuilder<DogProfile>(
+            valueListenable: kMyDog,
+            builder: (_, dog, __) => Padding(
+              padding: EdgeInsets.fromLTRB(22, 14, 22, MediaQuery.of(context).padding.bottom + 118),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(_dateLabel,
+                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: 0.3, color: Color(0xBD463C69))),
+                        const SizedBox(height: 6),
+                        Text('${dog.name}랑\n산책 갈까요?',
+                            style: const TextStyle(fontSize: 25, height: 1.25, letterSpacing: -0.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                      ]),
+                    ),
+                    const SizedBox(width: 12),
+                    const ProfileAvatar(),
+                  ]),
+                  // 히어로: 우리 아이 + 오늘 산책 요약(0부터)
                   Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(_dateLabel,
-                          style: const TextStyle(
-                              fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: 0.3, color: Color(0xBD463C69))),
-                      const SizedBox(height: 6),
-                      const Text('오늘, 어떤 마음에\n가까운가요?',
-                          style: TextStyle(fontSize: 25, height: 1.25, letterSpacing: -0.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                    ]),
-                  ),
-                  const SizedBox(width: 12),
-                  const ProfileAvatar(),
-                ]),
-                // 오브 + 라벨 (남는 공간을 채움. 화면이 짧으면 FittedBox가 자동 축소 → 오버플로우 방지)
-                Expanded(
-                  child: Center(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FloatingOrb(emotion: e, size: 152),
-                          const SizedBox(height: 14),
-                          Text(e.label, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                          const SizedBox(height: 4),
-                          Text(e.desc, style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
-                        ],
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _dogHero(dog),
+                            const SizedBox(height: 16),
+                            Text(dog.name, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                            const SizedBox(height: 4),
+                            Text('${dog.breed} · ${dog.ageLabel} · ${dog.size.label}',
+                                style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                _chips(),
-                const SizedBox(height: 16),
-                _intensity(e),
-                const SizedBox(height: 13),
-                _todayRecord(),
-                const SizedBox(height: 12),
-                _ctas(e),
-                const SizedBox(height: 12),
-                _detailLink(),
-              ],
+                  _walkSummary(const WalkToday()),
+                  const SizedBox(height: 14),
+                  _ctas(context),
+                  const SizedBox(height: 13),
+                  _weatherCard(),
+                ],
+              ),
             ),
           ),
         ),
@@ -104,126 +81,62 @@ class _TodayScreenState extends State<TodayScreen> {
     );
   }
 
-  Widget _chips() {
-    Widget row(int a, int b, int c) => Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          _chip(a),
-          const SizedBox(width: 10),
-          _chip(b),
-          const SizedBox(width: 10),
-          _chip(c),
-        ]);
-    return Column(children: [row(0, 1, 2), const SizedBox(height: 10), row(3, 4, 5)]);
-  }
-
-  Widget _chip(int i) {
-    final em = kEmotions[i];
-    final on = i == emo;
-    return GestureDetector(
-      onTap: () => setState(() => emo = i),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 23, vertical: 10),
-        decoration: BoxDecoration(
-          gradient: on ? em.grad : null,
-          color: on ? null : const Color(0xC9FFFFFF),
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: on ? Colors.transparent : const Color(0x73FFFFFF)),
-          boxShadow: on
-              ? [BoxShadow(color: em.c2.withOpacity(0.32), blurRadius: 12, offset: const Offset(0, 5))]
-              : null,
-        ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          em.icon(19.6),
-          const SizedBox(width: 5),
-          Text(em.label,
-              style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: on ? Colors.white : T.textSecondary)),
-        ]),
-      ),
-    );
-  }
-
-  Widget _intensity(Emotion e) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        const Text('감정의 세기',
-            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(gradient: e.grad, borderRadius: BorderRadius.circular(10)),
-          child: Text(kLevels[intensity],
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white)),
-        ),
-      ]),
-      const SizedBox(height: 12),
-      SizedBox(
-        height: 44,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            for (int i = 0; i < 5; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => intensity = i),
-                  child: Container(
-                    height: 18.0 + i * 6.5,
-                    decoration: BoxDecoration(
-                      gradient: i <= intensity ? e.grad : null,
-                      color: i <= intensity ? null : const Color(0x1F785AA0),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    ]);
-  }
-
-  Widget _todayRecord() {
+  Widget _dogHero(DogProfile dog) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: BoxDecoration(
-        color: const Color(0x59FFFFFF),
-        border: Border.all(color: const Color(0x80FFFFFF)),
-        borderRadius: BorderRadius.circular(15),
+      width: 150,
+      height: 150,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)]),
+        boxShadow: [BoxShadow(color: Color(0x55FF9E7D), blurRadius: 34, offset: Offset(0, 16))],
       ),
+      child: Image.asset(dog.avatarAsset, width: 96, height: 96, gaplessPlayback: true),
+    );
+  }
+
+  Widget _walkSummary(WalkToday w) {
+    Widget cell(String v, String label) => Expanded(
+          child: Column(children: [
+            Text(v, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(height: 3),
+            Text(label, style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+          ]),
+        );
+    Widget div() => Container(width: 1, height: 30, color: const Color(0x1F8C7BFF));
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
       child: Row(children: [
-        const Text('오늘 기록',
-            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: todayLog.isEmpty
-              ? const Text('아직 기록이 없어요', style: TextStyle(fontSize: 12.5, color: Color(0x8C463C64)))
-              : Row(children: [
-                  for (final i in todayLog) ...[
-                    Container(
-                      width: 24,
-                      height: 24,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(shape: BoxShape.circle, gradient: kEmotions[i].grad),
-                      child: kEmotions[i].icon(16.8),
-                    ),
-                    const SizedBox(width: 5),
-                  ],
-                ]),
-        ),
-        Text('${todayLog.length}번 기록',
-            style: const TextStyle(fontSize: 11.5, color: Color(0x8C463C64))),
+        cell('${w.count}회', '오늘 산책'),
+        div(),
+        cell('${w.km.toStringAsFixed(1)}km', '거리'),
+        div(),
+        cell('${w.minutes}분', '시간'),
       ]),
     );
   }
 
-  Widget _ctas(Emotion e) {
+  Widget _ctas(BuildContext context) {
     return Row(children: [
-      Expanded(child: _btn(icon: Icons.edit_note, label: '기록하기', gradient: e.grad, onTap: () {})),
+      Expanded(
+        flex: 3,
+        child: _btn(
+          icon: Icons.pets,
+          label: '산책 시작',
+          gradient: _warm,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen())),
+        ),
+      ),
       const SizedBox(width: 11),
-      Expanded(child: _btn(icon: Icons.favorite_border, label: '위로받기', gradient: null, onTap: _openAnalyzing)),
+      Expanded(
+        flex: 2,
+        child: _btn(
+          icon: Icons.map_outlined,
+          label: '코스 찾기',
+          gradient: null,
+          onTap: () => RootTab.index.value = 1, // 지도 탭
+        ),
+      ),
     ]);
   }
 
@@ -240,34 +153,38 @@ class _TodayScreenState extends State<TodayScreen> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: filled ? Colors.transparent : const Color(0x80FFFFFF)),
           boxShadow: filled
-              ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 14, offset: const Offset(0, 8))]
+              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 14, offset: const Offset(0, 8))]
               : null,
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, size: 20, color: filled ? Colors.white : T.textSecondary),
-          const SizedBox(width: 7),
+          const SizedBox(width: 8),
           Text(label,
-              style: TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
-                  color: filled ? Colors.white : T.textSecondary)),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: filled ? Colors.white : T.textSecondary)),
         ]),
       ),
     );
   }
 
-  Widget _detailLink() {
-    return GestureDetector(
-      onTap: _openDetail,
-      child: const Padding(
-        padding: EdgeInsets.all(4),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text('더 정확히 입력하기',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xB3463C64))),
-          SizedBox(width: 6),
-          Icon(Icons.arrow_forward, size: 17, color: Color(0xB3463C64)),
-        ]),
-      ),
+  Widget _weatherCard() {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(children: [
+        Container(
+          width: 40, height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: const Color(0x22FFB74D), borderRadius: BorderRadius.circular(12)),
+          child: const Icon(Icons.wb_sunny_rounded, color: Color(0xFFFFA726), size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+            Text('산책하기 좋은 날씨예요', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
+            SizedBox(height: 3),
+            Text('맑음 · 24°C · 미세먼지 보통', style: TextStyle(fontSize: 12, color: Color(0x9E463C64))),
+          ]),
+        ),
+      ]),
     );
   }
 }
