@@ -254,19 +254,24 @@ final List<CareTask> kCareToday = [
   CareTask(type: CareType.walk, label: '저녁 산책', done: false),
 ];
 
-/// 가족 구성원.
+/// 가족 구성원. [todayKm] = 오늘 걸은 거리(구성원이 공유에 동의한 경우만 서버가 제공 — 현재 더미).
 class FamilyMember {
   final String name;
   final String role;
   final Color color;
-  const FamilyMember(this.name, this.role, this.color);
+  final double todayKm;
+  const FamilyMember(this.name, this.role, this.color, {this.todayKm = 0});
 }
 
 const List<FamilyMember> kFamilyMembers = [
-  FamilyMember('나', '보호자', Color(0xFFFF8F63)),
-  FamilyMember('엄마', '가족', Color(0xFF57C98A)),
-  FamilyMember('아빠', '가족', Color(0xFF5B8DEF)),
+  FamilyMember('나', '보호자', Color(0xFFFF8F63), todayKm: 2.4),
+  FamilyMember('엄마', '가족', Color(0xFF57C98A), todayKm: 1.1),
+  FamilyMember('아빠', '가족', Color(0xFF5B8DEF), todayKm: 0),
 ];
+
+/// 내 산책 거리 가족 공유 동의(위치정보법상 '개인위치정보 제3자 제공' 동의) 상태.
+/// 켤 때 반드시 동의 시트를 거치고, 제공 시마다 알림 통지(법 제19조) — 푸시는 백엔드 연동 시.
+final ValueNotifier<bool> kShareMyDistance = ValueNotifier<bool>(false);
 
 /// 가족 초대 코드(더미 — 백엔드 그룹 연동 전).
 const String kFamilyInviteCode = 'PAW-2481';

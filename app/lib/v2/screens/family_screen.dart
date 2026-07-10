@@ -60,6 +60,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   const SizedBox(height: 16),
                   _careCard(),
                   const SizedBox(height: 16),
+                  _distanceCard(),
+                  const SizedBox(height: 16),
                   _walkNotesCard(),
                   const SizedBox(height: 16),
                   _chatBanner(),
@@ -460,6 +462,183 @@ class _FamilyScreenState extends State<FamilyScreen> {
       }),
     );
   }
+
+  // ───────────── 오늘 걸은 거리 (가족 공유 — 위치정보 제3자 제공) ─────────────
+  Widget _distanceCard() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: kShareMyDistance,
+      builder: (context, sharing, __) {
+        final maxKm = kFamilyMembers.fold<double>(0.1, (m, f) => f.todayKm > m ? f.todayKm : m);
+
+        Widget memberRow(FamilyMember m) {
+          final isMe = m.name == '나';
+          final hidden = isMe && !sharing;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(children: [
+              Container(
+                width: 34, height: 34, alignment: Alignment.center,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: m.color),
+                child: Text(m.name.characters.first,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 42,
+                child: Text(m.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textPrimary)),
+              ),
+              Expanded(
+                child: hidden
+                    ? const Text('공유 꺼짐 — 오른쪽 스위치로 켤 수 있어요',
+                        style: TextStyle(fontSize: 12, color: T.textMuted))
+                    : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            widthFactor: (m.todayKm / maxKm).clamp(0.02, 1.0),
+                            child: Container(
+                              height: 8,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: [m.color.withValues(alpha: 0.75), m.color]),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ]),
+              ),
+              const SizedBox(width: 10),
+              Text(hidden ? '-' : '${m.todayKm.toStringAsFixed(1)}km',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800,
+                      color: hidden ? T.textMuted : T.textSecondary)),
+            ]),
+          );
+        }
+
+        return GlassCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Icon(Icons.route_rounded, size: 18, color: Color(0xFF33BFA6)),
+              const SizedBox(width: 7),
+              const Text('오늘 걸은 거리',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
+              const Spacer(),
+              // 내 거리 공유 토글(제3자 제공 동의 — 켤 때 동의 시트 필수)
+              GestureDetector(
+                onTap: () => _toggleShare(sharing),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 46, height: 27,
+                  padding: const EdgeInsets.all(3),
+                  alignment: sharing ? Alignment.centerRight : Alignment.centerLeft,
+                  decoration: BoxDecoration(
+                    gradient: sharing ? _warm : null,
+                    color: sharing ? null : const Color(0x1F8C7BFF),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Container(
+                    width: 21, height: 21,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle, color: Colors.white,
+                      boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 1))],
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            Text(sharing ? '내 거리가 가족에게 공유되고 있어요' : '내 거리 공유가 꺼져 있어요',
+                style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+            const SizedBox(height: 14),
+            for (final m in kFamilyMembers) memberRow(m),
+            const Text('내 거리·위치는 동의한 가족에게만 제공되고, 제공될 때마다 알림으로 알려드려요',
+                style: TextStyle(fontSize: 11, color: T.textMuted)),
+          ]),
+        );
+      },
+    );
+  }
+
+  void _toggleShare(bool current) {
+    if (current) {
+      kShareMyDistance.value = false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('가족 거리 공유를 중단했어요'), duration: Duration(milliseconds: 1600)),
+      );
+    } else {
+      _openShareConsentSheet();
+    }
+  }
+
+  // 제3자 제공 동의 시트 — 위치정보법 요건(제공받는 자·목적·기간 고지 후 명시적 동의).
+  void _openShareConsentSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFAFCFAFF),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: EdgeInsets.fromLTRB(24, 12, 24, 20 + MediaQuery.of(sheetCtx).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(
+            child: Container(
+              width: 42, height: 5,
+              decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text('가족에게 내 산책 거리를 공유할까요?',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 14),
+          _consentRow('제공받는 자', '내가 속한 가족 그룹의 구성원'),
+          _consentRow('제공 목적', '가족 간 산책 거리·활동 공유'),
+          _consentRow('보유·이용 기간', '공유를 끄거나 그룹을 나갈 때까지'),
+          _consentRow('통지', '내 위치·거리가 제공될 때마다 알림으로 알려드려요'),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {
+              kShareMyDistance.value = true;
+              Navigator.pop(sheetCtx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('공유를 시작했어요 · 제공될 때마다 알림으로 알려드려요'),
+                  duration: Duration(milliseconds: 2000),
+                ),
+              );
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(15)),
+              child: const Text('동의하고 공유 시작',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.pop(sheetCtx),
+              child: const Text('다음에 할게요', style: TextStyle(fontSize: 13.5, color: T.textMuted)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _consentRow(String k, String v) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+            width: 92,
+            child: Text(k, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: T.textSecondary)),
+          ),
+          Expanded(child: Text(v, style: const TextStyle(fontSize: 12.5, height: 1.4, color: Color(0xCC463C64)))),
+        ]),
+      );
 
   // ───────────── 산책 주의사항 (가족 누구나 추가/삭제) ─────────────
   Widget _walkNotesCard() {
