@@ -16,6 +16,7 @@ class _EditScreenState extends State<EditScreen> {
   late final TextEditingController _name;
   late final TextEditingController _breed;
   late final TextEditingController _age;
+  late PetSpecies _species;
   late DogSize _size;
   late bool _neutered;
 
@@ -32,6 +33,7 @@ class _EditScreenState extends State<EditScreen> {
     _name = TextEditingController(text: dog.name);
     _breed = TextEditingController(text: dog.breed);
     _age = TextEditingController(text: dog.ageMonths.toString());
+    _species = dog.species;
     _size = dog.size;
     _neutered = dog.neutered;
   }
@@ -46,13 +48,15 @@ class _EditScreenState extends State<EditScreen> {
 
   void _save() {
     final months = int.tryParse(_age.text.trim());
-    kMyDog.value = kMyDog.value.copyWith(
+    // 선택된 아이(kMyPets[kSelectedPetIdx])를 갱신 — 여러 마리 지원.
+    updateSelectedPet(kMyDog.value.copyWith(
       name: _name.text.trim().isEmpty ? kMyDog.value.name : _name.text.trim(),
       breed: _breed.text.trim().isEmpty ? kMyDog.value.breed : _breed.text.trim(),
+      species: _species,
       size: _size,
       ageMonths: (months == null || months < 0) ? kMyDog.value.ageMonths : months,
       neutered: _neutered,
-    );
+    ));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('우리 아이 프로필이 저장됐어요'), duration: Duration(milliseconds: 1400)),
     );
@@ -76,8 +80,12 @@ class _EditScreenState extends State<EditScreen> {
                   _borderPicker(),
                   const SizedBox(height: 22),
                   _field('이름', _name, hint: '우리 아이 이름'),
+                  const SizedBox(height: 20),
+                  const _Label('종류'),
+                  const SizedBox(height: 12),
+                  _speciesSegment(),
                   const SizedBox(height: 18),
-                  _field('견종', _breed, hint: '예: 믹스견, 포메라니안'),
+                  _field('품종', _breed, hint: '예: 믹스견, 포메라니안, 코리안숏헤어'),
                   const SizedBox(height: 20),
                   const _Label('크기'),
                   const SizedBox(height: 12),
@@ -220,6 +228,48 @@ class _EditScreenState extends State<EditScreen> {
           ),
         ),
       ),
+    ]);
+  }
+
+  Widget _speciesSegment() {
+    Widget cell(PetSpecies s) {
+      final on = _species == s;
+      return GestureDetector(
+        onTap: () => setState(() => _species = s),
+        child: Container(
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: on ? _sig : null,
+            color: on ? null : const Color(0x99FFFFFF),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: on ? Colors.transparent : const Color(0x66FFFFFF)),
+            boxShadow: on
+                ? const [BoxShadow(color: Color(0x4DD89BFF), blurRadius: 12, offset: Offset(0, 6))]
+                : null,
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Image.asset(
+              switch (s) {
+                PetSpecies.dog => 'assets/emoji/dog.png',
+                PetSpecies.cat => 'assets/emoji/cat.png',
+                PetSpecies.other => 'assets/emoji/paw.png',
+              },
+              width: 20, height: 20, gaplessPlayback: true,
+            ),
+            const SizedBox(width: 6),
+            Text(s.label,
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: on ? Colors.white : T.textSecondary)),
+          ]),
+        ),
+      );
+    }
+
+    return Row(children: [
+      for (int i = 0; i < PetSpecies.values.length; i++) ...[
+        if (i > 0) const SizedBox(width: 10),
+        Expanded(child: cell(PetSpecies.values[i])),
+      ],
     ]);
   }
 

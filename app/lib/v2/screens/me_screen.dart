@@ -56,7 +56,9 @@ class MeScreen extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
                   children: [
                     _dogHeader(dog),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
+                    _petsRow(context),
+                    const SizedBox(height: 16),
                     _statsCard(context),
                     const SizedBox(height: 18),
                     _menuCard(context),
@@ -106,6 +108,78 @@ class MeScreen extends StatelessWidget {
         ),
       ],
     ]);
+  }
+
+  // ───────────── 우리 아이들 (여러 마리 전환/추가) ─────────────
+  Widget _petsRow(BuildContext context) {
+    return ValueListenableBuilder<List<DogProfile>>(
+      valueListenable: kMyPets,
+      builder: (_, pets, __) => GlassCard(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Text('우리 아이들', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(width: 6),
+            Text('${pets.length}마리', style: const TextStyle(fontSize: 12, color: T.textMuted)),
+          ]),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (int i = 0; i < pets.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: GestureDetector(
+                    onTap: () => selectPet(i),
+                    child: Column(children: [
+                      Container(
+                        width: 54, height: 54, alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const RadialGradient(colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)]),
+                          border: Border.all(
+                            color: i == kSelectedPetIdx.value ? const Color(0xFFFF8F63) : Colors.transparent,
+                            width: 2.5,
+                          ),
+                        ),
+                        child: Image.asset(pets[i].avatarAsset, width: 32, height: 32, gaplessPlayback: true),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(pets[i].name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: i == kSelectedPetIdx.value ? FontWeight.w800 : FontWeight.w600,
+                            color: i == kSelectedPetIdx.value ? const Color(0xFFE07A4E) : T.textSecondary,
+                          )),
+                    ]),
+                  ),
+                ),
+              // 새 아이 추가
+              GestureDetector(
+                onTap: () {
+                  addPet(const DogProfile(name: '새 친구', breed: '', size: DogSize.small, ageMonths: 12));
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditScreen()));
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Column(children: [
+                  Container(
+                    width: 54, height: 54, alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0x66FFFFFF),
+                      border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.6), width: 1.5),
+                    ),
+                    child: const Icon(Icons.add, size: 24, color: Color(0xFFE07A4E)),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('추가', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                ]),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 
   // ───────────── 산책 활동 요약 ─────────────

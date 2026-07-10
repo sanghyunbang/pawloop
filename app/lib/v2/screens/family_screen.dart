@@ -216,7 +216,26 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
     Widget item(CareTask t, {required bool last}) {
       final c = careColor(t.type);
-      return GestureDetector(
+      return Dismissible(
+        key: ObjectKey(t),
+        direction: DismissDirection.endToStart,
+        background: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF6B7E).withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(Icons.delete_outline_rounded, size: 22, color: Color(0xFFFF6B7E)),
+        ),
+        onDismissed: (_) {
+          setState(() => kCareToday.remove(t));
+          kCareRev.value++;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("'${t.label}' 항목을 삭제했어요"), duration: const Duration(milliseconds: 1600)),
+          );
+        },
+        child: GestureDetector(
         onTap: () => setState(() {
           t.done = !t.done;
           if (t.done) {
@@ -226,6 +245,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
             t.by = null;
             t.time = null;
           }
+          kCareRev.value++;
         }),
         behavior: HitTestBehavior.opaque,
         child: Container(
@@ -270,6 +290,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
             ),
           ]),
         ),
+      ),
       );
     }
 
@@ -279,12 +300,132 @@ class _FamilyScreenState extends State<FamilyScreen> {
           Text('오늘의 케어',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
           Spacer(),
-          Text('탭해서 완료 표시', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+          Text('탭 완료 · 밀어서 삭제', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
         ]),
         const SizedBox(height: 4),
-        for (int i = 0; i < kCareToday.length; i++)
-          item(kCareToday[i], last: i == kCareToday.length - 1),
+        if (kCareToday.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text('아직 케어 항목이 없어요 · 아래에서 추가해 보세요',
+                style: TextStyle(fontSize: 13, color: T.textMuted)),
+          )
+        else
+          for (int i = 0; i < kCareToday.length; i++)
+            item(kCareToday[i], last: i == kCareToday.length - 1),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: _openAddCareSheet,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFA96B).withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.35)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+              Icon(Icons.add_rounded, size: 19, color: Color(0xFFE07A4E)),
+              SizedBox(width: 6),
+              Text('케어 항목 추가',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
+            ]),
+          ),
+        ),
       ]),
+    );
+  }
+
+  // 케어 항목 추가 시트 — 가족 누구나 자유롭게 등록.
+  void _openAddCareSheet() {
+    CareType selType = CareType.etc;
+    final labelCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) => StatefulBuilder(builder: (sheetCtx, setSheet) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFAFCFAFF),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+              22, 12, 22, 20 + MediaQuery.of(sheetCtx).viewInsets.bottom + MediaQuery.of(sheetCtx).padding.bottom),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(
+              child: Container(
+                width: 42, height: 5,
+                decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('케어 항목 추가', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(height: 4),
+            const Text('가족 모두의 오늘의 케어에 추가돼요', style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+            const SizedBox(height: 14),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final t in CareType.values)
+                GestureDetector(
+                  onTap: () => setSheet(() => selType = t),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: selType == t ? careColor(t) : const Color(0xFFF1ECF7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(careIcon(t), size: 15, color: selType == t ? Colors.white : T.textSecondary),
+                      const SizedBox(width: 5),
+                      Text(t.label,
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700,
+                              color: selType == t ? Colors.white : T.textSecondary)),
+                    ]),
+                  ),
+                ),
+            ]),
+            const SizedBox(height: 14),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0x9EFFFFFF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0x338C7BFF)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: labelCtrl,
+                autofocus: true,
+                style: const TextStyle(fontSize: 15, color: T.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: '항목 이름 (예: 저녁 약, 빗질, 놀아주기)',
+                  hintStyle: TextStyle(fontSize: 14, color: T.textMuted),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () {
+                final label = labelCtrl.text.trim();
+                if (label.isEmpty) return;
+                setState(() => kCareToday.add(CareTask(type: selType, label: label)));
+                kCareRev.value++;
+                Navigator.pop(sheetCtx);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(15)),
+                child: const Text('추가하기',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+              ),
+            ),
+          ]),
+        );
+      }),
     );
   }
 

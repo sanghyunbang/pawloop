@@ -62,8 +62,12 @@ class TodayScreen extends StatelessWidget {
                             const SizedBox(height: 16),
                             Text(dog.name, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: T.textPrimary)),
                             const SizedBox(height: 4),
-                            Text('${dog.breed} · ${dog.ageLabel} · ${dog.size.label}',
+                            Text('${dog.species.label} · ${dog.breed} · ${dog.ageLabel} · ${dog.size.label}',
                                 style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+                            if (kMyPets.value.length > 1) ...[
+                              const SizedBox(height: 12),
+                              _petSwitcher(),
+                            ],
                           ],
                         ),
                       ),
@@ -87,6 +91,42 @@ class TodayScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 여러 마리 키울 때 아이 전환 스위처.
+  Widget _petSwitcher() {
+    final pets = kMyPets.value;
+    final sel = kSelectedPetIdx.value;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      for (int i = 0; i < pets.length; i++) ...[
+        if (i > 0) const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () => selectPet(i),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: i == sel ? const Color(0xFFFF8F63).withValues(alpha: 0.16) : const Color(0x80FFFFFF),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: i == sel ? const Color(0xFFFF8F63) : const Color(0x66FFFFFF),
+                width: i == sel ? 1.6 : 1,
+              ),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Image.asset(pets[i].avatarAsset, width: 18, height: 18, gaplessPlayback: true),
+              const SizedBox(width: 5),
+              Text(pets[i].name,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: i == sel ? FontWeight.w800 : FontWeight.w600,
+                    color: i == sel ? const Color(0xFFE07A4E) : T.textSecondary,
+                  )),
+            ]),
+          ),
+        ),
+      ],
+    ]);
   }
 
   Widget _dogHero(DogProfile dog) {
@@ -217,11 +257,21 @@ class _CareCardState extends State<_CareCard> {
         t.time = null;
       }
     });
+    kCareRev.value++;
   }
+
+  void _openFamily() =>
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FamilyScreen()));
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
+    // 가족 화면에서 항목 추가/삭제 시에도 홈 카드가 함께 갱신되도록 구독.
+    return ValueListenableBuilder<int>(
+      valueListenable: kCareRev,
+      builder: (_, __, ___) {
+        final visible = kCareToday.take(3).toList();
+        final more = kCareToday.length - visible.length;
+        return GlassCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(children: [
         Row(children: [
@@ -230,22 +280,35 @@ class _CareCardState extends State<_CareCard> {
           const Text('오늘의 케어', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
           const Spacer(),
           GestureDetector(
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FamilyScreen())),
+            onTap: _openFamily,
             behavior: HitTestBehavior.opaque,
-            child: Row(children: const [
-              Text('우리 가족', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
-              Icon(Icons.chevron_right, size: 16, color: Color(0xFFE07A4E)),
+            child: Row(children: [
+              Text(more > 0 ? '+$more · 우리 가족' : '우리 가족',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+              const Icon(Icons.chevron_right, size: 16, color: Color(0xFFE07A4E)),
             ]),
           ),
         ]),
         const SizedBox(height: 10),
-        Row(children: [
-          for (int i = 0; i < kCareToday.length; i++) ...[
-            if (i > 0) const SizedBox(width: 8),
-            Expanded(child: _item(kCareToday[i])),
-          ],
-        ]),
+        if (visible.isEmpty)
+          GestureDetector(
+            onTap: _openFamily,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('케어 항목을 추가해 보세요 →', style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+            ),
+          )
+        else
+          Row(children: [
+            for (int i = 0; i < visible.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(child: _item(visible[i])),
+            ],
+          ]),
       ]),
+        );
+      },
     );
   }
 

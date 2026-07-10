@@ -46,41 +46,86 @@ enum DogSize {
   const DogSize(this.label);
 }
 
-/// 우리 아이 프로필.
+/// 반려동물 종류. (다견·다묘 가정 지원)
+enum PetSpecies {
+  dog('강아지'),
+  cat('고양이'),
+  other('기타');
+
+  final String label;
+  const PetSpecies(this.label);
+}
+
+/// 우리 아이 프로필. (강아지/고양이 등 여러 마리 지원)
 class DogProfile {
   final String name;
   final String breed;
+  final PetSpecies species;
   final DogSize size;
   final int ageMonths;
   final bool neutered;
-  final String avatarAsset;
 
   const DogProfile({
     required this.name,
     required this.breed,
+    this.species = PetSpecies.dog,
     required this.size,
     required this.ageMonths,
     this.neutered = false,
-    this.avatarAsset = 'assets/emoji/dog.png',
   });
 
   String get ageLabel => ageMonths >= 12 ? '${ageMonths ~/ 12}살' : '${ageMonths}개월';
 
-  DogProfile copyWith({String? name, String? breed, DogSize? size, int? ageMonths, bool? neutered}) =>
+  /// 종류별 아바타(Fluent Emoji).
+  String get avatarAsset => switch (species) {
+        PetSpecies.dog => 'assets/emoji/dog.png',
+        PetSpecies.cat => 'assets/emoji/cat.png',
+        PetSpecies.other => 'assets/emoji/paw.png',
+      };
+
+  DogProfile copyWith({String? name, String? breed, PetSpecies? species, DogSize? size, int? ageMonths, bool? neutered}) =>
       DogProfile(
         name: name ?? this.name,
         breed: breed ?? this.breed,
+        species: species ?? this.species,
         size: size ?? this.size,
         ageMonths: ageMonths ?? this.ageMonths,
         neutered: neutered ?? this.neutered,
-        avatarAsset: avatarAsset,
       );
 }
 
-/// 현재 반려견(전역). 추후 백엔드/프로필 편집과 연결.
-final ValueNotifier<DogProfile> kMyDog = ValueNotifier<DogProfile>(
-  const DogProfile(name: '보리', breed: '믹스견', size: DogSize.small, ageMonths: 30, neutered: true),
-);
+/// 우리 아이들(전역, 여러 마리). 추후 백엔드 dog 테이블과 연결.
+final ValueNotifier<List<DogProfile>> kMyPets = ValueNotifier<List<DogProfile>>([
+  const DogProfile(name: '보리', breed: '믹스견', species: PetSpecies.dog, size: DogSize.small, ageMonths: 30, neutered: true),
+  const DogProfile(name: '치즈', breed: '코리안숏헤어', species: PetSpecies.cat, size: DogSize.small, ageMonths: 22),
+]);
+
+/// 현재 선택된 아이 인덱스.
+final ValueNotifier<int> kSelectedPetIdx = ValueNotifier<int>(0);
+
+/// 현재 선택된 아이(전역) — 홈 히어로/프로필이 구독.
+final ValueNotifier<DogProfile> kMyDog = ValueNotifier<DogProfile>(kMyPets.value.first);
+
+/// 아이 선택.
+void selectPet(int i) {
+  if (i < 0 || i >= kMyPets.value.length) return;
+  kSelectedPetIdx.value = i;
+  kMyDog.value = kMyPets.value[i];
+}
+
+/// 선택된 아이 프로필 갱신(편집 저장).
+void updateSelectedPet(DogProfile p) {
+  final list = [...kMyPets.value];
+  list[kSelectedPetIdx.value] = p;
+  kMyPets.value = list;
+  kMyDog.value = p;
+}
+
+/// 새 아이 추가 후 선택.
+void addPet(DogProfile p) {
+  kMyPets.value = [...kMyPets.value, p];
+  selectPet(kMyPets.value.length - 1);
+}
 
 /// 오늘 산책 요약(0부터 시작 — 실제 기록 연동 전). 거리 km, 횟수.
 class WalkToday {
@@ -156,20 +201,39 @@ class PetPost {
 
 // ─────────────────────── 가족 케어 (물·밥·산책 공유) ───────────────────────
 
-/// 케어 항목 종류.
-enum CareType { water, meal, walk }
+/// 케어 항목 종류. (가족이 자유롭게 항목 추가 가능)
+enum CareType {
+  water('물'),
+  meal('밥'),
+  walk('산책'),
+  med('투약'),
+  snack('간식'),
+  etc('기타');
+
+  final String label;
+  const CareType(this.label);
+}
 
 IconData careIcon(CareType t) => switch (t) {
       CareType.water => Icons.water_drop_rounded,
       CareType.meal => Icons.restaurant_rounded,
       CareType.walk => Icons.pets_rounded,
+      CareType.med => Icons.medication_rounded,
+      CareType.snack => Icons.cookie_rounded,
+      CareType.etc => Icons.favorite_rounded,
     };
 
 Color careColor(CareType t) => switch (t) {
       CareType.water => const Color(0xFF5B8DEF),
       CareType.meal => const Color(0xFFFF8F63),
       CareType.walk => const Color(0xFF57C98A),
+      CareType.med => const Color(0xFF9B7BFF),
+      CareType.snack => const Color(0xFFEFA13C),
+      CareType.etc => const Color(0xFFFF7E8A),
     };
+
+/// 케어 목록 변경 알림(추가/삭제/토글) — 홈 카드 등 다른 화면 동기화용.
+final ValueNotifier<int> kCareRev = ValueNotifier<int>(0);
 
 /// 오늘의 케어 1건(가족 공유). 백엔드(care_log) 연동 전 로컬 상태.
 class CareTask {
