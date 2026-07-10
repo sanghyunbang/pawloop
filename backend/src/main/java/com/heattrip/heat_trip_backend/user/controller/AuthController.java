@@ -3,6 +3,7 @@ package com.heattrip.heat_trip_backend.user.controller;
 import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.entity.User;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
@@ -17,7 +18,7 @@ import org.springframework.http.ResponseEntity;
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
-public class AuthController {
+public class AuthController implements AuthApiDoc{
     
     private final UserService userService;
 
@@ -61,5 +62,25 @@ public class AuthController {
         userService.deleteMe(email);
         return ResponseEntity.noContent().build(); // 204
     }
+
+    /** 로그아웃 */
+    @Override
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletRequest request) {
+
+
+        String authHeader = request.getHeader("Authorization"); // 헤더 직접 꺼내기
+        String email = userService.emailFromAuth(authHeader); // /me와 마찬가지로 토믄에서 이메일 꺼내고
+        userService.logout(email);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** oauth2를 이용한 소셜 로그인 */
+    @GetMapping("/oauth/{provider}")
+    public ResponseEntity<Void> socialLogin() {
+
+        return ResponseEntity.ok().build();
+    }
+
 
 }

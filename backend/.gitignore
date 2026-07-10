@@ -78,3 +78,6 @@ prometheus/data/
 grafana/data/
 k6/results/
 *.k6.json
+
+# open api 스텁 관련
+generated-reference/

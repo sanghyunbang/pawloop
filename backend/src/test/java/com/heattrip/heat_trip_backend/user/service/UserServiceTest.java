@@ -84,4 +84,11 @@ class UserServiceTest {
 
         assertThat(email).isEqualTo("test1234@test.com");
     }
+
+    @Test
+    @DisplayName("로그아웃: 해당 사용자의 refreshToken을 폐기한다.")
+    void logout_revokesRefreshToken() {
+        userService.logout("bori@x.com");
+        verify(refreshTokenRepository).deleteByEmail("bori@x.com");
+    }
 }
