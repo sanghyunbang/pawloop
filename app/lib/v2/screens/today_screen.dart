@@ -269,6 +269,7 @@ class _CareCardState extends State<_CareCard> {
     return ValueListenableBuilder<int>(
       valueListenable: kCareRev,
       builder: (_, __, ___) {
+        ensureCareFreshForToday(); // 날 바뀌면 반복 항목 체크 리셋 · 일회성 제거
         final visible = kCareToday.take(3).toList();
         final more = kCareToday.length - visible.length;
         return GlassCard(

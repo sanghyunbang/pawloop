@@ -130,7 +130,7 @@ class _ShellNav extends StatelessWidget {
                       border: Border.all(color: const Color(0xA6FFFFFF), width: 3),
                       boxShadow: const [BoxShadow(color: Color(0x80D89BFF), blurRadius: 22, offset: Offset(0, 10))],
                     ),
-                    child: const Icon(Icons.edit, color: Colors.white, size: 25),
+                    child: const Icon(Icons.directions_walk_rounded, color: Colors.white, size: 26),
                   ),
                 ),
               ),

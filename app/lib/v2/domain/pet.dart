@@ -237,6 +237,8 @@ final ValueNotifier<int> kCareRev = ValueNotifier<int>(0);
 
 /// 오늘의 케어 1건(가족 공유). 백엔드(care_log) 연동 전 로컬 상태.
 /// [product]는 밥/간식 등에서 선택 입력하는 제품명(사료명) — 추후 소진 예측·제휴 추천의 재료.
+/// [daily]=true(기본)면 루틴: 날이 바뀌어도 항목은 유지되고 체크만 리셋.
+/// false면 일회성: 날이 바뀌면 자동으로 사라짐(예: '오늘 병원').
 class CareTask {
   final CareType type;
   final String label;
@@ -244,7 +246,26 @@ class CareTask {
   String? by; // 완료한 가족
   String? time; // '08:30'
   String? product; // 제품명(선택) 예: '로얄캐닌 미니 어덜트'
-  CareTask({required this.type, required this.label, this.done = false, this.by, this.time, this.product});
+  final bool daily;
+  CareTask({required this.type, required this.label, this.done = false, this.by, this.time, this.product, this.daily = true});
+}
+
+DateTime _careDay = DateTime.now();
+
+/// 날짜가 바뀌었으면: 반복(daily) 항목은 체크만 리셋, 일회성 항목은 제거.
+/// 케어를 그리는 화면에서 호출(같은 날이면 아무 일 없음).
+void ensureCareFreshForToday() {
+  final now = DateTime.now();
+  final same = now.year == _careDay.year && now.month == _careDay.month && now.day == _careDay.day;
+  if (same) return;
+  _careDay = now;
+  kCareToday.removeWhere((t) => !t.daily);
+  for (final t in kCareToday) {
+    t.done = false;
+    t.by = null;
+    t.time = null;
+  }
+  kCareRev.value++;
 }
 
 /// 오늘의 케어 목록(샘플).

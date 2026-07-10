@@ -15,6 +15,37 @@ class FamilyScreen extends StatefulWidget {
 }
 
 class _FamilyScreenState extends State<FamilyScreen> {
+  @override
+  void initState() {
+    super.initState();
+    ensureCareFreshForToday(); // 날 바뀌면 반복 항목 체크 리셋 · 일회성 제거
+  }
+
+  // 케어/주의사항 공용 삭제 확인 다이얼로그.
+  Future<bool> _confirmDelete(String what) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFFFCFAFF),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('삭제할까요?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+        content: Text("'$what' 항목이 가족 모두에게서 삭제돼요.",
+            style: const TextStyle(fontSize: 13.5, color: T.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('취소', style: TextStyle(color: T.textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('삭제', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFFF6B7E))),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
@@ -249,6 +280,12 @@ class _FamilyScreenState extends State<FamilyScreen> {
           }
           kCareRev.value++;
         }),
+        onLongPress: () async {
+          if (await _confirmDelete(t.label)) {
+            setState(() => kCareToday.remove(t));
+            kCareRev.value++;
+          }
+        },
         behavior: HitTestBehavior.opaque,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 13),
@@ -308,7 +345,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           Text('오늘의 케어',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
           Spacer(),
-          Text('탭 완료 · 밀어서 삭제', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+          Text('탭 완료 · 길게 눌러 삭제', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
         ]),
         const SizedBox(height: 4),
         if (kCareToday.isEmpty)
@@ -347,6 +384,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
   // 케어 항목 추가 시트 — 가족 누구나 자유롭게 등록.
   void _openAddCareSheet() {
     CareType selType = CareType.etc;
+    bool daily = true;
     final labelCtrl = TextEditingController();
     final productCtrl = TextEditingController();
     showModalBottomSheet(
@@ -437,6 +475,39 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 ),
               ),
             ],
+            const SizedBox(height: 12),
+            // 매일 반복 여부 — 반복이면 날마다 체크만 초기화, 끄면 오늘 하루만.
+            GestureDetector(
+              onTap: () => setSheet(() => daily = !daily),
+              behavior: HitTestBehavior.opaque,
+              child: Row(children: [
+                Icon(Icons.repeat_rounded, size: 18, color: daily ? const Color(0xFFE07A4E) : T.textMuted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('매일 반복', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text(daily ? '매일 아침 체크만 초기화되고 항목은 유지돼요' : '오늘 하루만 — 내일이면 자동으로 사라져요',
+                        style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+                  ]),
+                ),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 46, height: 27,
+                  padding: const EdgeInsets.all(3),
+                  alignment: daily ? Alignment.centerRight : Alignment.centerLeft,
+                  decoration: BoxDecoration(
+                    gradient: daily ? _warm : null,
+                    color: daily ? null : const Color(0x1F8C7BFF),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Container(
+                    width: 21, height: 21,
+                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
+                  ),
+                ),
+              ]),
+            ),
             const SizedBox(height: 16),
             GestureDetector(
               onTap: () {
@@ -444,7 +515,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 if (label.isEmpty) return;
                 final product = productCtrl.text.trim();
                 setState(() => kCareToday.add(CareTask(
-                    type: selType, label: label, product: product.isEmpty ? null : product)));
+                    type: selType, label: label, product: product.isEmpty ? null : product, daily: daily)));
                 kCareRev.value++;
                 Navigator.pop(sheetCtx);
               },
@@ -650,7 +721,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           Text('산책 주의사항',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
           Spacer(),
-          Text('밀어서 삭제', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+          Text('길게 눌러 삭제', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
         ]),
         const SizedBox(height: 12),
         if (kWalkNotes.isEmpty)
@@ -674,7 +745,14 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 child: const Icon(Icons.delete_outline_rounded, size: 19, color: Color(0xFFFF6B7E)),
               ),
               onDismissed: (_) => setState(() => kWalkNotes.removeAt(i)),
-              child: Padding(
+              child: GestureDetector(
+                onLongPress: () async {
+                  if (await _confirmDelete(kWalkNotes[i])) {
+                    setState(() => kWalkNotes.removeAt(i));
+                  }
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
                 padding: const EdgeInsets.only(bottom: 9),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Container(
@@ -689,6 +767,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                         style: const TextStyle(fontSize: 13.5, height: 1.45, color: T.textSecondary)),
                   ),
                 ]),
+              ),
               ),
             ),
         const SizedBox(height: 4),

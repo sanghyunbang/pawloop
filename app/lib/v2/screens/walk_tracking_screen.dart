@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:geolocator/geolocator.dart';
 import '../theme/app_tokens.dart';
+import '../domain/pet.dart';
 import '../data/location_service.dart';
+import '../data/pet_places_repository.dart';
 import 'create_screen.dart';
 
 /// 실시간 산책 트래킹 (더미 시뮬레이션).
@@ -26,6 +28,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   StreamSubscription<Position>? _posSub;
   bool _paused = false;
   bool _real = false; // true = 실제 GPS, false = 시뮬(위치 불가 시 폴백)
+  bool _poisLoaded = false; // 주변 장소 마커 로드 여부(첫 GPS 갱신 시 재시도)
   int _seconds = 0;
   double _km = 0;
 
@@ -76,10 +79,53 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
         });
         _drawPath();
         _ctrl?.updateCamera(NCameraUpdate.withParams(target: cur));
+        if (!_poisLoaded) _loadNearbyPlaces(cur); // 시작 좌표가 엉뚱했을 때 자가치유
       });
     } else {
       _path.add(_route[0]); // 시뮬 시작점
     }
+    // 산책길 주변 장소(동반카페·상점 등) 마커 — 트래킹 지도가 곧 발견/광고 지면.
+    _loadNearbyPlaces(_path.last);
+  }
+
+  /// 시작점 주변 반려동반 장소를 지도에 표시(카테고리색 미니 핀).
+  Future<void> _loadNearbyPlaces(NLatLng center) async {
+    final places = await PetPlacesRepository()
+        .fetchNearby(lat: center.latitude, lng: center.longitude, radius: 1500, numOfRows: 25);
+    if (!mounted || _ctrl == null || places.isEmpty) return;
+    final markers = <NAddableOverlay>{};
+    for (final p in places) {
+      markers.add(NMarker(
+        id: 'poi-${p.contentId.isEmpty ? p.title : p.contentId}',
+        position: NLatLng(p.lat, p.lng),
+        icon: await _poiIcon(p.category),
+      ));
+    }
+    if (mounted && markers.isNotEmpty) {
+      await _ctrl?.addOverlayAll(markers);
+      _poisLoaded = true;
+    }
+  }
+
+  Future<NOverlayImage> _poiIcon(PetCategory cat) async {
+    return NOverlayImage.fromWidget(
+      context: context,
+      size: const Size(36, 36),
+      widget: SizedBox(
+        width: 36, height: 36,
+        child: Center(
+          child: Container(
+            width: 30, height: 30, alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle, color: cat.color,
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: [BoxShadow(color: cat.color.withValues(alpha: 0.45), blurRadius: 4, offset: const Offset(0, 1))],
+            ),
+            child: Icon(cat.icon, size: 15, color: Colors.white),
+          ),
+        ),
+      ),
+    );
   }
 
   // 시뮬 모드: 더미 경로를 한 점씩 진행.
