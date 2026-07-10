@@ -66,6 +66,22 @@ class _InsightScreenState extends State<InsightScreen> {
   }
 
   Widget _header() => Row(children: [
+        // 탭이 아니라 푸시로 열렸을 때(홈 요약카드/프로필 메뉴)만 뒤로가기 표시.
+        if (Navigator.of(context).canPop()) ...[
+          GestureDetector(
+            onTap: () => Navigator.of(context).maybePop(),
+            child: Container(
+              width: 40, height: 40, alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xB3FFFFFF),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: const Color(0x80FFFFFF)),
+              ),
+              child: const Icon(Icons.arrow_back, size: 22, color: T.textPrimary),
+            ),
+          ),
+          const SizedBox(width: 14),
+        ],
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
           Text('산책 통계', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: T.textPrimary)),
           SizedBox(height: 4),

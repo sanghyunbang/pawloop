@@ -6,10 +6,12 @@ import '../domain/pet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 
-/// 가족 채팅 — 물·밥·산책을 함께 챙기는 가족 대화방.
-/// 백엔드 연동 전 로컬 상태([kChatMessages] 복사본)로 동작한다.
+/// 채팅방 — 기본은 '우리 가족'(물·밥·산책을 함께 챙기는 대화방).
+/// 채팅 목록에서 방 이름/부제를 넘겨 재사용한다. 백엔드 연동 전 로컬 상태.
 class FamilyChatScreen extends StatefulWidget {
-  const FamilyChatScreen({super.key});
+  final String title;
+  final String subtitle;
+  const FamilyChatScreen({super.key, this.title = '우리 가족', this.subtitle = ''});
 
   @override
   State<FamilyChatScreen> createState() => _FamilyChatScreenState();
@@ -105,10 +107,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> {
         ),
         const SizedBox(width: 14),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('가족 채팅',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          Text(widget.title,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
           const SizedBox(height: 2),
-          Text('${kFamilyMembers.length}명',
+          Text(widget.subtitle.isEmpty ? '${kFamilyMembers.length}명' : widget.subtitle,
               style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: T.textMuted)),
         ]),
       ]),

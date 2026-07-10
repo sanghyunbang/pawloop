@@ -7,6 +7,7 @@ import 'edit_screen.dart';
 import 'myrecords_screen.dart';
 import 'login_screen.dart';
 import 'family_screen.dart';
+import 'insight_screen.dart';
 
 /// 프로필 (me) — 우리 아이(강아지) 프로필 + 산책 활동 요약 + 메뉴.
 /// (감정 도메인 제거, 반려/산책 중심)
@@ -183,6 +184,8 @@ class MeScreen extends StatelessWidget {
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
           row(Icons.diversity_1_rounded, '우리 가족',
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FamilyScreen()))),
+          row(Icons.bar_chart_rounded, '산책 통계',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen()))),
           row(Icons.bookmark_border, '북마크', onTap: () => snack('저장한 장소가 아직 없어요 · 지도에서 마음에 드는 곳을 담아보세요')),
           ValueListenableBuilder<bool>(
             valueListenable: AuthState.loggedIn,

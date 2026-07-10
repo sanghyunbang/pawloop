@@ -6,6 +6,7 @@ import '../widgets/profile_avatar.dart';
 import 'main_shell.dart';
 import 'walk_tracking_screen.dart';
 import 'family_screen.dart';
+import 'insight_screen.dart';
 
 /// 홈 — 우리 아이 · 오늘 산책 · 근처 동반 장소. (감정 도메인 제거, 강아지 산책 중심)
 class TodayScreen extends StatelessWidget {
@@ -68,7 +69,11 @@ class TodayScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  _walkSummary(const WalkToday()),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen())),
+                    behavior: HitTestBehavior.opaque,
+                    child: _walkSummary(const WalkToday()),
+                  ),
                   const SizedBox(height: 12),
                   const _CareCard(),
                   const SizedBox(height: 12),

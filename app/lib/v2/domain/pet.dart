@@ -229,6 +229,54 @@ final List<ChatMessage> kChatMessages = [
   const ChatMessage('나', '제가 갈게요. 요즘 보리 슬개골 조심해야 하니까 공원 평지로만 돌게요', '15:52', mine: true),
 ];
 
+/// 채팅방. '우리 가족'이 기본방(대부분 가족과 함께 키우므로),
+/// 이후 친구·동호회(커뮤니티에서 만난 사람들) 방으로 확장.
+class ChatRoom {
+  final String name;
+  final String tag; // '가족' | '산책 크루' 등
+  final Color color;
+  final IconData icon;
+  final String lastMessage;
+  final String lastTime;
+  final int unread;
+  final int memberCount;
+  final bool isDefault; // 기본방(우리 가족)
+  const ChatRoom({
+    required this.name,
+    required this.tag,
+    required this.color,
+    required this.icon,
+    required this.lastMessage,
+    required this.lastTime,
+    this.unread = 0,
+    required this.memberCount,
+    this.isDefault = false,
+  });
+}
+
+final List<ChatRoom> kChatRooms = [
+  ChatRoom(
+    name: '우리 가족',
+    tag: '가족',
+    color: const Color(0xFFFF8F63),
+    icon: Icons.diversity_1_rounded,
+    lastMessage: kChatMessages.last.text,
+    lastTime: kChatMessages.last.time,
+    unread: 2,
+    memberCount: kFamilyMembers.length,
+    isDefault: true,
+  ),
+  const ChatRoom(
+    name: '서울숲 산책 크루',
+    tag: '산책 크루',
+    color: Color(0xFF33BFA6),
+    icon: Icons.directions_walk_rounded,
+    lastMessage: '내일 아침 7시 반 서울숲 정문 어때요?',
+    lastTime: '어제',
+    memberCount: 6,
+  ),
+];
+
 const List<PetPost> kPetPosts = [
   PetPost(
     nick: '보리아빠', board: '산책로 후기', loc: '서울숲', date: '2026.06.30',
