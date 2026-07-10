@@ -154,6 +154,81 @@ class PetPost {
   });
 }
 
+// ─────────────────────── 가족 케어 (물·밥·산책 공유) ───────────────────────
+
+/// 케어 항목 종류.
+enum CareType { water, meal, walk }
+
+IconData careIcon(CareType t) => switch (t) {
+      CareType.water => Icons.water_drop_rounded,
+      CareType.meal => Icons.restaurant_rounded,
+      CareType.walk => Icons.pets_rounded,
+    };
+
+Color careColor(CareType t) => switch (t) {
+      CareType.water => const Color(0xFF5B8DEF),
+      CareType.meal => const Color(0xFFFF8F63),
+      CareType.walk => const Color(0xFF57C98A),
+    };
+
+/// 오늘의 케어 1건(가족 공유). 백엔드(care_log) 연동 전 로컬 상태.
+class CareTask {
+  final CareType type;
+  final String label;
+  bool done;
+  String? by; // 완료한 가족
+  String? time; // '08:30'
+  CareTask({required this.type, required this.label, this.done = false, this.by, this.time});
+}
+
+/// 오늘의 케어 목록(샘플).
+final List<CareTask> kCareToday = [
+  CareTask(type: CareType.water, label: '물 갈아주기', done: true, by: '엄마', time: '08:10'),
+  CareTask(type: CareType.meal, label: '아침 밥', done: true, by: '나', time: '08:32'),
+  CareTask(type: CareType.walk, label: '저녁 산책', done: false),
+];
+
+/// 가족 구성원.
+class FamilyMember {
+  final String name;
+  final String role;
+  final Color color;
+  const FamilyMember(this.name, this.role, this.color);
+}
+
+const List<FamilyMember> kFamilyMembers = [
+  FamilyMember('나', '보호자', Color(0xFFFF8F63)),
+  FamilyMember('엄마', '가족', Color(0xFF57C98A)),
+  FamilyMember('아빠', '가족', Color(0xFF5B8DEF)),
+];
+
+/// 가족 초대 코드(더미 — 백엔드 그룹 연동 전).
+const String kFamilyInviteCode = 'PAW-2481';
+
+/// 산책 시 주의사항(가족 공유 메모).
+const List<String> kWalkNotes = [
+  '오른쪽 뒷다리 슬개골 — 계단·점프 피하기',
+  '대형견 만나면 예민해요. 리드줄 짧게 잡기',
+  '산책 후 발 닦고 물 충분히 주기',
+];
+
+/// 가족 채팅 메시지.
+class ChatMessage {
+  final String sender;
+  final String text;
+  final String time;
+  final bool mine;
+  const ChatMessage(this.sender, this.text, this.time, {this.mine = false});
+}
+
+final List<ChatMessage> kChatMessages = [
+  const ChatMessage('엄마', '보리 아침에 물 갈아줬어~', '08:11'),
+  const ChatMessage('나', '아침 밥도 줬어요! 사료 거의 다 떨어져가요', '08:33', mine: true),
+  const ChatMessage('아빠', '퇴근길에 사료 사갈게', '09:02'),
+  const ChatMessage('엄마', '저녁 산책 누가 갈 수 있어? 나 오늘 늦어', '15:40'),
+  const ChatMessage('나', '제가 갈게요. 요즘 보리 슬개골 조심해야 하니까 공원 평지로만 돌게요', '15:52', mine: true),
+];
+
 const List<PetPost> kPetPosts = [
   PetPost(
     nick: '보리아빠', board: '산책로 후기', loc: '서울숲', date: '2026.06.30',
