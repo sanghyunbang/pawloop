@@ -44,7 +44,7 @@ class ChatListScreen extends StatelessWidget {
   Widget _roomCard(BuildContext context, ChatRoom r) {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => FamilyChatScreen(title: r.name, subtitle: '${r.memberCount}명'),
+        builder: (_) => FamilyChatScreen(title: r.name, subtitle: '${r.memberCount}명', messages: r.messages),
       )),
       behavior: HitTestBehavior.opaque,
       child: GlassCard(

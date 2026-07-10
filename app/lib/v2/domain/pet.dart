@@ -229,6 +229,15 @@ final List<ChatMessage> kChatMessages = [
   const ChatMessage('나', '제가 갈게요. 요즘 보리 슬개골 조심해야 하니까 공원 평지로만 돌게요', '15:52', mine: true),
 ];
 
+/// 산책 크루(동호회) 방 메시지 — 방별 메시지 분리(더미).
+final List<ChatMessage> kCrewChatMessages = [
+  const ChatMessage('초코맘', '오늘 서울숲 사람 많던데 다들 산책 어떠셨어요?', '18:20'),
+  const ChatMessage('워킹독', '저녁엔 한산했어요! 잔디마당 쪽 추천', '19:05'),
+  const ChatMessage('나', '보리는 오늘 슬개골 때문에 평지만 돌았어요 🐾', '19:12', mine: true),
+  const ChatMessage('몽이누나', '아이고 얼른 나아야 할 텐데… 몸조리 잘해요', '19:30'),
+  const ChatMessage('초코맘', '내일 아침 7시 반 서울숲 정문 어때요?', '어제'),
+];
+
 /// 채팅방. '우리 가족'이 기본방(대부분 가족과 함께 키우므로),
 /// 이후 친구·동호회(커뮤니티에서 만난 사람들) 방으로 확장.
 class ChatRoom {
@@ -236,8 +245,7 @@ class ChatRoom {
   final String tag; // '가족' | '산책 크루' 등
   final Color color;
   final IconData icon;
-  final String lastMessage;
-  final String lastTime;
+  final List<ChatMessage> messages; // 방별 메시지
   final int unread;
   final int memberCount;
   final bool isDefault; // 기본방(우리 가족)
@@ -246,12 +254,14 @@ class ChatRoom {
     required this.tag,
     required this.color,
     required this.icon,
-    required this.lastMessage,
-    required this.lastTime,
+    required this.messages,
     this.unread = 0,
     required this.memberCount,
     this.isDefault = false,
   });
+
+  String get lastMessage => messages.isEmpty ? '' : messages.last.text;
+  String get lastTime => messages.isEmpty ? '' : messages.last.time;
 }
 
 final List<ChatRoom> kChatRooms = [
@@ -260,19 +270,17 @@ final List<ChatRoom> kChatRooms = [
     tag: '가족',
     color: const Color(0xFFFF8F63),
     icon: Icons.diversity_1_rounded,
-    lastMessage: kChatMessages.last.text,
-    lastTime: kChatMessages.last.time,
+    messages: kChatMessages,
     unread: 2,
     memberCount: kFamilyMembers.length,
     isDefault: true,
   ),
-  const ChatRoom(
+  ChatRoom(
     name: '서울숲 산책 크루',
     tag: '산책 크루',
-    color: Color(0xFF33BFA6),
+    color: const Color(0xFF33BFA6),
     icon: Icons.directions_walk_rounded,
-    lastMessage: '내일 아침 7시 반 서울숲 정문 어때요?',
-    lastTime: '어제',
+    messages: kCrewChatMessages,
     memberCount: 6,
   ),
 ];

@@ -11,7 +11,8 @@ import '../widgets/aurora.dart';
 class FamilyChatScreen extends StatefulWidget {
   final String title;
   final String subtitle;
-  const FamilyChatScreen({super.key, this.title = '우리 가족', this.subtitle = ''});
+  final List<ChatMessage>? messages; // 방별 메시지(null이면 가족방 기본)
+  const FamilyChatScreen({super.key, this.title = '우리 가족', this.subtitle = '', this.messages});
 
   @override
   State<FamilyChatScreen> createState() => _FamilyChatScreenState();
@@ -24,7 +25,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> {
     colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
   );
 
-  final List<ChatMessage> _msgs = [...kChatMessages];
+  late final List<ChatMessage> _msgs = [...(widget.messages ?? kChatMessages)];
   final TextEditingController _ctrl = TextEditingController();
   final ScrollController _scroll = ScrollController();
 
@@ -35,12 +36,16 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> {
     super.dispose();
   }
 
-  /// 발신자 이름 → 가족 구성원 색. 없으면 회색.
+  /// 발신자 이름 → 가족 구성원 색. 가족이 아니면 이름 해시로 팔레트 색 배정.
   Color _memberColor(String name) {
     for (final m in kFamilyMembers) {
       if (m.name == name) return m.color;
     }
-    return const Color(0xFF9B93B3);
+    const palette = [
+      Color(0xFF33BFA6), Color(0xFF5B8DEF), Color(0xFF9B7BFF),
+      Color(0xFFEFA13C), Color(0xFFFF7E8A), Color(0xFF57C98A),
+    ];
+    return palette[name.hashCode.abs() % palette.length];
   }
 
   void _send() {
