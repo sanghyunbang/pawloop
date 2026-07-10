@@ -48,6 +48,12 @@ class MyRecordsScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
                   const SizedBox(height: 12),
                   for (final w in kWalks) ...[_walkCard(w), const SizedBox(height: 12)],
+                  // P1: 히스토리 보존 정책 사전 고지(추후 유료 경계 — 처음부터 알리고 시작).
+                  const SizedBox(height: 6),
+                  const Center(
+                    child: Text('무료 플랜은 최근 3개월의 상세 기록을 볼 수 있어요',
+                        style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+                  ),
                 ],
               ),
             ),

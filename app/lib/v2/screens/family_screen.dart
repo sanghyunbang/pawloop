@@ -266,13 +266,19 @@ class _FamilyScreenState extends State<FamilyScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(t.label,
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: t.done ? T.textMuted : T.textPrimary,
-                    decoration: t.done ? TextDecoration.lineThrough : null,
-                  )),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(t.label,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: t.done ? T.textMuted : T.textPrimary,
+                      decoration: t.done ? TextDecoration.lineThrough : null,
+                    )),
+                if (t.product != null) ...[
+                  const SizedBox(height: 3),
+                  Text(t.product!, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+                ],
+              ]),
             ),
             Text(
               t.done ? '${t.by} · ${t.time}' : '아직',
@@ -340,6 +346,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
   void _openAddCareSheet() {
     CareType selType = CareType.etc;
     final labelCtrl = TextEditingController();
+    final productCtrl = TextEditingController();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -405,12 +412,37 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 ),
               ),
             ),
+            // 밥/간식은 제품명(선택) 입력 — 추후 소진 예측·추천의 재료. 강제 아님.
+            if (selType == CareType.meal || selType == CareType.snack) ...[
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0x9EFFFFFF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0x338C7BFF)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: productCtrl,
+                  style: const TextStyle(fontSize: 15, color: T.textPrimary),
+                  decoration: const InputDecoration(
+                    hintText: '제품명 (선택 · 예: 로얄캐닌 미니 어덜트)',
+                    hintStyle: TextStyle(fontSize: 14, color: T.textMuted),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             GestureDetector(
               onTap: () {
                 final label = labelCtrl.text.trim();
                 if (label.isEmpty) return;
-                setState(() => kCareToday.add(CareTask(type: selType, label: label)));
+                final product = productCtrl.text.trim();
+                setState(() => kCareToday.add(CareTask(
+                    type: selType, label: label, product: product.isEmpty ? null : product)));
                 kCareRev.value++;
                 Navigator.pop(sheetCtx);
               },
@@ -429,7 +461,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
     );
   }
 
-  // ───────────── 산책 주의사항 ─────────────
+  // ───────────── 산책 주의사항 (가족 누구나 추가/삭제) ─────────────
   Widget _walkNotesCard() {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -438,28 +470,139 @@ class _FamilyScreenState extends State<FamilyScreen> {
           SizedBox(width: 7),
           Text('산책 주의사항',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          Spacer(),
+          Text('밀어서 삭제', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
         ]),
         const SizedBox(height: 12),
-        for (final note in kWalkNotes)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 9),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 6,
-                height: 6,
-                margin: const EdgeInsets.only(top: 7),
-                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFFA96B)),
+        if (kWalkNotes.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 9),
+            child: Text('아직 주의사항이 없어요 · 가족과 공유할 메모를 남겨보세요',
+                style: TextStyle(fontSize: 13, color: T.textMuted)),
+          )
+        else
+          for (int i = 0; i < kWalkNotes.length; i++)
+            Dismissible(
+              key: ValueKey('walk-note-$i-${kWalkNotes[i]}'),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B7E).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.delete_outline_rounded, size: 19, color: Color(0xFFFF6B7E)),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(note,
-                    style: const TextStyle(fontSize: 13.5, height: 1.45, color: T.textSecondary)),
+              onDismissed: (_) => setState(() => kWalkNotes.removeAt(i)),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(top: 7),
+                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFFA96B)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(kWalkNotes[i],
+                        style: const TextStyle(fontSize: 13.5, height: 1.45, color: T.textSecondary)),
+                  ),
+                ]),
               ),
+            ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: _openAddNoteSheet,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFA96B).withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.35)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+              Icon(Icons.add_rounded, size: 18, color: Color(0xFFE07A4E)),
+              SizedBox(width: 5),
+              Text('주의사항 추가',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
             ]),
           ),
-        const SizedBox(height: 2),
+        ),
+        const SizedBox(height: 8),
         const Text('주의사항은 가족 모두에게 보여요', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
       ]),
+    );
+  }
+
+  // 주의사항 추가 시트.
+  void _openAddNoteSheet() {
+    final ctrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFAFCFAFF),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+            22, 12, 22, 20 + MediaQuery.of(sheetCtx).viewInsets.bottom + MediaQuery.of(sheetCtx).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(
+            child: Container(
+              width: 42, height: 5,
+              decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('산책 주의사항 추가', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0x9EFFFFFF),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0x338C7BFF)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: ctrl,
+              autofocus: true,
+              maxLines: 2,
+              minLines: 1,
+              style: const TextStyle(fontSize: 15, color: T.textPrimary),
+              decoration: const InputDecoration(
+                hintText: '예: 더운 날은 저녁 8시 이후에 나가기',
+                hintStyle: TextStyle(fontSize: 14, color: T.textMuted),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {
+              final text = ctrl.text.trim();
+              if (text.isEmpty) return;
+              setState(() => kWalkNotes.add(text));
+              Navigator.pop(sheetCtx);
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(15)),
+              child: const Text('추가하기',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 

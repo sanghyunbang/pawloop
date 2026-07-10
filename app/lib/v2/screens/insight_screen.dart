@@ -55,6 +55,8 @@ class _InsightScreenState extends State<InsightScreen> {
               const SizedBox(height: 18),
               _summaryCard(),
               const SizedBox(height: 14),
+              _aiReportCard(),
+              const SizedBox(height: 14),
               _weekChartCard(),
               const SizedBox(height: 14),
               _topPlacesCard(),
@@ -109,6 +111,44 @@ class _InsightScreenState extends State<InsightScreen> {
         cell('$_walkCount회', '산책 횟수'),
         div(),
         cell('${_avgKm.toStringAsFixed(1)}km', '평균 거리'),
+      ]),
+    );
+  }
+
+  // ── AI 주간 리포트 (P1: 무료 베타 — 추후 LLM 연동, 유료 경계 후보) ──
+  Widget _aiReportCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0x1FFFA96B), Color(0x1AFF7E8A)]),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0x3DFF8F63)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.auto_awesome_rounded, size: 19, color: Color(0xFFE07A4E)),
+          const SizedBox(width: 8),
+          const Text('AI 주간 리포트',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
+          const SizedBox(width: 7),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              gradient: _warm,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text('베타', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)),
+          ),
+        ]),
+        const SizedBox(height: 9),
+        Text(
+          '이번 주는 ${_walkCount}회 · ${_totalKm.toStringAsFixed(1)}km 걸었어요. 주말에 가장 활발했고, '
+          '평균 ${_avgKm.toStringAsFixed(1)}km로 꾸준한 편이에요. 슬개골 관리 중이라면 계단이 없는 '
+          '서울숲 평지 코스 위주를 추천해요. 물 마시기 기록도 잊지 마세요 🐾',
+          style: const TextStyle(fontSize: 13, height: 1.55, color: Color(0xD64A3F63)),
+        ),
+        const SizedBox(height: 8),
+        const Text('AI가 산책·케어 기록을 요약해요 · 무료 베타', style: TextStyle(fontSize: 11, color: T.textMuted)),
       ]),
     );
   }

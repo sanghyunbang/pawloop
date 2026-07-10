@@ -236,19 +236,21 @@ Color careColor(CareType t) => switch (t) {
 final ValueNotifier<int> kCareRev = ValueNotifier<int>(0);
 
 /// 오늘의 케어 1건(가족 공유). 백엔드(care_log) 연동 전 로컬 상태.
+/// [product]는 밥/간식 등에서 선택 입력하는 제품명(사료명) — 추후 소진 예측·제휴 추천의 재료.
 class CareTask {
   final CareType type;
   final String label;
   bool done;
   String? by; // 완료한 가족
   String? time; // '08:30'
-  CareTask({required this.type, required this.label, this.done = false, this.by, this.time});
+  String? product; // 제품명(선택) 예: '로얄캐닌 미니 어덜트'
+  CareTask({required this.type, required this.label, this.done = false, this.by, this.time, this.product});
 }
 
 /// 오늘의 케어 목록(샘플).
 final List<CareTask> kCareToday = [
   CareTask(type: CareType.water, label: '물 갈아주기', done: true, by: '엄마', time: '08:10'),
-  CareTask(type: CareType.meal, label: '아침 밥', done: true, by: '나', time: '08:32'),
+  CareTask(type: CareType.meal, label: '아침 밥', done: true, by: '나', time: '08:32', product: '로얄캐닌 미니 어덜트'),
   CareTask(type: CareType.walk, label: '저녁 산책', done: false),
 ];
 
@@ -269,8 +271,8 @@ const List<FamilyMember> kFamilyMembers = [
 /// 가족 초대 코드(더미 — 백엔드 그룹 연동 전).
 const String kFamilyInviteCode = 'PAW-2481';
 
-/// 산책 시 주의사항(가족 공유 메모).
-const List<String> kWalkNotes = [
+/// 산책 시 주의사항(가족 공유 메모). 가족 누구나 추가/삭제 가능.
+final List<String> kWalkNotes = [
   '오른쪽 뒷다리 슬개골 — 계단·점프 피하기',
   '대형견 만나면 예민해요. 리드줄 짧게 잡기',
   '산책 후 발 닦고 물 충분히 주기',

@@ -3,6 +3,7 @@ import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../data/auth_state.dart';
+import '../data/location_service.dart';
 import 'edit_screen.dart';
 import 'myrecords_screen.dart';
 import 'login_screen.dart';
@@ -60,7 +61,9 @@ class MeScreen extends StatelessWidget {
                     _petsRow(context),
                     const SizedBox(height: 16),
                     _statsCard(context),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
+                    _locationCard(),
+                    const SizedBox(height: 16),
                     _menuCard(context),
                   ],
                 ),
@@ -217,6 +220,65 @@ class MeScreen extends StatelessWidget {
             SizedBox(width: 2),
             Icon(Icons.chevron_right, size: 16, color: Color(0xFFE07A4E)),
           ]),
+        ]),
+      ),
+    );
+  }
+
+  // ───────────── 위치 정보 설정 (위치정보법: 일시적 이용중지 기능) ─────────────
+  Widget _locationCard() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: LocationService.paused,
+      builder: (context, paused, __) => GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(children: [
+          Container(
+            width: 40, height: 40, alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: (paused ? const Color(0xFFFF6B7E) : const Color(0xFF57C98A)).withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(paused ? Icons.location_off_rounded : Icons.location_on_rounded,
+                size: 21, color: paused ? const Color(0xFFFF6B7E) : const Color(0xFF3EA772)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('위치 정보 수집 일시 중단',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
+              const SizedBox(height: 3),
+              Text(paused ? '중단됨 — 지도·산책 기록이 현위치를 쓰지 않아요' : '켜면 언제든 위치 이용을 멈출 수 있어요',
+                  style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+            ]),
+          ),
+          GestureDetector(
+            onTap: () {
+              LocationService.paused.value = !paused;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(!paused ? '위치 정보 이용을 일시 중단했어요' : '위치 정보 이용을 다시 시작했어요'),
+                  duration: const Duration(milliseconds: 1600),
+                ),
+              );
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 50, height: 30,
+              padding: const EdgeInsets.all(3),
+              alignment: paused ? Alignment.centerRight : Alignment.centerLeft,
+              decoration: BoxDecoration(
+                color: paused ? const Color(0xFFFF6B7E) : const Color(0x1F8C7BFF),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Container(
+                width: 24, height: 24,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle, color: Colors.white,
+                  boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 1))],
+                ),
+              ),
+            ),
+          ),
         ]),
       ),
     );
