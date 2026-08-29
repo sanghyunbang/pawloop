@@ -9,7 +9,7 @@ body:
         제목은 `[BE]` `[FE]` `[Infra]` `[Docs]` 중 하나로 시작하고, **결과 상태**를 적어주세요.
         예: `[BE] JWT subject를 users.id로 통일 — 인증 주체 추출 한 곳으로`
 
-        우선순위 판정 기준은 [프로젝트 규약 #4](https://github.com/sanghyunbang/heattrip/issues/4#1-우선순위--p0p1p2p3)를 따릅니다.
+        우선순위 판정 기준은 [프로젝트 규약 #4](https://github.com/sanghyunbang/heattrip/issues/4)를 따릅니다.
   - type: textarea
     id: why
     attributes:
