@@ -1,54 +1,42 @@
 package com.heattrip.heat_trip_backend.schedules.controller;
 
+import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
 import com.heattrip.heat_trip_backend.schedules.entity.Schedule;
-import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.schedules.DTO.ScheduleResponseDto;
 import com.heattrip.heat_trip_backend.schedules.Service.ScheduleService;
 import com.heattrip.heat_trip_backend.user.entity.*;
-import com.heattrip.heat_trip_backend.user.service.*;
-
-import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 내 일정 CRUD.
+ *
+ * <p>네 핸들러가 각각 Authorization 헤더를 다시 읽고 토큰을 검증하고 사용자를 조회했다 —
+ * 같은 12줄이 네 번 복사돼 있었다. 그 블록은 전부 사라졌고 인증은 {@link CurrentUser} 가 맡는다. (이슈 #5)
+ *
+ * <p>거기 있던 "사용자를 찾을 수 없습니다" 404 분기 4개는 <b>도달 불가능한 죽은 코드</b>였다.
+ * {@code UserService.findByEmail} 은 못 찾으면 null 이 아니라 예외를 던졌으므로 그 if 는 한 번도
+ * 실행된 적이 없고 실제 응답은 400 이었다. 되살리지 않고 지운다 — 인증 실패는 이제 전부 401 이다.
+ *
+ * <p>반면 <b>소유권 403 과 "스케줄 없음" 404 는 그대로 둔다.</b> 그건 인증이 아니라 존재·소유 검증이고,
+ * 여전히 이 컨트롤러의 책임이다.
+ */
 @RestController
 @RequestMapping("/public")
 public class ScheduleController {
 
     private final ScheduleService scheduleService;
-    private final UserService userService;
-    private final JWTProvider jwtProvider;
-    
-    public ScheduleController(ScheduleService scheduleService, UserService userService, JWTProvider jwtProvider) {
+
+    public ScheduleController(ScheduleService scheduleService) {
         this.scheduleService = scheduleService;
-        this.userService = userService;
-        this.jwtProvider = jwtProvider;
     }
 
-    // --------------조회(미완성)
+    // --------------조회
     @GetMapping("/schedules")
-    public ResponseEntity<?> getMySchedules(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        System.out.println("스케쥴 조회 리스트 호출 / authHeader : " + authHeader);
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return ResponseEntity.status(401).body("인증 토큰이 없습니다.");
-        }
-
-        String token = authHeader.substring(7);
-        if (!jwtProvider.validateToken(token)) {
-            return ResponseEntity.status(401).body("유효하지 않은 토큰입니다.");
-        }
-
-        String userId = jwtProvider.getUserIdFromToken(token);
-        User user = userService.findByEmail(userId);
-        if (user == null) {
-            return ResponseEntity.status(404).body("사용자를 찾을 수 없습니다.");
-        }
-
+    public ResponseEntity<?> getMySchedules(@CurrentUser User user) {
         List<Schedule> schedules = scheduleService.findByUser(user);
 
         List<ScheduleResponseDto> dtos = schedules.stream()
@@ -57,9 +45,6 @@ public class ScheduleController {
                     return new ScheduleResponseDto(schedule, journeyCount);
                 })
                 .toList();
-
-        // ✅ 디버그는 사이즈만 안전하게 출력
-        System.out.println("스케쥴 DTO 개수 = " + dtos.size());
 
         // ✅ 빈 결과 처리 (프론트는 204 지원)
         if (dtos.isEmpty()) {
@@ -70,147 +55,76 @@ public class ScheduleController {
         return ResponseEntity.ok(dtos);
     }
 
-
-    // --------------등록 
+    // --------------등록
     @PostMapping("/schedules")
-    public ResponseEntity<?> createSchedule(@RequestBody Schedule schedule, HttpServletRequest request) {
-        System.out.println("       post schedule 진입.");
-        String authHeader = request.getHeader("Authorization");
-        System.out.println("         authHeader 체크 : "+authHeader);
+    public ResponseEntity<?> createSchedule(@RequestBody Schedule schedule, @CurrentUser User user) {
+        // 클라이언트가 실어 보낸 식별자를 버린다 — 이것이 없으면 "등록"이 남의 행 덮어쓰기가 된다.
+        //
+        // 본문을 엔티티(@RequestBody Schedule)로 그대로 받기 때문에 scheduleId 도 함께 바인딩된다.
+        // scheduleService.save 는 JpaRepository.save 라서 id 가 실려 있으면 insert 가 아니라
+        // merge(update) 다. 그래서 A 의 토큰으로 {"scheduleId": <B 의 행>} 를 보내면 아래
+        // setUser(user) 가 user_id 까지 A 로 바꾼 채 B 의 행을 덮어썼다 — 소유권 탈취이고
+        // 피해자의 원본은 복구되지 않는다(실측 확인).
+        //
+        // 근본 해결은 생성 전용 요청 DTO 를 받는 것이지만 그건 계약(응답 형태)까지 건드린다.
+        // 여기서는 "등록은 언제나 insert 다"라는 불변식만 한 줄로 세운다.
+        // 잠그는 테스트: ScheduleWriteBoundaryIntegrationTest.
+        schedule.setScheduleId(null);
 
-    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-        return ResponseEntity.status(401).body("PostMapping schedules : 인증 토큰이 없습니다.");
-    }
-    String token = authHeader.substring(7); // Bearer 제거
+        // 작성자 정보 주입
+        schedule.setUser(user);
 
-    if (!jwtProvider.validateToken(token)) {
-        return ResponseEntity.status(401).body("유효하지 않은 토큰입니다.");
-    }
-    String userId = jwtProvider.getUserIdFromToken(token);
-    User user = userService.findByEmail(userId);
-    if (user == null) {
-        return ResponseEntity.status(404).body("사용자를 찾을 수 없습니다.");
-    }
-
-    // 작성자 정보 주입
-    schedule.setUser(user);
-        
         Schedule saved = scheduleService.save(schedule);
         return ResponseEntity.ok(saved);
     }
 
-    // --------------유저정보[닉네임 / 본명]
-//    @GetMapping("/getuser")
-//    public ResponseEntity<?> getCurrentUser(HttpServletRequest request) {
-//    String authHeader = request.getHeader("Authorization");
-//    System.out.println("GetUser 진입");
-//
-//    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-//        return ResponseEntity.status(401).body("getUser clss : 인증 토큰이 없습니다.");
-//    }
-//
-//    String token = authHeader.substring(7); // "Bearer " 제거
-//
-//    if (!jwtProvider.validateToken(token)) {
-//        return ResponseEntity.status(401).body("유효하지 않은 토큰입니다.");
-//    }
-//
-//    String userId = jwtProvider.getUserIdFromToken(token); // subject에 저장된 값 (예: email 또는 userId)
-//
-//    // userService를 통해 사용자 조회
-//    User user = userService.findByEmail(userId); // or findById(userId) depending on what subject stores
-//
-//    if (user == null) {
-//        return ResponseEntity.status(404).body("사용자를 찾을 수 없습니다.");
-//    }
-//
-//    return ResponseEntity.ok(user);
-//}
+    // --------------수정
+    @PutMapping("/schedules/{scheduleId}")
+    public ResponseEntity<?> updateSchedule(
+            @PathVariable("scheduleId") Integer scheduleId,
+            @RequestBody Schedule updatedSchedule,
+            @CurrentUser User user) {
 
-// --------------수정
-@PutMapping("/schedules/{scheduleId}")
-public ResponseEntity<?> updateSchedule(
-        @PathVariable("scheduleId") Integer scheduleId,
-        @RequestBody Schedule updatedSchedule,
-        HttpServletRequest request) {
-            System.out.println("                  수정 메서드 진입 ");
+        // 기존 스케줄 조회
+        Schedule existing = scheduleService.findById(scheduleId);
+        if (existing == null) {
+            return ResponseEntity.status(404).body("수정할 스케줄을 찾을 수 없습니다.");
+        }
 
-    String authHeader = request.getHeader("Authorization");
-    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-        return ResponseEntity.status(401).body("인증 토큰이 없습니다.");
+        // 본인 소유 스케줄인지 확인
+        if (!existing.getUser().getId().equals(user.getId())) {
+            return ResponseEntity.status(403).body("본인의 스케줄만 수정할 수 있습니다.");
+        }
+
+        // 수정 필드 반영
+        existing.setTitle(updatedSchedule.getTitle());
+        existing.setContent(updatedSchedule.getContent());
+        existing.setDateFrom(updatedSchedule.getDateFrom());
+        existing.setDateTo(updatedSchedule.getDateTo());
+
+        // 저장
+        Schedule saved = scheduleService.save(existing);
+        return ResponseEntity.ok(saved);
     }
 
-    String token = authHeader.substring(7);
-    if (!jwtProvider.validateToken(token)) {
-        return ResponseEntity.status(401).body("유효하지 않은 토큰입니다.");
+    // --------------삭제
+    @DeleteMapping("/schedules/{scheduleId}")
+    public ResponseEntity<?> deleteSchedule(
+            @PathVariable("scheduleId") Integer scheduleId,
+            @CurrentUser User user) {
+
+        Schedule existing = scheduleService.findById(scheduleId);
+        if (existing == null) {
+            return ResponseEntity.status(404).body("삭제할 스케줄을 찾을 수 없습니다.");
+        }
+
+        // 본인 소유 스케줄인지 확인
+        if (!existing.getUser().getId().equals(user.getId())) {
+            return ResponseEntity.status(403).body("본인의 스케줄만 삭제할 수 있습니다.");
+        }
+
+        scheduleService.delete(existing);
+
+        return ResponseEntity.noContent().build();
     }
-
-    String userId = jwtProvider.getUserIdFromToken(token);
-    User user = userService.findByEmail(userId);
-    if (user == null) {
-        return ResponseEntity.status(404).body("사용자를 찾을 수 없습니다.");
-    }
-
-    // 기존 스케줄 조회
-    Schedule existing = scheduleService.findById(scheduleId);
-    if (existing == null) {
-        return ResponseEntity.status(404).body("수정할 스케줄을 찾을 수 없습니다.");
-    }
-
-    // 본인 소유 스케줄인지 확인
-    if (!existing.getUser().getId().equals(user.getId())) {
-        return ResponseEntity.status(403).body("본인의 스케줄만 수정할 수 있습니다.");
-    }
-
-    // 수정 필드 반영
-    existing.setTitle(updatedSchedule.getTitle());
-    existing.setContent(updatedSchedule.getContent());
-    existing.setDateFrom(updatedSchedule.getDateFrom());
-    existing.setDateTo(updatedSchedule.getDateTo());
-
-    // 저장
-    Schedule saved = scheduleService.save(existing);
-    return ResponseEntity.ok(saved);
-}
-
-// --------------삭제
-@DeleteMapping("/schedules/{scheduleId}")
-public ResponseEntity<?> deleteSchedule(
-        @PathVariable("scheduleId") Integer scheduleId,
-        HttpServletRequest request) {
-            System.out.println("            스케쥴 삭제 진입 ");
-
-    String authHeader = request.getHeader("Authorization");
-    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-        return ResponseEntity.status(401).body("인증 토큰이 없습니다.");
-    }
-
-    String token = authHeader.substring(7);
-    if (!jwtProvider.validateToken(token)) {
-        return ResponseEntity.status(401).body("유효하지 않은 토큰입니다.");
-    }
-
-    String userId = jwtProvider.getUserIdFromToken(token);
-    User user = userService.findByEmail(userId);
-    if (user == null) {
-        return ResponseEntity.status(404).body("사용자를 찾을 수 없습니다.");
-    }
-
-    Schedule existing = scheduleService.findById(scheduleId);
-    if (existing == null) {
-        return ResponseEntity.status(404).body("삭제할 스케줄을 찾을 수 없습니다.");
-    }
-
-    // 본인 소유 스케줄인지 확인
-    if (!existing.getUser().getId().equals(user.getId())) {
-        return ResponseEntity.status(403).body("본인의 스케줄만 삭제할 수 있습니다.");
-    }
-
-    scheduleService.delete(existing);
-
-    return ResponseEntity.noContent().build();
-}
-
-
-
 }

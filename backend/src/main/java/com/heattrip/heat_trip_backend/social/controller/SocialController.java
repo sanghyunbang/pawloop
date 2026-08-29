@@ -6,9 +6,8 @@ import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
-import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
+import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
 import com.heattrip.heat_trip_backend.social.dto.CardDto;
 import com.heattrip.heat_trip_backend.social.dto.CommentDto;
 import com.heattrip.heat_trip_backend.social.dto.CommentRequest;
@@ -17,9 +16,6 @@ import com.heattrip.heat_trip_backend.social.dto.ShareCardRequest;
 import com.heattrip.heat_trip_backend.social.entity.EmotionCard;
 import com.heattrip.heat_trip_backend.social.service.SocialService;
 import com.heattrip.heat_trip_backend.user.entity.User;
-import com.heattrip.heat_trip_backend.user.service.UserService;
-
-import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * "함께"(together) 소셜 피드 API.
@@ -30,39 +26,19 @@ import jakarta.servlet.http.HttpServletRequest;
 public class SocialController {
 
     private final SocialService socialService;
-    private final JWTProvider jwtProvider;
-    private final UserService userService;
 
-    public SocialController(SocialService socialService,
-                            JWTProvider jwtProvider,
-                            UserService userService) {
+    public SocialController(SocialService socialService) {
         this.socialService = socialService;
-        this.jwtProvider = jwtProvider;
-        this.userService = userService;
     }
 
-    /** JWT에서 현재 사용자 추출(JourneyController_v2 와 동일 패턴). 없으면 401. */
-    private User requireUser(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer "))
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-
-        String token = authHeader.substring(7);
-        if (!jwtProvider.validateToken(token))
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-
-        String email = jwtProvider.getUserIdFromToken(token); // 토큰 subject = email
-        User user = userService.findByEmail(email);
-        if (user == null)
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-
-        return user;
-    }
+    // 예전에는 여기 private User requireUser(HttpServletRequest) 가 있었다. 그 안의
+    // ResponseStatusException(401) 은 실제로 401 이 아니라 **500** 으로 나가고 있었다 —
+    // GlobalExceptionHandler 의 @ExceptionHandler(Exception.class) 가 DispatcherServlet 안에서
+    // 먼저 잡기 때문이다(실측 확인). 인증은 이제 @CurrentUser 가 맡고 실패는 본문 없는 401 이다. (이슈 #5)
 
     /** POST /api/social/cards — 현재 사용자로 카드 공유. */
     @PostMapping("/cards")
-    public ResponseEntity<?> shareCard(@RequestBody ShareCardRequest req, HttpServletRequest request) {
-        User user = requireUser(request);
+    public ResponseEntity<?> shareCard(@RequestBody ShareCardRequest req, @CurrentUser User user) {
         try {
             EmotionCard saved = socialService.share(
                     user.getId(),
@@ -85,8 +61,7 @@ public class SocialController {
     /** GET /api/social/cards?limit=50 — 최신순 피드. */
     @GetMapping("/cards")
     public ResponseEntity<?> feed(@RequestParam(value = "limit", defaultValue = "50") Integer limit,
-                                  HttpServletRequest request) {
-        User user = requireUser(request);
+                                  @CurrentUser User user) {
         try {
             List<CardDto> feed = socialService.feed(user.getId(), limit);
             return ResponseEntity.ok(feed);
@@ -102,8 +77,7 @@ public class SocialController {
     @PostMapping("/cards/{id}/reactions")
     public ResponseEntity<?> toggleReaction(@PathVariable("id") Long cardId,
                                             @RequestBody ReactionRequest req,
-                                            HttpServletRequest request) {
-        User user = requireUser(request);
+                                            @CurrentUser User user) {
         try {
             Map<String, Object> result = socialService.toggleReaction(cardId, user.getId(), req.getType());
             return ResponseEntity.ok(result);
@@ -119,8 +93,7 @@ public class SocialController {
     @PostMapping("/cards/{id}/comments")
     public ResponseEntity<?> addComment(@PathVariable("id") Long cardId,
                                         @RequestBody CommentRequest req,
-                                        HttpServletRequest request) {
-        User user = requireUser(request);
+                                        @CurrentUser User user) {
         try {
             CommentDto dto = socialService.addComment(cardId, user.getId(), req.getHandle(), req.getBody());
             return ResponseEntity.ok(dto);
@@ -135,8 +108,9 @@ public class SocialController {
     /** GET /api/social/cards/{id}/comments — 댓글 목록(오래된 순). */
     @GetMapping("/cards/{id}/comments")
     public ResponseEntity<?> comments(@PathVariable("id") Long cardId,
-                                      HttpServletRequest request) {
-        requireUser(request);
+                                      // 본문에서 쓰지 않지만 선언이 곧 인증 요구다 — 예전 requireUser(request)
+                                      // 호출이 하던 역할을 그대로 대신한다.
+                                      @CurrentUser User user) {
         try {
             List<CommentDto> comments = socialService.comments(cardId);
             return ResponseEntity.ok(comments);

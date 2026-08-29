@@ -68,7 +68,7 @@ class OAuthStandardOutputTest {
     void createAccessToken_표준출력에_아무것도찍지않는다() {
         JWTProvider provider = OAuthLoginProbe.jwtProvider();
 
-        provider.createAccessToken("google_" + OAuthLoginProbe.PROVIDER_ID, "ROLE_USER");
+        provider.createAccessToken(OAuthLoginProbe.ASSIGNED_USER_ID, "ROLE_USER");
 
         assertThat(out()).isEmpty();
         assertThat(err()).isEmpty();

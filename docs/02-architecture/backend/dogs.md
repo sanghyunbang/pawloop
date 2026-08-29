@@ -16,7 +16,7 @@
 | 리소스 책임 | 로그인 사용자의 반려견 프로필 CRUD. 목록/상세/등록/부분수정/삭제 + 아바타 이미지 업로드. |
 | 소유권 규칙 | 모든 쓰기(등록 제외)·상세는 `dog.user_id == 현재 userId` 여야 한다. 타인 dog 수정/삭제 시 **403 Forbidden**. |
 | 관련 테이블 | `dog`(주), `app_user`(FK 소유자). 삭제 시 `walk`가 `dog` FK를 `ON DELETE CASCADE` 하므로 산책 기록도 함께 삭제됨(구현 노트 참고). |
-| 재사용 가능한 기존 자산 | ① JWT→User 추출: `social` 컨트롤러의 `requireUser(HttpServletRequest)` 패턴 = `JWTProvider.getUserIdFromToken(token)`(subject=email) → `UserService.findByEmail(email)`. ② 아바타 업로드: `S3/media/MediaController`(`POST /media`, `multipart`, `UploadCategory`) + `MediaService.uploadMany/publicUrl`. ③ 에러 응답: social의 `Map.of("error", msg)` + `ResponseStatusException` 패턴. ④ 엔티티/DTO/레포 스타일: `social` 패키지(Lombok `@Getter/@Builder`, record DTO, Spring Data). |
+| 재사용 가능한 기존 자산 | ① JWT→User 추출: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (#5 이전 서술이던 `requireUser(HttpServletRequest)` 패턴은 삭제됐다.) ② 아바타 업로드: `S3/media/MediaController`(`POST /media`, `multipart`, `UploadCategory`) + `MediaService.uploadMany/publicUrl`. ③ 에러 응답: social의 `Map.of("error", msg)` + `ResponseStatusException` 패턴. ④ 엔티티/DTO/레포 스타일: `social` 패키지(Lombok `@Getter/@Builder`, record DTO, Spring Data). |
 | SSOT 주의 | `size` enum은 `small/medium/large` 3종(openapi `DogSize` = schema `ck_dog_size` CHECK 와 일치). 임의 값 금지. |
 
 ---
@@ -131,7 +131,7 @@ schema.md §2 `dog` 테이블 기준. 엔티티 필드 ↔ 컬럼:
 
 ## 6. 구현 노트 (함정 위주)
 
-1. **JWT 추출 규약(재사용)**: social의 `requireUser(HttpServletRequest)`를 그대로 사용 — `Authorization: Bearer <jwt>` → `JWTProvider.validateToken` → `getUserIdFromToken`(subject=**email**) → `UserService.findByEmail`. `AuthController`처럼 `@RequestHeader("Authorization")` + `UserService.emailFromAuth(authHeader)` 방식도 동일 결과. 둘 중 **social 컨트롤러 방식(HttpServletRequest)** 로 통일 권장(과제 규약).
+1. **JWT 추출 규약(재사용)**: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. subject 는 `users.id` 이고 `me.getId()` 를 그대로 `dog.user_id` 에 쓴다.
 2. **소유자 검증(403 핵심)**: 상세/수정/삭제/아바타 모두 조회한 `dog.userId`와 현재 `userId` 비교 필수. 불일치 시 **404가 아니라 403**(openapi가 403 Forbidden 명시). 단, "리소스 존재 은닉" 보안 정책을 택하면 타인 dog를 404로 숨기는 변형도 가능 — 팀 정책 확정 후 통일.
 3. **`ageMonths` 파생**: 저장 금지, 응답 시 `birth`↔현재일로 계산(`Period.between(birth, LocalDate.now()).toTotalMonths()`). `birth==null`이면 null 반환할지 0으로 둘지 openapi에 미정의 → 프론트와 합의(권장: null).
 4. **`birth` 직렬화**: 요청/응답 모두 ISO `yyyy-MM-dd` 문자열. 엔티티는 `LocalDate`. 파싱 실패는 400으로.

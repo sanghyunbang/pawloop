@@ -13,6 +13,27 @@ import org.springframework.web.multipart.MultipartFile;
  * - 저장소(FileStorage) + JPA 리포지토리 결합
  * - 권한/연결(refType/refId) 처리
  * - 엔티티 변경( key → objectKey / 컬럼: media_key ) 반영 ①
+ *
+ * <p><b>{@code ownerId} 의 값 규약이 이슈 #5 배포를 기점으로 바뀐다.</b> 이 클래스의 소유권 검사는
+ * 전부 {@code String.equals} 다. 그래서 규약이 바뀌면 옛 행은 진짜 주인에게도 매칭되지 않는다.
+ *
+ * <table>
+ *   <caption>owner_id 에 실제로 들어간 값</caption>
+ *   <tr><th>경로</th><th>#5 이전</th><th>#5 이후</th></tr>
+ *   <tr><td>{@code MediaController} 직접 업로드</td>
+ *       <td>JWT subject — 이메일 또는 {@code kakao_1234567890}</td><td>{@code users.id}</td></tr>
+ *   <tr><td>{@code JourneyController_v2} 경유</td>
+ *       <td>{@code users.id}</td><td>{@code users.id}(변화 없음)</td></tr>
+ * </table>
+ *
+ * <p>즉 배포 이전에 {@code POST /media} 로 올라간 행은 소유자 본인도 replace·delete 를 할 수 없다
+ * (400 "권한 없음"; {@code deleteByRef} 는 조용히 건너뛰어 S3 객체가 고아로 남는다).
+ * 보안 구멍은 아니다 — 옛 값은 이메일이거나 {@code provider_socialId} 라 순수 숫자인 새 값과
+ * 겹칠 수 없으므로 남의 파일이 열리지는 않는다(fail-closed).
+ *
+ * <p>백필 여부의 결정과 SQL 은 {@code docs/03-database/migration.md} §3-1 에 있다.
+ * 여기서 두 형식을 함께 받아 주는 과도기 코드는 <b>일부러 넣지 않는다</b> — 그런 코드는
+ * "언제 지우는가"의 주인이 없어 영구히 남고, 그 자체가 소유권 판정을 느슨하게 만든다.
  */
 @Service
 public class MediaService {

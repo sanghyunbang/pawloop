@@ -85,6 +85,26 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 401 Unauthorized 매핑. [⑩]
+     *
+     * <p>인증 주체를 해석할 수 없을 때({@code CurrentUserArgumentResolver}). 본문 없이 401 만 돌려줘
+     * {@code SecurityConfig} 의 {@code HttpStatusEntryPoint(UNAUTHORIZED)} 와 형태를 맞춘다 —
+     * "토큰 없음"과 "탈퇴한 계정의 살아 있는 토큰"이 앱에게 같은 모양으로 보여야 한다. (이슈 #5)
+     *
+     * <p><b>이 핸들러는 반드시 이 클래스 안에 있어야 한다.</b> 별도 {@code @ControllerAdvice} 로
+     * 빼면 예외 구체성이 아니라 <b>advice 빈 순서</b>로 승자가 정해져서, 순서가 뒤면 아래
+     * {@code @ExceptionHandler(Exception.class)} 가 먼저 잡아 500 이 그대로 나간다(실측 확인).
+     * 같은 클래스 안에서는 {@code ExceptionDepthComparator} 가 더 구체적인 이쪽을 고른다.
+     *
+     * <p>메시지를 본문에 싣지 않는 이유는 아래 {@code handleBadRequest} 를 보면 된다 —
+     * {@code ex.getMessage()} 가 그대로 응답이 된다. 인증 실패 경로에서 그건 유출이다. (이슈 #6)
+     */
+    @ExceptionHandler(com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException.class)
+    public ResponseEntity<Void> handleUnauthenticated() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    }
+
+    /**
      * 500 Internal Server Error 매핑. [⑨]
      * - 마지막 안전망: 처리되지 않은 모든 예외.
      */
@@ -116,4 +136,5 @@ public class GlobalExceptionHandler {
 [⑦] 404: 리소스 미존재(엔티티 없음) 매핑.
 [⑧] 403: 인증은 되었으나 권한 부족.
 [⑨] 500: 내부 처리 중 예기치 못한 오류(운영 시 로깅/트레이싱 권장).
+[⑩] 401: 인증 주체 해석 실패. 본문 없이 상태 코드만 — 메시지를 실으면 그게 유출 경로가 된다(#5·#6).
 ────────────────────────────────────────────────────────────────────────── */

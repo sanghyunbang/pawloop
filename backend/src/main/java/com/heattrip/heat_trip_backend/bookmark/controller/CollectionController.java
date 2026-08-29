@@ -3,9 +3,9 @@ package com.heattrip.heat_trip_backend.bookmark.controller;
 import com.heattrip.heat_trip_backend.bookmark.dto.*;
 import com.heattrip.heat_trip_backend.bookmark.entity.Collection;
 import com.heattrip.heat_trip_backend.bookmark.entity.CollectionItem;
+import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
 import com.heattrip.heat_trip_backend.bookmark.service.CollectionService;
 import com.heattrip.heat_trip_backend.user.entity.User;
-import com.heattrip.heat_trip_backend.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,17 +17,13 @@ import java.util.*;
 public class CollectionController {
 
     private final CollectionService collectionService;
-    private final UserService userService;
 
-    private User me(String authHeader) {
-        String email = userService.emailFromAuth(authHeader);
-        return userService.findByEmail(email);
-    }
+    // 인증 주체 해석은 CurrentUserArgumentResolver 한 곳이다. 예전에는 여기 private User me(authHeader) 가
+    // 있었고, 토큰 subject 를 이메일로 보고 조회해서 모든 소셜 계정에서 400 이었다. (이슈 #5)
 
     /** 컬렉션 목록 (카운트/최신아이템 contentId 포함) */
     @GetMapping
-    public ResponseEntity<List<CollectionResponse>> list(@RequestHeader("Authorization") String authHeader) {
-        User user = me(authHeader);
+    public ResponseEntity<List<CollectionResponse>> list(@CurrentUser User user) {
         List<Collection> rows = collectionService.findAll(user);
         List<CollectionResponse> out = new ArrayList<>();
         for (Collection c : rows) {
@@ -39,10 +35,9 @@ public class CollectionController {
 
     /** 생성 */
     @PostMapping
-    public ResponseEntity<CollectionResponse> create(@RequestHeader("Authorization") String authHeader,
+    public ResponseEntity<CollectionResponse> create(@CurrentUser User user,
                                                      @RequestBody CollectionRequest req) {
         if (req.getName() == null || req.getName().isBlank()) return ResponseEntity.badRequest().build();
-        User user = me(authHeader);
         Collection c = collectionService.create(user, req.getName());
         var s = collectionService.stats(user, c);
         return ResponseEntity.ok(CollectionResponse.of(c, s.count(), s.latestContentId()));
@@ -50,11 +45,10 @@ public class CollectionController {
 
     /** 이름 변경 */
     @PutMapping("/{id}")
-    public ResponseEntity<CollectionResponse> rename(@RequestHeader("Authorization") String authHeader,
+    public ResponseEntity<CollectionResponse> rename(@CurrentUser User user,
                                                      @PathVariable Long id,
                                                      @RequestBody CollectionRequest req) {
         if (req.getName() == null || req.getName().isBlank()) return ResponseEntity.badRequest().build();
-        User user = me(authHeader);
         Collection c = collectionService.rename(user, id, req.getName());
         var s = collectionService.stats(user, c);
         return ResponseEntity.ok(CollectionResponse.of(c, s.count(), s.latestContentId()));
@@ -62,39 +56,35 @@ public class CollectionController {
 
     /** 삭제 */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@RequestHeader("Authorization") String authHeader,
+    public ResponseEntity<Void> delete(@CurrentUser User user,
                                        @PathVariable Long id) {
-        User user = me(authHeader);
         collectionService.delete(user, id);
         return ResponseEntity.noContent().build();
     }
 
     /** 아이템 목록 */
     @GetMapping("/{id}/items")
-    public ResponseEntity<List<CollectionItemResponse>> items(@RequestHeader("Authorization") String authHeader,
+    public ResponseEntity<List<CollectionItemResponse>> items(@CurrentUser User user,
                                                               @PathVariable Long id) {
-        User user = me(authHeader);
         List<CollectionItem> items = collectionService.items(user, id);
         return ResponseEntity.ok(items.stream().map(CollectionItemResponse::from).toList());
     }
 
     /** 아이템 추가 */
     @PostMapping("/{id}/items")
-    public ResponseEntity<Void> addItem(@RequestHeader("Authorization") String authHeader,
+    public ResponseEntity<Void> addItem(@CurrentUser User user,
                                         @PathVariable Long id,
                                         @RequestBody CollectionItemRequest req) {
         if (req.getContentId() == null || req.getContentId().isBlank()) return ResponseEntity.badRequest().build();
-        User user = me(authHeader);
         collectionService.addItem(user, String.valueOf(id), req.getContentId());
         return ResponseEntity.ok().build();
     }
 
     /** 아이템 제거 */
     @DeleteMapping("/{id}/items/{contentId}")
-    public ResponseEntity<Void> removeItem(@RequestHeader("Authorization") String authHeader,
+    public ResponseEntity<Void> removeItem(@CurrentUser User user,
                                            @PathVariable Long id,
                                            @PathVariable String contentId) {
-        User user = me(authHeader);
         collectionService.removeItem(user, id, contentId);
         return ResponseEntity.noContent().build();
     }

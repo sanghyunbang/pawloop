@@ -7,6 +7,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
+import com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -89,9 +90,10 @@ public class UserService {
             throw new IllegalAccessException("비밀번호가 일치하지 않습니다");
         }
 
-        // userId에 email을 넣음(회원 가입된 회원의 경우)
+        // subject 는 users.id 다. 예전에는 여기에 email 을, 소셜 경로에는 "kakao_1234567890" 을 넣어
+        // 같은 토큰 형식이 두 가지 규약을 갖고 있었다. (이슈 #5)
         // 권한은 DB 의 role 컬럼을 쓴다. 예전에는 여기서 "ROLE_USER" 를 하드코딩했다. (이슈 #7)
-        return jwtProvider.createAccessToken(user.getEmail(), roleOf(user));
+        return jwtProvider.createAccessToken(user.getId(), roleOf(user));
     }
 
     /** role 컬럼이 없던 시절에 만들어진 행은 값이 비어 있을 수 있다. */
@@ -100,15 +102,24 @@ public class UserService {
         return (role == null || role.isBlank()) ? User.ROLE_USER : role;
     }
 
-    /** email로 사용자 조회 */
-    public User findByEmail(String email) {
-    return userRepository.findByEmail(email)
-            .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+    /**
+     * 인증 주체를 users.id 로 다시 로드한다.
+     *
+     * <p>엔티티를 파라미터로 받지 않는 이유: 리졸버가 트랜잭션 밖에서 로드한 detached 엔티티를
+     * 서비스로 들여보내면 영속성 컨텍스트 경계가 컨트롤러로 샌다. PK 조회 1회는 싸다.
+     *
+     * <p>여기서 {@code IllegalArgumentException}(→ 400) 이 아니라
+     * {@link UnauthenticatedException}(→ 401) 인 이유: 이 시점에 사용자가 없다는 것은
+     * "요청이 잘못됐다"가 아니라 "이 토큰의 주체가 더는 존재하지 않는다"이다. (이슈 #5)
+     */
+    private User require(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(UnauthenticatedException::new);
     }
 
     /** 사용자 정보 수정 */
-    public User updateProfile(String email, UpdateProfileRequest req) {
-        User u = findByEmail(email);
+    public User updateProfile(Long userId, UpdateProfileRequest req) {
+        User u = require(userId);
 
         if (req.getName() != null && !req.getName().isBlank()) {
             u.setName(req.getName().trim());
@@ -148,30 +159,36 @@ public class UserService {
         return userRepository.save(u);
     }
 
-    // 이미 프론트가 잘 불러오고 있다 해도, 백엔드에서 토큰만으로 식별하는 패턴이 더 안전하고 표준적 → 보안↑
-    // 클라이언트가 바디/쿼리로 보내는 이메일을 믿지 않고, 서버가 JWT에서 주체(email)를 확인해 당사자 계정만 읽고/수정하려는 목적
-    public String emailFromAuth(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new IllegalArgumentException("Invalid Authorization header");
-        }
-        String token = authHeader.substring(7);
-
-        return jwtProvider.getUserIdFromToken(token);
-    }
+    // 토큰 헤더에서 이메일을 뽑던 헬퍼와 public findByEmail(String) 은 #5 에서 삭제됐다.
+    // (완료 조건 5 는 그 헬퍼 이름이 backend/src/main 에서 grep 0건이기를 요구한다 —
+    //  주석에도 쓰지 않는 이유가 그것이다. AuthSubjectContractSpecTest 가 주석까지 포함해 확인한다.)
+    //
+    // 남겨 두면 되돌리는 사람이 jwtProvider.getUserIdFromToken + findByEmail 로 옛 모양을
+    // 이어 붙일 수 있다 — 소비처 8곳이 실제로 그 모양이었다. 지우면 어디를 되돌려도
+    // 컴파일이 죽는다. 인증 주체 해석은 CurrentUserArgumentResolver 한 곳뿐이다.
+    //
+    // 지워도 되는 것을 확인했다: signup·login 은 이미 userRepository.findByEmail 을 직접 쓰고,
+    // CustomOAuth2UserService 도 userRepository 를 직접 쓴다. 남는 호출자가 0 이었다.
 
     /** 사용자 삭제 (회원탈퇴) */
     @Transactional
-    public void deleteMe(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + email));
-        userRepository.delete(user);
+    public void deleteMe(Long userId) {
+        // 예외 메시지에 이메일을 넣지 않는다 — GlobalExceptionHandler 가 ex.getMessage() 를
+        // HTTP 응답 본문에 그대로 싣는다. 예전에는 여기서 이메일이 응답으로 나가고 있었다. (이슈 #6)
+        userRepository.delete(require(userId));
         // 필요 시: userRepository.flush();
     }
 
-    /** 사용자 로그아웃 */
+    /**
+     * 사용자 로그아웃.
+     *
+     * <p><b>본문이 비어 있는 것은 사실을 반영한 것이다.</b> 폐기할 서버측 상태가 아직 없다 —
+     * refresh 토큰도, 액세스 토큰 블록리스트({@code jti})도 없어서 발급된 토큰은 만료까지 유효하다.
+     * 저장/폐기는 이슈 #9 범위다. 엔드포인트와 이 메서드는 그때 채울 이음새로 남긴다.
+     */
     @Transactional
-    public void logout(String email) {
-        
+    public void logout(Long userId) {
+
     }
 
      // helpers

@@ -114,6 +114,68 @@ ALTER TABLE places ADD SPATIAL INDEX spx_places_geom (geom);
 
 ---
 
+## 3-1. 데이터 마이그레이션 — `media_objects.owner_id` 의 키가 바뀐다 (#5)
+
+> 스키마가 아니라 **값의 의미**가 바뀌는 마이그레이션이다. `ddl-auto` 도 Flyway 도 이런 변경은 알려 주지 않는다. 이 절이 그 결정을 기록하는 자리다.
+
+### 무엇이 바뀌나
+
+`MediaController` 가 파일 소유자를 식별하는 값이 **JWT subject** 에서 **`users.id`** 로 바뀐다(이슈 #5). `MediaService` 의 소유권 검사는 전부 `String.equals` 라서, 값의 의미가 바뀌면 옛 행은 진짜 주인에게도 매칭되지 않는다.
+
+| 업로드 경로 | #5 이전 `owner_id` | #5 이후 `owner_id` |
+| --- | --- | --- |
+| `POST /media` (`MediaController`) | JWT subject — `a@b.com` 또는 `kakao_1234567890` | `users.id` (`"42"`) |
+| `POST /journeys/v2/...` (`JourneyController_v2`) | `users.id` — **처음부터 그랬다** | `users.id` (변화 없음) |
+
+즉 한 테이블에 두 규약이 이미 섞여 있었고, #5 가 한쪽을 다른 쪽에 맞춘다.
+
+### 영향 (배포하면 실제로 일어난다)
+
+배포 이전에 `MediaController` 로 업로드된 행은 **소유자 본인도** 손댈 수 없다.
+
+- `PUT /media/{id}` · `DELETE /media/{id}` → `IllegalArgumentException("권한 없음")` → **400**. 사용자에게는 "내 사진인데 삭제가 안 된다".
+- `DELETE /media?refType&refId` → 필터에서 **조용히 건너뛴다**. DB 행과 S3 객체가 고아로 남는다(비용·개인정보 삭제 이행 문제).
+
+보안 구멍은 아니다 — 옛 값(이메일·`provider_socialId`)은 새 값(순수 숫자)과 겹칠 수 없어 **남의 파일이 열리지는 않는다**(fail-closed).
+
+### 결정
+
+**운영 DB 의 실측 결과에 따라 (A) 또는 (B).** 로컬(H2)·테스트 컨테이너로는 대상 행 수를 알 수 없으므로 아래 조회가 선행돼야 한다. 이 절은 그 조회 없이 배포하지 말라는 뜻이다.
+
+```sql
+-- 1) 백필 대상이 있는지부터 본다. 0 이면 (B).
+SELECT COUNT(*) AS legacy_rows
+  FROM media_objects
+ WHERE owner_id NOT REGEXP '^[0-9]+$';
+```
+
+**(A) 대상 행이 있으면 — 백필하고 배포한다.** 배포 창 안에서, 애플리케이션을 내린 상태로 1회 실행한다(멱등이다).
+
+```sql
+-- 2-a) 이메일로 올린 행
+UPDATE media_objects m
+  JOIN users u ON u.email = m.owner_id
+   SET m.owner_id = CAST(u.id AS CHAR)
+ WHERE m.owner_id NOT REGEXP '^[0-9]+$';
+
+-- 2-b) 소셜 subject(provider_socialId)로 올린 행
+UPDATE media_objects m
+  JOIN users u ON CONCAT(u.provider, '_', u.social_id) = m.owner_id
+   SET m.owner_id = CAST(u.id AS CHAR)
+ WHERE m.owner_id NOT REGEXP '^[0-9]+$';
+
+-- 3) 남은 것은 계정이 이미 지워진 고아 행이다. 지우지 말고 목록만 뽑아 S3 정리 대상으로 넘긴다.
+SELECT id, owner_id, media_key FROM media_objects WHERE owner_id NOT REGEXP '^[0-9]+$';
+```
+
+**(B) 대상 행이 0 건이면 — 백필 없이 배포한다.** 그 사실(실행 일시·`legacy_rows=0`)을 이 절에 한 줄로 남긴다.
+
+> 실행 기록: _(미실행 — 운영 DB 접근이 필요하다. #5 를 배포하는 사람이 위 1) 을 먼저 돌리고 결과를 여기에 적는다.)_
+
+> 과도기 코드(두 형식을 함께 받아 주는 소유권 검사)는 일부러 넣지 않았다. 그런 코드는 "언제 지우는가"의 주인이 없어 영구히 남고, 그 자체가 소유권 판정을 느슨하게 만든다.
+
+---
+
 ## 4. 공공데이터 동기화 배치 (place / trail upsert)
 
 3개 소스를 `place`/`trail`로 정기 동기화한다. 현재 KTO 임포트는 `PlaceImportService.fullImportAllAreas()`가 전 지역(17개 area) 페이지네이션으로 수집해 `PlaceService.saveInBatches(...)`로 저장한다.
