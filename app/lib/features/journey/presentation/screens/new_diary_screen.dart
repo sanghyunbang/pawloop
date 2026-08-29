@@ -181,7 +181,11 @@ class _NewDiaryScreenState extends State<NewDiaryScreen> {
       images: _imageFiles,
     );
 
+    // 업로드는 끝났다. 화면이 사라졌으면 안내와 화면 이동만 생략한다. (#63)
+    // notifyDiaryChanged 는 context 와 무관하므로 성공 경로에서는 먼저 부른다 —
+    // 저장은 됐는데 구독 화면이 갱신되지 않는 상태를 만들지 않기 위해서다.
     if (error != null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('저장 실패: $error')));
@@ -189,6 +193,7 @@ class _NewDiaryScreenState extends State<NewDiaryScreen> {
     }
 
     notifyDiaryChanged(); // 구독 화면(피드/나) 자동 새로고침
+    if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('저장 완료!')));

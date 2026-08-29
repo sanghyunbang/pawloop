@@ -10,6 +10,9 @@ class ShareAppScreen extends StatelessWidget {
 
   void _copyLink(BuildContext context) async {
     await Clipboard.setData(const ClipboardData(text: _dummyLink));
+    // StatelessWidget 이라 State.mounted 가 없다. BuildContext.mounted 를 쓴다.
+    // 복사는 이미 끝났으므로 안내만 생략된다. (#63)
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('링크가 클립보드에 복사되었어요!')),
     );

@@ -48,6 +48,10 @@ class _MediaGridFieldState extends State<MediaGridField> {
     final picked = await _picker.pickMultiImages();
     if (picked.isEmpty) return;
 
+    // 갤러리는 사용자가 오래 머무는 구간이다. 그 사이 이 위젯이 사라졌으면
+    // setState 도 context.read 도 예외다. (#63)
+    if (!mounted) return;
+
     // 2) 미리보기 표시를 위해 로컬 파일 리스트를 구성
     setState(() {
       _locals

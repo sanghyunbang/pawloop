@@ -33,12 +33,16 @@ class BookmarkHeart extends StatelessWidget {
             return InkWell(
               customBorder: const CircleBorder(),
               onTap: () async {
+                // await 뒤에는 위젯이 이미 사라졌을 수 있다. 죽은 context 로
+                // ScaffoldMessenger.of / showModalBottomSheet 를 부르면 예외다. (#63)
+                // 사용자가 비동기 작업 중에 뒤로 가거나 앱을 백그라운드로 보내면 재현된다.
                 try {
                   // 1) 현재 상태 다시 확인
                   await store.ensureInitialized();
                   final isOnNow = store.isBookmarked(contentId);
 
                   // 2) 인스타 스타일 바텀 시트 표시
+                  if (!context.mounted) return;
                   final res = await showCollectionPickerSheet(
                     context,
                     alreadyBookmarked: isOnNow,
@@ -50,6 +54,8 @@ class BookmarkHeart extends StatelessWidget {
                     if (isOnNow) {
                       await store.toggle(contentId); // 북마크 해제
                       await CollectionStore.instance.removeContentEverywhere(contentId); // 컬렉션에서도 제거
+                      // 해제는 이미 끝났다. 화면이 사라졌으면 안내만 생략한다.
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('북마크에서 제거했어요')),
                       );
@@ -64,6 +70,7 @@ class BookmarkHeart extends StatelessWidget {
                       contentId,
                       collectionId: res.collectionId?.toString(),
                     );
+                    if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -83,17 +90,23 @@ class BookmarkHeart extends StatelessWidget {
                         contentId,
                         collectionId: res.collectionId!.toString(),
                       ); // add+attach
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('선택한 컬렉션에 저장했어요')),
                       );
                     } else {
-                      // '그냥 저장하기'를 눌렀고 이미 저장 상태면 알림만
+                      // '그냥 저장하기'를 눌렀고 이미 저장 상태면 알림만.
+                      // 이 갈래에 직전 await 은 없지만, 위쪽 시트 대기(await)를 이미 지나왔다.
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('이미 북마크에 있어요')),
                       );
                     }
                   }
                 } catch (e) {
+                  // 오류 안내도 화면이 살아 있을 때만. 여기서 또 예외를 내면
+                  // 원래 오류가 가려진다.
+                  if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('처리 중 오류가 발생했어요: $e')),
                   );

@@ -117,19 +117,23 @@ class _ScheduleEditScreenState extends State<ScheduleEditScreen> {
           ? client.putJson(url, body: body)
           : client.postJson(url, body: body));
 
+      // 요청은 끝났다. 화면이 사라졌으면 안내만 생략한다 — 저장 자체는 이미 됐다. (#63)
+      if (!mounted) return;
+
       if (res.statusCode == 200 || res.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isEditing ? '스케줄이 수정되었습니다.' : '스케줄이 저장되었습니다.'),
           ),
         );
-        if (mounted) Navigator.pop(context);
+        Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('저장 실패')));
       }
     } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('서버 오류')));

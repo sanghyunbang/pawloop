@@ -62,6 +62,10 @@ class _AvatarPickerState extends State<AvatarPicker> {
     } else {
       _local = File(picked.path);
     }
+    // 갤러리·카메라는 사용자가 오래 머무는 구간이다. 그 사이 이 위젯이 사라졌을 수
+    // 있고, 언마운트된 State 에 setState 를 부르거나 죽은 context 로 read 하면 예외다.
+    // 선택은 이미 끝났으므로 여기서 돌아가도 잃는 것은 업로드뿐이다. (#63)
+    if (!mounted) return;
     setState(() {});
 
     // 2) 업로드/교체 실행
