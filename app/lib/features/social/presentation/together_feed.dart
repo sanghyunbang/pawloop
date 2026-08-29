@@ -63,9 +63,11 @@ class TogetherFeedState extends State<TogetherFeed> {
           if (mounted) {
             setState(() {
               _cards = _cards
-                  .map((c) => c.id == card.id
-                      ? c.copyWith(commentCount: c.commentCount + 1)
-                      : c)
+                  .map(
+                    (c) => c.id == card.id
+                        ? c.copyWith(commentCount: c.commentCount + 1)
+                        : c,
+                  )
                   .toList();
             });
           }
@@ -85,9 +87,9 @@ class TogetherFeedState extends State<TogetherFeed> {
       });
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('리액션에 실패했어요.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('리액션에 실패했어요.')));
       }
     }
   }
@@ -102,8 +104,10 @@ class TogetherFeedState extends State<TogetherFeed> {
           children: [
             const SizedBox(height: 120),
             Center(
-              child: Text(_error!,
-                  style: const TextStyle(color: Color(0xFF7B6E67))),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Color(0xFF7B6E67)),
+              ),
             ),
           ],
         ),
@@ -149,8 +153,11 @@ class _CardTile extends StatelessWidget {
   final EmotionCard card;
   final void Function(String type) onReact;
   final VoidCallback onComment;
-  const _CardTile(
-      {required this.card, required this.onReact, required this.onComment});
+  const _CardTile({
+    required this.card,
+    required this.onReact,
+    required this.onComment,
+  });
 
   String get _when {
     final s = card.createdAt;
@@ -183,36 +190,59 @@ class _CardTile extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 card.handle?.trim().isNotEmpty == true ? card.handle! : '익명',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(width: 6),
-              Text('· ${card.moodKey}',
-                  style: TextStyle(
-                      color: moodColor(card.moodKey),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12.5)),
+              Text(
+                '· ${card.moodKey}',
+                style: TextStyle(
+                  color: moodColor(card.moodKey),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                ),
+              ),
               const Spacer(),
-              Text(_when,
-                  style:
-                      const TextStyle(color: Color(0xFFB0B0B8), fontSize: 11.5)),
+              Text(
+                _when,
+                style: const TextStyle(
+                  color: Color(0xFFB0B0B8),
+                  fontSize: 11.5,
+                ),
+              ),
             ],
           ),
           if (card.placeName?.trim().isNotEmpty == true) ...[
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.place_outlined,
-                    size: 15, color: Color(0xFF8A8A92)),
+                const Icon(
+                  Icons.place_outlined,
+                  size: 15,
+                  color: Color(0xFF8A8A92),
+                ),
                 const SizedBox(width: 4),
-                Text(card.placeName!,
-                    style: const TextStyle(
-                        color: Color(0xFF8A8A92), fontSize: 12.5)),
+                Text(
+                  card.placeName!,
+                  style: const TextStyle(
+                    color: Color(0xFF8A8A92),
+                    fontSize: 12.5,
+                  ),
+                ),
               ],
             ),
           ],
           const SizedBox(height: 8),
-          Text(card.body,
-              style: const TextStyle(height: 1.5, fontSize: 14, color: Color(0xFF333333))),
+          Text(
+            card.body,
+            style: const TextStyle(
+              height: 1.5,
+              fontSize: 14,
+              color: Color(0xFF333333),
+            ),
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -235,15 +265,21 @@ class _CardTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Row(
                 children: [
-                  const Icon(Icons.mode_comment_outlined,
-                      size: 16, color: Color(0xFF8A8A92)),
+                  const Icon(
+                    Icons.mode_comment_outlined,
+                    size: 16,
+                    color: Color(0xFF8A8A92),
+                  ),
                   const SizedBox(width: 6),
                   Text(
-                    card.commentCount > 0 ? '댓글 ${card.commentCount}개' : '댓글 달기',
+                    card.commentCount > 0
+                        ? '댓글 ${card.commentCount}개'
+                        : '댓글 달기',
                     style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF8A8A92)),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF8A8A92),
+                    ),
                   ),
                 ],
               ),
@@ -279,8 +315,7 @@ class _ReactionChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? const Color(0xFFFFE7E0) : const Color(0xFFF6F6F8),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-              color: active ? _accent : const Color(0xFFE6E6EA)),
+          border: Border.all(color: active ? _accent : const Color(0xFFE6E6EA)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -297,11 +332,14 @@ class _ReactionChip extends StatelessWidget {
             ),
             if (count > 0) ...[
               const SizedBox(width: 4),
-              Text('$count',
-                  style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      color: active ? _accent : const Color(0xFF8A8A92))),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: active ? _accent : const Color(0xFF8A8A92),
+                ),
+              ),
             ],
           ],
         ),
@@ -315,8 +353,11 @@ class _CommentsSheet extends StatefulWidget {
   final SocialRepository repo;
   final EmotionCard card;
   final VoidCallback onAdded;
-  const _CommentsSheet(
-      {required this.repo, required this.card, required this.onAdded});
+  const _CommentsSheet({
+    required this.repo,
+    required this.card,
+    required this.onAdded,
+  });
 
   @override
   State<_CommentsSheet> createState() => _CommentsSheetState();
@@ -338,10 +379,12 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   Future<void> _load() async {
     try {
       final c = await widget.repo.comments(widget.card.id);
-      if (mounted) setState(() {
-        _comments = c;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _comments = c;
+          _loading = false;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -358,7 +401,10 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
-      final c = await widget.repo.addComment(cardId: widget.card.id, body: text);
+      final c = await widget.repo.addComment(
+        cardId: widget.card.id,
+        body: text,
+      );
       _ctrl.clear();
       widget.onAdded();
       if (mounted) {
@@ -370,8 +416,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     } catch (_) {
       if (mounted) {
         setState(() => _sending = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('댓글 작성에 실패했어요.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('댓글 작성에 실패했어요.')));
       }
     }
   }
@@ -379,7 +426,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.62,
         child: Column(
@@ -389,20 +438,26 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                  color: const Color(0xFFE0E0E6),
-                  borderRadius: BorderRadius.circular(2)),
+                color: const Color(0xFFE0E0E6),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
               child: Row(
                 children: [
-                  const Text('댓글',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                  const Text(
+                    '댓글',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                  ),
                   const SizedBox(width: 6),
-                  Text('${_comments.length}',
-                      style: const TextStyle(
-                          color: _accent, fontWeight: FontWeight.w800)),
+                  Text(
+                    '${_comments.length}',
+                    style: const TextStyle(
+                      color: _accent,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -411,16 +466,18 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _comments.isEmpty
-                      ? const Center(
-                          child: Text('첫 댓글을 남겨보세요.',
-                              style: TextStyle(color: Color(0xFF8A8A92))))
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-                          itemCount: _comments.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 14),
-                          itemBuilder: (_, i) => _CommentRow(c: _comments[i]),
-                        ),
+                  ? const Center(
+                      child: Text(
+                        '첫 댓글을 남겨보세요.',
+                        style: TextStyle(color: Color(0xFF8A8A92)),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+                      itemCount: _comments.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 14),
+                      itemBuilder: (_, i) => _CommentRow(c: _comments[i]),
+                    ),
             ),
             const Divider(height: 1, color: Color(0xFFEDEDF1)),
             SafeArea(
@@ -438,9 +495,12 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                           hintText: '따뜻한 한마디를 남겨주세요',
                           isDense: true,
                           border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24)),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                         ),
                       ),
                     ),
@@ -453,7 +513,10 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
                           : const Icon(Icons.send, color: Colors.white),
                     ),
                   ],
@@ -473,7 +536,9 @@ class _CommentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final when = c.createdAt.length >= 10 ? c.createdAt.substring(0, 10) : c.createdAt;
+    final when = c.createdAt.length >= 10
+        ? c.createdAt.substring(0, 10)
+        : c.createdAt;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -484,14 +549,21 @@ class _CommentRow extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
             ),
             const Spacer(),
-            Text(when,
-                style:
-                    const TextStyle(color: Color(0xFFB0B0B8), fontSize: 11)),
+            Text(
+              when,
+              style: const TextStyle(color: Color(0xFFB0B0B8), fontSize: 11),
+            ),
           ],
         ),
         const SizedBox(height: 3),
-        Text(c.body,
-            style: const TextStyle(fontSize: 13.5, color: Color(0xFF333333), height: 1.4)),
+        Text(
+          c.body,
+          style: const TextStyle(
+            fontSize: 13.5,
+            color: Color(0xFF333333),
+            height: 1.4,
+          ),
+        ),
       ],
     );
   }

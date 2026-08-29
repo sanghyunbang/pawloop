@@ -5,6 +5,7 @@
 /// - 높이 지정 없으면 16:9 비율 유지
 /// - errorBuilder로 fallback 이미지 제공
 /// - PhysicalModel로 얇은 elevation 연출
+library;
 
 import 'package:flutter/material.dart';
 
@@ -28,24 +29,24 @@ class PlaceImageBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(cornerRadius);
 
-    Widget _image() => Hero(
-          tag: 'place:$contentId',
-          child: Image.network(
-            imageUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (c, e, s) => Image.network(
-              'https://cdn.pixabay.com/photo/2019/07/08/04/23/traveling-4323759_1280.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-        );
+    Widget image() => Hero(
+      tag: 'place:$contentId',
+      child: Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (c, e, s) => Image.network(
+          'https://cdn.pixabay.com/photo/2019/07/08/04/23/traveling-4323759_1280.png',
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
 
     final child = PhysicalModel(
       color: Colors.white,
       elevation: elevation,
       borderRadius: radius,
       clipBehavior: Clip.antiAlias,
-      child: _image(),
+      child: image(),
     );
 
     if (imageHeight != null) return SizedBox(height: imageHeight, child: child);

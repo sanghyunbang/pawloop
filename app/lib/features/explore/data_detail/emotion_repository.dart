@@ -1,5 +1,6 @@
 /// Repository: API 호출 결과를 도메인 모델로 변환하여 상위에 제공.
 /// - 화면/VM이 API 형식에 의존하지 않도록 중간 계층 역할.
+library;
 
 import '../domain_detail/emotion_models.dart';
 import 'emotion_api.dart';

@@ -163,7 +163,7 @@ class _TodayCheckInState extends State<TodayCheckIn> {
               boxShadow: selected
                   ? [
                       BoxShadow(
-                        color: _accent.withOpacity(0.18),
+                        color: _accent.withValues(alpha: 0.18),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -238,9 +238,7 @@ class _TodayCheckInState extends State<TodayCheckIn> {
                   decoration: BoxDecoration(
                     color: on ? _accent : Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: on ? _accent : _border,
-                    ),
+                    border: Border.all(color: on ? _accent : _border),
                   ),
                   alignment: Alignment.center,
                   child: Text(

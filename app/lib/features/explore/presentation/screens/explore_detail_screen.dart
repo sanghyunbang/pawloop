@@ -1,5 +1,7 @@
 /// explore_detail_screen.dart
 /// ─────────────────────────────────────────────────────────────────────────
+library;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/core/net/logging_client.dart';
@@ -197,7 +199,7 @@ class _ExploreDetailScreenState extends State<ExploreDetailScreen> {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: kPrimary,
-            overlayColor: kPrimary.withOpacity(.08),
+            overlayColor: kPrimary.withValues(alpha: .08),
           ),
         ),
       ),

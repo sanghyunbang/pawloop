@@ -26,7 +26,7 @@ class WhitePage extends StatelessWidget {
     final textScale = media.textScaleFactor.clamp(1.0, 1.2);
 
     return MediaQuery(
-      data: media.copyWith(textScaleFactor: textScale),
+      data: media.copyWith(textScaler: TextScaler.linear(textScale)),
       child: Scaffold(
         backgroundColor: kBg,
         appBar: AppBar(

@@ -1,4 +1,3 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:heat_trip_flutter/features/explore/data/models/cursor_page_response.dart';
 import 'package:heat_trip_flutter/features/explore/data/models/place_detail_dto.dart';
 import 'package:heat_trip_flutter/features/explore/data/models/place_item_dto.dart';

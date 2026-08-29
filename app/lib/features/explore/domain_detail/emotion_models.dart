@@ -2,6 +2,7 @@
 /// 감정/특성/감정리뷰 도메인 모델 정의.
 /// - 프레젠테이션(위젯)과 데이터 계층 사이의 중간 형태.
 /// - API 스키마가 바뀌더라도 fromJson만 고치면 상위 코드 영향 최소화.
+library;
 
 class EmotionScore {
   /// 감정의 ID (예: 'JOY', 'CALM')
@@ -68,7 +69,8 @@ class PlaceFeatures {
     spirituality: (j['spirituality'] ?? 0.0).toDouble(),
     adventure: (j['adventure'] ?? 0.0).toDouble(),
     culture: (j['culture'] ?? 0.0).toDouble(),
-    natureHealing: (j['nature_healing'] ?? j['natureHealing'] ?? 0.0).toDouble(),
+    natureHealing: (j['nature_healing'] ?? j['natureHealing'] ?? 0.0)
+        .toDouble(),
     quiet: (j['quiet'] ?? 0.0).toDouble(),
   );
 }
@@ -127,6 +129,7 @@ class EmotionalReview {
     dD: (j['emotionalChange']?['dominance'] ?? 0.0).toDouble(),
     content: j['content'] ?? '',
     helpfulCount: (j['helpfulCount'] ?? 0) as int,
-    images: (j['images'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+    images:
+        (j['images'] as List?)?.map((e) => e.toString()).toList() ?? const [],
   );
 }

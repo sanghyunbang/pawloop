@@ -13,6 +13,7 @@
 /// ① utf8.decode(bodyBytes): 한글/멀티바이트 안전 파싱
 /// ② _join(): baseUrl/tail 안전 결합(중복 슬래시 제거)
 /// ③ includeConf=false면 conf_*, n_reviews 등 메타 제외
+library;
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -69,7 +70,10 @@ class EmotionApi {
 
   /// 나의 경험(피드백) 제출
   /// body: { beforeEmotion, afterEmotion, featureRatings:{...}, content?, timestamp }
-  Future<void> submitFeedback(int contentId, Map<String, dynamic> payload) async {
+  Future<void> submitFeedback(
+    int contentId,
+    Map<String, dynamic> payload,
+  ) async {
     final url = _join('$contentId/feedback');
     final r = await _client.post(
       Uri.parse(url),

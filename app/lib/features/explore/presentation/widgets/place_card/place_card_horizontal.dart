@@ -2,6 +2,7 @@
 ///
 /// 가로형 카드 구현.
 /// - 왼쪽 썸네일, 오른쪽 텍스트 블럭.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/features/explore/data/models/place_item_dto.dart';
@@ -26,7 +27,7 @@ class PlaceCardHorizontal extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(imageCornerRadius);
 
-    String _shortAddr(String? addr) {
+    String shortAddr(String? addr) {
       if (addr == null) return '';
       final t = addr.trim();
       if (t.isEmpty) return '';
@@ -48,7 +49,9 @@ class PlaceCardHorizontal extends StatelessWidget {
             SizedBox(
               width: thumbnailWidth,
               child: ClipRRect(
-                borderRadius: BorderRadius.horizontal(left: Radius.circular(imageCornerRadius)),
+                borderRadius: BorderRadius.horizontal(
+                  left: Radius.circular(imageCornerRadius),
+                ),
                 child: Hero(
                   tag: 'place:${data.safeContentId}',
                   child: Image.network(
@@ -73,16 +76,23 @@ class PlaceCardHorizontal extends StatelessWidget {
                       data.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.map_outlined, size: 14, color: Colors.black54),
+                        const Icon(
+                          Icons.map_outlined,
+                          size: 14,
+                          color: Colors.black54,
+                        ),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            _shortAddr(data.addr1),
+                            shortAddr(data.addr1),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(color: Colors.black54),

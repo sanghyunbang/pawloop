@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 /// 지역 단일 선택 바텀시트
 /// - 지역 목록을 보여주고 사용자가 하나를 선택하면 바로 닫히면서 값 반환
 class RegionSelectSheet extends StatefulWidget {
-  final String title;         // 바텀시트 상단에 표시될 제목
+  final String title; // 바텀시트 상단에 표시될 제목
   final List<String> options; // 선택 가능한 지역 목록
-  final String initial;       // 처음 선택되어 있는 지역
+  final String initial; // 처음 선택되어 있는 지역
 
   const RegionSelectSheet({
     super.key,
@@ -85,7 +85,7 @@ class _RegionSelectSheetState extends State<RegionSelectSheet> {
                   IconButton(
                     tooltip: '닫기',
                     icon: const Icon(Icons.close),
-                    color: onSurface.withOpacity(0.8),
+                    color: onSurface.withValues(alpha: 0.8),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -99,14 +99,18 @@ class _RegionSelectSheetState extends State<RegionSelectSheet> {
               Flexible(
                 child: SingleChildScrollView(
                   child: Wrap(
-                    spacing: 10,     // 칩 간 가로 간격
-                    runSpacing: 10,  // 칩 간 세로 간격
+                    spacing: 10, // 칩 간 가로 간격
+                    runSpacing: 10, // 칩 간 세로 간격
                     children: widget.options.map((opt) {
                       final sel = _selected == opt;
 
                       // ✅ 화이트 배경 유지 + 선택 시 얕은 틴트
-                      final Color bg = sel ? _primary.withOpacity(0.08) : Colors.white;
-                      final Color border = sel ? _primary : const Color(0xFFE0E0E0);
+                      final Color bg = sel
+                          ? _primary.withValues(alpha: 0.08)
+                          : Colors.white;
+                      final Color border = sel
+                          ? _primary
+                          : const Color(0xFFE0E0E0);
                       final Color textColor = sel ? _primary : onSurface;
 
                       return ChoiceChip(
@@ -120,7 +124,11 @@ class _RegionSelectSheetState extends State<RegionSelectSheet> {
                         ),
                         avatar: sel
                             ? const Icon(Icons.check, size: 18, color: _primary)
-                            : Icon(Icons.place_outlined, size: 18, color: onSurface.withOpacity(0.75)),
+                            : Icon(
+                                Icons.place_outlined,
+                                size: 18,
+                                color: onSurface.withValues(alpha: 0.75),
+                              ),
                         selected: sel,
                         onSelected: (_) {
                           setState(() => _selected = opt);
@@ -128,13 +136,16 @@ class _RegionSelectSheetState extends State<RegionSelectSheet> {
                           Navigator.pop(context, opt);
                         },
                         backgroundColor: bg,
-                        selectedColor: _primary.withOpacity(0.10),
+                        selectedColor: _primary.withValues(alpha: 0.10),
                         side: BorderSide(color: border, width: 1),
                         shape: StadiumBorder(
                           side: BorderSide(color: border, width: 1),
                         ),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
                       );
                     }).toList(),
                   ),

@@ -10,6 +10,7 @@
 /// [주의]
 /// - KTO의 키 이름은 모두 소문자입니다. (예: contentid, firstimage, firstimage2)
 ///   오탈자/대소문자 불일치가 가장 흔한 매핑 실패 원인입니다.
+library;
 
 class DetailCommonDto {
   final int? contentId;

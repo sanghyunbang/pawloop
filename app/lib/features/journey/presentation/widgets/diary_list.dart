@@ -61,8 +61,12 @@ class _DiaryCard extends StatelessWidget {
   final void Function(DiaryEntry entry)? onDelete;
   final void Function(DiaryEntry entry)? onShare;
 
-  const _DiaryCard(
-      {required this.entry, this.onEdit, this.onDelete, this.onShare});
+  const _DiaryCard({
+    required this.entry,
+    this.onEdit,
+    this.onDelete,
+    this.onShare,
+  });
 
   Future<void> _confirmDelete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -152,7 +156,7 @@ class _DiaryCard extends StatelessWidget {
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                        overlayColor: Colors.white.withOpacity(.06),
+                        overlayColor: Colors.white.withValues(alpha: .06),
                       ),
                     ),
                   ),
@@ -195,7 +199,7 @@ class _DiaryCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: cs.surfaceVariant,
+                  backgroundColor: cs.surfaceContainerHighest,
                   child: Text(
                     entry.authorInitials,
                     style: const TextStyle(fontWeight: FontWeight.w700),
@@ -589,7 +593,7 @@ class _InfoPill extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE6E6E6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 2,
             offset: const Offset(0, 1),
           ),

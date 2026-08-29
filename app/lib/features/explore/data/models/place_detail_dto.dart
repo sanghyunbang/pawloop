@@ -28,7 +28,7 @@ class PlaceDetailDto {
 
   factory PlaceDetailDto.fromJson(Map<String, dynamic> json) {
     // 다양한 타입(double/num/String/null)을 모두 수용하는 변환기
-    double? _toDouble(dynamic v) => v == null
+    double? toDouble(dynamic v) => v == null
         ? null
         : (v is num ? v.toDouble() : double.tryParse(v.toString()));
 
@@ -40,8 +40,8 @@ class PlaceDetailDto {
       addr2: json['addr2'] as String?,
       firstimage: json['firstimage'] as String?,
       firstimage2: json['firstimage2'] as String?,
-      mapx: _toDouble(json['mapx']),
-      mapy: _toDouble(json['mapy']),
+      mapx: toDouble(json['mapx']),
+      mapy: toDouble(json['mapy']),
     );
   }
 }
