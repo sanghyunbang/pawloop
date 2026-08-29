@@ -55,4 +55,56 @@ void main() {
       expect(tokenFromCallback(''), isNull);
     });
   });
+
+  // #9 부터 딥링크는 `?token=<AT>&refresh=<RT>` 다. 그전까지 앱은 refresh 를
+  // 버렸고, 그래서 AT 가 만료되는 순간 사용자는 조용히 로그아웃됐다.
+  group('refreshFromCallback', () {
+    test('token 과 refresh 가 함께 온 콜백에서 refresh 만 뽑는다', () {
+      const url =
+          'heattrip://login-callback?token=eyJhbGciOiJIUzI1NiJ9.p.s&refresh=abcdefRT';
+
+      expect(refreshFromCallback(url), 'abcdefRT');
+      expect(tokenFromCallback(url), 'eyJhbGciOiJIUzI1NiJ9.p.s');
+    });
+
+    test('파라미터 순서가 바뀌어도 값을 그대로 뽑는다', () {
+      const url = 'heattrip://login-callback?refresh=RT-1&token=AT-1&state=xyz';
+
+      expect(refreshFromCallback(url), 'RT-1');
+    });
+
+    test('refresh 가 없는 옛 딥링크는 null 이다 — 로그인 자체는 실패가 아니다', () {
+      const url = 'heattrip://login-callback?token=AT-1';
+
+      expect(refreshFromCallback(url), isNull);
+      expect(tokenFromCallback(url), 'AT-1', reason: 'AT 만으로도 로그인은 성립한다');
+    });
+
+    test('error 콜백은 refresh 도 실패로 본다', () {
+      expect(
+        refreshFromCallback(
+          'heattrip://login-callback?error=access_denied&refresh=RT-1',
+        ),
+        isNull,
+      );
+    });
+
+    test('refresh 값이 비었거나 URL 이 깨져도 예외 없이 null 이다', () {
+      expect(refreshFromCallback('heattrip://login-callback?refresh='), isNull);
+      expect(
+        refreshFromCallback('heattrip://login-callback?refresh=%20'),
+        isNull,
+      );
+      expect(refreshFromCallback('http://[invalid'), isNull);
+      expect(refreshFromCallback(''), isNull);
+    });
+
+    test('퍼센트 인코딩된 refresh 값을 디코드해 돌려준다', () {
+      // 불투명 문자열이라 파싱하지 않지만, URL 디코드는 Uri 가 이미 해 준다.
+      expect(
+        refreshFromCallback('heattrip://login-callback?refresh=a%2Bb%2Fc'),
+        'a+b/c',
+      );
+    });
+  });
 }

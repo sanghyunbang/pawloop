@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:heat_trip_flutter/core/config/env.dart';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/features/foryou_v2/data/api_client.dart';
 import 'package:heat_trip_flutter/features/foryou_v2/data/foryou_repository_impl.dart';
 import 'package:heat_trip_flutter/features/foryou_v2/domain/models.dart';
@@ -19,10 +18,8 @@ class ForYouVMHost extends StatefulWidget {
 class _ForYouVMHostState extends State<ForYouVMHost> {
   late final ForYouVM vm = ForYouVM(
     repo: ForYouRepositoryImpl(
-      ApiClient(
-        baseUrl: _resolveBaseUrl(),
-        tokenProvider: TokenStorage.getToken, // 추천 호출에 JWT 부착
-      ),
+      // JWT 부착은 AuthedClient 가 한다 (#11).
+      ApiClient(baseUrl: _resolveBaseUrl()),
     ),
     initial: const RankRequest(
       pad: Pad(pleasure: 0, arousal: 0, dominance: 0),

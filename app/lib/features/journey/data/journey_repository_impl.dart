@@ -8,25 +8,19 @@ import '../domain/diary_entry.dart';
 import '../domain/journey_stats.dart';
 import '../domain/journey.dart';
 
-import '../../auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 class JourneyRepositoryImpl {
   final String baseUrl = Env.apiBase ?? '';
 
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  final AuthedClient _client = AuthedClient.instance;
+
   // ------------------- 통계 조회
   Future<JourneyStats> fetchStats() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('No auth token');
-
     final url = Uri.parse('$baseUrl/journeys/stats');
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    final response = await _client.getJson(url);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -38,17 +32,8 @@ class JourneyRepositoryImpl {
 
   // ------------------- 스케줄 전체 조회
   Future<List<Schedule>> fetchSchedules() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('No auth token');
-
     final url = Uri.parse('$baseUrl/public/schedules');
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    final response = await _client.getJson(url);
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
@@ -60,17 +45,8 @@ class JourneyRepositoryImpl {
 
   // ------------------- 다이어리 전체 조회
   Future<List<DiaryEntry>> fetchDiaries() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('No auth token');
-
     final url = Uri.parse('$baseUrl/journeys/v2/entries');
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    final response = await _client.getJson(url);
 
     print('  ㅡㅡㅡㅡㅡㅡㅡjourney impl - 📦[fetchDiaries] body: ${response.body[0]}');
 
@@ -90,12 +66,8 @@ class JourneyRepositoryImpl {
     required DateTime dateTo,
     required List<File> images,
   }) async {
-    final token = await TokenStorage.getToken();
-    if (token == null) return 'Authentication required';
-
     final url = Uri.parse('$baseUrl/journeys/schedules');
-    final request = http.MultipartRequest('POST', url)
-      ..headers['Authorization'] = 'Bearer $token';
+    final request = http.MultipartRequest('POST', url);
 
     request.fields.addAll({
       'title': title,
@@ -116,7 +88,7 @@ class JourneyRepositoryImpl {
       );
     }
 
-    final streamedResponse = await request.send();
+    final streamedResponse = await _client.send(request);
     final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode == 201) {
@@ -130,17 +102,10 @@ class JourneyRepositoryImpl {
   }
 
   Future<String?> postDiary(DiaryEntry entry) async {
-    final token = await TokenStorage.getToken();
-    if (token == null) return 'Authentication required';
-
     final url = Uri.parse('$baseUrl/journeys/v2/entries');
-    final response = await http.post(
+    final response = await _client.postJson(
       url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(entry.toJson(includeId: false)),
+      body: entry.toJson(includeId: false),
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -167,12 +132,8 @@ class JourneyRepositoryImpl {
   }
 
   Future<List<String>?> uploadImages(List<File> images) async {
-    final token = await TokenStorage.getToken();
-    if (token == null) return null;
-
     final url = Uri.parse('$baseUrl/media');
     final request = http.MultipartRequest('POST', url);
-    request.headers['Authorization'] = 'Bearer $token';
 
     request.fields['category'] = 'journeys';
     request.fields['refType'] = 'journey';
@@ -190,7 +151,7 @@ class JourneyRepositoryImpl {
       );
     }
 
-    final streamedResponse = await request.send();
+    final streamedResponse = await _client.send(request);
     final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode == 200) {
@@ -207,17 +168,8 @@ class JourneyRepositoryImpl {
   }
 
   Future<List<Journey>> fetchJourneys() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('No auth token');
-
     final url = Uri.parse('$baseUrl/journeys/v2/entries');
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    final response = await _client.getJson(url);
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
@@ -229,17 +181,8 @@ class JourneyRepositoryImpl {
 
   Future<void> deleteDiary(int diaryId) async {
     print("   journey impl - deleteDiary 진입, 들어온 diaryId : $diaryId");
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('Authentication required');
-
     final url = Uri.parse('$baseUrl/journeys/v2/entries/$diaryId');
-    final response = await http.delete(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    final response = await _client.deleteJson(url);
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception('Failed to delete diary: ${response.statusCode}');
@@ -250,19 +193,13 @@ class JourneyRepositoryImpl {
     print(
       "   ㅡㅡㅡㅡㅡㅡㅡjourney impl - updateDiary 진입, 진입한 값 : $entry \n entry id = ${entry.id}",
     );
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('Authentication required');
     if (entry.id == null) throw Exception('Diary ID is required for update');
 
     final Did = entry.id;
     final url = Uri.parse('$baseUrl/journeys/v2/entries/$Did');
-    final response = await http.put(
+    final response = await _client.putJson(
       url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(entry.toJson(includeId: false)),
+      body: entry.toJson(includeId: false),
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {

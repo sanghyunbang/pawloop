@@ -15,7 +15,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
+import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
 import 'package:heat_trip_flutter/features/profile/data/dto/update_profile_request.dart';
 
 // ↓ shared/media 배럴 (models, repository, widgets 포함)
@@ -98,7 +98,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     } catch (_) {}
 
     try {
-      final token = await TokenStorage.getToken();
+      final token = await SecureTokenStore.instance.readAccessToken();
       if (token == null) {
         setState(() {
           _loadError = '로그인이 필요합니다.';
@@ -107,7 +107,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         return;
       }
 
-      final data = await _authRepo.getMyProfile(token);
+      final data = await _authRepo.getMyProfile();
       // ignore: avoid_print
       print('[ProfileEdit] raw data: $data');
 
@@ -190,7 +190,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
     setState(() => _saving = true);
 
-    final token = await TokenStorage.getToken();
+    final token = await SecureTokenStore.instance.readAccessToken();
     if (token == null) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -216,7 +216,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     // 디버그: 실제 전송 바디 확인
     debugPrint('[PUT /auth/me] body: ${jsonEncode(req.toJson())}');
 
-    final ok = await _authRepo.updateMyProfile(token, req);
+    final ok = await _authRepo.updateMyProfile(req);
 
     if (!mounted) return;
     setState(() => _saving = false);

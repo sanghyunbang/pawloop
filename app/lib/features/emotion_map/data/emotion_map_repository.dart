@@ -1,11 +1,13 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import '../domain/emotion_map_place.dart';
 
 /// 감정 지도 장소 조회 리포지토리.
 class EmotionMapRepository {
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  final AuthedClient _client = AuthedClient.instance;
+
   String get _baseUrl =>
       Env.apiBase.isNotEmpty ? Env.apiBase : 'http://10.0.2.2:8080';
 
@@ -23,13 +25,9 @@ class EmotionMapRepository {
         'limit': '$limit',
       },
     );
-    final token = await TokenStorage.getToken();
-    final res = await http.get(
-      uri,
-      headers: {
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      },
-    ).timeout(const Duration(seconds: 8));
+    final res = await _client
+        .getJson(uri)
+        .timeout(const Duration(seconds: 8));
     if (res.statusCode != 200) {
       throw Exception('emotion-map 응답 ${res.statusCode}');
     }
@@ -58,13 +56,9 @@ class EmotionMapRepository {
     }
     final uri = Uri.parse('$_baseUrl/api/curation/places/search')
         .replace(queryParameters: params);
-    final token = await TokenStorage.getToken();
-    final res = await http.get(
-      uri,
-      headers: {
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      },
-    ).timeout(const Duration(seconds: 10));
+    final res = await _client
+        .getJson(uri)
+        .timeout(const Duration(seconds: 10));
     if (res.statusCode != 200) {
       throw Exception('search 응답 ${res.statusCode}');
     }

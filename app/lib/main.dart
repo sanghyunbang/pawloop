@@ -2,7 +2,7 @@
 //
 // 목적
 // - 전역 DI(MultiProvider)로 MediaApiClient/MediaRepository를 주입.
-// - MediaApiClient에 tokenProvider를 주입해 /media 호출 시 401/403 방지. [①]
+// - 인증 헤더 부착과 401 자동 갱신은 AuthedClient 한 곳에서 한다 (#11). [①]
 // - 에러 핸들링(Widget build, 플랫폼, 비동기) 기본 설정.
 //
 // 필수 포인트
@@ -20,6 +20,7 @@ import 'package:provider/provider.dart';
 // go_router 설정
 import 'package:heat_trip_flutter/app/app_router.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 // 기본 테마
 import 'package:heat_trip_flutter/core/theme/theme.dart';
 
@@ -57,6 +58,15 @@ Future<void> main() async {
 
   // 저장된 토큰으로 로그인 상태 복원
   await AuthState.init();
+
+  // 세션이 끝나면(refresh 불가 · 재시도 후에도 401) 로그인 화면으로 보낸다 (#11).
+  // 저장된 토큰을 지우는 것은 AuthedClient 가 이미 했다 — 여기서는 전역 상태와
+  // 화면만 맞춘다. 라우터를 AuthedClient 가 직접 import 하지 않는 이유는
+  // `app_router.dart` 가 #12 소유이기 때문이다.
+  AuthedClient.instance.onSessionExpired = () async {
+    AuthState.loggedIn.value = false;
+    appRouter.goNamed('login');
+  };
 
   // Flutter 위젯 트리에서 발생한 모든 에러를 콘솔로
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -117,13 +127,8 @@ class HeatTrip extends StatelessWidget {
 
     return MultiProvider(
       providers: [
-        // [A] MediaApiClient: Authorization 토큰을 주입하기 위해 tokenProvider 설정. [①]
-        Provider(
-          create: (_) => MediaApiClient(
-            baseUrl: baseUrl,
-            tokenProvider: () => SecureTokenStore.instance.readAccessToken(),
-          ),
-        ),
+        // [A] MediaApiClient: 인증 헤더 부착과 401 갱신은 AuthedClient 가 한다 (#11).
+        Provider(create: (_) => MediaApiClient(baseUrl: baseUrl)),
         // [B] MediaRepository: API 클라이언트를 의존성으로 받음. [③]
         ProxyProvider<MediaApiClient, MediaRepository>(
           update: (_, api, __) => MediaRepository(api),

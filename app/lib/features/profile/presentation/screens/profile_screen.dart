@@ -15,6 +15,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
+import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
 import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/features/profile/presentation/widgets/tabs/bookmark_tab.dart';
 
@@ -76,7 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         }
       } catch (_) {}
 
-      final token = await TokenStorage.getToken();
+      final token = await SecureTokenStore.instance.readAccessToken();
       if (!mounted) return;
 
       if (token == null) {
@@ -88,7 +89,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         return;
       }
 
-      final userInfo = await authRepository.getMyProfile(token);
+      final userInfo = await authRepository.getMyProfile();
       if (!mounted) return;
 
       if (userInfo != null) {

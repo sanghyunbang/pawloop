@@ -5,6 +5,7 @@ import 'package:heat_trip_flutter/core/events/diary_events.dart';
 import 'package:heat_trip_flutter/core/mood/mood.dart';
 import 'package:heat_trip_flutter/core/mood/mood_color.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
+import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
 import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/features/journey/data/journey_api.dart';
 import 'package:heat_trip_flutter/features/journey/domain/models.dart';
@@ -48,8 +49,8 @@ class _MeScreenState extends State<MeScreen> {
     Map<String, dynamic>? profile;
     List<DiaryEntry> diaries = const [];
     try {
-      final token = await TokenStorage.getToken();
-      if (token != null) profile = await _auth.getMyProfile(token);
+      final token = await SecureTokenStore.instance.readAccessToken();
+      if (token != null) profile = await _auth.getMyProfile();
     } catch (_) {}
     try {
       diaries = await _api.fetchDiaries();

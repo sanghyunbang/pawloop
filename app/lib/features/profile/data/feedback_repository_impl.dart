@@ -1,13 +1,14 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/features/profile/domain/repository/feedback_repository.dart';
 import 'package:heat_trip_flutter/features/profile/data/dto/feedback_request.dart';
-import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 class FeedbackRepositoryImpl implements FeedbackRepository {
   final String baseUrl = Env.apiBase ?? '';
+
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  final AuthedClient _client = AuthedClient.instance;
 
   @override
   Future<bool> sendFeedback({
@@ -17,7 +18,6 @@ class FeedbackRepositoryImpl implements FeedbackRepository {
     String? deviceInfo,
   }) async {
     final uri = Uri.parse('$baseUrl/feedback');
-    final token = await TokenStorage.getToken(); // 로그인 연동(선택)
     final req = FeedbackRequest(
       content: content,
       category: category,
@@ -25,26 +25,18 @@ class FeedbackRepositoryImpl implements FeedbackRepository {
       deviceInfo: deviceInfo,
     );
 
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-
     try {
-      if (kDebugMode) {
-        print('[POST /feedback] body: ${jsonEncode(req.toJson())}');
-      }
-      final res = await http.post(uri, headers: headers, body: jsonEncode(req.toJson()));
+      final res = await _client.postJson(uri, body: req.toJson());
 
       if (res.statusCode == 200) return true;
 
       if (kDebugMode) {
-        print('[X] sendFeedback 실패: ${res.statusCode} / ${res.body}');
+        debugPrint('[X] sendFeedback 실패: ${res.statusCode}');
       }
       return false;
     } catch (e) {
       if (kDebugMode) {
-        print('[X] sendFeedback 예외: $e');
+        debugPrint('[X] sendFeedback 예외: ${e.runtimeType}');
       }
       return false;
     }

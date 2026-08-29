@@ -7,23 +7,20 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import 'package:http_parser/http_parser.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import '../models/media_models.dart';
-
-/// 외부에서 액세스 토큰을 얻어오는 함수 시그니처
-typedef TokenProvider = Future<String?> Function();
 
 class MediaApiClient {
   /// 예: 'http://10.0.2.2:8080' 또는 배포용 베이스 URL
   final String baseUrl;
 
-  /// 필요 시 Authorization 헤더에 주입
-  final TokenProvider? tokenProvider;
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  /// multipart 재시도는 원 request 를 재사용하지 않고 새로 조립한다 —
+  /// 재사용하면 `StateError: Can't finalize a finalized Request.` 다.
+  final AuthedClient _client;
 
-  MediaApiClient({required this.baseUrl, this.tokenProvider});
-
-  /// 토큰이 있으면 Authorization 헤더 추가
-  Map<String, String> _authHeaders(String? token) =>
-      token == null ? {} : {'Authorization': 'Bearer $token'};
+  MediaApiClient({required this.baseUrl, AuthedClient? client})
+    : _client = client ?? AuthedClient.instance;
 
   /// POST /media
   /// - 필드명은 서버와 반드시 동일: files, category, (refType|refId)
@@ -54,12 +51,8 @@ class MediaApiClient {
     if (refType != null) req.fields['refType'] = refType;
     if (refId != null) req.fields['refId'] = refId;
 
-    // 인증 헤더
-    final token = tokenProvider == null ? null : await tokenProvider!();
-    req.headers.addAll(_authHeaders(token));
-
     // 전송 → 표준 Response로 변환
-    final streamed = await req.send();
+    final streamed = await _client.send(req);
     final res = await http.Response.fromStream(streamed);
 
     // 2xx면 성공으로 간주
@@ -92,10 +85,7 @@ class MediaApiClient {
       ),
     );
 
-    final token = tokenProvider == null ? null : await tokenProvider!();
-    req.headers.addAll(_authHeaders(token));
-
-    final res = await http.Response.fromStream(await req.send());
+    final res = await http.Response.fromStream(await _client.send(req));
     if (res.statusCode ~/ 100 == 2) {
       final Map<String, dynamic> j = jsonDecode(res.body);
       // 서버는 category를 반환하지 않으므로 임시값을 넣거나
@@ -112,11 +102,7 @@ class MediaApiClient {
 
   /// DELETE /media/{mediaId}
   Future<void> deleteById(int mediaId) async {
-    final token = tokenProvider == null ? null : await tokenProvider!();
-    final res = await http.delete(
-      Uri.parse('$baseUrl/media/$mediaId'),
-      headers: _authHeaders(token),
-    );
+    final res = await _client.deleteJson(Uri.parse('$baseUrl/media/$mediaId'));
     if (res.statusCode != 204) {
       throw Exception('delete failed: ${res.statusCode} ${res.body}');
     }
@@ -128,9 +114,8 @@ class MediaApiClient {
     required String refType,
     required String refId,
   }) async {
-    final token = tokenProvider == null ? null : await tokenProvider!();
     final uri = Uri.parse('$baseUrl/media?refType=$refType&refId=$refId');
-    final res = await http.delete(uri, headers: _authHeaders(token));
+    final res = await _client.deleteJson(uri);
     if (res.statusCode != 204) {
       throw Exception('deleteByRef failed: ${res.statusCode} ${res.body}');
     }

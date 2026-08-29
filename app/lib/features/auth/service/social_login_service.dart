@@ -41,10 +41,16 @@ class SocialLoginService {
       // ※ result 를 로그로 찍지 마라 — URL 자체에 토큰이 들어 있다.
 
       final token = tokenFromCallback(result);
+      // #9 부터 딥링크는 `?token=<AT>&refresh=<RT>` 다. refresh 가 없다고 로그인을
+      // 실패로 보지는 않는다 — AT 만으로도 로그인은 성립하고, 갱신만 못 한다.
+      final refresh = refreshFromCallback(result);
 
       if (token != null) {
-        // 4. 추출한 JWT 토큰을 보안 저장소에 저장
-        await SecureTokenStore.instance.writeAccessToken(token);
+        // 4. 추출한 토큰을 보안 저장소에 저장 (AT + RT)
+        await SecureTokenStore.instance.writeTokens(
+          accessToken: token,
+          refreshToken: refresh,
+        );
         if (kDebugMode) {
           debugPrint('[SocialLogin] 토큰 저장 완료');
         }

@@ -1,20 +1,17 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 /// 간단 HTTP 클라이언트 (JSON POST만)
+///
+/// 토큰 공급자를 직접 들고 있지 않다 — 인증 헤더 부착도 401 갱신도
+/// [AuthedClient] 가 한다 (#11). `/api/curation/**` 는 백엔드에서 인증 필수다.
 class ApiClient {
   final String baseUrl;
-  final Map<String, String> defaultHeaders;
+  final AuthedClient _client;
 
-  /// JWT 토큰 공급자. 지정되면 매 요청에 `Authorization: Bearer ...` 부착.
-  /// (`/api/curation/**` 는 백엔드에서 인증 필수)
-  final Future<String?> Function()? tokenProvider;
-
-  const ApiClient({
-    required this.baseUrl,
-    this.defaultHeaders = const {'Content-Type': 'application/json'},
-    this.tokenProvider,
-  });
+  ApiClient({required this.baseUrl, AuthedClient? client})
+    : _client = client ?? AuthedClient.instance;
 
   Future<Map<String, dynamic>> postJson(
     String path, {
@@ -23,15 +20,8 @@ class ApiClient {
     Duration timeout = const Duration(seconds: 15),
   }) async {
     final uri = Uri.parse('$baseUrl$path');
-    final token = await tokenProvider?.call();
-    final merged = {
-      ...defaultHeaders,
-      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      if (headers != null) ...headers,
-    };
-    final jsonBody = body is String ? body : jsonEncode(body);
-    final res = await http
-        .post(uri, headers: merged, body: jsonBody)
+    final res = await _client
+        .postJson(uri, body: body, headers: headers)
         .timeout(timeout);
     if (res.statusCode ~/ 100 != 2) {
       throw Exception('HTTP ${res.statusCode} ${res.body}');

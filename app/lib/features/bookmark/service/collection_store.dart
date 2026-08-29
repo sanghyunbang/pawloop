@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 /// 컬렉션 1개 요약 정보
 class CollectionInfo {
@@ -43,17 +41,8 @@ class CollectionStore extends ChangeNotifier {
 
   final String _base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
 
-  Future<Map<String, String>> _headers() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) {
-      throw Exception('로그인이 필요합니다');
-    }
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
-  }
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  final AuthedClient _client = AuthedClient.instance;
 
   final List<CollectionInfo> _items = [];
   List<CollectionInfo> get items => List.unmodifiable(_items);
@@ -63,10 +52,7 @@ class CollectionStore extends ChangeNotifier {
 
   /// 서버에서 최신 목록으로 동기화
   Future<void> refresh() async {
-    final res = await http.get(
-      Uri.parse('$_base/collections'),
-      headers: await _headers(),
-    );
+    final res = await _client.getJson(Uri.parse('$_base/collections'));
     if (res.statusCode != 200) {
       throw Exception('컬렉션 조회 실패(${res.statusCode})');
     }
@@ -79,10 +65,9 @@ class CollectionStore extends ChangeNotifier {
 
   /// 컬렉션 생성
   Future<int?> create(String name) async {
-    final res = await http.post(
+    final res = await _client.postJson(
       Uri.parse('$_base/collections'),
-      headers: await _headers(),
-      body: jsonEncode({'name': name}),
+      body: {'name': name},
     );
     if (res.statusCode == 200 || res.statusCode == 201) {
       try {
@@ -103,10 +88,9 @@ class CollectionStore extends ChangeNotifier {
 
   /// 이름 변경
   Future<void> rename(int id, String name) async {
-    final res = await http.put(
+    final res = await _client.putJson(
       Uri.parse('$_base/collections/$id'),
-      headers: await _headers(),
-      body: jsonEncode({'name': name}),
+      body: {'name': name},
     );
     if (res.statusCode != 200) {
       throw Exception('컬렉션 이름 변경 실패(${res.statusCode})');
@@ -120,10 +104,7 @@ class CollectionStore extends ChangeNotifier {
 
   /// 컬렉션 삭제
   Future<void> remove(int id) async {
-    final res = await http.delete(
-      Uri.parse('$_base/collections/$id'),
-      headers: await _headers(),
-    );
+    final res = await _client.deleteJson(Uri.parse('$_base/collections/$id'));
     if (res.statusCode != 204 && res.statusCode != 200) {
       throw Exception('컬렉션 삭제 실패(${res.statusCode})');
     }
@@ -134,10 +115,9 @@ class CollectionStore extends ChangeNotifier {
   /// ★ 컬렉션에 아이템 추가 (하트 바텀시트에서 사용)
   /// 백엔드 엔드포인트 가정: POST /collections/{id}/items  body: { "contentId": "..." }
   Future<void> addItem(int collectionId, String contentId) async {
-    final res = await http.post(
+    final res = await _client.postJson(
       Uri.parse('$_base/collections/$collectionId/items'),
-      headers: await _headers(),
-      body: jsonEncode({'contentId': contentId}),
+      body: {'contentId': contentId},
     );
     if (res.statusCode != 200 &&
         res.statusCode != 201 &&
@@ -159,9 +139,8 @@ class CollectionStore extends ChangeNotifier {
 
   /// (옵션) 컬렉션에서 아이템 제거가 필요하면 사용
   Future<void> removeItem(int collectionId, String contentId) async {
-    final res = await http.delete(
+    final res = await _client.deleteJson(
       Uri.parse('$_base/collections/$collectionId/items/$contentId'),
-      headers: await _headers(),
     );
     if (res.statusCode != 200 && res.statusCode != 204) {
       throw Exception('컬렉션 항목 제거 실패(${res.statusCode})');

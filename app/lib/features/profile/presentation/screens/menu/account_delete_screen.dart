@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
+import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
 import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 
 class AccountDeleteScreen extends StatelessWidget {
@@ -20,7 +21,7 @@ class AccountDeleteScreen extends StatelessWidget {
     if (ok != true || !context.mounted) return;
 
     final repo = AuthRepositoryImpl();
-    final token = await TokenStorage.getToken();
+    final token = await SecureTokenStore.instance.readAccessToken();
 
     if (token == null) {
       await TokenStorage.clearToken();
@@ -28,7 +29,7 @@ class AccountDeleteScreen extends StatelessWidget {
       return;
     }
 
-    final success = await repo.deleteMyAccount(token);
+    final success = await repo.deleteMyAccount();
 
     if (!context.mounted) return;
 

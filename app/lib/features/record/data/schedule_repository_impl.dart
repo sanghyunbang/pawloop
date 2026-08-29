@@ -1,53 +1,35 @@
 import 'dart:convert';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:heat_trip_flutter/features/record/data/dto/schedule_request.dart';
 import 'package:heat_trip_flutter/features/record/data/model/schedule_response.dart';
-import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/errors/app_exception.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 class ScheduleRepositoryImpl {
   final String baseUrl = Env.apiBase ?? '';
 
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  final AuthedClient _client = AuthedClient.instance;
+
   // ------------------- 스케쥴 생성
   Future<String?> schedulePost(ScheduleRequest request) async {
-    final token = await TokenStorage.getToken();
-    if (token == null) return '[schedulePost] 인증 정보가 없습니다.';
-
     final url = Uri.parse('$baseUrl/public/schedules');
 
-    final response = await http.post(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(request.toJson()),
-    );
+    final response = await _client.postJson(url, body: request.toJson());
 
     if (response.statusCode == 201) {
       return null;
     } else {
-      print('[X] 포스팅 실패: ${response.statusCode} / ${response.body}');
+      if (kDebugMode) debugPrint('[X] 포스팅 실패: ${response.statusCode}');
       return '저장 실패 (${response.statusCode})';
     }
   }
 
   // ------------------- 스케쥴 전체 조회
   Future<List<ScheduleResponse>> fetchSchedules() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) {
-      throw const AuthRequiredException(); // 👈 깔끔한 메시지만
-    }
-
     final url = Uri.parse('$baseUrl/public/schedules');
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    final response = await _client.getJson(url);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       final List<dynamic> data = jsonDecode(response.body);
@@ -62,22 +44,13 @@ class ScheduleRepositoryImpl {
 
   // ------------------- 스케쥴 삭제
   Future<String?> deleteSchedule(int scheduleId) async {
-    final token = await TokenStorage.getToken();
-    if (token == null) return '[deleteSchedule] 인증 정보가 없습니다.';
-
     final url = Uri.parse('$baseUrl/public/schedules/$scheduleId');
-    final response = await http.delete(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    final response = await _client.deleteJson(url);
 
     if (response.statusCode == 200 || response.statusCode == 204) {
       return null;
     } else {
-      print('[X] 삭제 실패: ${response.statusCode} / ${response.body}');
+      if (kDebugMode) debugPrint('[X] 삭제 실패: ${response.statusCode}');
       return '삭제 실패 (${response.statusCode})';
     }
   }

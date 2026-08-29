@@ -1,10 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/record/data/schedule_repository_impl.dart';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
-import 'package:http/http.dart' as http;
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/features/record/data/model/schedule_response.dart';
 import 'package:heat_trip_flutter/features/record/presentation/widgets/record_ui.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
@@ -45,9 +43,7 @@ class _ScheduleEditScreenState extends State<ScheduleEditScreen> {
 
   Future<void> _fetchUser() async {
     try {
-      final token = await TokenStorage.getToken();
-      if (token == null) return setState(() => _authorName = '알 수 없음');
-      final user = await authRepository.getMyProfile(token);
+      final user = await authRepository.getMyProfile();
       setState(() => _authorName = (user?['name'] ?? '알 수 없음'));
     } catch (_) {
       setState(() => _authorName = '알 수 없음');
@@ -89,7 +85,6 @@ class _ScheduleEditScreenState extends State<ScheduleEditScreen> {
   }
 
   Future<void> _submit() async {
-    final token = await TokenStorage.getToken();
     if (!(_formKey.currentState!.validate()) || _range == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -107,31 +102,20 @@ class _ScheduleEditScreenState extends State<ScheduleEditScreen> {
         ? Uri.parse('$baseUrl/public/schedules/${widget.schedule!.scheduleId}')
         : Uri.parse('$baseUrl/public/schedules');
 
-    final body = jsonEncode({
+    final body = {
       "title": _titleController.text,
       "dateFrom": _fm.format(_range!.start),
       "dateTo": _fm.format(_range!.end),
       "content": _descriptionController.text,
-    });
+    };
+
+    // 인증 헤더 부착과 401 갱신은 전부 AuthedClient 가 한다 (#11).
+    final client = AuthedClient.instance;
 
     try {
       final res = await (isEditing
-          ? http.put(
-              url,
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
-              },
-              body: body,
-            )
-          : http.post(
-              url,
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
-              },
-              body: body,
-            ));
+          ? client.putJson(url, body: body)
+          : client.postJson(url, body: body));
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
