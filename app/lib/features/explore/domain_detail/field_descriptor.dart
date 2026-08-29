@@ -1,5 +1,7 @@
 /// field_descriptor.dart
 /// 타입별 상세 항목 스키마 정의에 사용하는 구조체 + 포맷터 유틸
+library;
+
 import 'package:flutter/material.dart';
 
 typedef ValueFormatter = String Function(dynamic);

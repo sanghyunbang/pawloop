@@ -25,8 +25,7 @@ class CollectionInfo {
       id: (j['id'] as num).toInt(),
       name: (j['name'] ?? '').toString(),
       count: (j['count'] as num?)?.toInt() ?? 0,
-      latestItemContentId:
-      j['latestItemContentId'] == null ? null : j['latestItemContentId'].toString(),
+      latestItemContentId: j['latestItemContentId']?.toString(),
     );
   }
 
@@ -43,8 +42,7 @@ class CollectionStore extends ChangeNotifier {
   CollectionStore._internal();
   static final CollectionStore instance = CollectionStore._internal();
 
-  final String _base =
-  (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
+  final String _base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
 
   Future<Map<String, String>> _headers() async {
     final token = await TokenStorage.getToken();
@@ -66,7 +64,10 @@ class CollectionStore extends ChangeNotifier {
 
   /// 서버에서 최신 목록으로 동기화
   Future<void> refresh() async {
-    final res = await http.get(Uri.parse('$_base/collections'), headers: await _headers());
+    final res = await http.get(
+      Uri.parse('$_base/collections'),
+      headers: await _headers(),
+    );
     if (res.statusCode != 200) {
       throw Exception('컬렉션 조회 실패(${res.statusCode})');
     }
@@ -120,8 +121,10 @@ class CollectionStore extends ChangeNotifier {
 
   /// 컬렉션 삭제
   Future<void> remove(int id) async {
-    final res =
-    await http.delete(Uri.parse('$_base/collections/$id'), headers: await _headers());
+    final res = await http.delete(
+      Uri.parse('$_base/collections/$id'),
+      headers: await _headers(),
+    );
     if (res.statusCode != 204 && res.statusCode != 200) {
       throw Exception('컬렉션 삭제 실패(${res.statusCode})');
     }
@@ -137,7 +140,9 @@ class CollectionStore extends ChangeNotifier {
       headers: await _headers(),
       body: jsonEncode({'contentId': contentId}),
     );
-    if (res.statusCode != 200 && res.statusCode != 201 && res.statusCode != 204) {
+    if (res.statusCode != 200 &&
+        res.statusCode != 201 &&
+        res.statusCode != 204) {
       throw Exception('컬렉션 항목 추가 실패(${res.statusCode})');
     }
 

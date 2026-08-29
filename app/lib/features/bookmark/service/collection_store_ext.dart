@@ -4,7 +4,6 @@
 // 백엔드에 배치 엔드포인트가 있으면 우선 사용하고, 없으면 컬렉션들을 순회하며 제거
 
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';

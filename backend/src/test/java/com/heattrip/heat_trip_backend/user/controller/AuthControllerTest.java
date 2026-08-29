@@ -5,6 +5,7 @@ import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,8 +13,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -86,5 +89,25 @@ class AuthControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getNickname()).isEqualTo("new-nick");
         verify(userService).updateProfile("test1234@test.com", request);
+    }
+
+
+    @Test
+    @DisplayName("로그아웃 : 토큰의 사용자를 로그아웃 처리하고 204를 반환한다.")
+    void logout_success() {
+        // given - 요청 / 토큰 준비 (HttpServletRequest는 mock으로)
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader("Authorization"))
+                .thenReturn("Bearer valid.token");
+        when(userService.emailFromAuth("Bearer valid.token"))
+                .thenReturn("bori@x.com");
+
+        // when - 컨트롤러 메서드 직접 호출(HTTP 없이)
+        ResponseEntity<?> res = authController.logout(request);
+
+        // then - 결과 검증
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT); // 204 나오는지
+
+        verify(userService).logout("bori@x.com");
     }
 }

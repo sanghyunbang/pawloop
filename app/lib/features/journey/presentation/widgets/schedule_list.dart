@@ -9,7 +9,8 @@ class ScheduleList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) return const Center(child: Text('No schedules to show.'));
+    if (items.isEmpty)
+      return const Center(child: Text('No schedules to show.'));
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       itemCount: items.length,
@@ -37,7 +38,8 @@ class ScheduleCard extends StatelessWidget {
       ScheduleStatus.completed => Colors.blueGrey,
     };
 
-    final hero = schedule.heroImageUrl ??
+    final hero =
+        schedule.heroImageUrl ??
         'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1600&auto=format&fit=crop';
 
     return InkWell(
@@ -47,7 +49,7 @@ class ScheduleCard extends StatelessWidget {
         context.pushNamed(
           'journeyDetail',
           pathParameters: {'id': schedule.id.toString()}, // ✅ int → String
-          extra: schedule,                                 // (선택) 초기 렌더용
+          extra: schedule, // (선택) 초기 렌더용
         );
       },
       child: Card(
@@ -86,14 +88,20 @@ class ScheduleCard extends StatelessWidget {
                     right: 10,
                     top: 10,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.55),
+                        color: Colors.black.withValues(alpha: 0.55),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
                         statusLabel,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -102,8 +110,11 @@ class ScheduleCard extends StatelessWidget {
                     bottom: 8,
                     child: CircleAvatar(
                       radius: 16,
-                      backgroundColor: Colors.black.withOpacity(0.5),
-                      child: const Icon(Icons.chevron_right, color: Colors.white),
+                      backgroundColor: Colors.black.withValues(alpha: 0.5),
+                      child: const Icon(
+                        Icons.chevron_right,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ],
@@ -115,25 +126,37 @@ class ScheduleCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(schedule.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  Text(
+                    schedule.title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 6),
-                  Row(children: [
-                    const Icon(Icons.place, size: 16),
-                    const SizedBox(width: 6),
-                    Text(schedule.location ?? '—'),
-                  ]),
+                  Row(
+                    children: [
+                      const Icon(Icons.place, size: 16),
+                      const SizedBox(width: 6),
+                      Text(schedule.location ?? '—'),
+                    ],
+                  ),
                   const SizedBox(height: 8),
-                  Row(children: [
-                    const Icon(Icons.calendar_month, size: 16),
-                    const SizedBox(width: 6),
-                    Text(schedule.dateLabel),
-                  ]),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_month, size: 16),
+                      const SizedBox(width: 6),
+                      Text(schedule.dateLabel),
+                    ],
+                  ),
                   const SizedBox(height: 8),
-                  Row(children: [
-                    const Icon(Icons.photo_library_outlined, size: 16),
-                    const SizedBox(width: 6),
-                    Text('${schedule.memoriesCount} memories captured'),
-                  ]),
+                  Row(
+                    children: [
+                      const Icon(Icons.photo_library_outlined, size: 16),
+                      const SizedBox(width: 6),
+                      Text('${schedule.memoriesCount} memories captured'),
+                    ],
+                  ),
                   const SizedBox(height: 10),
                   _ScheduleTags(tags: schedule.tags),
                 ],

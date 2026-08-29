@@ -1,6 +1,7 @@
 /// lib/features/explore/presentation/widgets/place_card/badges.dart
 ///
 /// 상단바에서 사용하는 작은 뱃지들.
+library;
 
 import 'package:flutter/material.dart';
 
@@ -24,22 +25,32 @@ class BadgeChip extends StatelessWidget {
     final double padV = small ? 3 : 4;
     final double iconSize = small ? 12 : 14;
     final double fontSize = small ? 10 : 11;
-    final Color fg = Colors.black.withOpacity(muted ? 0.58 : 0.87);
-    final Color bg = Colors.white.withOpacity(muted ? 0.70 : 0.92);
+    final Color fg = Colors.black.withValues(alpha: muted ? 0.58 : 0.87);
+    final Color bg = Colors.white.withValues(alpha: muted ? 0.70 : 0.92);
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(8),
-        boxShadow: muted ? const [] : const [BoxShadow(color: Colors.black12, blurRadius: 2)],
+        boxShadow: muted
+            ? const []
+            : const [BoxShadow(color: Colors.black12, blurRadius: 2)],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: iconSize, color: fg),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600, color: fg, height: 1.05)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+              color: fg,
+              height: 1.05,
+            ),
+          ),
         ],
       ),
     );
@@ -55,11 +66,14 @@ class BadgePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
+        color: Colors.white.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(999),
         boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
       ),
-      child: Text(text, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+      ),
     );
   }
 }

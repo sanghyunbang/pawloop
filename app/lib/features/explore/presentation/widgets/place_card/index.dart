@@ -2,6 +2,7 @@
 ///
 /// PlaceCard 관련 공개 위젯/타입을 한 곳에서 export.
 /// 외부에서는 이 파일만 import하면 된다.
+library;
 
 export 'place_card.dart';
 export 'place_card_vertical.dart';

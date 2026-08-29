@@ -80,9 +80,9 @@ Future<void> main() async {
         margin: const EdgeInsets.all(12),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(.06),
+          color: Colors.red.withValues(alpha: .06),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red.withOpacity(.3)),
+          border: Border.all(color: Colors.red.withValues(alpha: .3)),
         ),
         child: SingleChildScrollView(
           child: Text(

@@ -1,5 +1,7 @@
 /// hours_card.dart
 /// - 요일 정렬(월→일) 후, 좌우 정렬로 깔끔하게 표기
+library;
+
 import 'package:flutter/material.dart';
 
 class HoursCard extends StatelessWidget {

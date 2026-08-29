@@ -158,6 +158,12 @@ public class UserService {
         // 필요 시: userRepository.flush();
     }
 
+    /** 사용자 로그아웃 */
+    @Transactional
+    public void logout(String email) {
+        
+    }
+
      // helpers
     private static String safeLower(String s) { return s == null ? null : s.toLowerCase(); }
     private static String nvl(String s, String d) { return (s == null || s.isBlank()) ? d : s; }

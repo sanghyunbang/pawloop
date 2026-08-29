@@ -7,6 +7,7 @@
 /// 상위 계층(PlaceCard → Router → ExploreDetailScreen → DetailVM → Repository)에서
 /// 흘러 내려온 값을 '그대로' 사용합니다.
 /// ─────────────────────────────────────────────────────────────────────────────
+library;
 
 import 'dart:convert';
 import 'dart:async' as dart_async; // [①] TimeoutException 이름 충돌 방지 별칭

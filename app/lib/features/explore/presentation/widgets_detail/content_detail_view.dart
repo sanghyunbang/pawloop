@@ -1,5 +1,7 @@
 /// content_detail_view.dart
 /// detailSpec(스키마)에 따라 detailRaw의 값이 있는 항목만 자동으로 렌더링
+library;
+
 import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/features/explore/domain/entity_detail/place_detail.dart';
 import 'package:heat_trip_flutter/features/explore/domain_detail/detail_spec.dart';

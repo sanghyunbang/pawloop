@@ -57,7 +57,7 @@ class _NewDiaryScreenState extends State<NewDiaryScreen> {
   int _moodIndex = 0;
 
   Future<void> _addPhotoFromDevice() async {
-    final List<XFile>? pickedFiles = await _picker.pickMultiImage();
+    final List<XFile> pickedFiles = await _picker.pickMultiImage();
     if (pickedFiles != null && pickedFiles.isNotEmpty) {
       setState(() {
         _imageFiles.addAll(pickedFiles.map((xfile) => File(xfile.path)));
@@ -88,7 +88,6 @@ class _NewDiaryScreenState extends State<NewDiaryScreen> {
 
         return Theme(
           data: base.copyWith(
-            useMaterial3: true,
             colorScheme: ColorScheme.fromSeed(
               seedColor: seed,
               brightness: base.brightness,
@@ -489,7 +488,7 @@ class _PhotoFileGrid extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(.5),
+                    color: Colors.black.withValues(alpha: .5),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   padding: const EdgeInsets.all(4),
@@ -584,7 +583,7 @@ class _PhotoGrid extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(.5),
+                    color: Colors.black.withValues(alpha: .5),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   padding: const EdgeInsets.all(4),

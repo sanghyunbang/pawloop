@@ -4,7 +4,7 @@ import '../../domain/models.dart';
 /// 상단 통계 카드 (나의 총 여행 수 · 나의 총 일기 수)
 class StatsCard extends StatelessWidget {
   final JourneyStats stats;
-  const StatsCard({required this.stats});
+  const StatsCard({super.key, required this.stats});
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +22,7 @@ class StatsCard extends StatelessWidget {
                 child: _StatItem(
                   icon: Icons.flight_takeoff,
                   iconColor: Colors.indigo,
-                  iconSize: 28,                // ⬅ 아이콘 크게
+                  iconSize: 28, // ⬅ 아이콘 크게
                   value: '${stats.trips}',
                   label: '나의 총 여행 수',
                 ),
@@ -31,7 +31,7 @@ class StatsCard extends StatelessWidget {
                 child: _StatItem(
                   icon: Icons.menu_book_rounded,
                   iconColor: Colors.purple,
-                  iconSize: 28,                // ⬅ 아이콘 크게
+                  iconSize: 28, // ⬅ 아이콘 크게
                   value: '${stats.diaryEntries}',
                   label: '나의 총 일기 수',
                 ),
@@ -75,7 +75,7 @@ class _StatItem extends StatelessWidget {
             Text(
               value,
               style: const TextStyle(
-                fontSize: 20,                 // ⬅ 숫자 조금 키움
+                fontSize: 20, // ⬅ 숫자 조금 키움
                 fontWeight: FontWeight.w800,
                 color: Colors.black,
               ),
@@ -86,7 +86,7 @@ class _StatItem extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontSize: 13,                    // ⬅ 라벨도 살짝 키움
+            fontSize: 13, // ⬅ 라벨도 살짝 키움
             color: cs.onSurfaceVariant,
           ),
         ),

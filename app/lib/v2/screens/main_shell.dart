@@ -4,7 +4,7 @@ import '../theme/app_tokens.dart';
 import 'today_screen.dart';
 import 'explore_screen.dart';
 import 'feed_screen.dart';
-import 'insight_screen.dart';
+import 'chat_list_screen.dart';
 import 'walk_tracking_screen.dart';
 
 /// 루트 탭 상태. 푸시된 화면(result 등)에서도 탭을 바꿀 수 있게 전역 보관.
@@ -43,7 +43,7 @@ class MainShell extends StatelessWidget {
               screen = const FeedScreen();
               break;
             case 3:
-              screen = const InsightScreen();
+              screen = const ChatListScreen();
               break;
             default:
               screen = const TodayScreen();
@@ -107,8 +107,8 @@ class _ShellNav extends StatelessWidget {
                       item(Icons.home_rounded, '홈', 0),
                       item(Icons.map_outlined, '지도', 1),
                       const SizedBox(width: 56),
-                      item(Icons.chat_bubble_outline, '커뮤니티', 2),
-                      item(Icons.bar_chart_rounded, '통계', 3),
+                      item(Icons.forum_outlined, '커뮤니티', 2),
+                      item(Icons.chat_bubble_outline, '채팅', 3),
                     ]),
                   ),
                 ),
@@ -130,7 +130,7 @@ class _ShellNav extends StatelessWidget {
                       border: Border.all(color: const Color(0xA6FFFFFF), width: 3),
                       boxShadow: const [BoxShadow(color: Color(0x80D89BFF), blurRadius: 22, offset: Offset(0, 10))],
                     ),
-                    child: const Icon(Icons.edit, color: Colors.white, size: 25),
+                    child: const Icon(Icons.directions_walk_rounded, color: Colors.white, size: 26),
                   ),
                 ),
               ),
