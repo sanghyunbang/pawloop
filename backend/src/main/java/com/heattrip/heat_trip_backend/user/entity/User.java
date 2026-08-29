@@ -105,6 +105,21 @@ public class User {
     @Column(unique = true, nullable = true)
     private String email;
 
+    /**
+     * 로그인용 비밀번호(BCrypt 해시).
+     *
+     * <p><b>절대 직렬화하지 않는다.</b> 이 엔티티는 {@code UserResponse} 를 거치지 않고 응답에
+     * 실리는 경로가 있다 — {@code Schedule.user} 가 그렇다. {@code POST /public/schedules} 의
+     * 응답이 {@code Schedule} 엔티티를 통째로 내보내면서 이 해시가 그대로 나가고 있었다(실측 확인).
+     * 로그·예외 메시지에서 식별자를 걷어낸 규약(#6)이 응답 본문에서 뚫려 있던 자리다.
+     *
+     * <p>여기(엔티티 필드)에 붙이는 이유는 소비처가 아니라 원천을 막기 위해서다 — 아홉 번째
+     * 컨트롤러가 엔티티를 그대로 반환해도 해시는 나가지 않는다. 역직렬화도 함께 막히지만
+     * {@code User} 를 {@code @RequestBody} 로 받는 곳은 없다(확인함). 가입 비밀번호는
+     * {@code SignupRequest} 로 들어온다.
+     * 잠그는 테스트: ScheduleWriteBoundaryIntegrationTest.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String password; // 로그인용 비밀번호
 
     private String travelType;

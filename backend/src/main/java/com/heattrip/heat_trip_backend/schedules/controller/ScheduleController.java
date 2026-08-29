@@ -58,6 +58,19 @@ public class ScheduleController {
     // --------------등록
     @PostMapping("/schedules")
     public ResponseEntity<?> createSchedule(@RequestBody Schedule schedule, @CurrentUser User user) {
+        // 클라이언트가 실어 보낸 식별자를 버린다 — 이것이 없으면 "등록"이 남의 행 덮어쓰기가 된다.
+        //
+        // 본문을 엔티티(@RequestBody Schedule)로 그대로 받기 때문에 scheduleId 도 함께 바인딩된다.
+        // scheduleService.save 는 JpaRepository.save 라서 id 가 실려 있으면 insert 가 아니라
+        // merge(update) 다. 그래서 A 의 토큰으로 {"scheduleId": <B 의 행>} 를 보내면 아래
+        // setUser(user) 가 user_id 까지 A 로 바꾼 채 B 의 행을 덮어썼다 — 소유권 탈취이고
+        // 피해자의 원본은 복구되지 않는다(실측 확인).
+        //
+        // 근본 해결은 생성 전용 요청 DTO 를 받는 것이지만 그건 계약(응답 형태)까지 건드린다.
+        // 여기서는 "등록은 언제나 insert 다"라는 불변식만 한 줄로 세운다.
+        // 잠그는 테스트: ScheduleWriteBoundaryIntegrationTest.
+        schedule.setScheduleId(null);
+
         // 작성자 정보 주입
         schedule.setUser(user);
 
