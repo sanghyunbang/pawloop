@@ -1,4 +1,6 @@
 /// amenity_utils.dart
+library;
+
 import 'package:flutter/material.dart';
 
 IconData amenityIcon(String amenity) {

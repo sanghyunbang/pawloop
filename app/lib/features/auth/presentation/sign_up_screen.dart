@@ -25,17 +25,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _nicknameController = TextEditingController();
   final _nameController = TextEditingController();
 
-  String _gender = 'male';          // 'male' | 'female' | 'other'
-  String _ageGroup = 'over14';      // 'over14' | 'under14'
+  String _gender = 'male'; // 'male' | 'female' | 'other'
+  String _ageGroup = 'over14'; // 'over14' | 'under14'
 
   bool _isLoading = false;
   bool _obscurePw = true;
 
   // Consents
   bool _agreeAll = false;
-  bool _agreeTos = false;         // 필수
-  bool _agreePrivacy = false;     // 필수
-  bool _agreeMarketing = false;   // 선택
+  bool _agreeTos = false; // 필수
+  bool _agreePrivacy = false; // 필수
+  bool _agreeMarketing = false; // 선택
 
   final _authRepository = AuthRepositoryImpl();
 
@@ -96,9 +96,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const SizedBox(height: 8),
               Expanded(
                 child: SingleChildScrollView(
@@ -106,7 +110,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   child: Text(
                     body,
                     style: const TextStyle(
-                        fontSize: 13.5, height: 1.45, color: Colors.black87),
+                      fontSize: 13.5,
+                      height: 1.45,
+                      color: Colors.black87,
+                    ),
                   ),
                 ),
               ),
@@ -121,7 +128,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   child: const Text('확인'),
                 ),
@@ -137,9 +145,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     // 프런트 검증: 필수 동의 2개
     if (!_agreeTos || !_agreePrivacy) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('필수 동의 항목(이용약관/개인정보)을 확인해 주세요.'),
-        ),
+        const SnackBar(content: Text('필수 동의 항목(이용약관/개인정보)을 확인해 주세요.')),
       );
       return;
     }
@@ -154,10 +160,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       password: _passwordController.text.trim(),
       nickname: _nicknameController.text.trim(),
       name: _nameController.text.trim(),
-      gender: _gender,               // 'male' | 'female' | 'other'
-
+      gender: _gender, // 'male' | 'female' | 'other'
       // 아래 필드가 RegisterRequest에 반드시 존재해야 함
-      ageGroup: _ageGroup,           // 'over14' | 'under14'
+      ageGroup: _ageGroup, // 'over14' | 'under14'
       agreeTos: _agreeTos,
       agreePrivacy: _agreePrivacy,
       agreeMarketing: _agreeMarketing,
@@ -174,14 +179,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = false);
 
     if (success) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('회원가입 완료')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('회원가입 완료')));
       await Future.delayed(const Duration(milliseconds: 250));
       if (!mounted) return;
       context.goNamed('login');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('회원가입 실패. 다시 시도해주세요.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('회원가입 실패. 다시 시도해주세요.')));
     }
   }
 
@@ -218,17 +225,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Sign Up',
-                          style: TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.black87)),
+                      Text(
+                        'Sign Up',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
+                        ),
+                      ),
                       SizedBox(height: 6),
-                      Text('Please sign up to get started',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.black54,
-                              fontWeight: FontWeight.w500)),
+                      Text(
+                        'Please sign up to get started',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.black54,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -244,9 +257,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(.06),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6))
+                      color: Colors.black.withValues(alpha: .06),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
                   ],
                 ),
                 child: Padding(
@@ -284,8 +298,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 hint: '••••••••',
                                 obscureText: _obscurePw,
                                 fill: _fieldFill,
-                                validator: (value) => value == null ||
-                                        value.length < 8
+                                validator: (value) =>
+                                    value == null || value.length < 8
                                     ? '8자 이상 입력하세요'
                                     : null,
                                 suffixIcon: IconButton(
@@ -306,8 +320,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 controller: _nicknameController,
                                 hint: '닉네임을 입력하세요',
                                 fill: _fieldFill,
-                                validator: (value) => value == null ||
-                                        value.isEmpty
+                                validator: (value) =>
+                                    value == null || value.isEmpty
                                     ? '닉네임을 입력하세요'
                                     : null,
                               ),
@@ -318,8 +332,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 controller: _nameController,
                                 hint: '이름을 입력하세요',
                                 fill: _fieldFill,
-                                validator: (value) => value == null ||
-                                        value.isEmpty
+                                validator: (value) =>
+                                    value == null || value.isEmpty
                                     ? '이름을 입력하세요'
                                     : null,
                               ),
@@ -387,16 +401,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   color: const Color(0xFFF9FAFB),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                      color: const Color(0xFFE5E7EB)),
+                                    color: const Color(0xFFE5E7EB),
+                                  ),
                                 ),
                                 child: Column(
                                   children: [
                                     CheckboxListTile(
                                       value: _agreeAll,
                                       onChanged: _toggleAgreeAll,
-                                      title: const Text('전체 동의',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w800)),
+                                      title: const Text(
+                                        '전체 동의',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
                                       controlAffinity:
                                           ListTileControlAffinity.leading,
                                     ),
@@ -405,38 +423,42 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     _consentRow(
                                       value: _agreeTos,
                                       onChanged: (v) {
-                                        setState(
-                                            () => _agreeTos = v ?? false);
+                                        setState(() => _agreeTos = v ?? false);
                                         _syncAgreeAllFromChildren();
                                       },
                                       label: '이용약관 동의 (필수)',
                                       onView: () => _openTermsFromAsset(
-                                          '이용약관',
-                                          'assets/terms/terms_ko.md'),
+                                        '이용약관',
+                                        'assets/terms/terms_ko.md',
+                                      ),
                                     ),
                                     _consentRow(
                                       value: _agreePrivacy,
                                       onChanged: (v) {
-                                        setState(() =>
-                                            _agreePrivacy = v ?? false);
+                                        setState(
+                                          () => _agreePrivacy = v ?? false,
+                                        );
                                         _syncAgreeAllFromChildren();
                                       },
                                       label: '개인정보 처리방침 동의 (필수)',
                                       onView: () => _openTermsFromAsset(
-                                          '개인정보처리방침',
-                                          'assets/terms/privacy_ko.md'),
+                                        '개인정보처리방침',
+                                        'assets/terms/privacy_ko.md',
+                                      ),
                                     ),
                                     _consentRow(
                                       value: _agreeMarketing,
                                       onChanged: (v) {
-                                        setState(() =>
-                                            _agreeMarketing = v ?? false);
+                                        setState(
+                                          () => _agreeMarketing = v ?? false,
+                                        );
                                         _syncAgreeAllFromChildren();
                                       },
                                       label: '마케팅 정보 수신 동의 (선택)',
                                       onView: () => _openTermsFromAsset(
-                                          '마케팅 정보 수신 동의',
-                                          'assets/terms/marketing_ko.md'),
+                                        '마케팅 정보 수신 동의',
+                                        'assets/terms/marketing_ko.md',
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -453,11 +475,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     foregroundColor: Colors.white,
                                     elevation: 0,
                                     shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12)),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                     textStyle: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                   child: const Text('회원가입'),
                                 ),
@@ -476,14 +499,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   // ===== Small UI helpers =====
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 12,
-                letterSpacing: .4,
-                color: Color(0xFF70757D),
-                fontWeight: FontWeight.w700)),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        letterSpacing: .4,
+        color: Color(0xFF70757D),
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 
   Widget _filledField({
     required TextEditingController controller,
@@ -503,8 +529,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
         hintText: hint,
         filled: true,
         fillColor: fill,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         border: _border(),
         enabledBorder: _border(),
         focusedBorder: _border(color: Colors.black87),
@@ -515,8 +543,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   OutlineInputBorder _border({Color color = Colors.transparent}) =>
       OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: color, width: 1));
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: 1),
+      );
 
   Widget _radioTile({
     required String title,
@@ -526,8 +555,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-          color: const Color(0xFFF2F4F7),
-          borderRadius: BorderRadius.circular(12)),
+        color: const Color(0xFFF2F4F7),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: RadioListTile<String>(
         value: value,
         groupValue: group,
@@ -558,8 +588,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
           if (onView != null)
             TextButton(
               onPressed: onView,
-              child: const Text('보기',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              child: const Text(
+                '보기',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
         ],
       ),

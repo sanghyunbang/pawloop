@@ -115,12 +115,14 @@ class _LoadingScreenState extends State<LoadingScreen>
               child: Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.10),
+                  color: Colors.white.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withOpacity(.18)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .18),
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.08),
+                      color: Colors.black.withValues(alpha: .08),
                       blurRadius: 20,
                     ),
                   ],
@@ -173,7 +175,7 @@ class _LoadingScreenState extends State<LoadingScreen>
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.white.withOpacity(.18),
+                                  color: Colors.white.withValues(alpha: .18),
                                   blurRadius: 30,
                                   spreadRadius: 2,
                                 ),
@@ -213,7 +215,9 @@ class _LoadingScreenState extends State<LoadingScreen>
                           child: LinearProgressIndicator(
                             minHeight: 8,
                             value: _progress / 100,
-                            backgroundColor: Colors.white.withOpacity(.25),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: .25,
+                            ),
                             valueColor: const AlwaysStoppedAnimation<Color>(
                               Colors.white,
                             ),
@@ -223,7 +227,7 @@ class _LoadingScreenState extends State<LoadingScreen>
                         Text(
                           '${_progress.toStringAsFixed(0)}%',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(.9),
+                            color: Colors.white.withValues(alpha: .9),
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -263,7 +267,7 @@ class _Msg {
 }
 
 class _BouncingDot extends StatefulWidget {
-  const _BouncingDot({super.key, required this.delayMs});
+  const _BouncingDot({required this.delayMs});
   final int delayMs;
 
   @override
@@ -302,7 +306,7 @@ class _BouncingDotState extends State<_BouncingDot>
         width: 10,
         height: 10,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.8),
+          color: Colors.white.withValues(alpha: .8),
           shape: BoxShape.circle,
         ),
       ),
@@ -327,7 +331,7 @@ class _RipplePainter extends CustomPainter {
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
-        ..color = Colors.white.withOpacity(.20 * opacity);
+        ..color = Colors.white.withValues(alpha: .20 * opacity);
       canvas.drawCircle(center, radius, paint);
     }
   }

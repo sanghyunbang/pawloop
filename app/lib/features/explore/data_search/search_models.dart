@@ -26,7 +26,7 @@ class PlaceSummary {
   });
 
   factory PlaceSummary.fromJson(Map<String, dynamic> j) {
-    int? _toInt(dynamic v) => (v == null) ? null : int.tryParse('$v');
+    int? toInt(dynamic v) => (v == null) ? null : int.tryParse('$v');
     return PlaceSummary(
       contentid: int.parse('${j['contentid']}'),
       title: '${j['title'] ?? ''}',
@@ -34,7 +34,7 @@ class PlaceSummary {
       addr2: j['addr2'],
       firstimage: j['firstimage'],
       firstimage2: j['firstimage2'],
-      contentTypeId: _toInt(j['contentTypeId']),
+      contentTypeId: toInt(j['contentTypeId']),
       cat3: j['cat3'],
       cat3Name: j['cat3Name'],
     );
@@ -64,7 +64,9 @@ class PageResponsePS {
     final total = j['total'] ?? j['totalElements'] ?? (j['count'] ?? 0);
     final last = j['last']; // 없을 수 있음
     return PageResponsePS(
-      items: list.map((e) => PlaceSummary.fromJson(e as Map<String, dynamic>)).toList(),
+      items: list
+          .map((e) => PlaceSummary.fromJson(e as Map<String, dynamic>))
+          .toList(),
       page: page is int ? page : int.tryParse('$page') ?? 0,
       size: size is int ? size : int.tryParse('$size') ?? 20,
       total: total is int ? total : int.tryParse('$total') ?? 0,

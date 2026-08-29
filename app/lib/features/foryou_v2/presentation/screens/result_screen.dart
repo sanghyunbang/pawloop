@@ -258,7 +258,7 @@ class _GridCard extends StatelessWidget {
                         ),
                       ),
                       _OutlinePill(
-                        text: '매칭 ${pct}%',
+                        text: '매칭 $pct%',
                         borderColor: _pillBorder,
                         textColor: _pillText,
                       ),

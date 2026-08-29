@@ -6,10 +6,13 @@ import '../domain/pet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 
-/// 가족 채팅 — 물·밥·산책을 함께 챙기는 가족 대화방.
-/// 백엔드 연동 전 로컬 상태([kChatMessages] 복사본)로 동작한다.
+/// 채팅방 — 기본은 '우리 가족'(물·밥·산책을 함께 챙기는 대화방).
+/// 채팅 목록에서 방 이름/부제를 넘겨 재사용한다. 백엔드 연동 전 로컬 상태.
 class FamilyChatScreen extends StatefulWidget {
-  const FamilyChatScreen({super.key});
+  final String title;
+  final String subtitle;
+  final List<ChatMessage>? messages; // 방별 메시지(null이면 가족방 기본)
+  const FamilyChatScreen({super.key, this.title = '우리 가족', this.subtitle = '', this.messages});
 
   @override
   State<FamilyChatScreen> createState() => _FamilyChatScreenState();
@@ -22,7 +25,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> {
     colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
   );
 
-  final List<ChatMessage> _msgs = [...kChatMessages];
+  late final List<ChatMessage> _msgs = [...(widget.messages ?? kChatMessages)];
   final TextEditingController _ctrl = TextEditingController();
   final ScrollController _scroll = ScrollController();
 
@@ -33,12 +36,16 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> {
     super.dispose();
   }
 
-  /// 발신자 이름 → 가족 구성원 색. 없으면 회색.
+  /// 발신자 이름 → 가족 구성원 색. 가족이 아니면 이름 해시로 팔레트 색 배정.
   Color _memberColor(String name) {
     for (final m in kFamilyMembers) {
       if (m.name == name) return m.color;
     }
-    return const Color(0xFF9B93B3);
+    const palette = [
+      Color(0xFF33BFA6), Color(0xFF5B8DEF), Color(0xFF9B7BFF),
+      Color(0xFFEFA13C), Color(0xFFFF7E8A), Color(0xFF57C98A),
+    ];
+    return palette[name.hashCode.abs() % palette.length];
   }
 
   void _send() {
@@ -105,10 +112,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> {
         ),
         const SizedBox(width: 14),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('가족 채팅',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          Text(widget.title,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
           const SizedBox(height: 2),
-          Text('${kFamilyMembers.length}명',
+          Text(widget.subtitle.isEmpty ? '${kFamilyMembers.length}명' : widget.subtitle,
               style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: T.textMuted)),
         ]),
       ]),

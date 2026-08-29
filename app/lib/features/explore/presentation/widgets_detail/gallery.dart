@@ -1,5 +1,7 @@
 /// gallery.dart
 /// - 상세 상단 배경 갤러리(페이지뷰 + 점 인디케이터)
+library;
+
 import 'package:flutter/material.dart';
 
 class Gallery extends StatelessWidget {

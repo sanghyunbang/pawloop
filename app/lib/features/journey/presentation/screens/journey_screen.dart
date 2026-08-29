@@ -136,7 +136,9 @@ class _JourneyScreenState extends State<JourneyScreen>
                   borderRadius: BorderRadius.circular(12),
                 ),
                 textStyle: const TextStyle(fontWeight: FontWeight.w600),
-                overlayColor: Colors.white.withOpacity(.06), // 눌림 효과도 은은하게
+                overlayColor: Colors.white.withValues(
+                  alpha: .06,
+                ), // 눌림 효과도 은은하게
               ),
             ),
           ),
@@ -246,7 +248,7 @@ class _JourneyScreenState extends State<JourneyScreen>
 
 /// 탭 헤더
 class _JourneyTabs extends StatelessWidget {
-  const _JourneyTabs({super.key, required this.controller});
+  const _JourneyTabs({required this.controller});
 
   final TabController controller;
 
@@ -263,13 +265,13 @@ class _JourneyTabs extends StatelessWidget {
       indicatorSize: TabBarIndicatorSize.tab,
 
       // 눌렀을 때/호버/포커스 overlay 색 커스텀
-      overlayColor: MaterialStateProperty.resolveWith<Color?>((states) {
-        if (states.contains(MaterialState.pressed)) {
-          return selectedBg.withOpacity(0.25); // 눌렀을 때도 지정 색
+      overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+        if (states.contains(WidgetState.pressed)) {
+          return selectedBg.withValues(alpha: 0.25); // 눌렀을 때도 지정 색
         }
-        if (states.contains(MaterialState.hovered) ||
-            states.contains(MaterialState.focused)) {
-          return selectedBg.withOpacity(0.18);
+        if (states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.focused)) {
+          return selectedBg.withValues(alpha: 0.18);
         }
         return Colors.transparent;
       }),
@@ -278,7 +280,9 @@ class _JourneyTabs extends StatelessWidget {
 
       // 선택된 탭 배경/글자
       indicator: BoxDecoration(
-        color: selectedBg.withOpacity(0.25), // indicator와 overlay 톤을 맞추면 깜빡임 없음
+        color: selectedBg.withValues(
+          alpha: 0.25,
+        ), // indicator와 overlay 톤을 맞추면 깜빡임 없음
         borderRadius: BorderRadius.circular(12),
       ),
       labelColor: selectedFg,

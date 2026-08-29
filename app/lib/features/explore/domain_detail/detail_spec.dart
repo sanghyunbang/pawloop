@@ -1,5 +1,7 @@
 /// detail_spec.dart
 /// contentType별로 보여줄 필드 목록(키/라벨/아이콘/포맷터)을 정의
+library;
+
 import 'package:flutter/material.dart';
 import 'content_type.dart';
 import 'field_descriptor.dart';

@@ -106,11 +106,12 @@ class _MeScreenState extends State<MeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final nickname = (_profile?['nickname'] ??
-            _profile?['name'] ??
-            _profile?['userNickname'] ??
-            '여행자')
-        .toString();
+    final nickname =
+        (_profile?['nickname'] ??
+                _profile?['name'] ??
+                _profile?['userNickname'] ??
+                '여행자')
+            .toString();
     final email = (_profile?['email'] ?? '').toString();
     final initial = nickname.isNotEmpty ? nickname.characters.first : 'M';
 
@@ -156,7 +157,7 @@ class _MeScreenState extends State<MeScreen> {
       children: [
         CircleAvatar(
           radius: 30,
-          backgroundColor: _accent.withOpacity(0.15),
+          backgroundColor: _accent.withValues(alpha: 0.15),
           child: Text(
             initial,
             style: const TextStyle(
@@ -174,14 +175,18 @@ class _MeScreenState extends State<MeScreen> {
               Text(
                 nickname,
                 style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w900),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               if (email.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(
                   email,
                   style: const TextStyle(
-                      color: Color(0xFF8A8A92), fontSize: 13),
+                    color: Color(0xFF8A8A92),
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ],
@@ -193,20 +198,24 @@ class _MeScreenState extends State<MeScreen> {
 
   Widget _statsRow() {
     Widget item(String value, String label) => Expanded(
-          child: Column(
-            children: [
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: _accent)),
-              const SizedBox(height: 2),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF7B6E67))),
-            ],
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: _accent,
+            ),
           ),
-        );
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF7B6E67)),
+          ),
+        ],
+      ),
+    );
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18),
       decoration: BoxDecoration(
@@ -218,19 +227,16 @@ class _MeScreenState extends State<MeScreen> {
         children: [
           item('${_diaries.length}', '총 기록'),
           _divider(),
-          item('${_streak}일', '연속 기록'),
+          item('$_streak일', '연속 기록'),
           _divider(),
-          item('${_thisMonth}', '이번 달'),
+          item('$_thisMonth', '이번 달'),
         ],
       ),
     );
   }
 
-  Widget _divider() => Container(
-        width: 1,
-        height: 34,
-        color: const Color(0xFFEDEDF1),
-      );
+  Widget _divider() =>
+      Container(width: 1, height: 34, color: const Color(0xFFEDEDF1));
 
   Widget _moodSummary() {
     final counts = _moodCounts;
@@ -250,22 +256,28 @@ class _MeScreenState extends State<MeScreen> {
         children: [
           Row(
             children: [
-              const Text('내 감정 분포',
-                  style:
-                      TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800)),
+              const Text(
+                '내 감정 분포',
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+              ),
               const Spacer(),
               if (top != null)
-                Text('가장 많이 · $top',
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: moodColor(top))),
+                Text(
+                  '가장 많이 · $top',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: moodColor(top),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
           if (total == 0)
-            const Text('아직 기록이 없어요. 오늘의 마음을 남겨보세요.',
-                style: TextStyle(color: Color(0xFF8A8A92), fontSize: 13))
+            const Text(
+              '아직 기록이 없어요. 오늘의 마음을 남겨보세요.',
+              style: TextStyle(color: Color(0xFF8A8A92), fontSize: 13),
+            )
           else ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
@@ -294,12 +306,15 @@ class _MeScreenState extends State<MeScreen> {
                           width: 10,
                           height: 10,
                           decoration: BoxDecoration(
-                              color: moodColor(m.key),
-                              shape: BoxShape.circle),
+                            color: moodColor(m.key),
+                            shape: BoxShape.circle,
+                          ),
                         ),
                         const SizedBox(width: 5),
-                        Text('${m.key} ${counts[m.key]}',
-                            style: const TextStyle(fontSize: 12)),
+                        Text(
+                          '${m.key} ${counts[m.key]}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ],
                     ),
               ],
@@ -311,17 +326,25 @@ class _MeScreenState extends State<MeScreen> {
   }
 
   Widget _menu() {
-    Widget tile(IconData icon, String label, VoidCallback onTap,
-            {Color color = const Color(0xFF333333)}) =>
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-          leading: Icon(icon, color: color, size: 22),
-          title: Text(label,
-              style: TextStyle(
-                  fontWeight: FontWeight.w600, color: color, fontSize: 14.5)),
-          trailing: const Icon(Icons.chevron_right, color: Color(0xFFB8B8C3)),
-          onTap: onTap,
-        );
+    Widget tile(
+      IconData icon,
+      String label,
+      VoidCallback onTap, {
+      Color color = const Color(0xFF333333),
+    }) => ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+      leading: Icon(icon, color: color, size: 22),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: color,
+          fontSize: 14.5,
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: Color(0xFFB8B8C3)),
+      onTap: onTap,
+    );
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -339,8 +362,7 @@ class _MeScreenState extends State<MeScreen> {
             context.push('/bookmarks');
           }),
           const Divider(height: 1, color: Color(0xFFEDEDF1)),
-          tile(Icons.logout, '로그아웃', _logout,
-              color: const Color(0xFFE05A5A)),
+          tile(Icons.logout, '로그아웃', _logout, color: const Color(0xFFE05A5A)),
         ],
       ),
     );

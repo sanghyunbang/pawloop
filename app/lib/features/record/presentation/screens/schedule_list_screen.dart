@@ -114,7 +114,7 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
   // ─────────────────────────────────────
   // 아이콘 & 색상 매핑
   // ─────────────────────────────────────
-  Color _tint(Color c, [double o = .16]) => c.withOpacity(o);
+  Color _tint(Color c, [double o = .16]) => c.withValues(alpha: o);
 
   Widget _circleIcon(
     IconData icon,
@@ -128,8 +128,10 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
       decoration: BoxDecoration(
         color: _tint(color, .18),
         shape: BoxShape.circle,
-        border: Border.all(color: color.withOpacity(.45)),
-        boxShadow: [BoxShadow(color: color.withOpacity(.10), blurRadius: 8)],
+        border: Border.all(color: color.withValues(alpha: .45)),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: .10), blurRadius: 8),
+        ],
       ),
       alignment: Alignment.center,
       child: Icon(icon, size: iconSize, color: color),
@@ -221,7 +223,7 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                overlayColor: Colors.white.withOpacity(.06),
+                overlayColor: Colors.white.withValues(alpha: .06),
               ),
             ),
           ),
@@ -413,8 +415,8 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
       required Color color,
     }) {
       final selected = _filterType == key;
-      final bg = selected ? color.withOpacity(.14) : Colors.white;
-      final bd = selected ? color.withOpacity(.45) : kBorder;
+      final bg = selected ? color.withValues(alpha: .14) : Colors.white;
+      final bd = selected ? color.withValues(alpha: .45) : kBorder;
       final txt = selected ? color : kTextMain;
 
       return ChoiceChip(
@@ -518,9 +520,9 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
           height: 100,
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            color: color.withOpacity(.06),
+            color: color.withValues(alpha: .06),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withOpacity(.30)),
+            border: Border.all(color: color.withValues(alpha: .30)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           child: Column(
@@ -538,7 +540,10 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: color.withOpacity(.8)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: color.withValues(alpha: .8),
+                ),
               ),
             ],
           ),
@@ -609,13 +614,13 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          ...inProgress.map((s) => _cardFor(s, fm)).toList(),
+          ...inProgress.map((s) => _cardFor(s, fm)),
           const SizedBox(height: 16),
         ],
         if (planned.isNotEmpty) ...[
           const Text('Planned', style: TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          ...planned.map((s) => _cardFor(s, fm)).toList(),
+          ...planned.map((s) => _cardFor(s, fm)),
           const SizedBox(height: 16),
         ],
         if (completed.isNotEmpty) ...[
@@ -624,7 +629,7 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          ...completed.map((s) => _cardFor(s, fm)).toList(),
+          ...completed.map((s) => _cardFor(s, fm)),
           const SizedBox(height: 16),
         ],
       ],
@@ -714,7 +719,7 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
   Widget _cardFor(ScheduleResponse s, DateFormat fm) {
     final statusMeta = _uiStatusFor(s);
 
-    void _openDetail() {
+    void openDetail() {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => ScheduleDetailScreen(schedule: s)),
@@ -727,7 +732,7 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: _openDetail,
+          onTap: openDetail,
           child: ScheduleListCard(
             leadingIcon: _leadingFor(s),
             title: s.title,
@@ -856,7 +861,7 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
               if (selectedItems.isEmpty)
                 const Text('No events', style: TextStyle(color: kTextMuted))
               else
-                ...selectedItems.map((s) => _cardFor(s, fm)).toList(),
+                ...selectedItems.map((s) => _cardFor(s, fm)),
               const SizedBox(height: 24),
             ],
           ),
@@ -1042,7 +1047,7 @@ class _ScheduleListScreenState extends State<ScheduleListScreen> {
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                        overlayColor: Colors.white.withOpacity(.06),
+                        overlayColor: Colors.white.withValues(alpha: .06),
                       ),
                     ),
                   ),
@@ -1088,7 +1093,7 @@ class _StatusLabel extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF5F6F8),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(.28)),
+        border: Border.all(color: color.withValues(alpha: .28)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

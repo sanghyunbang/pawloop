@@ -1,5 +1,6 @@
 /// 스케쥴 작성시 서버로 전달할 요청 정보를 담는 모델 클래스
 /// 이메일, 비밀번호, 닉네임, (이름, 성별) 포함
+library;
 
 class ScheduleRequest {
   final String title;
