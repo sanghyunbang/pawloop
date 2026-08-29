@@ -1,0 +1,220 @@
+# Community (커뮤니티) — 백엔드 구현 청사진
+
+> Pawloop 백엔드(Spring Boot + MySQL 공간형)에서 **커뮤니티(게시판·댓글·반응)** 리소스를 개발자가 직접 구현할 때 읽는 청사진.
+> ⚠️ 이 문서는 **구조·시그니처·매핑**만 제공한다. 메서드 바디(구현 코드)는 포함하지 않는다 — 개발자가 직접 작성한다.
+>
+> 참조 계약: [`openapi.yaml`](../../04-api/openapi.yaml) `/api/community/**` · 데이터 모델: [`erd.md`](../../03-database/erd.md) · [`schema.md`](../../03-database/schema.md) `post`/`comment`/`reaction`
+> 컨벤션 출처: `backend/.../social/**` (record DTO, `ResponseEntity<?>`, JWT 추출), `.../user/controller/AuthController.java`, `.../OAuth/jwt/JWTProvider.java`
+
+---
+
+## 1. 개요
+
+| 항목 | 내용 |
+| --- | --- |
+| 책임 | 커뮤니티 게시글 목록/작성/상세, 댓글 목록/작성, 게시글 반응(help/cute/empathy) 토글. |
+| 관련 테이블 | `post`(글), `comment`(댓글), `reaction`(반응). 읽기 조인: `app_user`(작성자 닉네임), `place`(태그 장소, nullable FK). |
+| 재사용 후보 | 기존 `social` 패키지의 `EmotionCard/CardReaction/CardComment` 구조가 거의 동일 → **패턴을 그대로 복제/개편**한다. 특히 (a) 반응 토글 로직(`SocialService.toggleReaction`), (b) 반응/댓글 수 N+1 방지 배치 집계(`findByCardIdIn`, `countByCardIdInGroupBy`), (c) `ReactionSummary`(reactions map + mine)는 social의 `{reactions, myReactions}` 개편판이다. |
+| 기존과 차이 | ① 반응 타입이 `SAME/CHEER/CALM`(social) → `help/cute/empathy`(community). ② `ReactionSummary.mine`은 **문자열 단수**(내가 누른 1개 또는 null)로, social의 `myReactions`(리스트)와 다르다. openapi `reaction`은 단일 유형 라디오형 → 유저당 글별 **1개만** 유지하는 정책 권장. ③ 목록이 **커서 페이지네이션**(`items`/`nextCursor`/`hasMore`)이다(social은 limit-only). ④ `board` enum·`placeId` nullable FK 존재. |
+| 인증 정책 | 읽기(GET 목록/상세/댓글목록)는 **비인증 허용**(openapi `security: []`). 쓰기(글/댓글 작성, 반응 토글)는 **인증 필요**. SecurityConfig에서 `/api/community/**` GET은 permitAll, 그 외 authenticated 로 열어야 함(social은 전부 authenticated였음 — 주의). |
+
+---
+
+## 2. Controller
+
+**클래스:** `CommunityController` — `@RestController` + `@RequestMapping("/api/community")`
+(social `SocialController` 스타일: 생성자 주입 `CommunityService`/`JWTProvider`/`UserService`, `private User requireUser(HttpServletRequest)`로 JWT subject(email)→User 추출. 읽기 엔드포인트는 requireUser 호출 안 함.)
+
+| # | HTTP · 경로 | 메서드 시그니처 (파라미터 타입) | 반환 DTO | 인증 | openapi paths |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `GET /api/community/posts` | `feed(@RequestParam(required=false) String board, @RequestParam(required=false) String cursor, @RequestParam(defaultValue="20") Integer limit, HttpServletRequest req)` | `PostPageDto` (`Page` + `items: List<PostDto>`) | ✕ | `/api/community/posts` GET |
+| 2 | `POST /api/community/posts` | `create(@RequestBody PostRequest body, HttpServletRequest req)` | `PostDto` (201) | ✔ | `/api/community/posts` POST |
+| 3 | `GET /api/community/posts/{postId}` | `detail(@PathVariable Long postId, HttpServletRequest req)` | `PostDto` | ✕ | `/api/community/posts/{postId}` GET |
+| 4 | `GET /api/community/posts/{postId}/comments` | `comments(@PathVariable Long postId)` | `List<CommentDto>` | ✕ | `.../comments` GET |
+| 5 | `POST /api/community/posts/{postId}/comments` | `addComment(@PathVariable Long postId, @RequestBody CommentRequest body, HttpServletRequest req)` | `CommentDto` (201) | ✔ | `.../comments` POST |
+| 6 | `POST /api/community/posts/{postId}/reactions` | `toggleReaction(@PathVariable Long postId, @RequestBody ReactionRequest body, HttpServletRequest req)` | `ReactionSummary` | ✔ | `.../reactions` POST |
+
+> **반환 규약(social 준수):** 메서드는 `ResponseEntity<?>` 반환. 정상은 `ResponseEntity.ok(dto)` / 작성은 `ResponseEntity.status(HttpStatus.CREATED).body(dto)`. 검증 실패는 `IllegalArgumentException` → `ResponseEntity.badRequest().body(Map.of("error", ...))`, not-found는 404 매핑, 그 외는 500. (읽기 시 `mine`은 인증 헤더가 있으면 채우고 없으면 null — requireUser 대신 optional 추출 헬퍼를 두는 것도 가능.)
+> **인증 추출:** `requireUser`는 `Authorization: Bearer` → `jwtProvider.validateToken` → `jwtProvider.getUserIdFromToken`(=email) → `userService.findByEmail`. 실패 시 `ResponseStatusException(HttpStatus.UNAUTHORIZED)`. (SocialController와 동일.)
+
+---
+
+## 3. DTO (record)
+
+공통 `Error`, `Page`는 openapi `components/schemas`의 것을 참조만 한다(별도 정의 X). 요청 DTO는 social 스타일상 record 또는 lombok `@Getter @Setter @NoArgsConstructor` 클래스 중 하나 — social의 `CommentRequest`/`ReactionRequest`는 클래스였으므로 **요청은 클래스, 응답은 record** 로 통일 권장.
+
+### 응답 record
+
+**`PostDto`** ↔ openapi `Post`
+| 필드 | 타입 | 비고 |
+| --- | --- | --- |
+| `id` | `Long` | |
+| `author` | `AuthorDto` | 중첩(아래) |
+| `board` | `String` | Board enum 문자열 |
+| `loc` | `String` | nullable. 표시용 지역명(`place.name` 또는 사용자 입력) |
+| `placeId` | `String` | nullable. 연결 장소 식별자(openapi는 string — `place.external_id` 또는 `place.id` 문자열화) |
+| `title` | `String` | |
+| `body` | `String` | |
+| `commentCount` | `int` | |
+| `reactions` | `ReactionSummary` | 집계 + mine |
+| `createdAt` | `String` | ISO-8601 (`DateTimeFormatter.ISO_LOCAL_DATE_TIME`) |
+
+**`AuthorDto`** ↔ openapi `Post.author`
+| 필드 | 타입 |
+| --- | --- |
+| `id` | `Long` |
+| `nickname` | `String` |
+> (댓글 author는 `nickname`만 필요 → 별도 `CommentAuthorDto` 또는 `AuthorDto` 재사용. openapi `Comment.author`는 nickname 단독.)
+
+**`CommentDto`** ↔ openapi `Comment` (social의 것과 유사하나 author 구조 다름)
+| 필드 | 타입 | 비고 |
+| --- | --- | --- |
+| `id` | `Long` | |
+| `author` | `AuthorDto` | nickname만 채워도 무방 |
+| `body` | `String` | |
+| `createdAt` | `String` | ISO-8601 |
+
+**`ReactionSummary`** ↔ openapi `ReactionSummary`
+| 필드 | 타입 | 비고 |
+| --- | --- | --- |
+| `help` | `int` | 도움돼요 카운트 |
+| `cute` | `int` | 귀여워요 카운트 |
+| `empathy` | `int` | 공감 카운트 |
+| `mine` | `String` | nullable. 내가 누른 반응 타입 1개(없으면 null). ⚠️ social의 리스트가 아닌 **단수**. |
+
+**`PostPageDto`** ↔ openapi `Page` allOf + `items: List<Post>`
+| 필드 | 타입 | 비고 |
+| --- | --- | --- |
+| `items` | `List<PostDto>` | |
+| `nextCursor` | `String` | nullable. 다음 페이지 커서(마지막 항목 기준 base64/id 인코딩) |
+| `hasMore` | `boolean` | |
+
+### 요청
+
+**`PostRequest`** ↔ openapi `PostInput` (`@Getter @Setter @NoArgsConstructor` 클래스)
+| 필드 | 타입 | 필수 | 비고 |
+| --- | --- | --- | --- |
+| `board` | `String` | ✔ | Board enum 값 검증 |
+| `title` | `String` | ✔ | |
+| `body` | `String` | ✔ | |
+| `loc` | `String` | ✕ | |
+| `placeId` | `String` | ✕ | 있으면 `place` 조회/링크 |
+
+**`CommentRequest`** ↔ openapi `.../comments` POST body (social `CommentRequest` 재사용 가능하나 community용은 `body`만)
+| 필드 | 타입 | 필수 |
+| --- | --- | --- |
+| `body` | `String` | ✔ |
+
+**`ReactionRequest`** ↔ openapi `.../reactions` POST body
+| 필드 | 타입 | 필수 | 비고 |
+| --- | --- | --- | --- |
+| `type` | `String` | ✔ | `help`/`cute`/`empathy` 중 하나 |
+
+---
+
+## 4. Service
+
+**클래스:** `CommunityService` — `@Service @Transactional(readOnly = true)` (쓰기 메서드에 `@Transactional`). 생성자 주입: `PostRepository`, `CommentRepository`, `ReactionRepository`, `PlaceRepository`(loc/placeId 해석용), `UserRepository`(작성자 닉네임). social과 동일하게 상수(`VALID_REACTION_TYPES = {help,cute,empathy}`, `VALID_BOARDS`, `MAX_LIMIT`, `DEFAULT_LIMIT`)를 둔다.
+
+| 메서드 시그니처 | 한 줄 책임 (무엇을) |
+| --- | --- |
+| `PostPageDto feed(String board, String cursor, Integer limit, Long currentUserId)` | board 필터 + 커서 이후 최신순 페이지 조회 → `items/nextCursor/hasMore` 구성. |
+| `PostDto create(Long userId, PostRequest req)` | board·title·body 검증, placeId 해석, `post` 저장 후 DTO 반환. |
+| `PostDto detail(Long postId, Long currentUserId)` | 단건 조회(+작성자·반응·댓글수), 없으면 not-found. |
+| `List<CommentDto> comments(Long postId)` | 게시글 존재 검증 후 댓글 오래된 순 목록. |
+| `CommentDto addComment(Long postId, Long userId, String body)` | 글 존재·body 검증 후 댓글 저장 → DTO. |
+| `ReactionSummary toggleReaction(Long postId, Long userId, String type)` | type 검증, 같은 유형이면 삭제/다른 유형이면 교체(유저당 1개), 최신 집계 반환. |
+| `private ReactionSummary summarize(Long postId, Long currentUserId)` (헬퍼) | 단건 글의 help/cute/empathy 카운트 + mine 계산. |
+| `private Map<Long,ReactionSummary> summarizeBatch(List<Long> postIds, Long currentUserId)` (헬퍼) | 목록용 반응 배치 집계(N+1 방지). |
+| `private Map<Long,Integer> commentCounts(List<Long> postIds)` (헬퍼) | 목록용 댓글 수 배치 집계(N+1 방지). |
+| `private PostDto mapPost(Post, AuthorDto, ReactionSummary, int commentCount)` (헬퍼) | 엔티티 → PostDto 변환. |
+
+> **커서 규약:** `cursor`는 이전 응답 `nextCursor`(예: 마지막 post id를 base64 인코딩). 서비스는 커서 디코드 → `id < cursorId` 조건으로 다음 페이지 조회, `limit+1`건 조회해 초과분 존재 여부로 `hasMore` 판단 후 잘라내고 마지막 항목 id로 `nextCursor` 생성. board가 null이면 전체.
+> **반응 정책:** openapi `ReactionSummary.mine`이 단수이므로 유저당 글별 반응 **1개**만 유지. 스키마 유니크는 `(post_id,user_id,type)`이나, 서비스는 "다른 type을 누르면 기존 것을 지우고 새로 저장"으로 mine을 단일화한다(같은 type 재클릭 시 삭제 = 취소).
+
+---
+
+## 5. Entity & Repository
+
+패키지 `com.heattrip.heat_trip_backend.community.entity` / `.repository`. lombok `@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder`, `@PrePersist`로 `createdAt` 세팅(social 스타일). 테이블 정의는 [`schema.md`](../../03-database/schema.md) §6~8 기준.
+
+### Entity: `Post` (`@Table(name="post")`)
+| 엔티티 필드 | 컬럼 | 타입/제약 | 비고 |
+| --- | --- | --- | --- |
+| `id` | `id` | `Long` PK IDENTITY | |
+| `userId` | `user_id` | `Long` NOT NULL | FK→`app_user.id`. (연관관계 대신 social처럼 id 스칼라 매핑 권장) |
+| `board` | `board` | `String` NOT NULL | Board enum 문자열 저장 |
+| `placeId` | `place_id` | `Long` NULL | **nullable FK**→`place.id`, ON DELETE SET NULL |
+| `title` | `title` | `String` NOT NULL | |
+| `body` | `body` | `String`(`TEXT`) NOT NULL | `@Column(columnDefinition="TEXT")` |
+| `createdAt` | `created_at` | `LocalDateTime` NOT NULL, updatable=false | `@PrePersist` |
+
+### Entity: `Comment` (`@Table(name="comment")`)
+| 필드 | 컬럼 | 타입/제약 |
+| --- | --- | --- |
+| `id` | `id` | `Long` PK |
+| `postId` | `post_id` | `Long` NOT NULL, FK→`post.id` |
+| `userId` | `user_id` | `Long` NOT NULL, FK→`app_user.id` |
+| `body` | `body` | `String`(`TEXT`) NOT NULL |
+| `createdAt` | `created_at` | `LocalDateTime` NOT NULL, `@PrePersist` |
+
+### Entity: `Reaction` (`@Table(name="reaction", uniqueConstraints=@UniqueConstraint(name="uq_reaction", columnNames={"post_id","user_id","type"}))`)
+| 필드 | 컬럼 | 타입/제약 |
+| --- | --- | --- |
+| `id` | `id` | `Long` PK |
+| `postId` | `post_id` | `Long` NOT NULL, FK→`post.id` |
+| `userId` | `user_id` | `Long` NOT NULL, FK→`app_user.id` |
+| `type` | `type` | `String(10)` NOT NULL, CHECK in(help,cute,empathy) |
+| `createdAt` | `created_at` | `LocalDateTime` NOT NULL, `@PrePersist` |
+
+### 인덱스 (schema.md와 일치, **SPATIAL 없음** — 커뮤니티는 공간 컬럼 미사용)
+| 테이블 | 인덱스 | 종류 | 용도 |
+| --- | --- | --- | --- |
+| `post` | `idx_post_board(board, created_at)` | 보조 | 게시판별 최신순 커서 페이징 |
+| `post` | `idx_post_user(user_id)` / `idx_post_place(place_id)` | 보조 | 작성자·장소 조인 |
+| `comment` | `idx_comment_post(post_id, created_at)` | 보조 | 글별 댓글 |
+| `reaction` | `uq_reaction(post_id, user_id, type)` | UNIQUE | 중복 반응 방지 |
+
+### Repository (Spring Data `JpaRepository`)
+
+**`PostRepository extends JpaRepository<Post, Long>`**
+| 메서드 시그니처 | 용도 |
+| --- | --- |
+| `List<Post> findAllByOrderByIdDesc(Pageable pageable)` | 전체 첫 페이지(커서 없음) |
+| `List<Post> findByBoardOrderByIdDesc(String board, Pageable pageable)` | board 필터 첫 페이지 |
+| `List<Post> findByIdLessThanOrderByIdDesc(Long cursorId, Pageable pageable)` | 전체 커서 이후 페이지 |
+| `List<Post> findByBoardAndIdLessThanOrderByIdDesc(String board, Long cursorId, Pageable pageable)` | board+커서 페이지 |
+> (파생 쿼리로 충분 — 공간/네이티브 쿼리 불필요. `limit+1` 조회로 hasMore 판단.)
+
+**`CommentRepository extends JpaRepository<Comment, Long>`**
+| 메서드 | 용도 |
+| --- | --- |
+| `List<Comment> findByPostIdOrderByIdAsc(Long postId)` | 글별 댓글(오래된 순) |
+| `long countByPostId(Long postId)` | 단건 댓글 수 |
+| `@Query("select c.postId, count(c) from Comment c where c.postId in :ids group by c.postId") List<Object[]> countByPostIdInGroupBy(@Param("ids") List<Long> ids)` | 목록용 배치 집계(N+1 방지) |
+
+**`ReactionRepository extends JpaRepository<Reaction, Long>`**
+| 메서드 | 용도 |
+| --- | --- |
+| `List<Reaction> findByPostId(Long postId)` | 단건 집계/mine |
+| `List<Reaction> findByPostIdIn(List<Long> postIds)` | 목록용 배치 집계 |
+| `Optional<Reaction> findByPostIdAndUserId(Long postId, Long userId)` | 유저당 1개 정책(토글/교체) |
+| `Optional<Reaction> findByPostIdAndUserIdAndType(Long postId, Long userId, String type)` | 같은 type 재클릭(취소) 판정 |
+
+---
+
+## 6. 구현 노트 (함정 위주)
+
+- **인증 분기(읽기 vs 쓰기):** social은 `/api/social/**` 전체가 authenticated였다. community는 **GET을 permitAll**로 열어야 하므로 `SecurityConfig`에서 `HttpMethod.GET, "/api/community/**"` permitAll + POST authenticated를 명시할 것. 안 그러면 openapi `security: []` 계약과 어긋난다.
+- **JWT 추출:** `JWTProvider.getUserIdFromToken(token)`의 subject는 **email**이다(정수 userId 아님). 반드시 `userService.findByEmail(email)` → `User.getId()`로 변환. `Authorization` 헤더 없으면 401(`ResponseStatusException`). 읽기 엔드포인트에서 mine을 채우려면 헤더가 있을 때만 optional 추출(없으면 currentUserId=null → mine=null).
+- **반응 mine 단수화:** openapi `ReactionSummary.mine`은 문자열 1개. 스키마 유니크가 `(post,user,type)`이라 DB상 여러 type 저장이 가능하지만, **서비스 레벨에서 유저당 1개**로 제한(다른 type 클릭 시 기존 삭제 후 삽입). 이 결정은 social의 `myReactions`(리스트) 로직을 그대로 복붙하면 안 되는 지점이다.
+- **토글 트랜잭션:** `toggleReaction`은 삭제/삽입이 있으므로 `@Transactional`(쓰기). 같은 type 재클릭=취소, 다른 type=교체. 유니크 제약 위반(동시성)은 재조회로 흡수하거나 `find...AndType` 선조회로 회피.
+- **커서 페이지네이션:** `nextCursor`는 마지막 항목 `id`를 base64 등으로 인코딩(openapi 예 `eyJpZCI6MTIzfQ==`). `limit`은 기본 20·최대 100(`components/parameters/Limit`). `limit+1`건 조회 → 초과 시 `hasMore=true`, 초과분 잘라내고 마지막 id로 커서 생성. 커서 디코드 실패는 400.
+- **placeId 타입 불일치:** openapi `Post.placeId`는 **string**, DB `post.place_id`는 **BIGINT FK**. 요청 `PostRequest.placeId`(String)를 저장 시 `place` 조회(외부 `external_id` 또는 내부 id)로 해석해 `place.id`(Long)에 매핑하고, 응답에선 다시 문자열로. 존재하지 않는 place면 링크 없이 저장(FK는 ON DELETE SET NULL). `loc`은 표시용 문자열로 `place.name` 또는 사용자 입력을 그대로.
+- **N+1 방지:** 목록(feed)은 social의 배치 집계 패턴을 그대로 이식 — 페이지 내 postIds로 `findByPostIdIn`(반응)·`countByPostIdInGroupBy`(댓글)·작성자 닉네임 배치 조회 후 메모리에서 조립. 단건 루프 쿼리 금지.
+- **board 검증:** Board enum은 한글(`산책로 후기`/`동반장소`/`건강·병원`/`자유`/`자랑`). 공백/중점(·) 포함 문자열이므로 서비스 상수 `Set`으로 정확히 검증(오타 시 400). DB `board VARCHAR(20)` + `utf8mb4`.
+- **공간/좌표 무관:** 이 리소스는 `POINT`/`LINESTRING`, `ST_Distance_Sphere`, EPSG:5174→WGS84 변환과 **무관**하다(그건 Places/Walks 담당). 커뮤니티에 공간 쿼리를 넣지 말 것.
+- **외부 API 없음:** community는 공공데이터 프록시/캐싱(KTO·LOCALDATA)과 무관 — `TourApiClient`/`WebClientConfig` 패턴 불필요. 순수 RDB CRUD.
+- **에러 형식:** 검증 실패는 `IllegalArgumentException`→`Map.of("error", msg)` 400(social 방식) 또는 openapi `Error` 스키마(`{error:{code,message,traceId}}`)에 맞춘 공통 핸들러 사용. 프로젝트에 `observability/error` 글로벌 핸들러가 있으면 그쪽 포맷을 우선.
+
+완료: C:/Users/mm206/git_projects/heattrip/docs/02-architecture/backend/community.md
