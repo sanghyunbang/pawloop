@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.user.controller;
 
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
+import com.heattrip.heat_trip_backend.OAuth.user.GoogleOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.KakaoOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.OAuth2UserInfo;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
@@ -63,6 +64,9 @@ class AuthMeIntegrationTest {
     /** 카카오가 준 소셜 ID. 이 값이 subject 로 새어 나가면 안 된다. */
     private static final long KAKAO_SOCIAL_ID = 1234567890L;
 
+    /** 구글이 준 소셜 ID. 위와 같은 이유로 subject 에 나타나면 안 된다. */
+    private static final String GOOGLE_SOCIAL_ID = "109876543210987654321";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -93,6 +97,34 @@ class AuthMeIntegrationTest {
                 .as("이메일 없는 카카오 계정으로 프로필 조회가 된다 — #7 완료 조건 2 는 #5 가 들어와야 참이 된다")
                 .isEqualTo(200);
         assertThat(body(result)).contains("\"id\":" + kakao.getId());
+    }
+
+    @Test
+    @DisplayName("구글 계정도 소셜 로그인이 발급한 토큰으로 GET /auth/me 가 200 이고 자기 id 를 돌려받는다")
+    void 구글계정_토큰으로_내정보조회가_200이다() throws Exception {
+        // 완료 조건 2. 공급자에 따라 갈리는 코드가 남아 있지 않은지 확인하는 것이 목적이다 —
+        // 예전 subject 는 "kakao_..."·"google_..." 로 공급자 이름을 품고 있었다.
+        User google = userRepository.save(User.builder()
+                .provider("google")
+                .socialId(GOOGLE_SOCIAL_ID)
+                .username("google_" + GOOGLE_SOCIAL_ID)
+                .role(User.ROLE_USER)
+                .email("bori-google@example.com")
+                .name("보리")
+                .nickname("보리")
+                .build());
+
+        Map<String, Object> attributes = Map.of("sub", GOOGLE_SOCIAL_ID, "name", "보리");
+        String token = tokenIssuedByRealSocialLogin(
+                new CustomOAuth2User(new GoogleOAuth2User(attributes), attributes,
+                        google.getId(), google.getRole(), false),
+                "google");
+
+        MvcResult result = mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + token))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(result)).contains("\"id\":" + google.getId());
     }
 
     @Test
@@ -206,13 +238,17 @@ class AuthMeIntegrationTest {
     private String tokenIssuedByRealSocialLogin(User seeded) throws Exception {
         Map<String, Object> attributes = Map.of("id", KAKAO_SOCIAL_ID);
         OAuth2UserInfo userInfo = new KakaoOAuth2User(attributes);
-        CustomOAuth2User principal =
-                new CustomOAuth2User(userInfo, attributes, seeded.getId(), seeded.getRole(), false);
+        return tokenIssuedByRealSocialLogin(
+                new CustomOAuth2User(userInfo, attributes, seeded.getId(), seeded.getRole(), false),
+                "kakao");
+    }
 
+    private String tokenIssuedByRealSocialLogin(CustomOAuth2User principal, String registrationId)
+            throws Exception {
         MockHttpServletResponse response = new MockHttpServletResponse();
         registeredSuccessHandler().onAuthenticationSuccess(
                 new MockHttpServletRequest(), response,
-                new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "kakao"));
+                new OAuth2AuthenticationToken(principal, principal.getAuthorities(), registrationId));
 
         String redirect = response.getRedirectedUrl();
         assertThat(redirect)
