@@ -1,0 +1,142 @@
+# PR마다 백엔드·프론트를 각각 검증한다. 정책은 이슈 #21, 구축 이슈는 #22.
+#
+# 잡을 나눈 이유: 한쪽만 바뀐 PR에서 다른 쪽을 돌리지 않기 위해서다.
+# 경로 필터가 걸리지 않은 잡은 GitHub UI에서 "Skipped"로 표시되므로,
+# 필수 상태 검사로 지정해도 머지를 막지 않는다.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 같은 브랜치에 새 커밋이 오면 이전 실행을 취소한다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: 변경 경로 판별
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            app:
+              - 'app/**'
+              - '.github/workflows/ci.yml'
+
+  backend:
+    name: 백엔드 — 테스트 + 커버리지
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java 21 준비
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Gradle 준비 (캐시 포함)
+        uses: gradle/actions/setup-gradle@v4
+
+      # .env 없이 돌아가야 한다. 테스트가 .env를 요구하면 그 자체가 결함이다.
+      # application-dev.properties의 기본값(dev-google-client-id 등)으로 충분해야 한다.
+      - name: 테스트 + JaCoCo
+        run: ./gradlew test jacocoTestReport jacocoTestCoverageVerification --console=plain
+
+      - name: 커버리지 리포트 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: backend/build/reports/jacoco/test/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: 실패한 테스트 리포트 업로드
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-report
+          path: backend/build/reports/tests/test/
+          retention-days: 14
+
+  app:
+    name: 프론트 — 정적분석 + 테스트
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      # 버전을 고정한다. channel: stable만 쓰면 Flutter가 올라갈 때마다
+      # 재현이 깨지고, 원인이 우리 코드인지 툴체인인지 구분할 수 없게 된다.
+      - name: Flutter 3.44.4 준비
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+
+      - name: 의존성 설치
+        run: flutter pub get
+
+      # 에러만 실패로 본다. 현재 경고·info가 127건 남아 있어
+      # --fatal-warnings를 켜면 CI가 영원히 빨강이고, 그러면 아무도 CI를 안 본다.
+      # 경고 정리는 별도 이슈에서 점진적으로.
+      - name: 정적 분석 (에러 0건)
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: 테스트 + 커버리지
+        run: flutter test --coverage
+
+      - name: 커버리지 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-lcov
+          path: app/coverage/lcov.info
+          retention-days: 14
+          if-no-files-found: warn
+
+  # 경로 필터로 건너뛴 잡이 있어도 하나의 상태로 모아 판정한다.
+  # 브랜치 보호 규칙에는 이 잡 하나만 등록하면 된다.
+  verdict:
+    name: CI 통과
+    needs: [backend, app]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 결과 판정
+        run: |
+          echo "backend=${{ needs.backend.result }}"
+          echo "app=${{ needs.app.result }}"
+          for r in "${{ needs.backend.result }}" "${{ needs.app.result }}"; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::검증 실패"
+              exit 1
+            fi
+          done
+          echo "통과"

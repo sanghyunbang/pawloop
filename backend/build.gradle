@@ -102,7 +102,23 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+        // 'mysql' 태그는 MySQL 전용 기능(FULLTEXT MATCH...AGAINST)에 의존한다.
+        // H2 로는 500 이 나므로 기본 실행에서 제외한다. 되살리려면:
+        //   ./gradlew test -PincludeTags=mysql   (실제 MySQL 필요)
+        // 근본 해결(Testcontainers)은 이슈 #26.
+        if (!project.hasProperty('includeTags')) {
+            excludeTags 'mysql'
+        } else {
+            includeTags project.property('includeTags')
+        }
+    }
+
+    // 테스트는 'test' 프로파일로 돈다 → src/test/resources/application-test.properties.
+    // 이게 없으면 jwt.secret 등 기본값 없는 플레이스홀더 10개가 해결되지 않아
+    // @SpringBootTest 컨텍스트가 뜨지 않는다. 이슈 #22 참조.
+    systemProperty 'spring.profiles.active', 'test'
+
     finalizedBy jacocoTestReport
 }
 
@@ -114,6 +130,45 @@ jacocoTestReport {
         csv.required = false
     }
 }
+
+// 커버리지 하한선. 정책은 이슈 #21, 도입 이슈는 #22.
+//
+// 전역 하한을 걸지 않는 이유: 레거시가 많아 첫날부터 실패한다. 실패하는
+// 게이트는 며칠 안에 무시당하고, 그러면 없느니만 못하다. 대신 이번
+// 마일스톤(M2)에서 손대는 인증 패키지만 범위로 잡는다.
+//
+// 하한을 현재값(17.2%)에 맞춘 이유: 목표는 #21이 정한 80%지만 지금
+// 거기에 걸면 첫 PR부터 빨강이다. 우선 "내려가지 않게" 막고,
+// #13(OAuth 회귀 테스트)이 들어오는 대로 단계적으로 올린다.
+// 올릴 때는 이슈에 근거를 남긴다. **내리는 것은 금지.**
+def authCoveragePackages = [
+        'com/heattrip/heat_trip_backend/OAuth/**',
+        'com/heattrip/heat_trip_backend/user/**'
+]
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+
+    // 게이트 대상을 인증 패키지로 좁힌다. 나머지는 리포트에만 남는다.
+    classDirectories.setFrom(
+            files(sourceSets.main.output.classesDirs.collect { dir ->
+                fileTree(dir: dir, includes: authCoveragePackages)
+            })
+    )
+
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.17   // 2026-08 실측 17.2% → 목표 0.80 (#13, #21)
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification
 
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs += ['-parameters']
