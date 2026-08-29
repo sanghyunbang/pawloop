@@ -27,7 +27,7 @@
   - `place` (조인 대상, 읽기 전용. `geom POINT`, `SPATIAL INDEX`) — [schema.md §4](../../03-database/schema.md)
   - `app_user` (FK 대상) — [schema.md §1](../../03-database/schema.md)
 - **재사용 가능한 기존 자산**:
-  - JWT 인증 추출: `UserService.emailFromAuth(authHeader)` + `findByEmail(email)` (AuthController/BookmarkController 패턴), 또는 `JWTProvider.getUserIdFromToken(token)` (SocialController `requireUser` 패턴). **둘 중 프로젝트 표준 하나로 통일**.
+  - JWT 인증 추출: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (이 줄은 #5 이전 서술이었다 — 두 패턴 중 하나를 고르라고 안내했으나 둘 다 삭제됐다.)
   - 커서 페이지네이션 응답: `explore.dto.CursorPageResponse<T>`(items/nextCursor/hasNext) 및 `explore.dto.PageResponse` 참고. **단, openapi Bookmarks GET은 배열 반환(페이지네이션 없음)** — §2 주의.
   - 에러 패턴: `ResponseEntity.badRequest().body(Map.of("error", ...))` + `ResponseStatusException(HttpStatus.*)` (SocialController), 또는 openapi `Error{error:{code,message,traceId}}` 스키마.
   - `place` 좌표→lat/lng 추출: `explore.mapper.PlaceMapper`, `kakao.service.GeoUtils` 참고.
@@ -167,7 +167,7 @@ ORDER BY b.created_at DESC
    `existsByUserIdAndPlaceId` 선검사 후 저장하는 사이 동시요청이 오면 유니크 위반(`DataIntegrityViolationException`) 가능. **선검사 + DB 유니크 위반 캐치 이중 방어** 권장. 유니크 위반을 잡아 **409**로 변환(500 노출 금지).
 
 4. **JWT userId 추출 표준 통일**
-   두 패턴이 공존한다: (a) `UserService.emailFromAuth(authHeader)`→`findByEmail`→`getId()` (BookmarkController/AuthController), (b) `JWTProvider.getUserIdFromToken(token)`(SocialController `requireUser`, 토큰 subject=email). **한 가지로 통일**하고 Bookmarks도 그 규칙을 따를 것. 토큰 subject는 email이므로 최종적으로 `User.getId()`(BIGINT)를 얻어 `bookmark.user_id`에 저장.
+   **#5 에서 한 가지로 통일됐다.** `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. 토큰 subject 는 이제 `users.id` 이므로 별도 변환 없이 `me.getId()`(BIGINT)를 `bookmark.user_id` 에 저장한다.
 
 5. **트랜잭션 경계**
    - `add`/`remove`는 `@Transactional`(쓰기). `deleteBy...` 파생 삭제는 `@Modifying` + 트랜잭션 필수(아니면 삭제 미수행).

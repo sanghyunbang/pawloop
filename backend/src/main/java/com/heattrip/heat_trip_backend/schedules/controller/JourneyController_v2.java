@@ -51,7 +51,13 @@ public class JourneyController_v2 {
     // 인증은 @CurrentUser 가 맡고 실패는 본문 없는 401 이다. (이슈 #5)
     //
     // 아래 requireOwnedJourney 의 404/403 은 그대로 둔다 — 인증이 아니라 존재·소유 검증이다.
-    // (그 둘도 지금 500 으로 나가지만, 고치려면 전역 에러 계약을 바꿔야 해서 #5 범위 밖이다.)
+    //
+    // **그 둘은 이 PR 이후에도 500 으로 나간다.** 접근 자체는 막히므로 인가 구멍은 아니지만
+    // 앱은 '없음/권한없음'과 '서버 장애'를 구분할 수 없고, 500 본문에 내부 메시지
+    // (`404 NOT_FOUND "Journey not found"`)가 실린다. 고치려면 GlobalExceptionHandler 의
+    // catch-all 보다 ResponseStatusException 을 먼저 잡아야 하고, 그건 전역 에러 계약과
+    // NoResourceFoundException 처리까지 함께 건드리는 변경이라 #5 범위 밖이다.
+    // 소유자: 이슈 #44 (GlobalExceptionHandler 가 ResponseStatusException 을 삼킨다).
 
     /** 여정 존재/소유자 검증(없으면 404, 소유 아니면 403) */
     private Journey requireOwnedJourney(Long id, User user) {
