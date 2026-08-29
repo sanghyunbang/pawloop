@@ -3,13 +3,17 @@ package com.heattrip.heat_trip_backend.user.service;
 import java.time.LocalDateTime;
 
 import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException;
+import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
+import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 
@@ -29,10 +33,23 @@ public class UserService {
      */
     private final RefreshTokenService refreshTokenService;
 
-   @Transactional
-    public void signup(SignupRequest request) {
+    /**
+     * 이메일/비밀번호 가입.
+     *
+     * <p>저장한 사용자를 <b>돌려준다</b>. 계약(docs/04-api/openapi.yaml)의
+     * {@code POST /auth/signup} 이 201 + {@code User} 를 선언하므로 컨트롤러가 응답 본문을
+     * 만들려면 저장된 행이 필요하다. 예전에는 {@code void} 였고 응답은 평문
+     * {@code "회원가입 성공"} 이었다 — 계약에 없는 모양이었다. (이슈 #10)
+     *
+     * @throws ResponseStatusException 409 — 같은 이메일이 이미 있을 때. 계약이 그 경로에
+     *         {@code 409 Conflict} 를 선언한다. 예전에는 {@code IllegalArgumentException}
+     *         이라 400 이었고, 앱은 "입력이 틀렸다"와 "이미 가입돼 있다"를 구분할 수 없었다.
+     *         <b>사유 문구에 이메일을 넣지 않는다</b> — 그 문구는 그대로 응답 본문이 된다(#6).
+     */
+    @Transactional
+    public User signup(SignupRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new IllegalArgumentException("이미 가입된 이메일입니다.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.");
         }
 
         // ✅ 필수 동의 체크 (나이와 무관)
@@ -80,37 +97,49 @@ public class UserService {
                 .createdAt(now)
                 .build();
 
-        userRepository.save(user);
+        return userRepository.save(user);
     }
 
-    public String login(LoginRequest request) throws IllegalAccessException {
+    /**
+     * 이메일/비밀번호 로그인.
+     *
+     * <p>계약({@code openapi.yaml} 의 {@code POST /auth/login})이 선언한 {@code AuthTokens} 를
+     * 그대로 돌려준다 — 액세스 토큰·refresh 토큰 원문·만료 초·{@code isNew}·{@code user}.
+     * 예전에는 <b>JWT 평문 문자열</b> 하나였고, #9 가 발급·저장까지 해 둔 refresh 토큰은
+     * 반환값에 실릴 자리가 없어 <b>아무에게도 전달되지 않은 채</b> 14일간 원장에 남았다가
+     * 만료 정리에 걷혔다. 이제 그 값이 응답에 실린다. (이슈 #10)
+     *
+     * <p>{@code isNew} 는 항상 {@code false} 다. 이 경로는 이미 있는 계정으로 들어오는
+     * 경로라서 "이번 인증으로 계정이 생겼는가"의 답이 정해져 있다. 신규 가입은
+     * {@code POST /auth/signup} 이고, 소셜 신규 가입은 {@code CustomOAuth2User.isNew()} 다.
+     *
+     * @throws UnauthenticatedException 이메일이 없거나 비밀번호가 틀릴 때 — <b>본문 없는 401</b>.
+     *         두 경우를 구분하지 않는 것이 의도다: 구분해 주면 그 자체가 가입 여부를 묻는
+     *         조회 수단이 된다(#6). 예전에는 {@code IllegalAccessException}(checked)이었는데,
+     *         그건 어떤 핸들러에도 걸리지 않아 catch-all 이 잡아 <b>500</b> 으로 나갔다 —
+     *         계약은 그 경로에 401 만 선언한다.
+     */
+    public AuthTokensResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
-                    .orElseThrow(() -> new IllegalAccessException("가입되지 않은 이메일입니다."));
+                    .orElseThrow(UnauthenticatedException::new);
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new IllegalAccessException("비밀번호가 일치하지 않습니다");
+            throw new UnauthenticatedException();
         }
 
-        // refresh 토큰을 함께 발급·저장한다. (이슈 #9)
-        //
-        // 왜 반환하지 않는가: 이 메서드의 반환값은 그대로 HTTP 응답 본문이 되는 **JWT 평문
-        // 문자열**이다. 여기에 RT 를 실으려면 응답을 AuthTokens JSON 으로 바꿔야 하는데,
-        // 그 형태 변경은 #10 의 범위이고 지금 바꾸면 평문을 파싱하는 앱을 예고 없이 깨뜨린다.
-        // 그래도 지금 발급·저장까지 해 두는 이유는, #10 이 켜기 전까지 이 경로가 한 번도
-        // 실행되지 않은 코드로 남는 것을 막기 위해서다. 전달되지 않은 행은 만료 정리가 걷어간다.
-        //
-        // 대가를 정직하게 적는다: 그 행은 발급 순간부터 14일 동안 <b>아무도 쓸 수 없는 상태</b>로
-        // 원장에 남고, 이메일 로그인 1회마다 하나씩 쌓인다. 지금은 만료 정리(벌크 DELETE)가
-        // 걷어가므로 견딜 만하지만, 이건 임시 상태다 —
-        // **#10 이 로그인 응답을 AuthTokens JSON 으로 바꿀 때 이 반환값을 실어야 끝난다.**
-        // 그때까지 이 줄을 지우지 마라: 지우면 소셜 경로에만 있는 발급이 로그인 경로에서
-        // 회귀해도 아무도 모른다(UserServiceTest 가 이 호출을 잠근다).
-        refreshTokenService.issueFor(user.getId());
+        // refresh 토큰을 함께 발급·저장하고, 그 원문을 응답에 싣는다. (이슈 #9 발급 · #10 전달)
+        // 이 줄을 지우면 앱이 갱신할 수단을 잃고 1시간마다 재로그인하게 된다.
+        String refreshToken = refreshTokenService.issueFor(user.getId());
 
         // subject 는 users.id 다. 예전에는 여기에 email 을, 소셜 경로에는 "kakao_1234567890" 을 넣어
         // 같은 토큰 형식이 두 가지 규약을 갖고 있었다. (이슈 #5)
         // 권한은 DB 의 role 컬럼을 쓴다. 예전에는 여기서 "ROLE_USER" 를 하드코딩했다. (이슈 #7)
-        return jwtProvider.createAccessToken(user.getId(), roleOf(user));
+        return new AuthTokensResponse(
+                jwtProvider.createAccessToken(user.getId(), roleOf(user)),
+                refreshToken,
+                jwtProvider.getExpiresInSeconds(),
+                false,
+                UserResponse.from(user));
     }
 
     /** role 컬럼이 없던 시절에 만들어진 행은 값이 비어 있을 수 있다. */

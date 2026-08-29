@@ -10,11 +10,13 @@
 
 | 계약 엔드포인트 | 상태 | 비고 |
 | --- | --- | --- |
-| `GET /auth/oauth/{provider}` (로그인 시작 302) | **경로만 추가** | Spring 기본 진입점은 `GET /oauth2/authorization/{provider}` — 이미 동작. 계약 경로(`/auth/oauth/{provider}`)로 오면 302로 넘겨주는 얇은 리다이렉트만 추가. |
+| `GET /auth/oauth/{provider}` (로그인 시작 302) | **있음(#10 완료)** | `AuthController.startOAuth` 가 `Location: /oauth2/authorization/{provider}` 로 302 한다. 화이트리스트(`kakao`·`naver`·`google`) 밖은 400 + `Error`(`VALIDATION`). 예전에는 핸들러가 **빈 200** 을 주면서 계약은 "미구현" 이라고 적고 있었다. |
+| `POST /auth/signup` | **있음(#10 완료)** | `201` + 계약의 `User`. 중복 이메일은 **409**. 예전에는 `200` + 평문 `"회원가입 성공"` 이었고 중복이 400 이었다. 토큰은 발급하지 않는다 — 가입 직후 로그인은 `POST /auth/login` 이다. |
+| `POST /auth/login` | **있음(#10 완료)** | `200` + `AuthTokensResponse`(계약의 `AuthTokens`). #9 가 발급·저장하던 refresh 토큰이 드디어 응답에 실린다. 자격증명 실패는 **본문 없는 401**(예전에는 500). |
 | (SuccessHandler → `heattrip://login-callback?token=`) | **있음(재사용)** | `OAuth2SuccessHandler` 그대로. 단 JWT subject 불일치(§6) 정리 필요. |
 | `POST /auth/oauth/{provider}/callback` (code→token) | **신규 추가** | SPA/네이티브 대안 흐름. 현재 없음. 공급자 토큰 교환 + 사용자 upsert + JWT 발급. |
 | `POST /auth/token/refresh` | **있음(#9 완료)** | `AuthController.refresh` → `RefreshTokenService.rotate`. 회전 + 재사용 감지 + 만료. 실패는 본문 없는 401, 형식 오류는 400·415·405. §5·§6 참조. |
-| `GET /auth/me` | **있음(수정)** | 현 `AuthController.me`가 `UserResponse` 반환. 계약 `User` 스키마(id/provider/nickname/isNew)로 응답 정합 맞추기. |
+| `GET /auth/me` | **있음(#10 확인 완료)** | `AuthController.me` 가 `UserResponse` 를 반환하고, 그 필드 집합이 곧 계약의 `User` 다(11개: id·email·name·nickname·gender·age·travelType·imageUrl·provider·createdAt·updatedAt). 별도 `UserDto` 를 만들지 않았다 — 그러면 같은 스키마의 사본이 둘이 되고 한쪽만 낡는다. `isNew` 는 여기 없다(로그인 응답의 1회성 속성, #23). |
 | `DELETE /auth/me` (회원탈퇴) | **있음(재사용)** | 현 `AuthController.deleteMe` 그대로. 204. |
 | `POST /auth/logout` | **있음(#9 완료) / 부분 폐기** | `AuthController.logout` → `UserService.logout` → `RefreshTokenService.revokeAllByUserId`. **전 기기 로그아웃**이며 멱등(폐기할 것이 없어도 204). 다만 액세스 토큰은 여전히 만료(1시간)까지 유효하다 — `jti` 블록리스트가 없기 때문이고, 그 소유자는 M2 이후 Redis Epic(`backend/TODO/refresh-token-redis.md`)이다. |
 
@@ -42,23 +44,28 @@
 
 > 기존 `user.controller.AuthController` 확장/정리. **인증이 필요한 핸들러는 `@CurrentUser User me` 파라미터를 받는다** — 컨트롤러가 `Authorization` 헤더를 다시 읽는 것은 #5 이후 금지이고 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. 각 행은 openapi paths와 1:1.
 
+아래는 **shipped 시그니처**다(#9·#10 이후). 초안 청사진과 다른 곳은 각주로 남긴다.
+
 | HTTP · 경로 | 메서드 시그니처(파라미터 타입) | 반환 DTO | 인증 |
 | --- | --- | --- | --- |
-| `GET /auth/oauth/{provider}` | `startOAuth(@PathVariable String provider, HttpServletRequest req, HttpServletResponse res)` | 302 (본문 없음) | ✕ |
-| `POST /auth/oauth/{provider}/callback` | `oauthCallback(@PathVariable String provider, @RequestBody OAuthCallbackRequest body)` | `AuthTokensDto` | ✕ |
-| `POST /auth/token/refresh` | `refresh(@RequestBody RefreshRequest body)` | `AuthTokensDto` | ✕ (refreshToken 본문 검증) |
-| `GET /auth/me` | `me(HttpServletRequest req)` | `UserDto` | ○ |
-| `DELETE /auth/me` | `deleteMe(HttpServletRequest req)` | 204 (`ResponseEntity<Void>`) | ○ |
-| `POST /auth/logout` | `logout(@RequestBody(required=false) RefreshRequest body, HttpServletRequest req)` | 204 | ✕(선택) |
+| `POST /auth/signup` | `signup(@RequestBody SignupRequest request)` | 201 + `UserResponse` | ✕ |
+| `POST /auth/login` | `login(@RequestBody LoginRequest request)` | `AuthTokensResponse` | ✕ |
+| `GET /auth/oauth/{provider}` | `startOAuth(@PathVariable String provider)` | 302 (본문 없음) | ✕ |
+| `POST /auth/oauth/{provider}/callback` | (미구현 — #14) | `AuthTokensResponse` | ✕ |
+| `POST /auth/token/refresh` | `refresh(@RequestBody RefreshTokenRequest body)` | `AuthTokensResponse` | ✕ (refreshToken 본문 검증) |
+| `GET /auth/me` | `me(@CurrentUser User me)` | `UserResponse` | ○ |
+| `PUT /auth/me` | `updateMe(@CurrentUser User me, @RequestBody UpdateProfileRequest req)` | `UserResponse` | ○ |
+| `DELETE /auth/me` | `deleteMe(@CurrentUser User me)` | 204 (`ResponseEntity<Void>`) | ○ |
+| `POST /auth/logout` | `logout(@CurrentUser User me)` | 204 | ○ |
 
-> ⚠️ 위 표는 **설계 시점의 청사진**이다. `/auth/token/refresh`·`/auth/logout` 의 shipped 시그니처는 다르다(#9):
-> `refresh(@RequestBody RefreshTokenRequest body)` 는 `AuthTokensResponse` 를 돌려주고,
-> `logout(@CurrentUser User me)` 는 **본문을 받지 않는다** — 로그아웃은 토큰 하나가 아니라
-> 그 사용자의 살아 있는 RT 전량을 폐기하는 동작이라 주체만 있으면 되기 때문이다.
+> ⚠️ 초안 청사진과 다른 점. `logout` 은 **본문을 받지 않는다** — 로그아웃은 토큰 하나가 아니라
+> 그 사용자의 살아 있는 RT 전량을 폐기하는 동작이라 주체만 있으면 되기 때문이다(#9).
+> `startOAuth` 는 `HttpServletRequest`/`Response` 를 받지 않는다 — 302 를 `ResponseEntity` 로
+> 만들면 서블릿 API 를 컨트롤러에 들일 이유가 없다(#10).
 
-- `provider` 파라미터: `kakao|naver|google` 이외 값 → 400/error.
+- `provider` 파라미터: `kakao|naver|google` 이외 값 → 400 + `Error`(`code: VALIDATION`). 대소문자·앞뒤 공백은 정규화한다. 사유 문구에 입력값을 되싣지 않는다 — 반사형 XSS 재료다.
 - 인증 필요 메서드는 `@CurrentUser User me` 하나로 끝난다. 주입에 실패하는 모든 경우(인증 없음 · principal 타입 불일치 · 그 id 의 행 없음)는 **본문 없는 401** 이다. `SocialController.requireUser(...)` 같은 컨트롤러별 헬퍼는 #5 에서 전부 사라졌다.
-- 오류 응답은 기존 `Error` 스키마 형태(`{ error: { code, message } }`) — §6.
+- 오류 응답은 계약의 `Error` 형태(`{ error: { code, message, traceId } }`) 하나뿐이다(#10 완료) — §6-7.
 
 ---
 
@@ -75,12 +82,21 @@
 
 ### 응답 (Response records)
 
-| record | 필드 (이름:타입) | openapi 스키마 |
+| record / 클래스 | 필드 (이름:타입) | openapi 스키마 |
 | --- | --- | --- |
-| `AuthTokensDto` | `accessToken:String`, `refreshToken:String`, `expiresIn:int`(초), `user:UserDto` | `AuthTokens` |
-| `UserDto` | `id:Long`, `provider:String`(kakao/naver/google), `nickname:String`, `isNew:boolean` | `User` |
+| `AuthTokensResponse` | `accessToken:String`, `refreshToken:String`, `expiresIn:long`(초), `isNew:Boolean`, `user:UserResponse` | `AuthTokens` |
+| `UserResponse` | `id:Long`, `email`, `name`, `nickname`, `gender`, `age:Integer`, `travelType`, `imageUrl`, `provider`, `createdAt`, `updatedAt` | `User` |
 
-> 주의: 계약 `User` 스키마는 4필드(id/provider/nickname/isNew)만. 기존 `UserResponse`(name/gender/age/email/travelType/imageUrl…)와 다르므로 **Auth 응답 전용으로 `UserDto`를 별도 정의**하고, 프로필 상세는 별도 리소스(User)로 분리한다. `isNew`는 콜백 시 신규 가입 여부(§4)에서 세팅, `me`에서는 통상 `false`.
+> **`UserDto` 를 따로 만들지 않았다.** 이 문서의 예전 판은 계약 `User` 가 4필드(id/provider/
+> nickname/isNew)라고 적고 Auth 응답 전용 DTO 분리를 지시했는데, 그 서술은 #23 이 계약을
+> 정리하기 전의 것이다. 지금 계약의 `User` 는 위 11필드이고 `isNew` 는 거기 **없다** —
+> `isNew` 는 로그인 응답(`AuthTokens`)의 1회성 이벤트 속성이지 프로필의 영속 속성이 아니다.
+> 즉 `UserResponse` 가 이미 계약의 `User` 다. 사본을 하나 더 만들면 한쪽만 낡는다. (#10)
+
+> `AuthTokensResponse.isNew` 가 `boolean` 이 아니라 `Boolean` 인 것은 의도다. `null` 이면
+> `@JsonInclude(NON_NULL)` 이 필드를 통째로 뺀다 — `POST /auth/token/refresh` 응답이 그 경우다.
+> `false` 를 실으면 "이번 갱신으로 계정이 생기지 않았다" 는 **물어본 적 없는 질문의 답**이
+> 매 갱신마다 앱의 온보딩 분기로 흘러든다. `user` 도 같은 이유로 `null` 이면 빠진다.
 
 ---
 
@@ -102,6 +118,12 @@
 > `user/service/RefreshTokenService`(발급·회전·폐기·정리) + `user/service/UserService`(로그아웃·탈퇴 위임)로
 > 구현했다. 특히 위 표의 `void logout(String refreshToken)` 은 **shipped 와 다르다** — 로그아웃은
 > 토큰 단위가 아니라 `revokeAllByUserId(userId)` 로 전 기기를 끊는다.
+>
+> `UserDto me(String subject)` 도 shipped 와 다르다(#10): 주체 해석은 서비스가 아니라
+> `CurrentUserArgumentResolver` 가 끝내고, 컨트롤러는 주입받은 엔티티를 `UserResponse.from` 으로
+> 바꿀 뿐이다 — 서비스를 한 번 더 부르면 주체 해석 지점이 다시 둘로 갈라진다(#5).
+> `buildAuthorizationRedirect(String provider)` 도 서비스에 두지 않았다: 그 메서드의 내용은
+> 문자열 하나를 잇는 것뿐이라, 서비스를 하나 만드는 대신 `AuthController.startOAuth` 에 두었다.
 
 > 소셜 토큰 교환(`exchangeCode`)은 `TourApiClient`/`WebClientConfig`의 WebClient 패턴을 그대로 사용(공급자 token endpoint + userinfo 호출). 공급자별 endpoint/파라미터 차이는 provider 분기로 처리.
 
@@ -192,14 +214,20 @@
 
 1-2. **`prv`·`jti` 클레임은 넣지 않았다 — 이관처는 M2 이후 Redis Epic 이다(#9 아님).** 이슈 #5 완료 조건 6 은 `sub` 가 숫자 문자열인 것과 함께 "`prv` 가 `kakao`/`google`/`local` 중 하나"를 요구하고, 1단계 첫 체크박스는 `jti`(UUID)도 요구한다. 실제 발급 클레임은 `sub`·`role`·`iat`·`exp` 넷뿐이다. 이유: `jti` 는 블록리스트 저장소가 있어야 의미가 있고(#9 의 refresh 토큰 저장소와 같은 곳), `prv` 는 지금 어떤 소비처도 읽지 않는다 — 읽는 쪽 없이 클레임만 늘리면 토큰만 커지고 규약은 검증되지 않는다. **#9 도 `jti` 를 도입하지 않기로 결론냈다.** 계약이 그 판단과 새 소유자를 적어 두었다(`docs/04-api/openapi.yaml` 의 `bearerAuth` — "`jti` 는 이슈 #9 에서 도입하지 않기로 했습니다 … Redis 로 뒷받침되는 액세스 토큰 블록리스트는 M2 이후 별도 Epic 입니다"). MySQL 블록리스트는 모든 인증 요청마다 DB 조회를 1회 더하면서 고작 1시간짜리 창을 줄인다. `prv` 는 읽는 코드가 없고 가변 값을 불변 토큰에 복제하는 형태라 도입 계획 자체가 없다. **#5 를 닫을 때 완료 조건 6 의 `prv` 절과 1단계의 `jti` 는 이관으로 처리한다 — 이관처는 #9 가 아니라 Redis Epic(`backend/TODO/refresh-token-redis.md`)이다.**
 
-1-3. **앱(#11·#12)에 반드시 전달해야 할 두 가지 (#9).** 백엔드 레인에서는 `app/**` 를 열 수 없으므로 여기 남긴다.
+1-3. **앱(#11·#12)에 반드시 전달해야 할 것 (#9·#10).** 백엔드 레인에서는 `app/**` 를 열 수 없으므로 여기 남긴다. **아래 세 번째·네 번째 줄은 지금 앱을 실제로 깨뜨린다** — `app/lib/features/auth/data/auth_repository_impl.dart` 가 로그인 응답 본문을 평문 토큰으로 읽고 있다.
 
    | 무엇 | 왜 | 안 하면 |
    | --- | --- | --- |
    | 딥링크는 `Uri.parse(url).queryParameters['token']` 로 파싱한다 | 딥링크가 `heattrip://login-callback?token=<AT>&refresh=<RT>` 로 바뀌었다. 액세스 토큰이 더 이상 URL 의 꼬리가 아니다 | `token=` 뒤를 전부 잘라 쓰던 코드가 `<AT>&refresh=<RT>` 를 통째로 저장한다 → 모든 요청 401 |
    | 갱신 요청을 **single-flight** 로 직렬화하고 실패해도 재시도하지 않는다 | 서버는 유예 창을 두지 않는다. 같은 RT 로 동시에 두 번 보내면 진 쪽이 **재사용**으로 판정된다 | 만료된 AT 로 API 두 개가 동시에 401 → 각자 refresh → 한쪽이 재사용으로 판정되어 **전 기기 로그아웃**. 사용자에게는 서버 버그로 보인다 |
+   | `POST /auth/login` 응답을 **JSON 으로 파싱**해 `accessToken` 을 꺼내고, `refreshToken` 을 함께 저장한다 | 응답이 JWT 평문 문자열에서 `AuthTokens` JSON 으로 바뀌었다(#10) | `response.body` 를 그대로 토큰으로 저장하면 JSON 전체가 `Authorization` 헤더에 실린다 → **모든 요청 401**. 그리고 refresh 토큰을 저장하지 않으면 1시간마다 재로그인이다 |
+   | `POST /auth/signup` 의 성공을 **201** 로 받고, 응답 본문을 `User` JSON 으로 읽는다 | 200 + 평문 `"회원가입 성공"` 에서 201 + `User` 로 바뀌었다(#10). 중복 이메일은 400 이 아니라 **409** 다 | 200 만 성공으로 보면 정상 가입이 실패로 보인다. 409 를 400 으로 묶어 다루면 "이미 가입된 이메일" 안내를 못 한다 |
+   | 로그인 실패를 **401** 로 다룬다 | 자격증명 실패가 500 에서 401 로 바뀌었다(#10). 본문은 없다 | 500 만 서버 오류로 보던 코드가 "서버가 죽었다" 대신 아무 안내도 못 한다 |
+   | 4xx·5xx 본문은 `{"error":{"code","message","traceId"}}` 하나뿐이다. **단 401 은 본문이 없다** | 전역 오류 포맷을 계약의 `Error` 로 통일했다(#10) | `{status,message,...}` 나 `{"error":"문자열"}` 을 기대하는 파싱은 전부 빈 값을 읽는다. 401 에서 `error.code` 를 읽으려 하면 파싱 예외가 난다 |
 
    두 번째 항목은 흔한 사고다(백그라운드 복귀·병렬 요청). 인터셉터에 뮤텍스를 두고, 진행 중인 갱신이 있으면 그 결과를 기다리게 하는 것이 표준 해법이다.
+
+   세 번째 항목의 이행 순서: **서버가 먼저 바뀌었으므로 앱은 즉시 따라와야 한다.** 두 형태를 동시에 받는 관용 코드(문자열이면 그대로, JSON 이면 `accessToken`)를 잠시 두는 것은 괜찮지만, 그 관용은 앱이 배포된 뒤 지워야 한다 — 남겨 두면 다음 사람이 어느 쪽이 계약인지 알 수 없다.
 
 2. **Access token 만료** — 해결됨. 수명은 `jwt.expiration`(기본 3600000ms = 1시간)이고 `JWTProvider.getExpiresInSeconds()` 가 그 값을 초로 돌려준다 — `POST /auth/token/refresh` 의 `expiresIn` 이 그것이다. RT 수명은 `jwt.refresh-expiration`(기본 14일)이며 두 값 모두 `.env.example` 에 등재돼 있다.
 3. **Refresh token — #9 에서 구현됨.** 발급·저장(해시)·회전·재사용 감지·만료·폐기·탈퇴 정리·야간 만료 정리가 `user/service/RefreshTokenService` 한 곳에 있다. 남은 함정만 적는다.
@@ -208,10 +236,16 @@
    - **유예 창을 두지 않는다.** 그래서 같은 RT 로 동시에 두 번 보내면 진 쪽이 재사용으로 판정되어 **전 기기가 끊긴다**. 앱은 갱신 요청을 single-flight 로 직렬화해야 하고 실패해도 재시도하면 안 된다 — 재시도가 곧 재사용 판정이다. 계약이 이 요구를 명시한다(§6-1-3 인수인계 표).
    - **만료 정리 잡은 `@EnableScheduling`(`config/SchedulingConfig`) 없이는 완전히 무력하다.** 애너테이션은 붙어 있는데 잡이 영원히 등록되지 않는 상태에서도 앱은 멀쩡히 뜬다. `RefreshTokenOperationalWiringIntegrationTest` 가 살아 있는 컨텍스트의 등록된 잡 목록으로 잠근다.
    - **Hibernate 바인딩 로그를 TRACE 로 올리지 마라.** 올리면 `token_hash`(SHA-256)·이메일·BCrypt 해시·소셜 ID 가 전부 운영 로그로 나간다(#6). 기본값은 `application.properties` 에서 껐고 같은 테스트가 잠근다.
-4. **로그인 시작 경로 이중화** — 실제 Spring OAuth2 진입점은 `/oauth2/authorization/{provider}`(SecurityConfig `oauth2Login`). 계약 `GET /auth/oauth/{provider}`는 이 진입점으로의 **302 리다이렉트 래퍼**만 두면 됨(성공 시 딥링크는 기존 SuccessHandler가 처리). 별도 인증 로직 재구현 금지.
+4. **로그인 시작 경로 이중화 — #10 에서 래퍼를 두었다.** 실제 Spring OAuth2 진입점은 `/oauth2/authorization/{provider}`(SecurityConfig `oauth2Login`). 계약 `GET /auth/oauth/{provider}` 는 그 진입점으로의 **302 리다이렉트 래퍼**뿐이다(성공 시 딥링크는 기존 SuccessHandler 가 처리). **별도 인증 로직 재구현 금지** — 그래서 `AuthController.startOAuth` 는 어떤 서비스도 부르지 않고, `AuthControllerTest` 가 그것을 `verifyNoMoreInteractions` 로 잠근다. 앱은 이 경로를 쓸 필요가 없다(진입점을 직접 열면 리다이렉트 한 번을 아낀다) — 계약을 보고 구현한 클라이언트가 막다른 길에 빠지지 않게 하는 호환 표면이다.
 5. **콜백 대안 흐름(callback POST)의 토큰 교환** — `flutter_web_auth_2` 딥링크 흐름과 별개로, SPA/네이티브가 인가코드를 직접 넘기는 경우. 공급자 token endpoint 호출은 `WebClientConfig` 빈 + `TourApiClient` 스타일(WebClient, 타임아웃/에러 매핑)로. secret은 `@Value`로 주입, 로그에 노출 금지.
-6. **provider 화이트리스트** — `{provider}`는 `kakao|naver|google`만 허용. 그 외는 400 + `Error`(`code: VALIDATION`류). `CustomOAuth2UserService`의 `switch`에 `"Kakao"`(대문자) 중복 case가 있으니 정규화(소문자) 후 분기 통일 권장.
-7. **에러 포맷 통일** — 계약은 4xx/5xx 본문으로 `{ error: { code, message, traceId? } }` 를 선언한다. 반면 `SocialController`는 `{ error: "msg" }`(문자열), `GlobalExceptionHandler`는 `{ status, error, message, path, timestamp }` 로 서로 다르다 → 정리는 #10. **단 401 은 예외다:** 인증 실패는 원인과 무관하게 **본문 없는 401** 이고(#5·#6), 계약의 `components/responses/Unauthorized` 도 그렇게 선언한다. 인증 실패를 컨트롤러가 만들지 않는다는 점도 함께 바뀌었다 — `SecurityConfig` 의 `HttpStatusEntryPoint(401)` 와 `CurrentUserArgumentResolver` 두 곳뿐이다.
+6. **provider 화이트리스트 — #10 에서 구현됨.** `AuthController.SUPPORTED_PROVIDERS` 가 `kakao|naver|google` 만 허용하고, 그 외는 400 + `Error`(`code: VALIDATION`)다. 목록은 계약(`components/parameters/Provider`)의 enum 과 **같아야 한다** — 여기서만 넓히면 계약에 없는 값이 302 로 통과한다. 입력은 `trim().toLowerCase()` 로 정규화한다(`CustomOAuth2UserService` 의 `switch` 에 `"Kakao"` 대문자 중복 case 가 있던 것과 같은 함정을 여기서는 만들지 않는다).
+7. **에러 포맷 통일 — #10 에서 완료.** 4xx/5xx 본문은 계약의 `Error`(`{ error: { code, message, traceId } }`) 하나뿐이고, 만드는 곳은 `GlobalExceptionHandler` 한 곳뿐이다. `code` 는 HTTP 상태에서 파생된다(`codeOf`) — 던지는 쪽이 문자열을 손으로 적지 않는다. 그 어휘는 계약의 `Error.code` enum 이 소유하며 `AuthContractSpecTest.errorSchema_declaresTheClosedCodeVocabulary` 가 둘을 대조한다.
+
+   정리 전에는 세 갈래였다: 계약의 봉투, `GlobalExceptionHandler` 의 `{ status, error, message, path, timestamp }`, `SocialController` 의 `{ error: "msg" }`(문자열). `SocialController` 의 다섯 핸들러에 있던 `try/catch` 두 겹을 걷어냈다 — 그 `catch (Exception)` 은 예상하지 못한 예외를 스택트레이스도 남기지 않고 삼키고 있었다.
+
+   **단 401 은 예외다:** 인증 실패는 원인과 무관하게 **본문 없는 401** 이고(#5·#6), 계약의 `components/responses/Unauthorized` 도 그렇게 선언한다. `handleDeclaredStatus` 도 401 만은 본문을 붙이지 않는다 — `ResponseStatusException(401)` 하나가 그 계약을 깨뜨리지 않게 하기 위해서다. 인증 실패를 만드는 곳은 `SecurityConfig` 의 `HttpStatusEntryPoint(401)` 와 `GlobalExceptionHandler.handleUnauthenticated`(주체 해석 실패·자격증명 실패·RT 회전 실패) 두 곳뿐이다.
+
+   > ⚠️ **이슈 #10 본문은 401 에도 `{"error":{"code":"UNAUTHORIZED"}}` 본문을 요구했다. 따르지 않았다.** 그 요구는 #5 보다 먼저 쓰였고, #5 가 그 뒤에 '401 은 본문 없음' 으로 확정하면서 계약과 두 테스트(`AuthContractSpecTest.unauthorizedResponse_declaresNoBody`, `GeneratedOpenApiSpecTest.generatedSpec_401NeverDeclaresABody`)가 그것을 잠갔다. 본문을 되붙이면 그 둘이 빨간불이 된다. 계약이 코드보다 우선이라는 규약(#4)을 그대로 따른 결과다.
 8. **트랜잭션** — `exchangeCode`(사용자 upsert + refresh 저장), `deleteMe`(사용자 + refresh 삭제)는 `@Transactional` 경계로 묶기. 외부 공급자 HTTP 호출은 트랜잭션 밖에서 수행 후, DB 쓰기만 트랜잭션 내부로(장시간 커넥션 점유 방지).
 9. **좌표/공간 무관** — Auth 리소스는 EPSG:5174→WGS84·`ST_Distance_Sphere` 등 공간 처리와 무관(그쪽 함정은 Places/Walks 문서에서 다룸).
 10. **테이블명 정합** — 스키마 문서는 `app_user`, 코드 실체는 `users`. 문서·코드 중 한쪽으로 명칭을 수렴시키거나, 문서에 "실 테이블=`users`" 주석을 남길 것(마이그레이션 혼선 방지).

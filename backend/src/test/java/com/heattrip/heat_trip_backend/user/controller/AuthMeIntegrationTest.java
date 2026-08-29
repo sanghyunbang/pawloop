@@ -297,7 +297,8 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
         LoginRequest request = new LoginRequest();
         request.setEmail(email);
         request.setPassword(rawPassword);
-        return userService.login(request);
+        // 반환값이 문자열에서 AuthTokens 로 바뀌었다 — 응답에 refresh 토큰을 싣기 위해서다(#10).
+        return userService.login(request).accessToken();
     }
 
     private AuthenticationSuccessHandler registeredSuccessHandler() {

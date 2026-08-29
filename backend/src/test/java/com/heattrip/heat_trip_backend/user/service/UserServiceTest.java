@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.user.service;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException;
+import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
@@ -16,6 +17,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -170,7 +172,7 @@ class UserServiceTest {
 
     @Test
     @DisplayName("이메일 가입자의 로그인 토큰 권한은 DB 의 role 값을 쓴다")
-    void login_usesRoleFromDatabase() throws IllegalAccessException {
+    void login_usesRoleFromDatabase() {
         LoginRequest request = new LoginRequest();
         request.setEmail("admin@example.com");
         request.setPassword("test1234");
@@ -187,13 +189,13 @@ class UserServiceTest {
         when(passwordEncoder.matches("test1234", "encoded-password")).thenReturn(true);
         when(jwtProvider.createAccessToken(7L, "ROLE_ADMIN")).thenReturn("jwt-token");
 
-        assertThat(userService.login(request)).isEqualTo("jwt-token");
+        assertThat(userService.login(request).accessToken()).isEqualTo("jwt-token");
         verify(jwtProvider).createAccessToken(7L, "ROLE_ADMIN");
     }
 
     @Test
     @DisplayName("로그인 성공 시 JWT를 반환하며 토큰의 subject 로 이메일이 아니라 users.id 를 넘긴다")
-    void login_returnsJwtWhenCredentialsMatch() throws IllegalAccessException {
+    void login_returnsJwtWhenCredentialsMatch() {
         // createAccessToken 의 첫 인자가 Long 이라, login 을 user.getEmail() 로 되돌리면
         // 이 테스트가 실패하기 전에 **컴파일이 먼저 죽는다**. 그게 이 이슈의 진짜 방어선이다. (#5)
         LoginRequest request = new LoginRequest();
@@ -210,14 +212,52 @@ class UserServiceTest {
         when(passwordEncoder.matches("test1234", "encoded-password")).thenReturn(true);
         when(jwtProvider.createAccessToken(7L, "ROLE_USER")).thenReturn("jwt-token");
 
-        String token = userService.login(request);
-
-        assertThat(token).isEqualTo("jwt-token");
+        assertThat(userService.login(request).accessToken()).isEqualTo("jwt-token");
         verify(jwtProvider).createAccessToken(7L, "ROLE_USER");
     }
 
     @Test
-    @DisplayName("비밀번호가 틀리면 로그인에 실패한다")
+    @DisplayName("로그인 응답에는 발급된 refresh 토큰 원문과 만료 초와 계약의 User 가 함께 실린다")
+    void login_carriesRefreshTokenAndExpiryAndUser() {
+        // #9 는 refresh 토큰을 발급·저장까지만 했고 반환값에 실을 자리가 없었다 — 그 행은
+        // 아무에게도 전달되지 않은 채 만료 정리에 걷혔다. 여기가 그 전달을 잠그는 자리다. (#10)
+        LoginRequest request = new LoginRequest();
+        request.setEmail("bori@example.com");
+        request.setPassword("test1234");
+
+        User user = User.builder()
+                .id(7L)
+                .email("bori@example.com")
+                .password("encoded-password")
+                .nickname("보리아빠")
+                .provider(User.PROVIDER_LOCAL)
+                .build();
+
+        when(userRepository.findByEmail("bori@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("test1234", "encoded-password")).thenReturn(true);
+        when(jwtProvider.createAccessToken(7L, "ROLE_USER")).thenReturn("jwt-token");
+        when(jwtProvider.getExpiresInSeconds()).thenReturn(3600L);
+        when(refreshTokenService.issueFor(7L)).thenReturn("opaque-refresh-token");
+
+        AuthTokensResponse tokens = userService.login(request);
+
+        assertThat(tokens.refreshToken())
+                .as("발급해 놓고 응답에 싣지 않으면 앱은 1시간마다 재로그인해야 한다")
+                .isEqualTo("opaque-refresh-token");
+        assertThat(tokens.expiresIn())
+                .as("만료 초는 JWTProvider 가 실제 수명에서 계산한 값이어야 한다 (완료 조건 2)")
+                .isEqualTo(3600L);
+        assertThat(tokens.isNew())
+                .as("이미 있는 계정으로 들어오는 경로다 — '이번에 생성됐는가' 의 답은 정해져 있다")
+                .isFalse();
+        assertThat(tokens.user()).isNotNull();
+        assertThat(tokens.user().getId()).isEqualTo(7L);
+        assertThat(tokens.user().getNickname()).isEqualTo("보리아빠");
+        assertThat(tokens.user().getProvider()).isEqualTo("local");
+    }
+
+    @Test
+    @DisplayName("비밀번호가 틀리면 400·500 이 아니라 본문 없는 401 로 이어지는 예외를 던진다")
     void login_throwsWhenPasswordDoesNotMatch() {
         LoginRequest request = new LoginRequest();
         request.setEmail("test1234@test.com");
@@ -231,8 +271,43 @@ class UserServiceTest {
         when(userRepository.findByEmail("test1234@test.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong-password", "encoded-password")).thenReturn(false);
 
+        // 예전에는 IllegalAccessException(checked)이었다. 그건 어떤 핸들러에도 걸리지 않아
+        // catch-all 이 잡아 500 으로 나갔다 — 계약은 이 경로에 401 만 선언한다. (#10)
         assertThatThrownBy(() -> userService.login(request))
-                .isInstanceOf(IllegalAccessException.class);
+                .isInstanceOf(UnauthenticatedException.class);
+    }
+
+    @Test
+    @DisplayName("가입되지 않은 이메일도 비밀번호 오류와 똑같이 본문 없는 401 이다")
+    void login_unknownEmail_isIndistinguishableFromWrongPassword() {
+        // 구분해 주면 그 자체가 '이 이메일이 가입돼 있는가' 를 묻는 조회 수단이 된다 (#6).
+        LoginRequest request = new LoginRequest();
+        request.setEmail("nobody@example.com");
+        request.setPassword("test1234");
+
+        when(userRepository.findByEmail("nobody@example.com")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.login(request))
+                .isInstanceOf(UnauthenticatedException.class)
+                .hasMessageNotContaining("@");
+    }
+
+    @Test
+    @DisplayName("이미 가입된 이메일로 다시 가입하면 400 이 아니라 409 로 거절하고 이메일을 사유에 담지 않는다")
+    void signup_duplicateEmail_isConflictWithoutEchoingTheEmail() {
+        SignupRequest request = signupRequest("MALE", "over14");
+        when(userRepository.findByEmail("bori@example.com"))
+                .thenReturn(Optional.of(User.builder().id(1L).email("bori@example.com").build()));
+
+        assertThatThrownBy(() -> userService.signup(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(thrown -> assertThat(((ResponseStatusException) thrown).getStatusCode().value())
+                        .as("계약은 이 경로에 409 Conflict 를 선언한다 — 400 은 '입력이 틀렸다' 는 다른 말이다")
+                        .isEqualTo(409))
+                // 사유 문구는 그대로 응답 본문이 된다 (#6).
+                .hasMessageNotContaining("@");
+
+        verify(userRepository, never()).save(any(User.class));
     }
 
     // ─────────────────────── users.id 로 받는 시그니처 (이슈 #5) ───────────────────────
@@ -368,8 +443,8 @@ class UserServiceTest {
     @Test
     @DisplayName("이메일 로그인도 액세스 토큰과 함께 refresh 토큰을 발급·저장한다")
     void login_issuesRefreshTokenForThatUser() {
-        // 응답 모양(현행 JWT 평문 문자열)은 바꾸지 않는다 — 그건 #10 의 범위다.
-        // 그래도 발급·저장까지 해 두어야 이 경로가 '한 번도 실행되지 않은 코드' 로 남지 않는다.
+        // 발급 자체를 잠근다. 그 값이 응답까지 실려 나가는지는
+        // login_carriesRefreshTokenAndExpiryAndUser 가 본다 (#10).
         LoginRequest request = new LoginRequest();
         request.setEmail("bori@example.com");
         request.setPassword("test1234");

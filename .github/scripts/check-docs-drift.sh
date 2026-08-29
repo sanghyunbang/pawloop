@@ -41,7 +41,9 @@ ALLOW='예전|걷어냈|걷어내|제거했|버렸|이력|더 이상|이제는|d
 #
 # 고쳐지면 이 목록에서 지운다. 지우지 않으면 게이트가 그 줄을 계속 눈감아 준다.
 KNOWN_STALE=(
-  "docs/04-api/api-spec.md:.*serviceKey.*YOUR_DECODING_SERVICE_KEY"   # 소유 #10 (계약 정합)
+  # docs/04-api/api-spec.md 의 serviceKey 줄은 #10 에서 고쳤다 — 이제 dart-define 을 말하고
+  # `.env` 는 "예전에는" 이라는 이력 서술로만 남아 ALLOW 를 탄다. 예외를 지우지 않으면
+  # 게이트가 그 줄을 영원히 눈감아 준다.
   "docs/99-decisions/decision-log.md:.*serviceKey 취급 주의"           # 소유 #15 (ADR·문서 정합)
 )
 

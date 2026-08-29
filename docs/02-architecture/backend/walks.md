@@ -170,7 +170,7 @@
 - **totalKm/avgKm 파생.** `totalKm = SUM(distance_m)/1000`, `avgKm = totalKm / walkCount`(0건이면 0, 0 나눗셈 방지). `weekKm` 합과 `totalKm`가 반올림으로 미세 불일치할 수 있으니 산출 순서/반올림 시점 통일.
 - **topPlaces (MVP 미지원 데이터).** 현재 `walk` 스키마에 방문 장소(place) 연결 컬럼이 없다. 정직하게 **빈 배열 반환**하거나 후속 확장(향후 `walk.place_id` 또는 경로 종점↔`place` 공간 근접 매칭)으로 미룰 것. 없는 데이터를 억지로 만들지 말 것.
 - **트랜잭션.** `createWalk`만 쓰기 트랜잭션(`@Transactional`). native INSERT + 후속 SELECT(생성 id/`ST_AsText`)를 한 트랜잭션 안에서 처리해 반환 DTO 일관성 확보. 조회/통계는 읽기 전용(`@Transactional(readOnly = true)`) 권장.
-- **에러 패턴.** 기존 `Error` 스키마(`{ error: { code, message, traceId } }`) 준수. NOT_FOUND(없는 walk), FORBIDDEN(타인 소유), UNAUTHORIZED(미인증), VALIDATION_ERROR(좌표<2, 필수 누락)로 매핑.
+- **에러 패턴.** 계약의 `Error` 스키마(`{ error: { code, message, traceId } }`) 준수. `NOT_FOUND`(없는 walk), `FORBIDDEN`(타인 소유), `VALIDATION`(좌표<2, 필수 누락)으로 매핑한다. **`code` 를 직접 적지 마라** — `GlobalExceptionHandler.codeOf` 가 HTTP 상태에서 파생하고, 그 어휘는 계약의 `Error.code` enum 이 소유한다(#10). 예전 이 줄에 있던 `VALIDATION_ERROR` 는 그 enum 에 없는 값이다. **미인증은 `UNAUTHORIZED` 코드가 아니라 본문 없는 401** 이다(#5) — 401 에 본문을 실으면 `GeneratedOpenApiSpecTest` 가 빨간불을 낸다.
 - **좌표계 변환(참고).** `walk.path`는 앱에서 이미 WGS84(4326)로 들어오므로 EPSG:5174→WGS84 변환 불필요(그 변환은 `place`의 LOCALDATA 병원/펫샵 삽입 시에만 해당). Walks에서는 SRID를 4326으로 고정만 하면 된다.
 
 ---

@@ -15,27 +15,66 @@ import com.heattrip.heat_trip_backend.user.service.UserService;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+
+import java.net.URI;
+import java.util.List;
+import java.util.Locale;
 
 
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController implements AuthApiDoc{
-    
+
     private final UserService userService;
     private final RefreshTokenService refreshTokenService;
 
+    /**
+     * 소셜 로그인의 <b>실제</b> 진입점. Spring Security 의 {@code oauth2Login()} 이 만든다.
+     *
+     * <p>{@code GET /auth/oauth/{provider}} 는 이 경로로 넘겨주는 얇은 래퍼일 뿐이다 —
+     * 인증 로직을 다시 구현하지 않는다.
+     */
+    private static final String SPRING_OAUTH2_ENTRY_POINT = "/oauth2/authorization/";
+
+    /**
+     * 계약({@code docs/04-api/openapi.yaml} 의 {@code components/parameters/Provider})의
+     * enum 과 <b>같은 목록</b>이어야 한다. 여기서만 넓히면 계약에 없는 값이 302 로 통과한다.
+     *
+     * <p>{@code naver} 가 있는 이유: 제품 결정상 보류(#15)일 뿐 백엔드 설정과 매핑 코드가
+     * 살아 있고, 계약도 enum 에 유지한다.
+     */
+    private static final List<String> SUPPORTED_PROVIDERS = List.of("kakao", "naver", "google");
+
+    /**
+     * 이메일/비밀번호 회원가입.
+     *
+     * <p>계약이 선언한 <b>201 + {@code User}</b> 다. 예전에는 200 + 평문 {@code "회원가입 성공"}
+     * 이었다 — 계약 어디에도 없는 모양이고, 클라이언트가 방금 만든 계정의 {@code id} 조차
+     * 알 수 없었다. (이슈 #10)
+     */
     @PostMapping("/signup")
-    public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
-        userService.signup(request);
-        return ResponseEntity.ok("회원가입 성공");
+    public ResponseEntity<UserResponse> signup(@RequestBody SignupRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(UserResponse.from(userService.signup(request)));
     }
 
+    /**
+     * 이메일/비밀번호 로그인 — 계약의 {@code AuthTokens} JSON.
+     *
+     * <p><b>반환 타입을 {@code ResponseEntity<String>} 으로 되돌리지 마라.</b> 그러면 #9 가
+     * 발급·저장하는 refresh 토큰이 다시 아무에게도 전달되지 않고, 앱은 액세스 토큰이 만료될
+     * 때마다 재로그인해야 한다. 되돌리면 {@code AuthContractIntegrationTest} 의 JSON 경로
+     * 단언이 컴파일 또는 실행에서 죽는다. (이슈 #10 완료 조건 9)
+     *
+     * <p>자격증명 실패는 <b>본문 없는 401</b> 이다 — 서비스가 던지는
+     * {@code UnauthenticatedException} 을 {@code GlobalExceptionHandler} 가 매핑한다.
+     */
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody LoginRequest request) throws IllegalAccessException {
-        String token = userService.login(request); 
-        return ResponseEntity.ok(token);
+    public ResponseEntity<AuthTokensResponse> login(@RequestBody LoginRequest request) {
+        return ResponseEntity.ok(userService.login(request));
     }
 
 
@@ -47,8 +86,8 @@ public class AuthController implements AuthApiDoc{
      * 이 {@code GlobalExceptionHandler} 에 매핑되어 <b>본문 없는 401</b> 이 된다. 그 매핑이
      * 끊기면 같은 요청이 조용히 500 으로 새므로 통합 테스트가 그것을 못 박는다.
      *
-     * <p>로그인 응답(현행 JWT 평문 문자열)과 모양이 다른 것은 의도다. 로그인 응답을 이 JSON 으로
-     * 맞추는 것은 #10 의 범위다.
+     * <p>응답은 로그인과 같은 {@code AuthTokensResponse} 지만 {@code isNew}·{@code user} 가
+     * 없다 — 갱신에는 의미가 없는 질문이라 JSON 에서 아예 빠진다(#10 에서도 그대로 둔다).
      */
     @PostMapping("/token/refresh")
     public ResponseEntity<AuthTokensResponse> refresh(@RequestBody RefreshTokenRequest request) {
@@ -60,6 +99,9 @@ public class AuthController implements AuthApiDoc{
      *
      * <p>인증 주체는 {@code CurrentUserArgumentResolver} 가 채운다 — 여기서 Authorization 헤더를
      * 다시 읽지 않는다. 주입에 실패하는 모든 경우는 본문 없는 401 이다. (이슈 #5)
+     *
+     * <p>응답 스키마는 계약의 {@code User} 다. {@code isNew} 는 여기 없다 — 그건 로그인 응답
+     * ({@code AuthTokens})의 1회성 이벤트 속성이지 프로필의 영속 속성이 아니다(#23).
      */
     @GetMapping("/me")
     public ResponseEntity<UserResponse> me(@CurrentUser User me) {
@@ -91,12 +133,34 @@ public class AuthController implements AuthApiDoc{
         return ResponseEntity.noContent().build();
     }
 
-    /** oauth2를 이용한 소셜 로그인 */
+    /**
+     * 계약 경로의 소셜 로그인 시작 — {@code /oauth2/authorization/{provider}} 로의 <b>302 래퍼</b>.
+     *
+     * <p>예전에는 {@code ResponseEntity.ok().build()} 였다. 계약은 이 경로를 302 로 선언하면서
+     * 동시에 "미구현 — 핸들러가 없다"고 적었는데, 실제로는 핸들러가 있었고 <b>빈 200</b> 을
+     * 줬다. 계약도 코드도 사실이 아니었고, {@code AuthContractSpecTest} 가 그 거짓을 잠그고
+     * 있었다. 셋을 함께 고친다. (이슈 #10 · #5 코멘트)
+     *
+     * <p><b>인증 로직을 여기서 다시 구현하지 않는다.</b> 실제 진입점은 Spring Security 의
+     * {@code oauth2Login()} 이 만드는 {@code /oauth2/authorization/{provider}} 이고, 성공 시
+     * 딥링크 복귀는 {@code OAuth2SuccessHandler} 가 그대로 처리한다.
+     *
+     * <p>화이트리스트에 없는 {@code provider} 는 <b>400</b> 이다 — 302 로 넘겨 봐야
+     * {@code /oauth2/authorization/facebook} 에는 등록이 없어 그쪽에서 오류가 나고, 그 오류는
+     * 원인을 알려 주지 않는다. 여기서 막으면 계약이 선언한 {@code Error} 본문으로 이유가 간다.
+     * 사유 문구에 {@code provider} 원문을 되싣지 않는다 — 그건 곧 반사형 XSS 재료다.
+     */
     @GetMapping("/oauth/{provider}")
-    public ResponseEntity<Void> socialLogin() {
+    public ResponseEntity<Void> startOAuth(@PathVariable("provider") String provider) {
+        String normalized = provider == null ? "" : provider.trim().toLowerCase(Locale.ROOT);
 
-        return ResponseEntity.ok().build();
+        if (!SUPPORTED_PROVIDERS.contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "지원하지 않는 소셜 로그인 공급자입니다. " + SUPPORTED_PROVIDERS + " 중 하나여야 합니다.");
+        }
+
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create(SPRING_OAUTH2_ENTRY_POINT + normalized))
+                .build();
     }
-
-
 }
