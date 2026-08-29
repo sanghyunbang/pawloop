@@ -82,12 +82,16 @@ class AuthEndpointAuthorizationTest extends AbstractMySqlIntegrationTest {
     @Test
     @DisplayName("로그인(POST /auth/login)은 토큰 없이도 인가 계층을 통과한다")
     void login_withoutToken_isNotBlockedByAuthorization() throws Exception {
+        // 자격증명이 틀린 요청으로는 이걸 증명할 수 없다 — #10 이후 그건 **401** 이고,
+        // 인가 실패도 같은 본문 없는 401 이라 둘을 구별할 수 없다. 대신 읽을 수 없는 본문을
+        // 보내 400 을 받는다. 400 은 인가 계층 너머(DispatcherServlet 안)에서만 나온다.
         int status = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"nobody@example.com\",\"password\":\"wrong-password\"}"))
+                        .content("{"))
                 .andReturn().getResponse().getStatus();
 
-        assertThat(status).isNotEqualTo(401);
-        assertThat(status).isNotEqualTo(403);
+        assertThat(status)
+                .as("인가 계층이 막았다면 컨트롤러 계층의 400 은 나올 수 없다")
+                .isEqualTo(400);
     }
 }

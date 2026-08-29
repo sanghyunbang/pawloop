@@ -262,10 +262,13 @@ class AuthContractSpecTest {
     @DisplayName("구현이 없는 계약 경로는 description 에 미구현임이 명시돼 있다")
     void unimplementedOperations_areMarkedAsSuch() {
         record Op(String path, String method) {}
-        // /auth/token/refresh 는 #9 에서 구현되어 이 목록에서 빠졌다. 아래
-        // refreshOperation_isNoLongerMarkedUnimplemented 가 그 자리를 지킨다.
+        // /auth/token/refresh 는 #9 에서, GET /auth/oauth/{provider} 는 #10 에서 구현되어
+        // 이 목록에서 빠졌다. refreshOperation_isNoLongerMarkedUnimplemented 와
+        // startOAuthOperation_isNoLongerMarkedUnimplemented 가 각각 그 자리를 지킨다.
+        //
+        // 남은 하나(콜백)는 진짜로 핸들러가 없다. 이 목록이 비면 테스트 자체가 아무것도
+        // 지키지 못하므로, 마지막 항목이 구현될 때는 이 테스트를 지워라 — 비워 두지 마라.
         List<Op> unimplemented = List.of(
-                new Op("/auth/oauth/{provider}", "get"),
                 new Op("/auth/oauth/{provider}/callback", "post"));
 
         Map<String, Object> paths = asMap(spec.get("paths"));
@@ -278,6 +281,58 @@ class AuthContractSpecTest {
                     .as("%s %s 에 기계가 읽을 미구현 표식이 필요하다", op.method(), op.path())
                     .containsEntry("x-implementation-status", "not-implemented");
         }
+    }
+
+    @Test
+    @DisplayName("GET /auth/oauth/{provider} 는 더 이상 미구현이 아니며 302 래퍼임과 400 을 계약이 말한다")
+    void startOAuthOperation_isNoLongerMarkedUnimplemented() {
+        // 이 경로의 계약은 "미구현 — 핸들러가 없습니다" 라고 적었는데 핸들러는 있었고 빈 200 을
+        // 줬다. 계약도 코드도 거짓이었고 unimplementedOperations_areMarkedAsSuch 가 그 거짓이
+        // **남아 있기를** 요구해 초록불로 고정하고 있었다. 자리를 이쪽으로 옮긴다. (#10)
+        Map<String, Object> startOAuth =
+                asMap(asMap(asMap(spec.get("paths")).get("/auth/oauth/{provider}")).get("get"));
+
+        assertThat(startOAuth)
+                .as("기계가 읽는 미구현 표식이 남으면 클라이언트 생성기가 이 경로를 건너뛴다")
+                .doesNotContainKey("x-implementation-status");
+
+        String description = String.valueOf(startOAuth.get("description"));
+        assertThat(description).doesNotContain("미구현");
+        assertThat(description)
+                .as("인증 로직을 재구현하지 않는다는 것이 이 경로의 전부다 — 그게 사라지면 사본이 생긴다")
+                .contains("/oauth2/authorization/{provider}");
+        assertThat(description)
+                .as("빈 200 을 주던 시절의 기록을 지우면 같은 거짓이 되살아난다")
+                .contains("빈 200");
+
+        assertThat(asMap(startOAuth.get("responses")).keySet())
+                .as("화이트리스트 밖 공급자는 302 가 아니라 400 이다 (완료 조건 5·11)")
+                .contains("302", "400");
+    }
+
+    @Test
+    @DisplayName("로그인·회원가입 계약이 '목표' 가 아니라 구현된 사실을 말하고 앱이 깨지는 지점을 경고한다")
+    void loginAndSignup_declareTheShippedShapeAndItsBreakingChange() {
+        Map<String, Object> paths = asMap(spec.get("paths"));
+        String login = String.valueOf(asMap(asMap(paths.get("/auth/login")).get("post")).get("description"));
+        String signup = String.valueOf(asMap(asMap(paths.get("/auth/signup")).get("post")).get("description"));
+
+        // "목표 계약입니다" 는 '아직 구현이 다르다' 는 뜻이다. #10 이 구현을 맞췄으므로 거짓이다.
+        assertThat(login).doesNotContain("목표 계약입니다");
+        assertThat(signup).doesNotContain("목표 계약입니다");
+
+        // 앱은 이 두 응답을 평문으로 파싱하고 있었다(#11·#12 소유). 무엇이 어떻게 바뀌었는지가
+        // 계약에 없으면 앱 레인은 자기가 왜 깨졌는지 알 방법이 없다.
+        assertThat(login)
+                .as("response.body 를 그대로 토큰으로 저장하던 코드가 조용히 깨진다")
+                .contains("JWT 원문 문자열");
+        assertThat(signup)
+                .as("200 만 성공으로 보던 코드가 201 을 실패로 읽는다")
+                .contains("회원가입 성공");
+
+        assertThat(asMap(asMap(asMap(paths.get("/auth/signup")).get("post")).get("responses")).keySet())
+                .as("중복 가입은 400 이 아니라 409 다 — 앱이 '입력 오류' 와 구분할 수 있어야 한다")
+                .contains("201", "409");
     }
 
     // ─────────────────────────── D. 스키마 정합 ───────────────────────────
@@ -424,6 +479,35 @@ class AuthContractSpecTest {
         assertThat(String.valueOf(unauthorized.get("description")))
                 .as("본문이 없다는 사실을 사람이 읽을 수 있게 적어야 한다")
                 .contains("본문");
+    }
+
+    @Test
+    @DisplayName("Error 봉투가 required 와 닫힌 code 어휘를 선언해 오류 본문이 한 형태로 고정된다")
+    void errorSchema_declaresTheClosedCodeVocabulary() {
+        // 예전에는 required 도 enum 도 없어서 `{}` 가 유효한 Error 였고, 같은 상태에 서로 다른
+        // code 문자열을 적어도 계약이 아무 말을 하지 않았다(VALIDATION 과 VALIDATION_ERROR 가
+        // 문서에 공존했다). 어휘를 계약이 소유한다. (#10)
+        Map<String, Object> error = schema("Error");
+
+        assertThat(stringList(error.get("required")))
+                .as("required 가 없으면 빈 객체 {} 가 유효한 오류 응답이 된다")
+                .containsExactly("error");
+
+        Map<String, Object> body = asMap(asMap(error.get("properties")).get("error"));
+        assertThat(stringList(body.get("required"))).contains("code", "message");
+        assertThat(asMap(body.get("properties")))
+                .as("traceId 가 없으면 사용자가 서버 로그에서 자기 요청을 지목할 방법이 없다")
+                .containsKey("traceId");
+
+        List<String> codes = stringList(asMap(asMap(body.get("properties")).get("code")).get("enum"));
+        assertThat(codes)
+                .as("전역 처리기의 상태→코드 표와 같아야 한다 (GlobalExceptionHandler.codeOf)")
+                .containsExactlyInAnyOrder("VALIDATION", "FORBIDDEN", "NOT_FOUND",
+                        "METHOD_NOT_ALLOWED", "CONFLICT", "UNSUPPORTED_MEDIA_TYPE",
+                        "RATE_LIMITED", "INTERNAL");
+        assertThat(codes)
+                .as("401 은 본문 자체가 없다 — 코드를 두면 앱이 오지 않는 본문을 기다린다 (#5)")
+                .doesNotContain("UNAUTHORIZED");
     }
 
     @Test

@@ -5,13 +5,24 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.NoSuchElementException;
 
 /**
  * 전역 예외 처리기. [①]
- * - 컨트롤러에서 던진 예외를 일관된 JSON 구조로 변환해 반환합니다. [②]
+ * - 컨트롤러에서 던진 예외를 <b>계약이 선언한 하나의 JSON 구조</b>로 변환해 반환합니다. [②]
  * - Swagger/OpenAPI에서 4xx/5xx 응답 스키마를 명확히 보여줄 수 있습니다. [③]
+ *
+ * <h2>본문 형태는 계약이 정한다 (이슈 #10)</h2>
+ * <p>예전에는 오류 본문이 세 갈래였다 — 계약({@code openapi.yaml} 의 {@code Error})은
+ * {@code {error:{code,message,traceId}}}, 이 클래스는
+ * {@code {status,error,message,path,timestamp}}, {@code SocialController} 는
+ * {@code {error:"문자열"}}. 세 갈래가 같은 앱으로 나갔고, 어느 것도 계약이 아니었다.
+ * 이제 4xx·5xx 본문은 전부 {@link ErrorResponse} 하나다.
+ *
+ * <p><b>401 만 예외다 — 본문이 없다.</b> 인증 실패는 원인과 무관하게 상태 코드 401 만
+ * 돌려준다(#5·#6). 계약의 {@code components/responses/Unauthorized} 도 그렇게 선언하고,
+ * {@code GeneratedOpenApiSpecTest} 가 생성 문서에 401 본문 스키마가 생기면 빨간불을 낸다.
+ * 그래서 아래 {@code handleUnauthenticated} 는 {@code ResponseEntity<Void>} 다.
  */
 @RestControllerAdvice // [A] 전역 @Controller/~를 가로채 JSON 응답으로 바꿔줌
 public class GlobalExceptionHandler {
@@ -21,34 +32,70 @@ public class GlobalExceptionHandler {
 
     /**
      * 오류 응답 페이로드(record). [④]
-     * - Swagger에서 스키마 이름을 지정해 문서화합니다. [⑤]
+     *
+     * <p>계약의 {@code components/schemas/Error} 와 1:1 이다 — 최상위에 {@code error} 하나뿐이고
+     * 그 안이 {@code code}·{@code message}·{@code traceId} 다. 필드를 최상위로 펼치지 마라:
+     * 계약이 감싼 형태이고, 앱은 {@code error.code} 로 분기한다.
+     *
+     * @param error 오류 상세. 이 봉투 자체에는 다른 필드가 없다
      */
-    @Schema(name = "ErrorResponse") // [B] OpenAPI 문서에 모델 이름으로 노출
-    public record ErrorResponse(
-        int status,        // HTTP status code (예: 400, 404, 500)
-        String error,      // 상태 텍스트 (예: "Bad Request")
-        String message,    // 구체 메시지 (예외 메시지)
-        String path,       // 요청 URI
-        Instant timestamp  // 서버 기준 발생 시각
-    ) { }
+    @Schema(name = "ErrorResponse", description = "계약(openapi.yaml)의 Error 스키마")
+    public record ErrorResponse(ErrorBody error) {
+
+        /**
+         * @param code    기계가 읽는 분류. HTTP 상태 하나당 하나로 고정한다([⑬] 표 참조)
+         * @param message 사람이 읽는 문구. <b>예외 메시지를 그대로 싣지 않는 경로가 있다</b>
+         * @param traceId {@code X-Correlation-Id} 값. 이 요청을 서버 로그에서 집는 유일한 열쇠
+         */
+        @Schema(name = "ErrorBody")
+        public record ErrorBody(String code, String message, String traceId) { }
+
+        /** 지금 요청의 상관관계 ID 를 붙여 봉투를 만든다. MDC 가 비어 있으면 {@code null} 이다. */
+        static ErrorResponse of(String code, String message) {
+            return new ErrorResponse(new ErrorBody(code, message, correlationId()));
+        }
+    }
+
+    /**
+     * HTTP 상태 → 오류 코드. [⑬]
+     *
+     * <p>코드를 상태에서 파생시키는 이유: 던지는 쪽마다 문자열을 손으로 적으면 같은 상태에
+     * 서로 다른 코드가 붙는다(실제로 {@code VALIDATION}·{@code VALIDATION_ERROR} 두 표기가
+     * 문서에 공존했다). 여기 한 곳이 어휘의 출처다.
+     *
+     * <p>401 이 표에 없는 것은 의도다 — 401 은 본문 자체가 없다.
+     */
+    private static String codeOf(HttpStatus status) {
+        return switch (status) {
+            case BAD_REQUEST -> "VALIDATION";
+            case FORBIDDEN -> "FORBIDDEN";
+            case NOT_FOUND -> "NOT_FOUND";
+            case METHOD_NOT_ALLOWED -> "METHOD_NOT_ALLOWED";
+            case CONFLICT -> "CONFLICT";
+            case UNSUPPORTED_MEDIA_TYPE -> "UNSUPPORTED_MEDIA_TYPE";
+            case TOO_MANY_REQUESTS -> "RATE_LIMITED";
+            default -> "INTERNAL";
+        };
+    }
+
+    private static String correlationId() {
+        return org.slf4j.MDC.get(
+                com.heattrip.heat_trip_backend.observability.logging.CorrelationIdFilter.MDC_KEY);
+    }
 
     /**
      * 400 Bad Request 매핑. [⑥]
      * - 검증 실패/잘못된 파라미터 등 클라이언트 오류.
+     *
+     * <p>여기서는 {@code ex.getMessage()} 를 싣는다. 이 경로에 오는 문구는 우리가 직접 쓴
+     * 검증 메시지("gender 는 MALE·FEMALE·OTHER 중 하나이거나 비어 있어야 합니다.")이고,
+     * 그게 없으면 클라이언트가 무엇이 틀렸는지 알 방법이 없다. <b>그러므로 이 예외를 던질 때
+     * 식별자·토큰·이메일을 메시지에 넣지 마라</b> — 그 순간 응답으로 나간다(#6).
      */
     @ExceptionHandler(IllegalArgumentException.class) // [C] 해당 타입 예외만 처리
-    public ResponseEntity<ErrorResponse> handleBadRequest(
-        IllegalArgumentException ex,
-        org.springframework.web.context.request.WebRequest req // [D] URI 등 접근
-    ) {
-        var body = new ErrorResponse(
-            HttpStatus.BAD_REQUEST.value(),
-            "Bad Request",
-            ex.getMessage(),
-            req.getDescription(false).replace("uri=", ""), // "uri=/path" 문자열 정리
-            Instant.now()
-        );
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(codeOf(HttpStatus.BAD_REQUEST), ex.getMessage()));
     }
 
     /**
@@ -56,17 +103,9 @@ public class GlobalExceptionHandler {
      * - repo.findById(...).orElseThrow() → NoSuchElementException 등.
      */
     @ExceptionHandler(NoSuchElementException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(
-        Exception ex, org.springframework.web.context.request.WebRequest req
-    ) {
-        var body = new ErrorResponse(
-            HttpStatus.NOT_FOUND.value(),
-            "Not Found",
-            ex.getMessage(),
-            req.getDescription(false).replace("uri=", ""),
-            Instant.now()
-        );
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    public ResponseEntity<ErrorResponse> handleNotFound(Exception ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(codeOf(HttpStatus.NOT_FOUND), ex.getMessage()));
     }
 
     /**
@@ -74,32 +113,26 @@ public class GlobalExceptionHandler {
      * - 권한 부족(인가 실패) 상황.
      */
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleForbidden(
-        Exception ex, org.springframework.web.context.request.WebRequest req
-    ) {
-        var body = new ErrorResponse(
-            HttpStatus.FORBIDDEN.value(),
-            "Forbidden",
-            ex.getMessage(),
-            req.getDescription(false).replace("uri=", ""),
-            Instant.now()
-        );
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    public ResponseEntity<ErrorResponse> handleForbidden(Exception ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(codeOf(HttpStatus.FORBIDDEN), ex.getMessage()));
     }
 
     /**
      * 401 Unauthorized 매핑. [⑩]
      *
-     * <p>인증 주체를 해석할 수 없을 때({@code CurrentUserArgumentResolver}). 본문 없이 401 만 돌려줘
-     * {@code SecurityConfig} 의 {@code HttpStatusEntryPoint(UNAUTHORIZED)} 와 형태를 맞춘다 —
-     * "토큰 없음"과 "탈퇴한 계정의 살아 있는 토큰"이 앱에게 같은 모양으로 보여야 한다. (이슈 #5)
+     * <p>인증 주체를 해석할 수 없을 때({@code CurrentUserArgumentResolver}), 그리고 이메일
+     * 로그인의 자격증명 실패({@code UserService.login})·refresh 회전 실패
+     * ({@code RefreshTokenService.rotate}). 본문 없이 401 만 돌려줘 {@code SecurityConfig} 의
+     * {@code HttpStatusEntryPoint(UNAUTHORIZED)} 와 형태를 맞춘다 — "토큰 없음"과 "탈퇴한
+     * 계정의 살아 있는 토큰"과 "비밀번호 틀림"이 앱에게 같은 모양으로 보여야 한다. (이슈 #5·#10)
      *
      * <p><b>이 핸들러는 반드시 이 클래스 안에 있어야 한다.</b> 별도 {@code @ControllerAdvice} 로
      * 빼면 예외 구체성이 아니라 <b>advice 빈 순서</b>로 승자가 정해져서, 순서가 뒤면 아래
      * {@code @ExceptionHandler(Exception.class)} 가 먼저 잡아 500 이 그대로 나간다(실측 확인).
      * 같은 클래스 안에서는 {@code ExceptionDepthComparator} 가 더 구체적인 이쪽을 고른다.
      *
-     * <p>메시지를 본문에 싣지 않는 이유는 아래 {@code handleBadRequest} 를 보면 된다 —
+     * <p>메시지를 본문에 싣지 않는 이유는 위 {@code handleBadRequest} 를 보면 된다 —
      * {@code ex.getMessage()} 가 그대로 응답이 된다. 인증 실패 경로에서 그건 유출이다. (이슈 #6)
      */
     @ExceptionHandler(com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException.class)
@@ -129,28 +162,25 @@ public class GlobalExceptionHandler {
         org.springframework.web.server.ResponseStatusException.class,
         org.springframework.web.servlet.resource.NoResourceFoundException.class
     })
-    public ResponseEntity<ErrorResponse> handleDeclaredStatus(
-        Exception ex,
-        org.springframework.web.context.request.WebRequest req
-    ) {
+    public ResponseEntity<ErrorResponse> handleDeclaredStatus(Exception ex) {
         // 두 예외의 유일한 공통 조상은 Exception 이다. 상태 코드는 둘 다 구현하는
         // ErrorResponse 인터페이스에서 읽는다.
         HttpStatus status = HttpStatus.resolve(((org.springframework.web.ErrorResponse) ex).getStatusCode().value());
         if (status == null) {
             status = HttpStatus.INTERNAL_SERVER_ERROR;
         }
+
+        // 401 을 이 경로로 던져도 본문이 붙지 않는다 — 계약이 '본문 없음' 이기 때문이다.
+        // 여기서 예외를 두지 않으면 ResponseStatusException(401) 하나가 계약을 깬다.
+        if (status == HttpStatus.UNAUTHORIZED) {
+            return ResponseEntity.status(status).build();
+        }
+
         String reason = (ex instanceof org.springframework.web.server.ResponseStatusException rse)
                 ? rse.getReason()
                 : "요청한 경로를 찾을 수 없습니다.";
 
-        var body = new ErrorResponse(
-            status.value(),
-            status.getReasonPhrase(),
-            reason,
-            req.getDescription(false).replace("uri=", ""),
-            Instant.now()
-        );
-        return ResponseEntity.status(status).body(body);
+        return ResponseEntity.status(status).body(ErrorResponse.of(codeOf(status), reason));
     }
 
     /**
@@ -180,9 +210,7 @@ public class GlobalExceptionHandler {
         org.springframework.web.HttpMediaTypeNotSupportedException.class,
         org.springframework.web.HttpRequestMethodNotSupportedException.class
     })
-    public ResponseEntity<ErrorResponse> handleMalformedRequest(
-        Exception ex, org.springframework.web.context.request.WebRequest req
-    ) {
+    public ResponseEntity<ErrorResponse> handleMalformedRequest(Exception ex) {
         final HttpStatus status;
         final String message;
         if (ex instanceof org.springframework.web.HttpMediaTypeNotSupportedException) {
@@ -196,14 +224,7 @@ public class GlobalExceptionHandler {
             message = "요청 본문을 읽을 수 없습니다.";
         }
 
-        var body = new ErrorResponse(
-            status.value(),
-            status.getReasonPhrase(),
-            message,
-            req.getDescription(false).replace("uri=", ""),
-            Instant.now()
-        );
-        return ResponseEntity.status(status).body(body);
+        return ResponseEntity.status(status).body(ErrorResponse.of(codeOf(status), message));
     }
 
     /**
@@ -214,28 +235,19 @@ public class GlobalExceptionHandler {
      * 예외이고, 그 메시지에는 SQL 조각·파일 경로·이메일·토큰 조각이 섞여 들어올 수 있다
      * (이슈 #6). 실제로 {@code "User not found: " + email} 이 이 경로로 이메일을
      * 내보내고 있었다. 원인은 서버 로그에만 남기고, 응답에는 상관관계 ID 만 준다 —
-     * 그것으로 로그에서 이 요청을 정확히 찾을 수 있다.
+     * 그것으로 로그에서 이 요청을 정확히 찾을 수 있다. 그 ID 는 이제 고정 문구 안이 아니라
+     * {@code error.traceId} 필드에 있다(계약의 {@code Error} 가 그 자리를 정의한다).
      */
     @ExceptionHandler(Exception.class) // [E] 상위 캐치
     public ResponseEntity<ErrorResponse> handleEtc(
-        Exception ex, org.springframework.web.context.request.WebRequest req
+        Exception ex,
+        org.springframework.web.context.request.WebRequest req
     ) {
-        String path = req.getDescription(false).replace("uri=", "");
-        String correlationId = org.slf4j.MDC.get(
-                com.heattrip.heat_trip_backend.observability.logging.CorrelationIdFilter.MDC_KEY);
-
         log.error("처리되지 않은 예외 — {} {}", req.getDescription(false), ex.getClass().getName(), ex);
 
-        var body = new ErrorResponse(
-            HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            "Internal Server Error",
-            correlationId == null
-                    ? "서버에서 오류가 발생했습니다."
-                    : "서버에서 오류가 발생했습니다. (요청 ID: " + correlationId + ")",
-            path,
-            Instant.now()
-        );
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.of(codeOf(HttpStatus.INTERNAL_SERVER_ERROR),
+                        "서버에서 오류가 발생했습니다."));
     }
 }
 
@@ -252,7 +264,9 @@ public class GlobalExceptionHandler {
 [⑦] 404: 리소스 미존재(엔티티 없음) 매핑.
 [⑧] 403: 인증은 되었으나 권한 부족.
 [⑨] 500: 내부 처리 중 예기치 못한 오류(운영 시 로깅/트레이싱 권장).
-[⑩] 401: 인증 주체 해석 실패. 본문 없이 상태 코드만 — 메시지를 실으면 그게 유출 경로가 된다(#5·#6).
+[⑩] 401: 인증 실패. 본문 없이 상태 코드만 — 메시지를 실으면 그게 유출 경로가 된다(#5·#6).
 [⑪] ResponseStatusException: 컨트롤러가 스스로 정한 상태 코드. catch-all 보다 먼저 잡아야 한다(#44).
 [⑫] 400/415/405: 형식이 깨진 요청. 핸들러가 없으면 전부 500 이었다(#9 에서 실측). 본문에 예외 메시지 금지 — 요청 본문 조각이 섞인다(#6).
+[⑬] code 어휘: 400 VALIDATION · 403 FORBIDDEN · 404 NOT_FOUND · 405 METHOD_NOT_ALLOWED ·
+    409 CONFLICT · 415 UNSUPPORTED_MEDIA_TYPE · 429 RATE_LIMITED · 그 밖 INTERNAL. 401 은 본문 없음(#10).
 ────────────────────────────────────────────────────────────────────────── */

@@ -21,15 +21,18 @@ info:
       (2026-08 이전에는 소셜 계정에서 400 이었습니다. #5 에서 해소되었습니다.)
     - 인증 요구 여부는 **각 오퍼레이션의 `security` 선언이 정본**입니다. 아래 한 줄은 요약일 뿐입니다:
       MVP에선 읽기(장소 조회 등)는 비인증 허용, 쓰기(산책 저장·글 작성)는 인증 필요.
-    - **오류 응답 규약** (#44)
+    - **오류 응답 규약** (#44 · #10)
       - `401` 은 **본문이 없습니다.** 인증 계층이 상태 코드만 돌려줍니다 — 토큰 없음·위조·만료·
-        탈퇴한 계정의 살아 있는 토큰이 전부 같은 모양입니다.
-      - 그 밖의 오류는 `Error` 스키마(`status`/`error`/`message`/`path`/`timestamp`)입니다.
+        탈퇴한 계정의 살아 있는 토큰·이메일 로그인의 자격증명 실패가 전부 같은 모양입니다.
+      - 그 밖의 오류는 **전부** `Error` 스키마(`{ error: { code, message, traceId } }`)입니다.
+        `code` 는 HTTP 상태 하나당 하나로 고정된 닫힌 목록입니다(`Error.code` 의 enum 참조).
+        (2026-08 이전에는 `{status, error, message, path, timestamp}` 였고, `SocialController` 는
+         또 다른 `{ "error": "문자열" }` 을 돌려줬습니다. #10 이 하나로 합쳤습니다.)
       - **알 수 없는 경로는 `404`** 입니다. `message` 는 `요청한 경로를 찾을 수 없습니다.`
-      - `500` 의 `message` 에는 **원인이 실리지 않습니다.** 대신 요청 ID 가 들어갑니다
-        (`X-Correlation-Id` 응답 헤더와 같은 값). 서버 로그에서 그 ID 로 원인을 찾습니다 —
-        예외 메시지를 그대로 실으면 SQL 조각·경로·이메일이 새어 나갑니다.
-      - 컨트롤러가 `403`·`404` 를 명시적으로 정해 던지면 그 코드가 그대로 나갑니다.
+      - `500` 의 `message` 에는 **원인이 실리지 않습니다.** 고정 문구이고, 이 요청을 지목하는
+        열쇠는 `error.traceId`(= `X-Correlation-Id` 응답 헤더)입니다. 서버 로그에서 그 ID 로
+        원인을 찾습니다 — 예외 메시지를 그대로 실으면 SQL 조각·경로·이메일이 새어 나갑니다.
+      - 컨트롤러가 `403`·`404`·`409` 를 명시적으로 정해 던지면 그 코드가 그대로 나갑니다.
         (2026-08 이전에는 전부 `500` 이었습니다.)
     - 목록은 커서 페이지네이션(`items`/`nextCursor`/`hasMore`).
     - 좌표: `lat`(위도), `lng`(경도). (관광공사 원본은 mapy=위도, mapx=경도)
@@ -79,8 +82,19 @@ paths:
       tags: [Auth]
       summary: 이메일 회원가입
       description: |
-        **목표 계약입니다.** 현행 구현은 `200 OK` + 본문 `"회원가입 성공"`(평문)을 반환합니다.
-        구현을 이 계약(201 + `User`)에 맞추는 것은 이슈 #10 의 범위입니다.
+        `AuthController.signup` 이 처리합니다. 성공은 **201 + `User`** 입니다(이슈 #10 에서 구현).
+
+        > ⚠️ **2026-08 이전에는 `200 OK` + 본문 `"회원가입 성공"`(평문)이었습니다.**
+        > 상태 코드와 본문 형태가 함께 바뀌었습니다. 200 만 성공으로 보던 클라이언트는
+        > 201 도 성공으로 받아야 하고, 본문을 문자열로 읽던 코드는 JSON 으로 읽어야 합니다.
+
+        같은 이메일이 이미 있으면 **409** 입니다. 예전에는 400 이었고, 앱은 "입력이 틀렸다"와
+        "이미 가입돼 있다"를 구분할 수 없었습니다. 오류 본문은 공통 `Error` 이며
+        409 의 `error.code` 는 `CONFLICT` 입니다.
+
+        **이 응답에는 토큰이 없습니다.** 가입 직후 로그인 상태로 만들려면 클라이언트가
+        `POST /auth/login` 을 한 번 더 호출해야 합니다 — 가입과 인증을 한 응답에 묶지 않는 것은
+        의도입니다(가입 폼의 재시도가 토큰 발급을 반복하지 않습니다).
       security: []
       requestBody:
         required: true
@@ -101,8 +115,20 @@ paths:
       tags: [Auth]
       summary: 이메일/비밀번호 로그인
       description: |
-        **목표 계약입니다.** 현행 구현은 JSON 이 아니라 **JWT 원문 문자열**을 본문에 그대로 담아 반환합니다.
-        구현을 이 계약(`AuthTokens` JSON)에 맞추는 것은 이슈 #10 의 범위입니다.
+        `AuthController.login` 이 처리합니다. 응답은 `AuthTokens` JSON 입니다(이슈 #10 에서 구현).
+
+        > ⚠️ **2026-08 이전에는 본문이 JSON 이 아니라 JWT 원문 문자열이었습니다.**
+        > `response.body` 를 그대로 토큰으로 저장하던 클라이언트는 이제 `accessToken` 필드를
+        > 읽어야 합니다. 그렇게 고치지 않으면 JSON 전체가 토큰으로 저장되어 모든 요청이 401 이 됩니다.
+
+        `refreshToken` 이 여기에 실립니다 — 서버는 #9 부터 발급·저장하고 있었지만 응답에 실을
+        자리가 없어 아무에게도 전달되지 않았습니다. `isNew` 는 이 경로에서 **항상 `false`** 입니다
+        (이미 있는 계정으로 들어오는 경로라 답이 정해져 있습니다).
+
+        **자격증명 실패는 본문 없는 401 입니다.** 가입되지 않은 이메일과 비밀번호 오류를
+        구분하지 않습니다 — 구분해 주면 그 자체가 가입 여부를 묻는 조회 수단이 됩니다(#6).
+        예전에는 두 경우 모두 **500** 이었습니다(`IllegalAccessException` 이 전역 처리기의
+        catch-all 에 잡혔습니다).
       security: []
       requestBody:
         required: true
@@ -185,21 +211,36 @@ paths:
   /auth/oauth/{provider}:
     get:
       tags: [Auth]
-      summary: 소셜 로그인 시작(302 리다이렉트) — 미구현
+      summary: 소셜 로그인 시작 — `/oauth2/authorization/{provider}` 로의 302 래퍼
       description: |
-        **미구현.** 백엔드에 이 경로의 핸들러가 없습니다. 실제 동작하는 진입점은
-        `GET /oauth2/authorization/{provider}` 이며 앱도 그쪽을 호출합니다.
-        이 경로를 302 래퍼로 실제 구현할지, 삭제할지는 이슈 #10 에서 결정합니다.
-      x-implementation-status: not-implemented
+        `AuthController.startOAuth` 가 처리합니다(이슈 #10 에서 구현). **인증 로직을 다시
+        구현하지 않습니다** — `Location: /oauth2/authorization/{provider}` 로 302 를 줄 뿐이고,
+        공급자 왕복과 딥링크 복귀는 그쪽(Spring Security `oauth2Login`)이 그대로 처리합니다.
+
+        > **2026-08 이전 이 절은 "백엔드에 이 경로의 핸들러가 없습니다" 라고 적었습니다. 거짓이었습니다.**
+        > 핸들러는 있었고 **빈 200** 을 돌려줬습니다. 계약과 구현이 서로 다른 거짓을 말하고
+        > 있었고, `AuthContractSpecTest.unimplementedOperations_areMarkedAsSuch` 가 그 거짓을
+        > 초록불로 고정하고 있었습니다. 셋을 함께 고쳤습니다.
+
+        앱은 이 경로를 쓸 필요가 없습니다 — `GET /oauth2/authorization/{provider}` 를 직접 열면
+        리다이렉트 한 번을 아낍니다. 이 경로는 계약을 보고 구현한 클라이언트가 막다른 길에
+        빠지지 않게 하는 호환 표면입니다.
+
+        `provider` 가 아래 enum 에 없으면 302 가 아니라 **400** 이고, 본문은 공통 `Error`
+        (`error.code` = `VALIDATION`)입니다. 302 로 넘겨 봐야 등록이 없는 공급자는 그쪽에서
+        원인을 알 수 없는 오류가 됩니다. 대소문자와 앞뒤 공백은 가리지 않습니다.
       security: []
       parameters:
         - $ref: '#/components/parameters/Provider'
       responses:
         '302':
-          description: 공급자 로그인 페이지로 리다이렉트
+          description: |
+            Spring Security 진입점으로 리다이렉트. `Location` 은 항상
+            `/oauth2/authorization/{provider}`(소문자로 정규화된 값)입니다.
           headers:
             Location:
               schema: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
 
   /auth/oauth/{provider}/callback:
     post:
@@ -258,9 +299,11 @@ paths:
         **형식 자체가 깨진 요청**은 401 이 아니라 400·415·405 입니다(이슈 #9). 읽을 수 없는
         JSON·배열 본문·`refreshToken` 이 문자열이 아닌 경우는 **400**, `Content-Type` 이
         `application/json` 이 아니면 **415**, `POST` 가 아닌 메서드는 **405** 입니다.
-        이 세 응답의 본문은 `{ status, error, message, path, timestamp }` 형태이며
+        이 세 응답의 본문은 공통 `Error`(`{ error: { code, message, traceId } }`)이며
         **예외 메시지를 싣지 않습니다** — 파서 메시지에 요청 본문(= refresh 토큰 원문)
-        조각이 섞이기 때문입니다(#6). 오류 본문 형태를 공통 `Error` 로 통일하는 것은 #10 입니다.
+        조각이 섞이기 때문입니다(#6). `message` 는 상태마다 고정 문구입니다.
+        (2026-08 이전에는 `{ status, error, message, path, timestamp }` 였습니다 — #10 에서
+        전역 오류 본문을 계약의 `Error` 하나로 통일했습니다.)
 
         > 앱에게: **400·415·405 를 401 처럼 다루지 마세요.** 그건 재로그인 사유가 아니라
         > 클라이언트 요청이 잘못됐다는 신호이고, 재시도해도 결과가 같습니다.
@@ -285,13 +328,18 @@ paths:
               schema: { $ref: '#/components/schemas/AuthTokens' }
         '400':
           description: |
-            요청 본문을 읽을 수 없음(깨진 JSON·배열 본문·타입 불일치). 본문은
-            `{ status, error, message, path, timestamp }` 이고 `message` 는 고정 문구입니다 —
-            파서 메시지를 그대로 실으면 refresh 토큰 원문 조각이 새어 나갑니다(#6).
+            요청 본문을 읽을 수 없음(깨진 JSON·배열 본문·타입 불일치). `message` 는 고정
+            문구입니다 — 파서 메시지를 그대로 실으면 refresh 토큰 원문 조각이 새어 나갑니다(#6).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '415':
           description: |
             `Content-Type` 이 `application/json` 이 아님. 본문 형태는 400 과 같습니다.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /auth/me:
     get:
@@ -1020,14 +1068,44 @@ components:
   schemas:
     Error:
       type: object
+      description: |
+        4xx·5xx 오류 본문의 **유일한** 형태입니다(이슈 #10). 서버에서 이 봉투를 만드는 곳은
+        `GlobalExceptionHandler` 한 곳뿐이며, 최상위 필드는 `error` 하나입니다 — 필드를
+        최상위로 펼치지 마세요.
+
+        **401 만 예외입니다 — 본문이 없습니다.** `components/responses/Unauthorized` 를 보세요.
+
+        (2026-08 이전에는 실제 응답이 세 갈래였습니다: 이 봉투, 전역 처리기의
+        `{ status, error, message, path, timestamp }`, `SocialController` 의
+        `{ error: "문자열" }`. #10 이 하나로 합쳤습니다.)
+      required: [error]
       properties:
         error:
           type: object
           required: [code, message]
           properties:
-            code: { type: string, example: NOT_FOUND }
-            message: { type: string, example: "해당 장소를 찾을 수 없습니다." }
-            traceId: { type: string }
+            code:
+              type: string
+              example: NOT_FOUND
+              enum: [VALIDATION, FORBIDDEN, NOT_FOUND, METHOD_NOT_ALLOWED, CONFLICT,
+                     UNSUPPORTED_MEDIA_TYPE, RATE_LIMITED, INTERNAL]
+              description: |
+                HTTP 상태 하나당 하나로 고정됩니다 — 던지는 쪽이 문자열을 손으로 적지 않습니다.
+                400 `VALIDATION` · 403 `FORBIDDEN` · 404 `NOT_FOUND` · 405 `METHOD_NOT_ALLOWED` ·
+                409 `CONFLICT` · 415 `UNSUPPORTED_MEDIA_TYPE` · 429 `RATE_LIMITED` ·
+                그 밖의 5xx `INTERNAL`. 401 은 이 목록에 없습니다(본문 자체가 없습니다).
+            message:
+              type: string
+              example: "해당 장소를 찾을 수 없습니다."
+              description: |
+                사람이 읽는 문구. **예외 메시지가 아닙니다** — 500 과 형식 오류(400·405·415)
+                경로에서는 고정 문구를 씁니다. 예외 메시지에는 SQL 조각·파일 경로·이메일·
+                토큰 조각이 섞여 들어오기 때문입니다(#6).
+            traceId:
+              type: string
+              description: |
+                이 요청의 상관관계 ID. 응답 헤더 `X-Correlation-Id` 와 같은 값이며, 서버 로그에서
+                이 요청을 집는 열쇠입니다. 문의할 때 이 값을 함께 보내세요.
 
     Page:
       type: object
@@ -1051,10 +1129,10 @@ components:
             폐기 가능한 불투명 문자열(JWT 아님, 패딩 없는 Base64URL 43자). 수명은 14일이며
             `POST /auth/token/refresh` 를 쓸 때마다 회전합니다 — 응답의 새 값으로 교체 저장하세요.
 
-            **어디에 실리는가(2026-08 현재):** 소셜 로그인 딥링크의 `refresh` 파라미터와
-            `POST /auth/token/refresh` 의 200 응답입니다. `POST /auth/login`·`/auth/signup` 의
-            현행 구현은 아직 JWT 원문 문자열을 반환하므로 여기에 실리지 않습니다 — 그 응답을
-            이 스키마로 맞추는 것은 이슈 #10 입니다(서버는 이미 발급·저장하고 있습니다).
+            **어디에 실리는가(2026-08 현재):** `POST /auth/login` 의 200 응답,
+            `POST /auth/token/refresh` 의 200 응답, 그리고 소셜 로그인 딥링크의 `refresh`
+            파라미터입니다. `POST /auth/signup` 은 토큰을 발급하지 않으므로(201 + `User`)
+            여기에 해당하지 않습니다 — 가입 직후에는 `POST /auth/login` 을 호출하세요.
         expiresIn: { type: integer, description: 초, example: 3600 }
         isNew:
           type: boolean

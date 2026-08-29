@@ -117,4 +117,44 @@ class AuthBlueprintDocSpecTest {
                 .as("동시 갱신 1회로 전 기기가 끊기는 것은 앱에게 서버 버그로 보인다")
                 .contains("single-flight");
     }
+
+    @Test
+    @DisplayName("로그인·회원가입 응답이 바뀌었다는 사실이 앱 인수인계 절에 남아 있다")
+    void blueprint_carriesTheBreakingResponseChangeToTheApp() {
+        // #10 은 앱이 지금 파싱하는 두 응답의 모양을 바꿨다. app/** 을 열 수 없는 레인이므로
+        // 이 문서가 #11·#12 로 가는 **유일한** 경로다. 지워지면 앱 레인은 자기가 왜 깨졌는지
+        // 알 방법이 없다.
+        assertThat(authBlueprint)
+                .as("응답 본문을 그대로 토큰으로 저장하던 코드는 JSON 전체를 헤더에 싣게 된다")
+                .contains("auth_repository_impl.dart");
+        assertThat(authBlueprint)
+                .as("무엇을 꺼내야 하는지가 없으면 '바뀌었다' 는 통보일 뿐이다")
+                .contains("`accessToken` 을 꺼내고");
+        assertThat(authBlueprint)
+                .as("200 만 성공으로 보던 코드는 정상 가입을 실패로 읽는다")
+                .contains("성공을 **201** 로 받고");
+    }
+
+    @Test
+    @DisplayName("청사진이 계약 User 를 4필드라고 말하지 않고 UserDto 를 따로 만들라고 지시하지 않는다")
+    void blueprint_noLongerPrescribesASecondCopyOfTheUserSchema() {
+        // 그 지시는 #23 이 계약을 정리하기 전의 것이다. 따르면 같은 스키마의 사본이 둘이 되고,
+        // 한쪽만 낡는다. 실제로 계약의 User 는 11필드이고 isNew 는 거기 없다.
+        assertThat(authBlueprint)
+                .as("이 문장을 그대로 따르면 UserResponse 와 나란히 낡는 두 번째 DTO 가 생긴다")
+                .doesNotContain("**Auth 응답 전용으로 `UserDto`를 별도 정의**");
+        assertThat(authBlueprint)
+                .doesNotContain("계약 `User` 스키마는 4필드(id/provider/nickname/isNew)만");
+    }
+
+    @Test
+    @DisplayName("청사진의 에러 포맷 절이 통일을 미래 시제로 미루지 않는다")
+    void blueprint_recordsThatTheErrorFormatIsUnified() {
+        // "정리는 #10" 은 #10 이 닫히는 순간 거짓이 된다. 남겨 두면 다음 사람이
+        // 이미 통일된 포맷을 다시 통일하려 한다.
+        assertThat(authBlueprint).doesNotContain("서로 다르다 → 정리는 #10");
+        assertThat(authBlueprint)
+                .as("401 만 본문이 없다는 예외는 남아야 한다 — 지우면 #5 이전으로 돌아간다")
+                .contains("본문 없는 401");
+    }
 }
