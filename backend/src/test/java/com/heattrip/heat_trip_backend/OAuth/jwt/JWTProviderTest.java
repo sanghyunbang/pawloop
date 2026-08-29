@@ -84,7 +84,8 @@ class JWTProviderTest {
         String token = provider.createAccessToken(42L, "ROLE_USER");
 
         assertThat(provider.validateToken(token)).isTrue();
-        assertThat(provider.getUserIdFromToken(token)).isEqualTo("42");
+        // 반환 타입이 Long 인 것이 계약이다 — 이 값으로 findByEmail 을 부르는 코드는 컴파일되지 않는다.
+        assertThat(provider.getUserIdFromToken(token)).isEqualTo(42L);
         assertThat(provider.getRoleFromToken(token)).isEqualTo("ROLE_USER");
     }
 
@@ -117,11 +118,29 @@ class JWTProviderTest {
         JWTProvider provider = newProvider(3_600_000L);
 
         for (String legacySubject : new String[] { "a@b.com", "kakao_123", "google_109876543210987654321", "" }) {
-            assertThat(provider.validateToken(signedToken(legacySubject, "ROLE_USER")))
+            String legacy = signedToken(legacySubject, "ROLE_USER");
+
+            assertThat(provider.validateToken(legacy))
                     .as("옛 형식 subject(%s)를 필터가 통과시키면 컨트롤러에서 파싱에 실패해 400 이 되고 "
                             + "그 원문이 응답 본문에 실린다", legacySubject)
                     .isFalse();
+            assertThatThrownBy(() -> provider.getUserIdFromToken(legacy))
+                    .as("거절 지점은 JWTProvider 한 곳이다 — 새 예외 타입을 만들지 않아 필터가 "
+                            + "서명 실패·만료와 똑같이 다룬다")
+                    .isInstanceOf(JWTProvider.InvalidTokenException.class)
+                    .hasMessage("Invalid JWT token");
         }
+    }
+
+    @Test
+    @DisplayName("옛 형식 subject 를 거절해도 그 값이 예외 메시지에 실리지 않는다.")
+    void getUserIdFromToken_실패해도_subject원문이_새지않는다() {
+        JWTProvider provider = newProvider(3_600_000L);
+        String socialSubject = "kakao_1234567890";
+
+        assertThatThrownBy(() -> provider.getUserIdFromToken(signedToken(socialSubject, "ROLE_USER")))
+                .as("GlobalExceptionHandler 가 예외 메시지를 HTTP 응답 본문에 그대로 싣는다 (이슈 #6)")
+                .hasMessageNotContaining(socialSubject);
     }
 
     @Test

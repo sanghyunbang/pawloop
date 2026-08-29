@@ -110,8 +110,16 @@ public class JWTProvider {
                 .compact();
     }
 
-    public String getUserIdFromToken(String token) {
-        return parseClaims(token).getSubject();
+    /**
+     * 토큰의 subject 를 {@code users.id} 로 읽는다.
+     *
+     * <p>반환 타입이 {@code Long} 인 것이 계약이다 — 이 값으로 {@code findByEmail} 을 부르는 코드는
+     * 컴파일되지 않는다. (이슈 #5)
+     *
+     * @throws InvalidTokenException 파싱 실패, 또는 subject 가 양의 long 이 아닐 때
+     */
+    public Long getUserIdFromToken(String token) {
+        return requireNumericSubject(parseClaims(token));
     }
 
     public String getRoleFromToken(String token) {

@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
+import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
 import com.heattrip.heat_trip_backend.S3.UploadCategory;
 import com.heattrip.heat_trip_backend.S3.media.MediaObject;
 import com.heattrip.heat_trip_backend.S3.media.MediaService;
@@ -19,9 +19,7 @@ import com.heattrip.heat_trip_backend.schedules.DTO.JourneyResponseDto;
 import com.heattrip.heat_trip_backend.schedules.Service.JourneyService_v2;
 import com.heattrip.heat_trip_backend.schedules.entity.Journey;
 import com.heattrip.heat_trip_backend.user.entity.User;
-import com.heattrip.heat_trip_backend.user.service.UserService;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 
 @RestController
@@ -32,20 +30,14 @@ public class JourneyController_v2 {
     // 의존성
     // ─────────────────────────────────────
     private final JourneyService_v2 journeyService;
-    private final JWTProvider jwtProvider;
-    private final UserService userService;
     private final MediaService mediaService;
 
     // 여정-미디어 연결에 사용할 refType 상수
     private static final String REF_TYPE = "JOURNEY";
 
     public JourneyController_v2(JourneyService_v2 journeyService,
-                                JWTProvider jwtProvider,
-                                UserService userService,
                                 MediaService mediaService) {
         this.journeyService = journeyService;
-        this.jwtProvider = jwtProvider;
-        this.userService = userService;
         this.mediaService = mediaService;
     }
 
@@ -53,23 +45,13 @@ public class JourneyController_v2 {
     // 내부 유틸 (권한/소유 검증, DTO 변환)
     // ─────────────────────────────────────
 
-    /** JWT에서 사용자 주체를 추출(없으면 401) */
-    private User requireUser(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer "))
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-
-        String token = authHeader.substring(7);
-        if (!jwtProvider.validateToken(token))
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-
-        String userId = jwtProvider.getUserIdFromToken(token);
-        User user = userService.findByEmail(userId);
-        if (user == null)
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
-
-        return user;
-    }
+    // 예전에는 여기 private User requireUser(HttpServletRequest) 가 있었다. 그 안의
+    // ResponseStatusException(401) 은 실제로 401 이 아니라 **500** 으로 나가고 있었다(실측 확인) —
+    // GlobalExceptionHandler 의 @ExceptionHandler(Exception.class) 가 먼저 잡기 때문이다.
+    // 인증은 @CurrentUser 가 맡고 실패는 본문 없는 401 이다. (이슈 #5)
+    //
+    // 아래 requireOwnedJourney 의 404/403 은 그대로 둔다 — 인증이 아니라 존재·소유 검증이다.
+    // (그 둘도 지금 500 으로 나가지만, 고치려면 전역 에러 계약을 바꿔야 해서 #5 범위 밖이다.)
 
     /** 여정 존재/소유자 검증(없으면 404, 소유 아니면 403) */
     private Journey requireOwnedJourney(Long id, User user) {
@@ -105,9 +87,8 @@ public class JourneyController_v2 {
     // R: 목록 조회 (이미지 포함)
     // ─────────────────────────────────────
     @GetMapping("/entries")
-    public ResponseEntity<?> listMyJourneys(HttpServletRequest request) {
+    public ResponseEntity<?> listMyJourneys(@CurrentUser User user) {
         System.out.println("        ㅡㅡㅡㅡㅡGet Entries 진입 ");
-        User user = requireUser(request);
         List<Journey> journeys = journeyService.getJourneysByUser(user);
 
         List<JourneyWithImagesResponse> body = journeys.stream()
@@ -123,8 +104,7 @@ public class JourneyController_v2 {
     // R: 단건 조회 (이미지 포함)
     // ─────────────────────────────────────
     @GetMapping("/entries/{id}")
-    public ResponseEntity<?> getJourney(@PathVariable Long id, HttpServletRequest request) {
-        User user = requireUser(request);
+    public ResponseEntity<?> getJourney(@PathVariable Long id, @CurrentUser User user) {
         Journey j = requireOwnedJourney(id, user);
         return ResponseEntity.ok(composeJourneyWithImages(j));
     }
@@ -133,9 +113,8 @@ public class JourneyController_v2 {
     // C: 여정 생성 (본문만)
     // ─────────────────────────────────────
     @PostMapping("/entries")
-    public ResponseEntity<?> createJourney(@RequestBody JourneyRequestDto dto, HttpServletRequest request) {
+    public ResponseEntity<?> createJourney(@RequestBody JourneyRequestDto dto, @CurrentUser User user) {
         System.out.println("           ㅡㅡㅡㅡㅡㅡㅡentrys 진입완료 들어온 값 : \n" + dto);
-        User user = requireUser(request);
         Journey saved = journeyService.saveJourney(dto, user);
         return ResponseEntity.ok(new JourneyWithImagesResponse(new JourneyResponseDto(saved), List.of()));
     }
@@ -147,9 +126,8 @@ public class JourneyController_v2 {
     public ResponseEntity<?> createJourneyWithImages(
         @RequestPart("dto") JourneyRequestDto dto,
         @RequestPart(value = "images", required = false) List<MultipartFile> images,
-        HttpServletRequest request
+        @CurrentUser User user
     ) {
-        User user = requireUser(request);
         Journey saved = journeyService.saveJourney(dto, user);
 
         if (images != null && !images.isEmpty()) {
@@ -171,10 +149,9 @@ public class JourneyController_v2 {
     public ResponseEntity<?> updateJourney(
         @PathVariable("Did") Long id,
         @RequestBody JourneyRequestDto dto,
-        HttpServletRequest request
+        @CurrentUser User user
     ) {
         System.out.println("    ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡupdate diary 진입함. 진입한 게시물 id : " + id);
-        User user = requireUser(request);
         Journey target = requireOwnedJourney(id, user);
         Journey updated = journeyService.updateJourney(target, dto);
         return ResponseEntity.ok(composeJourneyWithImages(updated));
@@ -187,9 +164,8 @@ public class JourneyController_v2 {
     public ResponseEntity<?> addImages(
         @PathVariable Long id,
         @RequestPart("images") List<MultipartFile> images,
-        HttpServletRequest request
+        @CurrentUser User user
     ) {
-        User user = requireUser(request);
         Journey j = requireOwnedJourney(id, user);
 
         if (images == null || images.isEmpty())
@@ -214,9 +190,8 @@ public class JourneyController_v2 {
     public ResponseEntity<?> deleteOneImage(
         @PathVariable Long id,
         @PathVariable Long mediaId,
-        HttpServletRequest request
+        @CurrentUser User user
     ) {
-        User user = requireUser(request);
         Journey j = requireOwnedJourney(id, user);
 
         // 연결 검증 버전 (권장)
@@ -229,9 +204,8 @@ public class JourneyController_v2 {
     // D: 여정 삭제 (연결 이미지 전체 삭제 후 본문 삭제)
     // ─────────────────────────────────────
     @DeleteMapping("/entries/{diaryId}")
-    public ResponseEntity<?> deleteJourney(@PathVariable("diaryId") Long id, HttpServletRequest request) {
+    public ResponseEntity<?> deleteJourney(@PathVariable("diaryId") Long id, @CurrentUser User user) {
         System.out.println("    ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡdelete diary 진입함. 진입한 게시글 id :  " + id );
-        User user = requireUser(request);
         Journey j = requireOwnedJourney(id, user);
 
         // 1) 연결된 미디어 전체 삭제
@@ -247,8 +221,7 @@ public class JourneyController_v2 {
     // 통계 (간단 예시)
     // ─────────────────────────────────────
     @GetMapping("/stats")
-    public ResponseEntity<?> stats(HttpServletRequest request) {
-        User user = requireUser(request);
+    public ResponseEntity<?> stats(@CurrentUser User user) {
         List<Journey> entries = journeyService.getJourneysByUser(user);
         Map<String, Object> stats = Map.of("entryCount", entries.size());
         return ResponseEntity.ok(stats);

@@ -3,7 +3,9 @@ package com.heattrip.heat_trip_backend.S3.media;
 import com.heattrip.heat_trip_backend.S3.UploadCategory;
 import com.heattrip.heat_trip_backend.S3.media.dto.MediaItemResponse;
 import com.heattrip.heat_trip_backend.S3.media.dto.UrlResponse;
+import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
 import com.heattrip.heat_trip_backend.S3.media.error.GlobalExceptionHandler.ErrorResponse; // [①] 에러 스키마 참조
+import com.heattrip.heat_trip_backend.user.entity.User;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -17,7 +19,6 @@ import jakarta.validation.constraints.Min;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -71,9 +72,9 @@ public class MediaController {
         @RequestParam(name = "category") UploadCategory category, // [F] Enum → 문서에서 선택형
         @RequestParam(name = "refType", required = false) String refType, // [G] 도메인 연결 메타
         @RequestParam(name = "refId",   required = false) String refId,
-        @AuthenticationPrincipal String userId // [H] JWT 필터에서 주입되는 사용자 식별자 가정
+        @CurrentUser User me // [H] 인증 주체. 해석은 CurrentUserArgumentResolver 한 곳뿐이다 (이슈 #5)
     ) {
-        var saved = mediaService.uploadMany(files, category, userId, refType, refId); // [I] 업로드+저장
+        var saved = mediaService.uploadMany(files, category, me.getId().toString(), refType, refId); // [I] 업로드+저장
         var body = saved.stream().map(m -> new MediaItemResponse(
             m.getId(),
             m.getObjectKey(),                                 // S3 object key
@@ -172,9 +173,9 @@ public class MediaController {
         @PathVariable(name = "mediaId") @Min(1) Long mediaId, // [Q] 파라미터 검증
         @Parameter(description = "New file")
         @RequestPart("file") MultipartFile file,
-        @AuthenticationPrincipal String userId
+        @CurrentUser User me
     ) {
-        var m = mediaService.replace(mediaId, file, userId);
+        var m = mediaService.replace(mediaId, file, me.getId().toString());
         return ResponseEntity.ok(new MediaItemResponse(
             m.getId(),
             m.getObjectKey(),
@@ -211,9 +212,9 @@ public class MediaController {
     public ResponseEntity<Void> delete(
         @Parameter(description = "Media id (DB PK)", required = true)
         @PathVariable(name = "mediaId") @Min(1) Long mediaId,
-        @AuthenticationPrincipal String userId
+        @CurrentUser User me
     ) {
-        mediaService.delete(mediaId, userId);
+        mediaService.delete(mediaId, me.getId().toString());
         return ResponseEntity.noContent().build(); // [S] 204 No Content
     }
 
@@ -240,9 +241,9 @@ public class MediaController {
         @RequestParam(name = "refType") String refType,
         @Parameter(description = "Reference id", required = true)
         @RequestParam(name = "refId") String refId,
-        @AuthenticationPrincipal String userId
+        @CurrentUser User me
     ) {
-        mediaService.deleteByRef(refType, refId, userId);
+        mediaService.deleteByRef(refType, refId, me.getId().toString());
         return ResponseEntity.noContent().build();
     }
 }
@@ -262,7 +263,10 @@ public class MediaController {
 [E] @RequestPart: multipart/form-data에서 파일 업로드 필드.
 [F] Enum 파라미터: Swagger에서 드롭다운으로 표시.
 [G] refType/refId: 도메인 연결 메타(선택 필드).
-[H] @AuthenticationPrincipal: JWT 인증 필터가 SecurityContext에 저장한 사용자 식별자 주입.
+[H] @CurrentUser: CurrentUserArgumentResolver 가 users.id 로 사용자 행을 로드해 주입한다(이슈 #5).
+    예전에는 @AuthenticationPrincipal String 이었고, 필터의 principal 타입이 바뀌자 예외도 경고도
+    컴파일 에러도 없이 **200 OK 인 채로 null 이 주입**됐다 — MediaService 의 소유권 검사 4곳이
+    통째로 무력화되는 조용한 회귀다. AuthSubjectContractSpecTest 가 재도입을 막는다.
 [I] 서비스 호출: 파일 검증/업로드/DB 저장 일괄 처리.
 [J] 공개 URL: S3 key → CloudFront 등 CDN 경로 조합.
 [K] 반환 DTO 리스트: Swagger에서 array[MediaItemResponse]로 표시.
