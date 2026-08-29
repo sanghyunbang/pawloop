@@ -6,7 +6,7 @@ import 'package:heat_trip_flutter/core/mood/mood.dart';
 import 'package:heat_trip_flutter/core/mood/mood_color.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
+import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/features/journey/data/journey_api.dart';
 import 'package:heat_trip_flutter/features/journey/domain/models.dart';
 
@@ -100,8 +100,10 @@ class _MeScreenState extends State<MeScreen> {
     return m;
   }
 
+  /// 로그아웃. `POST /auth/logout` 호출과 상태 갱신은 전부 [AuthState] 가 한다 (#12).
+  /// 토큰만 지우면 status 가 `authenticated` 로 남아 로그인 화면이 홈으로 되튕긴다.
   Future<void> _logout() async {
-    await TokenStorage.clearToken();
+    await AuthState.logout();
     if (mounted) context.goNamed('login');
   }
 

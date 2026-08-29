@@ -9,6 +9,21 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  errors:
+    # `await` 뒤에 살아 있는지 확인하지 않고 BuildContext 를 쓰면 **컴파일 실패**로 막는다.
+    #
+    # 이 규칙은 원래 info 라 CI 를 통과했고, 그 사이에 23곳이 쌓였다. #63 이 22곳,
+    # #12 가 마지막 1곳(죽은 logout_service.dart 삭제)을 없애 **0건**이 된 지금
+    # error 로 올린다. 0 일 때 올리지 않으면 영영 못 올린다.
+    #
+    # 실제로 잡히는 버그다 — 사용자가 비동기 작업 중 뒤로 가면 죽은 context 로
+    # ScaffoldMessenger.of / Navigator 를 불러 예외가 난다.
+    #
+    # 정말 안전한 곳(작업이 이미 끝나 안내만 남은 자리)은 가드를 넣거나,
+    # 왜 안전한지 한 줄 적고 `// ignore: use_build_context_synchronously` 를 쓴다.
+    use_build_context_synchronously: error
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

@@ -56,17 +56,22 @@ Future<void> main() async {
   // 로그인 상태를 복원하기 전에 돌려야 기존 사용자가 재로그인 없이 넘어온다.
   await SecureTokenStore.instance.migrateLegacyToken();
 
-  // 저장된 토큰으로 로그인 상태 복원
-  await AuthState.init();
-
-  // 세션이 끝나면(refresh 불가 · 재시도 후에도 401) 로그인 화면으로 보낸다 (#11).
-  // 저장된 토큰을 지우는 것은 AuthedClient 가 이미 했다 — 여기서는 전역 상태와
-  // 화면만 맞춘다. 라우터를 AuthedClient 가 직접 import 하지 않는 이유는
-  // `app_router.dart` 가 #12 소유이기 때문이다.
+  // 세션이 끝나면(refresh 불가 · 재시도 후에도 401) 상태만 내린다 (#11).
+  // 저장된 토큰을 지우는 것은 AuthedClient 가 이미 했다.
+  //
+  // **여기서 화면을 직접 옮기지 않는다.** 라우터가 `AuthState.status` 를
+  // `refreshListenable` 로 듣고 있어서(#12), 보호 라우트에 있었다면 알아서 로그인
+  // 화면으로 밀려나고 공개 라우트(지도·탐색)에 있었다면 그대로 둘러보기를 이어간다.
+  // 예전처럼 무조건 `goNamed('login')` 을 하면, 지도를 보던 사용자가 백그라운드
+  // 요청 하나 때문에 로그인 화면으로 튕긴다.
   AuthedClient.instance.onSessionExpired = () async {
-    AuthState.loggedIn.value = false;
-    appRouter.goNamed('login');
+    AuthState.markSessionExpired();
   };
+
+  // 저장된 토큰을 서버(`GET /auth/me`)로 검증한다. **await 하지 않는다** —
+  // 여기서 네트워크 왕복을 기다리면 첫 프레임 자체가 늦는다. 검증이 끝날 때까지
+  // 상태는 `AuthStatus.unknown` 이고 라우터는 스플래시를 띄운다(완료 조건 7).
+  unawaited(AuthState.init());
 
   // Flutter 위젯 트리에서 발생한 모든 에러를 콘솔로
   FlutterError.onError = (FlutterErrorDetails details) {

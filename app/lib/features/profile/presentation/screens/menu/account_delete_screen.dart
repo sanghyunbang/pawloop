@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
+import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 
 class AccountDeleteScreen extends StatelessWidget {
   const AccountDeleteScreen({super.key});
@@ -24,7 +24,8 @@ class AccountDeleteScreen extends StatelessWidget {
     final token = await SecureTokenStore.instance.readAccessToken();
 
     if (token == null) {
-      await TokenStorage.clearToken();
+      // 서버에 부를 세션 자체가 없다 — 로컬만 정리한다.
+      await AuthState.clearLocalSession();
       if (context.mounted) context.goNamed('login');
       return;
     }
@@ -34,8 +35,9 @@ class AccountDeleteScreen extends StatelessWidget {
     if (!context.mounted) return;
 
     if (success) {
-      await TokenStorage.clearToken();
-      // 위 가드(:34)는 deleteMyAccount 뒤의 것이다. clearToken 도 await 이라
+      // 계정이 지워졌으므로 `POST /auth/logout` 은 401 이다 — 로컬만 정리한다 (#12).
+      await AuthState.clearLocalSession();
+      // 위 가드(:34)는 deleteMyAccount 뒤의 것이다. 세션 정리도 await 이라
       // 그 사이에 화면이 사라졌을 수 있다. 탈퇴와 토큰 삭제는 이미 끝났으므로
       // 여기서 돌아가도 잃는 것은 안내와 화면 이동뿐이다. (#63)
       if (!context.mounted) return;

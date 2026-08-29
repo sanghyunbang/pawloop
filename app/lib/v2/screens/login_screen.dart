@@ -1,9 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
+import 'package:heat_trip_flutter/app/auth_redirect.dart' show homeRoute;
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../data/auth_state.dart';
+import 'package:heat_trip_flutter/features/auth/service/oauth_callback.dart';
 import 'package:heat_trip_flutter/features/auth/service/social_login_service.dart';
+
+/// 실패 사유별 안내 문구.
+///
+/// 예전에는 세 경우가 전부 "로그인에 실패했어요. 다시 시도해 주세요." 한 줄이었다.
+/// 스스로 창을 닫은 사람에게 "실패" 라고 말하면 앱이 고장 난 줄 알고, 비행기 모드인
+/// 사람에게 "다시 시도" 라고 말하면 될 때까지 누른다. (이슈 #12 완료 조건 9)
+///
+/// 순수 함수라 위젯 없이도 시험할 수 있다.
+String loginFailureMessage(SocialLoginOutcome outcome) {
+  switch (outcome) {
+    case SocialLoginOutcome.canceled:
+      return '로그인을 취소했어요.';
+    case SocialLoginOutcome.networkError:
+      return '네트워크에 연결할 수 없어요. 연결 상태를 확인해 주세요.';
+    case SocialLoginOutcome.serverError:
+      return '로그인 서버에 문제가 있어요. 잠시 후 다시 시도해 주세요.';
+    case SocialLoginOutcome.success:
+      // 호출되지 않는 분기지만, enum 이 늘어날 때 컴파일러가 알려주도록 남긴다.
+      return '';
+  }
+}
 
 /// "Sign in with Google" 버튼 라이트 테마 규격 색상.
 /// 배경 흰색 · 테두리 #747775 · 텍스트 #1F1F1F — 브랜드 가이드가 고정한 값이다.
@@ -26,25 +50,57 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login(String provider) async {
     setState(() => _busy = true);
-    bool ok = false;
+    AuthState.beginAuthenticating();
+
+    SocialLoginResult result;
     try {
-      ok = await SocialLoginService.signIn(provider);
-    } catch (_) {
-      ok = false;
+      result = await SocialLoginService.signIn(provider);
+    } catch (e) {
+      // signIn 은 예외를 삼키지만, 그래도 여기서 앱이 죽지 않게 한 겹 더 둔다.
+      result = SocialLoginResult(outcomeFromError(e));
     }
+
+    // 스낵바를 띄울 messenger 는 await 전에 잡아 둔다 — 성공 시 이 화면은
+    // 곧 pop 되고, 그 뒤의 `ScaffoldMessenger.of(context)` 는 죽은 context 를 본다.
     if (!mounted) return;
-    setState(() => _busy = false);
-    if (ok) {
-      AuthState.markLoggedIn();
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인됐어요 🐾')),
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    if (!result.ok) {
+      AuthState.cancelAuthenticating();
+      if (!mounted) return;
+      setState(() => _busy = false);
+      messenger.showSnackBar(
+        SnackBar(content: Text(loginFailureMessage(result.outcome))),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인에 실패했어요. 다시 시도해 주세요.')),
-      );
+      return;
     }
+
+    // 로그인 화면을 먼저 걷어낸다. 그래야 온보딩 리다이렉트가 이 화면 뒤에서
+    // 일어나 사용자에게 보이지 않는 일이 없다.
+    if (navigator.canPop()) navigator.pop();
+
+    // 서버에 "나는 누구인가" 를 물어 상태를 확정한다. isNew 면 라우터가 온보딩으로 보낸다.
+    await AuthState.completeLogin(isNew: result.isNew);
+
+    if (mounted) setState(() => _busy = false);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('로그인됐어요 🐾')),
+    );
+  }
+
+  /// "그냥 둘러보기" — 로그인 없이 앱을 계속 쓴다.
+  ///
+  /// 이 화면은 두 경로로 뜬다: 프로필 메뉴에서 `push` 로 얹히거나, 라우터가
+  /// `/auth/login` 으로 보내거나(세션 만료·보호 라우트 진입). pop 할 게 없는
+  /// 두 번째 경우까지 생각하지 않으면 버튼이 아무것도 안 하는 화면이 된다.
+  void _dismiss() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+    GoRouter.maybeOf(context)?.go(homeRoute);
   }
 
   @override
@@ -98,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                  onPressed: _busy ? null : _dismiss,
                   child: const Text('그냥 둘러보기', style: TextStyle(fontSize: 14, color: T.textMuted)),
                 ),
                 const Spacer(flex: 1),

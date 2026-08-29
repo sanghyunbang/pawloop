@@ -57,6 +57,8 @@ class MeScreen extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
                   children: [
                     _dogHeader(dog),
+                    const SizedBox(height: 10),
+                    _accountLine(),
                     const SizedBox(height: 16),
                     _petsRow(context),
                     const SizedBox(height: 16),
@@ -111,6 +113,51 @@ class MeScreen extends StatelessWidget {
         ),
       ],
     ]);
+  }
+
+  // ───────────── 로그인한 계정 ─────────────
+
+  /// 서버(`GET /auth/me`)가 알려준 닉네임을 띄운다 — 이슈 #12 완료 조건 1.
+  ///
+  /// 예전에는 앱이 "토큰이 있다" 는 것만 알았지 그 토큰이 누구 것인지 몰랐다.
+  /// 그래서 로그인해도 이 자리에 보여 줄 것이 없었다.
+  Widget _accountLine() {
+    return ValueListenableBuilder<AuthStatus>(
+      valueListenable: AuthState.status,
+      builder: (_, status, __) {
+        final user = AuthState.user;
+        final String text;
+        if (status == AuthStatus.unknown) {
+          text = '계정 확인 중…';
+        } else if (user != null) {
+          final provider = user.provider;
+          text = provider == null
+              ? user.displayName
+              : '${user.displayName} · $provider';
+        } else if (status == AuthStatus.authenticated) {
+          // 토큰은 있는데 프로필을 못 받은 상태(오프라인 시작).
+          text = '로그인됨 · 프로필을 불러오지 못했어요';
+        } else {
+          text = '로그인하지 않았어요';
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.account_circle_outlined,
+                size: 15, color: T.textMuted),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                text,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12.5, color: T.textMuted),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // ───────────── 우리 아이들 (여러 마리 전환/추가) ─────────────
@@ -323,11 +370,21 @@ class MeScreen extends StatelessWidget {
           row(Icons.bar_chart_rounded, '산책 통계',
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen()))),
           row(Icons.bookmark_border, '북마크', onTap: () => snack('저장한 장소가 아직 없어요 · 지도에서 마음에 드는 곳을 담아보세요')),
-          ValueListenableBuilder<bool>(
-            valueListenable: AuthState.loggedIn,
-            builder: (_, logged, __) => logged
+          ValueListenableBuilder<AuthStatus>(
+            valueListenable: AuthState.status,
+            builder: (_, status, __) => status == AuthStatus.authenticated ||
+                    status == AuthStatus.onboarding
                 ? row(Icons.logout, '로그아웃', color: const Color(0xFFFF6B7E), border: false,
-                    onTap: () async { await AuthState.logout(); snack('로그아웃되었습니다'); })
+                    // messenger 를 await 전에 잡는다 — 로그아웃은 네트워크를 타고,
+                    // 그 사이 이 화면이 사라져 있을 수 있다.
+                    onTap: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await AuthState.logout();
+                      messenger.showSnackBar(const SnackBar(
+                        content: Text('로그아웃되었습니다'),
+                        duration: Duration(milliseconds: 1800),
+                      ));
+                    })
                 : row(Icons.login, '로그인 / 회원가입', color: const Color(0xFF5B8DEF), border: false,
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()))),
           ),

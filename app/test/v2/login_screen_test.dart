@@ -7,9 +7,16 @@
 //
 // 픽셀 위치는 보지 않는다(이슈 #21). 다만 구글 버튼의 색은 예외다 —
 // 브랜드 가이드가 "임의 색상 변경 금지"를 요구하므로 회귀로 잠근다.
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:heat_trip_flutter/features/auth/service/oauth_callback.dart';
+import 'package:heat_trip_flutter/features/auth/service/social_login_service.dart';
+import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/screens/login_screen.dart';
 
 /// 주어진 에셋 경로를 그리는 [SvgPicture] 를 찾는 Finder.
@@ -86,6 +93,94 @@ void main() {
 
       expect(decoration.color, const Color(0xFFFEE500));
       expect(decoration.border, isNull);
+    });
+  });
+
+  // ── 실패 사유별 안내 문구 (이슈 #12 완료 조건 9) ──────────────────────────
+  //
+  // 예전에는 취소·네트워크·서버 오류가 전부 "로그인에 실패했어요. 다시 시도해 주세요."
+  // 한 줄이었다. 스스로 창을 닫은 사람에게 "실패" 라고 말하면 앱이 고장 난 줄 알고,
+  // 비행기 모드인 사람에게 "다시 시도" 라고 말하면 될 때까지 누른다.
+  //
+  // `FlutterWebAuth2.authenticate` 는 플랫폼 채널이라 테스트에서 부를 수 없다.
+  // `SocialLoginService.authenticator` 를 갈아끼워 세 갈래를 만든다.
+  group('로그인 실패 사유별 안내', () {
+    tearDown(() {
+      SocialLoginService.resetForTest();
+      AuthState.resetForTest();
+    });
+
+    /// [onAuthenticate] 가 던지거나 돌려주는 것으로 실패를 흉내 낸다.
+    Future<void> tapKakao(
+      WidgetTester tester,
+      Future<String> Function() onAuthenticate,
+    ) async {
+      SocialLoginService.authenticator =
+          ({required url, required callbackUrlScheme}) => onAuthenticate();
+
+      await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+      await tester.tap(find.text('카카오로 시작하기'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('사용자가 취소하면 "취소" 라고 말한다 — 실패라고 하지 않는다', (tester) async {
+      await tapKakao(
+        tester,
+        () => throw PlatformException(code: 'CANCELED'),
+      );
+
+      expect(find.text('로그인을 취소했어요.'), findsOneWidget);
+      expect(find.textContaining('실패'), findsNothing);
+    });
+
+    testWidgets('네트워크 오류는 연결 상태를 확인하라고 말한다', (tester) async {
+      await tapKakao(
+        tester,
+        () => throw const SocketException('no route to host'),
+      );
+
+      expect(
+        find.text('네트워크에 연결할 수 없어요. 연결 상태를 확인해 주세요.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('서버 오류는 잠시 후 다시 시도하라고 말한다', (tester) async {
+      // 계약과 다른 콜백(토큰 없음) — 사용자 탓이 아니라 서버 탓이다.
+      await tapKakao(
+        tester,
+        () async => 'heattrip://login-callback?error=account_state_invalid',
+      );
+
+      expect(
+        find.text('로그인 서버에 문제가 있어요. 잠시 후 다시 시도해 주세요.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('세 문구가 서로 다르다 — 한 문장으로 뭉개지지 않는다', (tester) async {
+      final messages = {
+        loginFailureMessage(SocialLoginOutcome.canceled),
+        loginFailureMessage(SocialLoginOutcome.networkError),
+        loginFailureMessage(SocialLoginOutcome.serverError),
+      };
+
+      expect(messages.length, 3);
+    });
+
+    testWidgets('타임아웃도 네트워크 오류로 분류된다', (tester) async {
+      await tapKakao(tester, () => throw TimeoutException('slow'));
+
+      expect(
+        find.text('네트워크에 연결할 수 없어요. 연결 상태를 확인해 주세요.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('실패해도 authenticating 에 머물지 않는다', (tester) async {
+      await tapKakao(tester, () => throw PlatformException(code: 'CANCELED'));
+
+      expect(AuthState.status.value, isNot(AuthStatus.authenticating));
     });
   });
 }

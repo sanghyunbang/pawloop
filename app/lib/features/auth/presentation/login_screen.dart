@@ -1,11 +1,26 @@
 // lib/features/auth/presentation/login_screen.dart
+//
+// ## 이 화면의 역할 — **이메일/비밀번호 로그인(보조 경로)** 이다 (이슈 #12)
+//
+// 앱에는 `LoginScreen` 이라는 이름의 화면이 두 개 있었고, 어느 쪽이 진짜인지
+// 코드만 보고는 알 수 없었다. #12 에서 정본을 정했다.
+//
+//  - **정본**: `lib/v2/screens/login_screen.dart` — 카카오/구글 소셜 로그인.
+//    라우터 name `'login'`(`/auth/login`)이 가리키는 곳이고, 세션 만료(#11)와
+//    보호 라우트 진입이 사용자를 보내는 곳도 여기다.
+//  - **이 파일**: `POST /auth/login` + `POST /auth/signup` 계약(#10)을 쓰는
+//    이메일 경로. 회원가입 화면(`sign_up_screen.dart`)과 짝이라 지우지 않고
+//    `/auth/login/email`(name `'loginEmail'`)로 남겨 둔다.
+//
+// 여기 있던 **주석 처리된 소셜 로그인 버튼들은 삭제했다** — 정본이 따로 있는데
+// 주석으로 남겨 두면 다음 사람이 "이걸 살리면 되나" 를 매번 다시 판단해야 한다.
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart'; // ✅ 유지
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/login_request.dart';
-import 'package:heat_trip_flutter/features/auth/presentation/widgets/social_login_button.dart';
 import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
-import 'package:heat_trip_flutter/features/auth/service/social_login_service.dart';
+import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,7 +30,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final AuthRepositoryImpl _authRepository = AuthRepositoryImpl();
-  final SocialLoginService _loginService = SocialLoginService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
@@ -46,10 +60,15 @@ class _LoginScreenState extends State<LoginScreen> {
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
         );
+
+        // 토큰만 저장하고 화면을 옮기면 앱은 여전히 "내가 누군지" 모른다.
+        // `GET /auth/me` 로 상태를 확정한다. isNew 면 라우터가 온보딩으로 보낸다(#12).
+        await AuthState.completeLogin(isNew: tokens.isNew);
         if (!mounted) return;
 
-        // 로그인 후 "오늘" 홈으로 진입 (새 IA, F0-4)
-        context.go('/foryou_v2');
+        // 신규 가입자는 라우터의 redirect 가 온보딩으로 붙잡으므로 여기서 미리
+        // 가로채지 않는다. 기존 사용자만 "오늘" 홈으로 보낸다 (새 IA, F0-4).
+        if (!tokens.isNew) context.go('/foryou_v2');
       } else {
         _showDialog('[로그인 실패] 아이디와 비밀번호를 확인해주세요.');
       }
@@ -57,14 +76,6 @@ class _LoginScreenState extends State<LoginScreen> {
       _showDialog('오류 발생: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // === 원본 기능 그대로 ===
-  Future<void> _handleSocialLogin(String provider) async {
-    final success = await SocialLoginService.signIn(provider);
-    if (success && mounted) {
-      context.go('/foryou_v2');
     }
   }
 
@@ -271,39 +282,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                       ),
-
-                      // 소셜 로그인 버튼들(원본 그대로)
-                      // const SizedBox(height: 16),
-                      // Container(
-                      //   decoration: BoxDecoration(
-                      //     color: Colors.white,
-                      //     borderRadius: BorderRadius.circular(12),
-                      //     border: Border.all(color: Color(0xFFE5E7EB), width: 1), // ← 연회색 테두리
-                      //   ),
-                      //   child: SocialLoginButton(
-                      //     iconPath: 'assets/icons/google.svg',
-                      //     label: 'Google로 로그인',
-                      //     backgroundColor: Colors.white,
-                      //     textColor: Colors.black,
-                      //     onPressed: () => _handleSocialLogin('google'),
-                      //   ),
-                      // ),
-                      // const SizedBox(height: 12),
-                      // SocialLoginButton(
-                      //   iconPath: 'assets/icons/kakao.svg',
-                      //   label: 'Kakao로 로그인',
-                      //   backgroundColor: const Color(0xFFFEE500),
-                      //   textColor: Colors.black,
-                      //   onPressed: () => _handleSocialLogin('kakao'),
-                      // ),
-                      // const SizedBox(height: 12),
-                      // SocialLoginButton(
-                      //   iconPath: 'assets/icons/naver.svg',
-                      //   label: 'Naver로 로그인',
-                      //   backgroundColor: const Color(0xFF03C75A),
-                      //   textColor: Colors.white,
-                      //   onPressed: () => _handleSocialLogin('naver'),
-                      // ),
                     ],
                   ),
                 ),
@@ -350,136 +328,3 @@ class _LoginScreenState extends State<LoginScreen> {
         borderSide: BorderSide(color: color, width: 1),
       );
 }
-
-// import 'package:flutter/material.dart';
-// import 'package:go_router/go_router.dart'; // ✅ 추가
-// import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
-// import 'package:heat_trip_flutter/features/auth/data/dto/login_request.dart';
-// import 'package:heat_trip_flutter/features/auth/presentation/widgets/social_login_button.dart';
-// import 'package:heat_trip_flutter/features/auth/service/social_login_service.dart';
-// import 'package:shared_preferences/shared_preferences.dart';
-//
-// class LoginScreen extends StatefulWidget {
-//   const LoginScreen({super.key});
-//   @override
-//   State<LoginScreen> createState() => _LoginScreenState();
-// }
-//
-// class _LoginScreenState extends State<LoginScreen> {
-//   final AuthRepositoryImpl _authRepository = AuthRepositoryImpl();
-//   final SocialLoginService _loginService = SocialLoginService();
-//   final TextEditingController _emailController = TextEditingController();
-//   final TextEditingController _passwordController = TextEditingController();
-//   bool _isLoading = false;
-//
-//   Future<void> _handleEmailLogin() async {
-//     final email = _emailController.text.trim();
-//     final password = _passwordController.text.trim();
-//     if (email.isEmpty || password.isEmpty) {
-//       _showDialog('이메일과 비밀번호를 모두 입력해주세요.');
-//       return;
-//     }
-//
-//     setState(() => _isLoading = true);
-//     try {
-//       final token = await _authRepository.login(
-//         LoginRequest(email: email, password: password),
-//       );
-//       if (token != null) {
-//         final prefs = await SharedPreferences.getInstance();
-//         await prefs.setString('jwt_token', token);
-//         if (!mounted) return;
-//
-//         // ✅ Navigator.pushReplacement → go_router
-//         context.go('/explore'); // or: context.goNamed('start');
-//       } else {
-//         _showDialog('[로그인 실패] 아이디와 비밀번호를 확인해주세요.');
-//       }
-//     } catch (e) {
-//       _showDialog('오류 발생: $e');
-//     } finally {
-//       if (mounted) setState(() => _isLoading = false);
-//     }
-//   }
-//
-//   Future<void> _handleSocialLogin(String provider) async {
-//     final success = await SocialLoginService.signIn(provider);
-//     if (success && mounted) {
-//       // ✅ 소셜 로그인 성공 시도 동일
-//       context.go('/explore');
-//     }
-//   }
-//
-//   void _showDialog(String message) {
-//     showDialog(
-//       context: context,
-//       builder: (_) => AlertDialog(
-//         title: const Text('알림'),
-//         content: Text(message),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context),
-//             child: const Text('확인'),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(title: const Text('로그인')),
-//       body: Center(
-//         child: SingleChildScrollView(
-//           padding: const EdgeInsets.all(24.0),
-//           child: Column(
-//             children: [
-//               TextField(
-//                 controller: _emailController,
-//                 decoration: const InputDecoration(labelText: '이메일'),
-//               ),
-//               const SizedBox(height: 12),
-//               TextField(
-//                 controller: _passwordController,
-//                 decoration: const InputDecoration(labelText: '비밀번호'),
-//                 obscureText: true,
-//               ),
-//               const SizedBox(height: 20),
-//               _isLoading
-//                   ? const CircularProgressIndicator()
-//                   : ElevatedButton(
-//                       onPressed: _handleEmailLogin,
-//                       child: const Text('이메일 로그인'),
-//                     ),
-//               const Divider(height: 40),
-//               SocialLoginButton(
-//                 iconPath: 'assets/icons/google.svg',
-//                 label: 'Google로 로그인',
-//                 backgroundColor: Colors.white,
-//                 textColor: Colors.black,
-//                 onPressed: () => _handleSocialLogin('google'),
-//               ),
-//               const SizedBox(height: 12),
-//               SocialLoginButton(
-//                 iconPath: 'assets/icons/kakao.svg',
-//                 label: 'Kakao로 로그인',
-//                 backgroundColor: const Color(0xFFFEE500),
-//                 textColor: Colors.black,
-//                 onPressed: () => _handleSocialLogin('kakao'),
-//               ),
-//               const SizedBox(height: 12),
-//               SocialLoginButton(
-//                 iconPath: 'assets/icons/naver.svg',
-//                 label: 'Naver로 로그인',
-//                 backgroundColor: const Color(0xFF03C75A),
-//                 textColor: Colors.white,
-//                 onPressed: () => _handleSocialLogin('naver'),
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
