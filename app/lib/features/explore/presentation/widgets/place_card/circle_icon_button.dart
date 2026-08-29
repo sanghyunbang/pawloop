@@ -2,6 +2,7 @@
 ///
 /// 터치 리플 효과가 있는 원형 아이콘 버튼.
 /// - 상단바 하트 등에 재사용.
+library;
 
 import 'package:flutter/material.dart';
 

@@ -8,6 +8,7 @@
 /// - ⚠️ intro2는 "이미지 리스트"를 주지 않는 경우가 대부분입니다.
 ///   images/firstimage(2)는 실제로 common 쪽에서 오는 편입니다.
 ///   그래도 호환성을 위해 필드를 두되, 존재할 때만 흡수하는 방식을 취합니다. [④]
+library;
 
 class DetailIntroDto {
   // 운영/편의/문의

@@ -17,7 +17,7 @@ class _AddTripSheetState extends State<AddTripSheet> {
   DateTime? _selectedDate;
 
   final ImagePicker _picker = ImagePicker();
-  List<File> _imageFiles = [];
+  final List<File> _imageFiles = [];
 
   @override
   void initState() {

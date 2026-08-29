@@ -28,9 +28,10 @@ class RightSideMenuPanel extends StatelessWidget {
   void _closeThenPush(BuildContext context, Widget screen) {
     Navigator.of(context).pop(); // 패널 먼저 닫기
     Future.microtask(() {
-      Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(builder: (_) => screen),
-      );
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).push(MaterialPageRoute(builder: (_) => screen));
     });
   }
 
@@ -51,7 +52,7 @@ class RightSideMenuPanel extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 24,
               offset: const Offset(-8, 0),
             ),
@@ -68,7 +69,10 @@ class RightSideMenuPanel extends StatelessWidget {
                     const Expanded(
                       child: Text(
                         'Menu',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     IconButton(
@@ -90,10 +94,7 @@ class RightSideMenuPanel extends StatelessWidget {
                     _MenuLeaf(
                       leading: const Icon(Icons.info_outline),
                       title: '소개',
-                      onTap: () => _closeThenPush(
-                        context,
-                        const AboutScreen(),
-                      ),
+                      onTap: () => _closeThenPush(context, const AboutScreen()),
                     ),
 
                     // 2) 약관 및 정책 (드롭다운)
@@ -103,10 +104,8 @@ class RightSideMenuPanel extends StatelessWidget {
                       children: [
                         _MenuLeaf(
                           title: '이용약관',
-                          onTap: () => _closeThenPush(
-                            context,
-                            const TermsScreen(),
-                          ),
+                          onTap: () =>
+                              _closeThenPush(context, const TermsScreen()),
                         ),
                         _MenuLeaf(
                           title: '개인정보처리방침',
@@ -122,26 +121,25 @@ class RightSideMenuPanel extends StatelessWidget {
                     _MenuLeaf(
                       leading: const Icon(Icons.chat_bubble_outline),
                       title: '의견보내기',
-                      onTap: () => _closeThenPush(
-                        context,
-                        const FeedbackScreen(),
-                      ),
+                      onTap: () =>
+                          _closeThenPush(context, const FeedbackScreen()),
                     ),
 
                     // 4) 앱추천
                     _MenuLeaf(
                       leading: const Icon(Icons.share_outlined),
                       title: '앱 추천',
-                      onTap: () => _closeThenPush(
-                        context,
-                        const ShareAppScreen(),
-                      ),
+                      onTap: () =>
+                          _closeThenPush(context, const ShareAppScreen()),
                     ),
 
                     // 5) 회원탈퇴 (로그인 상태에서만 노출)
                     if (isLoggedIn)
                       _MenuLeaf(
-                        leading: const Icon(Icons.delete_outline, color: Colors.red),
+                        leading: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                        ),
                         title: '회원탈퇴',
                         isDestructive: true,
                         onTap: () => _closeThenPush(
@@ -181,16 +179,22 @@ class _MenuExpansion extends StatelessWidget {
         leading: leading,
         title: Text(title, style: const TextStyle(fontSize: 16)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        collapsedShape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        collapsedShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
         tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        childrenPadding:
-        const EdgeInsets.only(left: 12 + 24, right: 12, bottom: 8),
+        childrenPadding: const EdgeInsets.only(
+          left: 12 + 24,
+          right: 12,
+          bottom: 8,
+        ),
         children: children
-            .map((leaf) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: leaf,
-        ))
+            .map(
+              (leaf) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: leaf,
+              ),
+            )
             .toList(),
       ),
     );
@@ -221,20 +225,20 @@ class _MenuLeaf extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.deepPurple.withOpacity(0.0), // 필요 시 선택 배경
+          color: Colors.deepPurple.withValues(alpha: 0.0), // 필요 시 선택 배경
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
             if (leading != null) ...[
-              IconTheme(data: IconThemeData(color: fg), child: leading!),
+              IconTheme(
+                data: IconThemeData(color: fg),
+                child: leading!,
+              ),
               const SizedBox(width: 10),
             ],
             Expanded(
-              child: Text(
-                title,
-                style: TextStyle(fontSize: 16, color: fg),
-              ),
+              child: Text(title, style: TextStyle(fontSize: 16, color: fg)),
             ),
           ],
         ),

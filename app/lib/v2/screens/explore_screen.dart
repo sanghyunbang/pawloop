@@ -129,9 +129,52 @@ class _ExploreScreenState extends State<ExploreScreen> {
             Text(_isLayer ? '공공데이터 (더미)' : '관광공사', style: const TextStyle(fontSize: 10.5, color: T.textMuted)),
           ]),
           const SizedBox(height: 10),
-          for (final p in _filtered) ...[_placeCard(p), const SizedBox(height: 12)],
+          for (int i = 0; i < _filtered.length; i++) ...[
+            _placeCard(_filtered[i]),
+            const SizedBox(height: 12),
+            // P1 수익화 훅: 리스트 3번째 자리는 동네 제휴 업체 지면(슬롯만 설계, 채움은 P2).
+            if (i == 1) ...[_sponsorSlot(), const SizedBox(height: 12)],
+          ],
         ],
       ],
+    );
+  }
+
+  // 제휴 업체 슬롯(placeholder) — 지면 설계용.
+  Widget _sponsorSlot() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0x66FFFFFF),
+        borderRadius: BorderRadius.circular(T.radius),
+        border: Border.all(color: const Color(0x338C7BFF)),
+      ),
+      child: Row(children: [
+        Container(
+          width: 44, height: 44, alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF9B7BFF).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: const Icon(Icons.storefront_rounded, size: 22, color: Color(0xFF9B7BFF)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+            Text('우리 동네 업체 자리', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
+            SizedBox(height: 3),
+            Text('동네 펫샵·미용·병원이 여기에 소개될 예정이에요', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+          ]),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF9B7BFF).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text('제휴', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF9B7BFF))),
+        ),
+      ]),
     );
   }
 

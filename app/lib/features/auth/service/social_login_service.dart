@@ -1,4 +1,3 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'token_storage.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';

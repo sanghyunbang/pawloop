@@ -40,30 +40,35 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
 
     // 2) 메타 배치 조회 (imageUrl + (optional) contentTypeId) — 이미지 프리뷰 + 타입 보강
     final ids = items.map((e) => e.contentId).toList();
-    final metaMap = await api.resolveMetaBatch(ids); // {contentId: {imageUrl, contentTypeId}}
+    final metaMap = await api.resolveMetaBatch(
+      ids,
+    ); // {contentId: {imageUrl, contentTypeId}}
 
     // 3) Post로 변환 (아이템에 타입 없으면 메타 배치의 타입으로 보강)
-    int? _toInt(dynamic v) {
+    int? toInt(dynamic v) {
       if (v == null) return null;
       if (v is num) return v.toInt();
       return int.tryParse(v.toString());
     }
 
-    return items.map((it) {
-      final meta = metaMap[it.contentId];
-      final img = (meta?['imageUrl'] as String?) ?? '';
-      final typeFromMeta = _toInt(meta?['contentTypeId']);
-      final finalType = it.contentTypeId ?? typeFromMeta;
+    return items
+        .map((it) {
+          final meta = metaMap[it.contentId];
+          final img = (meta?['imageUrl'] as String?) ?? '';
+          final typeFromMeta = toInt(meta?['contentTypeId']);
+          final finalType = it.contentTypeId ?? typeFromMeta;
 
-      // 최종 타입이 없으면(아주 드문 케이스) 해당 항목은 스킵
-      if (finalType == null) return null;
+          // 최종 타입이 없으면(아주 드문 케이스) 해당 항목은 스킵
+          if (finalType == null) return null;
 
-      return _Post(
-        contentId: it.contentId,
-        contentTypeId: finalType,
-        imageUrl: img,
-      );
-    }).whereType<_Post>().toList();
+          return _Post(
+            contentId: it.contentId,
+            contentTypeId: finalType,
+            imageUrl: img,
+          );
+        })
+        .whereType<_Post>()
+        .toList();
   }
 
   void _goDetail(BuildContext context, _Post post) {
@@ -151,7 +156,9 @@ class _PostTile extends StatelessWidget {
         onTap: onTap,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: hasImage ? _NetImage(post.imageUrl) : const _ThumbPlaceholder(),
+          child: hasImage
+              ? _NetImage(post.imageUrl)
+              : const _ThumbPlaceholder(),
         ),
       ),
     );
@@ -172,14 +179,18 @@ class _NetImage extends StatelessWidget {
         loadingBuilder: (c, w, p) => p == null
             ? w
             : const Center(
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
         errorBuilder: (c, e, s) => const Center(
-          child: Icon(Icons.broken_image_outlined, size: 28, color: Colors.black26),
+          child: Icon(
+            Icons.broken_image_outlined,
+            size: 28,
+            color: Colors.black26,
+          ),
         ),
       ),
     );
@@ -193,7 +204,11 @@ class _ThumbPlaceholder extends StatelessWidget {
     return const DecoratedBox(
       decoration: BoxDecoration(color: Color(0xFFF3F4F6)),
       child: Center(
-        child: Icon(Icons.photo_size_select_actual_outlined, color: Colors.black26, size: 22),
+        child: Icon(
+          Icons.photo_size_select_actual_outlined,
+          color: Colors.black26,
+          size: 22,
+        ),
       ),
     );
   }
@@ -229,7 +244,7 @@ class _Api {
     }
     final list = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
 
-    int? _toInt(dynamic v) {
+    int? toInt(dynamic v) {
       if (v == null) return null;
       if (v is num) return v.toInt();
       return int.tryParse(v.toString());
@@ -238,16 +253,18 @@ class _Api {
     // 타입 없어도 그대로 반환(나중에 메타 배치에서 보강)
     return list
         .map((e) {
-      final id = (e['contentId'] ?? '').toString();
-      final type = _toInt(e['contentTypeId']);
-      return _ItemSummary(contentId: id, contentTypeId: type);
-    })
+          final id = (e['contentId'] ?? '').toString();
+          final type = toInt(e['contentTypeId']);
+          return _ItemSummary(contentId: id, contentTypeId: type);
+        })
         .where((it) => it.contentId.isNotEmpty)
         .toList();
   }
 
   /// 배치 메타: contentId → { imageUrl:String, contentTypeId:int? }
-  Future<Map<String, Map<String, dynamic>>> resolveMetaBatch(List<String> contentIds) async {
+  Future<Map<String, Map<String, dynamic>>> resolveMetaBatch(
+    List<String> contentIds,
+  ) async {
     if (contentIds.isEmpty) return {};
     final res = await http.post(
       Uri.parse('$base/bookmarks/images:batchResolve'),

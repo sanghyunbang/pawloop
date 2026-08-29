@@ -1,6 +1,7 @@
 /// 감정 탭 묶음의 상태를 관리하는 ChangeNotifier.
 /// - active 탭, 로딩/에러, 로드된 데이터, 제출폼 상태 등.
 /// - 탐색 상세 화면과 별도의 VM로 분리하여 관심사를 분리.
+library;
 
 import 'package:flutter/foundation.dart';
 import '../../data_detail/emotion_repository.dart';
@@ -51,34 +52,58 @@ class DetailEmotionVM extends ChangeNotifier {
 
   /// 공간 특성 로드
   Future<void> loadFeatures() async {
-    loadingFeatures = true; error = null; notifyListeners();
+    loadingFeatures = true;
+    error = null;
+    notifyListeners();
     try {
       features = await repo.fetchFeatures(contentId);
     } catch (e) {
       error = '$e';
     }
-    loadingFeatures = false; notifyListeners();
+    loadingFeatures = false;
+    notifyListeners();
   }
 
   /// 감정 리뷰 로드
   Future<void> loadReviews() async {
-    loadingReviews = true; error = null; notifyListeners();
+    loadingReviews = true;
+    error = null;
+    notifyListeners();
     try {
       reviews = await repo.fetchReviews(contentId);
     } catch (e) {
       error = '$e';
     }
-    loadingReviews = false; notifyListeners();
+    loadingReviews = false;
+    notifyListeners();
   }
 
   /// 탭 전환
-  void setTab(EmotionTab t) { active = t; notifyListeners(); }
+  void setTab(EmotionTab t) {
+    active = t;
+    notifyListeners();
+  }
 
   /// 제출폼 바인딩용 setter들
-  void setBefore(String id) { beforeEmotionId = id; notifyListeners(); }
-  void setAfter(String id) { afterEmotionId = id; notifyListeners(); }
-  void setFeature(String key, double v){ userFeatureRatings[key] = v; notifyListeners(); }
-  void setText(String t){ feedbackText = t; notifyListeners(); }
+  void setBefore(String id) {
+    beforeEmotionId = id;
+    notifyListeners();
+  }
+
+  void setAfter(String id) {
+    afterEmotionId = id;
+    notifyListeners();
+  }
+
+  void setFeature(String key, double v) {
+    userFeatureRatings[key] = v;
+    notifyListeners();
+  }
+
+  void setText(String t) {
+    feedbackText = t;
+    notifyListeners();
+  }
 
   /// 제출
   Future<void> submit() async {

@@ -2,6 +2,8 @@
 /// - 주소/전화/홈페이지 렌더링
 /// - '길찾기'는 Google Maps 웹 호출
 /// - 전화번호는 숫자만 추출 후 tel: 스킴으로 연결
+library;
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../domain/entity_detail/place_detail.dart';
@@ -10,11 +12,7 @@ class ContactCard extends StatelessWidget {
   final PlaceDetail detail;
   final Color? backgroundColor;
 
-  const ContactCard({
-    super.key,
-    required this.detail,
-    this.backgroundColor,
-  });
+  const ContactCard({super.key, required this.detail, this.backgroundColor});
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +28,7 @@ class ContactCard extends StatelessWidget {
     final homepageRaw = (detail.detailRaw['homepage'] ?? '').toString();
     final homepageHref =
         RegExp(r'href=\"([^\"]+)\"').firstMatch(homepageRaw)?.group(1) ??
-            homepageRaw.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+        homepageRaw.replaceAll(RegExp(r'<[^>]*>'), '').trim();
 
     return Card(
       elevation: 0,
@@ -50,8 +48,10 @@ class ContactCard extends StatelessWidget {
               children: [
                 Icon(Icons.place),
                 const SizedBox(width: 10),
-                const Text('연락처 및 위치',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                const Text(
+                  '연락처 및 위치',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -63,18 +63,21 @@ class ContactCard extends StatelessWidget {
               _InfoRow(
                 icon: Icons.location_on_outlined,
                 iconColor: p,
-                child: Text(detail.address!, style: const TextStyle(fontSize: 14)),
                 onTap: (detail.lat != null && detail.lon != null)
                     ? () => _openMap(detail.lat!, detail.lon!)
                     : null,
                 trailing: (detail.lat != null && detail.lon != null)
                     ? IconButton(
-                  icon: const Icon(Icons.navigation),
-                  color: p,
-                  tooltip: '지도로 보기',
-                  onPressed: () => _openMap(detail.lat!, detail.lon!),
-                )
+                        icon: const Icon(Icons.navigation),
+                        color: p,
+                        tooltip: '지도로 보기',
+                        onPressed: () => _openMap(detail.lat!, detail.lon!),
+                      )
                     : null,
+                child: Text(
+                  detail.address!,
+                  style: const TextStyle(fontSize: 14),
+                ),
               ),
 
             // 문의전화
@@ -84,10 +87,6 @@ class ContactCard extends StatelessWidget {
                 child: _InfoRow(
                   icon: Icons.call_outlined,
                   iconColor: p,
-                  child: Text(
-                    detail.detailRaw['infocenter'].toString(),
-                    style: const TextStyle(fontSize: 14),
-                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.phone),
                     color: p,
@@ -99,6 +98,10 @@ class ContactCard extends StatelessWidget {
                       if (tel.isNotEmpty) launchUrl(Uri.parse('tel:$tel'));
                     },
                   ),
+                  child: Text(
+                    detail.detailRaw['infocenter'].toString(),
+                    style: const TextStyle(fontSize: 14),
+                  ),
                 ),
               ),
 
@@ -109,17 +112,17 @@ class ContactCard extends StatelessWidget {
                 child: _InfoRow(
                   icon: Icons.public,
                   iconColor: p,
-                  child: _LinkText(
-                    homepageHref,
-                    color: p,
-                    maxLines: 1,
-                    onTap: () => _openExternalUrl(homepageHref),
-                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.open_in_new),
                     color: p,
                     tooltip: '브라우저로 열기',
                     onPressed: () => _openExternalUrl(homepageHref),
+                  ),
+                  child: _LinkText(
+                    homepageHref,
+                    color: p,
+                    maxLines: 1,
+                    onTap: () => _openExternalUrl(homepageHref),
                   ),
                 ),
               ),
@@ -222,13 +225,13 @@ class _InfoRow extends StatelessWidget {
     return onTap == null
         ? row
         : InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: row,
-      ),
-    );
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: row,
+            ),
+          );
   }
 }
 
@@ -243,7 +246,7 @@ class _IconCapsule extends StatelessWidget {
       width: 28,
       height: 28,
       decoration: BoxDecoration(
-        color: color.withOpacity(.1),
+        color: color.withValues(alpha: .1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(icon, color: color, size: 18),
@@ -256,7 +259,12 @@ class _LinkText extends StatelessWidget {
   final Color color;
   final int maxLines;
   final VoidCallback onTap;
-  const _LinkText(this.text, {required this.color, this.maxLines = 1, required this.onTap});
+  const _LinkText(
+    this.text, {
+    required this.color,
+    this.maxLines = 1,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +279,7 @@ class _LinkText extends StatelessWidget {
           fontSize: 14,
           color: color,
           decoration: TextDecoration.underline,
-          decorationColor: color.withOpacity(.7),
+          decorationColor: color.withValues(alpha: .7),
         ),
       ),
     );

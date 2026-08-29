@@ -3,6 +3,8 @@
 /// - 공간 특성 슬라이더(0~1, 10단계)
 /// - 텍스트 입력 + 제출 버튼
 ///
+library;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/detail_emotion_vm.dart';
@@ -27,19 +29,19 @@ class FeedbackTab extends StatelessWidget {
         const SizedBox(height: 8),
         // 방문 전 감정 선택 — 원형 칩 디자인
         Center(
-        child: Wrap(
-          spacing: 14,
-          runSpacing: 16,
-          children: EMOTIONS.map((e) {
-            final selected = vm.beforeEmotionId == e.id;
-            return _RoundChip(
-              emoji: e.emoji,
-              label: e.name,
-              selected: selected,
-              onTap: () => vm.setBefore(e.id),
-            );
-          }).toList(),
-        ),
+          child: Wrap(
+            spacing: 14,
+            runSpacing: 16,
+            children: EMOTIONS.map((e) {
+              final selected = vm.beforeEmotionId == e.id;
+              return _RoundChip(
+                emoji: e.emoji,
+                label: e.name,
+                selected: selected,
+                onTap: () => vm.setBefore(e.id),
+              );
+            }).toList(),
+          ),
         ),
 
         const SizedBox(height: 32),
@@ -48,19 +50,19 @@ class FeedbackTab extends StatelessWidget {
         const SizedBox(height: 8),
         // 방문 후 감정 선택 — 원형 칩 디자인
         Center(
-        child: Wrap(
-          spacing: 14,
-          runSpacing: 16,
-          children: EMOTIONS.map((e) {
-            final selected = vm.afterEmotionId == e.id;
-            return _RoundChip(
-              emoji: e.emoji,
-              label: e.name,
-              selected: selected,
-              onTap: () => vm.setAfter(e.id),
-            );
-          }).toList(),
-        ),
+          child: Wrap(
+            spacing: 14,
+            runSpacing: 16,
+            children: EMOTIONS.map((e) {
+              final selected = vm.afterEmotionId == e.id;
+              return _RoundChip(
+                emoji: e.emoji,
+                label: e.name,
+                selected: selected,
+                onTap: () => vm.setAfter(e.id),
+              );
+            }).toList(),
+          ),
         ),
 
         const SizedBox(height: 8),
@@ -69,49 +71,55 @@ class FeedbackTab extends StatelessWidget {
         _sectionTitle('이 공간의 특성을 평가해주세요'),
         const SizedBox(height: 8),
         // 각 특성 슬라이더 (0~1) — 로직 그대로, 스타일만
-        ...vm.userFeatureRatings.entries.map((e) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 100,
-                child: Text(
-                  _k2label(e.key),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: _brand,
-                    inactiveTrackColor: Colors.grey.shade300,
-                    thumbColor: _brand,
-                    overlayColor: _brand.withOpacity(.15),
-                    trackHeight: 6,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
-                  ),
-                  child: Slider(
-                    value: e.value,
-                    onChanged: (v) => vm.setFeature(e.key, v),
-                    min: 0,
-                    max: 1,
-                    divisions: 10,
+        ...vm.userFeatureRatings.entries.map(
+          (e) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 100,
+                  child: Text(
+                    _k2label(e.key),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-              SizedBox(
-                width: 44,
-                child: Text(
-                  '${(e.value * 100).round()}%',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(color: _muted),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: _brand,
+                      inactiveTrackColor: Colors.grey.shade300,
+                      thumbColor: _brand,
+                      overlayColor: _brand.withValues(alpha: .15),
+                      trackHeight: 6,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 10,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 18,
+                      ),
+                    ),
+                    child: Slider(
+                      value: e.value,
+                      onChanged: (v) => vm.setFeature(e.key, v),
+                      min: 0,
+                      max: 1,
+                      divisions: 10,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    '${(e.value * 100).round()}%',
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(color: _muted),
+                  ),
+                ),
+              ],
+            ),
           ),
-        )),
+        ),
 
         const Divider(height: 32),
         const SizedBox(height: 6),
@@ -134,7 +142,10 @@ class FeedbackTab extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: _brand, width: 1.2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
           ),
           onChanged: vm.setText,
         ),
@@ -147,20 +158,22 @@ class FeedbackTab extends StatelessWidget {
             onPressed: (vm.beforeEmotionId == null || vm.afterEmotionId == null)
                 ? null
                 : () async {
-              await vm.submit();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('경험을 공유했어요. 고마워요!')),
-                );
-              }
-            },
+                    await vm.submit();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('경험을 공유했어요. 고마워요!')),
+                      );
+                    }
+                  },
             icon: const Icon(Icons.send),
             label: const Text('경험 공유하기'),
             style: FilledButton.styleFrom(
               backgroundColor: _brand,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               disabledBackgroundColor: const Color(0xFFEDEDED),
               disabledForegroundColor: const Color(0xFF9AA0A6),
             ),
@@ -182,13 +195,20 @@ class FeedbackTab extends StatelessWidget {
   /// 내부 키 → 한글 라벨 (로직 그대로)
   String _k2label(String k) {
     switch (k) {
-      case 'sociality': return '사교성';
-      case 'spirituality': return '영적 체험';
-      case 'adventure': return '모험성';
-      case 'culture': return '문화성';
-      case 'nature_healing': return '자연치유';
-      case 'quiet': return '고요함';
-      default: return k;
+      case 'sociality':
+        return '사교성';
+      case 'spirituality':
+        return '영적 체험';
+      case 'adventure':
+        return '모험성';
+      case 'culture':
+        return '문화성';
+      case 'nature_healing':
+        return '자연치유';
+      case 'quiet':
+        return '고요함';
+      default:
+        return k;
     }
   }
 }
@@ -214,12 +234,11 @@ class _RoundChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? _brand.withOpacity(.12) : const Color(0xFFF8F8F9);
+    final bg = selected
+        ? _brand.withValues(alpha: .12)
+        : const Color(0xFFF8F8F9);
     final border = selected ? _brand : _chipBorder;
-    final emojiText = Text(
-      emoji,
-      style: const TextStyle(fontSize: 22),
-    );
+    final emojiText = Text(emoji, style: const TextStyle(fontSize: 22));
 
     return InkWell(
       onTap: onTap,

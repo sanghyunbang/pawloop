@@ -13,14 +13,14 @@ class CollectionSummary {
     this.latestItemContentTypeId, // ★ 추가
   });
 
-  factory CollectionSummary.fromJson(Map<String, dynamic> j) => CollectionSummary(
-    id: (j['id'] as num).toInt(),
-    name: (j['name'] ?? '').toString(),
-    count: (j['count'] as num?)?.toInt() ?? 0,
-    latestItemContentId:
-    j['latestItemContentId'] == null ? null : j['latestItemContentId'].toString(),
-    latestItemContentTypeId: _toInt(j['latestItemContentTypeId']), // ★ 추가
-  );
+  factory CollectionSummary.fromJson(Map<String, dynamic> j) =>
+      CollectionSummary(
+        id: (j['id'] as num).toInt(),
+        name: (j['name'] ?? '').toString(),
+        count: (j['count'] as num?)?.toInt() ?? 0,
+        latestItemContentId: j['latestItemContentId']?.toString(),
+        latestItemContentTypeId: _toInt(j['latestItemContentTypeId']), // ★ 추가
+      );
 }
 
 int? _toInt(dynamic v) {

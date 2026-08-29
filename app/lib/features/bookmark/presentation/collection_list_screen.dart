@@ -132,7 +132,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     height: 4,
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: subtle.withOpacity(0.35),
+                      color: subtle.withValues(alpha: 0.35),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -163,8 +163,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                       counterText: '',
                       filled: true,
                       fillColor: const Color(0xFFF7F8FA),
-                      contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: Colors.grey.shade300),
@@ -173,7 +175,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: Colors.grey.shade300),
                       ),
-                      focusedBorder: const OutlineInputBorder( // 브랜드 컬러
+                      focusedBorder: const OutlineInputBorder(
+                        // 브랜드 컬러
                         borderRadius: BorderRadius.all(Radius.circular(12)),
                         borderSide: BorderSide(color: _brand, width: 1.6),
                       ),
@@ -181,12 +184,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                       suffixIcon: value.isEmpty
                           ? null
                           : IconButton(
-                        icon: const Icon(Icons.clear_rounded),
-                        onPressed: () {
-                          tfController.clear();
-                          onChanged('');
-                        },
-                      ),
+                              icon: const Icon(Icons.clear_rounded),
+                              onPressed: () {
+                                tfController.clear();
+                                onChanged('');
+                              },
+                            ),
                     ),
                   ),
                   // 길이 카운터
@@ -210,10 +213,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: _brand,
                             side: const BorderSide(color: _brand),
-                            overlayColor: _brand.withOpacity(0.06),
+                            overlayColor: _brand.withValues(alpha: 0.06),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           child: const Text('취소'),
                         ),
@@ -221,15 +225,20 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: canSubmit ? () => Navigator.pop(ctx, value) : null,
+                          onPressed: canSubmit
+                              ? () => Navigator.pop(ctx, value)
+                              : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _brand,
                             foregroundColor: Colors.white,
-                            disabledBackgroundColor: _brand.withOpacity(0.35),
+                            disabledBackgroundColor: _brand.withValues(
+                              alpha: 0.35,
+                            ),
                             disabledForegroundColor: Colors.white70,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           child: const Text('확인'),
                         ),
@@ -269,7 +278,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
-                    color: subtle.withOpacity(0.35),
+                    color: subtle.withValues(alpha: 0.35),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -300,9 +309,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('컬렉션 관리'), actions: [
-        IconButton(icon: const Icon(Icons.add), onPressed: _create),
-      ]),
+      appBar: AppBar(
+        title: const Text('컬렉션 관리'),
+        actions: [IconButton(icon: const Icon(Icons.add), onPressed: _create)],
+      ),
       body: AnimatedBuilder(
         animation: CollectionStore.instance,
         builder: (_, __) {
@@ -350,8 +360,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                         : const _ThumbPlaceholder(),
                   ),
                 ),
-                title: Text(c.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                title: Text(
+                  c.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 subtitle: Text('항목 ${c.count}개'),
                 trailing: IconButton(
                   icon: const Icon(Icons.more_horiz), // 기본색 유지
@@ -370,8 +382,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 /* ────────────── 썸네일 로드를 위한 API 래퍼 ────────────── */
 
 class _ApiColl {
-  final String base =
-  (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
+  final String base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
 
   Future<Map<String, String>> _headers() async {
     final token = await TokenStorage.getToken();
@@ -386,7 +397,10 @@ class _ApiColl {
   /// /collections 에서 최신 아이템 contentId를 받고, 배치로 이미지 URL 매핑
   /// return: { collectionId : imageUrl }
   Future<Map<int, String>> fetchCollectionThumbs() async {
-    final res = await http.get(Uri.parse('$base/collections'), headers: await _headers());
+    final res = await http.get(
+      Uri.parse('$base/collections'),
+      headers: await _headers(),
+    );
     if (res.statusCode != 200) {
       throw Exception('컬렉션 조회 실패(${res.statusCode})');
     }
@@ -418,7 +432,9 @@ class _ApiColl {
     return out;
   }
 
-  Future<Map<String, String>> _resolveImageUrlsBatch(List<String> contentIds) async {
+  Future<Map<String, String>> _resolveImageUrlsBatch(
+    List<String> contentIds,
+  ) async {
     if (contentIds.isEmpty) return {};
     final res = await http.post(
       Uri.parse('$base/bookmarks/images:batchResolve'),
@@ -450,10 +466,22 @@ class _NetImage extends StatelessWidget {
       child: Image.network(
         url,
         fit: BoxFit.cover,
-        loadingBuilder: (c, w, p) =>
-        p == null ? w : const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
-        errorBuilder: (c, e, s) =>
-        const Center(child: Icon(Icons.broken_image_outlined, size: 28, color: Colors.black26)),
+        loadingBuilder: (c, w, p) => p == null
+            ? w
+            : const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+        errorBuilder: (c, e, s) => const Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            size: 28,
+            color: Colors.black26,
+          ),
+        ),
       ),
     );
   }
@@ -467,8 +495,11 @@ class _ThumbPlaceholder extends StatelessWidget {
     return const DecoratedBox(
       decoration: BoxDecoration(color: Color(0xFFF3F4F6)),
       child: Center(
-        child: Icon(Icons.photo_size_select_actual_outlined,
-            color: Colors.black26, size: 22),
+        child: Icon(
+          Icons.photo_size_select_actual_outlined,
+          color: Colors.black26,
+          size: 22,
+        ),
       ),
     );
   }
