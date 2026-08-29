@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -13,6 +14,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -48,11 +50,23 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // 인가 경계의 정본은 계약(docs/04-api/openapi.yaml)의 Auth 태그 설명이다.
+        //
+        // 예전에는 "/auth/**" 를 통째로 permitAll 했다. 그러면 회원 탈퇴(DELETE /auth/me)와
+        // 프로필 수정(PUT /auth/me), 로그아웃(POST /auth/logout)이 Spring Security 인가
+        // 계층을 아예 거치지 않는다. 컨트롤러가 @RequestHeader("Authorization") 를 직접 읽는
+        // 것 말고는 방어가 없어서, 계약이 선언한 401 보장이 실제로는 성립하지 않았다. (이슈 #23-D)
+        //
+        // 그래서 비인증이어야 하는 경로만 열거한다. 나머지 /auth/* 는
+        // anyRequest().authenticated() 로 떨어져 토큰 없이는 401 이 된다.
         var publicMatchers = new ArrayList<>(List.of(
                 "/",
                 "/oauth2/**",
                 "/login/**",
-                "/auth/**",
+                "/auth/signup",
+                "/auth/login",
+                "/auth/oauth/**",
+                "/auth/token/refresh",
                 "/error",
                 "/actuator/health/**",
                 "/actuator/info",
@@ -77,6 +91,12 @@ public class SecurityConfig {
                 .requestMatchers("/public/**").authenticated()
                 .anyRequest().authenticated()
             )
+            // oauth2Login() 을 켜면 기본 진입점이 LoginUrlAuthenticationEntryPoint 라서
+            // 인증이 없는 요청에 401 이 아니라 로그인 페이지로 302 를 준다. 모바일 JSON API 에는
+            // 쓸모가 없고, 계약(openapi.yaml)이 선언한 401 과도 어긋난다. 상태 코드로 답한다.
+            // 소셜 로그인 진입점(/oauth2/**)은 permitAll 이라 이 변경의 영향을 받지 않는다.
+            .exceptionHandling(ex -> ex.authenticationEntryPoint(
+                    new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
             .oauth2Login(oauth2 -> oauth2
                 .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
                 .successHandler(oAuth2SuccessHandler)
