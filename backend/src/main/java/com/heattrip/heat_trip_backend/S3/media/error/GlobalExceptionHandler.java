@@ -16,6 +16,9 @@ import java.util.NoSuchElementException;
 @RestControllerAdvice // [A] 전역 @Controller/~를 가로채 JSON 응답으로 바꿔줌
 public class GlobalExceptionHandler {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     /**
      * 오류 응답 페이로드(record). [④]
      * - Swagger에서 스키마 이름을 지정해 문서화합니다. [⑤]
@@ -105,18 +108,78 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 컨트롤러가 상태 코드를 <b>스스로 정해</b> 던진 예외를 그대로 내보낸다. [⑪]
+     *
+     * <p>이게 없으면 {@code new ResponseStatusException(HttpStatus.FORBIDDEN, ...)} 이
+     * 아래 {@code @ExceptionHandler(Exception.class)} 에 먼저 잡혀 <b>500</b> 으로 나간다.
+     * 401·403·404 를 의도한 코드가 전부 500 이었다(실측 확인). 계약(openapi.yaml)이
+     * 선언한 응답 코드와 실제가 어긋났고, 앱은 "권한 없음"과 "서버 고장"을 구분할 수 없었다.
+     *
+     * <p>{@code NoResourceFoundException}(알 수 없는 경로)도 함께 받는다.
+     * <b>그건 {@code ResponseStatusException} 의 하위 타입이 아니다</b> — Spring 6.1 에서
+     * {@code ServletException} 을 상속하고 {@code ErrorResponse} 를 구현한다. 그래서 타입을
+     * 둘 다 적어야 하고, 상태 코드는 공통 인터페이스 {@code ErrorResponse.getStatusCode()}
+     * 에서 읽는다. 이걸 빼면 알 수 없는 경로가 500 이 된다(실측 확인).
+     *
+     * <p><b>메시지로 {@code getReason()} 만 쓴다.</b> 그건 던진 사람이 고른 문구라 밖에
+     * 내보내도 되는 값이다. {@code getMessage()} 는 상태 코드·내부 문구가 섞인 조합이라
+     * {@code "403 FORBIDDEN \"...\""} 같은 값이 클라이언트로 나간다.
+     */
+    @ExceptionHandler({
+        org.springframework.web.server.ResponseStatusException.class,
+        org.springframework.web.servlet.resource.NoResourceFoundException.class
+    })
+    public ResponseEntity<ErrorResponse> handleDeclaredStatus(
+        Exception ex,
+        org.springframework.web.context.request.WebRequest req
+    ) {
+        // 두 예외의 유일한 공통 조상은 Exception 이다. 상태 코드는 둘 다 구현하는
+        // ErrorResponse 인터페이스에서 읽는다.
+        HttpStatus status = HttpStatus.resolve(((org.springframework.web.ErrorResponse) ex).getStatusCode().value());
+        if (status == null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        String reason = (ex instanceof org.springframework.web.server.ResponseStatusException rse)
+                ? rse.getReason()
+                : "요청한 경로를 찾을 수 없습니다.";
+
+        var body = new ErrorResponse(
+            status.value(),
+            status.getReasonPhrase(),
+            reason,
+            req.getDescription(false).replace("uri=", ""),
+            Instant.now()
+        );
+        return ResponseEntity.status(status).body(body);
+    }
+
+    /**
      * 500 Internal Server Error 매핑. [⑨]
      * - 마지막 안전망: 처리되지 않은 모든 예외.
+     *
+     * <p><b>예외 메시지를 본문에 싣지 않는다.</b> 여기 오는 것은 우리가 예상하지 못한
+     * 예외이고, 그 메시지에는 SQL 조각·파일 경로·이메일·토큰 조각이 섞여 들어올 수 있다
+     * (이슈 #6). 실제로 {@code "User not found: " + email} 이 이 경로로 이메일을
+     * 내보내고 있었다. 원인은 서버 로그에만 남기고, 응답에는 상관관계 ID 만 준다 —
+     * 그것으로 로그에서 이 요청을 정확히 찾을 수 있다.
      */
     @ExceptionHandler(Exception.class) // [E] 상위 캐치
     public ResponseEntity<ErrorResponse> handleEtc(
         Exception ex, org.springframework.web.context.request.WebRequest req
     ) {
+        String path = req.getDescription(false).replace("uri=", "");
+        String correlationId = org.slf4j.MDC.get(
+                com.heattrip.heat_trip_backend.observability.logging.CorrelationIdFilter.MDC_KEY);
+
+        log.error("처리되지 않은 예외 — {} {}", req.getDescription(false), ex.getClass().getName(), ex);
+
         var body = new ErrorResponse(
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
             "Internal Server Error",
-            ex.getMessage(),
-            req.getDescription(false).replace("uri=", ""),
+            correlationId == null
+                    ? "서버에서 오류가 발생했습니다."
+                    : "서버에서 오류가 발생했습니다. (요청 ID: " + correlationId + ")",
+            path,
             Instant.now()
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
@@ -137,4 +200,5 @@ public class GlobalExceptionHandler {
 [⑧] 403: 인증은 되었으나 권한 부족.
 [⑨] 500: 내부 처리 중 예기치 못한 오류(운영 시 로깅/트레이싱 권장).
 [⑩] 401: 인증 주체 해석 실패. 본문 없이 상태 코드만 — 메시지를 실으면 그게 유출 경로가 된다(#5·#6).
+[⑪] ResponseStatusException: 컨트롤러가 스스로 정한 상태 코드. catch-all 보다 먼저 잡아야 한다(#44).
 ────────────────────────────────────────────────────────────────────────── */
