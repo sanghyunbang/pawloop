@@ -164,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.06),
+                      color: Colors.black.withValues(alpha: .06),
                       blurRadius: 18,
                       offset: const Offset(0, 6),
                     ),
@@ -191,46 +191,48 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextField(
                         controller: _passwordController,
                         obscureText: _obscureLoginPw, // ✅ 토글 적용
-                        decoration: _filledDecoration(
-                          hint: '••••••••',
-                          fill: fieldFill,
-                        ).copyWith(
-                          // ✅ 눈 아이콘 토글
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscureLoginPw
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: Colors.black38,
+                        decoration:
+                            _filledDecoration(
+                              hint: '••••••••',
+                              fill: fieldFill,
+                            ).copyWith(
+                              // ✅ 눈 아이콘 토글
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureLoginPw
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: Colors.black38,
+                                ),
+                                onPressed: () => setState(
+                                  () => _obscureLoginPw = !_obscureLoginPw,
+                                ),
+                              ),
                             ),
-                            onPressed: () =>
-                                setState(() => _obscureLoginPw = !_obscureLoginPw),
-                          ),
-                        ),
                       ),
                       const SizedBox(height: 20),
 
                       _isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _handleEmailLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accent,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: _handleEmailLogin,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: accent,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  textStyle: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                child: const Text('이메일 로그인'),
+                              ),
                             ),
-                            textStyle: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          child: const Text('이메일 로그인'),
-                        ),
-                      ),
 
                       const SizedBox(height: 24),
                       const Divider(),
@@ -243,10 +245,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             const Text(
                               '아직 계정이 없으신가요? ',
-                              style: TextStyle(color: Colors.black54, fontSize: 13),
+                              style: TextStyle(
+                                color: Colors.black54,
+                                fontSize: 13,
+                              ),
                             ),
                             TextButton(
-                              onPressed: () => context.goNamed('signUp'), // or: context.go('/auth/sign-up')
+                              onPressed: () => context.goNamed(
+                                'signUp',
+                              ), // or: context.go('/auth/sign-up')
                               child: const Text(
                                 '회원가입',
                                 style: TextStyle(
@@ -337,8 +344,6 @@ class _LoginScreenState extends State<LoginScreen> {
         borderSide: BorderSide(color: color, width: 1),
       );
 }
-
-
 
 // import 'package:flutter/material.dart';
 // import 'package:go_router/go_router.dart'; // ✅ 추가

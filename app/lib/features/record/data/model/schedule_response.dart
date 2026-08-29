@@ -43,17 +43,17 @@ class ScheduleResponse {
 extension ScheduleResponseMapper on ScheduleResponse {
   Schedule toSchedule() {
     return Schedule(
-      id: this.scheduleId,
-      title: this.title,
-      content: this.content,
-      dateFrom: this.dateFrom,
-      dateTo: this.dateTo,
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt,
-      userId: this.user?.userId ?? 0,
+      id: scheduleId,
+      title: title,
+      content: content,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      userId: user?.userId ?? 0,
       location: null, // API에 없으면 null or 기본값
       tags: const [], // API에 없으면 빈 리스트
-      memoriesCount: this.journeyCount, // API에 없으면 0
+      memoriesCount: journeyCount, // API에 없으면 0
       heroImageUrl: null, // API에 없으면 null
     );
   }

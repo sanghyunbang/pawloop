@@ -70,7 +70,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: _brandOrange.withOpacity(0.25),
+                    color: _brandOrange.withValues(alpha: 0.25),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -89,8 +89,11 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.auto_awesome,
-                                color: Colors.white, size: 18),
+                            const Icon(
+                              Icons.auto_awesome,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                             const SizedBox(width: 6),
                             const Text(
                               '분석 완료',
@@ -146,7 +149,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                   vertical: 5,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(.18),
+                                  color: Colors.white.withValues(alpha: .18),
                                   borderRadius: BorderRadius.circular(999),
                                   border: Border.all(color: Colors.white30),
                                 ),
@@ -573,8 +576,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.white.withOpacity(0.16), // ↓
-                                Colors.white.withOpacity(0.04),
+                                Colors.white.withValues(alpha: 0.16), // ↓
+                                Colors.white.withValues(alpha: 0.04),
                                 Colors.transparent,
                               ],
                               stops: const [0.0, 0.25, 0.6],
@@ -636,9 +639,7 @@ class _NearbyStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final places = [...vm.places]
-      ..sort(
-        (a, b) => (a.distanceKm ?? 1e9).compareTo(b.distanceKm ?? 1e9),
-      );
+      ..sort((a, b) => (a.distanceKm ?? 1e9).compareTo(b.distanceKm ?? 1e9));
     final top3 = places.take(3).toList();
     if (top3.isEmpty) return const SizedBox.shrink();
 

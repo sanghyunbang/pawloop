@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/features/bookmark/domain/bookmark_repository.dart';
 import 'package:http/http.dart' as http;
@@ -29,24 +28,30 @@ class BookmarkRepositoryImpl implements BookmarkRepository {
     final list = (jsonDecode(r.body) as List).cast<Map<String, dynamic>>();
 
     // createdAt이 있으면 클라에서 한 번 더 안전하게 최신순 정렬
-    final rows = list.map((j) {
-      final id = (j['contentId'] ?? '').toString();
-      final createdAtStr = (j['createdAt'] ?? '').toString();
-      final createdAt = DateTime.tryParse(createdAtStr);
-      return _Row(id: id, createdAt: createdAt);
-    }).where((e) => e.id.isNotEmpty).toList();
+    final rows = list
+        .map((j) {
+          final id = (j['contentId'] ?? '').toString();
+          final createdAtStr = (j['createdAt'] ?? '').toString();
+          final createdAt = DateTime.tryParse(createdAtStr);
+          return _Row(id: id, createdAt: createdAt);
+        })
+        .where((e) => e.id.isNotEmpty)
+        .toList();
 
     rows.sort((a, b) {
       final A = a.createdAt, B = b.createdAt;
       if (A == null && B == null) return 0;
-      if (A == null) return 1;  // null은 뒤로
+      if (A == null) return 1; // null은 뒤로
       if (B == null) return -1;
-      return B.compareTo(A);     // 최신이 먼저
+      return B.compareTo(A); // 최신이 먼저
     });
 
     // createdAt이 없으면 서버가 준 순서를 신뢰(기본 그대로 반환)
     if (rows.every((e) => e.createdAt == null)) {
-      return list.map((e) => (e['contentId'] ?? '').toString()).where((id) => id.isNotEmpty).toList();
+      return list
+          .map((e) => (e['contentId'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toList();
     }
     return rows.map((e) => e.id).toList();
   }
@@ -56,13 +61,19 @@ class BookmarkRepositoryImpl implements BookmarkRepository {
     await http.post(
       Uri.parse('$base/bookmarks'),
       headers: await _headers(),
-      body: jsonEncode({'contentId': contentId, if (collectionId != null) 'collectionId': collectionId}),
+      body: jsonEncode({
+        'contentId': contentId,
+        if (collectionId != null) 'collectionId': collectionId,
+      }),
     );
   }
 
   @override
   Future<void> remove(String contentId) async {
-    await http.delete(Uri.parse('$base/bookmarks/$contentId'), headers: await _headers());
+    await http.delete(
+      Uri.parse('$base/bookmarks/$contentId'),
+      headers: await _headers(),
+    );
   }
 
   @override
@@ -86,7 +97,10 @@ class BookmarkRepositoryImpl implements BookmarkRepository {
 
   @override
   Future<String?> fetchImage(String contentId) async {
-    final r = await http.get(Uri.parse('$base/bookmarks/img/$contentId'), headers: await _headers());
+    final r = await http.get(
+      Uri.parse('$base/bookmarks/img/$contentId'),
+      headers: await _headers(),
+    );
     if (r.statusCode != 200) return null;
     final j = (jsonDecode(r.body) as Map<String, dynamic>);
     final url = (j['imageUrl'] ?? j['firstimage'] ?? '').toString().trim();

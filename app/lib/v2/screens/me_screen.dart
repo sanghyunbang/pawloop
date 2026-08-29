@@ -3,10 +3,12 @@ import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../data/auth_state.dart';
+import '../data/location_service.dart';
 import 'edit_screen.dart';
 import 'myrecords_screen.dart';
 import 'login_screen.dart';
 import 'family_screen.dart';
+import 'insight_screen.dart';
 
 /// 프로필 (me) — 우리 아이(강아지) 프로필 + 산책 활동 요약 + 메뉴.
 /// (감정 도메인 제거, 반려/산책 중심)
@@ -55,9 +57,13 @@ class MeScreen extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
                   children: [
                     _dogHeader(dog),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
+                    _petsRow(context),
+                    const SizedBox(height: 16),
                     _statsCard(context),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
+                    _locationCard(),
+                    const SizedBox(height: 16),
                     _menuCard(context),
                   ],
                 ),
@@ -107,6 +113,78 @@ class MeScreen extends StatelessWidget {
     ]);
   }
 
+  // ───────────── 우리 아이들 (여러 마리 전환/추가) ─────────────
+  Widget _petsRow(BuildContext context) {
+    return ValueListenableBuilder<List<DogProfile>>(
+      valueListenable: kMyPets,
+      builder: (_, pets, __) => GlassCard(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Text('우리 아이들', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(width: 6),
+            Text('${pets.length}마리', style: const TextStyle(fontSize: 12, color: T.textMuted)),
+          ]),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (int i = 0; i < pets.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: GestureDetector(
+                    onTap: () => selectPet(i),
+                    child: Column(children: [
+                      Container(
+                        width: 54, height: 54, alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const RadialGradient(colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)]),
+                          border: Border.all(
+                            color: i == kSelectedPetIdx.value ? const Color(0xFFFF8F63) : Colors.transparent,
+                            width: 2.5,
+                          ),
+                        ),
+                        child: Image.asset(pets[i].avatarAsset, width: 32, height: 32, gaplessPlayback: true),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(pets[i].name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: i == kSelectedPetIdx.value ? FontWeight.w800 : FontWeight.w600,
+                            color: i == kSelectedPetIdx.value ? const Color(0xFFE07A4E) : T.textSecondary,
+                          )),
+                    ]),
+                  ),
+                ),
+              // 새 아이 추가
+              GestureDetector(
+                onTap: () {
+                  addPet(const DogProfile(name: '새 친구', breed: '', size: DogSize.small, ageMonths: 12));
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditScreen()));
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Column(children: [
+                  Container(
+                    width: 54, height: 54, alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0x66FFFFFF),
+                      border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.6), width: 1.5),
+                    ),
+                    child: const Icon(Icons.add, size: 24, color: Color(0xFFE07A4E)),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('추가', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                ]),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
   // ───────────── 산책 활동 요약 ─────────────
   Widget _statsCard(BuildContext context) {
     final totalKm = kWalks.fold<double>(0, (s, w) => s + w.km);
@@ -142,6 +220,65 @@ class MeScreen extends StatelessWidget {
             SizedBox(width: 2),
             Icon(Icons.chevron_right, size: 16, color: Color(0xFFE07A4E)),
           ]),
+        ]),
+      ),
+    );
+  }
+
+  // ───────────── 위치 정보 설정 (위치정보법: 일시적 이용중지 기능) ─────────────
+  Widget _locationCard() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: LocationService.paused,
+      builder: (context, paused, __) => GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(children: [
+          Container(
+            width: 40, height: 40, alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: (paused ? const Color(0xFFFF6B7E) : const Color(0xFF57C98A)).withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(paused ? Icons.location_off_rounded : Icons.location_on_rounded,
+                size: 21, color: paused ? const Color(0xFFFF6B7E) : const Color(0xFF3EA772)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('위치 정보 수집 일시 중단',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
+              const SizedBox(height: 3),
+              Text(paused ? '중단됨 — 지도·산책 기록이 현위치를 쓰지 않아요' : '켜면 언제든 위치 이용을 멈출 수 있어요',
+                  style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+            ]),
+          ),
+          GestureDetector(
+            onTap: () {
+              LocationService.paused.value = !paused;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(!paused ? '위치 정보 이용을 일시 중단했어요' : '위치 정보 이용을 다시 시작했어요'),
+                  duration: const Duration(milliseconds: 1600),
+                ),
+              );
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 50, height: 30,
+              padding: const EdgeInsets.all(3),
+              alignment: paused ? Alignment.centerRight : Alignment.centerLeft,
+              decoration: BoxDecoration(
+                color: paused ? const Color(0xFFFF6B7E) : const Color(0x1F8C7BFF),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Container(
+                width: 24, height: 24,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle, color: Colors.white,
+                  boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 1))],
+                ),
+              ),
+            ),
+          ),
         ]),
       ),
     );
@@ -183,6 +320,8 @@ class MeScreen extends StatelessWidget {
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
           row(Icons.diversity_1_rounded, '우리 가족',
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FamilyScreen()))),
+          row(Icons.bar_chart_rounded, '산책 통계',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen()))),
           row(Icons.bookmark_border, '북마크', onTap: () => snack('저장한 장소가 아직 없어요 · 지도에서 마음에 드는 곳을 담아보세요')),
           ValueListenableBuilder<bool>(
             valueListenable: AuthState.loggedIn,

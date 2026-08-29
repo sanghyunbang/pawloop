@@ -6,6 +6,7 @@
 ///   throw를 받지 않으므로 `error`는 null로 유지되어 화면(탭)이 항상 뜹니다.
 /// - 에러 메시지를 UI에 보여주고 싶다면, Repository에서 warning을
 ///   도메인에 녹여 전달하거나, VM에 별도의 notice 필드를 두어 세팅하세요.
+library;
 
 import 'package:flutter/foundation.dart';
 import 'package:heat_trip_flutter/core/errors/app_exception.dart';

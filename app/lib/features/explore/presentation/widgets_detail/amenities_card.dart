@@ -3,6 +3,7 @@
 /// ▷ amenity_utils.dart 파일에 정의된 amenity 아이콘 및 라벨 매핑 함수를 활용
 /// ▷ 각 편의시설을 2열(Grid)로 간결하게 나열 (아이콘 + 텍스트)
 /// ▷ 예시 입력: ['wifi', 'parking', 'card']
+library;
 
 import 'package:flutter/material.dart';
 import '../../data_detail/amenity_utils.dart'; // amenityIcon, amenityLabel 함수 import

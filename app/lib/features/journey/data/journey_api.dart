@@ -43,7 +43,7 @@ class RealJourneyApi implements JourneyApi {
       final response = await _repo.fetchSchedules(); // 실제 API 호출
       final schedules = response.map((e) => e.toSchedule()).toList();
       return schedules;
-    } catch (e, stackTrace) {
+    } catch (e) {
       print('❌ fetchSchedules 에러: $e');
       return [];
     }
@@ -85,7 +85,7 @@ class RealJourneyApi implements JourneyApi {
 
   @override
   Future<DiaryEntry> updateDiary(DiaryEntry entry) async {
-    print(" ㅡㅡㅡㅡㅡㅡㅡjourney api - [update] diary 호출됨, 호출된 entry : ${entry} ");
+    print(" ㅡㅡㅡㅡㅡㅡㅡjourney api - [update] diary 호출됨, 호출된 entry : $entry ");
     return await _jrepo.updateDiary(entry);
   }
 }

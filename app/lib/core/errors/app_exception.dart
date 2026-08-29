@@ -8,7 +8,7 @@ abstract class AppException implements Exception {
 
 /// 단순 메시지 용
 class AppMessageException extends AppException {
-  const AppMessageException(String message) : super(message);
+  const AppMessageException(super.message);
 }
 
 // 상황별로 더 세분화도 가능
@@ -21,11 +21,11 @@ class NoScheduleException extends AppException {
 }
 
 class NetworkException extends AppException {
-  const NetworkException(String message) : super(message);
+  const NetworkException(super.message);
 }
 
 class ServerException extends AppException {
-  const ServerException(String message) : super(message);
+  const ServerException(super.message);
 }
 
 class UnknownException extends AppException {
@@ -82,15 +82,15 @@ class RateLimitException extends AppException {
 }
 
 class DatabaseException extends AppException {
-  const DatabaseException(String message) : super(message);
+  const DatabaseException(super.message);
 }
 
 class CacheException extends AppException {
-  const CacheException(String message) : super(message);
+  const CacheException(super.message);
 }
 
 class ValidationException extends AppException {
-  const ValidationException(String message) : super(message);
+  const ValidationException(super.message);
 }
 
 class PaymentRequiredException extends AppException {

@@ -182,8 +182,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (trimmed.isNotEmpty) 'q': trimmed,
       if (contentTypeId != null) 'contentTypeId': contentTypeId,
       if (emotionCategoryId != null) 'emotionCategoryId': emotionCategoryId,
-      'page': '0',   // Explore 기본값과 일치
-      'size': '20',  // Explore 기본값과 일치
+      'page': '0', // Explore 기본값과 일치
+      'size': '20', // Explore 기본값과 일치
       if (sort != null) 'sort': sort,
     };
   }
@@ -216,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: _HeroWithSearchBar(
                   imageUrl:
-                  'https://images.unsplash.com/photo-1636545550720-ee79a51a958d?w=1600',
+                      'https://images.unsplash.com/photo-1636545550720-ee79a51a958d?w=1600',
                   title: '감정 기반 여행지 추천',
                   subtitle: '당신의 마음에 딱 맞는 특별한 장소를 찾아보세요',
                   searchCtrl: _searchCtrl,
@@ -248,11 +248,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             'cat3': b.cat3List.join(','),
                           }
                           // ✅ cat3가 없으면 검색 모드 → Explore 규격으로 통일
-                          else ..._buildSearch(
-                            q: b.query ?? '',
-                            contentTypeId: b.contentTypeId?.toString(),
-                            // 필요 시 정렬을 추가하고 싶다면 여기에 예: sort: 'pop,desc'
-                          ),
+                          else
+                            ..._buildSearch(
+                              q: b.query ?? '',
+                              contentTypeId: b.contentTypeId?.toString(),
+                              // 필요 시 정렬을 추가하고 싶다면 여기에 예: sort: 'pop,desc'
+                            ),
                         },
                       ),
                     ),
@@ -350,7 +351,7 @@ class _HeroWithSearchBar extends StatelessWidget {
               child: Container(
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(.35),
+                  color: Colors.black.withValues(alpha: .35),
                   borderRadius: BorderRadius.circular(28),
                 ),
                 alignment: Alignment.center,
@@ -392,7 +393,7 @@ class _GlassChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.2),
+        color: Colors.white.withValues(alpha: .2),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -436,9 +437,9 @@ class _BoardSectionView extends StatelessWidget {
           section.subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.black54,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
         const SizedBox(height: 14),
         SizedBox(

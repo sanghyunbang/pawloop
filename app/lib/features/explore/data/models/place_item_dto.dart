@@ -1,5 +1,6 @@
 // ── import 는 파일 상단 어딘가에 추가하세요(중복 방지)
-import 'package:heat_trip_flutter/features/explore/data_search/search_models.dart' show PlaceSummary;
+import 'package:heat_trip_flutter/features/explore/data_search/search_models.dart'
+    show PlaceSummary;
 
 /// PlaceItem: 리스트 카드에서 쓰는 "요약" 엔티티(도메인 모델)
 /// - 서버 키와 분리하여, 앱 내부에서는 카멜케이스/nullable을 선호합니다.
@@ -69,9 +70,9 @@ class PlaceItemDto extends PlaceItem {
   factory PlaceItemDto.fromSummary(PlaceSummary s) {
     return PlaceItemDto(
       contentid: s.contentid,
-      contentTypeId: s.contentTypeId,       // null 허용
-      title: s.title,                       // required
-      addr1: s.addr1 ?? '',                 // ← non-null 보정
+      contentTypeId: s.contentTypeId, // null 허용
+      title: s.title, // required
+      addr1: s.addr1 ?? '', // ← non-null 보정
       addr2: s.addr2 ?? '',
       firstimage: s.firstimage ?? '',
       firstimage2: s.firstimage2 ?? '',
@@ -98,15 +99,16 @@ class PlaceItemDto extends PlaceItem {
   /// - 서버 키는 보통 소문자 `contenttypeid` 입니다.
   /// - 들어오는 값이 문자열일 수 있으므로 `_toIntOrNull`로 안전 변환합니다.
   factory PlaceItemDto.fromJson(Map<String, dynamic> json) {
-    int? _pickContentTypeId(Map<String, dynamic> j) {
+    int? pickContentTypeId(Map<String, dynamic> j) {
       // 1) snake_case, 2) camelCase, 3) 혹시 모를 'content_type_id'
-      final cand = j['contenttypeid'] ?? j['contentTypeId'] ?? j['content_type_id'];
+      final cand =
+          j['contenttypeid'] ?? j['contentTypeId'] ?? j['content_type_id'];
       return _toIntOrNull(cand);
     }
 
     return PlaceItemDto(
       contentid: _toIntOrNull(json['contentid']) ?? 0,
-      contentTypeId: _pickContentTypeId(json), // ← 보강
+      contentTypeId: pickContentTypeId(json), // ← 보강
       title: (json['title'] as String?) ?? '',
       addr1: (json['addr1'] as String?) ?? '',
       addr2: (json['addr2'] as String?) ?? '',

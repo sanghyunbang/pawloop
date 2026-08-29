@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 /// 상단 필터 트리거 칩 (공용 스타일)
 class RegionFilterChip extends StatelessWidget {
-  final String label;        // 칩에 표시할 텍스트
-  final bool selected;       // 현재 선택 상태 여부 (true면 강조 스타일)
-  final bool outlined;       // 외곽선만 표시하는 스타일 여부
-  final VoidCallback onTap;  // 클릭 시 호출되는 콜백 함수
+  final String label; // 칩에 표시할 텍스트
+  final bool selected; // 현재 선택 상태 여부 (true면 강조 스타일)
+  final bool outlined; // 외곽선만 표시하는 스타일 여부
+  final VoidCallback onTap; // 클릭 시 호출되는 콜백 함수
 
   const RegionFilterChip({
     super.key,
@@ -30,7 +30,7 @@ class RegionFilterChip extends StatelessWidget {
     return Material(
       color: bgColor,
       elevation: selected ? 1.5 : 0, // 선택 시 살짝 띄워 줌
-      shadowColor: Colors.black.withOpacity(0.12),
+      shadowColor: Colors.black.withValues(alpha: 0.12),
       shape: StadiumBorder(
         side: BorderSide(color: borderColor, width: isOutlineStyle ? 1 : 1),
       ),
@@ -42,11 +42,7 @@ class RegionFilterChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.place_outlined,
-                size: 18,
-                color: labelColor,
-              ),
+              Icon(Icons.place_outlined, size: 18, color: labelColor),
               const SizedBox(width: 6),
               Text(
                 label,
@@ -58,7 +54,11 @@ class RegionFilterChip extends StatelessWidget {
               ),
               if (selected) ...[
                 const SizedBox(width: 6),
-                Icon(Icons.close, size: 18, color: labelColor.withOpacity(0.9)),
+                Icon(
+                  Icons.close,
+                  size: 18,
+                  color: labelColor.withValues(alpha: 0.9),
+                ),
               ],
             ],
           ),

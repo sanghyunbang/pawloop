@@ -4,6 +4,7 @@
 /// 정수 ID로 파싱해 주는 확장자 모음.
 /// - UI 위젯에서 null/형변환 예외로 터지는 것을 방지.
 /// - 데이터 계층 성격이므로 presentation이 아닌 data 하위에 둔다.
+library;
 
 import '../place_item_dto.dart';
 

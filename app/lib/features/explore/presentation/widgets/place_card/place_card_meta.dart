@@ -2,6 +2,7 @@
 ///
 /// 주소(광역+기초), 거리, 소요시간을 한 줄에 표현.
 /// - compact에 따라 아이콘/폰트 크기 조정.
+library;
 
 import 'package:flutter/material.dart';
 
@@ -24,7 +25,7 @@ class MetaRow extends StatelessWidget {
     final double iconSize = compact ? 12 : 14;
     final double fontSize = compact ? 11 : 12;
 
-    String _shortAddr(String? addr) {
+    String shortAddr(String? addr) {
       if (addr == null) return '';
       final t = addr.trim();
       if (t.isEmpty) return '';
@@ -37,7 +38,7 @@ class MetaRow extends StatelessWidget {
       const SizedBox(width: 4),
       Flexible(
         child: Text(
-          _shortAddr(addr1),
+          shortAddr(addr1),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(color: Colors.black54, fontSize: fontSize),
@@ -56,18 +57,28 @@ class MetaRow extends StatelessWidget {
 
     if ((distance ?? '').trim().isNotEmpty) {
       addDot();
-      pieces.add(Text(distance!.trim(), style: TextStyle(color: Colors.black54, fontSize: fontSize)));
+      pieces.add(
+        Text(
+          distance!.trim(),
+          style: TextStyle(color: Colors.black54, fontSize: fontSize),
+        ),
+      );
     }
 
     if ((duration ?? '').trim().isNotEmpty) {
       addDot();
-      pieces.add(Row(
-        children: [
-          Icon(Icons.schedule, size: iconSize, color: Colors.black54),
-          const SizedBox(width: 2),
-          Text(duration!.trim(), style: TextStyle(color: Colors.black54, fontSize: fontSize)),
-        ],
-      ));
+      pieces.add(
+        Row(
+          children: [
+            Icon(Icons.schedule, size: iconSize, color: Colors.black54),
+            const SizedBox(width: 2),
+            Text(
+              duration!.trim(),
+              style: TextStyle(color: Colors.black54, fontSize: fontSize),
+            ),
+          ],
+        ),
+      );
     }
 
     return Row(children: pieces);
@@ -86,7 +97,10 @@ class RatingBadge extends StatelessWidget {
       children: [
         Icon(Icons.star, size: iconSize, color: const Color(0xFFFFC107)),
         const SizedBox(width: 4),
-        Text(rating.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(
+          rating.toStringAsFixed(1),
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
       ],
     );
   }

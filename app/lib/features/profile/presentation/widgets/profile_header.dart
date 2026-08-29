@@ -126,7 +126,10 @@ class ProfileHeader extends StatelessWidget {
               shape: BoxShape.circle,
               color: Colors.white,
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 10),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .08),
+                  blurRadius: 10,
+                ),
               ],
             ),
             child: ClipOval(
@@ -165,7 +168,7 @@ class ProfileHeader extends StatelessWidget {
             Container(
               margin: const EdgeInsets.only(top: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.3),
+                color: Colors.white.withValues(alpha: .3),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TabBar(

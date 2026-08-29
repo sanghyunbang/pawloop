@@ -259,7 +259,7 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     textStyle: const TextStyle(fontWeight: FontWeight.w600),
-                    overlayColor: Colors.white.withOpacity(.06),
+                    overlayColor: Colors.white.withValues(alpha: .06),
                   ),
                 ),
               ),

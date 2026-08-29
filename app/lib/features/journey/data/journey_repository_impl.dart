@@ -249,7 +249,7 @@ class JourneyRepositoryImpl {
 
   Future<DiaryEntry> updateDiary(DiaryEntry entry) async {
     print(
-      "   ㅡㅡㅡㅡㅡㅡㅡjourney impl - updateDiary 진입, 진입한 값 : ${entry} \n entry id = ${entry.id}",
+      "   ㅡㅡㅡㅡㅡㅡㅡjourney impl - updateDiary 진입, 진입한 값 : $entry \n entry id = ${entry.id}",
     );
     final token = await TokenStorage.getToken();
     if (token == null) throw Exception('Authentication required');

@@ -3,6 +3,7 @@
 /// 세로형 카드 구현.
 /// - 상단 바(카테고리/가격/하트) + 이미지 + 본문(제목/메타/태그)로 구성.
 /// - 스타일 관련 수치(compact, 패딩 등)를 이 파일에서 계산/적용.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/features/explore/data/models/place_item_dto.dart';
@@ -53,7 +54,10 @@ class PlaceCardVertical extends StatelessWidget {
     this.imageElevation = 1,
     this.barImageGap = 4,
     this.showTopBar = true,
-    this.topBarPadding = const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    this.topBarPadding = const EdgeInsets.symmetric(
+      horizontal: 10,
+      vertical: 6,
+    ),
   });
 
   @override
@@ -123,8 +127,7 @@ class PlaceCardVertical extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (rating != null)
-                          RatingBadge(rating: rating!),
+                        if (rating != null) RatingBadge(rating: rating!),
                       ],
                     ),
                     const SizedBox(height: 6),

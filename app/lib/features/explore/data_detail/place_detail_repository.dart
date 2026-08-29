@@ -5,6 +5,8 @@
 ///  - common/intro 중 하나 실패 → 실패한 쪽은 empty() DTO로 대체
 ///  - 둘 다 실패여도 throw 하지 않고 **둘 다 empty()** 로 대체하여 PlaceDetail 반환
 ///    => vm.error 가 세팅되지 않아서 화면(탭)이 항상 렌더링됨
+library;
+
 import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/features/explore/domain/entity_detail/place_detail.dart';
 

@@ -7,6 +7,7 @@
 ///
 /// ✅ 변경: 카드의 썸네일 URL을 go_router `extra`로 함께 전달.
 ///         PlaceItem에 `firstImage`가 없으므로 `firstimage/firstimage2`만 사용.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';

@@ -1,6 +1,8 @@
 /// reviews_card.dart
 /// - 총 리뷰 수를 헤더에 표기
 /// - 상위 3개만 미리보기 (추후 '모든 리뷰 보기' 눌렀을 때 라우팅/시트 확장 가능)
+library;
+
 import 'package:flutter/material.dart';
 import '../../domain/entity_detail/place_detail.dart';
 
