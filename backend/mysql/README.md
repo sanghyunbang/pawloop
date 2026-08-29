@@ -18,6 +18,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\02_add_places_emotion_columns.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\03_add_journey_place_id.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\04_users_social_account_model.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\05_refresh_token.sql
 ```
 
 | 파일 | 무엇을 |
@@ -26,6 +27,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `02_add_places_emotion_columns.sql` | `places`의 감정 데이터 컬럼(`seed_emotion`·`ugc_emotion`·`ugc_count`) |
 | `03_add_journey_place_id.sql` | 다이어리↔장소 연결용 `journey.place_id` |
 | `04_users_social_account_model.sql` | 소셜 계정 모델 — `users.provider`·`social_id`·`role` 추가, 레거시 `username` 백필, `UNIQUE(provider, social_id)` (이슈 #7) |
+| `05_refresh_token.sql` | refresh 토큰 원장 — `refresh_token` 테이블 생성, `UNIQUE(token_hash)`, `user_id`·`expires_at` 인덱스 (이슈 #9) |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
@@ -37,3 +39,16 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 사후 검증이 필요한 이유는 `spring.jpa.hibernate.ddl-auto=validate`가 **UNIQUE 제약을 검사하지 않기 때문**입니다. 제약이 빠진 채 배포해도 앱은 멀쩡히 뜨고, 아무도 모르는 상태로 중복이 쌓입니다.
 
 되돌리는 SQL(DOWN)은 `04_users_social_account_model.sql` 헤더 주석에 있습니다.
+
+### 05는 실패하면 멈춥니다 — 그게 정상입니다
+
+`05`는 새 테이블을 만들 뿐이라 백필이 없지만, 관문은 04와 같이 둡니다.
+
+- **사전 점검**: dev는 `ddl-auto=update`라 **앱이 먼저 뜨면 Hibernate가 `refresh_token`을 이미 만들어 둡니다.** 엔티티 초안이 다른 상태로 만든 테이블(UNIQUE 없음 등)에 중복 `token_hash`가 들어 있으면 UNIQUE를 걸 수 없습니다. 그럴 때는 스키마를 한 글자도 바꾸지 않고 그 해시 목록을 출력한 뒤 `ERROR 1644`로 중단합니다. 해당 행을 지우면 그 사용자는 재로그인만 하면 됩니다.
+- **사후 검증**: 컬럼 6개·`UNIQUE(token_hash)`·`user_id` 인덱스·`expires_at` 인덱스가 전부 걸렸는지 확인하고, 하나라도 빠졌으면 `ERROR 1644`로 실패합니다.
+
+사후 검증이 필요한 이유는 04와 같습니다 — `spring.jpa.hibernate.ddl-auto=validate`는 **UNIQUE 제약도 인덱스도 검사하지 않습니다.** `uk_refresh_token_token_hash`가 빠진 채 배포해도 앱은 멀쩡히 뜨고, 재사용 감지의 전제("해시 1개 = 행 1개")가 아무도 모르게 무너집니다.
+
+**실행 순서**: `05`는 앱 배포 **전**에 돌립니다. 테이블이 없으면 로그인이 실패하므로 이 순서는 사실상 강제됩니다. 되돌릴 때는 앱을 먼저 내립니다. 되돌리는 SQL(DOWN)은 `05_refresh_token.sql` 헤더 주석에 있습니다.
+
+만료된 `refresh_token` 행은 이 스크립트가 아니라 애플리케이션의 야간 스케줄 잡이 지웁니다(기본 04:30 Asia/Seoul, `auth.refresh-token.purge-cron`으로 조정).

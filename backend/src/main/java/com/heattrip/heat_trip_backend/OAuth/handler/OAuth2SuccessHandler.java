@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
+import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
 
 import java.io.IOException; 
 import jakarta.servlet.ServletException;
@@ -27,8 +28,12 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler{
     // 생성자를 통한 의존성 주입 (? gradle말고 여기서 말하는 의존성 주입은 또 뭐지)
     // JWTProvider를 주입받아 사용( JWTProvider가 빈에 주입 되어 있어야 함)
 
-    public OAuth2SuccessHandler(JWTProvider jwtProvider) {
+    /** refresh 토큰 발급·저장의 유일한 통로. (이슈 #9) */
+    private final RefreshTokenService refreshTokenService;
+
+    public OAuth2SuccessHandler(JWTProvider jwtProvider, RefreshTokenService refreshTokenService) {
         this.jwtProvider = jwtProvider;
+        this.refreshTokenService = refreshTokenService;
     }
 
     /**
@@ -70,10 +75,29 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler{
          // JWT 토큰 생성
          String token = jwtProvider.createAccessToken(userId, role);
 
-         // flutter + web_oauth_2 에 맞춰서 redirec URI 만들기
-         // 예: heattrip://login-callback?token=<access-token>
+         // refresh 토큰 발급·저장. 원문은 여기서 딥링크로 나가는 것 말고는 아무 데도 남지 않는다. (이슈 #9)
+         String refreshToken = refreshTokenService.issueFor(userId);
 
-         String redirect = "heattrip://login-callback?token=" + token;
+         // flutter + web_oauth_2 에 맞춰서 redirect URI 만들기
+         // 예: heattrip://login-callback?token=<access-token>&refresh=<refresh-token>
+         //
+         // ⚠️ token= 를 **앞**에 유지한다. 계약(openapi.yaml)에 적힌 현행 URL 접두사가
+         //    `?token=` 이라, 순서를 뒤집으면 그 접두사로 매칭하는 기존 파싱이 즉사한다.
+         //
+         // ⚠️ 그래도 앱은 파싱을 고쳐야 한다: AT 는 더 이상 URL 의 꼬리가 아니다.
+         //    'token=' 뒤를 전부 잘라 쓰면 &refresh=... 까지 삼켜 손상된 토큰을 저장한다.
+         //    Uri.parse(url).queryParameters['token'] 로 읽어야 한다. (인수인계 대상: #11)
+         //
+         // ⚠️ 위험을 정확히 적어 둔다: RT 는 14일짜리 자격증명이고 이 딥링크는 302 의 Location
+         //    헤더(액세스 로그·프록시 로그)와 브라우저 히스토리에 남는다. AT 가 이미 나가고 있는
+         //    같은 채널이라 노출 '채널'이 새로 생기지는 않지만 창의 길이가 1시간 → 14일로 커진다.
+         //    그 창은 회전 + 재사용 감지가 실질적으로 좁힌다(탈취된 RT 를 쓰는 순간, 정당한
+         //    사용자의 다음 회전이 전량 폐기를 유발한다). 토큰을 URL 로 넘기는 방식 자체를
+         //    1회용 코드 교환으로 바꾸는 것은 #14 의 범위다.
+         String redirect = "heattrip://login-callback?token=" + token + "&refresh=" + refreshToken;
+
+         // 캐시 경로 한 줄을 닫는다. 이 응답에는 두 개의 자격증명이 실려 있다.
+         response.setHeader("Cache-Control", "no-store");
 
          response.sendRedirect(redirect);
 

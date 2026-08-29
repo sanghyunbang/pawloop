@@ -24,6 +24,11 @@ public class UserService {
     private final PasswordEncoder passwordEncoder; // 이건 뭐지?
     private final JWTProvider jwtProvider;
 
+    /**
+     * refresh 토큰을 만지는 유일한 통로. 이 서비스는 리포지토리를 직접 보지 않는다. (이슈 #9)
+     */
+    private final RefreshTokenService refreshTokenService;
+
    @Transactional
     public void signup(SignupRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
@@ -85,6 +90,15 @@ public class UserService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new IllegalAccessException("비밀번호가 일치하지 않습니다");
         }
+
+        // refresh 토큰을 함께 발급·저장한다. (이슈 #9)
+        //
+        // 왜 반환하지 않는가: 이 메서드의 반환값은 그대로 HTTP 응답 본문이 되는 **JWT 평문
+        // 문자열**이다. 여기에 RT 를 실으려면 응답을 AuthTokens JSON 으로 바꿔야 하는데,
+        // 그 형태 변경은 #10 의 범위이고 지금 바꾸면 평문을 파싱하는 앱을 예고 없이 깨뜨린다.
+        // 그래도 지금 발급·저장까지 해 두는 이유는, #10 이 켜기 전까지 이 경로가 한 번도
+        // 실행되지 않은 코드로 남는 것을 막기 위해서다. 전달되지 않은 행은 만료 정리가 걷어간다.
+        refreshTokenService.issueFor(user.getId());
 
         // subject 는 users.id 다. 예전에는 여기에 email 을, 소셜 경로에는 "kakao_1234567890" 을 넣어
         // 같은 토큰 형식이 두 가지 규약을 갖고 있었다. (이슈 #5)
@@ -163,25 +177,43 @@ public class UserService {
     // 지워도 되는 것을 확인했다: signup·login 은 이미 userRepository.findByEmail 을 직접 쓰고,
     // CustomOAuth2UserService 도 userRepository 를 직접 쓴다. 남는 호출자가 0 이었다.
 
-    /** 사용자 삭제 (회원탈퇴) */
+    /**
+     * 사용자 삭제 (회원탈퇴).
+     *
+     * <p><b>refresh 토큰을 사용자보다 먼저 지운다.</b> 순서가 계약이다 — users 로의 FK 를
+     * 걸지 않기로 했으므로(RefreshToken 엔티티 javadoc 참조) 원장 정리를 DB 가 대신해 주지
+     * 않는다. 여기서 빠뜨리면 탈퇴한 사용자의 RT 행이 남아 완료 조건 7 이 깨진다.
+     * 순서 자체는 UserServiceTest 의 InOrder 단언이 잠근다. (이슈 #9)
+     */
     @Transactional
     public void deleteMe(Long userId) {
         // 예외 메시지에 이메일을 넣지 않는다 — GlobalExceptionHandler 가 ex.getMessage() 를
         // HTTP 응답 본문에 그대로 싣는다. 예전에는 여기서 이메일이 응답으로 나가고 있었다. (이슈 #6)
-        userRepository.delete(require(userId));
+        User me = require(userId);
+        refreshTokenService.deleteAllByUserId(userId);
+        userRepository.delete(me);
         // 필요 시: userRepository.flush();
     }
 
     /**
-     * 사용자 로그아웃.
+     * 사용자 로그아웃 — <b>전 기기</b>. 그 사용자의 살아 있는 refresh 토큰을 전부 폐기한다.
      *
-     * <p><b>본문이 비어 있는 것은 사실을 반영한 것이다.</b> 폐기할 서버측 상태가 아직 없다 —
-     * refresh 토큰도, 액세스 토큰 블록리스트({@code jti})도 없어서 발급된 토큰은 만료까지 유효하다.
-     * 저장/폐기는 이슈 #9 범위다. 엔드포인트와 이 메서드는 그때 채울 이음새로 남긴다.
+     * <p>기기 하나만 끊지 않는 이유는 계약이 그렇게 선언했기 때문이다
+     * (docs/04-api/openapi.yaml 의 {@code POST /auth/logout}: "특정 기기 하나만 끊는 요청 본문은
+     * 정의하지 않습니다"). 이슈 본문의 "전달받은 RT 를 폐기" 는 그 계약보다 앞서 쓰인 초안이고,
+     * 따르면 계약에 없는 요청 본문을 추가하게 된다(그건 #10 의 영역이다). 정책 #4 는 계약이
+     * 코드보다 우선이라고 정했다.
+     *
+     * <p>멱등이다 — 이미 전부 폐기된 상태여도 영향 행 수가 0 일 뿐 204 다.
+     *
+     * <p><b>알려진 한계:</b> 이미 발급된 액세스 토큰은 만료(≤1시간)까지 유효하다. 토큰 단위
+     * 무효화에는 {@code jti} 클레임과 블록리스트 저장소가 필요한데, MySQL 블록리스트는 모든
+     * 인증 요청마다 DB 조회를 1회 더하면서 고작 1시간짜리 창을 줄인다 — 비용이 이득을 넘는다.
+     * Redis 로 뒷받침되는 그 작업은 M2 이후 별도 Epic 이다. (이슈 #9)
      */
     @Transactional
     public void logout(Long userId) {
-
+        refreshTokenService.revokeAllByUserId(userId);
     }
 
      // helpers

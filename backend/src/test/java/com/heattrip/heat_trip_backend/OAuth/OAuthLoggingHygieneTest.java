@@ -7,6 +7,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2SuccessHandler;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
+import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,7 +44,8 @@ class OAuthLoggingHygieneTest {
         appender = new ListAppender<>();
         appender.start();
 
-        for (Class<?> type : List.of(JWTProvider.class, OAuth2SuccessHandler.class, CustomOAuth2UserService.class)) {
+        for (Class<?> type : List.of(JWTProvider.class, OAuth2SuccessHandler.class,
+                CustomOAuth2UserService.class, RefreshTokenService.class)) {
             Logger logger = (Logger) LoggerFactory.getLogger(type);
             watched.add(logger);
             originalLevels.add(logger.getLevel());
@@ -67,14 +69,38 @@ class OAuthLoggingHygieneTest {
     @Test
     @DisplayName("로그인 한 번을 수행해도 인증 로그에 토큰 원문·시크릿·시크릿 길이가 남지 않는다.")
     void 로그인후_인증로그에_토큰과시크릿이없다() throws Exception {
-        String token = OAuthLoginProbe.runLogin();
+        OAuthLoginProbe.IssuedTokens issued = OAuthLoginProbe.runLogin();
 
         List<String> messages = capturedMessages();
 
         assertThat(messages).isNotEmpty(); // 아무것도 안 찍혔다면 이 테스트는 아무것도 지키지 못한다
         assertThat(messages).noneMatch(m -> m.contains("eyJ"));
-        assertThat(messages).noneMatch(m -> m.contains(token));
+        assertThat(messages).noneMatch(m -> m.contains(issued.accessToken()));
         assertThat(messages).noneMatch(m -> m.toLowerCase().contains("secret"));
+    }
+
+    @Test
+    @DisplayName("로그인 한 번을 수행해도 인증 로그에 refresh 토큰 원문도 그 SHA-256 해시도 남지 않는다.")
+    void 로그인후_인증로그에_refresh토큰이_남지않는다() throws Exception {
+        // RT 는 14일짜리 자격증명이다 — 로그로 새면 대가가 액세스 토큰보다 크다. (이슈 #6·#9)
+        // 해시까지 함께 막는 이유: 해시는 결정적이라, 로그에 남으면 DB 원장의 그 행을 그대로
+        // 지목할 수 있다(그 행을 폐기하거나 대조하는 데 쓸 수 있는 값이다).
+        OAuthLoginProbe.IssuedTokens issued = OAuthLoginProbe.runLogin();
+        String hash = sha256Hex(issued.refreshToken());
+
+        List<String> messages = capturedMessages();
+
+        assertThat(messages).isNotEmpty();
+        assertThat(issued.refreshToken()).isNotBlank();
+        assertThat(messages).noneMatch(m -> m.contains(issued.refreshToken()));
+        assertThat(messages).noneMatch(m -> m.contains(hash));
+    }
+
+    /** 프로덕션 해싱 함수를 재사용하지 않고 테스트가 직접 계산한다 — 순환 검증을 피한다. */
+    private static String sha256Hex(String raw) throws Exception {
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return java.util.HexFormat.of().formatHex(digest);
     }
 
     @Test

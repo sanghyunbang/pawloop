@@ -3,8 +3,11 @@ package com.heattrip.heat_trip_backend.OAuth;
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2SuccessHandler;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
+import com.heattrip.heat_trip_backend.user.entity.RefreshToken;
 import com.heattrip.heat_trip_backend.user.entity.User;
+import com.heattrip.heat_trip_backend.user.repository.RefreshTokenRepository;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
+import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
 import org.mockito.ArgumentMatchers;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.core.ParameterizedTypeReference;
@@ -23,6 +26,7 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestOperations;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -62,11 +66,32 @@ final class OAuthLoginProbe {
     }
 
     /**
+     * DB 없이 도는 refresh 토큰 서비스. 저장은 목이 삼키고, 발급된 원문만 밖으로 나온다. (이슈 #9)
+     */
+    static RefreshTokenService refreshTokenService() {
+        RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
+        when(refreshTokenRepository.save(any(RefreshToken.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        return new RefreshTokenService(
+                refreshTokenRepository, mock(UserRepository.class), jwtProvider(),
+                Clock.systemDefaultZone(), 1_209_600_000L);
+    }
+
+    /**
+     * 로그인 1회가 발급한 두 자격증명.
+     *
+     * <p>refresh 토큰이 여기 함께 있는 이유: RT 는 14일짜리라 로그에 새면 대가가 AT 보다 크다.
+     * 로그 위생 테스트가 원문과 그 SHA-256 해시를 둘 다 대조할 수 있어야 한다. (이슈 #6·#9)
+     */
+    record IssuedTokens(String accessToken, String refreshToken) {
+    }
+
+    /**
      * 로그인 1회를 끝까지 수행한다.
      *
-     * @return 발급된 액세스 토큰 원문 (로그에 남지 않았는지 대조할 때 쓴다)
+     * @return 발급된 액세스 토큰·refresh 토큰 원문 (로그에 남지 않았는지 대조할 때 쓴다)
      */
-    static String runLogin() throws Exception {
+    static IssuedTokens runLogin() throws Exception {
         OAuth2User user = loadUser();
 
         // CustomOAuth2User.getName() → provider_providerId. 성공 핸들러가 이 값을 subject 로 쓴다.
@@ -78,13 +103,27 @@ final class OAuthLoginProbe {
         OAuth2AuthenticationToken authentication =
                 new OAuth2AuthenticationToken(user, user.getAuthorities(), "google");
 
-        new OAuth2SuccessHandler(jwtProvider).onAuthenticationSuccess(request, response, authentication);
+        new OAuth2SuccessHandler(jwtProvider, refreshTokenService())
+                .onAuthenticationSuccess(request, response, authentication);
 
         String redirect = response.getRedirectedUrl();
         if (redirect == null || !redirect.contains("token=")) {
             throw new IllegalStateException("리다이렉트 URL 에 토큰이 없다: " + redirect);
         }
-        return redirect.substring(redirect.indexOf("token=") + "token=".length());
+        // substring 으로 자르지 않는다 — &refresh= 가 붙은 뒤로는 'token=' 뒤가 AT 의 끝이 아니다.
+        return new IssuedTokens(queryParam(redirect, "token"), queryParam(redirect, "refresh"));
+    }
+
+    /** 딥링크 쿼리스트링에서 파라미터 하나를 꺼낸다. 값에는 URL 예약문자가 없다(Base64URL·JWT). */
+    static String queryParam(String url, String name) {
+        String query = url.substring(url.indexOf('?') + 1);
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0 && pair.substring(0, eq).equals(name)) {
+                return pair.substring(eq + 1);
+            }
+        }
+        throw new IllegalStateException("딥링크에 " + name + " 파라미터가 없다: " + url);
     }
 
     /** 신규 가입 분기에서 DB 가 채워 주는 PK. 실제 저장소는 IDENTITY 로 값을 넣어 준다. */

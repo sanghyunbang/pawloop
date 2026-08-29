@@ -46,7 +46,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 - JWT 의 `sub` 는 서버가 발급한 **불투명 사용자 키**다. 이메일이라고 가정하거나 파싱하지 말 것 — 소셜 로그인 경로에서는 이메일이 아니다. 사용자 정보가 필요하면 `GET /auth/me` 로 조회한다.
-- 현재 발급되는 클레임은 `sub`·`role`·`iat`·`exp` 뿐이다. `jti` 가 없어 로그아웃해도 액세스 토큰은 만료까지 유효하다(#9).
+- 현재 발급되는 클레임은 `sub`·`role`·`iat`·`exp` 뿐이다. `jti` 가 없어 로그아웃해도 액세스 토큰은 만료까지 유효하다. #9 는 `jti` 를 도입하지 않기로 했다 — 블록리스트 저장소라는 소비자가 있어야 의미가 있고, 그건 M2 이후 별도 Epic 이다. 로그아웃은 대신 **서버측 refresh 토큰을 전부 폐기**한다(#9).
 - 소셜 로그인 계정과 이메일 가입 계정은 **같은 경로로 동작한다.** 어느 쪽 토큰으로든 `GET /auth/me`·`PUT /auth/me`·`DELETE /auth/me`·`POST /auth/logout` 이 200/204 다. (2026-08 이전에는 소셜 계정에서 400 이었다. #5 에서 해소되었다.)
 - 토큰 없음/만료/무효 → `401 Unauthorized`. **본문이 없다** — 상태 코드만 돌아오고 `Content-Type` 도 없다.
   토큰 없음·서명 위조·만료·옛 형식 subject·탈퇴 계정의 살아 있는 토큰이 전부 같은 모양이다(실패 원인을 알려 주지 않는 것이 의도다 — #6).
@@ -108,7 +108,10 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 `GET /oauth2/authorization/{provider}` — `provider ∈ {kakao, google}` (naver 보류)
 
-앱(`flutter_web_auth_2`)이 실제로 여는 URL. 소셜 인증 화면으로 302 리다이렉트되고, 성공 시 백엔드가 앱 딥링크 `heattrip://login-callback?token=<JWT>` 로 되돌린다.
+앱(`flutter_web_auth_2`)이 실제로 여는 URL. 소셜 인증 화면으로 302 리다이렉트되고, 성공 시 백엔드가 앱 딥링크 `heattrip://login-callback?token=<JWT>&refresh=<refreshToken>` 로 되돌린다(#9).
+
+> ⚠️ `token` 은 더 이상 URL 의 꼬리가 아니다. `'token='` 뒤를 전부 잘라 쓰면 `&refresh=...` 까지 삼켜 손상된 액세스 토큰을 저장하게 된다. `Uri.parse(url).queryParameters['token']` 로 읽어야 한다.
+> 딥링크에 자격증명 두 개가 실리는 위험(302 Location 헤더·브라우저 히스토리)과 그 대체(1회용 코드 교환)는 `openapi.yaml` 의 같은 경로 설명과 #14 를 보라.
 
 > 계약에 있는 `GET /auth/oauth/{provider}` 는 **미구현**이다. 실제 진입점은 위 경로다.
 > 딥링크 스킴은 `heattrip://` 다 — 코드(`social_login_service.dart`, `OAuth2SuccessHandler.java`)가 그렇게 동작한다. 이 문서가 예전에 예시로 들던 `pawloop` 스킴은 오기였고, 그대로 구현하면 콜백을 받지 못한다.
@@ -137,18 +140,24 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 - `isNew` 는 **로그인 응답의 1회성 이벤트 속성**이라 `user` 블록 밖(`AuthTokens` 최상위)에 있다. `true` 면 프론트는 온보딩(강아지 프로필 등록)으로 유도.
-- `refreshToken` 은 미구현이라 아직 응답에 없다(#9).
+- `refreshToken` 은 이 경로(미구현)에는 없다. 소셜 로그인은 딥링크의 `refresh` 파라미터로, 갱신은 `POST /auth/token/refresh` 응답으로 전달된다(#9).
 
-### 2.3 토큰 갱신 — 🟡 계획(미구현)
+### 2.3 토큰 갱신 — ✅ 구현(#9)
 
-`POST /auth/token/refresh`
+`POST /auth/token/refresh` — 인증 불필요. 주체는 본문의 refresh 토큰 자체가 증명한다.
 
 ```json
 // Request
-{ "refreshToken": "eyJhbGci..." }
-// 200 OK — AuthTokens 전체(회전 시 새 refreshToken 포함)
-{ "accessToken": "eyJhbGci...", "expiresIn": 3600 }
+{ "refreshToken": "9qQ1t...(패딩 없는 Base64URL 43자, JWT 아님)" }
+// 200 OK — 회전된다. 새 refreshToken 으로 반드시 교체 저장할 것
+{ "accessToken": "eyJhbGci...", "refreshToken": "새 값", "expiresIn": 3600 }
 ```
+
+- **회전**: 성공하면 옛 refresh 토큰은 그 자리에서 폐기된다. 다시 쓰면 401 이다.
+- **재사용 감지**: 이미 폐기된 refresh 토큰이 다시 오면 유출로 간주해 **그 사용자의 모든 세션**을 폐기하고 401 이다. 즉 옛 토큰으로 한 번 재시도하면 방금 받았던 새 토큰도 함께 죽는다.
+- 만료·미존재는 그냥 401 이며 다른 세션을 끊지 않는다. 실패는 전부 **본문 없는 401** 이다.
+- ⚠️ 클라이언트는 갱신 요청을 **직렬화(single-flight)** 해야 한다. 같은 값으로 동시에 두 번 보내면 한쪽이 재사용으로 처리되어 전 기기가 끊긴다. 서버는 유예 창을 두지 않는다.
+- 수명 14일(`jwt.refresh-expiration`). 서버에는 SHA-256 해시만 저장된다.
 
 ### 2.4 내 정보 조회 — ✅ 구현(재사용)
 
@@ -190,11 +199,12 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 > 시맨틱이 부분 수정이므로 장기적으로는 `PATCH` 가 옳다. 전환은 별도 정리 이슈.
 
-### 2.8 로그아웃 — 🟡 핸들러는 있음 / 서버측 폐기는 미구현
+### 2.8 로그아웃 — ✅ 구현(#9)
 
 `POST /auth/logout` — 인증된 주체를 받아 `204 No Content`(멱등) / `401`. 어느 쪽 토큰(소셜·이메일 가입)으로 불러도 204 다.
 
-> **서버측에 아직 폐기할 상태가 없다.** refresh 토큰 저장소도 `jti` 블록리스트도 없어 이 호출 뒤에도 발급된 액세스 토큰은 **만료까지 유효**하다. 따라서 클라이언트가 저장한 토큰을 반드시 스스로 지워야 한다. 실제 폐기(전 기기 로그아웃)는 #9 범위다.
+> **전 기기 로그아웃이다.** 그 사용자의 서버측 refresh 토큰을 전부 폐기한다. 요청 본문은 없다 — 기기 하나만 끊는 경로는 정의하지 않는다.
+> **다만 이미 발급된 액세스 토큰은 만료(≤1시간)까지 유효하다.** `jti` 블록리스트가 없기 때문이고, 그건 M2 이후 별도 Epic 이다. 따라서 클라이언트가 저장한 토큰을 반드시 스스로 지워야 한다.
 
 ### 2.9 회원 탈퇴 — ✅ 구현(재사용)
 

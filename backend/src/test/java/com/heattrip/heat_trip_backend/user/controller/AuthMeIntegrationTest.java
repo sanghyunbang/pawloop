@@ -276,7 +276,21 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(redirect)
                 .as("소셜 로그인 성공은 토큰을 실은 딥링크로 끝나야 한다")
                 .startsWith("heattrip://login-callback?token=");
-        return redirect.substring(redirect.indexOf("token=") + "token=".length());
+        // substring 으로 자르지 않는다 — #9 가 &refresh=<RT> 를 덧붙인 뒤로 'token=' 뒤는
+        // 액세스 토큰의 끝이 아니다. 그렇게 자른 값은 서명 검증에서 깨진다(앱도 같은 함정이다).
+        return queryParam(redirect, "token");
+    }
+
+    /** 딥링크 쿼리스트링에서 파라미터 하나를 꺼낸다. 값에는 URL 예약문자가 없다(JWT·Base64URL). */
+    private static String queryParam(String url, String name) {
+        String query = url.substring(url.indexOf('?') + 1);
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0 && pair.substring(0, eq).equals(name)) {
+                return pair.substring(eq + 1);
+            }
+        }
+        throw new AssertionError("딥링크에 " + name + " 파라미터가 없다: " + url);
     }
 
     private String tokenIssuedByPasswordLogin(String email, String rawPassword) throws Exception {

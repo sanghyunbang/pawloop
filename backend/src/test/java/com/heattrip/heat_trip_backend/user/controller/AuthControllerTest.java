@@ -1,9 +1,12 @@
 package com.heattrip.heat_trip_backend.user.controller;
 
+import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
+import com.heattrip.heat_trip_backend.user.dto.RefreshTokenRequest;
 import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.entity.User;
+import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
 import com.heattrip.heat_trip_backend.user.service.UserService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,6 +34,9 @@ class AuthControllerTest {
 
     @Mock
     private UserService userService;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
 
     @InjectMocks
     private AuthController authController;
@@ -114,5 +120,22 @@ class AuthControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         verify(userService).logout(7L);
+    }
+
+    @Test
+    @DisplayName("토큰 갱신 API는 본문의 refreshToken 을 그대로 회전 서비스에 넘기고 결과를 200 으로 돌려준다")
+    void refresh_returnsRotatedTokensFromService() {
+        // 컨트롤러는 얇다 — 검증도 회전도 서비스가 한다. 여기서 null·공백을 400 으로 거르면
+        // 계약이 선언한 '본문 없는 401' 과 어긋난다. (이슈 #9)
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("opaque-refresh-token");
+        AuthTokensResponse rotated = new AuthTokensResponse("new-jwt", "new-refresh", 3600L);
+        when(refreshTokenService.rotate("opaque-refresh-token")).thenReturn(rotated);
+
+        var response = authController.refresh(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(rotated);
+        verify(refreshTokenService).rotate("opaque-refresh-token");
     }
 }
