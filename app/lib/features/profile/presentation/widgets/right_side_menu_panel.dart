@@ -28,6 +28,9 @@ class RightSideMenuPanel extends StatelessWidget {
   void _closeThenPush(BuildContext context, Widget screen) {
     Navigator.of(context).pop(); // 패널 먼저 닫기
     Future.microtask(() {
+      // 이 콜백은 pop 이 끝난 뒤에 돈다 — 그 사이 이 위젯의 context 는 죽는다.
+      // 죽은 context 로 Navigator.of 를 부르면 예외다. (#63)
+      if (!context.mounted) return;
       Navigator.of(
         context,
         rootNavigator: true,
