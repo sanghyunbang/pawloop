@@ -9,7 +9,7 @@
 ## 0. 사용법 · 전제
 
 - 대상: Flutter 앱(`app/`, 화면은 `lib/v2/` 하위). 현재는 자동화 테스트가 거의 없어 **수동 회귀**가 1차 방어선이다.
-- 실행: 안드로이드 에뮬레이터 권장(네이버맵 SDK · KTO API 실호출). 지도가 흰 화면이면 먼저 `.env`(`NAVER_MAP_CLIENT_ID`, `YOUR_DECODING_SERVICE_KEY`) 확인.
+- 실행: 안드로이드 에뮬레이터 권장(네이버맵 SDK · KTO API 실호출). 지도가 흰 화면이면 먼저 `--dart-define` 주입값(`NAVER_MAP_CLIENT_ID`, `YOUR_DECODING_SERVICE_KEY`)을 확인. 템플릿은 `app/dart-define.example.json`, 실행은 `flutter run --dart-define-from-file=dart-define.json`.
 - 표기 규칙:
   - ✅ **정상 기대** — MVP에서 반드시 통과해야 하는 항목
   - 🟡 **더미/미구현 확인** — 지금은 하드코딩/더미가 "의도된" 동작(아래 [7. 알려진 더미](#7-알려진-더미미연동-오탐-방지)와 대조)
@@ -269,7 +269,7 @@
 | `pet_places_repository.dart` | 지도 리스트/마커, 빈/에러 폴백([D1~D9](#8-1-공공데이터-kto-korpettourservice2--pet_places_repositorydart)) |
 | `explore_screen.dart` | 필터·토글·마커·시트·범례 |
 | `main_shell.dart` | 탭 전환, (+)버튼 push, 네비 오버레이 |
-| `env.dart`/`.env` | 지도 표시(D10), KTO 로드(D1) |
+| `env.dart` / `--dart-define` | 지도 표시(D10), KTO 로드(D1) |
 | 테마/`app_tokens` | 전 화면 색·글래스카드·아바타 테두리 |
 
 ---
