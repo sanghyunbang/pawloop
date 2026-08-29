@@ -23,8 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>세 겹의 잠금 중 두 번째다.
  * <ol>
- *   <li><b>컴파일 불가</b> — {@code UserService.emailFromAuth} 와 public {@code findByEmail} 을
- *       지웠으므로 소비처 어디를 되돌려도 빌드가 죽는다. 가장 강하고 비용이 0 이다.</li>
+ *   <li><b>컴파일 불가</b> — 토큰 헤더에서 이메일을 뽑던 {@code UserService} 헬퍼와
+ *       public {@code findByEmail} 을 지웠으므로 소비처 어디를 되돌려도 빌드가 죽는다.
+ *       가장 강하고 비용이 0 이다.</li>
  *   <li><b>이 테스트</b> — 컴파일이 못 잡는 것을 잡는다. 특히 {@code @AuthenticationPrincipal String}
  *       재도입은 예외도 경고도 컴파일 에러도 없이 <b>200 OK 인 채로 null 이 주입</b>되는
  *       유일한 조용한 회귀다(실측 확인).</li>
@@ -41,17 +42,31 @@ class AuthSubjectContractSpecTest {
     /** 유일하게 Authorization 헤더를 읽고 토큰을 해석해도 되는 파일. */
     private static final String THE_ONLY_EXTRACTION_POINT = "JWTAuthenticationFilter.java";
 
+    /**
+     * 이슈 완료 조건 5 가 이름으로 지목한, 지워진 헬퍼.
+     *
+     * <p>이어 붙여 조립하는 이유: 리터럴로 두면 이 파일 자체가
+     * {@code grep -rn <이름> backend/src} 에 걸려, 읽는 사람이 "아직 남아 있나?" 하고 멈칫한다.
+     * 단언이 보는 값은 조립 결과이므로 검사의 강도는 같다.
+     */
+    private static final String DELETED_HELPER = "email" + "FromAuth";
+
     /** 파일 이름 → 주석을 걷어낸 소스. */
     private static Map<String, String> sources;
+
+    /** 파일 이름 → 주석까지 그대로인 원본. grep 과 같은 눈으로 보는 단언에 쓴다. */
+    private static Map<String, String> rawSources;
 
     @BeforeAll
     static void loadMainSources() throws IOException {
         Path mainJava = locateBackendMainJava();
         try (Stream<Path> walk = Files.walk(mainJava)) {
             sources = new LinkedHashMap<>();
+            rawSources = new LinkedHashMap<>();
             for (Path file : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
-                sources.put(file.getFileName().toString(),
-                        stripComments(Files.readString(file, StandardCharsets.UTF_8)));
+                String raw = Files.readString(file, StandardCharsets.UTF_8);
+                rawSources.put(file.getFileName().toString(), raw);
+                sources.put(file.getFileName().toString(), stripComments(raw));
             }
         }
         assertThat(sources)
@@ -60,10 +75,18 @@ class AuthSubjectContractSpecTest {
     }
 
     @Test
-    @DisplayName("src/main 어디에도 emailFromAuth 가 남아 있지 않다")
-    void noSourceMentionsEmailFromAuth() {
-        assertThat(filesContaining("emailFromAuth"))
-                .as("완료 조건 5 를 문자 그대로: grep -rn \"emailFromAuth\" backend/src/main 이 0건이어야 한다")
+    @DisplayName("토큰 헤더에서 이메일을 뽑던 헬퍼의 이름이 주석을 포함해 src/main 어디에도 없다")
+    void noSourceMentionsTheDeletedHelper() {
+        // 여기만 주석을 걷어내지 않은 원본을 본다. 완료 조건 5 가 요구하는 것이
+        // "grep -rn <이름> backend/src/main 이 0건" 이라 grep 과 같은 눈으로 봐야 한다.
+        List<String> hits = rawSources.entrySet().stream()
+                .filter(entry -> entry.getValue().contains(DELETED_HELPER))
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+
+        assertThat(hits)
+                .as("이력을 적을 때도 이 이름은 쓰지 않는다 — 완료 조건이 문자열 자체를 지목했다")
                 .isEmpty();
     }
 

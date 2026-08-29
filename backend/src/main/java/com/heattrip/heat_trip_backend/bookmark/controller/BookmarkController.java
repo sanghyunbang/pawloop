@@ -21,7 +21,7 @@ public class BookmarkController {
     private final BookmarkService bookmarkService;
 
     // 인증 주체 해석은 CurrentUserArgumentResolver 한 곳이다. 예전에는 여기 private User me(authHeader) 가
-    // 있었고, 그게 emailFromAuth + findByEmail 이라 모든 소셜 계정에서 400 이었다. (이슈 #5)
+    // 있었고, 토큰 subject 를 이메일로 보고 조회해서 모든 소셜 계정에서 400 이었다. (이슈 #5)
 
     /** 내 북마크 목록 */
     @GetMapping

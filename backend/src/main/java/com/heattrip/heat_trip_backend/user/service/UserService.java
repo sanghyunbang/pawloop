@@ -159,10 +159,12 @@ public class UserService {
         return userRepository.save(u);
     }
 
-    // emailFromAuth(String authHeader) 와 public findByEmail(String email) 은 #5 에서 삭제됐다.
+    // 토큰 헤더에서 이메일을 뽑던 헬퍼와 public findByEmail(String) 은 #5 에서 삭제됐다.
+    // (완료 조건 5 는 그 헬퍼 이름이 backend/src/main 에서 grep 0건이기를 요구한다 —
+    //  주석에도 쓰지 않는 이유가 그것이다. AuthSubjectContractSpecTest 가 주석까지 포함해 확인한다.)
     //
-    // 남겨 두면 되돌리는 사람이 emailFromAuth 없이도 jwtProvider.getUserIdFromToken + findByEmail 로
-    // 옛 모양을 이어 붙일 수 있다 — 소비처 8곳이 실제로 그 모양이었다. 지우면 어디를 되돌려도
+    // 남겨 두면 되돌리는 사람이 jwtProvider.getUserIdFromToken + findByEmail 로 옛 모양을
+    // 이어 붙일 수 있다 — 소비처 8곳이 실제로 그 모양이었다. 지우면 어디를 되돌려도
     // 컴파일이 죽는다. 인증 주체 해석은 CurrentUserArgumentResolver 한 곳뿐이다.
     //
     // 지워도 되는 것을 확인했다: signup·login 은 이미 userRepository.findByEmail 을 직접 쓰고,
