@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.user.repository;
 
+import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,12 +22,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 자바 코드가 아니라 DDL 의 성질이다. 목으로는 절대 잡히지 않는다.
  *
  * <p>{@code replace = NONE} 인 이유: {@code src/test/resources/application-test.properties} 가
- * H2 를 {@code MODE=MySQL} 로 띄운다. 운영은 MySQL 이므로 NULL 유일성 같은 미묘한 차이를
- * 최대한 같은 조건에서 본다. 기본 임베디드 DB 로 갈아치우면 그 모드가 사라진다.
+ * <b>실제 MySQL 8.0</b> 위에서 돈다({@link AbstractMySqlIntegrationTest}). 예전에는 H2 를
+ * {@code MODE=MySQL} 로 띄웠는데, 그건 근사치라 NULL 유일성·콜레이션 같은 차이를 못 잡는다.
+ * {@code replace = NONE} 이 없으면 {@code @DataJpaTest} 가 임베디드 DB 로 갈아치운다. (#49)
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-class UserRepositoryTest {
+class UserRepositoryTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;

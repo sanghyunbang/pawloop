@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.config;
 
+import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 여기서는 살아 있는 {@link FilterChainProxy} 에서 실제로 등록된 핸들러를 꺼내 직접 태운다.
  */
 @SpringBootTest
-class OAuth2LoginFailureRedirectTest {
+class OAuth2LoginFailureRedirectTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private FilterChainProxy springSecurityFilterChain;

@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.OAuth.jwt;
 
+import org.testcontainers.containers.MySQLContainer;
+import com.heattrip.heat_trip_backend.support.MySqlTestContainer;
 import com.heattrip.heat_trip_backend.HeatTripBackendApplication;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -152,12 +154,27 @@ class JWTProviderSecretValidationTest {
     void 애플리케이션기동_31바이트시크릿이면_실패한다() {
         // --jwt.secret 은 커맨드라인 인자라 application-test.properties 보다 우선한다.
         // 웹 타입은 그대로 두고 포트만 0(임의 포트)으로 — 컨텍스트가 죽으면 바로 반납된다.
+        //
+        // 데이터소스를 인자로 직접 주는 이유(#49): application-test.properties 에는 이제
+        // 데이터소스가 없다. 스프링 컨텍스트를 띄우는 테스트는 전부
+        // AbstractMySqlIntegrationTest 의 @DynamicPropertySource 로 받는데, 이 테스트는
+        // @SpringBootTest 가 아니라 SpringApplicationBuilder 로 직접 띄우므로 그 경로를
+        // 타지 않는다. 주지 않으면 기동이 실패하기는 하는데 **이유가 jwt.secret 이 아니라
+        // 데이터소스**가 되어, 이 테스트가 검증하려던 것을 더 이상 검증하지 않게 된다.
+        MySQLContainer<?> mysql = MySqlTestContainer.instance();
         SpringApplicationBuilder builder = new SpringApplicationBuilder(HeatTripBackendApplication.class)
                 .bannerMode(org.springframework.boot.Banner.Mode.OFF);
 
         assertThatThrownBy(() -> {
-            try (ConfigurableApplicationContext context =
-                         builder.run("--spring.profiles.active=test", "--server.port=0", "--jwt.secret=" + TOO_SHORT_SECRET)) {
+            try (ConfigurableApplicationContext context = builder.run(
+                    "--spring.profiles.active=test",
+                    "--server.port=0",
+                    "--spring.datasource.url=" + mysql.getJdbcUrl(),
+                    "--spring.datasource.username=" + mysql.getUsername(),
+                    "--spring.datasource.password=" + mysql.getPassword(),
+                    "--spring.datasource.driver-class-name=" + mysql.getDriverClassName(),
+                    "--spring.jpa.hibernate.ddl-auto=none",
+                    "--jwt.secret=" + TOO_SHORT_SECRET)) {
                 // 여기에 도달하면 검증이 없는 것이다.
             }
         })
