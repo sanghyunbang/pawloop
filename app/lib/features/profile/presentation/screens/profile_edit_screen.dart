@@ -107,7 +107,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         return;
       }
 
-      final data = await _authRepo.getMyProfile(token);
+      final data = await _authRepo.getMyProfile();
       // ignore: avoid_print
       print('[ProfileEdit] raw data: $data');
 
@@ -216,7 +216,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     // 디버그: 실제 전송 바디 확인
     debugPrint('[PUT /auth/me] body: ${jsonEncode(req.toJson())}');
 
-    final ok = await _authRepo.updateMyProfile(token, req);
+    final ok = await _authRepo.updateMyProfile(req);
 
     if (!mounted) return;
     setState(() => _saving = false);

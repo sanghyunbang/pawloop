@@ -88,7 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         return;
       }
 
-      final userInfo = await authRepository.getMyProfile(token);
+      final userInfo = await authRepository.getMyProfile();
       if (!mounted) return;
 
       if (userInfo != null) {

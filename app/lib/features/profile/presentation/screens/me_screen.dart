@@ -49,7 +49,7 @@ class _MeScreenState extends State<MeScreen> {
     List<DiaryEntry> diaries = const [];
     try {
       final token = await TokenStorage.getToken();
-      if (token != null) profile = await _auth.getMyProfile(token);
+      if (token != null) profile = await _auth.getMyProfile();
     } catch (_) {}
     try {
       diaries = await _api.fetchDiaries();

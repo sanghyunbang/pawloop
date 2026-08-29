@@ -47,7 +47,7 @@ class _ScheduleEditScreenState extends State<ScheduleEditScreen> {
     try {
       final token = await TokenStorage.getToken();
       if (token == null) return setState(() => _authorName = '알 수 없음');
-      final user = await authRepository.getMyProfile(token);
+      final user = await authRepository.getMyProfile();
       setState(() => _authorName = (user?['name'] ?? '알 수 없음'));
     } catch (_) {
       setState(() => _authorName = '알 수 없음');

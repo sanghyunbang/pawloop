@@ -94,7 +94,7 @@ class SecureTokenStore {
 
   Future<void> deleteAccessToken() => delete(accessTokenKey);
 
-  // ── 리프레시 토큰 (#9 에서 값이 생긴다) ────────────────────────────────
+  // ── 리프레시 토큰 (#9) ─────────────────────────────────────────────────
 
   Future<String?> readRefreshToken() => read(refreshTokenKey);
 
@@ -102,6 +102,22 @@ class SecureTokenStore {
       write(refreshTokenKey, token);
 
   Future<void> deleteRefreshToken() => delete(refreshTokenKey);
+
+  /// 로그인/갱신 결과를 한 번에 저장한다.
+  ///
+  /// [refreshToken] 이 null 이면 **기존 값을 지우지 않는다.** refresh 를 주지 않는
+  /// 경로(옛 서버, `refresh` 파라미터 없는 딥링크)에서 멀쩡히 살아 있는 RT 를
+  /// 날려 사용자를 재로그인시키지 않기 위해서다. RT 를 없애는 것은 로그아웃
+  /// ([clear])의 일이다.
+  Future<void> writeTokens({
+    required String accessToken,
+    String? refreshToken,
+  }) async {
+    await writeAccessToken(accessToken);
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      await writeRefreshToken(refreshToken);
+    }
+  }
 
   /// 로그아웃: 액세스/리프레시 둘 다 지운다.
   Future<void> clear() async {

@@ -28,7 +28,7 @@ class AccountDeleteScreen extends StatelessWidget {
       return;
     }
 
-    final success = await repo.deleteMyAccount(token);
+    final success = await repo.deleteMyAccount();
 
     if (!context.mounted) return;
 

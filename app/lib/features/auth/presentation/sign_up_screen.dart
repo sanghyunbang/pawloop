@@ -174,22 +174,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
     // (선택) 디버그: 실제 전송 바디 확인
     // debugPrint(req.toJson().toString());
 
-    final success = await _authRepository.register(req);
+    final outcome = await _authRepository.register(req);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (success) {
+    if (outcome == RegisterOutcome.created) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('회원가입 완료')));
       await Future.delayed(const Duration(milliseconds: 250));
       if (!mounted) return;
       context.goNamed('login');
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('회원가입 실패. 다시 시도해주세요.')));
+      return;
     }
+
+    // 409 를 400 과 구분해 안내한다 — 이미 계정이 있는 사용자에게
+    // "다시 시도해주세요" 는 아무 도움이 안 된다 (#10 이 상태 코드를 나눴다).
+    final message = switch (outcome) {
+      RegisterOutcome.duplicateEmail => '이미 가입된 이메일입니다. 로그인해주세요.',
+      RegisterOutcome.invalidInput => '입력한 정보를 다시 확인해주세요.',
+      _ => '회원가입 실패. 다시 시도해주세요.',
+    };
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // ===== UI =====

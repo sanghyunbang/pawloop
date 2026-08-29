@@ -34,12 +34,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final token = await _authRepository.login(
+      final tokens = await _authRepository.login(
         LoginRequest(email: email, password: password),
       );
-      if (token != null) {
+      if (tokens != null) {
         // 평문 SharedPreferences 가 아니라 보안 저장소에 저장한다 (#8).
-        await SecureTokenStore.instance.writeAccessToken(token);
+        //
+        // **refresh 토큰도 함께 저장한다** (#9·#11). 예전에는 AT 만 저장했고,
+        // 그래서 AT 가 만료되는 순간(1시간) 사용자는 조용히 로그아웃됐다.
+        await SecureTokenStore.instance.writeTokens(
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        );
         if (!mounted) return;
 
         // 로그인 후 "오늘" 홈으로 진입 (새 IA, F0-4)

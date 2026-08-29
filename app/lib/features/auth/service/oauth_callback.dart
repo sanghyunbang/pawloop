@@ -30,3 +30,35 @@ String? tokenFromCallback(String callbackUrl) {
   if (token == null || token.trim().isEmpty) return null;
   return token;
 }
+
+/// 콜백 URL에서 refresh 토큰을 뽑는다. 뽑을 수 없으면 null.
+///
+/// #9 부터 딥링크가 `heattrip://login-callback?token=<AT>&refresh=<RT>` 이다.
+/// 그전까지 앱은 `refresh` 파라미터를 버렸고, 그래서 액세스 토큰이 만료되는
+/// 순간(1시간) 사용자는 조용히 로그아웃됐다 — 깨지는 게 아니라 작동하지 않는 것이라
+/// 증상이 조용했다.
+///
+/// [tokenFromCallback] 과 규칙을 일부러 나눠 둔다.
+/// - `error` 가 실려 오면 둘 다 실패다(같은 규칙).
+/// - 그러나 **`refresh` 가 없다고 로그인을 실패시키지는 않는다.** 옛 서버·옛
+///   딥링크로 돌아오는 경우 AT 만으로도 로그인은 성립하고, 갱신만 못 할 뿐이다.
+///   그래서 호출부는 이 함수의 null 을 "갱신 불가" 로 다루지 "로그인 실패" 로
+///   다루지 않는다.
+///
+/// refresh 토큰은 JWT 가 아니라 불투명 문자열이므로 **파싱하거나 검증하지 않는다.**
+/// 값의 유효성은 서버만 안다.
+String? refreshFromCallback(String callbackUrl) {
+  final Uri uri;
+  try {
+    uri = Uri.parse(callbackUrl);
+  } on FormatException {
+    return null;
+  }
+
+  final error = uri.queryParameters['error'];
+  if (error != null && error.trim().isNotEmpty) return null;
+
+  final refresh = uri.queryParameters['refresh'];
+  if (refresh == null || refresh.trim().isEmpty) return null;
+  return refresh;
+}
