@@ -1,0 +1,280 @@
+# 기능 명세 (Feature Spec)
+
+> Pawloop(포루프)의 MVP 4대 기능(산책·지도·커뮤니티·프로필)과 신규 MVP 기능(가족 케어 & 채팅), 확장 기능의 목적·동작·데이터·상태를 정리한다. 실제 코드(`app/lib/v2`)를 기준으로 작성했으며, 더미/미연동 부분은 그대로 표기한다.
+
+관련 문서: [ERD](../03-database/erd.md) · [화면 흐름](./user-flows.md) · [정보 구조(IA)](./information-architecture.md)
+
+---
+
+## 0. 요약
+
+Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 공간"을 지향한다. **산책을 wedge로** 좁게 시작해 지도(동반장소)·커뮤니티·프로필로 확장한다. 감정 여행(heattrip) 앱에서 피벗하며 감정 요소는 전부 제거됐다.
+
+- 진입: `main.dart` → `MainShell`(`lib/v2/screens/main_shell.dart`)
+- 네비 5탭 구성: **홈 · 지도 · [산책 기록 FAB] · 커뮤니티 · 통계** (가운데 솟은 원형 FAB → 실시간 산책 트래킹)
+- 상태관리: `ValueNotifier` + `ValueListenableBuilder` (경량). 탭 인덱스/지도뷰는 `RootTab`(전역 `ValueNotifier`)로 보관.
+- 도메인 SSOT: `lib/v2/domain/pet.dart` (`DogProfile`, `PetCategory`, `WalkLog`, `PetPost` 등)
+
+### 기능 우선순위 (한눈에)
+
+| 우선순위 | 기능 | 상태 | 데이터 소스 | 비고 |
+|---|---|---|---|---|
+| P0 | 실시간 산책 트래킹 | 더미 시뮬레이션 | 로컬(시뮬 경로) | 배포 시 `geolocator` → `walk.path(LINESTRING)` |
+| P0 | 산책 기록 작성/조회 | 화면 완성, 미영속 | 로컬 상수(`kWalks`) | 저장 시 스낵바만, DB 미연동 |
+| P0 | 지도 · 동반장소 | KTO 실연동 | 관광공사 KorPetTourService2 | 병원/펫샵/산책로 레이어는 더미 |
+| P0 | 강아지 프로필 | 세션 내 편집 반영 | 전역 `kMyDog` | 앱 재시작 시 초기화(미영속) |
+| P1 | 커뮤니티(피드/상세/댓글/반응) | 더미 | 로컬 상수(`kPetPosts`) | 백엔드 social API 미연동 |
+| P1 | 산책 통계 | 더미 | 로컬 상수(`kWeekKm`) | fl_chart 주간 막대 |
+| P1 | 가족 케어 & 채팅(그룹·오늘의 케어·주의사항·채팅) | 더미 예정 | 로컬 상수 예정(`kCareToday`·`kFamilyMembers`·`kChatMessages` 등) | 신규 MVP — §6 |
+| P2 | 로그인 | 미구현 | (백엔드 auth 존재) | 앱은 로그아웃 스낵바만 |
+| P2 | 실위치(geolocator) | 미도입 | 서울 시청 고정 | `_center` 하드코딩 |
+| P3 | 건강/식사/병원/동네 로그 | 미구현 | — | post-MVP 확장 |
+| P3 | 반려인 매칭/산책 크루 | 미구현 | — | post-MVP 확장 |
+
+> 상태 표기: **더미** = UI만·데이터 하드코딩, **미영속** = 세션 내 동작하나 저장 안 됨, **실연동** = 외부 API 실제 호출.
+
+---
+
+## 1. 산책 (Walk)
+
+가장 핵심적인 wedge. "실시간 트래킹"과 "수기 기록", 두 경로로 산책을 남긴다.
+
+### 1.1 실시간 산책 트래킹 — `walk_tracking_screen.dart`
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 산책 중 경로·거리·시간·페이스를 실시간으로 보여주고, 종료 시 기록으로 저장 유도 |
+| 진입 | 홈 "산책 시작" CTA / 바텀네비 가운데 FAB |
+| 동작 | 네이버 지도 위 라이브 스탯 패널(km·시간·페이스), 경로 폴리라인 + 헤드 마커, 카메라 추적. 일시정지/재개, 종료 |
+| 종료 흐름 | 바텀시트(시간·거리·페이스 요약) → "기록 저장하기"(→ `CreateScreen(prefillPlace:'오늘 산책')`) / "저장 안 함" |
+| 데이터 | **더미 시뮬레이션**: `_makeRoute()`가 서울숲 근처 40점 루프 생성. `Timer.periodic(1s)`로 한 점씩 전진, Haversine `_dist()`로 누적 거리 계산 |
+| 상태 | `_seconds`, `_km`, `_paused`, `_path`(진행 경로), `_idx`(진행 인덱스). `NaverMapController _ctrl` |
+| 미연동 | 실제 GPS 스트림 없음. 배포 시 `geolocator` 위치 스트림 → `walk.path`(LINESTRING/인코딩 폴리라인) 저장 필요 |
+
+### 1.2 산책 기록 작성 — `create_screen.dart`
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 산책 장소·날짜·거리·시간·사진·메모를 수기로 남긴다 |
+| 진입 | 트래킹 종료 후 저장 / `MyRecordsScreen` "산책 기록하기" |
+| 동작 | 장소(TextField, `prefillPlace` 프리필) · 날짜(오늘 표시, 선택 UI 미구현) · 거리/시간 스텝퍼(±0.1km / ±5분) · 사진(플레이스홀더, "곧 지원") · 메모(4줄) |
+| 저장 | `_save()` → `maybePop()` + "산책 기록이 저장됐어요 🐾" 스낵바. **DB 저장 없음(미영속)** |
+| 상태 | `km`(기본 2.0), `minutes`(기본 30), `_place`/`_memo` TextEditingController |
+| 데이터 모델 | `WalkLog{date, place, km, minutes, memo}` + 파생 `pace`(분/km). 향후 `walk` 테이블 매핑 |
+
+### 1.3 내 산책 기록 조회 — `myrecords_screen.dart`
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 이번 달 요약 + 전체 산책 리스트 열람 |
+| 동작 | 요약 카드(총 거리·횟수·총 시간, `kWalks` 집계) + 산책 카드 리스트(장소·날짜·km·분·페이스·메모) |
+| 데이터 | **더미** 상수 `kWalks`(샘플 5건). 실제론 `walk` 조회 |
+
+---
+
+## 2. 지도 (Explore / Map)
+
+"우리 아이랑 갈 수 있는 곳"을 리스트/지도로 탐색. 유일하게 **외부 API 실연동**된 기능.
+
+| 항목 | 내용 | 화면 |
+|---|---|---|
+| 목적 | 반려동반 가능 장소 + 병원/펫샵/산책로를 카테고리별로 탐색 | `explore_screen.dart` |
+| 뷰 | 리스트 ↔ 지도 토글(`view = 'list'|'map'`). 카메라·마커는 `NaverMap` | |
+| 필터 | 카테고리 칩 가로 스크롤(전체 + `kPetCategories` 9종). 선택 시 `_catFilter` = contenttypeid 또는 레이어 key | |
+| 장소 상세 | 마커/카드 탭 → 바텀시트(이름·카테고리·거리·주소·전화·"반려동물 동반 가능(관광공사)") | |
+
+### 2.1 데이터 소스
+
+| 레이어 | key | 소스 | 상태 |
+|---|---|---|---|
+| 여행지/카페·식당/레포츠/숙박/쇼핑/문화 | `12/39/28/32/38/14` | 관광공사 **KorPetTourService2** `locationBasedList2` | **실연동** |
+| 병원 | `vet` | 인허가(LOCALDATA) 예정 | **더미**(`_dummyVet` 3건) |
+| 펫샵 | `shop` | 인허가(LOCALDATA) 예정 | **더미**(`_dummyShop` 2건) |
+| 산책로 | `trail` | 두루누비 걷기여행길 예정 | **더미** 폴리라인(`_trailCoords`) + 카드 2건 |
+
+- 호출: `PetPlacesRepository.fetchNearby(lat, lng, radius=8000, numOfRows=80)` — `mapX/mapY/radius/arrange=E`(거리순). serviceKey는 `.env` `YOUR_DECODING_SERVICE_KEY`(이미 인코딩된 키)를 그대로 사용.
+- 응답 파싱: `PetPlace.fromJson` — `mapx`(경도)/`mapy`(위도)/`contenttypeid`/`addr1`/`tel`/`firstimage`/`dist`. 좌표 0인 항목은 제외.
+- 카테고리 매핑: `petCatByType(contentTypeId)` (SSOT `kPetCategories`, `pet.dart`).
+
+### 2.2 상태 / 동작 세부
+
+| 상태 | 의미 |
+|---|---|
+| `_center` | 지도 중심(**서울 시청 37.5665,126.9816 고정** — 실위치 미도입) |
+| `_places` | KTO에서 받은 `PetPlace` 목록 |
+| `_loading` | 로딩 인디케이터/스낵바 표시 |
+| `_catFilter` | null=전체 / contenttypeid / 레이어 key |
+| `_mapCtrl` | `NaverMapController` |
+
+- `_filtered` 게터: `trail`이면 빈 리스트(선으로 표시), `vet/shop`이면 더미 레이어, null이면 전체, 그 외 contenttypeid 필터.
+- 마커: `NOverlayImage.fromWidget`으로 카테고리색 원형 핀 렌더(플랫폼 통일). `trail`은 `NPolylineOverlay` + 시작 마커.
+- 미연동: 검색바(플레이스홀더, 입력 불가), "이 지역에서 찾기"(지도 이동 시 재조회 미구현), 실위치.
+
+---
+
+## 3. 커뮤니티 (Community / Feed)
+
+반려인들의 산책·동반장소·건강 이야기. **전부 더미**(백엔드 social API 미연동).
+
+### 3.1 피드 — `feed_screen.dart`
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 게시판별 글 목록을 카드/리스트로 열람 |
+| 게시판 | `kPetBoards` = 전체·산책로 후기·동반장소·건강·병원·자유·자랑. 필터 버튼 → 바텀시트 선택 |
+| 뷰 토글 | 카드(`_card`) ↔ 리스트(`_row`) |
+| 카드 구성 | 닉네임 아바타(첫 글자) · 게시판칩(색상) · 위치 · 제목 · 본문(3줄) · 반응칩 3종 · 댓글수 |
+| 상태 | `feedBoard`('전체'), `view`('card') |
+| 데이터 | **더미** `kPetPosts`(4건). `PetPost{nick, board, loc, date, title, body, commentCount, reactions[3]}` |
+
+### 3.2 글 상세 — `post_detail_screen.dart`
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 글 본문 + 반응 + 댓글 스레드 |
+| 반응 | `kPetReactions` = 도움돼요·귀여워요·공감. 버튼 탭 시 **로컬 토글**(카운트 ±1, `_picked` Set) |
+| 댓글 | 하단 입력바에서 전송 → 로컬 리스트에 '나' 댓글 추가(**세션 한정, 미영속**). 시드 3건 |
+| 상태 | `_reactions`(글 반응 복사본), `_picked`(선택 반응), `_cmts`(댓글 리스트) |
+| 미연동 | 글 작성 진입점 없음(피드에 새 글 버튼 미구현), 좋아요/댓글 서버 저장 없음 |
+
+> 백엔드에는 커뮤니티용 엔티티가 아직 반려 맥락으로 재정의되지 않음(레거시 `explore/emotion` 계열 존재). ERD의 `post/comment/reaction`은 목표 스키마.
+
+---
+
+## 4. 프로필 (Profile / Me)
+
+우리 아이(강아지) 프로필 + 산책 활동 요약 + 메뉴.
+
+### 4.1 프로필 조회 — `me_screen.dart`
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 강아지 프로필 카드 + 산책 활동 요약 + 메뉴 |
+| 프로필 | 아바타 · 이름 · "견종 · 나이 · 크기" · 중성화 배지 |
+| 요약 | 총 산책 횟수·총 거리·이번주(`kWalks`/`kWeekKm` 집계) → 탭 시 `MyRecordsScreen` |
+| 메뉴 | 프로필 편집 · 내 산책 기록 · 북마크(스낵바만) · 로그아웃(스낵바만) |
+| 데이터 | 전역 `kMyDog`(`ValueNotifier<DogProfile>`) |
+
+### 4.2 프로필 편집 — `edit_screen.dart`
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 강아지 정보 수정 |
+| 필드 | 이름 · 견종 · 크기(`DogSize` 세그먼트: 소형/중형/대형) · 나이(개월, 숫자) · 중성화 토글 · 프로필 테두리 색(`kAvatarBorders`) |
+| 저장 | `_save()` → `kMyDog.value = copyWith(...)`. **세션 내 즉시 반영**(홈/프로필 갱신). 앱 재시작 시 초기값 복귀(미영속) |
+| 데이터 모델 | `DogProfile{name, breed, size, ageMonths, neutered, avatarAsset}` + 파생 `ageLabel` |
+
+> 목표: `dog` 테이블(user_id FK) 연동. 현재는 로그인/유저 개념 없이 단일 반려견 전역 상태.
+
+---
+
+## 5. 홈 · 통계 (보조 화면)
+
+### 5.1 홈 — `today_screen.dart`
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 우리 아이 히어로 + 오늘 산책 요약 + 진입 CTA |
+| 구성 | 날짜/인사("{이름}랑 산책 갈까요?") · 강아지 히어로 · 오늘 산책 요약(**0부터** `WalkToday()`) · CTA(산책 시작/코스 찾기) · 날씨 카드(하드코딩) |
+| 상태 | `kMyDog` 구독. 요약은 항상 0(실기록 연동 전) |
+
+### 5.2 산책 통계 — `insight_screen.dart`
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 이번 주 요약 + 주간 거리 막대그래프 + 자주 가는 곳 |
+| 요약 | 총 거리·횟수·평균(`kWeekKm` 파생) |
+| 차트 | `fl_chart` `BarChart` 주간(월~일) 막대. 오늘(`kWalkTodayIdx`) 강조 그라데이션, 툴팁 |
+| 자주 가는 곳 | `kWalks` place 빈도 상위 3 |
+| 데이터 | **더미** `kWeekKm`(7일)·`kWalks` |
+
+---
+
+## 6. 가족 케어 & 채팅 (Family Care & Chat)
+
+반려는 혼자가 아니라 **가족이 함께** 돌본다. 가족 간 케어 공유로 이중 급여(밥 두 번)·산책 누락을 막고, 앱의 일일 사용 이유(리텐션)를 만든다. 프론트는 더미(로컬 상수)로 선행 구현 예정이며, 도메인은 SSOT(`lib/v2/domain/pet.dart`)에 추가한다: `CareType`/`CareTask`/`kCareToday`/`FamilyMember`/`kFamilyMembers`/`kFamilyInviteCode`/`kWalkNotes`/`ChatMessage`/`kChatMessages`.
+
+### 6.1 가족 그룹 — `family_screen.dart` (MVP)
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 케어를 함께 나눌 가족 단위를 만든다(그룹 생성·초대코드로 참여·멤버 목록) |
+| 진입 | 홈 "오늘의 케어" 카드 / 프로필 메뉴 "우리 가족" |
+| 동작 | 그룹 생성, 초대코드 공유/입력으로 참여, 멤버 목록(역할 owner/member) 표시. 가족 화면에서 케어 현황·주의사항·채팅으로 진입 |
+| 데이터 | `family_group(id, name, invite_code, created_at)` · `group_member(id, group_id FK, user_id FK, role[owner/member], joined_at)`. 더미: `FamilyMember`/`kFamilyMembers`/`kFamilyInviteCode` |
+| API | `POST /api/groups`(생성) · `POST /api/groups/join`(초대코드) · `GET /api/groups/me`(내 그룹+멤버) |
+| 상태 | **더미 예정**(백엔드 groups API 연동 전) |
+
+### 6.2 오늘의 케어 공유 (MVP)
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 물 갈아주기/밥/산책을 **누가·언제** 했는지 가족이 공유 — 이중 급여·산책 누락 방지 |
+| 진입 | 홈 "오늘의 케어" 카드 / 가족 화면 케어 현황 |
+| 동작 | 오늘의 케어 항목(물/밥/산책) 체크 + 수행자·시각 표시. 기록 시 그룹에 공유 |
+| 데이터 | 기존 care_log 계획 확장: `care_log(id, dog_id FK, group_id FK nullable, type[water/meal/walk/med/vet], done_by(user_id), occurred_at, memo)`. 더미: `CareType`/`CareTask`/`kCareToday` |
+| API | `GET/POST /api/groups/{groupId}/care-logs`(오늘 케어 조회/기록) |
+| 상태 | **더미 예정** |
+
+### 6.3 산책 시 주의사항 (MVP)
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 산책할 때 알아야 할 것을 가족 공유 메모로 남긴다 |
+| 진입 | 가족 화면 |
+| 동작 | 공유 메모 열람/수정 |
+| 데이터 | `walk_note(id, group_id FK, body, created_at)` 또는 그룹의 공유 메모. 더미: `kWalkNotes` |
+| API | `GET/PUT /api/groups/{groupId}/walk-notes` |
+| 상태 | **더미 예정** |
+
+### 6.4 가족 채팅 — `family_chat_screen.dart` (MVP)
+
+| 항목 | 내용 |
+|---|---|
+| 목적 | 가족 그룹 채팅 — 케어를 둘러싼 일상 대화로 일일 사용 이유를 만든다 |
+| 진입 | 가족 화면 → 채팅 |
+| 동작 | 메시지 목록(커서 페이지네이션) + 입력바 전송. **MVP는 폴링**, 실시간(WebSocket/STOMP)은 post-MVP |
+| 데이터 | `chat_message(id, group_id FK, user_id FK, body, created_at)`. 더미: `ChatMessage`/`kChatMessages` |
+| API | `GET/POST /api/groups/{groupId}/messages` |
+| 상태 | **더미 예정** |
+
+### 6.5 post-MVP
+
+친구 추가(가족 외) · 케어 알림/리마인더 · 케어 히스토리 통계 · 실시간 푸시.
+
+> UI/UX는 기존 바이브 유지 — AuroraBackground + GlassCard, 따뜻한 그라데이션(#FFA96B→#FF7E8A), Pretendard, Fluent Emoji 톤.
+
+---
+
+## 7. 확장 기능 (post-MVP)
+
+MVP 범위 밖. 개요만 정의하며 현재 미구현.
+
+| 우선순위 | 기능 | 개요 | 필요 선행 |
+|---|---|---|---|
+| P2 | **로그인** | 소셜 로그인(카카오/네이버/구글). 백엔드에 OAuth/JWT 골격 존재(레거시 heattrip). 유저별 반려견·기록·글 귀속 | `app_user` 연동, 앱 토큰 저장 |
+| P2 | **실위치** | `geolocator` 도입 → 지도 `_center`·트래킹 GPS 실제화. 권한 처리 | 위치 권한 UX |
+| P3 | **건강 로그** | 체중·컨디션 등 기록 | `care_log(type=health)` |
+| P3 | **식사 로그** | 사료·간식·급여량 | `care_log(type=meal)` |
+| P3 | **병원/접종 기록** | 방문·접종·투약 이력 | `care_log(type=vet/med)` |
+| P3 | **동네 로그** | 동네 단위 활동/장소 로그 | 지역 스키마 |
+| P3 | **반려인 매칭 / 산책 크루** | 근처 반려인 매칭·동반 산책 모집 | 유저·위치·매칭 |
+| P2 | **백엔드 반려 API** | 산책/장소/커뮤니티 실연동. KTO는 향후 백엔드 프록시+캐싱(1000콜/일 제한 대응) | Spring `tour/social` 재정의 |
+
+### 확장 시 데이터 모델(요약)
+
+- `walk(dog_id, started_at, ended_at, distance_m, duration_s, path LINESTRING, memo, weather)` — GPS 경로는 한 컬럼
+- `care_log(dog_id, type[meal/health/vet/med], occurred_at, title, value, memo, photo)`
+- `place(source, category, geom POINT, ...)` — POI 캐시(KTO/LOCALDATA/두루누비)
+- 공간쿼리: `ST_Distance_Sphere`/`MBRContains` + SPATIAL INDEX. 상세는 [ERD](../03-database/erd.md) 참조.
+
+---
+
+## 8. 공통 사항
+
+| 항목 | 내용 |
+|---|---|
+| 상태관리 | `ValueNotifier` + `ValueListenableBuilder`. 전역: `RootTab.index/exploreView`, `kMyDog`, `AppThemeCtl.avatarBorder` |
+| 영속성 | **현재 없음** — 대부분 로컬 상수/세션 상태. 저장 액션은 스낵바 피드백만 |
+| 외부 연동 | 관광공사 KorPetTourService2(장소, 실연동) · 네이버 지도 SDK(Client ID). 그 외 병원/펫샵/산책로·커뮤니티·기록은 더미 |
+| 미구현 진입점 | 커뮤니티 글쓰기, 지도 검색, 날짜 선택, 사진 첨부, 북마크 저장, 로그인 |
