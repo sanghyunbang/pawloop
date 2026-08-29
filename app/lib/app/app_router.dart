@@ -46,11 +46,17 @@ final GoRouter appRouter = GoRouter(
       _pendingLocation = here;
     }
 
+    final sessionEnded = AuthState.sessionEnded;
     final target = authRedirect(
       status: status,
       location: here,
       pendingLocation: _pendingLocation,
+      sessionEnded: sessionEnded,
     );
+
+    // 1회성 신호다. 여기서 소비하지 않으면 사용자가 로그인 화면을 닫을 때마다
+    // 다시 끌려온다 — go_router 는 redirect 가 null 을 줄 때까지 반복 호출한다.
+    if (sessionEnded && target == loginRoute) AuthState.consumeSessionEnded();
 
     // 스플래시를 벗어나는 순간 기억을 비운다 — 남겨 두면 다음 로그아웃/로그인에서
     // 엉뚱한 옛 목적지로 튄다.

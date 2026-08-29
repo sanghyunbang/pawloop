@@ -122,6 +122,25 @@ class AuthState {
 
   static AuthUser? _user;
 
+  static bool _sessionEnded = false;
+
+  /// **방금** 세션이 끝났는가 — 로그아웃했거나, 저장된 토큰이 서버에서 거부됐거나(#11).
+  ///
+  /// ## 왜 이 플래그가 따로 필요한가
+  ///
+  /// "로그인한 적 없는 사람" 과 "방금 로그아웃당한 사람" 은 같은
+  /// [AuthStatus.unauthenticated] 지만 보여 줘야 할 화면이 다르다.
+  ///
+  ///  - 전자는 그냥 둘러보게 둔다. 지도를 보다가 로그인 화면으로 튕기면 앱이 고장 난 것이다.
+  ///  - 후자는 **로그인 화면을 보여 줘야 한다.** 폐기된 토큰으로 앱을 켰는데 아무 일도
+  ///    없었다는 듯 홈이 뜨면, 사용자는 자기가 로그아웃됐다는 사실 자체를 모른다.
+  ///
+  /// 라우터가 한 번 읽고 [consumeSessionEnded] 로 지운다 — 1회성 신호다.
+  static bool get sessionEnded => _sessionEnded;
+
+  /// 신호를 소비한다. 지우지 않으면 로그인 화면을 닫을 때마다 다시 끌려온다.
+  static void consumeSessionEnded() => _sessionEnded = false;
+
   /// 서버가 확인해 준 사용자. [AuthStatus.authenticated]·[AuthStatus.onboarding]
   /// 일 때만 채워져 있다.
   static AuthUser? get user => _user;
@@ -159,6 +178,7 @@ class AuthState {
     _tokenStore = null;
     _repository = null;
     _user = null;
+    _sessionEnded = false;
     status.value = AuthStatus.unknown;
   }
 
@@ -197,6 +217,11 @@ class AuthState {
             _user == null ? AuthStatus.unauthenticated : AuthStatus.authenticated;
       case MeOutcome.unauthorized:
         // 토큰은 AuthedClient 가 이미 지웠다(_endSession). 여기서는 상태만 맞춘다.
+        //
+        // **토큰을 들고 시작했는데 거부당했다** — 이 사람은 로그인해 있다고 믿고 있다.
+        // 아무 일 없다는 듯 홈을 띄우면 자기가 로그아웃됐다는 사실 자체를 모른다.
+        // 라우터가 이 신호를 보고 로그인 화면으로 보낸다(완료 조건 4).
+        _sessionEnded = true;
         status.value = AuthStatus.unauthenticated;
       case MeOutcome.networkError:
         status.value = AuthStatus.authenticated;
@@ -264,12 +289,14 @@ class AuthState {
 
     await _store.clear();
     _user = null;
+    _sessionEnded = true;
     status.value = AuthStatus.unauthenticated;
   }
 
   /// `AuthedClient` 가 갱신에 실패했을 때 부르는 훅(#11). 토큰은 그쪽이 이미 지웠다.
   static void markSessionExpired() {
     _user = null;
+    _sessionEnded = true;
     status.value = AuthStatus.unauthenticated;
   }
 }

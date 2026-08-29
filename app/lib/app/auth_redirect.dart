@@ -54,6 +54,10 @@ bool isProtectedRoute(String location) {
 /// [pendingLocation] 은 스플래시로 튕기기 전에 가려던 곳이다. 상태가 확정되면
 /// 그 자리로 돌려보낸다 — 없으면 [homeRoute].
 ///
+/// [sessionEnded] 는 **방금** 로그아웃했거나 저장된 토큰이 거부된 경우다
+/// (`AuthState.sessionEnded`). 로그인한 적 없는 사람과 달리 이 사람은 자기가
+/// 로그인 상태라고 믿고 있으므로, 공개 라우트에 있어도 로그인 화면을 보여 준다.
+///
 /// 규칙표(테스트가 이 순서대로 잠근다):
 ///
 /// | 상태 | 경로 | 결과 |
@@ -66,12 +70,14 @@ bool isProtectedRoute(String location) {
 /// | authenticated | 로그인·가입 | 홈 |
 /// | authenticated | 스플래시 | pending ?? 홈 |
 /// | authenticated | 그 밖 | null |
+/// | unauthenticated + sessionEnded | 아무 데나 | 로그인 |
 /// | unauthenticated | 보호 라우트 | 로그인 |
 /// | unauthenticated | 공개 라우트 | null |
 String? authRedirect({
   required AuthStatus status,
   required String location,
   String? pendingLocation,
+  bool sessionEnded = false,
 }) {
   final path = _pathOf(location);
 
@@ -90,19 +96,31 @@ String? authRedirect({
       return path == onboardingRoute ? null : onboardingRoute;
 
     case AuthStatus.authenticated:
-      if (path == splashRoute) return _settle(status, pendingLocation);
+      if (path == splashRoute) {
+        return _settle(status, pendingLocation, sessionEnded: sessionEnded);
+      }
       // 이미 로그인했는데 로그인 화면이 뜨면 사용자는 로그인이 풀린 줄 안다.
       if (_authOnlyEntryRoutes.contains(path)) return homeRoute;
       return null;
 
     case AuthStatus.unauthenticated:
-      if (path == splashRoute) return _settle(status, pendingLocation);
+      if (path == splashRoute) {
+        return _settle(status, pendingLocation, sessionEnded: sessionEnded);
+      }
+      // 방금 끝난 세션. 공개 라우트에 있어도 로그인 화면을 보여 준다 —
+      // 로그아웃/폐기를 알리지 않으면 사용자는 자기가 나갔다는 것을 모른다.
+      if (sessionEnded && path != loginRoute) return loginRoute;
       return isProtectedRoute(path) ? loginRoute : null;
   }
 }
 
 /// 스플래시에서 빠져나갈 자리를 고른다.
-String _settle(AuthStatus status, String? pendingLocation) {
+String _settle(
+  AuthStatus status,
+  String? pendingLocation, {
+  bool sessionEnded = false,
+}) {
+  if (status != AuthStatus.authenticated && sessionEnded) return loginRoute;
   final target = pendingLocation ?? homeRoute;
   if (_pathOf(target) == splashRoute) return homeRoute; // 스플래시로 되돌아가지 않는다
   if (status != AuthStatus.authenticated && isProtectedRoute(target)) {

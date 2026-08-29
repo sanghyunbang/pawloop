@@ -229,6 +229,54 @@ void main() {
     });
   });
 
+  // 로그인한 적 없는 사람과 방금 로그아웃당한 사람은 같은 unauthenticated 지만
+  // 보여 줄 화면이 다르다. 후자는 자기가 로그인 상태라고 믿고 있다.
+  group('sessionEnded — 방금 끝난 세션 (완료 조건 4·6)', () {
+    test('공개 라우트에 있어도 로그인 화면으로 보낸다', () {
+      for (final location in ['/home', '/explore', '/profile']) {
+        expect(
+          authRedirect(
+            status: AuthStatus.unauthenticated,
+            location: location,
+            sessionEnded: true,
+          ),
+          loginRoute,
+          reason: '$location 에서 조용히 로그아웃되면 사용자가 알 방법이 없다',
+        );
+      }
+    });
+
+    test('이미 로그인 화면이면 리다이렉트하지 않는다 — 무한 루프 방지', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.unauthenticated,
+          location: loginRoute,
+          sessionEnded: true,
+        ),
+        isNull,
+      );
+    });
+
+    test('폐기된 토큰으로 앱을 켜면 스플래시에서 홈이 아니라 로그인으로 나간다', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.unauthenticated,
+          location: splashRoute,
+          pendingLocation: '/home',
+          sessionEnded: true,
+        ),
+        loginRoute,
+      );
+    });
+
+    test('신호가 없으면(=한 번도 로그인한 적 없음) 공개 라우트는 그대로다', () {
+      expect(
+        authRedirect(status: AuthStatus.unauthenticated, location: '/home'),
+        isNull,
+      );
+    });
+  });
+
   group('isProtectedRoute', () {
     test('목록에 적힌 것과 그 하위만 보호된다', () {
       expect(isProtectedRoute('/bookmarks'), isTrue);

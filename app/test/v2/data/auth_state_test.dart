@@ -305,6 +305,51 @@ void main() {
     });
   });
 
+  // "로그인한 적 없음" 과 "방금 세션이 끝남" 을 라우터가 구분할 수 있어야
+  // 폐기 토큰으로 앱을 켰을 때 홈이 아니라 로그인 화면이 뜬다(완료 조건 4·6).
+  group('sessionEnded 신호', () {
+    test('토큰이 아예 없는 시작은 신호를 켜지 않는다 — 둘러보기를 방해하지 않는다', () async {
+      _install((req) async => http.Response('{}', 200), accessToken: null);
+
+      await AuthState.init();
+
+      expect(AuthState.sessionEnded, isFalse);
+    });
+
+    test('저장된 토큰이 401 로 거부되면 신호를 켠다', () async {
+      _install((req) async => http.Response('', 401));
+
+      await AuthState.init();
+
+      expect(AuthState.sessionEnded, isTrue);
+    });
+
+    test('로그아웃도 신호를 켠다', () async {
+      _install((req) async => http.Response('', 204));
+
+      await AuthState.logout();
+
+      expect(AuthState.sessionEnded, isTrue);
+    });
+
+    test('한 번 소비하면 꺼진다 — 로그인 화면을 닫을 때마다 끌려오면 안 된다', () async {
+      _install((req) async => http.Response('', 204));
+      await AuthState.logout();
+
+      AuthState.consumeSessionEnded();
+
+      expect(AuthState.sessionEnded, isFalse);
+    });
+
+    test('정상 로그인 시작은 신호를 켜지 않는다', () async {
+      _install((req) async => _json(_userJson()));
+
+      await AuthState.init();
+
+      expect(AuthState.sessionEnded, isFalse);
+    });
+  });
+
   group('세션 만료 훅 (#11 배선)', () {
     test('markSessionExpired 는 상태를 내리고 user 를 비운다', () async {
       _install((req) async => _json(_userJson()));
