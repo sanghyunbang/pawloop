@@ -1,7 +1,14 @@
-// 소셜 로그인 콜백 딥링크 파싱 순수 함수 테스트.
+// 소셜 로그인 콜백 딥링크 판정 — 순수 함수 테스트. (이슈 #14)
 //
-// flutter_web_auth_2 가 돌려주는 URL 문자열만 다룬다 — 네트워크도, 플러그인도,
+// flutter_web_auth_2 가 돌려주는 URL 문자열만 다룬다 — 네트워크도, 플랫폼 채널도,
 // 저장소도 타지 않으므로 비행기 모드에서도 돈다. 테스트 정책은 이슈 #21 참조.
+//
+// ## 왜 파일 전체가 바뀌었나
+//
+// #14 이전 딥링크는 `?token=<AT>&refresh=<RT>` 였고 이 파일은 그 세 파라미터
+// (`token`·`refresh`·`isNew`)를 뽑는 함수들을 잠그고 있었다. 지금 딥링크에는
+// **코드와 state 만** 실린다. 옛 함수들은 오지 않는 값을 찾는 코드라 지웠다 —
+// 남겨 두면 "테스트가 있는 죽은 코드" 가 되고, 그건 초록불이 거짓말을 하는 형태다.
 import 'dart:async';
 import 'dart:io';
 
@@ -10,228 +17,211 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/features/auth/service/oauth_callback.dart';
 
+/// 이 테스트 전반에서 "앱이 만들어 저장해 둔 값" 역할.
+const _state = 'st-ABCdef123_-';
+
 void main() {
-  group('tokenFromCallback', () {
-    test('정상 콜백 URL에서 token 파라미터를 그대로 뽑는다', () {
-      const url =
-          'heattrip://login-callback?token=eyJhbGciOiJIUzI1NiJ9.payload.sig';
-
-      expect(
-        tokenFromCallback(url),
-        'eyJhbGciOiJIUzI1NiJ9.payload.sig',
-      );
+  group('newOAuthState', () {
+    test('딥링크 쿼리에 그대로 실어도 되는 문자만 쓴다', () {
+      // 백엔드의 OAuthAppStateFilter 화이트리스트와 같은 규칙이다.
+      // `&` 한 글자가 섞이면 딥링크에 파라미터를 하나 더 만든다.
+      expect(newOAuthState(), matches(r'^[A-Za-z0-9_-]{16,128}$'));
     });
 
-    test('다른 파라미터가 섞여 있어도 token만 골라낸다', () {
-      const url =
-          'heattrip://login-callback?provider=google&token=abc.def.ghi&state=xyz';
+    test('부를 때마다 다른 값이다 — 고정값이면 대조가 통과 의식일 뿐이다', () {
+      final values = List.generate(20, (_) => newOAuthState()).toSet();
 
-      expect(tokenFromCallback(url), 'abc.def.ghi');
-    });
-
-    test('token 파라미터가 없는 URL은 null을 돌려준다', () {
-      expect(tokenFromCallback('heattrip://login-callback'), isNull);
-      expect(tokenFromCallback('heattrip://login-callback?state=xyz'), isNull);
-    });
-
-    test('사용자가 동의를 거부한 error 콜백은 null을 돌려준다', () {
-      expect(
-        tokenFromCallback('heattrip://login-callback?error=access_denied'),
-        isNull,
-      );
-    });
-
-    test('error와 token이 함께 와도 실패로 본다', () {
-      expect(
-        tokenFromCallback(
-          'heattrip://login-callback?error=access_denied&token=abc',
-        ),
-        isNull,
-      );
-    });
-
-    test('token 값이 비어 있으면 null을 돌려준다', () {
-      expect(tokenFromCallback('heattrip://login-callback?token='), isNull);
-      expect(tokenFromCallback('heattrip://login-callback?token=%20'), isNull);
-    });
-
-    test('URL 형식이 깨져도 예외를 던지지 않고 null을 돌려준다', () {
-      expect(tokenFromCallback('http://[invalid'), isNull);
-      expect(tokenFromCallback(''), isNull);
+      expect(values.length, 20);
     });
   });
 
-  // #9 부터 딥링크는 `?token=<AT>&refresh=<RT>` 다. 그전까지 앱은 refresh 를
-  // 버렸고, 그래서 AT 가 만료되는 순간 사용자는 조용히 로그아웃됐다.
-  group('refreshFromCallback', () {
-    test('token 과 refresh 가 함께 온 콜백에서 refresh 만 뽑는다', () {
-      const url =
-          'heattrip://login-callback?token=eyJhbGciOiJIUzI1NiJ9.p.s&refresh=abcdefRT';
+  group('codeFromCallback', () {
+    test('정상 콜백 URL에서 code 파라미터를 그대로 뽑는다', () {
+      const url = 'heattrip://login-callback?code=abcDEF123&state=$_state';
 
-      expect(refreshFromCallback(url), 'abcdefRT');
-      expect(tokenFromCallback(url), 'eyJhbGciOiJIUzI1NiJ9.p.s');
+      expect(codeFromCallback(url), 'abcDEF123');
     });
 
-    test('파라미터 순서가 바뀌어도 값을 그대로 뽑는다', () {
-      const url = 'heattrip://login-callback?refresh=RT-1&token=AT-1&state=xyz';
-
-      expect(refreshFromCallback(url), 'RT-1');
+    test('code 가 없거나 공백뿐이면 null 이다', () {
+      expect(codeFromCallback('heattrip://login-callback?state=$_state'), isNull);
+      expect(codeFromCallback('heattrip://login-callback?code='), isNull);
+      expect(codeFromCallback('heattrip://login-callback?code=%20'), isNull);
     });
 
-    test('refresh 가 없는 옛 딥링크는 null 이다 — 로그인 자체는 실패가 아니다', () {
-      const url = 'heattrip://login-callback?token=AT-1';
-
-      expect(refreshFromCallback(url), isNull);
-      expect(tokenFromCallback(url), 'AT-1', reason: 'AT 만으로도 로그인은 성립한다');
-    });
-
-    test('error 콜백은 refresh 도 실패로 본다', () {
-      expect(
-        refreshFromCallback(
-          'heattrip://login-callback?error=access_denied&refresh=RT-1',
-        ),
-        isNull,
-      );
-    });
-
-    test('refresh 값이 비었거나 URL 이 깨져도 예외 없이 null 이다', () {
-      expect(refreshFromCallback('heattrip://login-callback?refresh='), isNull);
-      expect(
-        refreshFromCallback('heattrip://login-callback?refresh=%20'),
-        isNull,
-      );
-      expect(refreshFromCallback('http://[invalid'), isNull);
-      expect(refreshFromCallback(''), isNull);
-    });
-
-    test('퍼센트 인코딩된 refresh 값을 디코드해 돌려준다', () {
-      // 불투명 문자열이라 파싱하지 않지만, URL 디코드는 Uri 가 이미 해 준다.
-      expect(
-        refreshFromCallback('heattrip://login-callback?refresh=a%2Bb%2Fc'),
-        'a+b/c',
-      );
+    test('URL 형식이 깨져도 예외를 던지지 않고 null 을 돌려준다', () {
+      expect(codeFromCallback('http://[invalid'), isNull);
+      expect(codeFromCallback(''), isNull);
     });
   });
 
-  group('isNewFromCallback (이슈 #12)', () {
-    test('isNew=true 면 참이다 — 신규 가입자를 온보딩으로 보내는 근거', () {
-      expect(
-        isNewFromCallback('heattrip://login-callback?token=AT&isNew=true'),
-        isTrue,
+  group('resolveOAuthCallback — 정상', () {
+    test('state 가 일치하고 code 가 있으면 성공이고 code 를 돌려준다', () {
+      final result = resolveOAuthCallback(
+        'heattrip://login-callback?code=abcDEF123&state=$_state',
+        _state,
       );
+
+      expect(result.outcome, SocialLoginOutcome.success);
+      expect(result.ok, isTrue);
+      expect(result.code, 'abcDEF123');
     });
 
-    test('대소문자를 가리지 않고 1 도 참으로 본다', () {
-      expect(
-        isNewFromCallback('heattrip://login-callback?token=AT&isNew=TRUE'),
-        isTrue,
+    test('파라미터 순서가 바뀌어도 판정은 같다', () {
+      final result = resolveOAuthCallback(
+        'heattrip://login-callback?state=$_state&code=abcDEF123',
+        _state,
       );
-      expect(
-        isNewFromCallback('heattrip://login-callback?token=AT&isNew=1'),
-        isTrue,
-      );
-    });
 
-    test('파라미터가 아예 없으면 false — 지금 백엔드가 이 경우다', () {
-      // 재로그인마다 온보딩이 다시 뜨면 매번 반려동물 프로필을 새로 등록하라는 앱이 된다.
-      expect(
-        isNewFromCallback('heattrip://login-callback?token=AT&refresh=RT'),
-        isFalse,
-      );
-    });
-
-    test('false·빈 값·깨진 URL 은 전부 false 다', () {
-      expect(
-        isNewFromCallback('heattrip://login-callback?token=AT&isNew=false'),
-        isFalse,
-      );
-      expect(
-        isNewFromCallback('heattrip://login-callback?token=AT&isNew='),
-        isFalse,
-      );
-      expect(isNewFromCallback('http://[invalid'), isFalse);
-      expect(isNewFromCallback(''), isFalse);
+      expect(result.code, 'abcDEF123');
     });
   });
 
-  group('outcomeFromCallback — 실패 사유 분기 (이슈 #12 완료 조건 9)', () {
-    test('token 이 있으면 성공이다', () {
+  group('resolveOAuthCallback — state 대조 (완료 조건 4)', () {
+    test('state 가 다르면 실패다 — 응답 바꿔치기를 막는 장치가 이것뿐이다', () {
+      final result = resolveOAuthCallback(
+        'heattrip://login-callback?code=abcDEF123&state=someone-elses-state',
+        _state,
+      );
+
+      expect(result.ok, isFalse);
+      expect(result.outcome, SocialLoginOutcome.serverError);
       expect(
-        outcomeFromCallback('heattrip://login-callback?token=AT&refresh=RT'),
-        SocialLoginOutcome.success,
+        result.code,
+        isNull,
+        reason: '실패한 판정이 code 를 돌려주면 호출부가 그걸 교환에 쓸 수 있다',
       );
     });
 
-    test('access_denied 는 서버 오류가 아니라 사용자 취소다', () {
+    test('state 가 아예 없으면 실패다 — 없는 것은 일치가 아니다', () {
+      final result = resolveOAuthCallback(
+        'heattrip://login-callback?code=abcDEF123',
+        _state,
+      );
+
+      expect(result.ok, isFalse);
+    });
+
+    test('state 가 비어 있으면 실패다', () {
+      final result = resolveOAuthCallback(
+        'heattrip://login-callback?code=abcDEF123&state=',
+        _state,
+      );
+
+      expect(result.ok, isFalse);
+    });
+
+    test('대소문자가 다르면 실패다 — 느슨한 비교는 비교가 아니다', () {
+      final result = resolveOAuthCallback(
+        'heattrip://login-callback?code=abcDEF123&state=${_state.toUpperCase()}',
+        _state,
+      );
+
+      expect(result.ok, isFalse);
+    });
+
+    test('기대하는 state 자체가 비어 있으면 성공시키지 않는다', () {
+      // 앱이 state 생성을 건너뛴 상태를 조용히 통과시키면 검사가 있다고 말할 수 없다.
+      final result = resolveOAuthCallback(
+        'heattrip://login-callback?code=abcDEF123&state=',
+        '',
+      );
+
+      expect(result.ok, isFalse);
+    });
+  });
+
+  group('resolveOAuthCallback — code 없음', () {
+    test('code 가 없으면 실패다 — 계약 위반이지 사용자 탓이 아니다', () {
+      final result = resolveOAuthCallback(
+        'heattrip://login-callback?state=$_state',
+        _state,
+      );
+
+      expect(result.outcome, SocialLoginOutcome.serverError);
+      expect(result.code, isNull);
+    });
+
+    test('URL 형식이 깨져도 예외를 던지지 않는다', () {
+      expect(resolveOAuthCallback('http://[invalid', _state).outcome,
+          SocialLoginOutcome.serverError);
+      expect(resolveOAuthCallback('', _state).outcome,
+          SocialLoginOutcome.serverError);
+    });
+  });
+
+  group('resolveOAuthCallback — error 딥링크', () {
+    test('취소 계열 error 는 canceled 다 — state 대조보다 먼저 본다', () {
+      // 취소 딥링크에는 state 가 실려 오지 않는다. state 를 먼저 보면 스스로 창을
+      // 닫은 사용자에게 "서버에 문제가 있다" 고 말하게 된다.
       for (final code in [
         'access_denied',
         'user_cancelled',
-        'USER_CANCELED',
+        'user_canceled',
         'cancelled',
+        'canceled',
       ]) {
         expect(
-          outcomeFromCallback('heattrip://login-callback?error=$code'),
+          resolveOAuthCallback('heattrip://login-callback?error=$code', _state)
+              .outcome,
           SocialLoginOutcome.canceled,
-          reason: '$code 는 사용자가 스스로 그만둔 것이다',
+          reason: '$code 는 취소로 분류돼야 한다',
         );
       }
     });
 
-    test('그 밖의 error 는 서버 오류다', () {
+    test('그 밖의 error 는 serverError 다', () {
       expect(
-        outcomeFromCallback(
+        resolveOAuthCallback(
           'heattrip://login-callback?error=account_state_invalid',
-        ),
+          _state,
+        ).outcome,
+        SocialLoginOutcome.serverError,
+      );
+      expect(
+        resolveOAuthCallback(
+          'heattrip://login-callback?error=email_already_registered',
+          _state,
+        ).outcome,
         SocialLoginOutcome.serverError,
       );
     });
 
-    test('error 도 token 도 없는 콜백은 계약 위반 — 서버 오류로 본다', () {
-      expect(
-        outcomeFromCallback('heattrip://login-callback'),
-        SocialLoginOutcome.serverError,
+    test('error 와 code 가 함께 와도 실패로 본다', () {
+      final result = resolveOAuthCallback(
+        'heattrip://login-callback?error=access_denied&code=abc&state=$_state',
+        _state,
       );
-      expect(outcomeFromCallback('http://[invalid'), SocialLoginOutcome.serverError);
+
+      expect(result.ok, isFalse);
+      expect(result.code, isNull);
     });
   });
 
-  group('outcomeFromError — 예외를 사유로 분류한다', () {
-    test('PlatformException(CANCELED) 는 취소다', () {
-      // flutter_web_auth_2 는 사용자가 브라우저 탭을 닫으면 이 예외를 던진다.
-      expect(
-        outcomeFromError(PlatformException(code: 'CANCELED')),
-        SocialLoginOutcome.canceled,
-      );
-      expect(
-        outcomeFromError(PlatformException(code: 'cancelled')),
-        SocialLoginOutcome.canceled,
-      );
+  // 예외 분류는 #12 에서 들어온 규칙 그대로다 — 딥링크 모양이 바뀌어도 변하지 않는다.
+  group('outcomeFromError', () {
+    test('사용자가 브라우저를 닫으면 canceled 다', () {
+      for (final code in ['CANCELED', 'CANCELLED', 'USER_CANCELED']) {
+        expect(
+          outcomeFromError(PlatformException(code: code)),
+          SocialLoginOutcome.canceled,
+        );
+      }
     });
 
-    test('그 밖의 PlatformException 은 서버 오류다', () {
-      expect(
-        outcomeFromError(PlatformException(code: 'NO_BROWSER')),
-        SocialLoginOutcome.serverError,
-      );
+    test('네트워크 계열 예외는 networkError 다', () {
+      expect(outcomeFromError(const SocketException('no route')),
+          SocialLoginOutcome.networkError);
+      expect(outcomeFromError(http.ClientException('boom')),
+          SocialLoginOutcome.networkError);
+      expect(outcomeFromError(TimeoutException('slow')),
+          SocialLoginOutcome.networkError);
     });
 
-    test('소켓·클라이언트·타임아웃 예외는 네트워크 오류다', () {
-      expect(
-        outcomeFromError(const SocketException('no route')),
-        SocialLoginOutcome.networkError,
-      );
-      expect(
-        outcomeFromError(http.ClientException('failed')),
-        SocialLoginOutcome.networkError,
-      );
-      expect(
-        outcomeFromError(TimeoutException('too slow')),
-        SocialLoginOutcome.networkError,
-      );
-    });
-
-    test('알 수 없는 예외는 서버 오류로 떨어뜨린다', () {
-      expect(outcomeFromError(StateError('?')), SocialLoginOutcome.serverError);
+    test('그 밖의 예외는 serverError 다', () {
+      expect(outcomeFromError(PlatformException(code: 'UNKNOWN')),
+          SocialLoginOutcome.serverError);
+      expect(outcomeFromError(StateError('boom')),
+          SocialLoginOutcome.serverError);
     });
   });
 }
