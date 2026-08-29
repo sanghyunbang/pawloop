@@ -1,0 +1,45 @@
+name: Epic — 여러 이슈를 묶는 상위 작업
+description: PR 하나로 안 끝나거나, 백엔드·프론트에 동시에 걸치는 큰 작업
+title: "[Epic] "
+labels: ["meta/epic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Epic에는 **우선순위 라벨을 붙이지 않습니다.** 서브이슈들이 각자 우선순위를 가집니다.
+        만든 뒤 `Sub-issues` 섹션에서 서브이슈를 연결하면 진행률이 자동으로 표시됩니다.
+  - type: textarea
+    id: goal
+    attributes:
+      label: 목표 — 무엇이 끝나면 이 Epic이 닫히나
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: 현재 상태 (as-is)
+      description: 이미 있는 자산과 안 되는 것. 표나 mermaid 다이어그램을 권장합니다.
+    validations:
+      required: true
+  - type: textarea
+    id: target
+    attributes:
+      label: 목표 설계 (to-be)
+      description: 어떤 모양으로 만들 것인가. 다이어그램으로.
+  - type: textarea
+    id: breakdown
+    attributes:
+      label: 쪼개기 계획
+      description: 어떤 서브이슈로 나눌지. 만든 뒤 실제 서브이슈로 연결하고 여기는 지워도 됩니다.
+  - type: textarea
+    id: dod
+    attributes:
+      label: Epic 완료 조건
+      description: 서브이슈 전체를 관통하는 인수 조건. 사용자가 실제로 할 수 있게 되는 일로 쓰면 좋습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 범위 밖
+      description: 이번에 하지 않는 것. 나중에 "왜 이건 안 했지"를 막아줍니다.
