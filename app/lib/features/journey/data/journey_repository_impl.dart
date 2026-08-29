@@ -6,7 +6,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 import '../domain/schedule.dart';
 import '../domain/diary_entry.dart';
-import '../domain/journeyStats.dart';
+import '../domain/journey_stats.dart';
 import '../domain/journey.dart';
 
 import '../../auth/service/token_storage.dart';

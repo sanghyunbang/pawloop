@@ -17,6 +17,9 @@ concurrency:
 
 permissions:
   contents: read
+  # dorny/paths-filter 가 pull_request 이벤트에서 변경 파일 목록을 GitHub API 로
+  # 가져온다. 이게 없으면 "Resource not accessible by integration" 으로 죽는다.
+  pull-requests: read
 
 jobs:
   changes:
@@ -123,20 +126,33 @@ jobs:
 
   # 경로 필터로 건너뛴 잡이 있어도 하나의 상태로 모아 판정한다.
   # 브랜치 보호 규칙에는 이 잡 하나만 등록하면 된다.
+  #
+  # changes 를 needs 에 넣는 이유: 경로 판별이 실패하면 backend/app 이
+  # 'skipped' 가 되는데, skipped 를 통과로 처리하면 파이프라인이 통째로
+  # 깨졌는데도 초록으로 보고된다. 실제로 그렇게 새어나간 적이 있다.
   verdict:
     name: CI 통과
-    needs: [backend, app]
+    needs: [changes, backend, app]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: 결과 판정
         run: |
-          echo "backend=${{ needs.backend.result }}"
-          echo "app=${{ needs.app.result }}"
+          echo "changes = ${{ needs.changes.result }}"
+          echo "backend = ${{ needs.backend.result }}"
+          echo "app     = ${{ needs.app.result }}"
+
+          # 경로 판별이 성공하지 않았으면 아래 판정 자체를 믿을 수 없다.
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "::error::경로 판별 잡이 '${{ needs.changes.result }}' — 검증 결과를 신뢰할 수 없다"
+            exit 1
+          fi
+
+          # skipped 는 정상이다. 해당 경로가 안 바뀐 PR 이라는 뜻.
           for r in "${{ needs.backend.result }}" "${{ needs.app.result }}"; do
-            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
-              echo "::error::검증 실패"
-              exit 1
-            fi
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::검증 실패 (result=$r)"; exit 1 ;;
+            esac
           done
           echo "통과"
