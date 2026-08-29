@@ -258,29 +258,39 @@ class AuthContractSpecTest {
                 .doesNotContainKey("x-implementation-status");
     }
 
-    @Test
-    @DisplayName("구현이 없는 계약 경로는 description 에 미구현임이 명시돼 있다")
-    void unimplementedOperations_areMarkedAsSuch() {
-        record Op(String path, String method) {}
-        // /auth/token/refresh 는 #9 에서, GET /auth/oauth/{provider} 는 #10 에서 구현되어
-        // 이 목록에서 빠졌다. refreshOperation_isNoLongerMarkedUnimplemented 와
-        // startOAuthOperation_isNoLongerMarkedUnimplemented 가 각각 그 자리를 지킨다.
-        //
-        // 남은 하나(콜백)는 진짜로 핸들러가 없다. 이 목록이 비면 테스트 자체가 아무것도
-        // 지키지 못하므로, 마지막 항목이 구현될 때는 이 테스트를 지워라 — 비워 두지 마라.
-        List<Op> unimplemented = List.of(
-                new Op("/auth/oauth/{provider}/callback", "post"));
+    // unimplementedOperations_areMarkedAsSuch 는 여기 있었다. 마지막 항목이었던
+    // POST /auth/oauth/{provider}/callback 이 #14 에서 구현되면서 목록이 비었고, 빈 목록을
+    // 도는 반복문은 아무것도 지키지 못한다 — 그 테스트의 주석이 "마지막 항목이 구현될 때는
+    // 이 테스트를 지워라, 비워 두지 마라" 고 적어 둔 대로 지웠다. 자리를 이어받는 것은
+    // 아래 oauthCallbackOperation_isNoLongerMarkedUnimplemented 다.
+    //
+    // 계약에 미구현 경로가 다시 생기면 이 테스트를 되살려라 — 목록이 비어 있지 않을 때만
+    // 의미가 있다.
 
-        Map<String, Object> paths = asMap(spec.get("paths"));
-        for (Op op : unimplemented) {
-            Map<String, Object> operation = asMap(asMap(paths.get(op.path())).get(op.method()));
-            assertThat(String.valueOf(operation.get("description")))
-                    .as("%s %s 는 백엔드 핸들러가 없다. 계약이 그 사실을 말해야 한다", op.method(), op.path())
-                    .contains("미구현");
-            assertThat(operation)
-                    .as("%s %s 에 기계가 읽을 미구현 표식이 필요하다", op.method(), op.path())
-                    .containsEntry("x-implementation-status", "not-implemented");
-        }
+    @Test
+    @DisplayName("POST /auth/oauth/{provider}/callback 은 더 이상 미구현이 아니며 1회용 코드 교환임을 계약이 말한다")
+    void oauthCallbackOperation_isNoLongerMarkedUnimplemented() {
+        Map<String, Object> callback = asMap(asMap(asMap(spec.get("paths"))
+                .get("/auth/oauth/{provider}/callback")).get("post"));
+
+        assertThat(callback)
+                .as("기계가 읽는 미구현 표식이 남으면 클라이언트 생성기가 이 경로를 건너뛴다")
+                .doesNotContainKey("x-implementation-status");
+
+        String description = String.valueOf(callback.get("description"));
+        assertThat(description)
+                .as("'미구현' 은 이력 서술로만 남아야 한다 — 현재형으로 남으면 클라이언트가 이 경로를 피한다")
+                .contains("2026-08 이전 이 절은");
+        assertThat(description)
+                .as("이 경로가 소셜 토큰의 유일한 통로라는 사실을 모르면 앱이 딥링크에서 토큰을 계속 찾는다")
+                .contains("1회용");
+        assertThat(description)
+                .as("재사용·만료가 401 이라는 것을 모르면 앱은 그것을 서버 버그로 신고한다")
+                .contains("401");
+
+        assertThat(asMap(callback.get("responses")).keySet())
+                .as("한도에 걸리면 429 다 — 계약에 없으면 앱이 '서버 고장' 으로 읽고 재시도 루프를 돈다")
+                .contains("200", "401", "429");
     }
 
     @Test
@@ -449,18 +459,24 @@ class AuthContractSpecTest {
     }
 
     @Test
-    @DisplayName("소셜 로그인 딥링크 서술에 refresh 파라미터와 그 파싱 주의가 적혀 있다")
-    void spec_documentsTheRefreshTokenOnTheDeepLink() {
-        // 액세스 토큰이 URL 의 꼬리가 아니게 되었다는 사실이 계약에 없으면, 'token=' 뒤를 전부
-        // 잘라 쓰는 클라이언트가 조용히 손상된 토큰을 저장한다(모든 요청 401).
+    @DisplayName("소셜 로그인 딥링크 서술이 1회용 코드·state 를 말하고 토큰이 실리지 않음을 못 박는다")
+    void spec_documentsTheOneTimeCodeOnTheDeepLink() {
+        // 이 서술이 옛 형태로 돌아가면 앱은 딥링크에서 오지 않는 토큰을 계속 찾는다.
         String description = String.valueOf(asMap(asMap(asMap(spec.get("paths"))
                 .get("/oauth2/authorization/{provider}")).get("get")).get("description"));
 
-        assertThat(description).contains("&refresh=<refreshToken>");
-        assertThat(description).contains("queryParameters['token']");
         assertThat(description)
-                .as("자격증명 두 개가 URL 로 나가는 위험과 그 대체(#14)를 계약이 숨기면 안 된다")
-                .contains("#14");
+                .as("딥링크의 실제 모양이다 (#14 완료 조건 1)")
+                .contains("?code=", "state=");
+        assertThat(description)
+                .as("'토큰이 없다' 를 계약이 말하지 않으면 클라이언트는 그것을 서버 버그로 읽는다")
+                .contains("딥링크에는 토큰이 없습니다");
+        assertThat(description)
+                .as("state 불일치를 로그인 실패로 처리하는 것은 클라이언트의 몫이다 — 계약이 요구해야 한다")
+                .contains("로그인 실패로");
+        assertThat(description)
+                .as("토큰을 URL 로 넘기던 시절의 기록을 지우면 같은 설계가 되살아난다")
+                .contains("?token=<JWT>&refresh=<refreshToken>");
     }
 
     @Test

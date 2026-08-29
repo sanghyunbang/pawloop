@@ -20,11 +20,14 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
+
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2FailureHandler;
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2SuccessHandler;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTAuthenticationFilter;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
+import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.security.ApiRateLimitFilter;
 
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,9 @@ public class SecurityConfig {
     private final OAuth2FailureHandler oAuth2FailureHandler;
     private final PublicSecurityProperties publicSecurityProperties;
     private final ApiRateLimitFilter apiRateLimitFilter;
+
+    /** 앱이 만든 state 를 소셜 왕복 동안 세션에 붙들어 둔다. (이슈 #14) */
+    private final OAuthAppStateFilter oAuthAppStateFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -111,6 +117,10 @@ public class SecurityConfig {
 
         http.addFilterBefore(new JWTAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(apiRateLimitFilter, JWTAuthenticationFilter.class);
+        // state 캡처는 진입점의 302 보다 **먼저** 일어나야 한다. 이 필터를 시큐리티 체인 밖에
+        // 두면(빈으로만 등록하면) 자동 등록 순서상 시큐리티 체인 뒤라, 진입 요청은 이미 302 로
+        // 끝난 뒤라서 앱이 붙인 state 를 영영 못 본다. (이슈 #14)
+        http.addFilterBefore(oAuthAppStateFilter, OAuth2AuthorizationRequestRedirectFilter.class);
         return http.build();
     }
 

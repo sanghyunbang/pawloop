@@ -152,22 +152,27 @@ paths:
       description: |
         앱(`flutter_web_auth_2`)이 실제로 여는 URL 입니다. 공급자 인증 화면으로 302 리다이렉트됩니다.
         인증 성공 시 백엔드가 앱 딥링크로 리다이렉트합니다:
-        `heattrip://login-callback?token=<JWT>&refresh=<refreshToken>` (이슈 #9).
+        `heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` (이슈 #14).
 
-        > ⚠️ **`token` 은 더 이상 URL 의 꼬리가 아닙니다.** `'token='` 뒤를 전부 잘라 쓰는 파싱은
-        > `&refresh=...` 까지 삼켜 손상된 액세스 토큰을 저장하게 됩니다(모든 요청이 401 이 됩니다).
-        > `Uri.parse(url).queryParameters['token']` 처럼 쿼리 파서로 읽으세요.
+        **딥링크에는 토큰이 없습니다.** 쿼리 파라미터는 정확히 `code` 와 `state` 둘뿐입니다.
+        앱은 받은 `code` 를 `POST /auth/oauth/{provider}/callback` 으로 교환해 `AuthTokens` 를
+        받습니다. 코드는 **60초 살고 한 번 쓰면 죽습니다** — 두 번째 교환은 401 입니다.
 
-        > ⚠️ **알려진 위험:** 이 딥링크에는 두 개의 자격증명이 실려 있고, URL 은 302 응답의
-        > `Location` 헤더(액세스·프록시 로그)와 브라우저 히스토리에 남습니다. 액세스 토큰이
-        > 이미 나가고 있던 채널이라 노출 채널이 새로 생기지는 않지만, 노출 창이 1시간에서
-        > 14일로 길어집니다. 그 창은 회전 + 재사용 감지가 실질적으로 좁힙니다(탈취된 refresh
-        > 토큰을 쓰는 순간 정당한 사용자의 다음 갱신이 전량 폐기를 일으킵니다). 서버는 이
-        > 리다이렉트에 `Cache-Control: no-store` 를 붙입니다. 토큰을 URL 로 넘기는 방식 자체를
-        > 1회용 코드 교환(`POST /auth/oauth/{provider}/callback`)으로 대체하는 것은 이슈 #14 입니다.
+        > **2026-08 이전에는 이 딥링크가 `?token=<JWT>&refresh=<refreshToken>` 이었습니다(#9).**
+        > 커스텀 스킴(`heattrip://`)은 어느 앱이든 등록할 수 있고, URL 은 302 응답의 `Location`
+        > 헤더(액세스·프록시 로그)와 브라우저 히스토리에 남습니다. 그 채널로 1시간짜리 액세스
+        > 토큰과 14일짜리 refresh 토큰이 함께 나가고 있었습니다. 지금 나가는 것은 60초짜리
+        > 1회용 난수뿐이라, 가로채도 쓸 수 있는 창이 사실상 없습니다. 서버는 이 리다이렉트에
+        > 여전히 `Cache-Control: no-store` 를 붙입니다.
+
+        > ⚠️ **`state` 는 앱이 만들어 앱이 대조합니다.** 인증을 시작할 때
+        > `GET /oauth2/authorization/{provider}?state=<난수>` 로 보내면 서버가 그 값을 왕복 동안
+        > 붙들었다가 딥링크에 그대로 실어 돌려줍니다. 돌아온 값이 보낸 값과 다르면 **로그인 실패로
+        > 처리하세요** — 응답 바꿔치기를 막는 장치가 그것뿐입니다. `[A-Za-z0-9_-]{1,128}` 만
+        > 통과합니다(그 밖의 값은 없는 것으로 취급되어 빈 `state` 가 돌아옵니다).
 
         **실패도 같은 딥링크로 돌아옵니다**: `heattrip://login-callback?error=<code>`.
-        앱은 `token` 과 `error` 중 어느 쪽이 실려 있는지로 성공/실패를 가릅니다.
+        앱은 `code` 와 `error` 중 어느 쪽이 실려 있는지로 성공/실패를 가릅니다.
         현재 서버가 보내는 `code` 는 다음이 전부입니다.
 
         | `error` | 뜻 | 앱이 할 일 |
@@ -181,12 +186,20 @@ paths:
       security: []
       parameters:
         - $ref: '#/components/parameters/Provider'
+        - name: state
+          in: query
+          required: false
+          description: |
+            앱이 만든 난수. 성공 딥링크에 그대로 실려 돌아옵니다. `[A-Za-z0-9_-]{1,128}`.
+            보내지 않으면 딥링크의 `state` 는 빈 값입니다(키는 남습니다).
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,128}$' }
       responses:
         '302':
           description: 공급자 로그인 페이지로 리다이렉트
           headers:
             Location:
               schema: { type: string }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /login/oauth2/code/{provider}:
     get:
@@ -194,8 +207,8 @@ paths:
       summary: 공급자 리디렉션 수신(Spring Security 내부 콜백)
       description: |
         공급자 콘솔에 등록해야 하는 승인 리디렉션 URI 입니다. 값은 `{server.url}/login/oauth2/code/{provider}`.
-        성공 시 앱 딥링크 `heattrip://login-callback?token=<JWT>&refresh=<refreshToken>` 로 302 합니다.
-        클라이언트가 직접 호출하는 경로가 아닙니다.
+        성공 시 앱 딥링크 `heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 로
+        302 합니다(#14). 클라이언트가 직접 호출하는 경로가 아닙니다.
       security: []
       parameters:
         - $ref: '#/components/parameters/Provider'
@@ -245,13 +258,26 @@ paths:
   /auth/oauth/{provider}/callback:
     post:
       tags: [Auth]
-      summary: 인가코드 → 토큰 교환(SPA/네이티브 대안 흐름) — 미구현
+      summary: 1회용 코드 → 토큰 교환 (소셜 로그인의 마지막 단계)
       description: |
-        **미구현.** 백엔드에 핸들러가 없습니다. 현행 소셜 로그인은 302 딥링크로
-        액세스 토큰과 refresh 토큰을 전달합니다(#9) — 이 경로가 구현되기 전까지
-        `AuthTokens` 의 `expiresIn`·`isNew`·`user` 는 소셜 경로에서 클라이언트에 도달할
-        방법이 없습니다. 딥링크 대신 1회용 코드를 교환하는 형태로 바꾸는 것은 #14 입니다.
-      x-implementation-status: not-implemented
+        `AuthController.exchangeOAuthCode` 가 처리합니다(이슈 #14). **소셜 로그인에서 토큰이
+        클라이언트에 도달하는 유일한 통로입니다** — 딥링크에는 `code` 와 `state` 만 실립니다.
+
+        > **2026-08 이전 이 절은 "미구현 — 백엔드에 핸들러가 없습니다" 였고, 소셜 로그인은
+        > 302 딥링크로 액세스 토큰과 refresh 토큰을 함께 전달했습니다(#9).** 그래서
+        > `AuthTokens` 의 `expiresIn`·`isNew`·`user` 는 소셜 경로에서 클라이언트에 도달할
+        > 방법이 없었고, 소셜 신규 가입자는 온보딩으로 가지 못했습니다. 지금은 도달합니다.
+
+        `code` 는 딥링크로 받은 **1회용 인가 코드**입니다. 공급자가 준 인가코드가 아닙니다 —
+        공급자와의 코드 교환은 백엔드(Spring Security)가 이미 끝냈습니다. 그래서 이 흐름에는
+        PKCE 가 없습니다(앱이 공급자와 직접 말하게 바꾸는 날 필수가 됩니다).
+
+        **코드는 60초 살고 한 번 쓰면 죽습니다.** 재사용·만료·공급자 불일치·`state` 불일치는
+        전부 **본문 없는 401** 입니다. 구분해 주면 그 응답 차이가 "그 코드가 존재하긴 했는가"를
+        알려 주는 오라클이 됩니다. 실패한 교환도 코드를 죽입니다 — 코드 하나에 시도 한 번입니다.
+
+        `state` 는 앱이 인증을 시작할 때 만들어 보낸 값과 같아야 합니다. 앱쪽 대조를 대신하지
+        않습니다 — 코드를 그것이 시작된 인증 왕복에 묶어 두는 두 번째 줄입니다.
       security: []
       parameters:
         - $ref: '#/components/parameters/Provider'
@@ -263,8 +289,18 @@ paths:
               type: object
               required: [code]
               properties:
-                code: { type: string, description: 공급자 인가코드 }
-                redirectUri: { type: string, example: "heattrip://login-callback" }
+                code:
+                  type: string
+                  description: 딥링크로 받은 1회용 코드(패딩 없는 Base64URL 43자)
+                state:
+                  type: string
+                  description: 인증 시작 때 앱이 만들어 저장해 둔 난수
+                redirectUri:
+                  type: string
+                  example: "heattrip://login-callback"
+                  description: |
+                    **리다이렉트 대상으로 쓰이지 않습니다.** 이 시점에는 리다이렉트가 이미
+                    끝났고, 대상은 서버 설정(`app.security.oauth.redirect-allowlist`)이 정합니다.
       responses:
         '200':
           description: 토큰 발급
@@ -272,6 +308,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AuthTokens' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /auth/token/refresh:
     post:
@@ -340,6 +377,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /auth/me:
     get:
@@ -1060,7 +1098,16 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     RateLimited:
-      description: "외부 데이터 한도 초과(예: KTO 1000콜/일)"
+      description: |
+        한도 초과. 두 가지 출처가 같은 응답을 씁니다.
+        - 외부 데이터 한도 초과(예: KTO 1000콜/일)
+        - 서버의 요청 빈도 제한(`ApiRateLimitFilter`). 인증 경로
+          (`POST /auth/login`, `POST /auth/token/refresh`,
+          `POST /auth/oauth/{provider}/callback`, `GET /oauth2/authorization/*`)가
+          여기 걸립니다(#14). `Retry-After` 헤더에 창 길이(초)가 실립니다.
+
+        본문은 공통 `Error` 이고 `error.code` 는 `RATE_LIMITED` 입니다. **버킷 이름이나
+        한도 수치는 싣지 않습니다** — 서버 내부의 경로 분류를 그대로 노출하게 됩니다.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

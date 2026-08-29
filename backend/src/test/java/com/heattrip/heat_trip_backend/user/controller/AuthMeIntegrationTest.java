@@ -30,6 +30,7 @@ import org.springframework.security.web.FilterChainProxy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
  * 인증 주체 해석의 끝-끝 잠금 — 이슈 #5.
@@ -273,12 +275,22 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
                 new OAuth2AuthenticationToken(principal, principal.getAuthorities(), registrationId));
 
         String redirect = response.getRedirectedUrl();
+        // #14 이후 딥링크에 토큰은 없다 — 1회용 코드뿐이다. 토큰은 교환 엔드포인트의 응답
+        // 본문으로만 나온다. 여기서 실제 HTTP 경로를 태우는 이유는 예전과 같다: 컨트롤러를
+        // 직접 부르면 "서비스는 고쳤는데 경로가 붙어 있지 않은" 상태를 잡지 못한다.
         assertThat(redirect)
-                .as("소셜 로그인 성공은 토큰을 실은 딥링크로 끝나야 한다")
-                .startsWith("heattrip://login-callback?token=");
-        // substring 으로 자르지 않는다 — #9 가 &refresh=<RT> 를 덧붙인 뒤로 'token=' 뒤는
-        // 액세스 토큰의 끝이 아니다. 그렇게 자른 값은 서명 검증에서 깨진다(앱도 같은 함정이다).
-        return queryParam(redirect, "token");
+                .as("소셜 로그인 성공은 1회용 코드를 실은 딥링크로 끝나야 한다 (#14 완료 조건 1)")
+                .startsWith("heattrip://login-callback?code=");
+        assertThat(redirect)
+                .as("딥링크에 토큰이 실리면 #14 가 되돌려진 것이다")
+                .doesNotContain("token=", "refresh=");
+
+        String body = mockMvc.perform(post("/auth/oauth/" + registrationId + "/callback")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + queryParam(redirect, "code") + "\",\"state\":\"\"}"))
+                .andReturn().getResponse().getContentAsString();
+
+        return com.jayway.jsonpath.JsonPath.read(body, "$.accessToken");
     }
 
     /** 딥링크 쿼리스트링에서 파라미터 하나를 꺼낸다. 값에는 URL 예약문자가 없다(JWT·Base64URL). */

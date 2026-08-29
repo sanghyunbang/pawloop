@@ -329,11 +329,22 @@ class AuthTokenRefreshIntegrationTest extends AbstractMySqlIntegrationTest {
                 new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "kakao"));
 
         String redirect = response.getRedirectedUrl();
+        // #14 이후 딥링크에는 1회용 코드만 실린다. refresh 토큰이 클라이언트에 도달하는 경로는
+        // 이제 교환 엔드포인트의 응답 본문이다 — #9 완료 조건 1 이 요구한 "클라이언트에 도달하는
+        // 경로" 는 그대로 살아 있고, 채널만 URL 에서 응답 본문으로 옮겨졌다.
         assertThat(redirect)
-                .as("완료 조건 1 — 로그인하면 딥링크에 refreshToken 이 포함된다")
-                .startsWith("heattrip://login-callback?token=")
-                .contains("&refresh=");
-        return new Session(seeded.getId(), queryParam(redirect, "token"), queryParam(redirect, "refresh"));
+                .as("#14 완료 조건 1 — 딥링크에는 code 와 state 만 실린다")
+                .startsWith("heattrip://login-callback?code=");
+        assertThat(redirect).doesNotContain("token=", "refresh=");
+
+        String body = mockMvc.perform(post("/auth/oauth/kakao/callback")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + queryParam(redirect, "code") + "\",\"state\":\"\"}"))
+                                .andReturn().getResponse().getContentAsString();
+
+        return new Session(seeded.getId(),
+                com.jayway.jsonpath.JsonPath.read(body, "$.accessToken"),
+                com.jayway.jsonpath.JsonPath.read(body, "$.refreshToken"));
     }
 
     private MvcResult refresh(String refreshToken) throws Exception {

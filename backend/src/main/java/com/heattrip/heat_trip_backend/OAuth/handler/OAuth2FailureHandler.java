@@ -12,6 +12,8 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
 
+import com.heattrip.heat_trip_backend.config.OAuthSecurityProperties;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -45,8 +47,18 @@ public class OAuth2FailureHandler implements AuthenticationFailureHandler {
 
     private static final Logger log = LoggerFactory.getLogger(OAuth2FailureHandler.class);
 
-    /** 성공 경로와 같은 커스텀 스킴. flutter_web_auth_2 가 이 스킴을 기다린다. */
-    static final String REDIRECT_BASE = "heattrip://login-callback";
+    /**
+     * 성공 경로와 <b>같은</b> 리다이렉트 대상을 쓴다. 값은 설정의 허용 목록이 정한다 (이슈 #14).
+     *
+     * <p>예전에는 여기에 {@code "heattrip://login-callback"} 이 박혀 있었다. 성공 경로만
+     * 설정으로 빼면 웹 콜백을 추가하는 날 실패만 옛 스킴으로 가고, 그 로그인 시트는
+     * 사용자가 취소할 때까지 멈춰 있는다.
+     */
+    private final OAuthSecurityProperties oauthProperties;
+
+    public OAuth2FailureHandler(OAuthSecurityProperties oauthProperties) {
+        this.oauthProperties = oauthProperties;
+    }
 
     /** 알 수 없는/안전하지 않은 코드는 전부 이 값으로 뭉갠다. */
     static final String DEFAULT_ERROR_CODE = "authentication_failed";
@@ -64,7 +76,9 @@ public class OAuth2FailureHandler implements AuthenticationFailureHandler {
         // 남기는 것은 정규화된 코드 하나뿐이다. (이슈 #6)
         log.warn("[OAuth2 로그인] 인증 실패 — error={}", code);
 
-        response.sendRedirect(REDIRECT_BASE + "?error=" + code);
+        // 요청이 말한 대상은 허용 목록에 있을 때만 쓰인다. Referer·X-Forwarded-Host 는 읽지 않는다.
+        response.sendRedirect(oauthProperties.resolveRedirect(request.getParameter("redirect_uri"))
+                + "?error=" + code);
     }
 
     /**

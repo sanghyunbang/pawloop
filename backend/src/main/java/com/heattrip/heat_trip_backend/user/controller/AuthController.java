@@ -6,8 +6,10 @@ import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import org.springframework.web.bind.annotation.*;
 
+import com.heattrip.heat_trip_backend.OAuth.code.OAuthCodeExchangeService;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
+import com.heattrip.heat_trip_backend.user.dto.OAuthCodeExchangeRequest;
 import com.heattrip.heat_trip_backend.user.dto.RefreshTokenRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
@@ -30,6 +32,9 @@ public class AuthController implements AuthApiDoc{
 
     private final UserService userService;
     private final RefreshTokenService refreshTokenService;
+
+    /** 1회용 코드 → 토큰. 소셜 경로에서 토큰이 나가는 유일한 자리다. (이슈 #14) */
+    private final OAuthCodeExchangeService oauthCodeExchangeService;
 
     /**
      * 소셜 로그인의 <b>실제</b> 진입점. Spring Security 의 {@code oauth2Login()} 이 만든다.
@@ -162,5 +167,31 @@ public class AuthController implements AuthApiDoc{
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(SPRING_OAUTH2_ENTRY_POINT + normalized))
                 .build();
+    }
+
+    /**
+     * 1회용 코드 → {@code AuthTokens} 교환. (이슈 #14)
+     *
+     * <p>계약이 오래 자리만 잡아 두고 "미구현" 이라 적어 두었던 경로다. 이제 <b>소셜 로그인에서
+     * 토큰이 클라이언트에 도달하는 유일한 통로</b>다 — 딥링크에는 코드와 {@code state} 만 실린다.
+     *
+     * <p>덕분에 {@code AuthTokens} 의 {@code expiresIn}·{@code isNew}·{@code user} 가 소셜
+     * 경로에서도 도달한다. 예전에는 그 셋이 URL 쿼리로 표현할 방법이 없어 앱이 소셜 신규
+     * 가입자를 온보딩으로 보내지 못했다.
+     *
+     * <p>인증이 필요 없다({@code SecurityConfig.publicMatchers} 의 {@code /auth/oauth/**}).
+     * 주체는 코드 자체가 증명한다. 실패는 원인과 무관하게 <b>본문 없는 401</b> 이다 —
+     * 구분해 주면 그 차이가 코드의 존재 여부를 알려 주는 오라클이 된다.
+     *
+     * <p>{@code provider} 화이트리스트 검사를 여기서 다시 하지 않는 이유: 코드에는 그것을 만든
+     * 공급자가 실려 있고, 서비스가 경로 변수와 그 값을 대조한다. 목록에 없는 공급자로 만든
+     * 코드는 애초에 존재할 수 없으므로 401 이 정확한 답이다.
+     */
+    @PostMapping("/oauth/{provider}/callback")
+    public ResponseEntity<AuthTokensResponse> exchangeOAuthCode(
+            @PathVariable("provider") String provider,
+            @RequestBody OAuthCodeExchangeRequest request) {
+        return ResponseEntity.ok(
+                oauthCodeExchangeService.exchange(provider, request.getCode(), request.getState()));
     }
 }

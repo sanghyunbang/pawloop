@@ -1,8 +1,12 @@
 package com.heattrip.heat_trip_backend.OAuth;
 
+import com.heattrip.heat_trip_backend.OAuth.code.AuthCodeStore;
+import com.heattrip.heat_trip_backend.OAuth.code.OAuthCodeExchangeService;
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2SuccessHandler;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
+import com.heattrip.heat_trip_backend.config.OAuthSecurityProperties;
+import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.entity.RefreshToken;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.RefreshTokenRepository;
@@ -94,33 +98,66 @@ final class OAuthLoginProbe {
     static IssuedTokens runLogin() throws Exception {
         OAuth2User user = loadUser();
 
-        // CustomOAuth2User.getName() → provider_providerId. 성공 핸들러가 이 값을 subject 로 쓴다.
+        // CustomOAuth2User.getName() → provider_providerId. 이 값이 로그에 남으면 안 된다.
         user.getName();
 
-        JWTProvider jwtProvider = jwtProvider();
+        // #14 이후 딥링크에는 토큰이 없다 — 1회용 코드뿐이다. 그래서 이 프로브도 두 걸음이다:
+        // ① 성공 핸들러가 코드를 발급하고, ② 교환 서비스가 그 코드를 토큰으로 바꾼다.
+        // 로그 위생 테스트가 태워야 하는 경로는 그 둘 다이므로 한쪽만 돌리면 반쪽이 된다.
+        OAuthSecurityProperties oauthProperties = new OAuthSecurityProperties();
+        AuthCodeStore codeStore = new AuthCodeStore(Clock.systemDefaultZone(), oauthProperties);
+
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
         OAuth2AuthenticationToken authentication =
                 new OAuth2AuthenticationToken(user, user.getAuthorities(), "google");
 
-        new OAuth2SuccessHandler(jwtProvider, refreshTokenService())
+        new OAuth2SuccessHandler(codeStore, oauthProperties)
                 .onAuthenticationSuccess(request, response, authentication);
 
         String redirect = response.getRedirectedUrl();
-        if (redirect == null || !redirect.contains("token=")) {
-            throw new IllegalStateException("리다이렉트 URL 에 토큰이 없다: " + redirect);
+        if (redirect == null || !redirect.contains("code=")) {
+            throw new IllegalStateException("리다이렉트 URL 에 1회용 코드가 없다: " + redirect);
         }
-        // substring 으로 자르지 않는다 — &refresh= 가 붙은 뒤로는 'token=' 뒤가 AT 의 끝이 아니다.
-        return new IssuedTokens(queryParam(redirect, "token"), queryParam(redirect, "refresh"));
+
+        AuthTokensResponse tokens = exchangeService(codeStore)
+                .exchange("google", queryParam(redirect, "code"), queryParam(redirect, "state"));
+
+        return new IssuedTokens(tokens.accessToken(), tokens.refreshToken());
     }
 
-    /** 딥링크 쿼리스트링에서 파라미터 하나를 꺼낸다. 값에는 URL 예약문자가 없다(Base64URL·JWT). */
+    /** 코드 → 토큰 교환기. 사용자 조회만 목으로 막고 나머지는 실제 경로다. */
+    private static OAuthCodeExchangeService exchangeService(AuthCodeStore codeStore) {
+        UserRepository userRepository = mock(UserRepository.class);
+        when(userRepository.findById(ASSIGNED_USER_ID)).thenReturn(Optional.of(
+                User.builder()
+                        .id(ASSIGNED_USER_ID)
+                        .provider("google")
+                        .socialId(PROVIDER_ID)
+                        .email(EMAIL)
+                        .name("프로브 사용자")
+                        .nickname("프로브 사용자")
+                        .role("ROLE_USER")
+                        .build()));
+        return new OAuthCodeExchangeService(
+                codeStore, jwtProvider(), refreshTokenService(), userRepository);
+    }
+
+    /**
+     * 딥링크 쿼리스트링에서 파라미터 하나를 꺼낸다. 값에는 URL 예약문자가 없다(Base64URL).
+     *
+     * <p>{@code state} 는 값이 빈 문자열일 수 있다 — 이 지그는 진입 요청을 흉내내지 않으므로
+     * 앱이 붙인 state 가 없다. 그때도 키는 존재하므로 빈 문자열을 돌려준다.
+     */
     static String queryParam(String url, String name) {
         String query = url.substring(url.indexOf('?') + 1);
         for (String pair : query.split("&")) {
             int eq = pair.indexOf('=');
             if (eq > 0 && pair.substring(0, eq).equals(name)) {
                 return pair.substring(eq + 1);
+            }
+            if (eq < 0 && pair.equals(name)) {
+                return "";
             }
         }
         throw new IllegalStateException("딥링크에 " + name + " 파라미터가 없다: " + url);
