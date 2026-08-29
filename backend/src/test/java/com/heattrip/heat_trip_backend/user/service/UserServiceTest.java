@@ -78,6 +78,7 @@ class UserServiceTest {
         request.setPassword("test1234");
 
         User user = User.builder()
+                .id(7L)
                 .email("admin@example.com")
                 .password("encoded-password")
                 .provider(User.PROVIDER_LOCAL)
@@ -86,32 +87,35 @@ class UserServiceTest {
 
         when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("test1234", "encoded-password")).thenReturn(true);
-        when(jwtProvider.createAccessToken("admin@example.com", "ROLE_ADMIN")).thenReturn("jwt-token");
+        when(jwtProvider.createAccessToken(7L, "ROLE_ADMIN")).thenReturn("jwt-token");
 
         assertThat(userService.login(request)).isEqualTo("jwt-token");
-        verify(jwtProvider).createAccessToken("admin@example.com", "ROLE_ADMIN");
+        verify(jwtProvider).createAccessToken(7L, "ROLE_ADMIN");
     }
 
     @Test
-    @DisplayName("로그인 성공 시 JWT를 반환한다")
+    @DisplayName("로그인 성공 시 JWT를 반환하며 토큰의 subject 로 이메일이 아니라 users.id 를 넘긴다")
     void login_returnsJwtWhenCredentialsMatch() throws IllegalAccessException {
+        // createAccessToken 의 첫 인자가 Long 이라, login 을 user.getEmail() 로 되돌리면
+        // 이 테스트가 실패하기 전에 **컴파일이 먼저 죽는다**. 그게 이 이슈의 진짜 방어선이다. (#5)
         LoginRequest request = new LoginRequest();
         request.setEmail("test1234@test.com");
         request.setPassword("test1234");
 
         User user = User.builder()
+                .id(7L)
                 .email("test1234@test.com")
                 .password("encoded-password")
                 .build();
 
         when(userRepository.findByEmail("test1234@test.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("test1234", "encoded-password")).thenReturn(true);
-        when(jwtProvider.createAccessToken("test1234@test.com", "ROLE_USER")).thenReturn("jwt-token");
+        when(jwtProvider.createAccessToken(7L, "ROLE_USER")).thenReturn("jwt-token");
 
         String token = userService.login(request);
 
         assertThat(token).isEqualTo("jwt-token");
-        verify(jwtProvider).createAccessToken("test1234@test.com", "ROLE_USER");
+        verify(jwtProvider).createAccessToken(7L, "ROLE_USER");
     }
 
     @Test

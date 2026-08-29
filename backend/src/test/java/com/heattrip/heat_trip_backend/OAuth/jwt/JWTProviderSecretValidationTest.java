@@ -118,7 +118,7 @@ class JWTProviderSecretValidationTest {
         JWTProvider provider = providerWith(EXACTLY_32_SECRET);
 
         assertThatCode(() -> init(provider)).doesNotThrowAnyException();
-        assertThat(provider.createAccessToken("user-1", "ROLE_USER")).isNotBlank();
+        assertThat(provider.createAccessToken(42L, "ROLE_USER")).isNotBlank();
     }
 
     @Test

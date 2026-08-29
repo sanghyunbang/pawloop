@@ -97,7 +97,7 @@ class OAuthLoggingHygieneTest {
     void 토큰발급시_JWTProvider로그에_식별자가없다() {
         JWTProvider provider = OAuthLoginProbe.jwtProvider();
 
-        String token = provider.createAccessToken("google_" + OAuthLoginProbe.PROVIDER_ID, "ROLE_USER");
+        String token = provider.createAccessToken(OAuthLoginProbe.ASSIGNED_USER_ID, "ROLE_USER");
 
         List<String> messages = capturedMessages();
         assertThat(messages).noneMatch(m -> m.contains(token));

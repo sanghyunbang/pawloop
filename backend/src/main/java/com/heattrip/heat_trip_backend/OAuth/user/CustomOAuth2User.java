@@ -65,6 +65,10 @@ public class CustomOAuth2User implements OAuth2User {
      * getName()
      * Spring Security에서 사용자 식별용으로 사용하는 메서드
      * provider + "_" + providerId 형식으로 통일 (예: kakao_123456)
+     *
+     * <p><b>이 값은 JWT subject 가 아니다.</b> 토큰의 {@code sub} 는 {@link #getUserId()}(= users.id)다.
+     * 예전에는 {@code OAuth2SuccessHandler} 가 {@code authentication.getName()} 을 그대로 subject 로
+     * 썼고, 소비처가 그 값을 이메일로 해석해 모든 소셜 계정에서 {@code /auth/me} 가 400 이었다. (이슈 #5)
      */
     @Override
     public String getName() {

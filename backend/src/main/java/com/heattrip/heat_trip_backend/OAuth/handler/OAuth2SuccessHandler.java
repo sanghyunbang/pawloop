@@ -7,6 +7,7 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
+import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 
 import java.io.IOException; 
 import jakarta.servlet.ServletException;
@@ -42,15 +43,26 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler{
                                          HttpServletResponse response, 
                                          Authentication authentication) throws IOException, ServletException {
         
-        // 진입 여부만 남긴다. userId(= provider_providerId)는 소셜 ID 라서 로그에 남기지 않는다. (이슈 #6)
+        // 진입 여부만 남긴다. 소셜 ID 도 users.id 도 로그에 남기지 않는다. (이슈 #6)
         log.debug("OAuth2 로그인 성공 처리 진입");
 
-         // 인증 성공 후 JWT 토큰 생성 및 응답에 추가하는 로직을 구현할 예정
-         // 예: String token = jwtProvider.createAccessToken(authentication.getName(), authentication.getAuthorities());
-         // response.addHeader("Authorization", "Bearer " + token);
-         
-         // getName() 메서드는 CustomOAuth2User에서 provider + "_" + providerId 형식으로 사용자 식별자를 반환하도록 구현되어 있음
-         String userId = authentication.getName();
+         // subject 는 users.id 다. 예전에는 authentication.getName()(= CustomOAuth2User.getName()
+         // = "kakao_1234567890")을 그대로 썼고, 그 값이 소비처에서 이메일로 해석되는 바람에
+         // 모든 소셜 계정에서 /auth/me 계열이 400 이었다. (이슈 #5)
+         //
+         // CustomOAuth2User.getName() 자체는 그대로 둔다 — Spring Security 가 principal 이름으로 쓰고,
+         // 로그 위생 테스트(OAuthLoggingHygieneTest)가 그 값이 로그에 없음을 보장하는 기준이기도 하다.
+         CustomOAuth2User principal = (CustomOAuth2User) authentication.getPrincipal();
+         Long userId = principal.getUserId();
+
+         if (userId == null) {
+             // users.id 를 모르는 principal 로는 토큰을 만들 수 없다. 여기서 sub="null" 토큰을 발급하면
+             // 앱 secure storage 에 저장되어 그 계정은 재로그인 전까지 영구 401 이 된다.
+             // 실패 딥링크는 OAuth2FailureHandler 와 같은 모양이다 — 앱은 이미 그 형태를 기다린다.
+             log.warn("[OAuth2 로그인] 인증 주체에 users.id 가 없어 토큰을 발급하지 않는다.");
+             response.sendRedirect("heattrip://login-callback?error=account_state_invalid");
+             return;
+         }
 
          // 사용자 권한 정보 가져오기
          String role = authentication.getAuthorities().iterator().next().getAuthority(); // 권한 정보 가져오기 (예: ROLE_USER)

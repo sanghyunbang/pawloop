@@ -89,9 +89,10 @@ public class UserService {
             throw new IllegalAccessException("비밀번호가 일치하지 않습니다");
         }
 
-        // userId에 email을 넣음(회원 가입된 회원의 경우)
+        // subject 는 users.id 다. 예전에는 여기에 email 을, 소셜 경로에는 "kakao_1234567890" 을 넣어
+        // 같은 토큰 형식이 두 가지 규약을 갖고 있었다. (이슈 #5)
         // 권한은 DB 의 role 컬럼을 쓴다. 예전에는 여기서 "ROLE_USER" 를 하드코딩했다. (이슈 #7)
-        return jwtProvider.createAccessToken(user.getEmail(), roleOf(user));
+        return jwtProvider.createAccessToken(user.getId(), roleOf(user));
     }
 
     /** role 컬럼이 없던 시절에 만들어진 행은 값이 비어 있을 수 있다. */

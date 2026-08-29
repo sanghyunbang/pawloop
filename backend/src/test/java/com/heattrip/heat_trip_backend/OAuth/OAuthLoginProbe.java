@@ -87,6 +87,9 @@ final class OAuthLoginProbe {
         return redirect.substring(redirect.indexOf("token=") + "token=".length());
     }
 
+    /** 신규 가입 분기에서 DB 가 채워 주는 PK. 실제 저장소는 IDENTITY 로 값을 넣어 준다. */
+    static final long ASSIGNED_USER_ID = 42L;
+
     /** CustomOAuth2UserService.loadUser 를 네트워크 없이 실행한다(신규 가입 분기). */
     static OAuth2User loadUser() {
         UserRepository userRepository = mock(UserRepository.class);
@@ -94,6 +97,17 @@ final class OAuthLoginProbe {
         when(userRepository.findByProviderAndSocialId("google", PROVIDER_ID)).thenReturn(Optional.empty());
         when(userRepository.findByUsername("google_" + PROVIDER_ID)).thenReturn(Optional.empty());
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        // 지그 보수: save 를 스텁하지 않으면 목이 null 을 돌려주고, CustomOAuth2UserService.createUser 는
+        // 반환값을 쓰지 않으므로 user.getId() 가 null 로 남는다. 실제 저장소라면 절대 일어나지 않는 상태다.
+        // 그대로 두면 #5 이후의 OAuth2SuccessHandler 가 users.id 를 못 찾아 토큰 대신 실패 딥링크를
+        // 돌려주고, 이 지그를 쓰는 로그 위생·표준출력 테스트 9건이 #5 와 무관한 이유로 무너진다.
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(ASSIGNED_USER_ID);
+            }
+            return saved;
+        });
 
         return service(userRepository).loadUser(userRequest());
     }
