@@ -1,34 +1,24 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'secure_token_store.dart';
 
-/// JWT 토큰을 저장하고 불러오는 역할을 하는 클래스
-/// 로그인 성공 시 토큰을 저장
-/// 이후 앱을 실행했을 때 자동 로그인 등에 사용할 수 있음
-
+/// JWT 토큰 접근용 얇은 위임 래퍼.
+///
+/// 저장 로직은 전부 [SecureTokenStore] 로 옮겼다. 이 클래스에는 더 이상
+/// SharedPreferences 도, 키 상수도, 로깅도 없다 — 호출부 40여 곳을 한
+/// 번에 고치지 않기 위해 이름만 남겨둔 것이다.
+///
+/// **새 코드는 `SecureTokenStore.instance` 를 직접 써라.**
+/// 이 래퍼는 호출부가 정리되는 대로 삭제한다.
 class TokenStorage {
-  // SharedPreferences에 저장될 키 값 (고정 문자열)
-  static const _jwtKey = 'jwt_token';
+  const TokenStorage._();
 
-  /// JWT 토큰을 저장하는 메서드
-  /// [token] 매개변수는 서버에서 발급받은 JWT 문자열
-  static Future<void> saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_jwtKey, token);
-    print('[TokenStorage] 토큰 저장 완료: $token');
-  }
+  /// JWT(액세스) 토큰을 보안 저장소에 저장한다.
+  static Future<void> saveToken(String token) =>
+      SecureTokenStore.instance.writeAccessToken(token);
 
-  /// 저장된 JWT 토큰을 불러오는 메서드
-  /// 반환값은 JWT 문자열이며, 저장된 토큰이 없으면 null을 반환
-  static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(_jwtKey);
-    print('[TokenStorage] 저장된 토큰 불러오기: $token');
-    return token;
-  }
+  /// 저장된 JWT(액세스) 토큰을 읽는다. 없거나 읽기에 실패하면 null.
+  static Future<String?> getToken() =>
+      SecureTokenStore.instance.readAccessToken();
 
-  /// JWT 토큰을 삭제하는 메서드
-  /// 로그아웃 시 호출하여 저장된 토큰을 제거
-  static Future<void> clearToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_jwtKey);
-  }
+  /// 로그아웃 시 액세스/리프레시 토큰을 모두 지운다.
+  static Future<void> clearToken() => SecureTokenStore.instance.clear();
 }

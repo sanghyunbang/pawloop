@@ -37,9 +37,8 @@ public class CustomOAuth2User implements OAuth2User {
      */
     @Override
     public String getName() {
-        String name = userInfo.getProvider() + "_" + userInfo.getProviderId();
-        System.out.println("[DEBUG] getName() returns: " + name); // 디버깅 코드 추가[0802]
-        return name;
+        // 이 값은 provider_providerId, 즉 소셜 ID 다. 어떤 레벨로도 로그에 남기지 않는다. (이슈 #6)
+        return userInfo.getProvider() + "_" + userInfo.getProviderId();
     }
 
     /**
