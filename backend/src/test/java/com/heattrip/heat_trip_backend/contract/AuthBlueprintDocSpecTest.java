@@ -94,9 +94,14 @@ class AuthBlueprintDocSpecTest {
     @DisplayName("청사진이 jti 의 소유자로 더 이상 이슈 #9 를 지목하지 않는다")
     void blueprint_doesNotStillPointJtiAtThisIssue() {
         // 계약의 그 문장은 #9 가 고쳤다. 청사진이 옛 문장을 인용한 채로 남으면 인용이 거짓이 된다.
+        // 금지 문구가 하나뿐이면 표현만 바꿔서 같은 거짓이 되살아난다.
+        // 실제로 그랬다 — 본문 끝은 "이관처는 #9 가 아니라 Redis Epic" 이라고 정정하는데
+        // 굵은 머리말은 "#9 로 이관" 으로 남아 있어, 굵은 줄만 훑는 독자가 정확히
+        // 이 수정이 없애려던 잘못된 소유자를 얻었다.
         assertThat(authBlueprint)
                 .as("#9 는 jti 없이 닫혔다. 소유자는 M2 이후 Redis Epic 이다")
-                .doesNotContain("도입은 이슈 #9");
+                .doesNotContain("도입은 이슈 #9")
+                .doesNotContain("#9 로 이관");
         assertThat(authBlueprint)
                 .contains("refresh-token-redis.md");
     }
