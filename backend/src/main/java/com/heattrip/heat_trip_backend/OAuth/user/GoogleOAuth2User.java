@@ -44,9 +44,16 @@ public class GoogleOAuth2User implements OAuth2UserInfo {
     }
 
     // 사용자의 이름을 반환합니다. 예: "John Doe"
+    // 구글에는 '닉네임' 개념이 없어서 name 이 표시 이름 역할을 합니다. (이슈 #7)
     @Override
     public String getName() {
         return (String) attributes.get("name");
+    }
+
+    // 구글 프로필 사진 URL. scope 에 profile 이 없으면 키 자체가 없습니다.
+    @Override
+    public String getImageUrl() {
+        return (String) attributes.get("picture");
     }
 
     // 전체 사용자 정보(Map)를 반환합니다.

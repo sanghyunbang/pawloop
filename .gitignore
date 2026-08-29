@@ -25,6 +25,10 @@
 # --- Node (tools 등) ---
 **/node_modules/
 
+# --- 에이전트 작업 폴더 ---
+# .claude/worktrees 는 병렬 작업용 임시 git worktree 다. 커밋 대상이 아니다.
+/.claude/worktrees/
+
 # --- IDE / OS ---
 .idea/
 *.iml
