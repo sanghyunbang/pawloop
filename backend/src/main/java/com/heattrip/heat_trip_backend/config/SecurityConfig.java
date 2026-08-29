@@ -116,11 +116,29 @@ public class SecurityConfig {
             );
 
         http.addFilterBefore(new JWTAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class);
-        http.addFilterBefore(apiRateLimitFilter, JWTAuthenticationFilter.class);
         // state 캡처는 진입점의 302 보다 **먼저** 일어나야 한다. 이 필터를 시큐리티 체인 밖에
         // 두면(빈으로만 등록하면) 자동 등록 순서상 시큐리티 체인 뒤라, 진입 요청은 이미 302 로
         // 끝난 뒤라서 앱이 붙인 state 를 영영 못 본다. (이슈 #14)
         http.addFilterBefore(oAuthAppStateFilter, OAuth2AuthorizationRequestRedirectFilter.class);
+
+        // ⚠️ rate limit 은 **소셜 진입점 리다이렉트 필터보다 앞**이어야 한다. (이슈 #14)
+        //
+        // 예전에는 `addFilterBefore(apiRateLimitFilter, JWTAuthenticationFilter.class)` 였고,
+        // 그 자리는 체인에서 OAuth2AuthorizationRequestRedirectFilter **뒤**다. 진입점 요청은
+        // 그 리다이렉트 필터가 302 를 쓰고 chain.doFilter 를 부르지 않은 채 끝내므로,
+        // 뒤에 있는 rate limit 필터까지 요청이 오지 않는다. 실제 체인 덤프로 확인한 순서:
+        //   [6]OAuthAppStateFilter [7]OAuth2AuthorizationRequestRedirectFilter
+        //   [8]OAuth2LoginAuthenticationFilter [9]ApiRateLimitFilter
+        // 그 상태에서 한도 2 로 GET /oauth2/authorization/kakao 를 6번 치면 전부 302 였고,
+        // 곧이어 같은 버킷의 POST /auth/token/refresh 가 401,401,429 를 냈다 — 앞선 6건이
+        // 카운터에 **한 건도** 들어가지 않았다는 뜻이다. `resolveRule` 의 분기와
+        // ApiRateLimitFilterTest.socialEntryPoint_isRateLimited 는 초록인데도 그랬다.
+        // 단위 테스트는 필터를 직접 태우므로 체인 위치를 정의상 볼 수 없다.
+        //
+        // OAuthAppStateFilter 보다도 앞에 두는 이유: 한도를 넘긴 요청이 세션조차 만들지
+        // 않는다(그 필터는 state 를 담으려고 request.getSession(true) 를 부른다).
+        // 이 순서를 되돌리면 ApiRateLimitFilterChainOrderIntegrationTest 가 빨간불이다.
+        http.addFilterBefore(apiRateLimitFilter, OAuthAppStateFilter.class);
         return http.build();
     }
 

@@ -279,6 +279,76 @@ void main() {
       expect(expiredHookCalls, 1);
     });
 
+    test('갱신이 429 를 받으면 토큰을 지우지 않는다 — 일시적 혼잡은 로그아웃이 아니다', () async {
+      // #14 가 POST /auth/token/refresh 에 rate limit 을 새로 걸면서 이 응답이 처음으로
+      // 나올 수 있게 됐다. 인증 버킷은 소셜 코드 교환과 **공유**하므로, 공용 NAT 뒤에서
+      // 로그인이 몰리면 아무 잘못 없는 사용자의 갱신이 429 를 받는다.
+      //
+      // 예전 코드는 200 이 아닌 모든 응답을 "세션 종료" 로 읽었다. 그 상태에서는 429 한
+      // 번에 store.clear() 가 불리고 멀쩡한 refresh 토큰이 사라졌다(실측: clearCount=1,
+      // sessionExpiredCalls=1). _performRefresh 의 401 분기를 다시 `!= 200` 으로 되돌리면
+      // 이 테스트가 빨간불이다.
+      var expiredHookCalls = 0;
+      final store = _FakeTokenStore(access: 'AT-1', refresh: 'RT-STILL-VALID');
+
+      final client = AuthedClient(
+        inner: MockClient((req) async {
+          if (_isRefresh(req)) {
+            return http.Response(
+              jsonEncode({
+                'error': {
+                  'code': 'RATE_LIMITED',
+                  'message': '요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
+                  'traceId': 'trace-1',
+                },
+              }),
+              429,
+              headers: const {'retry-after': '60'},
+            );
+          }
+          return http.Response('', 401);
+        }),
+        baseUrl: _base,
+        store: store,
+        onSessionExpired: () async => expiredHookCalls++,
+      );
+
+      final res = await client.getJson(Uri.parse('$_base/api/bookmarks'));
+
+      expect(res.statusCode, 401, reason: '호출부에는 여전히 401 이 간다 — 이번 요청은 실패다');
+      expect(
+        store.clearCount,
+        0,
+        reason: '"잠시 후 다시" 를 재로그인 강제로 번역하면 안 된다',
+      );
+      expect(store.refresh, 'RT-STILL-VALID', reason: '아직 유효한 RT 를 버리지 않는다');
+      expect(store.access, 'AT-1');
+      expect(expiredHookCalls, 0, reason: '세션 만료 훅이 돌면 화면이 로그인으로 튄다');
+    });
+
+    test('갱신이 5xx 나 네트워크 오류로 실패해도 토큰을 지키고 401 만 돌려준다', () async {
+      final store = _FakeTokenStore(access: 'AT-1', refresh: 'RT-1');
+
+      final client = AuthedClient(
+        inner: MockClient((req) async {
+          if (_isRefresh(req)) throw http.ClientException('연결 실패');
+          return http.Response('', 401);
+        }),
+        baseUrl: _base,
+        store: store,
+      );
+
+      final res = await client.getJson(Uri.parse('$_base/api/bookmarks'));
+
+      expect(res.statusCode, 401);
+      expect(
+        store.clearCount,
+        0,
+        reason: '비행기 모드에서 앱을 열었다는 이유로 로그인 상태를 버리면 안 된다',
+      );
+      expect(store.refresh, 'RT-1');
+    });
+
     test('저장된 refresh 토큰이 없으면 갱신 요청을 아예 보내지 않는다', () async {
       var protectedHits = 0;
       var refreshHits = 0;
