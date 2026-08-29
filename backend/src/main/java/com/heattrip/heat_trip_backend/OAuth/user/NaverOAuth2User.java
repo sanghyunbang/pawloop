@@ -48,6 +48,16 @@ public class NaverOAuth2User implements OAuth2UserInfo {
         return null;
     }
 
+    // 네이버 프로필 이미지
+    @Override
+    public String getImageUrl() {
+        Map<String, Object> response = (Map<String, Object>) attributes.get("response");
+        if (response != null) {
+            return (String) response.get("profile_image");
+        }
+        return null;
+    }
+
     // 원본 attribute 전체 반환
     public Map<String, Object> getAttributes() {
         return attributes;

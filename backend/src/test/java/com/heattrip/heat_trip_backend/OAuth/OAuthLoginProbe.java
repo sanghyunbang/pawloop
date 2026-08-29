@@ -93,7 +93,10 @@ final class OAuthLoginProbe {
         attributes.put("name", "프로브 사용자");
 
         UserRepository userRepository = mock(UserRepository.class);
+        // 식별 키는 (provider, social_id) 다 — username 이 아니다. (이슈 #7)
+        when(userRepository.findByProviderAndSocialId("google", PROVIDER_ID)).thenReturn(Optional.empty());
         when(userRepository.findByUsername("google_" + PROVIDER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
 
         RestOperations restOperations = mock(RestOperations.class);
         when(restOperations.exchange(any(RequestEntity.class),

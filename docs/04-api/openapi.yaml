@@ -998,8 +998,9 @@ components:
           enum: [local, kakao, naver, google, null]
           description: |
             계정 출처. `local` = 이메일/비밀번호 가입.
-            **현재 백엔드 `users` 테이블에 대응 컬럼이 없어 응답에 포함되지 않습니다.**
-            컬럼 추가와 매핑은 이슈 #10 · #5 의 범위입니다.
+            `users.provider` 컬럼과 `UserResponse.provider` 로 구현돼 있습니다(#7).
+            소셜 계정의 식별 키는 `(provider, social_id)` 이며 이메일이 아닙니다.
+            백필 SQL 이 아직 실행되지 않은 환경의 옛 행은 `null` 일 수 있습니다.
 
     SignupInput:
       type: object
