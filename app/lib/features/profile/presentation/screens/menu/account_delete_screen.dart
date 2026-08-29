@@ -35,6 +35,10 @@ class AccountDeleteScreen extends StatelessWidget {
 
     if (success) {
       await TokenStorage.clearToken();
+      // 위 가드(:34)는 deleteMyAccount 뒤의 것이다. clearToken 도 await 이라
+      // 그 사이에 화면이 사라졌을 수 있다. 탈퇴와 토큰 삭제는 이미 끝났으므로
+      // 여기서 돌아가도 잃는 것은 안내와 화면 이동뿐이다. (#63)
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('탈퇴가 완료되었습니다.')),
       );

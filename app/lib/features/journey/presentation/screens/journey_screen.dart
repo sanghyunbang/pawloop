@@ -70,6 +70,9 @@ class _JourneyScreenState extends State<JourneyScreen>
   Future<void> _handleDelete(DiaryEntry entry) async {
     try {
       await _api.deleteDiary(entry.id!); // <- 실제 API 호출
+      // 삭제는 끝났다. 언마운트된 State 에 setState 를 부르면 예외다 — 아래
+      // context.mounted 가드보다 이게 먼저다. (#63)
+      if (!mounted) return;
       setState(() {
         _diariesF = _api.fetchDiaries(); // 목록 새로고침
       });

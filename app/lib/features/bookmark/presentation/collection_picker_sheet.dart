@@ -28,6 +28,10 @@ Future<CollectionPickerResult?> showCollectionPickerSheet(
   const double rowExtent = 68.0; // 아이템 대략 높이(타일 + 패딩)
   const double dividerHeight = 1; // 구분선 높이
 
+  // refresh() 를 기다리는 동안 호출한 화면이 사라졌을 수 있다.
+  // 죽은 context 로 시트를 열면 예외다. 못 열면 '사용자가 닫음'과 같은 null 이다. (#63)
+  if (!context.mounted) return null;
+
   return showModalBottomSheet<CollectionPickerResult>(
     context: context,
     isScrollControlled: true,
