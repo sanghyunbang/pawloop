@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.OAuth.handler;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,8 @@ import jakarta.servlet.http.HttpServletResponse;
 // AuthenticationSuccessHandler 인터페이스를 구현하여 로그인 성공 시 동작을 정의할 예정
 // 이 클래스는 OAuth2 로그인 성공 후 추가 작업을 처리하는 데 사용.
 public class OAuth2SuccessHandler implements AuthenticationSuccessHandler{
+
+    private static final Logger log = LoggerFactory.getLogger(OAuth2SuccessHandler.class);
 
     // JWT 생성 및 서명 등을 처리하는 클래스 (JWTProvider) 미리 만들어 둠
     private final JWTProvider jwtProvider;
@@ -38,7 +42,8 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler{
                                          HttpServletResponse response, 
                                          Authentication authentication) throws IOException, ServletException {
         
-        System.out.println("[V] OAuth2SuccessHandler triggered"); // 진입여부 확인
+        // 진입 여부만 남긴다. userId(= provider_providerId)는 소셜 ID 라서 로그에 남기지 않는다. (이슈 #6)
+        log.debug("OAuth2 로그인 성공 처리 진입");
 
          // 인증 성공 후 JWT 토큰 생성 및 응답에 추가하는 로직을 구현할 예정
          // 예: String token = jwtProvider.createAccessToken(authentication.getName(), authentication.getAuthorities());
@@ -59,13 +64,11 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler{
          String redirect = "heattrip://login-callback?token=" + token;
 
          response.sendRedirect(redirect);
-         
-         System.out.println("[!] onAuthenticationSuccess() called!");
-         System.out.println("[V] userId = " + userId);
 
-
-        
-    }  
+         // 리다이렉트 URL 에는 토큰이 실려 있으므로 절대 로그로 남기지 않는다.
+         // (액세스 로그·리버스 프록시 로그에 남는 문제는 운영 로그 설정 점검 대상이다 — 이슈 #6 참고)
+         log.debug("OAuth2 로그인 성공 — 앱으로 리다이렉트 완료");
+    }
     
 }
 

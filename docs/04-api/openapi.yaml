@@ -9,10 +9,21 @@ info:
     프론트가 실제로 필요로 하는 데이터를 기준으로 이 계약을 정의합니다. 백엔드(Spring Boot + MySQL 공간형)는
     이 계약을 구현합니다.
 
-    - 인증: JWT Bearer. subject = 사용자 email.
-    - MVP에선 읽기(장소 조회 등)는 비인증 허용, 쓰기(산책 저장·글 작성)는 인증 필요.
+    **이 파일이 API 계약의 단일 출처(SSOT)입니다.** 같은 폴더의 `api-spec.md` 는 사람이 읽는 요약이며,
+    두 문서의 값이 충돌하면 **언제나 이 파일이 우선**합니다.
+
+    - 인증: JWT Bearer(HS256). `sub` 는 서버가 발급한 **불투명 사용자 키**입니다.
+      이메일이라고 가정하거나 문자열을 파싱하지 마세요. 사용자 식별 정보가 필요하면 `GET /auth/me` 로 조회합니다.
+      (발급 규칙은 서버 내부 사항이며 예고 없이 바뀝니다 — #5 에서 `users.id` 로 통일 예정.
+       클라이언트 계약은 어느 쪽이든 "파싱하지 않는 불투명 키"입니다.)
+    - 인증 요구 여부는 **각 오퍼레이션의 `security` 선언이 정본**입니다. 아래 한 줄은 요약일 뿐입니다:
+      MVP에선 읽기(장소 조회 등)는 비인증 허용, 쓰기(산책 저장·글 작성)는 인증 필요.
     - 목록은 커서 페이지네이션(`items`/`nextCursor`/`hasMore`).
     - 좌표: `lat`(위도), `lng`(경도). (관광공사 원본은 mapy=위도, mapx=경도)
+    - 리네임 진행 중: 제품명은 Pawloop, 도메인·딥링크 스킴은 당분간 heattrip 을 유지합니다
+      (`https://api.heattrip.link`, `heattrip://login-callback`).
+    - `미구현` 이라고 적힌 오퍼레이션은 계약만 있고 백엔드 핸들러가 없습니다(2026-08 기준).
+      Prism 목 서버로는 통과하지만 실서버에서는 404 입니다.
 servers:
   - url: https://api.heattrip.link
     description: 운영(예정 — 패키지/도메인 리네임 전까지 기존 유지)
@@ -23,7 +34,15 @@ servers:
 
 tags:
   - name: Auth
-    description: 소셜 로그인(카카오/네이버) · 토큰 · 내 정보
+    description: |
+      소셜 로그인(카카오·구글) · 이메일 가입/로그인 · 토큰 · 내 정보.
+      네이버는 백엔드 설정이 남아 있으나 제품 결정상 **보류**입니다(#15).
+      지원 공급자의 단일 출처는 `components.parameters.Provider` 의 enum 입니다.
+
+      **인가 경계** — 비인증 허용은 `/auth/signup`, `/auth/login`, `/auth/oauth/**`,
+      `/auth/token/refresh`, 그리고 Spring Security 가 처리하는 `/oauth2/**`·`/login/oauth2/**` 뿐입니다.
+      `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 **반드시 bearerAuth 검증을 거쳐야 합니다.**
+      (구현 참조: `SecurityConfig` 의 permitAll 목록에 `/auth/**` 를 통째로 넣지 말 것 — 이슈 #23)
   - name: Dogs
     description: 반려견 프로필
   - name: Places
@@ -42,25 +61,116 @@ security:
 
 paths:
   # ─────────────────────────── Auth ───────────────────────────
-  /auth/oauth/{provider}:
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: 이메일 회원가입
+      description: |
+        **목표 계약입니다.** 현행 구현은 `200 OK` + 본문 `"회원가입 성공"`(평문)을 반환합니다.
+        구현을 이 계약(201 + `User`)에 맞추는 것은 이슈 #10 의 범위입니다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignupInput' }
+      responses:
+        '201':
+          description: 가입됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: 이메일/비밀번호 로그인
+      description: |
+        **목표 계약입니다.** 현행 구현은 JSON 이 아니라 **JWT 원문 문자열**을 본문에 그대로 담아 반환합니다.
+        구현을 이 계약(`AuthTokens` JSON)에 맞추는 것은 이슈 #10 의 범위입니다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginInput' }
+      responses:
+        '200':
+          description: 토큰 발급
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /oauth2/authorization/{provider}:
     get:
       tags: [Auth]
-      summary: 소셜 로그인 시작(302 리다이렉트)
+      summary: 소셜 로그인 시작(302 리다이렉트) — Spring Security OAuth2 진입점
       description: |
-        브라우저/`flutter_web_auth_2`에서 이 URL을 열면 공급자 인증 화면으로 302 리다이렉트됩니다.
+        앱(`flutter_web_auth_2`)이 실제로 여는 URL 입니다. 공급자 인증 화면으로 302 리다이렉트됩니다.
         인증 성공 시 백엔드가 앱 딥링크로 리다이렉트합니다: `heattrip://login-callback?token=<JWT>`.
-        (레거시 Spring Security OAuth2 `/oauth2/authorization/{provider}` 흐름 계승)
       security: []
       parameters:
         - $ref: '#/components/parameters/Provider'
       responses:
         '302':
           description: 공급자 로그인 페이지로 리다이렉트
+          headers:
+            Location:
+              schema: { type: string }
+
+  /login/oauth2/code/{provider}:
+    get:
+      tags: [Auth]
+      summary: 공급자 리디렉션 수신(Spring Security 내부 콜백)
+      description: |
+        공급자 콘솔에 등록해야 하는 승인 리디렉션 URI 입니다. 값은 `{server.url}/login/oauth2/code/{provider}`.
+        성공 시 앱 딥링크 `heattrip://login-callback?token=<JWT>` 로 302 합니다.
+        클라이언트가 직접 호출하는 경로가 아닙니다.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        '302':
+          description: 앱 딥링크로 리다이렉트
+          headers:
+            Location:
+              schema: { type: string }
+
+  /auth/oauth/{provider}:
+    get:
+      tags: [Auth]
+      summary: 소셜 로그인 시작(302 리다이렉트) — 미구현
+      description: |
+        **미구현.** 백엔드에 이 경로의 핸들러가 없습니다. 실제 동작하는 진입점은
+        `GET /oauth2/authorization/{provider}` 이며 앱도 그쪽을 호출합니다.
+        이 경로를 302 래퍼로 실제 구현할지, 삭제할지는 이슈 #10 에서 결정합니다.
+      x-implementation-status: not-implemented
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+      responses:
+        '302':
+          description: 공급자 로그인 페이지로 리다이렉트
+          headers:
+            Location:
+              schema: { type: string }
 
   /auth/oauth/{provider}/callback:
     post:
       tags: [Auth]
-      summary: 인가코드 → 토큰 교환(SPA/네이티브 대안 흐름)
+      summary: 인가코드 → 토큰 교환(SPA/네이티브 대안 흐름) — 미구현
+      description: |
+        **미구현.** 백엔드에 핸들러가 없습니다. 현행 소셜 로그인은 302 딥링크가
+        액세스 토큰 문자열만 전달하므로, 이 경로가 구현되기 전까지 `AuthTokens` 의
+        `refreshToken`·`expiresIn`·`user` 는 클라이언트에 도달할 경로가 없습니다(#14·#9).
+      x-implementation-status: not-implemented
       security: []
       parameters:
         - $ref: '#/components/parameters/Provider'
@@ -85,7 +195,11 @@ paths:
   /auth/token/refresh:
     post:
       tags: [Auth]
-      summary: 액세스 토큰 갱신
+      summary: 액세스 토큰 갱신 — 미구현
+      description: |
+        **미구현.** 백엔드에 refresh 토큰의 발급·저장·폐기 코드가 전혀 없습니다(JWTProvider 는 access 만 발급).
+        구현 전까지 클라이언트는 액세스 토큰 만료 시 재로그인으로 처리합니다. 도입은 이슈 #9.
+      x-implementation-status: not-implemented
       security: []
       requestBody:
         required: true
@@ -115,19 +229,56 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Auth]
+      summary: 내 정보 수정(부분 수정 — 보낸 필드만 반영, 생략한 필드는 유지)
+      description: |
+        시맨틱이 부분 수정이므로 장기적으로는 `PATCH /auth/me` 가 옳습니다.
+        현행 구현이 `PUT` 이라 계약도 `PUT` 으로 적되, `PATCH` 전환은 별도 정리 이슈로 남깁니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserUpdate' }
+      responses:
+        '200':
+          description: 수정됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
     delete:
       tags: [Auth]
       summary: 회원 탈퇴
       responses:
         '204': { description: 삭제됨 }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /auth/logout:
     post:
       tags: [Auth]
-      summary: 로그아웃(refreshToken 폐기)
+      summary: 로그아웃(전 기기 — 해당 사용자의 모든 세션을 폐기)
+      description: |
+        **미구현.** 백엔드에 `/auth/logout` 핸들러가 없습니다(2026-08 기준). 도입은 이슈 #9.
+
+        범위는 **전 기기 로그아웃**입니다. Authorization 헤더의 액세스 토큰으로 주체를 식별해
+        그 사용자의 서버측 세션(refresh 토큰)을 **전부** 폐기합니다. 특정 기기 하나만 끊는
+        요청 본문은 정의하지 않습니다.
+
+        액세스 토큰은 만료 전까지 서명상 유효하므로(현재 `jti` 블랙리스트가 없음)
+        클라이언트도 저장된 토큰을 반드시 삭제해야 합니다.
+        멱등입니다 — 이미 폐기된 상태여도 204 를 반환합니다.
+
+        한계: 액세스 토큰이 이미 만료된 상태에서는 이 계약으로 로그아웃을 호출할 수 없습니다.
+        refresh 토큰만으로 폐기하는 경로는 #9 에서 함께 정의합니다.
+      x-implementation-status: not-implemented
       responses:
-        '204': { description: 로그아웃됨 }
+        '204': { description: 로그아웃됨(멱등) }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
   # ─────────────────────────── Dogs ───────────────────────────
   /api/dogs:
@@ -701,12 +852,29 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        `Authorization: Bearer <JWT>`. 서명 알고리즘은 HS256.
+
+        현재 발급되는 클레임은 다음 4개뿐입니다.
+
+        | 클레임 | 값 | 비고 |
+        |:---|:---|:---|
+        | `sub` | 불투명 사용자 키 | **파싱 금지.** 이메일이라고 가정하지 마세요 |
+        | `role` | 예: `ROLE_USER` | |
+        | `iat` | 발급 시각 | |
+        | `exp` | 만료 시각 | |
+
+        아직 **없는** 클레임: `jti`(토큰 단위 무효화 불가 — 로그아웃해도 액세스 토큰은 만료까지 유효),
+        `prv`(공급자). 도입은 이슈 #9.
 
   parameters:
     Provider:
       name: provider
       in: path
       required: true
+      description: |
+        MVP 지원 공급자는 `kakao` · `google` 입니다. `naver` 는 백엔드 설정과 매핑 코드가
+        남아 있어 enum 에 유지하지만 제품 결정상 **보류** 상태입니다(#15).
       schema: { type: string, enum: [kakao, naver, google] }
     Cursor:
       name: cursor
@@ -775,6 +943,8 @@ components:
 
     Page:
       type: object
+      # nextCursor 는 마지막 페이지에서 null 이므로 required 에 넣지 않는다.
+      required: [items, hasMore]
       properties:
         items:
           type: array
@@ -784,19 +954,89 @@ components:
 
     AuthTokens:
       type: object
+      required: [accessToken, expiresIn]
       properties:
         accessToken: { type: string }
-        refreshToken: { type: string }
+        refreshToken:
+          type: string
+          description: |
+            **미구현** — 백엔드에 발급/저장/폐기 코드가 없어 현재 응답에 포함되지 않습니다(#9).
         expiresIn: { type: integer, description: 초, example: 3600 }
+        isNew:
+          type: boolean
+          default: false
+          description: |
+            이번 인증으로 계정이 새로 생성되었으면 true. **로그인 응답 1회성 이벤트 속성**이며
+            사용자 프로필의 영속 속성이 아닙니다(그래서 `User` 가 아니라 여기에 있습니다).
+            true 면 프론트는 온보딩(반려견 프로필 등록)으로 유도합니다.
         user: { $ref: '#/components/schemas/User' }
 
     User:
       type: object
+      # 최소 보장. id 가 없으면 클라이언트가 아무것도 할 수 없다.
+      # `{}` 가 유효한 User 로 통과하던 상태를 막기 위한 것이다(이슈 #23-A).
+      required: [id]
       properties:
         id: { type: integer, format: int64 }
-        provider: { type: string, enum: [kakao, naver, google] }
-        nickname: { type: string, example: "보리아빠" }
-        isNew: { type: boolean, description: 신규 가입이면 온보딩 유도 }
+        email:
+          type: [string, "null"]
+          format: email
+          description: 로그인 ID. 소셜 공급자가 이메일을 주지 않으면 null 일 수 있습니다.
+        name: { type: [string, "null"] }
+        nickname:
+          type: [string, "null"]
+          example: "보리아빠"
+          description: 소셜 가입 경로에서는 설정되지 않아 null 일 수 있습니다(#7).
+        gender: { type: [string, "null"], enum: [MALE, FEMALE, OTHER, null] }
+        age: { type: [integer, "null"] }
+        travelType: { type: [string, "null"], description: 현재 스키마는 단일 문자열 }
+        imageUrl: { type: [string, "null"], format: uri }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        provider:
+          type: [string, "null"]
+          enum: [local, kakao, naver, google, null]
+          description: |
+            계정 출처. `local` = 이메일/비밀번호 가입.
+            **현재 백엔드 `users` 테이블에 대응 컬럼이 없어 응답에 포함되지 않습니다.**
+            컬럼 추가와 매핑은 이슈 #10 · #5 의 범위입니다.
+
+    SignupInput:
+      type: object
+      required: [email, password, nickname, agreeTos, agreePrivacy]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+        nickname: { type: string }
+        name: { type: string }
+        gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        ageGroup: { type: string, enum: [under14, over14] }
+        agreeTos: { type: boolean, description: 필수 — false/null 이면 400 }
+        agreePrivacy: { type: boolean, description: 필수 — false/null 이면 400 }
+        agreeMarketing: { type: boolean, description: 선택 }
+        tosVersion: { type: string, default: "v1.0" }
+        privacyVersion: { type: string, default: "v1.0" }
+        marketingVersion: { type: string, default: "v1.0" }
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+
+    UserUpdate:
+      type: object
+      # 부분 수정 — 보낸 필드만 반영한다. 빈 객체는 의미가 없으므로 최소 1개를 요구한다.
+      minProperties: 1
+      properties:
+        name: { type: string }
+        nickname: { type: string }
+        gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        age: { type: integer }
+        travelType: { type: string }
+        imageUrl: { type: string, format: uri }
+        agreeMarketing: { type: boolean }
 
     DogSize:
       type: string

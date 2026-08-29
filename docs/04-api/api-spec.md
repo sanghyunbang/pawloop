@@ -1,5 +1,10 @@
 # Pawloop(포루프) REST API 명세
 
+> [!IMPORTANT]
+> **API 계약의 단일 출처(SSOT)는 [`openapi.yaml`](openapi.yaml) 이다.**
+> 이 문서는 사람이 읽기 위한 요약이며, 값이 충돌하면 **언제나 `openapi.yaml` 이 우선한다.**
+> 계약을 바꿀 때는 `openapi.yaml` 을 먼저 고치고, 이 문서를 뒤따라 맞춘다.
+
 > 산책·동반장소·커뮤니티 앱 **Pawloop(포루프)**의 REST API 명세. 현재 구현된 부분과 **계획(Planned)** 을 함께 정리한다. 지금 앱은 장소 데이터를 관광공사 KTO API로 **직접 호출**하고 있으며, 백엔드는 이 문서의 프록시·저장 API로 점진 이전한다.
 
 관련 문서: [ERD](../03-database/erd.md) · [아키텍처](../02-architecture/)
@@ -40,7 +45,8 @@
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-- JWT subject = 사용자 email (레거시 `JWTProvider` 규약 유지).
+- JWT 의 `sub` 는 서버가 발급한 **불투명 사용자 키**다. 이메일이라고 가정하거나 파싱하지 말 것 — 소셜 로그인 경로에서는 이메일이 아니다. 사용자 정보가 필요하면 `GET /auth/me` 로 조회한다.
+- 현재 발급되는 클레임은 `sub`·`role`·`iat`·`exp` 뿐이다. `jti` 가 없어 로그아웃해도 액세스 토큰은 만료까지 유효하다(#9).
 - 토큰 없음/만료/무효 → `401 Unauthorized`.
 - MVP 단계에서는 로그인 없이도 홈/지도/산책이 동작하도록 **비인증 읽기**를 일부 허용(장소 조회 등). 쓰기(산책 저장·글 작성)는 인증 필요.
 
@@ -89,52 +95,55 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## 2. 인증 (Auth)
 
-카카오·네이버 OAuth 중심(레거시 `kakao/`, `OAuth/` 패키지 계승). 프론트는 `flutter_web_auth_2`로 소셜 로그인 콜백을 받는다.
+카카오·구글 OAuth 중심(레거시 `kakao/`, `OAuth/` 패키지 계승). 네이버는 코드·설정이 남아 있으나 제품 결정상 **보류**다(#15). 프론트는 `flutter_web_auth_2`로 소셜 로그인 콜백을 받는다.
 
-### 2.1 소셜 로그인 시작 — 🟡 계획
+> JWT 의 `sub` 는 서버가 발급한 **불투명 사용자 키**다. 이메일이라고 가정하거나 파싱하지 말 것. 사용자 정보는 `GET /auth/me` 로 조회한다.
 
-`GET /auth/oauth/{provider}` — `provider ∈ {kakao, naver}`
+**인가 경계** — 비인증 허용은 `/auth/signup`, `/auth/login`, `/auth/oauth/**`, `/auth/token/refresh`, `/oauth2/**`, `/login/oauth2/**` 뿐이다. `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 반드시 토큰 검증을 거친다.
 
-브라우저(또는 `flutter_web_auth_2`)에서 이 URL을 열면 소셜 인증 화면으로 302 리다이렉트.
+### 2.1 소셜 로그인 시작 — ✅ 구현
 
-| 쿼리 | 설명 |
-|---|---|
-| `redirect_uri` | 콜백 앱스킴 (예: `pawloop://auth`) |
+`GET /oauth2/authorization/{provider}` — `provider ∈ {kakao, google}` (naver 보류)
 
-### 2.2 소셜 로그인 콜백 → 토큰 교환 — 🟡 계획
+앱(`flutter_web_auth_2`)이 실제로 여는 URL. 소셜 인증 화면으로 302 리다이렉트되고, 성공 시 백엔드가 앱 딥링크 `heattrip://login-callback?token=<JWT>` 로 되돌린다.
+
+> 계약에 있는 `GET /auth/oauth/{provider}` 는 **미구현**이다. 실제 진입점은 위 경로다.
+> 딥링크 스킴은 `heattrip://` 다 — 코드(`social_login_service.dart`, `OAuth2SuccessHandler.java`)가 그렇게 동작한다. 이 문서가 예전에 예시로 들던 `pawloop` 스킴은 오기였고, 그대로 구현하면 콜백을 받지 못한다.
+
+### 2.2 소셜 로그인 콜백 → 토큰 교환 — 🟡 계획(미구현)
 
 `POST /auth/oauth/{provider}/callback`
 
 ```json
 // Request
-{ "code": "authorization_code_from_provider", "redirectUri": "pawloop://auth" }
+{ "code": "authorization_code_from_provider", "redirectUri": "heattrip://login-callback" }
 ```
 
 ```json
 // 200 OK
 {
   "accessToken": "eyJhbGci...",
-  "refreshToken": "eyJhbGci...",
   "expiresIn": 3600,
+  "isNew": false,
   "user": {
     "id": 42,
-    "provider": "kakao",
-    "nickname": "보리아빠",
-    "isNew": false
+    "email": "bori@example.com",
+    "nickname": "보리아빠"
   }
 }
 ```
 
-- `isNew=true` 면 프론트는 온보딩(강아지 프로필 등록)으로 유도.
+- `isNew` 는 **로그인 응답의 1회성 이벤트 속성**이라 `user` 블록 밖(`AuthTokens` 최상위)에 있다. `true` 면 프론트는 온보딩(강아지 프로필 등록)으로 유도.
+- `refreshToken` 은 미구현이라 아직 응답에 없다(#9).
 
-### 2.3 토큰 갱신 — 🟡 계획
+### 2.3 토큰 갱신 — 🟡 계획(미구현)
 
 `POST /auth/token/refresh`
 
 ```json
 // Request
 { "refreshToken": "eyJhbGci..." }
-// 200 OK
+// 200 OK — AuthTokens 전체(회전 시 새 refreshToken 포함)
 { "accessToken": "eyJhbGci...", "expiresIn": 3600 }
 ```
 
@@ -146,22 +155,47 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 // 200 OK
 {
   "id": 42,
-  "provider": "kakao",
+  "email": "bori@example.com",
+  "name": "방상현",
   "nickname": "보리아빠",
-  "profileImage": "https://.../me.png",
-  "createdAt": "2026-05-01T10:00:00+09:00"
+  "gender": "MALE",
+  "age": 32,
+  "travelType": "healing",
+  "imageUrl": "https://.../me.png",
+  "createdAt": "2026-05-01T10:00:00+09:00",
+  "updatedAt": "2026-08-01T10:00:00+09:00"
 }
 ```
 
-> 레거시 `AuthController.me()`(subject=email)를 그대로 계승. 감정앱의 이메일/비번 `/auth/signup`·`/auth/login`은 MVP에서 소셜 로그인으로 대체(스텁 유지).
+> `provider` 는 `users` 테이블에 컬럼이 없어 아직 내려오지 않는다(#10·#5). 필드명은 `profileImage` 가 아니라 **`imageUrl`** 이다.
 
-### 2.5 로그아웃 — 🟡 계획
+### 2.5 이메일 회원가입 — ✅ 구현 (계약은 목표 형태)
 
-`POST /auth/logout` — refreshToken 폐기. `204 No Content`.
+`POST /auth/signup` — 비인증. 목표 계약은 `201 Created` + `User` JSON.
 
-### 2.6 회원 탈퇴 — ✅ 구현(재사용)
+> 현행 구현은 `200 OK` + 본문 `"회원가입 성공"`(평문)이다. 구현을 계약에 맞추는 것은 #10.
 
-`DELETE /auth/me` — `204 No Content`. (레거시 `AuthController.deleteMe()` 계승)
+### 2.6 이메일 로그인 — ✅ 구현 (계약은 목표 형태)
+
+`POST /auth/login` — 비인증. 목표 계약은 `200 OK` + `AuthTokens` JSON.
+
+> 현행 구현은 JSON 이 아니라 **JWT 원문 문자열**을 본문에 담아 반환한다. 구현을 계약에 맞추는 것은 #10.
+
+### 2.7 내 정보 수정 — ✅ 구현
+
+`PUT /auth/me` — 부분 수정(보낸 필드만 반영). `200 OK` + `User`.
+
+> 시맨틱이 부분 수정이므로 장기적으로는 `PATCH` 가 옳다. 전환은 별도 정리 이슈.
+
+### 2.8 로그아웃 — 🟡 계획(미구현)
+
+`POST /auth/logout` — **전 기기 로그아웃**. 액세스 토큰의 주체에 해당하는 모든 세션을 폐기한다. `204 No Content`(멱등) / `401`.
+
+> 액세스 토큰은 만료까지 서명상 유효하므로(`jti` 없음) 클라이언트도 저장된 토큰을 반드시 지운다.
+
+### 2.9 회원 탈퇴 — ✅ 구현(재사용)
+
+`DELETE /auth/me` — `204 No Content` / `401`. (레거시 `AuthController.deleteMe()` 계승)
 
 ---
 
@@ -632,7 +666,7 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 ## 11. 이관 로드맵 (직접호출 → 백엔드)
 
 1. **Phase 1 — 장소 프록시:** `GET /api/places/nearby|{id}`로 KTO 호출을 백엔드 이전. `place` 캐시 테이블 + 공간 인덱스 + KTO 1000콜/일 완화(캐싱·TTL). 프론트 `Env.apiBase` 스위치만으로 전환.
-2. **Phase 2 — 계정·프로필:** 카카오/네이버 OAuth + `/auth/me` + `/api/dogs`. 로컬 `kMyDog` → 서버 동기화.
+2. **Phase 2 — 계정·프로필:** 카카오/구글 OAuth + `/auth/me` + `/api/dogs`. 로컬 `kMyDog` → 서버 동기화.
 3. **Phase 3 — 산책 저장:** `POST /api/walks` + `stats` 집계. GPS 경로 `walk.path` LINESTRING 저장.
 4. **Phase 4 — 커뮤니티 실연동:** `/api/posts` 계열로 `kPetPosts` 대체. 레거시 `/api/social` 로직 재사용.
 5. **Phase 5 — 공공데이터 레이어:** LOCALDATA(동물병원 ~9,445건, EPSG:5174→WGS84) · 두루누비 산책로 실데이터. `vet/shop/trail` 레이어 더미 제거.
