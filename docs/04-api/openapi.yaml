@@ -1,0 +1,1056 @@
+openapi: 3.1.0
+info:
+  title: Pawloop API
+  version: 0.1.0
+  description: |
+    Pawloop(포루프) — 반려동물 산책·동반장소·커뮤니티 앱의 REST API 계약.
+
+    이 문서는 **design-first(계약 우선)** 로 작성되었습니다. 프론트엔드(Flutter)가 먼저 만들어졌고,
+    프론트가 실제로 필요로 하는 데이터를 기준으로 이 계약을 정의합니다. 백엔드(Spring Boot + MySQL 공간형)는
+    이 계약을 구현합니다.
+
+    - 인증: JWT Bearer. subject = 사용자 email.
+    - MVP에선 읽기(장소 조회 등)는 비인증 허용, 쓰기(산책 저장·글 작성)는 인증 필요.
+    - 목록은 커서 페이지네이션(`items`/`nextCursor`/`hasMore`).
+    - 좌표: `lat`(위도), `lng`(경도). (관광공사 원본은 mapy=위도, mapx=경도)
+servers:
+  - url: https://api.heattrip.link
+    description: 운영(예정 — 패키지/도메인 리네임 전까지 기존 유지)
+  - url: http://localhost:4010
+    description: Prism 목 서버 (design-first mock)
+  - url: http://10.0.2.2:8080
+    description: 로컬 백엔드 (안드로이드 에뮬레이터 → 호스트)
+
+tags:
+  - name: Auth
+    description: 소셜 로그인(카카오/네이버) · 토큰 · 내 정보
+  - name: Dogs
+    description: 반려견 프로필
+  - name: Places
+    description: 반려동반 장소(관광공사) · 동물병원/펫샵/산책로 레이어
+  - name: Walks
+    description: 산책 기록(GPS 경로) · 통계
+  - name: Community
+    description: 게시판 · 댓글 · 반응
+  - name: Bookmarks
+    description: 저장한 장소
+  - name: Groups
+    description: 가족 그룹 · 오늘의 케어 공유 · 산책 주의사항 · 가족 채팅
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ─────────────────────────── Auth ───────────────────────────
+  /auth/oauth/{provider}:
+    get:
+      tags: [Auth]
+      summary: 소셜 로그인 시작(302 리다이렉트)
+      description: |
+        브라우저/`flutter_web_auth_2`에서 이 URL을 열면 공급자 인증 화면으로 302 리다이렉트됩니다.
+        인증 성공 시 백엔드가 앱 딥링크로 리다이렉트합니다: `heattrip://login-callback?token=<JWT>`.
+        (레거시 Spring Security OAuth2 `/oauth2/authorization/{provider}` 흐름 계승)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+      responses:
+        '302':
+          description: 공급자 로그인 페이지로 리다이렉트
+
+  /auth/oauth/{provider}/callback:
+    post:
+      tags: [Auth]
+      summary: 인가코드 → 토큰 교환(SPA/네이티브 대안 흐름)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, description: 공급자 인가코드 }
+                redirectUri: { type: string, example: "heattrip://login-callback" }
+      responses:
+        '200':
+          description: 토큰 발급
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/token/refresh:
+    post:
+      tags: [Auth]
+      summary: 액세스 토큰 갱신
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: 갱신됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: 내 정보 조회
+      responses:
+        '200':
+          description: 사용자
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [Auth]
+      summary: 회원 탈퇴
+      responses:
+        '204': { description: 삭제됨 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: 로그아웃(refreshToken 폐기)
+      responses:
+        '204': { description: 로그아웃됨 }
+
+  # ─────────────────────────── Dogs ───────────────────────────
+  /api/dogs:
+    get:
+      tags: [Dogs]
+      summary: 내 반려견 목록
+      responses:
+        '200':
+          description: 반려견 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Dog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Dogs]
+      summary: 반려견 등록
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DogInput' }
+      responses:
+        '201':
+          description: 등록됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dog' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/dogs/{dogId}:
+    parameters:
+      - name: dogId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      tags: [Dogs]
+      summary: 반려견 상세
+      responses:
+        '200':
+          description: 반려견
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dog' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Dogs]
+      summary: 반려견 수정(부분)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DogInput' }
+      responses:
+        '200':
+          description: 수정됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dog' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Dogs]
+      summary: 반려견 삭제
+      responses:
+        '204': { description: 삭제됨 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ─────────────────────────── Places ───────────────────────────
+  /api/places/nearby:
+    get:
+      tags: [Places]
+      summary: 내 주변 장소 조회
+      description: |
+        현위치 좌표 기준 주변의 반려동반 가능 장소를 거리순으로 반환합니다.
+        `source=kto`는 관광공사 KorPetTourService2 캐시, `vet`/`shop`은 LOCALDATA(동물병원/펫샵),
+        `trail`은 두루누비(산책로) 레이어입니다. (현재 프론트는 KTO 직접호출 + 병원/펫샵/산책로 더미)
+      security: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number, format: double, example: 37.5665 }
+        - name: lng
+          in: query
+          required: true
+          schema: { type: number, format: double, example: 126.9816 }
+        - name: radius
+          in: query
+          description: 반경(m)
+          schema: { type: integer, default: 8000, maximum: 20000 }
+        - name: category
+          in: query
+          description: 카테고리 필터(생략 시 전체). KTO contentTypeId 또는 레이어 키.
+          schema:
+            type: string
+            enum: ['12', '14', '28', '32', '38', '39', 'vet', 'shop', 'trail']
+        - name: limit
+          in: query
+          schema: { type: integer, default: 80, maximum: 200 }
+      responses:
+        '200':
+          description: 장소 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Place' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/places/{contentId}:
+    get:
+      tags: [Places]
+      summary: 장소 상세
+      security: []
+      parameters:
+        - name: contentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 장소 상세(반려동반 상세정보 포함)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlaceDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ─────────────────────────── Walks ───────────────────────────
+  /api/walks:
+    get:
+      tags: [Walks]
+      summary: 산책 기록 목록(내 반려견)
+      parameters:
+        - name: dogId
+          in: query
+          schema: { type: integer, format: int64 }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 산책 목록(커서 페이지네이션)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Walk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Walks]
+      summary: 산책 기록 저장
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WalkInput' }
+      responses:
+        '201':
+          description: 저장됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Walk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/walks/{walkId}:
+    get:
+      tags: [Walks]
+      summary: 산책 상세(경로 포함)
+      parameters:
+        - name: walkId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: 산책
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Walk' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/walks/stats/weekly:
+    get:
+      tags: [Walks]
+      summary: 주간 산책 통계
+      parameters:
+        - name: dogId
+          in: query
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: 주간 통계(월~일 거리 + 요약)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WalkStats' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ─────────────────────────── Community ───────────────────────────
+  /api/community/posts:
+    get:
+      tags: [Community]
+      summary: 게시글 목록
+      security: []
+      parameters:
+        - name: board
+          in: query
+          description: 게시판(생략 시 전체)
+          schema: { $ref: '#/components/schemas/Board' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 게시글 목록(커서 페이지네이션)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Post' }
+    post:
+      tags: [Community]
+      summary: 게시글 작성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostInput' }
+      responses:
+        '201':
+          description: 작성됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Post' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/community/posts/{postId}:
+    get:
+      tags: [Community]
+      summary: 게시글 상세
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      responses:
+        '200':
+          description: 게시글
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Post' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/community/posts/{postId}/comments:
+    parameters:
+      - $ref: '#/components/parameters/PostId'
+    get:
+      tags: [Community]
+      summary: 댓글 목록
+      security: []
+      responses:
+        '200':
+          description: 댓글 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Comment' }
+    post:
+      tags: [Community]
+      summary: 댓글 작성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, example: "저도 여기 자주 가요! 정보 감사합니다 🐾" }
+      responses:
+        '201':
+          description: 작성됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/community/posts/{postId}/reactions:
+    post:
+      tags: [Community]
+      summary: 반응 토글(도움돼요/귀여워요/공감)
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type: { $ref: '#/components/schemas/ReactionType' }
+      responses:
+        '200':
+          description: 반응 반영 후 최신 집계
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReactionSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ─────────────────────────── Bookmarks ───────────────────────────
+  /api/bookmarks:
+    get:
+      tags: [Bookmarks]
+      summary: 저장한 장소 목록
+      responses:
+        '200':
+          description: 북마크한 장소
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Place' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Bookmarks]
+      summary: 장소 북마크 추가
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [placeId]
+              properties:
+                placeId: { type: string }
+      responses:
+        '201': { description: 추가됨 }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/bookmarks/{placeId}:
+    delete:
+      tags: [Bookmarks]
+      summary: 북마크 삭제
+      parameters:
+        - name: placeId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: 삭제됨 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ─────────────────────────── Groups ───────────────────────────
+  /api/groups:
+    post:
+      tags: [Groups]
+      summary: 가족 그룹 생성
+      description: |
+        가족 그룹을 만들고 초대코드를 발급합니다. 생성자는 `owner` 역할로 자동 참여합니다.
+        가족 간 케어 공유로 이중 급여(밥 두 번)·산책 누락을 막는 기능의 시작점입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "보리네 가족" }
+      responses:
+        '201':
+          description: 생성됨(초대코드 포함)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Group' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/groups/join:
+    post:
+      tags: [Groups]
+      summary: 초대코드로 그룹 참여
+      description: 가족에게 받은 초대코드로 그룹에 `member` 역할로 참여합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [inviteCode]
+              properties:
+                inviteCode: { type: string, example: "PAW-2K7Q" }
+      responses:
+        '200':
+          description: 참여됨(그룹 + 멤버 목록)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Group' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/groups/me:
+    get:
+      tags: [Groups]
+      summary: 내 그룹 조회(멤버 목록 포함)
+      description: 내가 속한 가족 그룹과 멤버 목록을 반환합니다. 속한 그룹이 없으면 404.
+      responses:
+        '200':
+          description: 내 그룹
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Group' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/groups/{groupId}/care-logs:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    get:
+      tags: [Groups]
+      summary: 오늘의 케어 조회
+      description: |
+        그룹의 케어 기록(물 갈아주기/밥/산책 등)을 조회합니다. 기본은 오늘(KST) —
+        누가·언제 했는지 가족이 함께 봅니다.
+      parameters:
+        - name: date
+          in: query
+          description: 조회 날짜(생략 시 오늘, KST)
+          schema: { type: string, format: date, example: "2026-07-10" }
+        - name: type
+          in: query
+          description: 케어 종류 필터(생략 시 전체)
+          schema: { $ref: '#/components/schemas/CareType' }
+      responses:
+        '200':
+          description: 케어 기록 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CareLog' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Groups]
+      summary: 케어 기록 남기기
+      description: "물/밥/산책 등을 기록합니다. done_by(수행자)는 토큰의 사용자로 서버가 기록합니다."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CareLogInput' }
+      responses:
+        '201':
+          description: 기록됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CareLog' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/groups/{groupId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    get:
+      tags: [Groups]
+      summary: 가족 채팅 메시지 목록
+      description: |
+        그룹 채팅 메시지(최신순, 커서 페이지네이션). MVP는 폴링으로 새 메시지를 확인하고,
+        실시간(WebSocket/STOMP)은 post-MVP로 확장합니다.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 메시지 목록(커서 페이지네이션)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/ChatMessage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Groups]
+      summary: 메시지 전송
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, example: "보리 저녁밥 방금 줬어요! 또 주지 마세요 🐶" }
+      responses:
+        '201':
+          description: 전송됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatMessage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/groups/{groupId}/walk-notes:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    get:
+      tags: [Groups]
+      summary: 산책 주의사항 조회(가족 공유 메모)
+      responses:
+        '200':
+          description: 주의사항 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WalkNote' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Groups]
+      summary: 산책 주의사항 전체 교체
+      description: 그룹의 공유 메모를 통째로 교체합니다(간단한 MVP 규약).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [notes]
+              properties:
+                notes:
+                  type: array
+                  items: { type: string }
+                  example: ["횡단보도 앞에서 오토바이에 짖어요", "저녁 산책은 목줄 짧게"]
+      responses:
+        '200':
+          description: 교체 후 최신 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WalkNote' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Provider:
+      name: provider
+      in: path
+      required: true
+      schema: { type: string, enum: [kakao, naver, google] }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      description: 이전 응답의 nextCursor
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, default: 20, maximum: 100 }
+    PostId:
+      name: postId
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+
+  responses:
+    Unauthorized:
+      description: 인증 필요/무효
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: UNAUTHORIZED, message: "로그인이 필요합니다." } }
+    Forbidden:
+      description: 권한 없음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: 리소스 없음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: 요청 검증 실패
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: 중복
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: "외부 데이터 한도 초과(예: KTO 1000콜/일)"
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: NOT_FOUND }
+            message: { type: string, example: "해당 장소를 찾을 수 없습니다." }
+            traceId: { type: string }
+
+    Page:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {}
+        nextCursor: { type: [string, "null"], example: "eyJpZCI6MTIzfQ==" }
+        hasMore: { type: boolean }
+
+    AuthTokens:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer, description: 초, example: 3600 }
+        user: { $ref: '#/components/schemas/User' }
+
+    User:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        provider: { type: string, enum: [kakao, naver, google] }
+        nickname: { type: string, example: "보리아빠" }
+        isNew: { type: boolean, description: 신규 가입이면 온보딩 유도 }
+
+    DogSize:
+      type: string
+      enum: [small, medium, large]
+      description: 소형견/중형견/대형견
+
+    Dog:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string, example: "보리" }
+        breed: { type: string, example: "믹스견" }
+        size: { $ref: '#/components/schemas/DogSize' }
+        birth: { type: [string, "null"], format: date, example: "2024-01-15" }
+        ageMonths: { type: integer, description: birth로부터 계산(응답 편의), example: 30 }
+        neutered: { type: boolean }
+        avatarUrl: { type: [string, "null"] }
+
+    DogInput:
+      type: object
+      required: [name, size]
+      properties:
+        name: { type: string }
+        breed: { type: string }
+        size: { $ref: '#/components/schemas/DogSize' }
+        birth: { type: [string, "null"], format: date }
+        neutered: { type: boolean, default: false }
+
+    Place:
+      type: object
+      description: 지도/리스트에 뿌리는 장소(프론트 PetPlace와 대응).
+      properties:
+        contentId: { type: string, example: "2733967" }
+        title: { type: string, example: "서울숲" }
+        source: { type: string, enum: [kto, vet, shop, trail], example: kto }
+        category: { $ref: '#/components/schemas/PlaceCategory' }
+        contentTypeId: { type: string, example: "12", description: "KTO 콘텐츠타입(12관광지/14문화/28레포츠/32숙박/38쇼핑/39음식점)" }
+        lat: { type: number, format: double, example: 37.5445 }
+        lng: { type: number, format: double, example: 127.0374 }
+        addr: { type: string, example: "서울특별시 성동구 뚝섬로 273" }
+        tel: { type: [string, "null"] }
+        image: { type: [string, "null"], format: uri }
+        distM: { type: number, format: double, description: 조회 기준점으로부터 거리(m), example: 320 }
+
+    PlaceCategory:
+      type: string
+      description: 프론트 카테고리 키(KTO contentTypeId 또는 레이어 키)
+      enum: ['12', '14', '28', '32', '38', '39', 'vet', 'shop', 'trail']
+
+    PlaceDetail:
+      allOf:
+        - $ref: '#/components/schemas/Place'
+        - type: object
+          properties:
+            overview: { type: [string, "null"], description: 개요 }
+            petInfo:
+              type: object
+              description: 반려동물 동반 상세(KTO detailPetTour2 — 대부분 자유텍스트)
+              properties:
+                acmpyPsblCpam: { type: [string, "null"], description: 동반 가능 반려동물 }
+                acmpyNeedMtr: { type: [string, "null"], description: 동반 시 필요사항 }
+                etcAcmpyInfo: { type: [string, "null"], description: 기타 유의사항 }
+
+    Walk:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        dogId: { type: integer, format: int64 }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: [string, "null"], format: date-time }
+        distanceM: { type: integer, example: 2400 }
+        durationS: { type: integer, example: 2280 }
+        path:
+          type: array
+          description: GPS 경로. [경도, 위도] 좌표 배열(GeoJSON LineString의 coordinates). DB엔 LINESTRING으로 저장.
+          items:
+            type: array
+            items: { type: number, format: double }
+            minItems: 2
+            maxItems: 2
+          example: [[127.0374, 37.5445], [127.0402, 37.5455]]
+        memo: { type: [string, "null"] }
+        weather: { type: [string, "null"], example: "맑음 24°C" }
+
+    WalkInput:
+      type: object
+      required: [dogId, startedAt, distanceM, durationS]
+      properties:
+        dogId: { type: integer, format: int64 }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: string, format: date-time }
+        distanceM: { type: integer }
+        durationS: { type: integer }
+        path:
+          type: array
+          items:
+            type: array
+            items: { type: number, format: double }
+        memo: { type: string }
+        weather: { type: string }
+
+    WalkStats:
+      type: object
+      properties:
+        weekKm:
+          type: array
+          description: 월~일 요일별 거리(km). 길이 7.
+          items: { type: number, format: double }
+          example: [2.1, 2.9, 1.2, 0, 1.8, 3.1, 2.4]
+        totalKm: { type: number, format: double, example: 13.5 }
+        walkCount: { type: integer, example: 6 }
+        avgKm: { type: number, format: double, example: 2.3 }
+        topPlaces:
+          type: array
+          description: 자주 간 곳 상위
+          items:
+            type: object
+            properties:
+              place: { type: string, example: "서울숲" }
+              count: { type: integer, example: 3 }
+
+    Board:
+      type: string
+      enum: ["산책로 후기", "동반장소", "건강·병원", "자유", "자랑"]
+
+    ReactionType:
+      type: string
+      enum: [help, cute, empathy]
+      description: 도움돼요/귀여워요/공감
+
+    ReactionSummary:
+      type: object
+      properties:
+        help: { type: integer }
+        cute: { type: integer }
+        empathy: { type: integer }
+        mine: { type: [string, "null"], description: "내가 누른 반응(없으면 null)" }
+
+    Post:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        author:
+          type: object
+          properties:
+            id: { type: integer, format: int64 }
+            nickname: { type: string, example: "보리아빠" }
+        board: { $ref: '#/components/schemas/Board' }
+        loc: { type: [string, "null"], example: "서울숲" }
+        placeId: { type: [string, "null"], description: 연결된 장소(선택) }
+        title: { type: string, example: "서울숲 아침 산책 코스 추천" }
+        body: { type: string }
+        commentCount: { type: integer, example: 4 }
+        reactions: { $ref: '#/components/schemas/ReactionSummary' }
+        createdAt: { type: string, format: date-time }
+
+    PostInput:
+      type: object
+      required: [board, title, body]
+      properties:
+        board: { $ref: '#/components/schemas/Board' }
+        title: { type: string }
+        body: { type: string }
+        loc: { type: string }
+        placeId: { type: string }
+
+    Comment:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        author:
+          type: object
+          properties:
+            nickname: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    GroupRole:
+      type: string
+      enum: [owner, member]
+      description: 그룹 내 역할(생성자 owner / 참여자 member)
+
+    GroupMember:
+      type: object
+      description: 가족 그룹 멤버(group_member)
+      properties:
+        id: { type: integer, format: int64 }
+        userId: { type: integer, format: int64 }
+        nickname: { type: string, example: "보리아빠" }
+        role: { $ref: '#/components/schemas/GroupRole' }
+        joinedAt: { type: string, format: date-time }
+
+    Group:
+      type: object
+      description: 가족 그룹(family_group). 초대코드로 가족을 초대한다.
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string, example: "보리네 가족" }
+        inviteCode: { type: string, example: "PAW-2K7Q" }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/GroupMember' }
+        createdAt: { type: string, format: date-time }
+
+    CareType:
+      type: string
+      enum: [water, meal, walk, med, vet]
+      description: 물 갈아주기/밥/산책/약/병원
+
+    CareLog:
+      type: object
+      description: "케어 기록(care_log): 누가·언제 어떤 케어를 했는지 가족과 공유."
+      properties:
+        id: { type: integer, format: int64 }
+        dogId: { type: integer, format: int64 }
+        groupId: { type: [integer, "null"], format: int64, description: 가족 그룹(개인 기록이면 null) }
+        type: { $ref: '#/components/schemas/CareType' }
+        doneBy:
+          type: object
+          description: 수행한 가족 구성원
+          properties:
+            userId: { type: integer, format: int64 }
+            nickname: { type: string, example: "보리엄마" }
+        occurredAt: { type: string, format: date-time }
+        memo: { type: [string, "null"], example: "사료 반 컵 + 습식 토핑" }
+
+    CareLogInput:
+      type: object
+      required: [dogId, type]
+      properties:
+        dogId: { type: integer, format: int64 }
+        type: { $ref: '#/components/schemas/CareType' }
+        occurredAt: { type: string, format: date-time, description: 생략 시 서버 현재 시각 }
+        memo: { type: string }
+
+    ChatMessage:
+      type: object
+      description: 가족 채팅 메시지(chat_message)
+      properties:
+        id: { type: integer, format: int64 }
+        groupId: { type: integer, format: int64 }
+        author:
+          type: object
+          properties:
+            userId: { type: integer, format: int64 }
+            nickname: { type: string, example: "보리아빠" }
+        body: { type: string, example: "보리 저녁밥 방금 줬어요! 또 주지 마세요 🐶" }
+        createdAt: { type: string, format: date-time }
+
+    WalkNote:
+      type: object
+      description: 산책 시 주의사항(walk_note — 가족 공유 메모)
+      properties:
+        id: { type: integer, format: int64 }
+        groupId: { type: integer, format: int64 }
+        body: { type: string, example: "횡단보도 앞에서 오토바이에 짖어요" }
+        createdAt: { type: string, format: date-time }
