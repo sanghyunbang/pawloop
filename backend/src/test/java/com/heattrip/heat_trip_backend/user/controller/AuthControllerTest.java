@@ -3,6 +3,7 @@ package com.heattrip.heat_trip_backend.user.controller;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.RefreshTokenRequest;
+import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -50,17 +52,79 @@ class AuthControllerTest {
             .build();
 
     @Test
-    @DisplayName("로그인 API는 서비스가 반환한 JWT를 그대로 응답한다")
-    void login_returnsTokenFromService() throws IllegalAccessException {
+    @DisplayName("로그인 API는 서비스가 만든 AuthTokens 를 그대로 200 으로 응답한다")
+    void login_returnsAuthTokensFromService() {
+        // 예전에는 반환 타입이 ResponseEntity<String> 이었고 본문이 JWT 평문이었다.
+        // 그 시절 단언("jwt-token" 문자열 비교)은 이 타입 변경으로 **컴파일부터 죽는다** —
+        // 되돌림에 대한 가장 강한 반응이다. (이슈 #10 완료 조건 9)
         LoginRequest request = new LoginRequest();
         request.setEmail("test1234@test.com");
         request.setPassword("test1234");
-        when(userService.login(request)).thenReturn("jwt-token");
+        AuthTokensResponse tokens = new AuthTokensResponse(
+                "jwt-token", "opaque-refresh-token", 3600L, false, UserResponse.from(ME));
+        when(userService.login(request)).thenReturn(tokens);
 
         var response = authController.login(request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isEqualTo("jwt-token");
+        assertThat(response.getBody())
+                .as("컨트롤러는 얇다 — 응답 조립은 서비스가 끝냈다")
+                .isEqualTo(tokens);
+    }
+
+    @Test
+    @DisplayName("회원가입 API는 저장된 사용자를 계약의 User 로 바꿔 201 로 응답한다")
+    void signup_returns201WithCreatedUser() {
+        // 예전에는 200 + 평문 "회원가입 성공" 이었다. 계약 어디에도 없는 모양이라
+        // 클라이언트가 방금 만든 계정의 id 조차 알 수 없었다. (이슈 #10)
+        SignupRequest request = new SignupRequest();
+        request.setEmail("test1234@test.com");
+        when(userService.signup(request)).thenReturn(ME);
+
+        var response = authController.signup(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getId()).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("소셜 로그인 시작 API는 Spring 진입점으로 302 리다이렉트만 하고 인증 로직을 재구현하지 않는다")
+    void startOAuth_redirectsToTheSpringEntryPoint() {
+        for (String provider : new String[] {"kakao", "naver", "google"}) {
+            var response = authController.startOAuth(provider);
+
+            assertThat(response.getStatusCode())
+                    .as("계약은 이 경로를 302 로 선언한다. 예전 구현은 빈 200 이었다")
+                    .isEqualTo(HttpStatus.FOUND);
+            assertThat(response.getHeaders().getLocation())
+                    .hasToString("/oauth2/authorization/" + provider);
+        }
+
+        // 이 경로는 서비스를 전혀 부르지 않는다 — 부르는 순간 인증 로직의 두 번째 사본이 생긴다.
+        verifyNoMoreInteractions(userService);
+    }
+
+    @Test
+    @DisplayName("화이트리스트에 없는 공급자는 302 가 아니라 400 이고 사유에 입력값을 되싣지 않는다")
+    void startOAuth_rejectsUnsupportedProvider() {
+        // 화이트리스트를 지우면 facebook 이 302 를 받아 이 테스트가 빨간불이 된다.
+        // (이슈 #10 완료 조건 11)
+        assertThatThrownBy(() -> authController.startOAuth("facebook"))
+                .isInstanceOf(IllegalArgumentException.class)
+                // 메시지는 그대로 400 응답 본문이 된다. 입력을 되싣으면 반사형 XSS 재료다.
+                .hasMessageNotContaining("facebook");
+    }
+
+    @Test
+    @DisplayName("공급자 이름은 대소문자와 앞뒤 공백을 가리지 않는다")
+    void startOAuth_normalizesTheProviderName() {
+        var response = authController.startOAuth("  Kakao ");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(response.getHeaders().getLocation())
+                .as("정규화하지 않으면 /oauth2/authorization/Kakao 로 넘어가 그쪽에서 등록을 못 찾는다")
+                .hasToString("/oauth2/authorization/kakao");
     }
 
     @Test

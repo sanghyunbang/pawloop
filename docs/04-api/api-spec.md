@@ -18,7 +18,7 @@
 | 백엔드 | Spring Boot (Java/Kotlin 혼용) + MySQL(공간형 POINT/LINESTRING) |
 | Base URL(운영) | `https://api.heattrip.link` (도메인 유지, 서비스명만 Pawloop로 피벗) |
 | Base URL(로컬) | `http://10.0.2.2:8080` (안드로이드 에뮬레이터 → 호스트 localhost) |
-| 프론트 진입점 | `app/lib/core/config/env.dart` → `Env.apiBase` (`--dart-define=API_BASE` > `.env: API_BASE_URL` > 로컬) |
+| 프론트 진입점 | `app/lib/core/config/env.dart` → `Env.apiBase` (`--dart-define=API_BASE` > `--dart-define=API_BASE_URL` > `Env.localEmulator`) |
 | 인증 | JWT Bearer 토큰 (`Authorization: Bearer <token>`) |
 | Content-Type | `application/json; charset=utf-8` |
 | 시간 | ISO-8601 (`2026-06-30T08:12:00+09:00`), 서버는 KST 기준 |
@@ -72,27 +72,36 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ### 1.3 에러 포맷
 
-레거시 컨트롤러의 `{"error": "..."}` 패턴을 확장한 공통 envelope.
+4xx·5xx 본문은 **이 봉투 하나뿐이다**(#10). 만드는 곳도 `GlobalExceptionHandler` 한 곳이다.
 
 ```json
 {
   "error": {
-    "code": "PLACE_NOT_FOUND",
+    "code": "NOT_FOUND",
     "message": "해당 장소를 찾을 수 없습니다.",
     "traceId": "b3f1..."
   }
 }
 ```
 
-| HTTP | code 예시 | 상황 |
+`code` 는 **HTTP 상태 하나당 하나로 고정**된다 — 던지는 쪽이 문자열을 손으로 적지 않는다.
+`traceId` 는 응답 헤더 `X-Correlation-Id` 와 같은 값이며, 서버 로그에서 그 요청을 집는 열쇠다.
+
+| HTTP | code | 상황 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | 요청 바디/쿼리 검증 실패 |
-| 401 | (본문 없음) | 토큰 없음/무효 — 이 표에서 유일하게 **본문을 주지 않는** 상태다(위 1.1 참조) |
+| 400 | `VALIDATION` | 요청 바디/쿼리 검증 실패, 읽을 수 없는 JSON |
+| 401 | (본문 없음) | 토큰 없음/무효, 자격증명 실패 — 이 표에서 유일하게 **본문을 주지 않는** 상태다(위 1.1 참조) |
 | 403 | `FORBIDDEN` | 타인 리소스 수정 시도 |
-| 404 | `NOT_FOUND` | 리소스 없음 |
-| 409 | `CONFLICT` | 중복(예: 이미 누른 반응) |
+| 404 | `NOT_FOUND` | 리소스 없음, 알 수 없는 경로 |
+| 405 | `METHOD_NOT_ALLOWED` | 그 경로가 지원하지 않는 HTTP 메서드 |
+| 409 | `CONFLICT` | 중복(예: 이미 가입된 이메일) |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | `Content-Type` 이 `application/json` 이 아님 |
 | 429 | `RATE_LIMITED` | 외부 데이터(예: KTO 1000콜/일) 한도 |
-| 500 | `INTERNAL_ERROR` | 서버 오류 |
+| 500 | `INTERNAL` | 서버 오류. `message` 는 고정 문구다 — 예외 메시지에는 SQL 조각·경로·이메일·토큰이 섞인다(#6) |
+
+> 2026-08 이전에는 실제 응답이 세 갈래였다: 이 봉투(계약), 전역 처리기의
+> `{ status, error, message, path, timestamp }`, `SocialController` 의 `{ "error": "문자열" }`.
+> #10 이 하나로 합쳤다. `VALIDATION_ERROR`·`INTERNAL_ERROR` 표기도 이때 사라졌다.
 
 ---
 
@@ -113,7 +122,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 > ⚠️ `token` 은 더 이상 URL 의 꼬리가 아니다. `'token='` 뒤를 전부 잘라 쓰면 `&refresh=...` 까지 삼켜 손상된 액세스 토큰을 저장하게 된다. `Uri.parse(url).queryParameters['token']` 로 읽어야 한다.
 > 딥링크에 자격증명 두 개가 실리는 위험(302 Location 헤더·브라우저 히스토리)과 그 대체(1회용 코드 교환)는 `openapi.yaml` 의 같은 경로 설명과 #14 를 보라.
 
-> 계약에 있는 `GET /auth/oauth/{provider}` 는 **미구현**이다. 실제 진입점은 위 경로다.
+> 계약에 있는 `GET /auth/oauth/{provider}` 는 이 경로로의 **302 래퍼**다(#10 에서 구현).
+> 앱은 그걸 쓸 필요가 없다 — 위 경로를 직접 열면 리다이렉트 한 번을 아낀다.
+> 예전에는 계약이 "미구현" 이라고 적었는데 실제로는 핸들러가 있었고 **빈 200** 을 줬다.
 > 딥링크 스킴은 `heattrip://` 다 — 코드(`social_login_service.dart`, `OAuth2SuccessHandler.java`)가 그렇게 동작한다. 이 문서가 예전에 예시로 들던 `pawloop` 스킴은 오기였고, 그대로 구현하면 콜백을 받지 못한다.
 
 ### 2.2 소셜 로그인 콜백 → 토큰 교환 — 🟡 계획(미구현)
@@ -156,7 +167,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **회전**: 성공하면 옛 refresh 토큰은 그 자리에서 폐기된다. 다시 쓰면 401 이다.
 - **재사용 감지**: 이미 폐기된 refresh 토큰이 다시 오면 유출로 간주해 **그 사용자의 모든 세션**을 폐기하고 401 이다. 즉 옛 토큰으로 한 번 재시도하면 방금 받았던 새 토큰도 함께 죽는다.
 - 만료·미존재는 그냥 401 이며 다른 세션을 끊지 않는다. **형식이 맞는 요청**의 실패는 원인과 무관하게 전부 **본문 없는 401** 이다(빈 문자열·`{}` 포함).
-- ⚠️ **형식 자체가 깨진 요청은 401 이 아니다.** 읽을 수 없는 JSON·배열 본문·타입 불일치는 **400**, `Content-Type` 이 `application/json` 이 아니면 **415**, `POST` 가 아니면 **405** 다(#9). 세 응답의 본문은 `{ status, error, message, path, timestamp }` 이고 예외 메시지를 싣지 않는다 — 파서 메시지에 요청 본문(= refresh 토큰 원문) 조각이 섞이기 때문이다(#6). **앱은 이 셋을 401 처럼 다루면 안 된다** — 재로그인 사유가 아니라 요청이 잘못됐다는 신호이고, 재시도해도 결과가 같다.
+- ⚠️ **형식 자체가 깨진 요청은 401 이 아니다.** 읽을 수 없는 JSON·배열 본문·타입 불일치는 **400**, `Content-Type` 이 `application/json` 이 아니면 **415**, `POST` 가 아니면 **405** 다(#9). 세 응답의 본문은 §1.3 의 공통 `Error` 봉투이고 예외 메시지를 싣지 않는다 — 파서 메시지에 요청 본문(= refresh 토큰 원문) 조각이 섞이기 때문이다(#6). **앱은 이 셋을 401 처럼 다루면 안 된다** — 재로그인 사유가 아니라 요청이 잘못됐다는 신호이고, 재시도해도 결과가 같다.
 - ⚠️ 클라이언트는 갱신 요청을 **직렬화(single-flight)** 해야 한다. 같은 값으로 동시에 두 번 보내면 한쪽이 재사용으로 처리되어 전 기기가 끊긴다. 서버는 유예 창을 두지 않는다.
 - 수명 14일(`jwt.refresh-expiration`). 서버에는 SHA-256 해시만 저장된다.
 
@@ -175,24 +186,45 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   "age": 32,
   "travelType": "healing",
   "imageUrl": "https://.../me.png",
+  "provider": "local",
   "createdAt": "2026-05-01T10:00:00+09:00",
   "updatedAt": "2026-08-01T10:00:00+09:00"
 }
 ```
 
-> `provider` 는 `users` 테이블에 컬럼이 없어 아직 내려오지 않는다(#10·#5). 필드명은 `profileImage` 가 아니라 **`imageUrl`** 이다.
+> `provider` 는 내려온다 — `users.provider` 컬럼은 #7 에서 생겼고 `UserResponse` 가 매핑한다. 값은 `local`(이메일 가입)·`kakao`·`naver`·`google` 중 하나다. (이 문서는 오래도록 "컬럼이 없어 아직 내려오지 않는다"고 적고 있었다.) 필드명은 `profileImage` 가 아니라 **`imageUrl`** 이다.
+> `isNew` 는 여기에 없다 — 로그인 응답(`AuthTokens`)의 1회성 이벤트 속성이지 프로필의 영속 속성이 아니다(#23).
 
-### 2.5 이메일 회원가입 — ✅ 구현 (계약은 목표 형태)
+### 2.5 이메일 회원가입 — ✅ 구현(#10)
 
-`POST /auth/signup` — 비인증. 목표 계약은 `201 Created` + `User` JSON.
+`POST /auth/signup` — 비인증. `201 Created` + `User` JSON. 중복 이메일은 `409` + §1.3 의 `Error`(`code: CONFLICT`).
 
-> 현행 구현은 `200 OK` + 본문 `"회원가입 성공"`(평문)이다. 구현을 계약에 맞추는 것은 #10.
+```json
+// 201 Created — 2.4 와 같은 User 형태
+{ "id": 42, "email": "bori@example.com", "nickname": "보리아빠", "provider": "local", "...": "..." }
+```
 
-### 2.6 이메일 로그인 — ✅ 구현 (계약은 목표 형태)
+> ⚠️ **예전에는 `200 OK` + 본문 `"회원가입 성공"`(평문)이었고 중복은 400 이었다.** 200 만 성공으로 보는 클라이언트는 201 도 성공으로 받아야 한다.
+> **이 응답에는 토큰이 없다.** 가입 직후 로그인 상태로 만들려면 `POST /auth/login` 을 한 번 더 부른다.
 
-`POST /auth/login` — 비인증. 목표 계약은 `200 OK` + `AuthTokens` JSON.
+### 2.6 이메일 로그인 — ✅ 구현(#10)
 
-> 현행 구현은 JSON 이 아니라 **JWT 원문 문자열**을 본문에 담아 반환한다. 구현을 계약에 맞추는 것은 #10.
+`POST /auth/login` — 비인증. `200 OK` + `AuthTokens` JSON.
+
+```json
+// 200 OK
+{
+  "accessToken": "eyJhbGci...",
+  "refreshToken": "9qQ1t...(43자)",
+  "expiresIn": 3600,
+  "isNew": false,
+  "user": { "id": 42, "email": "bori@example.com", "provider": "local", "...": "..." }
+}
+```
+
+> ⚠️ **예전에는 JSON 이 아니라 JWT 원문 문자열을 본문에 그대로 담았다.** `response.body` 를 토큰으로 저장하던 코드는 이제 `accessToken` 을 읽어야 한다 — 안 고치면 JSON 전체가 토큰으로 저장되어 모든 요청이 401 이 된다.
+> `refreshToken` 이 드디어 실린다. 서버는 #9 부터 발급·저장하고 있었지만 응답에 자리가 없어 아무에게도 전달되지 않았다. `isNew` 는 이 경로에서 항상 `false` 다.
+> 자격증명 실패는 **본문 없는 401** 이다(가입되지 않은 이메일과 비밀번호 오류를 구분하지 않는다 — 구분해 주면 그 자체가 가입 여부 조회 수단이다). 예전에는 두 경우 모두 **500** 이었다.
 
 ### 2.7 내 정보 수정 — ✅ 구현
 
@@ -297,7 +329,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   &contentTypeId={optional}
 ```
 
-- `serviceKey`: `.env`의 `YOUR_DECODING_SERVICE_KEY`(명칭과 달리 이미 **인코딩된** 키). 프론트에서 그대로 붙임.
+- `serviceKey`: `--dart-define=YOUR_DECODING_SERVICE_KEY` 로 들어오는 값(`Env.tourServiceKey`). 명칭과 달리 이미 **인코딩된** 키라 프론트에서 그대로 붙인다. 예전에는 `.env` 를 에셋으로 번들해 읽었는데, 그러면 APK 안에 원본이 그대로 실려 나간다 — #29 가 걷어냈다. dart-define 도 완화일 뿐이라 이 키를 앱에서 진짜로 없애려면 백엔드 프록시로 옮겨야 한다(#29 (B)).
 - `arrange=E`: 거리순. `radius` 기본 8000m.
 - 응답 파싱(프론트): `response.body.items.item[]` → `contentid, title, contenttypeid, addr1, firstimage, tel, mapx(경도), mapy(위도), dist(m)`.
 - `contenttypeid`: `12`관광지 `14`문화 `28`레포츠 `32`숙박 `38`쇼핑 `39`음식점.

@@ -1,6 +1,9 @@
 package com.heattrip.heat_trip_backend.S3.media.error;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
+import com.heattrip.heat_trip_backend.observability.logging.CorrelationIdFilter;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
@@ -13,6 +16,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -69,6 +73,12 @@ class GlobalExceptionHandlerStatusTest extends AbstractMySqlIntegrationTest {
         void boom() {
             throw new IllegalStateException("bori@example.com 의 비밀번호는 $2a$10$secrethash 다");
         }
+
+        /** 검증 실패 경로 — 400 + code VALIDATION 이어야 한다. (이슈 #10) */
+        @GetMapping(BASE + "/illegal-argument")
+        void illegalArgument() {
+            throw new IllegalArgumentException("probe-validation-failed");
+        }
     }
 
     @TestConfiguration
@@ -78,6 +88,8 @@ class GlobalExceptionHandlerStatusTest extends AbstractMySqlIntegrationTest {
             return new Probe();
         }
     }
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Autowired private MockMvc mockMvc;
     @Autowired private UserRepository userRepository;
@@ -112,7 +124,7 @@ class GlobalExceptionHandlerStatusTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
-    @DisplayName("던진 쪽이 고른 사유 문구가 응답 본문에 그대로 실린다")
+    @DisplayName("던진 쪽이 고른 사유 문구가 계약의 error.message 자리에 그대로 실린다")
     void responseStatusException_carriesItsReason() throws Exception {
         var response = mockMvc
                 .perform(get(Probe.BASE + "/403").header("Authorization", bearer()))
@@ -120,9 +132,53 @@ class GlobalExceptionHandlerStatusTest extends AbstractMySqlIntegrationTest {
 
         // getReason() 은 던진 사람이 고른 문구다. getMessage() 는 상태 코드가 섞인 조합이라
         // 그대로 내보내면 "403 FORBIDDEN \"probe-forbidden\"" 같은 값이 클라이언트에 간다.
+        assertThat(errorBody(response).path("message").asText()).isEqualTo("probe-forbidden");
         assertThat(response.getContentAsString(java.nio.charset.StandardCharsets.UTF_8))
-                .contains("probe-forbidden")
                 .doesNotContain("403 FORBIDDEN");
+    }
+
+    @Test
+    @DisplayName("오류 본문은 상태 코드마다 계약의 Error 봉투와 정해진 code 로 나간다")
+    void errorBody_matchesTheContractEnvelope() throws Exception {
+        // 예전에는 {status, error, message, path, timestamp} 였다. 계약(openapi.yaml 의
+        // Error)은 {error:{code,message,traceId}} 이고, 앱은 error.code 로 분기한다.
+        // 형태가 다르면 앱은 계약대로 짠 분기에서 아무것도 못 읽는다. (이슈 #10)
+        String token = bearer();
+        record Case(int status, String code) {}
+
+        for (Case expected : new Case[] {new Case(403, "FORBIDDEN"), new Case(404, "NOT_FOUND")}) {
+            var response = mockMvc
+                    .perform(get(Probe.BASE + "/" + expected.status()).header("Authorization", token))
+                    .andReturn().getResponse();
+
+            assertThat(errorBody(response).path("code").asText())
+                    .as("%d 의 error.code", expected.status())
+                    .isEqualTo(expected.code());
+        }
+
+        var badRequest = mockMvc
+                .perform(get(Probe.BASE + "/illegal-argument").header("Authorization", token))
+                .andReturn().getResponse();
+        assertThat(badRequest.getStatus()).isEqualTo(400);
+        assertThat(errorBody(badRequest).path("code").asText())
+                .as("완료 조건 5 가 이 값을 이름으로 요구한다")
+                .isEqualTo("VALIDATION");
+    }
+
+    @Test
+    @DisplayName("오류 본문의 traceId 가 응답 헤더의 상관관계 ID 와 같아서 그 요청을 로그에서 집을 수 있다")
+    void errorBody_carriesTheCorrelationIdOfThisRequest() throws Exception {
+        // 예전에는 이 값이 message 안에 "(요청 ID: ...)" 로 섞여 있었다. 계약은 그것을
+        // error.traceId 라는 자기 필드로 정의한다 — 문구를 파싱해 꺼낼 필요가 없어야 한다.
+        var response = mockMvc
+                .perform(get(Probe.BASE + "/boom").header("Authorization", bearer()))
+                .andReturn().getResponse();
+
+        String traceId = errorBody(response).path("traceId").asText();
+        assertThat(traceId).isNotBlank();
+        assertThat(traceId)
+                .as("헤더와 본문이 다른 값이면 로그에서 이 요청을 찾을 수 없다")
+                .isEqualTo(response.getHeader(CorrelationIdFilter.HEADER));
     }
 
     @Test
@@ -155,8 +211,25 @@ class GlobalExceptionHandlerStatusTest extends AbstractMySqlIntegrationTest {
                 .doesNotContain("bori@example.com")
                 .doesNotContain("$2a$10$secrethash")
                 .doesNotContain("IllegalStateException");
-        assertThat(body)
+        assertThat(errorBody(response).path("code").asText()).isEqualTo("INTERNAL");
+        assertThat(errorBody(response).path("traceId").asText())
                 .as("원인을 찾을 수단은 남겨야 한다 — 로그에서 이 요청을 집을 수 있는 ID")
-                .contains("요청 ID");
+                .isNotBlank();
+    }
+
+    // ─────────────────────────── 지그 ───────────────────────────
+
+    /** 응답 본문의 계약 봉투 안쪽({@code $.error})을 꺼낸다. */
+    private static JsonNode errorBody(MockHttpServletResponse response) throws Exception {
+        JsonNode root = MAPPER.readTree(
+                response.getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+
+        assertThat(root.has("error"))
+                .as("계약(openapi.yaml 의 Error)은 최상위에 error 하나뿐인 봉투다. 본문: %s", root)
+                .isTrue();
+        assertThat(root.properties())
+                .as("봉투 밖에 필드를 더하면 그건 더 이상 계약의 Error 가 아니다")
+                .hasSize(1);
+        return root.path("error");
     }
 }
