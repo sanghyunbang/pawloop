@@ -29,6 +29,14 @@ repositories {
 dependencyManagement {
 	imports {
 		mavenBom 'org.springframework.ai:spring-ai-bom:1.0.0'
+		// Testcontainers 버전은 여기 한 곳에서만 정한다. 개별 모듈에 버전을 적으면
+		// mysql / junit-jupiter 가 서로 다른 버전으로 갈라진다. 이슈 #26.
+		//
+		// Spring Boot 3.5.4 가 관리하는 값은 1.21.3 인데, 그걸 쓰면 Docker Engine 29 에서
+		// 컨테이너가 아예 뜨지 않는다("Could not find a valid Docker environment", /info 가 400).
+		// Docker 29 는 API 버전 1.44 미만을 거부하는데 1.21.3 은 더 낮은 버전으로 붙는다.
+		// 그래서 Boot 의 관리 버전을 덮어쓴다. 되돌리려면 Docker 29 에서 먼저 확인할 것.
+		mavenBom 'org.testcontainers:testcontainers-bom:1.21.4'
 	}
 }
 
@@ -99,20 +107,20 @@ dependencies {
 
 	// TEST관련
 	testRuntimeOnly 'com.h2database:h2'
+
+	// Testcontainers — 검색의 핵심 경로가 MySQL FULLTEXT(MATCH ... AGAINST) 전용이라
+	// H2 로는 검증할 수 없다. 실제 MySQL 8.0 컨테이너를 띄워서 돌린다. 이슈 #26.
+	// 컨테이너는 src/test/java/.../support/MySqlTestContainer 에서 JVM 당 한 번만 뜬다.
+	testImplementation 'org.testcontainers:mysql'
+	testImplementation 'org.testcontainers:junit-jupiter'
 }
 
 tasks.named('test') {
-	useJUnitPlatform {
-        // 'mysql' 태그는 MySQL 전용 기능(FULLTEXT MATCH...AGAINST)에 의존한다.
-        // H2 로는 500 이 나므로 기본 실행에서 제외한다. 되살리려면:
-        //   ./gradlew test -PincludeTags=mysql   (실제 MySQL 필요)
-        // 근본 해결(Testcontainers)은 이슈 #26.
-        if (!project.hasProperty('includeTags')) {
-            excludeTags 'mysql'
-        } else {
-            includeTags project.property('includeTags')
-        }
-    }
+	// 태그 제외 없음. MySQL 전용 경로(FULLTEXT MATCH...AGAINST)는 이슈 #26 에서
+    // Testcontainers 로 실제 MySQL 8.0 위에서 돌게 했다. 다시 제외하지 말 것 —
+    // 제외하면 검색의 핵심 경로가 CI 에서 한 번도 검증되지 않는 상태로 돌아간다.
+    // 전제: Docker 가 있어야 한다(GitHub Actions ubuntu-latest 는 기본 탑재).
+    useJUnitPlatform()
 
     // 테스트는 'test' 프로파일로 돈다 → src/test/resources/application-test.properties.
     // 이게 없으면 jwt.secret 등 기본값 없는 플레이스홀더 10개가 해결되지 않아
