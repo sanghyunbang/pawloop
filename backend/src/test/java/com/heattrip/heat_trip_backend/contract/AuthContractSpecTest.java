@@ -149,6 +149,21 @@ class AuthContractSpecTest {
         assertThat(asMap(paths.get("/auth/me")))
                 .as("PUT /auth/me 는 구현·앱 호출 모두 존재하는데 계약에서 빠져 있었다")
                 .containsKeys("get", "put", "delete");
+
+        // POST /auth/logout 은 AuthController.logout 으로 실재한다. 계약은 오래도록 그것을
+        // "미구현 — 핸들러가 없습니다" 라고 적었고 아래 unimplementedOperations_areMarkedAsSuch 가
+        // 그 거짓 서술이 **남아 있기를** 요구해 초록불로 고정하고 있었다. 자리를 이쪽으로 옮긴다. (#5)
+        assertThat(asMap(paths.get("/auth/logout")))
+                .as("핸들러가 있는 경로를 '핸들러가 없다'고 적는 계약은 앱을 잘못 인도한다")
+                .containsKey("post");
+        Map<String, Object> logout = asMap(asMap(paths.get("/auth/logout")).get("post"));
+        assertThat(String.valueOf(logout.get("description")))
+                .as("서버측 폐기가 없다는 사실은 남아야 한다 — 사라진 것은 '핸들러가 없다'는 거짓뿐이다")
+                .doesNotContain("미구현")
+                .contains("#9");
+        assertThat(logout)
+                .as("기계가 읽는 미구현 표식도 함께 걷어야 한다")
+                .doesNotContainKey("x-implementation-status");
     }
 
     @Test
@@ -158,8 +173,7 @@ class AuthContractSpecTest {
         List<Op> unimplemented = List.of(
                 new Op("/auth/oauth/{provider}", "get"),
                 new Op("/auth/oauth/{provider}/callback", "post"),
-                new Op("/auth/token/refresh", "post"),
-                new Op("/auth/logout", "post"));
+                new Op("/auth/token/refresh", "post"));
 
         Map<String, Object> paths = asMap(spec.get("paths"));
         for (Op op : unimplemented) {
@@ -218,6 +232,39 @@ class AuthContractSpecTest {
         assertThat(String.valueOf(logout.get("summary")) + String.valueOf(logout.get("description")))
                 .as("현재 기기만인지 전 기기인지가 어디에도 없었다")
                 .contains("전 기기");
+    }
+
+    @Test
+    @DisplayName("401 응답은 본문을 선언하지 않는다 — 서버가 실제로 본문 없는 401 만 돌려주기 때문이다")
+    void unauthorizedResponse_declaresNoBody() {
+        Map<String, Object> unauthorized =
+                asMap(asMap(asMap(spec.get("components")).get("responses")).get("Unauthorized"));
+
+        // 서버의 인증 실패는 두 경로뿐이고 둘 다 본문이 없다 —
+        // SecurityConfig 의 HttpStatusEntryPoint(UNAUTHORIZED) 와
+        // GlobalExceptionHandler.handleUnauthenticated 의 ResponseEntity<Void>.
+        // 계약이 JSON Error 본문을 선언하면 앱이 error.code 로 분기하다 파싱에서 깨진다.
+        assertThat(unauthorized)
+                .as("28개 오퍼레이션이 이 응답을 $ref 한다 — 여기 한 줄이 앱 전체의 401 처리를 정한다")
+                .doesNotContainKey("content");
+        assertThat(String.valueOf(unauthorized.get("description")))
+                .as("본문이 없다는 사실을 사람이 읽을 수 있게 적어야 한다")
+                .contains("본문");
+    }
+
+    @Test
+    @DisplayName("소셜 로그인 실패 딥링크의 error 코드 목록이 계약에 적혀 있다")
+    void spec_documentsTheSocialLoginFailureDeepLinkCodes() {
+        Map<String, Object> startOAuth = asMap(asMap(asMap(spec.get("paths"))
+                .get("/oauth2/authorization/{provider}")).get("get"));
+        String description = String.valueOf(startOAuth.get("description"));
+
+        // 성공(`?token=`)만 적혀 있고 실패(`?error=`)는 코드 목록을 포함해 어디에도 없었다.
+        // 앱은 모르는 코드를 받으면 조용히 무시하거나 빈 화면이 된다.
+        assertThat(description).contains("?error=");
+        assertThat(description)
+                .as("서버가 실제로 보내는 코드다 — OAuth2SuccessHandler·OAuth2FailureHandler·CustomOAuth2UserService")
+                .contains("email_already_registered", "account_state_invalid", "authentication_failed");
     }
 
     @Test

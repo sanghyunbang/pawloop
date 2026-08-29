@@ -116,6 +116,19 @@ paths:
       description: |
         앱(`flutter_web_auth_2`)이 실제로 여는 URL 입니다. 공급자 인증 화면으로 302 리다이렉트됩니다.
         인증 성공 시 백엔드가 앱 딥링크로 리다이렉트합니다: `heattrip://login-callback?token=<JWT>`.
+
+        **실패도 같은 딥링크로 돌아옵니다**: `heattrip://login-callback?error=<code>`.
+        앱은 `token` 과 `error` 중 어느 쪽이 실려 있는지로 성공/실패를 가릅니다.
+        현재 서버가 보내는 `code` 는 다음이 전부입니다.
+
+        | `error` | 뜻 | 앱이 할 일 |
+        |:---|:---|:---|
+        | `email_already_registered` | 같은 이메일이 다른 경로로 이미 가입돼 있다 (#7) | 기존 가입 방식으로 로그인하도록 안내 |
+        | `account_state_invalid` | 인증 주체에 `users.id` 가 없어 토큰을 발급할 수 없다 (#5) | 일반 오류 안내 후 재시도 |
+        | `authentication_failed` | 그 밖의 모든 실패(공급자 오류·사용자 취소 등)의 기본값 | 일반 오류 안내 후 재시도 |
+
+        공급자가 돌려준 오류 코드가 `[a-z0-9_]{1,64}` 를 만족하면 그대로 전달될 수 있습니다.
+        즉 목록은 닫혀 있지 않습니다 — **모르는 `code` 는 일반 오류로 처리**하세요.
       security: []
       parameters:
         - $ref: '#/components/parameters/Provider'
@@ -266,19 +279,21 @@ paths:
       tags: [Auth]
       summary: 로그아웃(전 기기 — 해당 사용자의 모든 세션을 폐기)
       description: |
-        **미구현.** 백엔드에 `/auth/logout` 핸들러가 없습니다(2026-08 기준). 도입은 이슈 #9.
+        **핸들러는 있습니다.** `AuthController.logout` 이 인증된 주체를 받아 204 를 돌려줍니다.
+        어느 쪽 토큰(소셜·이메일 가입)으로 불러도 204 이고, 토큰이 없으면 401 입니다.
+
+        **다만 서버측에 아직 폐기할 상태가 없습니다.** refresh 토큰 저장소도 액세스 토큰
+        블록리스트(`jti`)도 구현돼 있지 않아, 이 호출 뒤에도 **발급된 액세스 토큰은 만료까지
+        유효합니다.** 그러므로 클라이언트는 저장한 토큰을 반드시 스스로 삭제해야 합니다.
+        실제 서버측 폐기는 이슈 #9 범위입니다.
 
         범위는 **전 기기 로그아웃**입니다. Authorization 헤더의 액세스 토큰으로 주체를 식별해
-        그 사용자의 서버측 세션(refresh 토큰)을 **전부** 폐기합니다. 특정 기기 하나만 끊는
-        요청 본문은 정의하지 않습니다.
-
-        액세스 토큰은 만료 전까지 서명상 유효하므로(현재 `jti` 블랙리스트가 없음)
-        클라이언트도 저장된 토큰을 반드시 삭제해야 합니다.
+        그 사용자의 서버측 세션(refresh 토큰)을 **전부** 폐기합니다(#9 이후). 특정 기기 하나만
+        끊는 요청 본문은 정의하지 않습니다.
         멱등입니다 — 이미 폐기된 상태여도 204 를 반환합니다.
 
         한계: 액세스 토큰이 이미 만료된 상태에서는 이 계약으로 로그아웃을 호출할 수 없습니다.
         refresh 토큰만으로 폐기하는 경로는 #9 에서 함께 정의합니다.
-      x-implementation-status: not-implemented
       responses:
         '204': { description: 로그아웃됨(멱등) }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -901,11 +916,14 @@ components:
 
   responses:
     Unauthorized:
-      description: 인증 필요/무효
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-          example: { error: { code: UNAUTHORIZED, message: "로그인이 필요합니다." } }
+      description: |
+        인증 필요/무효. **본문이 없습니다** — 상태 코드 401 만 돌아오고 `Content-Type` 도 없습니다.
+
+        토큰 없음·서명 위조·만료·옛 형식 subject·탈퇴한 계정의 살아 있는 토큰이 전부 같은 모양입니다.
+        인증 실패의 원인을 본문으로 알려 주면 그 자체가 탐색 수단이 되기 때문입니다(#6).
+        클라이언트는 `error.code` 를 읽어 분기하지 말고 **상태 코드 401 만 보고** 재로그인으로 보내세요.
+        (2026-08 이전에는 이 절이 JSON `Error` 본문을 선언했지만 서버는 그때도 본문을 주지 않았습니다.
+         계약 쪽을 실제 동작에 맞춥니다 — #5.)
     Forbidden:
       description: 권한 없음
       content:

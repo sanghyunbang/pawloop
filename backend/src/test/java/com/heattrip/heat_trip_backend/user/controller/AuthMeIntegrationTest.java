@@ -159,11 +159,32 @@ class AuthMeIntegrationTest {
     // ─────────────────────────── d·e·f: 거절은 전부 401, 500 도 400 도 아니다 ───────────────────────────
 
     @Test
-    @DisplayName("Authorization 헤더가 없는 GET /auth/me 는 401 이다")
-    void 헤더없는_내정보조회는_401이다() throws Exception {
-        int status = mockMvc.perform(get("/auth/me")).andReturn().getResponse().getStatus();
+    @DisplayName("Authorization 헤더가 없는 GET /auth/me 는 본문 없는 401 이다")
+    void 헤더없는_내정보조회는_본문없는_401이다() throws Exception {
+        MvcResult result = mockMvc.perform(get("/auth/me")).andReturn();
 
-        assertThat(status).isEqualTo(401);
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        // 계약(docs/04-api/openapi.yaml components/responses/Unauthorized)이 이 모양을 선언한다.
+        // 예전에는 계약이 JSON Error 본문을 선언했는데 서버는 본문을 준 적이 없다 — 앱이 계약대로
+        // error.code 로 분기하면 파싱에서 깨진다. 계약을 실제 동작에 맞췄으니 동작도 잠근다. (#5)
+        assertThat(body(result))
+                .as("인증 실패의 원인을 본문으로 알려 주면 그 자체가 탐색 수단이 된다 (#6)")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("탈퇴한 계정의 살아 있는 토큰도 헤더 없음과 글자 그대로 같은 모양의 401 이다")
+    void 인증실패는_원인과_무관하게_같은_모양의_401이다() throws Exception {
+        MvcResult noHeader = mockMvc.perform(get("/auth/me")).andReturn();
+        MvcResult orphan = mockMvc.perform(get("/auth/me")
+                .header("Authorization", "Bearer " + signedToken("999999999", "ROLE_USER"))).andReturn();
+
+        // "토큰 없음"(HttpStatusEntryPoint)과 "그 id 의 행이 없음"(GlobalExceptionHandler)은
+        // 서로 다른 코드가 만든다. 둘이 갈라지면 앱은 401 을 두 갈래로 처리해야 하고,
+        // 공격자는 두 상태를 구별할 수 있게 된다.
+        assertThat(orphan.getResponse().getStatus()).isEqualTo(noHeader.getResponse().getStatus());
+        assertThat(body(orphan)).isEqualTo(body(noHeader)).isEmpty();
+        assertThat(orphan.getResponse().getContentType()).isEqualTo(noHeader.getResponse().getContentType());
     }
 
     @Test
