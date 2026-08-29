@@ -163,6 +163,22 @@ class JWTProviderTest {
         assertThat(provider.validateToken(signedToken("42", "   "))).isFalse();
     }
 
+    @Test
+    @DisplayName("role 클레임이 문자열이 아닌 토큰(숫자·배열)도 예외를 새게 하지 않고 검증에서 false 다.")
+    void validateToken_role이문자열이아니면_예외가아니라_false다() {
+        JWTProvider provider = newProvider(3_600_000L);
+
+        // Claims.get("role", String.class) 로 읽으면 jjwt 가 RequiredTypeException 을 던진다.
+        // 그 예외는 parseClaims 의 try 밖에서 나므로 JWTAuthenticationFilter 를 뚫고 나가
+        // @RestControllerAdvice 가 못 잡는 컨테이너 500 이 된다 — 완료 조건 11("어떤 입력에서도 401")
+        // 이 깨지는 자리다. JWTProvider.roleOf 의 instanceof 검사를 되돌리면 이 두 줄이 빨간불이 된다.
+        assertThat(provider.validateToken(signedToken("42", 7))).isFalse();
+        assertThat(provider.validateToken(signedToken("42", java.util.List.of("ROLE_USER")))).isFalse();
+        assertThat(provider.getRoleFromToken(signedToken("42", 7)))
+                .as("읽기 경로도 예외가 아니라 null 로 끝나야 한다")
+                .isNull();
+    }
+
 
     @Test
     @DisplayName("이미 만료된 토큰은 validateToken 이 false 를 돌려주고 getUserIdFromToken 은 예외를 던진다.")
@@ -217,12 +233,13 @@ class JWTProviderTest {
      * subject" 나 "role 이 없는 토큰"을 아예 표현할 수 없다. 여기서 검증하려는 것은 <b>이미 발급되어
      * 사용자 손에 있는</b> 그런 토큰을 만났을 때의 동작이다.
      */
-    private String signedToken(String subject, String role) {
+    private String signedToken(String subject, Object role) {
         long now = System.currentTimeMillis();
         return signedToken(subject, role, new Date(now), new Date(now + 3_600_000L));
     }
 
-    private String signedToken(String subject, String role, Date issuedAt, Date expiration) {
+    /** role 을 {@code Object} 로 받는다 — 문자열이 아닌 role 클레임을 표현할 수 있어야 한다. */
+    private String signedToken(String subject, Object role, Date issuedAt, Date expiration) {
         var builder = Jwts.builder()
                 .setSubject(subject)
                 .setIssuedAt(issuedAt)

@@ -39,8 +39,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AuthSubjectContractSpecTest {
 
-    /** 유일하게 Authorization 헤더를 읽고 토큰을 해석해도 되는 파일. */
-    private static final String THE_ONLY_EXTRACTION_POINT = "JWTAuthenticationFilter.java";
+    /**
+     * 유일하게 Authorization 헤더를 읽고 토큰을 해석해도 되는 파일.
+     *
+     * <p>{@code backend/src/main/java} 기준 상대 경로다. 파일 이름만 쓰면 안 된다 —
+     * 아래 {@link #loadMainSources()} 참조.
+     */
+    private static final String THE_ONLY_EXTRACTION_POINT =
+            "com/heattrip/heat_trip_backend/OAuth/jwt/JWTAuthenticationFilter.java";
+
+    /** {@link #onlyTheFilterExtractsTheSubject()} 가 함께 허용하는, 그 메서드를 선언하는 파일. */
+    private static final String THE_PROVIDER =
+            "com/heattrip/heat_trip_backend/OAuth/jwt/JWTProvider.java";
 
     /**
      * 이슈 완료 조건 5 가 이름으로 지목한, 지워진 헬퍼.
@@ -51,27 +61,44 @@ class AuthSubjectContractSpecTest {
      */
     private static final String DELETED_HELPER = "email" + "FromAuth";
 
-    /** 파일 이름 → 주석을 걷어낸 소스. */
+    /** src/main/java 기준 상대 경로 → 주석을 걷어낸 소스. */
     private static Map<String, String> sources;
 
-    /** 파일 이름 → 주석까지 그대로인 원본. grep 과 같은 눈으로 보는 단언에 쓴다. */
+    /** 같은 키 → 주석까지 그대로인 원본. grep 과 같은 눈으로 보는 단언에 쓴다. */
     private static Map<String, String> rawSources;
 
+    /**
+     * 키가 <b>상대 경로</b>인 이유: 예전에는 {@code file.getFileName()} 이었다. 그러면 같은
+     * 이름의 파일이 둘일 때 뒤에 온 것이 앞의 것을 덮어써서 <b>한쪽이 스캔에서 조용히 사라진다.</b>
+     * 실측으로 .java 205개 중 basename 고유는 200개였다 — 5개가 검사받지 않고 있었고
+     * ({@code Place.java}·{@code PlaceMapper.java}·{@code PlaceSearchCond.java}·
+     *  {@code PlaceTrait.java}·{@code StringListJsonConverter.java}) 가드가
+     * {@code hasSizeGreaterThan(50)} 이라 그 손실을 아무도 알리지 않았다.
+     * "조용한 회귀를 잡는 유일한 자동 장치"라고 스스로 선언한 테스트가 조용히 놓치는 구멍을
+     * 두어서는 안 된다. 가드도 실제 파일 개수에 붙여 다음에 누가 키를 되돌리면 드러나게 한다. (#5)
+     */
     @BeforeAll
     static void loadMainSources() throws IOException {
         Path mainJava = locateBackendMainJava();
+        long fileCount;
         try (Stream<Path> walk = Files.walk(mainJava)) {
             sources = new LinkedHashMap<>();
             rawSources = new LinkedHashMap<>();
-            for (Path file : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
+            List<Path> files = walk.filter(p -> p.toString().endsWith(".java")).toList();
+            fileCount = files.size();
+            for (Path file : files) {
+                String key = mainJava.relativize(file).toString().replace(java.io.File.separatorChar, '/');
                 String raw = Files.readString(file, StandardCharsets.UTF_8);
-                rawSources.put(file.getFileName().toString(), raw);
-                sources.put(file.getFileName().toString(), stripComments(raw));
+                rawSources.put(key, raw);
+                sources.put(key, stripComments(raw));
             }
         }
         assertThat(sources)
+                .as("키가 겹쳐 파일이 하나라도 사라지면 그 파일은 이 테스트의 어떤 단언도 받지 않는다")
+                .hasSize((int) fileCount);
+        assertThat(fileCount)
                 .as("소스를 한 개도 못 읽었다면 이 테스트는 아무것도 지키지 못한다")
-                .hasSizeGreaterThan(50);
+                .isGreaterThan(50);
     }
 
     @Test
@@ -121,7 +148,7 @@ class AuthSubjectContractSpecTest {
         // 호출부가 필터 하나뿐인 것이 이 단언의 내용이다.
         assertThat(filesContaining("getUserIdFromToken("))
                 .as("추출 지점이 하나여야 규약이 바뀔 때 고칠 곳도 하나다 — 예전에는 8곳이었다")
-                .containsExactlyInAnyOrder(THE_ONLY_EXTRACTION_POINT, "JWTProvider.java");
+                .containsExactlyInAnyOrder(THE_ONLY_EXTRACTION_POINT, THE_PROVIDER);
     }
 
     @Test
