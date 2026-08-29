@@ -61,11 +61,13 @@
 | 동물병원 | 🟡 더미 | LOCALDATA(인허가) 연동 예정. 현재 `_dummyVet` 3건 |
 | 펫샵 | 🟡 더미 | LOCALDATA 예정. 현재 `_dummyShop` 2건 |
 | 산책로 | 🟡 더미 | 두루누비(걷기여행길) 예정. 현재 폴리라인/카드 하드코딩 |
-| 지도 SDK | ✅ | `flutter_naver_map`. Client ID(`NAVER_MAP_CLIENT_ID`) 없으면 지도 비활성 |
+| 지도 SDK | ✅ | `flutter_naver_map`. Client ID(`--dart-define=NAVER_MAP_CLIENT_ID`) 없으면 지도 비활성 |
 | 장소 검색 | ❌ 미구현 | 검색창은 플레이스홀더(비동작) |
 | 현재 위치 기반 | ❌ 미구현 | 중심 서울 시청(37.5665, 126.9816) 고정 |
 
-> KTO 서비스키는 `.env`의 `YOUR_DECODING_SERVICE_KEY`(명칭과 달리 **인코딩키**). 앱이 `apis.data.go.kr`를 **직접 호출**(백엔드 프록시·캐싱 미도입, 1000콜/일 제한 유의).
+> KTO 서비스키는 `--dart-define=YOUR_DECODING_SERVICE_KEY`(명칭과 달리 **인코딩키**)로 주입해 `Env.tourServiceKey` 로 읽는다. 앱이 `apis.data.go.kr`를 **직접 호출**(백엔드 프록시·캐싱 미도입, 1000콜/일 제한 유의).
+>
+> ⚠️ 앱에 남은 유일한 과금성 자격증명이다. `--dart-define` 은 `.env` 에셋 번들링(#29 이전)보다 낫지만 완화일 뿐 — 문자열은 여전히 바이너리 안에 있다. **[#40](https://github.com/sanghyunbang/heattrip/issues/40) 에서 호출을 백엔드 프록시로 옮기면 이 키는 앱에서 완전히 사라진다**(그때 기존 키는 폐기·재발급).
 
 ### 3.3 커뮤니티
 | 기능 | 상태 | 비고 |
@@ -97,7 +99,7 @@
 | 지도 | `flutter_naver_map`(pubspec `^1.3.1`) |
 | 차트 | `fl_chart ^1.2.0` |
 | 네트워크 | `http`. 외부 호출은 KTO 1종 |
-| 설정 | `flutter_dotenv`. 키: `NAVER_MAP_CLIENT_ID`, `YOUR_DECODING_SERVICE_KEY`, `API_BASE_URL`(`Env`) |
+| 설정 | 컴파일 타임 `--dart-define` 단독(`flutter_dotenv`·`.env` 는 #29 에서 제거). 단일 진입점 `core/config/env.dart` 의 `Env`. 키: `API_BASE`(override) · `API_BASE_URL` · `NAVER_MAP_CLIENT_ID` · `YOUR_DECODING_SERVICE_KEY` · `MOBILE_OS`/`MOBILE_APP`(기본값 `ETC`/`HeatTrip`). 값 묶음 템플릿은 `app/dart-define.example.json` |
 | 디자인 | 파스텔 오라 그라데이션 배경, 글래스 카드(BackdropFilter blur), 따뜻한 그라데이션(#FFA96B→#FF7E8A), 플로팅 글래스 알약 네비 + 가운데 솟은 산책 FAB |
 
 ---

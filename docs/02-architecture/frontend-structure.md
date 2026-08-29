@@ -24,8 +24,8 @@
 
 ```
 lib/
-├─ main_v2.dart            # v2 진입점: dotenv·NaverMap 초기화 → MainShell
-├─ core/config/env.dart    # (레거시 core 재사용) API 키·베이스 URL 단일 진입점 Env
+├─ main_v2.dart            # v2 진입점: NaverMap 초기화(Env.naverMapClientId) → MainShell
+├─ core/config/env.dart    # (레거시 core 재사용) --dart-define 값 단일 진입점 Env
 └─ v2/
    ├─ screens/             # 화면 (탭 + 푸시 라우트)
    ├─ domain/pet.dart      # 도메인 모델 + 샘플 데이터 + 전역 상태(kMyDog 등)
@@ -70,7 +70,8 @@ lib/
 ### 2.3 `data/` — 레포지토리 (데이터 소스)
 
 - `pet_places_repository.dart`: 관광공사 **KorPetTourService2**(반려동물 동반여행) `locationBasedList2`를 `http`로 직접 호출. `PetPlace` 모델(좌표 `mapx`/`mapy`, `contenttypeid`, `addr1`/`tel`/`firstimage`, 거리 `dist`)로 파싱.
-  - 서비스 키는 `Env.tourServiceKey`(= `app/.env`), 키 없으면 빈 리스트 반환(앱이 죽지 않음).
+  - 서비스 키는 `Env.tourServiceKey`(= `--dart-define=YOUR_DECODING_SERVICE_KEY`), 키 없으면 빈 리스트 반환(앱이 죽지 않음).
+  - ⚠️ 이 키는 앱 바이너리에 박히는 과금성 자격증명이다. [#40](https://github.com/sanghyunbang/heattrip/issues/40) 에서 호출을 백엔드 프록시로 옮기면 앱에서 완전히 사라진다 — 그때 이 레포는 KTO 대신 자체 백엔드를 호출한다.
   - 병원(vet)·펫샵(shop)·산책로(trail)는 **아직 레포가 없고** 화면(`explore_screen.dart`) 안 `_dummyVet`/`_dummyShop`/`_trailCoords` 상수로 대체 → 향후 LOCALDATA·두루누비 레포로 분리 예정.
 
 ### 2.4 `widgets/` — 공용 위젯
@@ -144,7 +145,7 @@ flowchart TD
 ```mermaid
 flowchart LR
   KTO[관광공사 KorPetTourService2\nlocationBasedList2] -->|http GET| Repo[PetPlacesRepository]
-  Env[Env.tourServiceKey\n.env] --> Repo
+  Env[Env.tourServiceKey\n--dart-define] --> Repo
   Repo -->|List&lt;PetPlace&gt;| Explore[ExploreScreen\n리스트/지도/필터]
 
   Sample[domain/pet.dart\nkWalks · kWeekKm · kPetPosts] --> Insight[InsightScreen]
@@ -171,5 +172,5 @@ flowchart LR
 | Presentation | `v2/screens/`, `v2/widgets/` | 화면·공용 위젯. `ValueListenableBuilder`로 전역 상태 구독, `setState`로 로컬 상태 |
 | Domain | `v2/domain/pet.dart` | 모델·enum·카테고리 SSOT·샘플 데이터·전역 `ValueNotifier` |
 | Data | `v2/data/` | 외부 API(레포지토리). 현재 KTO 장소 1종 |
-| Config | `core/config/env.dart` | `.env` 키·베이스 URL 단일 진입점 |
+| Config | `core/config/env.dart` | 컴파일 타임 `--dart-define` 값(베이스 URL·외부 키) 단일 진입점 `Env` |
 | Theme | `v2/theme/` | 디자인 토큰(`T`) · 배경 테마(`AppThemeCtl`) |
