@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.schedules.controller;
 
+import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.schedules.entity.Schedule;
 import com.heattrip.heat_trip_backend.schedules.repository.ScheduleRepository;
@@ -39,7 +40,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class ScheduleWriteBoundaryIntegrationTest {
+class ScheduleWriteBoundaryIntegrationTest extends AbstractMySqlIntegrationTest {
 
     /** 실제 BCrypt 해시와 같은 모양의 가짜 값. 진짜 비밀번호가 아니다. */
     private static final String FAKE_BCRYPT_HASH =

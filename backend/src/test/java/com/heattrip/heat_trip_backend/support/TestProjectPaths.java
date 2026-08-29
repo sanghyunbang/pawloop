@@ -53,6 +53,22 @@ public final class TestProjectPaths {
         return resolved;
     }
 
+    /**
+     * backend 루트 기준 상대 경로의 <b>디렉터리</b>를 절대 경로로 바꾼다.
+     *
+     * <p>{@link #requireFile(String)} 과 같은 이유로 없으면 즉시 실패한다 — 소스를 훑는
+     * 스펙 테스트가 빈 디렉터리를 훑고 "위반 0건"으로 통과하면 아무것도 지키지 못한다.</p>
+     */
+    public static Path requireDirectory(String relativePath) {
+        Path resolved = backendDir().resolve(relativePath);
+        if (!Files.isDirectory(resolved)) {
+            throw new IllegalStateException(
+                    "테스트가 요구하는 디렉터리가 없다: " + resolved
+                            + " — 경로가 바뀌었다면 이 테스트도 함께 고쳐야 한다.");
+        }
+        return resolved;
+    }
+
     private static boolean looksLikeBackendDir(Path candidate) {
         return Files.isRegularFile(candidate.resolve("docker-compose.yml"))
                 && Files.isRegularFile(candidate.resolve("build.gradle"));

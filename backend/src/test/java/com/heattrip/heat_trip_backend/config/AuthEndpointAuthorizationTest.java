@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.config;
 
+import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-class AuthEndpointAuthorizationTest {
+class AuthEndpointAuthorizationTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

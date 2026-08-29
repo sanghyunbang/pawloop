@@ -1,18 +1,20 @@
 package com.heattrip.heat_trip_backend.tour.domain;
 
+import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.tour.repository.PlaceRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataJpaTest(properties = {
-        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
-})
-public class PlaceSanitizeJpaTest {
+// 데이터소스·dialect·ddl-auto 는 AbstractMySqlIntegrationTest 가 실 MySQL 로 넣는다.
+// replace = NONE 이 없으면 @DataJpaTest 가 그걸 임베디드 DB 로 갈아치운다. (#49)
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+public class PlaceSanitizeJpaTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     PlaceRepository placeRepository;

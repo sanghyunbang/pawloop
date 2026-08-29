@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.user.controller;
 
+import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.GoogleOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.KakaoOAuth2User;
@@ -56,7 +57,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class AuthMeIntegrationTest {
+class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
 
     /** src/test/resources/application-test.properties 의 jwt.secret 과 같은 값. */
     private static final String SECRET = "test-only-secret-key-32bytes-min!!";
