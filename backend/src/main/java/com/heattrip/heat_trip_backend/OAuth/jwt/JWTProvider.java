@@ -75,12 +75,26 @@ public class JWTProvider {
     }
 
     /**
-     * JWT Access Token 생성
-     * @param userId 사용자 ID (예: "abc123")
+     * JWT Access Token 생성.
+     *
+     * <p><b>subject 는 {@code users.id} 다.</b> 파라미터 타입이 {@code Long} 인 것이 이 규약의 방어선이다 —
+     * 예전에는 {@code String} 이라 이메일({@code UserService.login})과 소셜 ID
+     * ({@code OAuth2SuccessHandler} 의 {@code authentication.getName()})가 아무 저항 없이 들어왔고,
+     * 그래서 토큰 하나로 세 가지 subject 규약이 공존했다. 이제 그 둘은 컴파일되지 않는다. (이슈 #5)
+     *
+     * <p>클레임은 {@code sub}·{@code role}·{@code iat}·{@code exp} 넷뿐이다.
+     * {@code jti}·{@code prv} 는 계약(docs/04-api/openapi.yaml)이 이슈 #9 를 소유자로 지정해 두었다.
+     *
+     * @param userId users 테이블 PK. null 이면 {@link IllegalArgumentException}
      * @param role 사용자 권한 정보 (예: "ROLE_USER")
      * @return 생성된 JWT 문자열
      */
-    public String createAccessToken(String userId, String role) {
+    public String createAccessToken(Long userId, String role) {
+        if (userId == null) {
+            // 토큰을 만들 수 없는 상태다. sub="null" 토큰을 발급하면 그 계정은 재로그인 전까지 영구 401 이 된다.
+            throw new IllegalArgumentException("액세스 토큰의 subject(users.id)가 없습니다.");
+        }
+
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMillis);
 
@@ -88,7 +102,7 @@ public class JWTProvider {
         log.debug("액세스 토큰 발급 (만료 {}초)", getExpiresInSeconds());
 
         return Jwts.builder()
-                .setSubject(userId)
+                .setSubject(String.valueOf(userId))
                 .claim("role", role)
                 .setIssuedAt(now)
                 .setExpiration(expiry)
@@ -96,12 +110,54 @@ public class JWTProvider {
                 .compact();
     }
 
-    public String getUserIdFromToken(String token) {
-        return parseClaims(token).getSubject();
+    /**
+     * 토큰의 subject 를 {@code users.id} 로 읽는다.
+     *
+     * <p>반환 타입이 {@code Long} 인 것이 계약이다 — 이 값으로 {@code findByEmail} 을 부르는 코드는
+     * 컴파일되지 않는다. (이슈 #5)
+     *
+     * @throws InvalidTokenException 파싱 실패, 또는 subject 가 양의 long 이 아닐 때
+     */
+    public Long getUserIdFromToken(String token) {
+        return requireNumericSubject(parseClaims(token));
     }
 
     public String getRoleFromToken(String token) {
-        return parseClaims(token).get("role", String.class); // JWT 내의 role 클레임 읽기
+        return roleOf(parseClaims(token));
+    }
+
+    /**
+     * {@code role} 클레임을 문자열로 읽는다. 값이 없거나 문자열이 아니면 null.
+     *
+     * <p>{@code Claims.get("role", String.class)} 를 그대로 쓰지 않는 이유: 타입이 다르면 jjwt 가
+     * {@code RequiredTypeException} 을 던지는데, 그 예외는 {@code parseClaims} 의 try 밖에서 나므로
+     * {@code JWTAuthenticationFilter} 를 뚫고 나가 컨테이너 500 이 된다.
+     */
+    private static String roleOf(Claims claims) {
+        Object role = claims.get("role");
+        return (role instanceof String value) ? value : null;
+    }
+
+    /**
+     * subject 를 {@code users.id} 로 해석한다.
+     *
+     * <p>실패해도 <b>값을 로그에 넣지 않는다</b> — 옛 형식 토큰의 subject 는 이메일이거나
+     * 소셜 ID({@code kakao_1234567890})다. (이슈 #6)
+     *
+     * @throws InvalidTokenException subject 가 양의 long 이 아닐 때. 새 예외 타입을 만들지 않는 이유는
+     *         호출부(필터)가 이것을 서명 실패·만료와 <b>똑같이</b> 다뤄야 하기 때문이다.
+     */
+    private static long requireNumericSubject(Claims claims) {
+        try {
+            long userId = Long.parseLong(claims.getSubject());
+            if (userId <= 0) {
+                throw new InvalidTokenException("Invalid JWT token");
+            }
+            return userId;
+        } catch (NumberFormatException e) {
+            log.debug("JWT subject 가 users.id 형식이 아니다 (옛 형식 토큰으로 보인다)");
+            throw new InvalidTokenException("Invalid JWT token");
+        }
     }
 
     /**
@@ -131,10 +187,28 @@ public class JWTProvider {
         }
     }
 
+    /**
+     * 이 토큰으로 인증을 채워도 되는가.
+     *
+     * <p>세 가지를 함께 본다. <b>서명·만료 파싱 성공</b> · <b>{@code sub} 가 양의 long</b> ·
+     * <b>{@code role} 이 비어 있지 않음</b>.
+     *
+     * <p>뒤의 두 조건이 여기 있는 이유는 완료 조건("어떤 입력에서도 500 이 아니라 401")이다. (이슈 #5)
+     * <ul>
+     *   <li>수치 subject 를 여기서 막지 않으면 옛 형식 토큰이 컨트롤러까지 흘러가 거기서
+     *       파싱에 실패한다 — 응답은 400 이고 본문에 실패한 subject 원문(이메일/소셜 ID)이 실린다.</li>
+     *   <li>role 을 막지 않으면 필터 안에서 {@code new SimpleGrantedAuthority(null)} 이 예외를 던지는데,
+     *       필터 예외는 {@code @RestControllerAdvice} 가 잡지 못해 컨테이너 500 이 된다.</li>
+     * </ul>
+     * 여기서 false 를 돌려주면 필터가 {@code SecurityContext} 를 채우지 않고 통과시키고,
+     * {@code SecurityConfig} 의 {@code HttpStatusEntryPoint(UNAUTHORIZED)} 가 본문 없는 401 을 만든다.
+     */
     public boolean validateToken(String token) {
         try {
-            parseClaims(token); // 내부에서 예외 없으면 유효한 토큰
-            return true;
+            Claims claims = parseClaims(token); // 내부에서 예외 없으면 서명·만료는 통과
+            requireNumericSubject(claims);
+            String role = roleOf(claims);
+            return role != null && !role.isBlank();
         } catch (InvalidTokenException e) {
             // 예전에는 여기서 JwtException 을 잡았는데, parseClaims 는 이미 RuntimeException 으로
             // 감싼 뒤였다. 그래서 만료 토큰이 들어오면 false 가 아니라 예외가 그대로 튀어나갔다. (이슈 #6)

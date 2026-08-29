@@ -35,7 +35,7 @@
 | 6 | `POST /api/community/posts/{postId}/reactions` | `toggleReaction(@PathVariable Long postId, @RequestBody ReactionRequest body, HttpServletRequest req)` | `ReactionSummary` | ✔ | `.../reactions` POST |
 
 > **반환 규약(social 준수):** 메서드는 `ResponseEntity<?>` 반환. 정상은 `ResponseEntity.ok(dto)` / 작성은 `ResponseEntity.status(HttpStatus.CREATED).body(dto)`. 검증 실패는 `IllegalArgumentException` → `ResponseEntity.badRequest().body(Map.of("error", ...))`, not-found는 404 매핑, 그 외는 500. (읽기 시 `mine`은 인증 헤더가 있으면 채우고 없으면 null — requireUser 대신 optional 추출 헬퍼를 두는 것도 가능.)
-> **인증 추출:** `requireUser`는 `Authorization: Bearer` → `jwtProvider.validateToken` → `jwtProvider.getUserIdFromToken`(=email) → `userService.findByEmail`. 실패 시 `ResponseStatusException(HttpStatus.UNAUTHORIZED)`. (SocialController와 동일.)
+> **인증 추출:** `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (#5 이전에는 컨트롤러마다 `requireUser` 헬퍼가 헤더를 다시 읽고 `findByEmail` 을 했다 — 그 헬퍼들은 전부 삭제됐다.)
 
 ---
 
@@ -206,7 +206,7 @@
 ## 6. 구현 노트 (함정 위주)
 
 - **인증 분기(읽기 vs 쓰기):** social은 `/api/social/**` 전체가 authenticated였다. community는 **GET을 permitAll**로 열어야 하므로 `SecurityConfig`에서 `HttpMethod.GET, "/api/community/**"` permitAll + POST authenticated를 명시할 것. 안 그러면 openapi `security: []` 계약과 어긋난다.
-- **JWT 추출:** `JWTProvider.getUserIdFromToken(token)`의 subject는 **email**이다(정수 userId 아님). 반드시 `userService.findByEmail(email)` → `User.getId()`로 변환. `Authorization` 헤더 없으면 401(`ResponseStatusException`). 읽기 엔드포인트에서 mine을 채우려면 헤더가 있을 때만 optional 추출(없으면 currentUserId=null → mine=null).
+- **JWT 추출:** subject 는 **`users.id`** 다(#5 — 예전 서술의 email 이 아니다). `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. 읽기 엔드포인트의 `mine` 처럼 **인증이 선택인 경로**는 컨트롤러 파라미터로 표현하지 않는다 — 그 결정은 `SecurityConfig.publicMatchers` 가 한다(#23). 선택적 인증이 실제로 필요해지면 그때 별도 리졸버로 설계한다.
 - **반응 mine 단수화:** openapi `ReactionSummary.mine`은 문자열 1개. 스키마 유니크가 `(post,user,type)`이라 DB상 여러 type 저장이 가능하지만, **서비스 레벨에서 유저당 1개**로 제한(다른 type 클릭 시 기존 삭제 후 삽입). 이 결정은 social의 `myReactions`(리스트) 로직을 그대로 복붙하면 안 되는 지점이다.
 - **토글 트랜잭션:** `toggleReaction`은 삭제/삽입이 있으므로 `@Transactional`(쓰기). 같은 type 재클릭=취소, 다른 type=교체. 유니크 제약 위반(동시성)은 재조회로 흡수하거나 `find...AndType` 선조회로 회피.
 - **커서 페이지네이션:** `nextCursor`는 마지막 항목 `id`를 base64 등으로 인코딩(openapi 예 `eyJpZCI6MTIzfQ==`). `limit`은 기본 20·최대 100(`components/parameters/Limit`). `limit+1`건 조회 → 초과 시 `hasMore=true`, 초과분 잘라내고 마지막 id로 커서 생성. 커서 디코드 실패는 400.

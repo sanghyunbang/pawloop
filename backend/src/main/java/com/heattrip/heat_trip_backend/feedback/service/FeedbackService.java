@@ -1,12 +1,10 @@
 // src/main/java/com/heattrip/heat_trip_backend/feedback/service/FeedbackService.java
 package com.heattrip.heat_trip_backend.feedback.service;
 
-import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.feedback.dto.FeedbackRequest;
 import com.heattrip.heat_trip_backend.feedback.entity.Feedback;
 import com.heattrip.heat_trip_backend.feedback.repository.FeedbackRepository;
 import com.heattrip.heat_trip_backend.user.entity.User;
-import com.heattrip.heat_trip_backend.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,22 +15,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class FeedbackService {
 
     private final FeedbackRepository feedbackRepository;
-    private final JWTProvider jwtProvider; // 토큰 파싱/검증
-    private final UserService userService; // 토큰의 subject(email)로 사용자 로드
 
-    /** 피드백 저장 */
+    /**
+     * 피드백 저장.
+     *
+     * <p>예전에는 여기서 Authorization 헤더를 직접 파싱하고 "토큰이 없거나 유효하지 않으면 익명"이라는
+     * 분기를 뒀다. <b>그 분기는 도달 불가능했고 주석도 사실이 아니었다.</b> (이슈 #5)
+     * <ul>
+     *   <li>{@code /feedback} 은 {@code SecurityConfig.publicMatchers} 에 없어
+     *       {@code anyRequest().authenticated()} 로 떨어진다 — #23 이후 비인증 요청은
+     *       컨트롤러에 닿지도 못한다.</li>
+     *   <li>{@code UserService.findByEmail} 은 못 찾으면 null 이 아니라 예외를 던졌으므로
+     *       "없으면 null" 이라는 주석도 거짓이었다.</li>
+     * </ul>
+     * 즉 인가 계층과 서비스 계층이 서로 다른 정책을 말하고 있었다. 인가 계층이 정본이다.
+     * 익명 피드백을 살리려면 {@code publicMatchers} 에 {@code /feedback} 을 넣는 <b>제품 결정</b>이 먼저다.
+     */
     @Transactional
-    public void create(String authHeader, FeedbackRequest req) {
-        // 로그인 사용자 연동(토큰 없거나 유효하지 않으면 익명 처리)
-        User user = null;
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-            if (jwtProvider.validateToken(token)) {
-                String email = jwtProvider.getUserIdFromToken(token); // subject에 email 저장
-                user = userService.findByEmail(email); // 없으면 null
-            }
-        }
-
+    public void create(User user, FeedbackRequest req) {
         Feedback feedback = Feedback.builder()
                 .user(user)
                 .content(req.getContent())

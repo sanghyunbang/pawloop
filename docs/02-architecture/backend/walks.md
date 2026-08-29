@@ -163,7 +163,7 @@
 - **SRID 필수.** `walk.path`는 `SRID 4326` 고정. 삽입 시 `ST_GeomFromText(:wkt, 4326)`로 SRID를 반드시 명시. SRID 누락/불일치 시 `SPATIAL INDEX`·거리 연산이 오동작하거나 삽입 오류.
 - **path NOT NULL 정책.** SPATIAL INDEX 요건상 `path`는 NOT NULL. 앱이 좌표 없이 저장 요청(실내/GPS 미허용) 시 정책 필요: (a) `startedAt` 단일점으로 초기화(단, LINESTRING은 최소 2점 필요 → 시작점을 2회 넣거나), (b) 좌표 부재 요청은 400 거부. **LINESTRING은 점 1개로 만들 수 없다** — 최소 2좌표 보장 또는 검증 필요.
 - **JPA와 공간타입.** 순수 Spring Data JPA는 `LINESTRING`을 표준 매핑하지 못한다. 위 §5.2 분리 패턴(native INSERT + `ST_AsText` SELECT) 권장. Hibernate Spatial 도입 시 dialect/JTS 의존성 및 `Point`/`LineString` 매핑 검증 필요.
-- **JWT userId 추출.** `AuthController`/기존 JWT 필터 규약대로 `HttpServletRequest`에서 userId를 얻는다(subject=email → user 조회 or 필터가 주입한 attribute). Walks 전 엔드포인트 공통. 미인증 → `UNAUTHORIZED` 401(`Error` 스키마).
+- **JWT userId 추출.** `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. Walks 전 엔드포인트 공통. 미인증 → **본문 없는 401**(`Error` 스키마가 아니다 — `openapi.yaml` 의 `components/responses/Unauthorized` 참조).
 - **소유권 검증.** `walk`에는 `user_id`가 없고 `dog_id`만 있다. 반드시 `walk → dog → dog.user_id == userId`로 확인. 타인 산책 조회/목록 노출 금지. `createWalk`도 `dogId`가 요청자 소유인지 먼저 검증(아니면 403).
 - **커서 페이지네이션.** 커서는 불투명 토큰(예: base64로 감싼 `{"id":123}`) — openapi `nextCursor` 예시(`eyJpZCI6MTIzfQ==`)가 그 형태. `id DESC` 단일 키 또는 `started_at DESC, id DESC` 복합 키 중 택1(복합이면 커서에 두 값 인코딩). `limit+1`건 조회해 초과분 존재로 `hasMore` 판정 후 마지막 항목 커서를 `nextCursor`로.
 - **주간 통계 요일 정렬.** `weekKm`은 **월요일 시작 길이 7 배열**. MySQL `DAYOFWEEK()`는 일요일=1 기준이므로 월~일 인덱스 매핑 시 오프셋 주의(`WEEKDAY()`는 월요일=0 → 이 배열과 직접 맞음). "이번 주" 경계는 앱 로컬 타임존 기준으로 월요일 00:00 ~ 일요일 24:00 계산. 거리 m→km 변환(÷1000) 및 소수 자릿수 반올림 정책 통일.

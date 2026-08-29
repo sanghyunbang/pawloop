@@ -16,7 +16,7 @@
 | `POST /auth/token/refresh` | **신규 추가(구조 변경)** | refresh token 저장소/엔티티 자체가 없음. §5·§6 참조. |
 | `GET /auth/me` | **있음(수정)** | 현 `AuthController.me`가 `UserResponse` 반환. 계약 `User` 스키마(id/provider/nickname/isNew)로 응답 정합 맞추기. |
 | `DELETE /auth/me` (회원탈퇴) | **있음(재사용)** | 현 `AuthController.deleteMe` 그대로. 204. |
-| `POST /auth/logout` | **신규 추가** | refresh token 폐기. 현재 없음. 204. |
+| `POST /auth/logout` | **핸들러 있음 / 폐기 없음** | `AuthController.logout` 이 인증 주체를 받아 204. 다만 서버측에 폐기할 상태(refresh 저장소·`jti` 블록리스트)가 아직 없어 액세스 토큰은 만료까지 유효하다 → #9. |
 
 **재사용 가능한 기존 자산**
 - `OAuth/jwt/JWTProvider` — `createAccessToken(userId, role)`, `getUserIdFromToken`, `validateToken`. (refresh 발급 메서드 없음 → 추가 필요)
@@ -24,9 +24,9 @@
 - `OAuth/service/CustomOAuth2UserService` — 소셜 응답 → `OAuth2UserInfo`(Google/Kakao/Naver) 변환 + `users` upsert.
 - `OAuth/handler/OAuth2SuccessHandler` — JWT 발급 후 `heattrip://login-callback?token=` 딥링크 리다이렉트.
 - `OAuth/user/OAuth2UserInfo`(+ Google/Kakao/NaverOAuth2User) — 공급자별 provider/providerId/email/name 추출.
-- `user/service/UserService.emailFromAuth(authHeader)` — `Bearer` 헤더 → JWT subject 추출. me/삭제에서 사용 중.
+- ~~`user/service/UserService` 의 `Bearer` 헤더 → subject 추출 헬퍼~~ — **#5 에서 삭제됐다.** 대체: `OAuth/principal/CurrentUserArgumentResolver` + `@CurrentUser`. 컨트롤러는 Authorization 헤더를 다시 읽지 않는다(§6-1).
 - `user/repository/UserRepository` — `findByEmail`, `findByUsername`, `findByNickname`.
-- `config/SecurityConfig` — `/auth/**`·`/oauth2/**`·`/login/**` permitAll, STATELESS, `oauth2Login(userService, successHandler)`.
+- `config/SecurityConfig` — **`/auth/**` 는 더 이상 permitAll 이 아니다(#23).** 공개는 `/auth/signup`·`/auth/login`·`/auth/oauth/**`·`/auth/token/refresh`·`/oauth2/**`·`/login/**` 등 열거된 경로뿐이고 나머지는 `anyRequest().authenticated()` + `HttpStatusEntryPoint(401)`. STATELESS, `oauth2Login(userService, successHandler)`.
 
 ---
 
@@ -34,13 +34,13 @@
 
 - **책임**: 소셜(카카오/네이버/구글) 로그인 진입·콜백 처리, 앱 세션 토큰(access/refresh) 발급·갱신·폐기, 내 정보 조회/탈퇴.
 - **관련 테이블**: `app_user`(스키마 문서) — **현재 코드 실체는 `users` 테이블 + `User` 엔티티**. 두 스키마가 다름(§6 정합성 함정 참조). refresh token 저장용 테이블은 **미존재 → 신설 필요**(§5).
-- **인증 규약**: JWT Bearer, subject = 사용자 식별자. (계약/스키마는 `subject = email`을 명시. 현 코드는 소셜 흐름에서 `provider_providerId`를 subject로 쓰는 불일치 존재 → §6에서 통일.)
+- **인증 규약**: JWT Bearer, **subject = `users.id`**(#5 완료). 계약(`openapi.yaml`)은 이 값을 "파싱 금지의 불투명 사용자 키"로 선언한다 — 이메일도 `provider_providerId`도 아니다. 해석은 `JWTAuthenticationFilter` → `AuthenticatedUser` → `@CurrentUser` 한 줄기뿐이다(§6-1).
 
 ---
 
 ## 2. Controller — `AuthController` (`@RequestMapping("/auth")`)
 
-> 기존 `user.controller.AuthController` 확장/정리. 컨벤션: `ResponseEntity<?>` 반환, 인증 필요 시 `HttpServletRequest`에서 `Authorization` 헤더 → JWT subject 추출(기존 필터/`emailFromAuth` 규약). 각 행은 openapi paths와 1:1.
+> 기존 `user.controller.AuthController` 확장/정리. **인증이 필요한 핸들러는 `@CurrentUser User me` 파라미터를 받는다** — 컨트롤러가 `Authorization` 헤더를 다시 읽는 것은 #5 이후 금지이고 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. 각 행은 openapi paths와 1:1.
 
 | HTTP · 경로 | 메서드 시그니처(파라미터 타입) | 반환 DTO | 인증 |
 | --- | --- | --- | --- |
@@ -52,7 +52,7 @@
 | `POST /auth/logout` | `logout(@RequestBody(required=false) RefreshRequest body, HttpServletRequest req)` | 204 | ✕(선택) |
 
 - `provider` 파라미터: `kakao|naver|google` 이외 값 → 400/error.
-- 인증 필요 메서드는 `SocialController.requireUser(...)`와 동일한 패턴(헤더 → `validateToken` → subject → `UserService.findByEmail`)을 재사용/차용 권장.
+- 인증 필요 메서드는 `@CurrentUser User me` 하나로 끝난다. 주입에 실패하는 모든 경우(인증 없음 · principal 타입 불일치 · 그 id 의 행 없음)는 **본문 없는 401** 이다. `SocialController.requireUser(...)` 같은 컨트롤러별 헬퍼는 #5 에서 전부 사라졌다.
 - 오류 응답은 기존 `Error` 스키마 형태(`{ error: { code, message } }`) — §6.
 
 ---
@@ -147,13 +147,27 @@
 
 ## 6. 구현 노트 (함정 위주)
 
-1. **JWT subject 불일치(가장 중요)** — 계약/스키마는 `subject = email`. 그러나 `OAuth2SuccessHandler`는 `authentication.getName()`(= `CustomOAuth2User`의 `provider_providerId`)을 subject로 넣고, `UserService.login`은 `email`을 넣는다. `GET /auth/me` 등에서 `emailFromAuth` → `findByEmail`을 쓰므로 **소셜 로그인 토큰으로는 me 조회가 깨진다.** 소셜 흐름의 subject도 `email`로 통일하거나, subject를 사용자 PK로 통일하고 조회를 `findById`로 바꿀 것.
+1. **JWT subject — 결정: `users.id` 로 통일(#5 완료).** 예전에는 `OAuth2SuccessHandler`가 `authentication.getName()`(= `provider_providerId`)을, `UserService.login`이 `email`을 subject로 넣어 한 토큰 형식에 두 규약이 공존했고, 소비처가 전부 email 을 가정해 **소셜 로그인 토큰으로는 me 조회가 깨졌다.** 이제 발급은 `createAccessToken(Long userId, String role)` 한 곳이고(타입이 email·소셜 ID 를 컴파일 단계에서 막는다), 해석은 `JWTAuthenticationFilter` → `AuthenticatedUser` → `@CurrentUser` 한 줄기다. 컨트롤러가 Authorization 헤더를 다시 읽지 않는다는 것은 `AuthSubjectContractSpecTest` 가 소스 스캔으로 잠근다.
+1-1. **배포 영향 — 발급된 액세스 토큰이 전부 무효가 된다(강제 재로그인).** subject 규약이 바뀌므로, 배포 이전에 발급된 토큰(subject 가 이메일 또는 `kakao_1234567890`)은 `JWTAuthenticationFilter` 에서 401 로 떨어진다. 개발 단계이므로 마이그레이션 없이 **강제 재로그인**으로 처리한다(이슈 #5 3단계). 앱은 401 을 받으면 저장된 토큰을 지우고 로그인 화면으로 보내면 된다.
+
+   앱이 함께 알아야 하는 계약 변화:
+
+   | 무엇 | 이전 | 이후 |
+   | --- | --- | --- |
+   | 401 응답 본문 | 계약은 JSON `Error` 를 선언했다(서버는 준 적이 없다) | **본문 없음**(`Content-Type` 도 없음). `error.code` 로 분기하면 깨진다 |
+   | 소셜 계정 토큰으로 `/auth/me`·`/bookmarks`·`/collections`·`/public/schedules` | 400 (`IllegalArgumentException` 이 400 으로 매핑) | **200** (본래 의도한 동작) |
+   | 인증 실패한 `/api/social/**`·`/journeys/v2/**` | 500 | **401** |
+   | `/journeys/v2/**` 의 "없음/권한없음" | 500 | **여전히 500** — 인증이 아니라 존재·소유 검증이라 이번 범위 밖이다. 소유자: #44 |
+   | `media_object.owner_id` | JWT subject | `users.id` — 배포 이전 업로드분의 소유권이 끊긴다. 백필 결정은 `docs/03-database/migration.md` §3-1 |
+
+1-2. **`prv`·`jti` 클레임은 넣지 않았다 — #9 로 이관.** 이슈 #5 완료 조건 6 은 `sub` 가 숫자 문자열인 것과 함께 "`prv` 가 `kakao`/`google`/`local` 중 하나"를 요구하고, 1단계 첫 체크박스는 `jti`(UUID)도 요구한다. 실제 발급 클레임은 `sub`·`role`·`iat`·`exp` 넷뿐이다. 이유: `jti` 는 블록리스트 저장소가 있어야 의미가 있고(#9 의 refresh 토큰 저장소와 같은 곳), `prv` 는 지금 어떤 소비처도 읽지 않는다 — 읽는 쪽 없이 클레임만 늘리면 토큰만 커지고 규약은 검증되지 않는다. 계약도 같은 소유자를 지정해 두었다(`docs/04-api/openapi.yaml` 의 `bearerAuth` — "아직 없는 클레임: `jti`, `prv`. 도입은 이슈 #9"). **#5 를 닫을 때 완료 조건 6 의 `prv` 절과 1단계의 `jti` 는 이관으로 처리한다.**
+
 2. **Access token 만료** — `JWTProvider.TOKEN_VALID_TIME = 1000L*60*60*10000`(주석은 "1시간"이나 실제 ~416일)로 사실상 무기한. 계약 `expiresIn`(예 3600)과 어긋남. access는 짧게(예 1h) 재설정하고, 실제 만료초를 `expiresIn`으로 정확히 반환할 것.
 3. **Refresh token 부재** — 발급/저장/검증/회전/폐기 로직이 전무. `JWTProvider`에 `createRefreshToken`(또는 불투명 랜덤 토큰) 추가 + `RefreshToken` 저장소(§5-2)로 폐기 가능하게. 로그아웃/탈퇴는 반드시 저장된 refresh를 무효화.
 4. **로그인 시작 경로 이중화** — 실제 Spring OAuth2 진입점은 `/oauth2/authorization/{provider}`(SecurityConfig `oauth2Login`). 계약 `GET /auth/oauth/{provider}`는 이 진입점으로의 **302 리다이렉트 래퍼**만 두면 됨(성공 시 딥링크는 기존 SuccessHandler가 처리). 별도 인증 로직 재구현 금지.
 5. **콜백 대안 흐름(callback POST)의 토큰 교환** — `flutter_web_auth_2` 딥링크 흐름과 별개로, SPA/네이티브가 인가코드를 직접 넘기는 경우. 공급자 token endpoint 호출은 `WebClientConfig` 빈 + `TourApiClient` 스타일(WebClient, 타임아웃/에러 매핑)로. secret은 `@Value`로 주입, 로그에 노출 금지.
 6. **provider 화이트리스트** — `{provider}`는 `kakao|naver|google`만 허용. 그 외는 400 + `Error`(`code: VALIDATION`류). `CustomOAuth2UserService`의 `switch`에 `"Kakao"`(대문자) 중복 case가 있으니 정규화(소문자) 후 분기 통일 권장.
-7. **에러 포맷 통일** — 계약은 `{ error: { code, message, traceId? } }`. 반면 `SocialController`는 `{ error: "msg" }`(문자열)로 반환 중. Auth는 **계약의 중첩 객체 포맷**을 따르도록 공통 에러 바디/핸들러 정비(401=UNAUTHORIZED). `SecurityConfig`에서 `/auth/**`는 permitAll이므로 인증 실패는 컨트롤러/서비스 레벨에서 명시적으로 401을 던져야 함(`ResponseStatusException` 패턴).
+7. **에러 포맷 통일** — 계약은 4xx/5xx 본문으로 `{ error: { code, message, traceId? } }` 를 선언한다. 반면 `SocialController`는 `{ error: "msg" }`(문자열), `GlobalExceptionHandler`는 `{ status, error, message, path, timestamp }` 로 서로 다르다 → 정리는 #10. **단 401 은 예외다:** 인증 실패는 원인과 무관하게 **본문 없는 401** 이고(#5·#6), 계약의 `components/responses/Unauthorized` 도 그렇게 선언한다. 인증 실패를 컨트롤러가 만들지 않는다는 점도 함께 바뀌었다 — `SecurityConfig` 의 `HttpStatusEntryPoint(401)` 와 `CurrentUserArgumentResolver` 두 곳뿐이다.
 8. **트랜잭션** — `exchangeCode`(사용자 upsert + refresh 저장), `deleteMe`(사용자 + refresh 삭제)는 `@Transactional` 경계로 묶기. 외부 공급자 HTTP 호출은 트랜잭션 밖에서 수행 후, DB 쓰기만 트랜잭션 내부로(장시간 커넥션 점유 방지).
 9. **좌표/공간 무관** — Auth 리소스는 EPSG:5174→WGS84·`ST_Distance_Sphere` 등 공간 처리와 무관(그쪽 함정은 Places/Walks 문서에서 다룸).
 10. **테이블명 정합** — 스키마 문서는 `app_user`, 코드 실체는 `users`. 문서·코드 중 한쪽으로 명칭을 수렴시키거나, 문서에 "실 테이블=`users`" 주석을 남길 것(마이그레이션 혼선 방지).

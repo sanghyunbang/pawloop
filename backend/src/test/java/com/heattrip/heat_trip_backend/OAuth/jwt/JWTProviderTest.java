@@ -52,7 +52,7 @@ class JWTProviderTest {
     void createAccessToken_1시간설정이면_만료가3600초다() {
         JWTProvider provider = newProvider(3_600_000L);
 
-        String token = provider.createAccessToken("user-1", "ROLE_USER");
+        String token = provider.createAccessToken(42L, "ROLE_USER");
 
         assertThat(expiresInSeconds(token)).isEqualTo(3600L);
     }
@@ -70,7 +70,7 @@ class JWTProviderTest {
     void createAccessToken_설정을30분으로바꾸면_만료도30분이다() {
         JWTProvider provider = newProvider(1_800_000L);
 
-        String token = provider.createAccessToken("user-1", "ROLE_USER");
+        String token = provider.createAccessToken(42L, "ROLE_USER");
 
         assertThat(expiresInSeconds(token)).isEqualTo(1800L);
         assertThat(provider.getExpiresInSeconds()).isEqualTo(1800L);
@@ -81,12 +81,104 @@ class JWTProviderTest {
     void createAccessToken_발급한토큰은_파싱과검증을통과한다() {
         JWTProvider provider = newProvider(3_600_000L);
 
-        String token = provider.createAccessToken("user-1", "ROLE_USER");
+        String token = provider.createAccessToken(42L, "ROLE_USER");
 
         assertThat(provider.validateToken(token)).isTrue();
-        assertThat(provider.getUserIdFromToken(token)).isEqualTo("user-1");
+        // 반환 타입이 Long 인 것이 계약이다 — 이 값으로 findByEmail 을 부르는 코드는 컴파일되지 않는다.
+        assertThat(provider.getUserIdFromToken(token)).isEqualTo(42L);
         assertThat(provider.getRoleFromToken(token)).isEqualTo("ROLE_USER");
     }
+
+    @Test
+    @DisplayName("발급된 토큰의 subject 는 users.id 를 그대로 옮긴 숫자 문자열이다.")
+    void createAccessToken_subject가_숫자문자열이다() {
+        JWTProvider provider = newProvider(3_600_000L);
+
+        String token = provider.createAccessToken(42L, "ROLE_USER");
+
+        assertThat(parse(token).getSubject())
+                .as("계약(openapi.yaml)상 sub 는 불투명 키지만, 서버 내부 규약은 users.id 다 (이슈 #5)")
+                .isEqualTo("42")
+                .matches("\\d+");
+    }
+
+    @Test
+    @DisplayName("subject 로 쓸 users.id 가 없으면 토큰을 만들지 않고 예외를 던진다.")
+    void createAccessToken_userId가null이면_예외다() {
+        JWTProvider provider = newProvider(3_600_000L);
+
+        assertThatThrownBy(() -> provider.createAccessToken(null, "ROLE_USER"))
+                .as("sub=\"null\" 토큰이 발급되면 그 계정은 재로그인 전까지 영구 401 이 된다")
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("서명이 유효해도 subject 가 이메일이거나 소셜 ID 인 옛 형식 토큰은 검증을 통과하지 못한다.")
+    void validateToken_subject가_숫자가아니면_false다() {
+        JWTProvider provider = newProvider(3_600_000L);
+
+        for (String legacySubject : new String[] { "a@b.com", "kakao_123", "google_109876543210987654321", "" }) {
+            String legacy = signedToken(legacySubject, "ROLE_USER");
+
+            assertThat(provider.validateToken(legacy))
+                    .as("옛 형식 subject(%s)를 필터가 통과시키면 컨트롤러에서 파싱에 실패해 400 이 되고 "
+                            + "그 원문이 응답 본문에 실린다", legacySubject)
+                    .isFalse();
+            assertThatThrownBy(() -> provider.getUserIdFromToken(legacy))
+                    .as("거절 지점은 JWTProvider 한 곳이다 — 새 예외 타입을 만들지 않아 필터가 "
+                            + "서명 실패·만료와 똑같이 다룬다")
+                    .isInstanceOf(JWTProvider.InvalidTokenException.class)
+                    .hasMessage("Invalid JWT token");
+        }
+    }
+
+    @Test
+    @DisplayName("옛 형식 subject 를 거절해도 그 값이 예외 메시지에 실리지 않는다.")
+    void getUserIdFromToken_실패해도_subject원문이_새지않는다() {
+        JWTProvider provider = newProvider(3_600_000L);
+        String socialSubject = "kakao_1234567890";
+
+        assertThatThrownBy(() -> provider.getUserIdFromToken(signedToken(socialSubject, "ROLE_USER")))
+                .as("GlobalExceptionHandler 가 예외 메시지를 HTTP 응답 본문에 그대로 싣는다 (이슈 #6)")
+                .hasMessageNotContaining(socialSubject);
+    }
+
+    @Test
+    @DisplayName("subject 가 0 이하의 숫자인 토큰도 검증을 통과하지 못한다.")
+    void validateToken_subject가_양수가아니면_false다() {
+        JWTProvider provider = newProvider(3_600_000L);
+
+        assertThat(provider.validateToken(signedToken("0", "ROLE_USER"))).isFalse();
+        assertThat(provider.validateToken(signedToken("-7", "ROLE_USER"))).isFalse();
+    }
+
+    @Test
+    @DisplayName("role 클레임이 없거나 비어 있는 토큰은 검증을 통과하지 못한다.")
+    void validateToken_role이없으면_false다() {
+        JWTProvider provider = newProvider(3_600_000L);
+
+        // 필터 안에서 new SimpleGrantedAuthority(null) 이 터지면 @RestControllerAdvice 가 잡지 못해
+        // 컨테이너 500 이 된다. 완료 조건("어떤 입력에서도 401")을 지키려면 여기서 막아야 한다.
+        assertThat(provider.validateToken(signedToken("42", null))).isFalse();
+        assertThat(provider.validateToken(signedToken("42", "   "))).isFalse();
+    }
+
+    @Test
+    @DisplayName("role 클레임이 문자열이 아닌 토큰(숫자·배열)도 예외를 새게 하지 않고 검증에서 false 다.")
+    void validateToken_role이문자열이아니면_예외가아니라_false다() {
+        JWTProvider provider = newProvider(3_600_000L);
+
+        // Claims.get("role", String.class) 로 읽으면 jjwt 가 RequiredTypeException 을 던진다.
+        // 그 예외는 parseClaims 의 try 밖에서 나므로 JWTAuthenticationFilter 를 뚫고 나가
+        // @RestControllerAdvice 가 못 잡는 컨테이너 500 이 된다 — 완료 조건 11("어떤 입력에서도 401")
+        // 이 깨지는 자리다. JWTProvider.roleOf 의 instanceof 검사를 되돌리면 이 두 줄이 빨간불이 된다.
+        assertThat(provider.validateToken(signedToken("42", 7))).isFalse();
+        assertThat(provider.validateToken(signedToken("42", java.util.List.of("ROLE_USER")))).isFalse();
+        assertThat(provider.getRoleFromToken(signedToken("42", 7)))
+                .as("읽기 경로도 예외가 아니라 null 로 끝나야 한다")
+                .isNull();
+    }
+
 
     @Test
     @DisplayName("이미 만료된 토큰은 validateToken 이 false 를 돌려주고 getUserIdFromToken 은 예외를 던진다.")
@@ -131,11 +223,31 @@ class JWTProviderTest {
     }
 
     private String signedToken(Date issuedAt, Date expiration) {
-        return Jwts.builder()
-                .setSubject("user-1")
-                .claim("role", "ROLE_USER")
+        return signedToken("42", "ROLE_USER", issuedAt, expiration);
+    }
+
+    /**
+     * 임의의 subject·role 로 유효 서명·미만료 토큰을 만든다.
+     *
+     * <p>{@code createAccessToken} 을 쓰지 않는 이유: 그 시그니처가 {@code Long} 이라 "숫자가 아닌
+     * subject" 나 "role 이 없는 토큰"을 아예 표현할 수 없다. 여기서 검증하려는 것은 <b>이미 발급되어
+     * 사용자 손에 있는</b> 그런 토큰을 만났을 때의 동작이다.
+     */
+    private String signedToken(String subject, Object role) {
+        long now = System.currentTimeMillis();
+        return signedToken(subject, role, new Date(now), new Date(now + 3_600_000L));
+    }
+
+    /** role 을 {@code Object} 로 받는다 — 문자열이 아닌 role 클레임을 표현할 수 있어야 한다. */
+    private String signedToken(String subject, Object role, Date issuedAt, Date expiration) {
+        var builder = Jwts.builder()
+                .setSubject(subject)
                 .setIssuedAt(issuedAt)
-                .setExpiration(expiration)
+                .setExpiration(expiration);
+        if (role != null) {
+            builder.claim("role", role);
+        }
+        return builder
                 .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256)
                 .compact();
     }
