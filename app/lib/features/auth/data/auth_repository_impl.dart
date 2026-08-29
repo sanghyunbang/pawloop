@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:heat_trip_flutter/features/auth/data/dto/login_request.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/register_request.dart';
 import 'package:heat_trip_flutter/features/profile/data/dto/update_profile_request.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/net/log_redaction.dart';
 
 /// 실제 HTTP 요청을 통해 백엔드와 통신하는 클래스
 /// 회원가입 및 로그인 요청을 처리
@@ -37,7 +39,7 @@ class AuthRepositoryImpl {
       return token;
     } else {
       // 실패한 경우 콘솔에 상태 코드 및 응답을 출력
-      print('[X] 로그인 실패 : ${response.statusCode} / ${response.body}');
+      if (kDebugMode) debugPrint('[X] 로그인 실패 : ${response.statusCode} / ${redactBody(response.body)}');
       return null;
     }
   }
@@ -60,7 +62,7 @@ class AuthRepositoryImpl {
       return true;
     } else {
       // 실패한 경우에 콘솔에 사태 코드 및 응답 출력
-      print('[X] 회원가입 실패 : ${response.statusCode} / ${response.body}');
+      if (kDebugMode) debugPrint('[X] 회원가입 실패 : ${response.statusCode} / ${redactBody(response.body)}');
       return false;
     }
   }
@@ -112,11 +114,11 @@ class AuthRepositoryImpl {
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
-        print('[X] 유저 정보 불러오기 실패: ${response.statusCode} / ${response.body}');
+        if (kDebugMode) debugPrint('[X] 유저 정보 불러오기 실패: ${response.statusCode} / ${redactBody(response.body)}');
         return null;
       }
     } catch (e) {
-      print('[X] 유저 정보 요청 중 에러: $e');
+      if (kDebugMode) debugPrint('[X] 유저 정보 요청 중 에러: $e');
       return null;
     }
   }
@@ -136,11 +138,11 @@ class AuthRepositoryImpl {
       if (response.statusCode == 200) {
         return true;
       } else {
-        print('[X] 프로필 업데이트 실패: ${response.statusCode} / ${response.body}');
+        if (kDebugMode) debugPrint('[X] 프로필 업데이트 실패: ${response.statusCode} / ${redactBody(response.body)}');
         return false;
       }
     } catch (e) {
-      print('[X] 프로필 업데이트 오류: $e');
+      if (kDebugMode) debugPrint('[X] 프로필 업데이트 오류: $e');
       return false;
     }
   }
@@ -156,10 +158,10 @@ class AuthRepositoryImpl {
       if (res.statusCode == 200 || res.statusCode == 204) {
         return true;
       }
-      print('[X] deleteMyAccount 실패: ${res.statusCode} / ${res.body}');
+      if (kDebugMode) debugPrint('[X] deleteMyAccount 실패: ${res.statusCode} / ${redactBody(res.body)}');
       return false;
     } catch (e) {
-      print('[X] deleteMyAccount 에러: $e');
+      if (kDebugMode) debugPrint('[X] deleteMyAccount 에러: $e');
       return false;
     }
   }
