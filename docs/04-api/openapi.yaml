@@ -1041,8 +1041,21 @@ components:
         password: { type: string, format: password, minLength: 8 }
         nickname: { type: string }
         name: { type: string }
-        gender: { type: string, enum: [MALE, FEMALE, OTHER] }
-        ageGroup: { type: string, enum: [under14, over14] }
+        gender:
+          type: string
+          enum: [MALE, FEMALE, OTHER]
+          description: >
+            선택. **안 보내면 `User.gender` 가 `null`(미지정)로 저장됩니다** — '기타'와 구분됩니다.
+            대소문자를 가리지 않습니다(`male` 도 됩니다). 목록에 없는 값은 **400** 입니다
+            — 조용히 OTHER 로 바꾸지 않습니다(#42).
+        ageGroup:
+          type: string
+          enum: [under14, over14]
+          default: over14
+          description: >
+            선택. 안 보내면 `over14` 입니다. 대소문자를 가리지 않습니다.
+            목록에 없는 값은 **400** 입니다 — `over14` 로 떨어뜨리면 미성년자를
+            성인으로 취급하게 됩니다(#42).
         agreeTos: { type: boolean, description: 필수 — false/null 이면 400 }
         agreePrivacy: { type: boolean, description: 필수 — false/null 이면 400 }
         agreeMarketing: { type: boolean, description: 선택 }
@@ -1064,7 +1077,12 @@ components:
       properties:
         name: { type: string }
         nickname: { type: string }
-        gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        gender:
+          type: string
+          enum: [MALE, FEMALE, OTHER]
+          description: >
+            보내면 바꿉니다. 안 보내면 그대로 둡니다(부분 수정).
+            목록에 없는 값은 **400** 입니다(#42).
         age: { type: integer }
         travelType: { type: string }
         imageUrl: { type: string, format: uri }

@@ -36,16 +36,12 @@ public class UserService {
             throw new IllegalArgumentException("필수 동의(이용약관/개인정보)에 동의해 주세요.");
         }
 
-        User.Gender gender = switch (safeLower(request.getGender())) {
-            case "male"   -> User.Gender.MALE;
-            case "female" -> User.Gender.FEMALE;
-            default       -> User.Gender.OTHER;
-        };
-
-        User.AgeGroup ageGroup = switch (safeLower(request.getAgeGroup())) {
-            case "under14" -> User.AgeGroup.UNDER14;
-            default        -> User.AgeGroup.OVER14; // 기본
-        };
+        // 안 보내면 null 로 저장한다 — 계약(openapi.yaml 의 User.gender)이 null 을 허용한다.
+        // 예전에는 switch 의 default 가 OTHER 라, 미지정을 '기타'로 조용히 바꿔 저장했다.
+        // 그리고 safeLower(null) 이 null 을 그대로 돌려줘 switch 가 NPE 를 냈다 — 이메일
+        // 가입이 500 이었다. (이슈 #42)
+        User.Gender gender = parseGender(request.getGender());
+        User.AgeGroup ageGroup = parseAgeGroup(request.getAgeGroup());
 
         LocalDateTime now = LocalDateTime.now();
         String tosVer = nvl(request.getTosVersion(), "v1.0");
@@ -127,13 +123,10 @@ public class UserService {
         if (req.getNickname() != null && !req.getNickname().isBlank()) {
             u.setNickname(req.getNickname().trim());
         }
+        // PATCH 라 null 은 '바꾸지 않는다'는 뜻이다. 값이 왔으면 signup 과 같은 규칙으로
+        // 해석한다 — 예전에는 오타("mail" 등)를 조용히 OTHER 로 바꿔 저장했다. (이슈 #42)
         if (req.getGender() != null && !req.getGender().isBlank()) {
-            String g = req.getGender().trim().toUpperCase();
-            switch (g) {
-                case "FEMALE" -> u.setGender(User.Gender.FEMALE);
-                case "MALE"   -> u.setGender(User.Gender.MALE);
-                default       -> u.setGender(User.Gender.OTHER);
-            }
+            u.setGender(parseGender(req.getGender()));
         }
         if (req.getAge() != null) {
             u.setAge(req.getAge());
@@ -192,6 +185,49 @@ public class UserService {
     }
 
      // helpers
-    private static String safeLower(String s) { return s == null ? null : s.toLowerCase(); }
+
+    /**
+     * 성별 문자열을 해석한다. 대소문자는 가리지 않는다.
+     *
+     * <p>세 갈래다.
+     * <ul>
+     *   <li><b>안 보냈거나 빈 문자열</b> → {@code null}(미지정). 계약의 {@code User.gender} 가
+     *       {@code null} 을 허용하므로 이게 사실에 맞는 저장이다.</li>
+     *   <li><b>MALE·FEMALE·OTHER</b> → 그 값</li>
+     *   <li><b>그 밖의 값</b> → {@link IllegalArgumentException}(→ 400).
+     *       조용히 OTHER 로 바꾸면 클라이언트의 오타가 데이터로 굳는다.</li>
+     * </ul>
+     */
+    private static User.Gender parseGender(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return switch (raw.trim().toUpperCase()) {
+            case "MALE"   -> User.Gender.MALE;
+            case "FEMALE" -> User.Gender.FEMALE;
+            case "OTHER"  -> User.Gender.OTHER;
+            default -> throw new IllegalArgumentException(
+                    "gender 는 MALE·FEMALE·OTHER 중 하나이거나 비어 있어야 합니다.");
+        };
+    }
+
+    /**
+     * 연령 구간을 해석한다. 안 보내면 {@code OVER14} 다 — 계약이 그렇게 선언한다.
+     *
+     * <p>{@code UNDER14} 는 마케팅 동의 처리가 달라지는 값이라, 모르는 문자열을 조용히
+     * {@code OVER14} 로 떨어뜨리면 안 된다. 그건 미성년자를 성인으로 취급하는 것이다.
+     */
+    private static User.AgeGroup parseAgeGroup(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return User.AgeGroup.OVER14;
+        }
+        return switch (raw.trim().toUpperCase()) {
+            case "UNDER14" -> User.AgeGroup.UNDER14;
+            case "OVER14"  -> User.AgeGroup.OVER14;
+            default -> throw new IllegalArgumentException(
+                    "ageGroup 은 over14 또는 under14 여야 합니다.");
+        };
+    }
+
     private static String nvl(String s, String d) { return (s == null || s.isBlank()) ? d : s; }
 }

@@ -21,6 +21,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -71,6 +73,92 @@ class UserServiceTest {
         assertThat(saved.getRole()).isEqualTo("ROLE_USER");
         assertThat(saved.getEmail()).isEqualTo("bori@example.com");
         assertThat(saved.getPassword()).isEqualTo("encoded-password"); // 원문 저장 금지
+    }
+
+    // ─────────────────────── gender · ageGroup 해석 (이슈 #42) ───────────────────────
+
+    /** 필수 항목만 채운 가입 요청. gender·ageGroup 은 호출부가 정한다. */
+    private SignupRequest signupRequest(String gender, String ageGroup) {
+        SignupRequest request = new SignupRequest();
+        request.setEmail("bori@example.com");
+        request.setPassword("test1234");
+        request.setNickname("보리아빠");
+        request.setName("보리아빠");
+        request.setGender(gender);
+        request.setAgeGroup(ageGroup);
+        request.setAgreeTos(true);
+        request.setAgreePrivacy(true);
+        return request;
+    }
+
+    private User signupAndCapture(SignupRequest request) {
+        when(userRepository.findByEmail("bori@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode("test1234")).thenReturn("encoded-password");
+
+        userService.signup(request);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("gender 를 안 보내면 500 이 아니라 정상 가입되고, 성별은 null(미지정)로 저장된다")
+    void signup_withoutGender_succeedsAndStoresNull() {
+        // 예전에는 safeLower(null) 이 null 을 그대로 switch 에 넘겨 NPE 였다 — 500.
+        // 계약(openapi.yaml 의 User.gender)이 null 을 허용하므로 null 이 사실에 맞는 저장이다.
+        User saved = signupAndCapture(signupRequest(null, null));
+
+        assertThat(saved.getGender())
+                .as("미지정을 OTHER 로 바꿔 저장하면 '기타'라고 답한 사람과 구분되지 않는다")
+                .isNull();
+        assertThat(saved.getAgeGroup())
+                .as("ageGroup 은 안 보내면 OVER14 — 계약이 그렇게 선언한다")
+                .isEqualTo(User.AgeGroup.OVER14);
+    }
+
+    @Test
+    @DisplayName("gender 는 대소문자를 가리지 않는다 — 'male' 도 'MALE' 도 MALE 이다")
+    void signup_genderIsCaseInsensitive() {
+        assertThat(signupAndCapture(signupRequest("male", "over14")).getGender())
+                .isEqualTo(User.Gender.MALE);
+    }
+
+    @Test
+    @DisplayName("gender 에 모르는 값이 오면 조용히 OTHER 로 바꾸지 않고 400 으로 거절한다")
+    void signup_unknownGender_isRejected() {
+        // 조용히 OTHER 로 떨어뜨리면 클라이언트의 오타가 데이터로 굳는다.
+        assertThatThrownBy(() -> userService.signup(signupRequest("mail", "over14")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("gender");
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("ageGroup 에 모르는 값이 오면 OVER14 로 떨어뜨리지 않고 400 으로 거절한다")
+    void signup_unknownAgeGroup_isRejected() {
+        // UNDER14 는 마케팅 동의 처리가 달라지는 값이다. 모르는 문자열을 OVER14 로 보는 것은
+        // 미성년자를 성인으로 취급하는 것과 같다.
+        assertThatThrownBy(() -> userService.signup(signupRequest("MALE", "over-14")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ageGroup");
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("프로필 수정도 같은 규칙을 쓴다 — 모르는 gender 는 OTHER 가 아니라 400 이다")
+    void updateProfile_unknownGender_isRejected() {
+        User existing = User.builder().id(7L).email("bori@example.com").build();
+        when(userRepository.findById(7L)).thenReturn(Optional.of(existing));
+
+        UpdateProfileRequest req = new UpdateProfileRequest();
+        req.setGender("여자");
+
+        assertThatThrownBy(() -> userService.updateProfile(7L, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("gender");
     }
 
     @Test
