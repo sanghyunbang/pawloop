@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📌 프로젝트 규약 (우선순위 · 라벨 · 이슈 관리 · 용어집)
+    url: https://github.com/sanghyunbang/heattrip/issues/4
+    about: 이슈를 만들기 전에 읽어주세요. P0/P1/P2 판정 기준, 라벨 사전, 완료 조건 쓰는 법이 있습니다.

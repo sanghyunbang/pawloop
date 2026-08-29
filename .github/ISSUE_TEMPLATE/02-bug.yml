@@ -1,0 +1,60 @@
+name: 버그 (Bug)
+description: 의도대로 동작하지 않음
+title: "[BE] "
+labels: ["type/bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **재현 절차가 없는 버그 리포트는 고칠 수 없습니다.** 재현이 안 되면 그것도 적어주세요.
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 증상 — 무슨 일이 일어나나
+      placeholder: 소셜 로그인 후 홈에 진입하면 프로필이 비어 있고, 서버 로그에 500이 찍힌다.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 재현 절차
+      value: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 동작 vs 실제 동작
+      value: |
+        **기대**: 
+        **실제**: 
+    validations:
+      required: true
+  - type: textarea
+    id: cause
+    attributes:
+      label: 원인 (아는 만큼)
+      description: 파일 경로·줄 번호·로그·스택트레이스. 추측이면 추측이라고 적어주세요.
+  - type: dropdown
+    id: env
+    attributes:
+      label: 환경
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - 백엔드 (로컬)
+        - 백엔드 (운영)
+        - 상관없음
+    validations:
+      required: true
+  - type: textarea
+    id: dod
+    attributes:
+      label: 완료 조건 (DoD)
+      description: 무엇이 참이 되면 이 버그가 고쳐진 것인가. 회귀 테스트가 있으면 더 좋습니다.
+    validations:
+      required: true

@@ -1,0 +1,61 @@
+name: 작업 (Task)
+description: 기능 추가 · 개선 · 리팩터링 — 코드를 바꾸는 일반 작업
+title: "[BE] "
+labels: ["type/feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        제목은 `[BE]` `[FE]` `[Infra]` `[Docs]` 중 하나로 시작하고, **결과 상태**를 적어주세요.
+        예: `[BE] JWT subject를 users.id로 통일 — 인증 주체 추출 한 곳으로`
+
+        우선순위 판정 기준은 [프로젝트 규약 #4](https://github.com/sanghyunbang/heattrip/issues/4#1-우선순위--p0p1p2p3)를 따릅니다.
+  - type: textarea
+    id: why
+    attributes:
+      label: 왜 — 지금 무엇이 문제인가
+      description: 이 작업을 왜 하는지. 3개월 뒤에 읽어도 이해되게 써주세요.
+      placeholder: |
+        현재 A는 B라고 가정하는데 C에서는 그 가정이 깨진다. 그래서 D가 실패한다.
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: 어디 — 파일 경로와 줄 번호
+      description: 관련 코드 위치. 여러 곳이면 표로.
+      placeholder: |
+        - `backend/src/main/java/.../OAuth/jwt/JWTProvider.java:26`
+        - `app/lib/features/auth/service/social_login_service.dart`
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 무엇을 — 작업 체크리스트
+      description: 체크박스로. 하나가 대략 커밋 하나 크기면 좋습니다.
+      value: |
+        - [ ] 
+        - [ ] 
+    validations:
+      required: true
+  - type: textarea
+    id: dod
+    attributes:
+      label: 완료 조건 (DoD)
+      description: 누가 읽어도 참·거짓을 판정할 수 있는 문장으로. "잘 동작한다"는 완료 조건이 아닙니다.
+      placeholder: |
+        1. 카카오로 로그인한 토큰으로 `GET /auth/me`가 200과 `{id, provider, nickname}`을 반환한다
+        2. `./gradlew test` 통과
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 참고 · 함정 (선택)
+      description: 알아두면 시간을 아끼는 것들. 외부 서비스 제약, 관련 문서, 이전 시도.
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **만든 뒤에 할 일**: `area/*` · `prio/*` 라벨 추가, 마일스톤 지정, Epic이 있으면 서브이슈로 연결.
