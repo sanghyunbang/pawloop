@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart'; // ✅ 유지
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/login_request.dart';
 import 'package:heat_trip_flutter/features/auth/presentation/widgets/social_login_button.dart';
+import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
 import 'package:heat_trip_flutter/features/auth/service/social_login_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,8 +38,8 @@ class _LoginScreenState extends State<LoginScreen> {
         LoginRequest(email: email, password: password),
       );
       if (token != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('jwt_token', token);
+        // 평문 SharedPreferences 가 아니라 보안 저장소에 저장한다 (#8).
+        await SecureTokenStore.instance.writeAccessToken(token);
         if (!mounted) return;
 
         // 로그인 후 "오늘" 홈으로 진입 (새 IA, F0-4)
