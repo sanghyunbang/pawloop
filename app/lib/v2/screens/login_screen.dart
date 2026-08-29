@@ -5,7 +5,16 @@ import '../widgets/aurora.dart';
 import '../data/auth_state.dart';
 import 'package:heat_trip_flutter/features/auth/service/social_login_service.dart';
 
-/// Pawloop 로그인 — 카카오/네이버 소셜 로그인.
+/// "Sign in with Google" 버튼 라이트 테마 규격 색상.
+/// 배경 흰색 · 테두리 #747775 · 텍스트 #1F1F1F — 브랜드 가이드가 고정한 값이다.
+const Color _googleBg = Color(0xFFFFFFFF);
+const Color _googleBorder = Color(0xFF747775);
+const Color _googleFg = Color(0xFF1F1F1F);
+
+/// Pawloop 로그인 — 카카오/구글 소셜 로그인.
+///
+/// 네이버는 화면에서만 내렸다. `NaverOAuth2User`와 백엔드 설정은 그대로 살아 있으므로
+/// `_login('naver')`를 부르는 버튼만 다시 넣으면 언제든 되살릴 수 있다. (이슈 #3)
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -76,13 +85,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   onTap: () => _login('kakao'),
                 ),
                 const SizedBox(height: 12),
-                // 네이버
+                // 구글 — 브랜드 가이드(developers.google.com/identity/branding-guidelines)상
+                // 흰 배경 + 회색 테두리 + 검정 텍스트 + 공식 4색 "G" 로고가 고정이다.
+                // 임의로 색을 바꾸지 말 것. (login_screen_test 가 회귀로 잠가 둔다)
                 _socialBtn(
-                  label: '네이버로 시작하기',
-                  bg: const Color(0xFF03C75A),
-                  fg: Colors.white,
-                  icon: 'assets/icons/naver.svg',
-                  onTap: () => _login('naver'),
+                  label: 'Google로 시작하기',
+                  bg: _googleBg,
+                  fg: _googleFg,
+                  border: _googleBorder,
+                  icon: 'assets/icons/google.svg',
+                  onTap: () => _login('google'),
                 ),
                 const SizedBox(height: 16),
                 TextButton(
@@ -98,7 +110,14 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _socialBtn({required String label, required Color bg, required Color fg, required String icon, required VoidCallback onTap}) {
+  Widget _socialBtn({
+    required String label,
+    required Color bg,
+    required Color fg,
+    required String icon,
+    required VoidCallback onTap,
+    Color? border,
+  }) {
     return GestureDetector(
       onTap: _busy ? null : onTap,
       child: Opacity(
@@ -106,7 +125,11 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Container(
           height: 54,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(14),
+            border: border == null ? null : Border.all(color: border),
+          ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             SvgPicture.asset(icon, width: 20, height: 20),
             const SizedBox(width: 10),

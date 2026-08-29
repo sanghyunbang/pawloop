@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
+import 'oauth_callback.dart';
 import 'secure_token_store.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 
@@ -39,7 +40,7 @@ class SocialLoginService {
       // result == 'heattrip://login-callback?token=...'
       // ※ result 를 로그로 찍지 마라 — URL 자체에 토큰이 들어 있다.
 
-      final token = Uri.parse(result).queryParameters['token'];
+      final token = tokenFromCallback(result);
 
       if (token != null) {
         // 4. 추출한 JWT 토큰을 보안 저장소에 저장

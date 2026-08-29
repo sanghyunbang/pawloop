@@ -41,6 +41,21 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- 소셜 로그인 딥링크 복귀용 커스텀 스킴. 이 블록이 없으면 iOS 는
+	     heattrip://login-callback 을 어디로 보낼지 몰라 앱으로 돌아오지 못한다. (이슈 #3) -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.cetacealab.heattrip</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>heattrip</string>
+			</array>
+		</dict>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
