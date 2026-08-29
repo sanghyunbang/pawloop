@@ -26,8 +26,8 @@ import 'package:heat_trip_flutter/core/theme/theme.dart';
 
 // ★ shared/media 배럴 (models, picker, api client, repository, widgets 포함)
 import 'package:heat_trip_flutter/shared/media/media.dart';
-// ★ 토큰 저장 서비스 (Bearer 주입에 사용)
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
+// ★ 토큰 보안 저장소 (Bearer 주입 + 구버전 평문 토큰 마이그레이션에 사용)
+import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
 // 전역 로그인 상태
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 
@@ -59,6 +59,10 @@ Future<void> main() async {
   } else {
     debugPrint('[NaverMap] NAVER_MAP_CLIENT_ID 미설정 — 지도 비활성');
   }
+
+  // 구버전(SharedPreferences 평문 'jwt_token') → 보안 저장소 1회 마이그레이션.
+  // 로그인 상태를 복원하기 전에 돌려야 기존 사용자가 재로그인 없이 넘어온다.
+  await SecureTokenStore.instance.migrateLegacyToken();
 
   // 저장된 토큰으로 로그인 상태 복원
   await AuthState.init();
@@ -126,7 +130,7 @@ class HeatTrip extends StatelessWidget {
         Provider(
           create: (_) => MediaApiClient(
             baseUrl: baseUrl,
-            tokenProvider: () async => await TokenStorage.getToken(),
+            tokenProvider: () => SecureTokenStore.instance.readAccessToken(),
           ),
         ),
         // [B] MediaRepository: API 클라이언트를 의존성으로 받음. [③]

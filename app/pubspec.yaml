@@ -54,6 +54,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  # 보안 저장소 실패(Keystore 예외) 페이크 플랫폼을 테스트에서 직접 꽂기 위해 필요
+  flutter_secure_storage_platform_interface: ^1.1.2
   # 플러터 아이콘 관련
   flutter_launcher_icons: ^0.13.1
 
