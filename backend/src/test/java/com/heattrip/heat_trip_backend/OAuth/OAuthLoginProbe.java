@@ -3,8 +3,10 @@ package com.heattrip.heat_trip_backend.OAuth;
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2SuccessHandler;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
+import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 import org.mockito.ArgumentMatchers;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.RequestEntity;
@@ -15,6 +17,7 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -85,18 +88,91 @@ final class OAuthLoginProbe {
     }
 
     /** CustomOAuth2UserService.loadUser 를 네트워크 없이 실행한다(신규 가입 분기). */
-    @SuppressWarnings("unchecked")
     static OAuth2User loadUser() {
-        Map<String, Object> attributes = new HashMap<>();
-        attributes.put("sub", PROVIDER_ID);
-        attributes.put("email", EMAIL);
-        attributes.put("name", "프로브 사용자");
-
         UserRepository userRepository = mock(UserRepository.class);
         // 식별 키는 (provider, social_id) 다 — username 이 아니다. (이슈 #7)
         when(userRepository.findByProviderAndSocialId("google", PROVIDER_ID)).thenReturn(Optional.empty());
         when(userRepository.findByUsername("google_" + PROVIDER_ID)).thenReturn(Optional.empty());
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+
+        return service(userRepository).loadUser(userRequest());
+    }
+
+    // ───────────────────── 실패·충돌 분기 (이슈 #7 / #6) ─────────────────────
+    //
+    // 아래 세 프로브는 이 PR 이 새로 만든 '이메일이 오가는 경로'를 로그 위생 테스트가
+    // 실제로 태울 수 있게 하려고 있다. 성공 경로 하나만 돌리면 이 분기들은 한 줄도
+    // 실행되지 않아서, 누가 이메일을 로그로 흘려도 스위트가 초록불이었다.
+
+    /**
+     * 같은 이메일을 쓰는 계정이 이미 있어 신규 가입이 거절되는 경로.
+     *
+     * @return {@code CustomOAuth2UserService.emailAlreadyRegistered} 가 던진 예외
+     */
+    static OAuth2AuthenticationException runEmailCollisionLogin() {
+        UserRepository userRepository = mock(UserRepository.class);
+        when(userRepository.findByProviderAndSocialId("google", PROVIDER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("google_" + PROVIDER_ID)).thenReturn(Optional.empty());
+        // 구글로 처음 들어온 이 이메일을 카카오 계정이 이미 쓰고 있다.
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(
+                User.builder().id(99L).provider("kakao").socialId("k-1").email(EMAIL).build()));
+
+        return expectFailure(userRepository);
+    }
+
+    /**
+     * 사전 조회와 INSERT 사이에 같은 값이 끼어들어 저장이 무결성 제약에 걸리는 경로.
+     *
+     * <p>목이 던지는 메시지는 MySQL 이 실제로 주는 문구 그대로다 — 그 안에 이메일 원문이
+     * 들어 있으므로, 예외를 cause 로 싣거나 메시지를 이어 붙이면 로그로 새어 나간다.
+     *
+     * @return {@code CustomOAuth2UserService.saveNew} 가 던진 예외
+     */
+    static OAuth2AuthenticationException runIntegrityViolationLogin() {
+        UserRepository userRepository = mock(UserRepository.class);
+        when(userRepository.findByProviderAndSocialId("google", PROVIDER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("google_" + PROVIDER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenThrow(new DataIntegrityViolationException(
+                "could not execute statement [Duplicate entry '" + EMAIL + "' for key 'users.UK_email']"));
+
+        return expectFailure(userRepository);
+    }
+
+    /**
+     * 기존 행에 공급자 이메일을 반영하려는데 그 이메일을 다른 계정이 이미 쓰고 있는 경로.
+     * 로그인은 통과하고 email 갱신만 건너뛴다.
+     */
+    static OAuth2User runEmailUpdateSkippedLogin() {
+        User existing = User.builder()
+                .id(42L).provider("google").socialId(PROVIDER_ID)
+                .name("프로브 사용자").nickname("프로브 사용자").role("ROLE_USER")
+                .build();
+        UserRepository userRepository = mock(UserRepository.class);
+        when(userRepository.findByProviderAndSocialId("google", PROVIDER_ID))
+                .thenReturn(Optional.of(existing));
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(
+                User.builder().id(99L).provider("kakao").socialId("k-1").email(EMAIL).build()));
+
+        return service(userRepository).loadUser(userRequest());
+    }
+
+    private static OAuth2AuthenticationException expectFailure(UserRepository userRepository) {
+        try {
+            service(userRepository).loadUser(userRequest());
+        } catch (OAuth2AuthenticationException e) {
+            return e;
+        }
+        throw new IllegalStateException("실패 분기를 태우지 못했다 — 프로브 스텁이 어긋났다.");
+    }
+
+    /** userinfo HTTP 를 목으로 막은 서비스. 공급자 응답에는 늘 {@link #EMAIL} 이 들어 있다. */
+    @SuppressWarnings("unchecked")
+    private static CustomOAuth2UserService service(UserRepository userRepository) {
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put("sub", PROVIDER_ID);
+        attributes.put("email", EMAIL);
+        attributes.put("name", "프로브 사용자");
 
         RestOperations restOperations = mock(RestOperations.class);
         when(restOperations.exchange(any(RequestEntity.class),
@@ -105,8 +181,7 @@ final class OAuthLoginProbe {
 
         CustomOAuth2UserService service = new CustomOAuth2UserService(userRepository);
         service.setRestOperations(restOperations);
-
-        return service.loadUser(userRequest());
+        return service;
     }
 
     private static OAuth2UserRequest userRequest() {

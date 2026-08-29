@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 
 import java.util.HashMap;
@@ -23,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -123,6 +125,31 @@ class CustomOAuth2UserServiceTest {
                 .hasMessageContaining("이미 있습니다");
 
         verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("INSERT 가 무결성 제약에 걸리면 500 이 아니라 account_conflict 인증 실패로 끝난다")
+    void upsert_failsWithAuthErrorWhenSaveHitsIntegrityConstraint() {
+        // 사전 조회(findByEmail)와 INSERT 사이에 같은 값이 끼어드는 경합. 이 catch 가 없으면
+        // DataIntegrityViolationException 이 필터체인 밖으로 나가 500 이 된다.
+        // 이 PR 의 핵심 주장("원인을 말하는 인증 실패")이 실제로 성립하는지 여기서 잠근다.
+        OAuth2UserInfo google = google("g-1", "보리아빠", "bori@example.com");
+        when(userRepository.findByProviderAndSocialId("google", "g-1")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("google_g-1")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("bori@example.com")).thenReturn(Optional.empty());
+        // MySQL 이 실제로 주는 문구 — 안에 이메일 원문이 들어 있다.
+        when(userRepository.save(any(User.class))).thenThrow(new DataIntegrityViolationException(
+                "could not execute statement [Duplicate entry 'bori@example.com' for key 'users.UK_email']"));
+
+        OAuth2AuthenticationException thrown = catchThrowableOfType(
+                OAuth2AuthenticationException.class, () -> service.upsertUser(google, Map.of()));
+
+        assertThat(thrown).isNotNull();
+        assertThat(thrown.getError().getErrorCode()).isEqualTo("account_conflict");
+        // DB 예외를 cause 로 싣거나 메시지에 이어 붙이면 이메일이 인증 실패 로그로 흘러간다. (이슈 #6)
+        assertThat(thrown.getCause()).isNull();
+        assertThat(thrown.getMessage()).doesNotContain("bori@example.com");
+        assertThat(thrown.getMessage()).doesNotContain("Duplicate entry");
     }
 
     @Test
@@ -305,12 +332,38 @@ class CustomOAuth2UserServiceTest {
     }
 
     @Test
-    @DisplayName("google·naver 도 대소문자와 무관하게 매핑된다")
+    @DisplayName("google·naver 도 대소문자와 무관하게 매핑되고, 실제 응답 모양에서 값을 꺼낸다")
     void toUserInfo_mapsOtherProviders() {
-        assertThat(CustomOAuth2UserService.toUserInfo("Google", Map.of()))
-                .isInstanceOf(GoogleOAuth2User.class);
-        assertThat(CustomOAuth2UserService.toUserInfo("NAVER", Map.of()))
-                .isInstanceOf(NaverOAuth2User.class);
+        OAuth2UserInfo googleInfo = CustomOAuth2UserService.toUserInfo(
+                "Google", Map.of("sub", "g-1", "name", "보리아빠", "email", "bori@example.com"));
+        assertThat(googleInfo).isInstanceOf(GoogleOAuth2User.class);
+        assertThat(googleInfo.getProviderId()).isEqualTo("g-1");
+
+        // 네이버는 값이 전부 response 아래에 중첩돼 있다. 빈 맵으로 instanceof 만 보던 옛 단언은
+        // 키 이름이나 캐스팅이 틀려도 초록불이었다 — 그러면 네이버 로그인 전원이 missing_social_id 로 죽는다.
+        OAuth2UserInfo naverInfo = CustomOAuth2UserService.toUserInfo("NAVER", Map.of(
+                "response", Map.of(
+                        "id", "n-1",
+                        "name", "보리아빠",
+                        "email", "bori@example.com",
+                        "profile_image", "https://cdn.example.com/n.jpg")));
+        assertThat(naverInfo).isInstanceOf(NaverOAuth2User.class);
+        assertThat(naverInfo.getProvider()).isEqualTo("naver");
+        assertThat(naverInfo.getProviderId()).isEqualTo("n-1");
+        assertThat(naverInfo.getName()).isEqualTo("보리아빠");
+        assertThat(naverInfo.getEmail()).isEqualTo("bori@example.com");
+        assertThat(naverInfo.getImageUrl()).isEqualTo("https://cdn.example.com/n.jpg");
+    }
+
+    @Test
+    @DisplayName("네이버 응답에 response 키가 없어도 접근자가 예외 없이 null 을 돌려준다")
+    void naverUserInfo_toleratesMissingResponseKey() {
+        OAuth2UserInfo naverInfo = CustomOAuth2UserService.toUserInfo("naver", Map.of());
+
+        assertThat(naverInfo.getProviderId()).isNull();
+        assertThat(naverInfo.getName()).isNull();
+        assertThat(naverInfo.getEmail()).isNull();
+        assertThat(naverInfo.getImageUrl()).isNull();
     }
 
     @Test

@@ -56,7 +56,7 @@ public class User {
      * 그래도 남겨 두는 이유:
      * <ul>
      *   <li>운영 DB 에 이 값만 들어 있는 행이 있고, 백필 SQL
-     *       (backend/docs/database/2026-08-29-users-social-account-model.sql)이 돌기 전에도
+     *       (backend/mysql/post-start/04_users_social_account_model.sql)이 돌기 전에도
      *       {@code UserRepository.findByUsername} 으로 그 행을 찾아 새 컬럼을 채워 넣어야 한다.
      *       (컬럼을 지우면 그 행들이 로그인할 때마다 중복 생성된다.)</li>
      *   <li>운영 프로파일은 {@code ddl-auto=validate} 라 JPA 쪽에서 필드를 지워도 컬럼은 남는다.
@@ -80,9 +80,18 @@ public class User {
     @Column(name = "social_id", length = 191)
     private String socialId;
 
-    /** 권한. 토큰 발급 시 이 값을 쓴다. 비어 있으면 {@link #ROLE_USER} 로 채운다. */
+    /**
+     * 권한. 토큰 발급 시 이 값을 쓴다. 비어 있으면 {@link #ROLE_USER} 로 채운다.
+     *
+     * <p>{@code nullable = false} 는 마이그레이션 SQL
+     * (backend/mysql/post-start/04_users_social_account_model.sql §A)의
+     * {@code role VARCHAR(20) NOT NULL DEFAULT 'ROLE_USER'} 와 정의를 맞추기 위한 것이다.
+     * 이게 없으면 dev(ddl-auto=update)는 nullable 컬럼을, prod 는 NOT NULL 컬럼을 갖게 되고
+     * Hibernate 의 validate 는 nullability 를 검사하지 않아 그 차이를 끝까지 알려주지 않는다.
+     * 값은 {@code @Builder.Default} 와 {@code @PrePersist} 가 함께 보장한다.
+     */
     @Builder.Default
-    @Column(length = 20)
+    @Column(length = 20, nullable = false)
     private String role = ROLE_USER;
 
     /**

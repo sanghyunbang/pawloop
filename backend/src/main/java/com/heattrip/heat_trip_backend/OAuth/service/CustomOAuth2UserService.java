@@ -171,7 +171,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             return byKey;
         }
 
-        // 백필 SQL(backend/docs/database/2026-08-29-users-social-account-model.sql)이
+        // 백필 SQL(backend/mysql/post-start/04_users_social_account_model.sql)이
         // 아직 돌지 않은 레거시 행은 식별자가
         // username = "{provider}_{socialId}" 한 문자열에 뭉쳐 있다. 여기서 새 컬럼으로 옮겨 심지 않으면
         // 그 사용자는 로그인할 때마다 계정이 하나씩 새로 생긴다.
