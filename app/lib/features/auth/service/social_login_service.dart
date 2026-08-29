@@ -1,5 +1,6 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
+import 'oauth_callback.dart';
 import 'token_storage.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 
@@ -34,7 +35,7 @@ class SocialLoginService {
       // result == 'heattrip://login-callback?token=...'
       print("[디버그] Returned result URL: $result"); // 여기에 뭐가 나오는지 확인
 
-      final token = Uri.parse(result).queryParameters['token'];
+      final token = tokenFromCallback(result);
 
       if (token != null) {
         // 4. 추출한 JWT 토큰을 SharedPreferences에 저장

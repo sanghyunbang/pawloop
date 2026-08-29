@@ -162,6 +162,67 @@ java -jar -Dspring.profiles.active=dev build/libs/*.jar
 - 기동 확인: `http://localhost:8080/actuator/health`
 - 백엔드 Gradle Wrapper는 8.14.3(앱 안드로이드 Wrapper 8.13과 별개).
 
+### 5.4 소셜 로그인(구글) 로컬 테스트
+
+> 이 절의 존재 이유: **구글은 사설 IP의 http redirect URI를 등록해주지 않는다.** 카카오는 `http://10.0.2.2:8080`을 그대로 받아주기 때문에 지금까지 이 차이가 드러나지 않았다. (이슈 #3)
+
+#### 왜 `10.0.2.2` 로는 안 되는가
+
+백엔드의 `APP_BASE_URL` 이 그대로 구글 redirect URI 가 된다.
+
+```
+APP_BASE_URL=http://10.0.2.2:8080
+  → redirect URI = http://10.0.2.2:8080/login/oauth2/code/google   ← 구글 콘솔이 거부
+```
+
+구글이 받아주는 형태는 **https** 이거나 **`http://localhost`** 둘뿐이다.
+
+#### 구글 클라우드 콘솔 — 승인된 리디렉션 URI
+
+OAuth 클라이언트는 이미 만들어져 있다(`backend/.env` 에 `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` 존재). 아래 두 개가 목록에 있는지만 확인하고, 없으면 추가한다.
+
+| 환경 | 등록할 redirect URI |
+| --- | --- |
+| 운영/스테이징 | `https://api.heattrip.link/login/oauth2/code/google` |
+| 로컬 개발 | `http://localhost:8080/login/oauth2/code/google` |
+
+#### 로컬 왕복 절차 (안드로이드 에뮬레이터)
+
+에뮬레이터에서 `localhost` 는 에뮬레이터 자신을 가리키므로, 호스트 PC 의 8080 을 에뮬레이터의 8080 으로 되돌려 꽂는다.
+
+```bash
+# 1) 에뮬레이터의 localhost:8080 → 호스트 PC 의 8080 으로 포워딩
+adb reverse tcp:8080 tcp:8080
+
+# 2) 백엔드를 localhost 기준으로 띄운다 (redirect URI 가 localhost 로 만들어진다)
+cd heattrip/backend
+APP_BASE_URL=http://localhost:8080 ./gradlew bootRun --args='--spring.profiles.active=dev'
+
+# 3) 앱도 같은 주소를 보게 한다. Env.apiBase 가 dart-define 을 최우선으로 읽으므로
+#    app/.env 는 건드릴 필요가 없다.
+cd heattrip/app
+flutter run --dart-define=API_BASE=http://localhost:8080
+```
+
+- `adb reverse` 는 **안드로이드 전용**이다. iOS 시뮬레이터는 호스트와 `localhost` 를 공유하므로 그냥 `http://localhost:8080` 을 쓰면 된다.
+- 터널(ngrok 등)로 공개 https 주소를 붙여도 되지만, 실행할 때마다 URL 이 바뀌면 콘솔에 매번 재등록해야 한다.
+
+#### 딥링크 복귀 설정 (이게 없으면 로그인이 끝나도 앱으로 못 돌아온다)
+
+`flutter_web_auth_2` 는 로그인 후 `heattrip://login-callback?token=...` 로 앱에 돌아온다. 양 플랫폼 모두 OS 에 스킴이 등록돼 있어야 한다.
+
+| 플랫폼 | 파일 | 내용 |
+| --- | --- | --- |
+| iOS | `app/ios/Runner/Info.plist` | `CFBundleURLTypes` → `CFBundleURLName=com.cetacealab.heattrip`, `CFBundleURLSchemes=[heattrip]` |
+| Android | `app/android/app/src/main/AndroidManifest.xml` | `com.linusu.flutter_web_auth_2.CallbackActivity` + `scheme=heattrip`, `host=login-callback` |
+
+> [!WARNING]
+> 안드로이드 intent-filter 는 **`MainActivity` 가 아니라 플러그인의 `CallbackActivity`** 에 달아야 한다. 플러그인은 `CallbackActivity.onCreate` 에서만 대기 중인 결과를 완료시키기 때문에, `MainActivity` 로 받으면 앱은 앞으로 나오지만 `authenticate()` 의 Future 가 영원히 끝나지 않는다.
+>
+> `android:autoVerify="true"` 는 App Links(https) 전용 속성이라 커스텀 스킴에는 의미가 없다. 붙이지 않는다.
+
+이 설정값들은 `app/test/platform_config_test.dart` 가 지키고 있다. 지우면 `flutter test` 가 빨간불이 된다.
+
 ---
 
 ## 6. 빌드 명령 정리
@@ -203,6 +264,7 @@ dart run flutter_launcher_icons
 - [ ] `flutter pub get` 성공
 - [ ] 에뮬레이터 부팅 후 `flutter run` — 지도 탭에 KTO 실데이터(서울) 표시되면 키 정상
 - [ ] (로컬 백엔드 쓸 때) MySQL `heat_trip_db` 생성 + `./gradlew bootRun` + 앱을 `--dart-define=API_BASE=http://10.0.2.2:8080`로 실행
+- [ ] (구글 로그인 테스트할 때) `adb reverse tcp:8080 tcp:8080` + 백엔드 `APP_BASE_URL=http://localhost:8080` + 앱 `--dart-define=API_BASE=http://localhost:8080` → [5.4](#54-소셜-로그인구글-로컬-테스트)
 
 ---
 

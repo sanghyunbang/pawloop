@@ -26,14 +26,6 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- 딥링크 -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="heattrip" android:host="login-callback"/>
-            </intent-filter>
-
             <!-- 런처 (하나만 유지) -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -43,6 +35,22 @@
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"/>
+        </activity>
+
+        <!-- 소셜 로그인 딥링크 복귀 (flutter_web_auth_2 v4 권장 구성).
+             플러그인은 CallbackActivity.onCreate 에서만 대기 중인 Result 를 완료시킨다.
+             예전처럼 MainActivity 에 intent-filter 를 달면 앱은 앞으로 나오지만
+             authenticate() 의 Future 는 영원히 끝나지 않는다.
+             autoVerify 는 App Links(https) 전용 속성이라 커스텀 스킴에는 의미가 없어 뺐다. -->
+        <activity
+            android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
+            android:exported="true">
+            <intent-filter android:label="flutter_web_auth_2">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="heattrip" android:host="login-callback"/>
+            </intent-filter>
         </activity>
 
         <meta-data android:name="flutterEmbedding" android:value="2" />
