@@ -109,7 +109,7 @@ final res = await http.get(uri).timeout(const Duration(seconds: 12));
 
 ### 1.6 서비스키 취급 (중요)
 
-- 키는 `.env`의 `YOUR_DECODING_SERVICE_KEY`에 있고, `Env.tourServiceKey`로 읽는다(`lib/core/config/env.dart`).
+- 키는 컴파일 타임 `--dart-define=YOUR_DECODING_SERVICE_KEY`로 들어오고, `Env.tourServiceKey`로 읽는다(`lib/core/config/env.dart`). 예전에는 `.env`를 에셋으로 번들링했는데 APK를 풀면 그대로 보여서 걷어냈다(#29). dart-define도 완화일 뿐 문자열은 바이너리에 남는다 — 진짜 제거는 #40.
 - **명칭은 "Decoding"이지만 실제로는 인코딩(URL-encoded)된 키**가 들어있다. 그래서 앱은 `Uri.encodeQueryComponent` 없이 쿼리스트링에 **문자열 그대로** 붙인다. 재인코딩하면 `%2B`가 `%252B`로 이중 인코딩되어 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 난다.
 - 키가 비어있으면 `fetchNearby`는 빈 리스트를 반환(앱 크래시 없음).
 - 키는 앱 번들에 노출되므로(공개데이터 특성상 치명적이진 않으나) 남용/한도 방지를 위해 **백엔드 프록시로 이전 권장**(→ 6장).
@@ -269,5 +269,5 @@ flowchart LR
 | `app/lib/v2/data/pet_places_repository.dart` | KTO `locationBasedList2` 호출·파싱(`PetPlace`) |
 | `app/lib/v2/domain/pet.dart` | 카테고리 SSOT(`kPetCategories`, `kLayerKeys`, `petCatByType`) |
 | `app/lib/core/config/env.dart` | `tourServiceKey`(`YOUR_DECODING_SERVICE_KEY`) 로드 |
-| `app/.env` | `YOUR_DECODING_SERVICE_KEY`(인코딩된 KTO 키), `NAVER_MAP_CLIENT_ID` |
+| `--dart-define` (템플릿 `app/dart-define.example.json`) | `YOUR_DECODING_SERVICE_KEY`(인코딩된 KTO 키), `NAVER_MAP_CLIENT_ID` |
 | `backend/.../tour/service/TourApiClient.java` | 레거시 `areaBasedList2` 프록시 패턴(반려 프록시 참고) |

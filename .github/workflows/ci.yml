@@ -28,6 +28,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       app: ${{ steps.filter.outputs.app }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -39,6 +40,11 @@ jobs:
               - '.github/workflows/ci.yml'
             app:
               - 'app/**'
+              - '.github/workflows/ci.yml'
+            docs:
+              - 'docs/**'
+              - 'app/lib/**'
+              - '.github/scripts/check-docs-drift.sh'
               - '.github/workflows/ci.yml'
 
   backend:
@@ -109,7 +115,7 @@ jobs:
       - name: 의존성 설치
         run: flutter pub get
 
-      # 에러만 실패로 본다. 현재 경고·info가 114건 남아 있어
+      # 에러만 실패로 본다. 현재 경고·info가 101건 남아 있어
       # --fatal-warnings를 켜면 CI가 영원히 빨강이고, 그러면 아무도 CI를 안 본다.
       # 경고 정리는 별도 이슈에서 점진적으로.
       - name: 정적 분석 (에러 0건)
@@ -127,6 +133,22 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+  # 문서가 코드와 어긋난 채 남는 것을 막는다. 사람이 눈으로 찾아 고치던 일을 옮겼다.
+  # #29 가 flutter_dotenv 를 걷어낸 뒤 "`.env` 에서 읽는다" 는 서술이 문서 곳곳에
+  # 남았고, #41 과 #54 가 두 번에 걸쳐 14줄을 고쳤다. 그건 전부 수동이었다. → 이슈 #59
+  #
+  # app/lib 도 트리거에 넣는 이유: 코드가 바뀌면 문서가 낡을 수 있고,
+  # 이 게이트는 사용자에게 보이는 안내 문구도 함께 본다.
+  docs:
+    name: 문서 — 코드와의 드리프트
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 낡은 서술 검사
+        run: bash .github/scripts/check-docs-drift.sh
+
   # 경로 필터로 건너뛴 잡이 있어도 하나의 상태로 모아 판정한다.
   # 브랜치 보호 규칙에는 이 잡 하나만 등록하면 된다.
   #
@@ -135,7 +157,7 @@ jobs:
   # 깨졌는데도 초록으로 보고된다. 실제로 그렇게 새어나간 적이 있다.
   verdict:
     name: CI 통과
-    needs: [changes, backend, app]
+    needs: [changes, backend, app, docs]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -144,6 +166,7 @@ jobs:
           echo "changes = ${{ needs.changes.result }}"
           echo "backend = ${{ needs.backend.result }}"
           echo "app     = ${{ needs.app.result }}"
+          echo "docs    = ${{ needs.docs.result }}"
 
           # 경로 판별이 성공하지 않았으면 아래 판정 자체를 믿을 수 없다.
           if [ "${{ needs.changes.result }}" != "success" ]; then
@@ -152,7 +175,7 @@ jobs:
           fi
 
           # skipped 는 정상이다. 해당 경로가 안 바뀐 PR 이라는 뜻.
-          for r in "${{ needs.backend.result }}" "${{ needs.app.result }}"; do
+          for r in "${{ needs.backend.result }}" "${{ needs.app.result }}" "${{ needs.docs.result }}"; do
             case "$r" in
               success|skipped) ;;
               *) echo "::error::검증 실패 (result=$r)"; exit 1 ;;

@@ -11,7 +11,7 @@
 | 계층 | 구성요소 | 스택 | 현재 상태 |
 | --- | --- | --- | --- |
 | 클라이언트 | Pawloop 앱 (`lib/v2/`) | Flutter 3.44.4 / Dart 3.12.2, go_router, ValueNotifier | 됨 (일부 더미) |
-| 지도 SDK | 네이버 Dynamic Map | `flutter_naver_map ^1.4.x` | 됨 (Client ID .env 주입) |
+| 지도 SDK | 네이버 Dynamic Map | `flutter_naver_map ^1.4.x` | 됨 (Client ID `--dart-define` 주입) |
 | 백엔드 | Pawloop API | Spring Boot 3.5.4 / Java 21 (+Kotlin), Spring Security·OAuth2·JWT | 레거시(heattrip 패키지) 재사용 |
 | DB | 관계형 | MySQL 8 (공간형 POINT/LINESTRING, SPATIAL INDEX) | 스키마 재정의 중 |
 | 저장소 | 이미지 | AWS S3 | 됨 (레거시) |
@@ -111,7 +111,7 @@ flowchart TB
 | 우선순위 | 소스 | 값 |
 | --- | --- | --- |
 | 1 | `--dart-define=API_BASE=...` | 로컬/스테이징 override |
-| 2 | `.env`의 `API_BASE_URL` | 운영 원격 (기본) |
+| 2 | `--dart-define=API_BASE_URL` | 운영 원격 (기본) |
 | 3 | 하드코딩 폴백 | `http://10.0.2.2:8080` (에뮬레이터→호스트 로컬) |
 
 - `NAVER_MAP_CLIENT_ID` — 네이버맵 SDK Client ID(모바일은 시크릿 불필요, 패키지명 허용목록으로 보호).
@@ -234,7 +234,7 @@ sequenceDiagram
 
 | 항목 | 값 | 근거 |
 | --- | --- | --- |
-| 운영 백엔드 | `api.heattrip.link` (원격, 8080) | `.env` `API_BASE_URL` |
+| 운영 백엔드 | `api.heattrip.link` (원격, 8080) | `--dart-define=API_BASE_URL` |
 | 로컬 개발 | `http://10.0.2.2:8080` (에뮬레이터→호스트) | `env.dart` 폴백 |
 | 지도 인증 | 네이버 Client ID + 패키지명 허용목록 | `main.dart` init |
 | 이미지 | AWS S3 | 백엔드 `S3` 모듈 |

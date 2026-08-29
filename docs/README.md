@@ -59,7 +59,7 @@
 | [MVP 범위](05-build/mvp-scope.md) | In/Out-of-scope · 완료 정의 |
 | [로드맵](05-build/roadmap.md) | 마일스톤(위치→로그인→실데이터→확장로그→출시) |
 | [구현 현황](05-build/implementation-status.md) | 화면·기능별 상태(완료/더미/미구현) |
-| [개발 환경 세팅](05-build/setup.md) | Flutter · .env · 에뮬 · 빌드 명령 |
+| [개발 환경 세팅](05-build/setup.md) | Flutter · `--dart-define` · 에뮬 · 빌드 명령 |
 
 ### 06-testing — 테스트
 | 문서 | 설명 |
