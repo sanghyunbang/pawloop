@@ -48,11 +48,17 @@ app.*.map.json
 /android/app/release
 
 # Env files
+# .env 는 더 이상 앱이 읽지 않는다(에셋 번들링 폐기 → 이슈 #29). 남아 있어도
+# 무시하고, 혹시 옛 파일이 굴러다녀도 커밋되지 않게 계속 막아둔다.
 .env
 .env.*
 *.env
-# 템플릿은 추적한다. 값이 비어 있고, 없으면 CI 가 에셋 번들을 못 만든다.
-!.env.example
+
+# --dart-define-from-file 로 넘기는 로컬 값 묶음. 실제 키가 들어가므로 추적 금지.
+dart-define.json
+dart-define.*.json
+# 값이 빈 템플릿만 추적한다.
+!dart-define.example.json
 
 # Secrets and local credentials
 local.properties

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'core/config/env.dart';
 import 'v2/screens/main_shell.dart';
@@ -8,11 +7,7 @@ import 'v2/screens/main_shell.dart';
 /// 실행: flutter run -t lib/main_v2.dart
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await dotenv.load();
-  } catch (e) {
-    debugPrint('[dotenv] load skipped: $e');
-  }
+  // 환경값은 컴파일 타임 --dart-define 으로 들어온다 (Env). → 이슈 #29
   final id = Env.naverMapClientId;
   if (id.isNotEmpty) {
     try {

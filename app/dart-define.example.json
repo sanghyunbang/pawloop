@@ -1,0 +1,9 @@
+{
+  "_README": "app/dart-define.json 으로 복사해 값을 채운다. 그 파일은 gitignore 대상이며, 여기(추적되는 템플릿)에는 진짜 키를 넣지 않는다. 사용법: flutter run --dart-define-from-file=dart-define.json — 자세한 설명은 docs/05-build/setup.md 3절.",
+
+  "API_BASE_URL": "https://api.heattrip.link",
+
+  "YOUR_DECODING_SERVICE_KEY": "",
+
+  "NAVER_MAP_CLIENT_ID": ""
+}

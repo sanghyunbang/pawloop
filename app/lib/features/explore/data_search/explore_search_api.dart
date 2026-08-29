@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:http/http.dart' as http;
 import 'search_models.dart';
 
@@ -12,7 +12,7 @@ class ExploreSearchApi {
   final http.Client _client;
 
   Uri _buildUri(Map<String, String?> qp) {
-    final base = dotenv.maybeGet('API_BASE_URL') ?? 'http://10.0.2.2:8080';
+    final base = Env.apiBase;
     return Uri.parse('$base/api/explore/places/search').replace(
       queryParameters: Map.fromEntries(
         qp.entries.where((e) => e.value != null && e.value!.isNotEmpty),

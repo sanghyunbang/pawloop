@@ -32,8 +32,9 @@ dependencies:
   # # 딥링크 : 앱을 외부(브라우저)에서 특정 화면으로 직접 여는 URL
   # uni_links: ^0.5.4
 
-  # env관련
-  flutter_dotenv: ^5.2.1
+  # env 관련: flutter_dotenv 를 걷어냈다. `.env` 를 에셋으로 번들링하면 APK 안에
+  # 원본 그대로 실려 나가기 때문. 이제 전부 --dart-define(lib/core/config/env.dart).
+  # → 이슈 #29
 
   # 페이지 속의 페이지 라우터
   go_router: ^16.1.0
@@ -100,7 +101,7 @@ flutter:
     - assets/
     - assets/emoji/
     - assets/lottie/
-    - .env
+    # `.env` 는 여기에 두지 않는다 — 에셋은 APK 에 원본 그대로 들어간다. → 이슈 #29
     - assets/terms/terms_ko.md
     - assets/terms/privacy_ko.md
     - assets/terms/marketing_ko.md

@@ -1,6 +1,6 @@
 # 개발환경 세팅 (setup)
 
-> Pawloop(포루프) 프론트(Flutter)와 백엔드(Spring Boot)를 로컬에서 실행하기 위한 설치·환경변수·에뮬레이터·빌드 명령 정리. 실제 `pubspec.yaml` / `app/.env` / `application-*.properties` 구조를 그대로 반영한다.
+> Pawloop(포루프) 프론트(Flutter)와 백엔드(Spring Boot)를 로컬에서 실행하기 위한 설치·환경변수·에뮬레이터·빌드 명령 정리. 실제 `pubspec.yaml` / `app/dart-define.example.json` / `application-*.properties` 구조를 그대로 반영한다.
 
 ---
 
@@ -45,43 +45,65 @@ flutter pub get
 | `fl_chart` | ^1.2.0 | 산책 통계 차트 |
 | `lottie` | ^3.4.0 | 애니메이션 |
 | `google_fonts` | ^8.1.0 | 폰트(Pretendard 로컬 에셋 병행) |
-| `flutter_dotenv` | ^5.2.1 | `.env` 로드 |
 | `go_router` | ^16.1.0 | 라우팅(MainShell) |
 | `provider` | ^6.1.5 | 상태/DI |
 | `geolocator` | ^13.0.1 | 위치(도입됨, 화면은 아직 서울 고정) |
 | `http` | ^1.4.0 | REST/공공데이터 호출 |
 | `flutter_secure_storage` / `shared_preferences` | ^9.2.4 / ^2.5.3 | 토큰/설정 저장 |
 
-> 참고: `pubspec.yaml`의 `flutter > assets`에 `.env`가 포함되어 있어야 `flutter_dotenv`가 번들에서 읽는다(이미 등록됨). 폰트 Pretendard는 `assets/fonts/`의 로컬 OTF를 사용한다.
+> 참고: `.env` 는 더 이상 쓰지 않는다. 에셋으로 번들링하면 APK 안에 원본 그대로 실려 나가기 때문에 `flutter_dotenv` 째로 걷어냈다(이슈 #29). 환경값은 3절의 `--dart-define` 으로 넣는다. 폰트 Pretendard는 `assets/fonts/`의 로컬 OTF를 사용한다.
+>
+> **`.env` 가 없어도 `flutter pub get` / `analyze` / `test` / `build` 가 전부 통과한다.** 새로 클론한 직후 바로 돌려도 된다.
 
 ---
 
-## 3. 환경변수 파일 `app/.env`
+## 3. 프론트 환경변수 — `--dart-define` (`.env` 아님)
 
-앱은 `main.dart`에서 `dotenv.load()`로 `app/.env`를 읽는다. 파일이 없어도 앱은 죽지 않지만(try-catch), 지도/공공데이터가 비활성화된다. 루트에 아래 3개 키를 채운다.
+앱의 환경값은 **컴파일 타임 `--dart-define`** 으로만 들어온다. 읽는 곳은 `lib/core/config/env.dart`의 `Env` 하나뿐이고, 런타임 파일 로드는 없다.
 
-```dotenv
-# app/.env
+> **왜 `.env`를 버렸나.** `pubspec.yaml`의 `assets`에 올린 파일은 APK/IPA 안에 **원본 그대로** 들어간다. `unzip -p app-release.apk assets/flutter_assets/.env` 한 줄이면 값이 그대로 보였다. → [이슈 #29](https://github.com/sanghyunbang/heattrip/issues/29)
 
-# Java(Spring) 백엔드 기본 URL
-API_BASE_URL=https://api.heattrip.link
+### 3.1 값 넣는 법
 
-# 공공데이터포털(관광공사) 서비스키 — 이미 "인코딩된" 값을 그대로 넣는다
-YOUR_DECODING_SERVICE_KEY=<data.go.kr 서비스키(인코딩키)>
+전부 기본값이 있어서 **아무것도 주지 않아도 빌드·실행은 된다**(지도/공공데이터만 비활성). 실제 키를 쓰려면 둘 중 하나.
 
-# 네이버 지도 Dynamic Map Client ID (시크릿 불필요, 패키지명 허용목록으로 보호)
-NAVER_MAP_CLIENT_ID=<네이버 클라우드 Client ID>
+**(a) 한두 개만 잠깐** — 커맨드라인에 직접
+
+```bash
+flutter run --dart-define=API_BASE=http://10.0.2.2:8080
 ```
 
-### 키별 설명
+**(b) 매번 쓰는 값 묶음** — 템플릿을 복사해 파일로 넘긴다. `app/dart-define.json`은 `.gitignore` 대상이다.
 
-| 키 | 읽는 위치 | 의미 / 주의 |
-| --- | --- | --- |
-| `API_BASE_URL` | `Env.apiBase` (`lib/core/config/env.dart`) | 백엔드 베이스 URL. 기본은 운영 원격 `https://api.heattrip.link`. 미설정 시 `http://10.0.2.2:8080`(에뮬레이터→호스트 로컬)로 폴백. |
-| `YOUR_DECODING_SERVICE_KEY` | `Env.tourServiceKey` | 관광공사 KorPetTourService2 호출용. **명칭과 달리 "인코딩된 키"가 들어감** — 쿼리스트링에 그대로 붙인다(`pet_places_repository.dart`에서 재인코딩하지 않음). 일 1000콜 제한. |
-| `NAVER_MAP_CLIENT_ID` | `Env.naverMapClientId` | 네이버 지도 SDK 초기화(`FlutterNaverMap().init`). 비어 있으면 지도 탭이 비활성(안내문)만 표시된다. |
+```bash
+cd heattrip/app
+cp dart-define.example.json dart-define.json   # 값을 채운다
+flutter run --dart-define-from-file=dart-define.json
+```
 
-> `Env.apiBase` 우선순위: **(1)** `--dart-define=API_BASE=...` → **(2)** `.env`의 `API_BASE_URL` → **(3)** `http://10.0.2.2:8080`. 로컬 백엔드로 붙일 땐 `.env`를 안 고치고 dart-define으로 override 하는 게 편하다.
+```jsonc
+// app/dart-define.json  (추적되지 않음 / 추적되는 건 값이 빈 dart-define.example.json)
+{
+  "API_BASE_URL": "https://api.heattrip.link",
+  "YOUR_DECODING_SERVICE_KEY": "<data.go.kr 서비스키(인코딩키)>",
+  "NAVER_MAP_CLIENT_ID": "<네이버 클라우드 Client ID>"
+}
+```
+
+### 3.2 키별 설명
+
+| 키 | 읽는 위치 | 기본값 | 의미 / 주의 |
+| --- | --- | --- | --- |
+| `API_BASE` | `Env.apiBase` | (없음) | 로컬/스테이징 전환용 override. `API_BASE_URL`보다 **우선**한다. |
+| `API_BASE_URL` | `Env.apiBase` | (없음) | 백엔드 베이스 URL. 운영은 `https://api.heattrip.link`. |
+| `YOUR_DECODING_SERVICE_KEY` | `Env.tourServiceKey` | `''` | 관광공사 KorPetTourService2 호출용. **명칭과 달리 "인코딩된 키"가 들어감** — 쿼리스트링에 그대로 붙인다(`pet_places_repository.dart`에서 재인코딩하지 않음). 일 1000콜 제한. |
+| `NAVER_MAP_CLIENT_ID` | `Env.naverMapClientId` | `''` | 네이버 지도 SDK 초기화(`FlutterNaverMap().init`). 비어 있으면 지도 탭이 비활성(안내문)만 표시된다. |
+| `MOBILE_OS` / `MOBILE_APP` | `Env.mobileOs` / `Env.mobileApp` | `ETC` / `HeatTrip` | 관광공사 API 가 요구하는 호출자 표기. 비밀 아님. 보통 안 건드린다. |
+
+> `Env.apiBase` 우선순위: **(1)** `--dart-define=API_BASE=...` → **(2)** `--dart-define=API_BASE_URL=...` → **(3)** `http://10.0.2.2:8080`.
+
+> [!WARNING]
+> **`--dart-define`은 완화이지 해결이 아니다.** 값은 컴파일 타임에 코드로 박힐 뿐, 문자열은 여전히 바이너리 안에 남는다(`strings`로 나온다). 쿼터·과금이 걸린 **관광공사 서비스키는 앱에서 완전히 사라진 게 아니다.** 진짜 제거는 호출 자체를 백엔드 프록시로 옮기는 M3 작업이다(이슈 #29 B). 그때 기존 키 폐기·재발급도 함께 해야 한다.
 
 ### 네이버 지도 콘솔 등록 (지도 인증 실패 방지)
 
@@ -105,11 +127,15 @@ flutter emulators --launch <avd_id>
 ```bash
 cd heattrip/app
 
-# (기본) .env의 API_BASE_URL(운영 원격) 사용
+# (아무 값 없이) Env.apiBase 가 http://10.0.2.2:8080 으로 폴백. 지도/공공데이터는 비활성.
 flutter run
 
-# (로컬 백엔드로 붙기) 에뮬레이터에서 호스트 PC의 8080 백엔드로
-flutter run --dart-define=API_BASE=http://10.0.2.2:8080
+# (평소) 값 묶음을 파일로 주기 — 3.1 (b)
+flutter run --dart-define-from-file=dart-define.json
+
+# (로컬 백엔드로 붙기) 파일의 API_BASE_URL 을 그때만 덮어쓴다
+flutter run --dart-define-from-file=dart-define.json \
+            --dart-define=API_BASE=http://10.0.2.2:8080
 ```
 
 > 에뮬레이터에서 `localhost`는 에뮬레이터 자신을 가리키므로, 호스트 PC의 로컬 백엔드는 반드시 **`10.0.2.2`** 로 접근한다(`Env.localEmulator`).
@@ -198,10 +224,11 @@ adb reverse tcp:8080 tcp:8080
 cd heattrip/backend
 APP_BASE_URL=http://localhost:8080 ./gradlew bootRun --args='--spring.profiles.active=dev'
 
-# 3) 앱도 같은 주소를 보게 한다. Env.apiBase 가 dart-define 을 최우선으로 읽으므로
-#    app/.env 는 건드릴 필요가 없다.
+# 3) 앱도 같은 주소를 보게 한다. API_BASE 가 API_BASE_URL 보다 우선하므로
+#    dart-define.json(운영 주소가 든 값 묶음)은 건드릴 필요가 없다.
 cd heattrip/app
-flutter run --dart-define=API_BASE=http://localhost:8080
+flutter run --dart-define-from-file=dart-define.json \
+            --dart-define=API_BASE=http://localhost:8080
 ```
 
 - `adb reverse` 는 **안드로이드 전용**이다. iOS 시뮬레이터는 호스트와 `localhost` 를 공유하므로 그냥 `http://localhost:8080` 을 쓰면 된다.
@@ -238,9 +265,12 @@ flutter test
 flutter run
 flutter run --dart-define=API_BASE=http://10.0.2.2:8080   # 로컬 백엔드 연동
 
-# 릴리스 APK / AAB
-flutter build apk --release
-flutter build appbundle --release
+# 릴리스 APK / AAB — 실제 키는 여기서 주입한다(에셋에 들어 있지 않다)
+flutter build apk --release --dart-define-from-file=dart-define.json
+flutter build appbundle --release --dart-define-from-file=dart-define.json
+
+# 번들에 .env 가 남아 있지 않은지 확인 (아무것도 안 나와야 정상)
+unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -F 'flutter_assets/.env'
 
 # 클린
 flutter clean && flutter pub get
@@ -259,11 +289,11 @@ dart run flutter_launcher_icons
 ## 7. 빠른 체크리스트
 
 - [ ] `flutter --version` → 3.44.4 / Dart 3.12.2
-- [ ] `heattrip/app/.env` 에 3개 키(`API_BASE_URL`, `YOUR_DECODING_SERVICE_KEY`, `NAVER_MAP_CLIENT_ID`) 채움
+- [ ] `flutter pub get` 성공 (`.env` 없이 그냥 된다)
+- [ ] `cp app/dart-define.example.json app/dart-define.json` 후 3개 키(`API_BASE_URL`, `YOUR_DECODING_SERVICE_KEY`, `NAVER_MAP_CLIENT_ID`) 채움 — 이 파일은 커밋되지 않는다
 - [ ] 네이버 콘솔에 패키지명 `com.cetacealab.heattrip` 등록
-- [ ] `flutter pub get` 성공
-- [ ] 에뮬레이터 부팅 후 `flutter run` — 지도 탭에 KTO 실데이터(서울) 표시되면 키 정상
-- [ ] (로컬 백엔드 쓸 때) MySQL `heat_trip_db` 생성 + `./gradlew bootRun` + 앱을 `--dart-define=API_BASE=http://10.0.2.2:8080`로 실행
+- [ ] 에뮬레이터 부팅 후 `flutter run --dart-define-from-file=dart-define.json` — 지도 탭에 KTO 실데이터(서울) 표시되면 키 정상
+- [ ] (로컬 백엔드 쓸 때) MySQL `heat_trip_db` 생성 + `./gradlew bootRun` + 앱에 `--dart-define=API_BASE=http://10.0.2.2:8080` 추가
 - [ ] (구글 로그인 테스트할 때) `adb reverse tcp:8080 tcp:8080` + 백엔드 `APP_BASE_URL=http://localhost:8080` + 앱 `--dart-define=API_BASE=http://localhost:8080` → [5.4](#54-소셜-로그인구글-로컬-테스트)
 
 ---
