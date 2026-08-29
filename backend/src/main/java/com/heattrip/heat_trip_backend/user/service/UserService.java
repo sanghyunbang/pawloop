@@ -52,6 +52,10 @@ public class UserService {
         String mktVer = nvl(request.getMarketingVersion(), "v1.0");
 
         User user = User.builder()
+                // 이메일/비밀번호 가입은 provider = "local". 소셜 가입자와 같은 표에 살면서도
+                // 계약(openapi.yaml)의 User.provider 로 구분된다. social_id 는 null 이다. (이슈 #7)
+                .provider(User.PROVIDER_LOCAL)
+                .role(User.ROLE_USER)
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .nickname(request.getNickname())
@@ -86,8 +90,14 @@ public class UserService {
         }
 
         // userId에 email을 넣음(회원 가입된 회원의 경우)
-        return jwtProvider.createAccessToken(user.getEmail(), "ROLE_USER");
+        // 권한은 DB 의 role 컬럼을 쓴다. 예전에는 여기서 "ROLE_USER" 를 하드코딩했다. (이슈 #7)
+        return jwtProvider.createAccessToken(user.getEmail(), roleOf(user));
+    }
 
+    /** role 컬럼이 없던 시절에 만들어진 행은 값이 비어 있을 수 있다. */
+    private static String roleOf(User user) {
+        String role = user.getRole();
+        return (role == null || role.isBlank()) ? User.ROLE_USER : role;
     }
 
     /** email로 사용자 조회 */

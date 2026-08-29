@@ -16,18 +16,49 @@ import org.springframework.security.oauth2.core.user.OAuth2User; // OAuth2 인�
  */
 public class CustomOAuth2User implements OAuth2User {
 
+    /** DB 에 role 컬럼이 없던 시절의 하드코딩 값. 이제는 fallback 으로만 쓴다. */
+    private static final String DEFAULT_ROLE = "ROLE_USER";
+
     // OAuth2UserInfo는 Google/Kakao/Naver 정보를 통일시킨 인터페이스
     private final OAuth2UserInfo userInfo;
 
     // 원본 attributes: 소셜 제공자로부터 받은 사용자 정보 원본
     private final Map<String, Object> attributes;
 
+    /** users 테이블 PK. 소셜 응답이 아니라 우리 DB 가 정한 값이다. */
+    private final Long userId;
+
+    /** DB 의 role 컬럼 값 (예: ROLE_USER). */
+    private final String role;
+
+    /**
+     * 이번 인증으로 계정이 <b>새로 만들어졌는지</b>.
+     *
+     * <p>계약(openapi.yaml)의 {@code AuthTokens.isNew} 로 나가는 <b>로그인 1회성 이벤트 속성</b>이다.
+     * 사용자 프로필의 영속 속성이 아니라서 {@code User} 스키마에는 없다 — 그래서 여기 있다.
+     * true 면 앱이 온보딩(반려견 프로필 등록)으로 분기한다. (이슈 #7)
+     */
+    private final boolean isNew;
+
     /**
      * 생성자: 통합 사용자 정보와 attributes를 저장
+     *
+     * <p>DB 를 거치지 않는 호출부(테스트 지그 등)를 위한 축약형. 신규 가입이 아님을 뜻한다.
      */
     public CustomOAuth2User(OAuth2UserInfo userInfo, Map<String, Object> attributes) {
+        this(userInfo, attributes, null, DEFAULT_ROLE, false);
+    }
+
+    public CustomOAuth2User(OAuth2UserInfo userInfo,
+                            Map<String, Object> attributes,
+                            Long userId,
+                            String role,
+                            boolean isNew) {
         this.userInfo = userInfo;
         this.attributes = attributes;
+        this.userId = userId;
+        this.role = (role == null || role.isBlank()) ? DEFAULT_ROLE : role;
+        this.isNew = isNew;
     }
 
     /**
@@ -52,11 +83,11 @@ public class CustomOAuth2User implements OAuth2User {
 
     /**
      * getAuthorities()
-     * 사용자의 권한 정보를 반환 (여기선 기본적으로 ROLE_USER 부여)
+     * 사용자의 권한 정보를 반환. DB 의 role 컬럼을 그대로 쓴다(이슈 #7 이전에는 상수였다).
      */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.singleton(new SimpleGrantedAuthority("ROLE_USER"));
+        return Collections.singleton(new SimpleGrantedAuthority(role));
     }
 
     /**
@@ -65,5 +96,19 @@ public class CustomOAuth2User implements OAuth2User {
      */
     public OAuth2UserInfo getUserInfo() {
         return userInfo;
+    }
+
+    /** users.id. 축약 생성자로 만들었으면 null. */
+    public Long getUserId() {
+        return userId;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    /** 이번 로그인에서 계정이 새로 생성되었으면 true. */
+    public boolean isNew() {
+        return isNew;
     }
 }
