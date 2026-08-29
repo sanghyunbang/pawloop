@@ -75,7 +75,41 @@ void main() {
           '${violations.join('\n')}',
     );
   });
+
+  test('app/lib 안에서 SharedPreferences 에 토큰을 평문으로 저장하는 곳이 없다', () {
+    // 토큰 저장 창구는 SecureTokenStore 하나뿐이어야 한다.
+    // SharedPreferences 는 앱 데이터 디렉터리의 XML 이라 루팅·백업 추출로 읽힌다.
+    final plaintextWrite = RegExp(
+      '''setString\\(\\s*['"](?:jwt_token|access_token|refresh_token|token)['"]''',
+    );
+
+    final violations = <String>[];
+    for (final file in _dartFilesUnderLib()) {
+      final lines = file.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        if (line.trimLeft().startsWith('//')) continue;
+        if (!plaintextWrite.hasMatch(line)) continue;
+        violations.add(
+          '${file.path.replaceAll(r'\', '/')}:${i + 1} — ${line.trim()}',
+        );
+      }
+    }
+
+    expect(
+      violations,
+      isEmpty,
+      reason: '토큰을 평문으로 저장한다. SecureTokenStore 를 써라.\n'
+          '${violations.join('\n')}',
+    );
+  });
 }
+
+List<File> _dartFilesUnderLib() => _resolveLibDir()
+    .listSync(recursive: true)
+    .whereType<File>()
+    .where((entity) => entity.path.endsWith('.dart'))
+    .toList();
 
 Directory _resolveLibDir() {
   for (final candidate in <String>['lib', 'app/lib', '../lib']) {
