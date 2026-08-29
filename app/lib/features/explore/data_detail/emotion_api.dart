@@ -1,6 +1,6 @@
 /// 감정/특성 관련 백엔드 REST 호출 전용.
 /// - http.Client를 주입받아 테스트/교체 용이.
-/// - .env에는 "API_BASE_URL=http://host:port"만 넣습니다. (※ 슬래시 없이)
+/// - --dart-define=API_BASE_URL=http://host:port 형태로 넣습니다. (※ 끝에 슬래시 없이)
 /// - 본 클래스의 baseUrl은 내부에서 "/api/explore/places"를 붙여 만듭니다.
 ///   예: http://222.111.78.27:8080 + /api/explore/places
 ///

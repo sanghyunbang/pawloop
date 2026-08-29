@@ -34,7 +34,7 @@ class _ForYouVMHostState extends State<ForYouVMHost> {
   );
 
   String _resolveBaseUrl() {
-    final raw = Env.apiBase.trim(); // dart-define || .env
+    final raw = Env.apiBase.trim(); // dart-define
     final picked = raw.isEmpty ? 'http://10.0.2.2:8080' : raw;
     return picked.replaceFirst(RegExp(r'/*$'), ''); // 말단 / 제거
   }

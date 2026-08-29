@@ -1,7 +1,6 @@
 // lib/features/bookmark/presentation/collection_detail_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';

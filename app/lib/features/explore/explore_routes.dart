@@ -14,7 +14,7 @@ import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/core/net/logging_client.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:heat_trip_flutter/core/config/env.dart';
 
 // Screens
 import 'presentation/screens/home/home_screen.dart';
@@ -27,12 +27,10 @@ import 'data_detail/place_detail_repository.dart';
 import 'presentation/state/detail_vm.dart';
 
 List<RouteBase> buildExploreRoutes() {
-  // .env 로드 (상세 화면에서만 사용)
-  final serviceKey = _normalizeServiceKey(
-    dotenv.maybeGet('YOUR_DECODING_SERVICE_KEY') ?? '',
-  );
-  final mobileOS = dotenv.maybeGet('MOBILE_OS') ?? 'ETC';
-  final mobileApp = dotenv.maybeGet('MOBILE_APP') ?? 'HeatTrip';
+  // 관광공사 키/호출자 표기는 --dart-define 으로 들어온다 (이슈 #29). 상세 화면에서만 사용.
+  final serviceKey = _normalizeServiceKey(Env.tourServiceKey);
+  final mobileOS = Env.mobileOs;
+  final mobileApp = Env.mobileApp;
 
   // ⚠️ KTO는 `_type=json` (소문자) 권장
   Uri buildCommonUri() =>

@@ -10,7 +10,7 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 /// 회원가입 및 로그인 요청을 처리
 
 class AuthRepositoryImpl {
-  // .env 파일에 저장된 API_BASE_URL을 불러옴
+  // --dart-define 으로 주입된 API_BASE / API_BASE_URL 을 불러옴 (Env)
   final String baseUrl = Env.apiBase ?? '';
 
   /// 로그인 요청

@@ -195,7 +195,8 @@ class _EmotionMapViewState extends State<EmotionMapView> {
         child: Padding(
           padding: EdgeInsets.all(32),
           child: Text(
-            '지도 Client ID가 설정되지 않았어요.\n.env의 NAVER_MAP_CLIENT_ID를 확인해 주세요.',
+            '지도 Client ID가 설정되지 않았어요.\n'
+            '빌드할 때 --dart-define=NAVER_MAP_CLIENT_ID=... 를 넣었는지 확인해 주세요.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Color(0xFF7B6E67)),
           ),
