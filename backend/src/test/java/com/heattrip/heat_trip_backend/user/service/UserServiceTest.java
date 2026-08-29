@@ -2,11 +2,13 @@ package com.heattrip.heat_trip_backend.user.service;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
+import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -33,6 +35,62 @@ class UserServiceTest {
 
     @InjectMocks
     private UserService userService;
+
+    // ─────────────────────── 이메일 가입 (완료 조건 6) ───────────────────────
+
+    @Test
+    @DisplayName("이메일 가입 사용자는 provider='local' · social_id=null · role='ROLE_USER' 로 저장된다")
+    void signup_storesLocalProviderAndDefaultRole() {
+        // 이슈 #7 완료 조건 6: "이메일 가입 사용자가 로그인해도 기존과 동일하게 동작한다 (provider = 'local')".
+        // provider 가 비면 계약(openapi.yaml)의 User.provider 가 null 로 나가고,
+        // 마이그레이션 SQL 의 '백필 후 provider IS NULL 인 행은 없다' 검증도 깨진다.
+        SignupRequest request = new SignupRequest();
+        request.setEmail("bori@example.com");
+        request.setPassword("test1234");
+        request.setNickname("보리아빠");
+        request.setName("보리아빠");
+        request.setGender("male");
+        request.setAgeGroup("over14");
+        request.setAgreeTos(true);
+        request.setAgreePrivacy(true);
+
+        when(userRepository.findByEmail("bori@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode("test1234")).thenReturn("encoded-password");
+
+        userService.signup(request);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        User saved = captor.getValue();
+
+        assertThat(saved.getProvider()).isEqualTo("local");
+        assertThat(saved.getSocialId()).isNull();
+        assertThat(saved.getRole()).isEqualTo("ROLE_USER");
+        assertThat(saved.getEmail()).isEqualTo("bori@example.com");
+        assertThat(saved.getPassword()).isEqualTo("encoded-password"); // 원문 저장 금지
+    }
+
+    @Test
+    @DisplayName("이메일 가입자의 로그인 토큰 권한은 DB 의 role 값을 쓴다")
+    void login_usesRoleFromDatabase() throws IllegalAccessException {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("admin@example.com");
+        request.setPassword("test1234");
+
+        User user = User.builder()
+                .email("admin@example.com")
+                .password("encoded-password")
+                .provider(User.PROVIDER_LOCAL)
+                .role("ROLE_ADMIN")
+                .build();
+
+        when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("test1234", "encoded-password")).thenReturn(true);
+        when(jwtProvider.createAccessToken("admin@example.com", "ROLE_ADMIN")).thenReturn("jwt-token");
+
+        assertThat(userService.login(request)).isEqualTo("jwt-token");
+        verify(jwtProvider).createAccessToken("admin@example.com", "ROLE_ADMIN");
+    }
 
     @Test
     @DisplayName("로그인 성공 시 JWT를 반환한다")

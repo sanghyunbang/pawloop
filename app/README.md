@@ -48,7 +48,7 @@ Heat Trip Flutter는 사용자가 여행지를 탐색하고, 감정 기반 추�
 flowchart LR
     App[Flutter App] --> Router[go_router]
     App --> Providers[Provider / MultiProvider]
-    App --> Env[flutter_dotenv / dart-define]
+    App --> Env[Env / --dart-define]
 
     Router --> Start[Start]
     Router --> Auth[Auth]
@@ -77,7 +77,6 @@ flowchart LR
 - go_router
 - provider
 - http
-- flutter_dotenv
 - shared_preferences
 - flutter_secure_storage
 - flutter_web_auth_2
@@ -126,34 +125,38 @@ flutter doctor
 flutter pub get
 ```
 
-### 3. 환경 변수 파일 생성
+### 3. 환경 변수 준비 (`--dart-define`)
 
-루트에 `.env` 파일을 만들고 필요한 값을 채웁니다. `.env`는 Git에 커밋하지 않습니다.
+환경값은 전부 컴파일 타임 `--dart-define`으로 주입합니다. 예전에는 `.env`를 `pubspec.yaml`의 `assets`에 올려 런타임에 읽었지만, 에셋은 APK 안에 원본 그대로 실려 나가므로 걷어냈습니다(이슈 #29).
 
-```env
-API_BASE_URL=https://your-backend.example.com
-YOUR_DECODING_SERVICE_KEY=your-public-data-service-key
-MOBILE_OS=ETC
-MOBILE_APP=HeatTrip
+값이 여러 개라 매번 타이핑하기 번거로우면 템플릿을 복사해 파일로 넘깁니다. `dart-define.json`은 Git에 커밋하지 않습니다.
+
+```bash
+cp dart-define.example.json dart-define.json   # 값을 채운다
+flutter run --dart-define-from-file=dart-define.json
 ```
 
 `YOUR_DECODING_SERVICE_KEY`는 공공데이터포털 서비스 키입니다. 인코딩된 키와 디코딩된 키를 모두 처리할 수 있도록 앱에서 정규화합니다.
 
+> `--dart-define`은 완화책이지 해결이 아닙니다. 값은 여전히 빌드 산출물 안의 문자열입니다. 관광공사 서비스 키를 앱에서 완전히 없애는 것은 백엔드 프록시 작업(M3, 이슈 #29 B)입니다.
+
 ### 4. 앱 실행
+
+아무 값도 주지 않으면 `Env.apiBase`는 `http://10.0.2.2:8080`(에뮬레이터 → 호스트 로컬)으로 폴백합니다.
 
 Android 에뮬레이터에서 로컬 백엔드를 사용할 때:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
+flutter run --dart-define=API_BASE=http://10.0.2.2:8080
 ```
 
 배포 서버를 사용할 때:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=https://your-backend.example.com
+flutter run --dart-define=API_BASE=https://your-backend.example.com
 ```
 
-`.env`의 `API_BASE_URL`을 사용할 수도 있지만, 빌드 환경별로 명확히 분리하려면 `--dart-define` 사용을 권장합니다.
+`API_BASE`는 `API_BASE_URL`보다 우선합니다. 템플릿 파일에 운영 주소를 `API_BASE_URL`로 넣어두고, 잠깐 로컬로 붙일 때만 `--dart-define=API_BASE=...`로 덮어쓰는 식으로 씁니다.
 
 ## 개발 명령
 
@@ -171,8 +174,11 @@ dart run flutter_launcher_icons
 
 ## 환경 변수
 
+전부 `--dart-define` 키입니다(`lib/core/config/env.dart`의 `Env`).
+
 | 이름 | 설명 | 예시 |
 | --- | --- | --- |
+| `API_BASE` | 백엔드 주소 override. `API_BASE_URL`보다 우선 | `http://10.0.2.2:8080` |
 | `API_BASE_URL` | Spring Boot 백엔드 API 주소 | `https://your-backend.example.com` |
 | `YOUR_DECODING_SERVICE_KEY` | 공공데이터포털 Tour API 서비스 키 | 커밋 금지 |
 | `MOBILE_OS` | Tour API 요청용 OS 값 | `ETC` |
@@ -180,9 +186,10 @@ dart run flutter_launcher_icons
 
 ## 보안 메모
 
-- `.env`, keystore, Firebase 설정 파일, 서비스 계정 JSON은 Git에 커밋하지 않습니다.
+- `dart-define.json`, keystore, Firebase 설정 파일, 서비스 계정 JSON은 Git에 커밋하지 않습니다. 추적되는 것은 값이 빈 `dart-define.example.json`뿐입니다.
 - Android release signing 파일은 `android/key.properties`와 keystore로 관리하고, 저장소에는 올리지 않습니다.
-- 실제 운영 API 주소와 서비스 키는 배포 환경 또는 로컬 `.env`에서 주입합니다.
+- 실제 운영 API 주소와 서비스 키는 빌드 시 `--dart-define`으로 주입합니다. `.env`를 에셋으로 번들링하던 방식은 폐기했습니다(이슈 #29).
+- 다만 `--dart-define` 값도 빌드 산출물 안에 문자열로 남습니다. 쿼터·과금이 걸린 자격증명(관광공사 서비스 키)을 앱에서 실제로 없애려면 백엔드 프록시가 필요합니다(M3).
 - public 저장소에서는 secret scan 경고가 나올 수 있는 예시 값을 README에 넣지 않습니다.
 
 ## 현재 라우트 개요

@@ -6,7 +6,7 @@
 // - 에러 핸들링(Widget build, 플랫폼, 비동기) 기본 설정.
 //
 // 필수 포인트
-// - --dart-define=API_BASE_URL=... 또는 .env를 통해 baseUrl 지정 가능. [②]
+// - --dart-define=API_BASE=... (또는 API_BASE_URL)로 baseUrl 지정 가능. [②]
 // - Provider를 사용하는 모든 화면(AvatarPicker/MediaRepository 등)이 의존성을 해결하게 됨. [③]
 
 import 'dart:async';
@@ -14,7 +14,6 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:provider/provider.dart';
 
@@ -35,15 +34,7 @@ Future<void> main() async {
   // 비동기 초기화 전에 바인딩
   WidgetsFlutterBinding.ensureInitialized();
 
-  // .env 로드 (없어도 앱이 죽지 않게 try-catch)
-  try {
-    await dotenv.load(); // 또는 await dotenv.load(fileName: '.env');
-  } catch (e, st) {
-    debugPrint('[dotenv] load skipped or failed: $e');
-    if (kDebugMode) {
-      debugPrintStack(stackTrace: st);
-    }
-  }
+  // 환경값은 컴파일 타임 --dart-define 으로 들어온다 (Env). 런타임 로드가 없다. → 이슈 #29
 
   // 네이버 지도 SDK 초기화 (Client ID 없으면 스킵 → 감정지도 탭만 안내문 표시)
   final naverClientId = Env.naverMapClientId;
@@ -154,7 +145,8 @@ class HeatTrip extends StatelessWidget {
      tokenProvider를 주입하지 않으면 업로드 시 401/403이 떨어지고,
      로컬 미리보기만 보이는 "착시"가 발생합니다.
 
-[②] baseUrl은 dev/prod에서 달라질 수 있습니다. 빌드 시 --dart-define 또는 .env로 관리하세요.
+[②] baseUrl은 dev/prod에서 달라질 수 있습니다. 빌드 시 --dart-define 으로 관리하세요.
+     (.env 에셋 번들링은 폐기했습니다 → 이슈 #29)
 
 [③] AvatarPicker → MediaRepository → MediaApiClient → 백엔드(/media)
      라는 계층으로 연결되어 있으며, Provider가 없으면 의존성 주입에 실패합니다.

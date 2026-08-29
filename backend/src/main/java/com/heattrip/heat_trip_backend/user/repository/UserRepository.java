@@ -14,7 +14,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // username으로 사용자 조회
     // SQL 없이 자동으로 쿼리 메소드 생성: SELECT * FROM users WHERE username = ?
+    //
+    // ⚠️ 소셜 로그인 식별에 이걸 쓰지 마라. 아래 findByProviderAndSocialId 가 정본이다. (이슈 #7)
+    // 백필 SQL 이 아직 돌지 않은 레거시 행("{provider}_{socialId}")을 한 번 찾아
+    // 새 컬럼으로 옮겨 심을 때만 쓴다.
     Optional<User> findByUsername(String username);
+
+    /**
+     * 소셜 계정 식별의 정본. (provider, social_id) 는 DB 에서 UNIQUE 다.
+     *
+     * <p>이메일로 찾지 않는 이유: 카카오는 이메일을 주지 않을 수 있고(선택 동의),
+     * 같은 사람이 나중에 이메일 동의를 켜면 값이 null → 실제 주소로 바뀐다.
+     * 시간에 따라 변하는 값은 식별 키가 될 수 없다.
+     */
+    Optional<User> findByProviderAndSocialId(String provider, String socialId);
 
     // nickname으로 사용자 조회
     // SQL 없이 자동으로 쿼리 메소드 생성: SELECT * FROM users WHERE nickname = ?

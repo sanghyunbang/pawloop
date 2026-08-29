@@ -1,7 +1,9 @@
 // 로그인 화면 위젯 테스트 — 어떤 소셜 버튼이 떠 있는가.
 //
-// HeatTrip(app/lib/main.dart)을 통째로 pump 하면 Env.apiBase 가 dotenv 를 요구해
-// 초기화 예외가 난다. 그래서 MaterialApp(home: LoginScreen()) 만 띄운다.
+// HeatTrip(app/lib/main.dart)을 통째로 pump 하면 라우터·Provider·네이버 지도 SDK
+// 초기화까지 딸려온다. 이 테스트가 보려는 것은 로그인 화면 하나뿐이라
+// MaterialApp(home: LoginScreen()) 만 띄운다.
+// (예전에는 Env.apiBase 가 dotenv 초기화를 요구해서 아예 불가능했다. → 이슈 #29)
 //
 // 픽셀 위치는 보지 않는다(이슈 #21). 다만 구글 버튼의 색은 예외다 —
 // 브랜드 가이드가 "임의 색상 변경 금지"를 요구하므로 회귀로 잠근다.
