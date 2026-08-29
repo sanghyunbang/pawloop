@@ -102,23 +102,30 @@ cd heattrip
 
 # 앱 — Flutter 3.44.4 필요
 cd app
-cp .env.example .env      # .env 는 에셋으로 번들되므로 파일 자체가 필요하다
-                          # 키가 비어 있어도 앱은 뜬다 (지도·공공데이터만 비활성)
 flutter pub get
-flutter run
+flutter run               # 키가 없어도 앱은 뜹니다 (지도·공공데이터만 비활성)
 
 # 서버 (선택) — JDK 21 + MySQL 8 필요
 cd ../backend
 ./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
-앱은 기본적으로 원격 API를 바라봅니다. 로컬 서버에 붙이려면 `flutter run --dart-define=API_BASE=http://10.0.2.2:8080` 로 실행하세요.
+환경값은 `.env` 파일이 아니라 **컴파일 타임 `--dart-define`** 으로 들어갑니다. 에셋으로 번들된 `.env` 는 APK 안에 원본 그대로 실려 나가기 때문입니다([이슈 #29](https://github.com/sanghyunbang/heattrip/issues/29)).
+
+```bash
+cd app
+cp dart-define.example.json dart-define.json     # 값을 채웁니다 (gitignore 대상)
+flutter run --dart-define-from-file=dart-define.json
+
+# 한두 개만 잠깐 바꾸려면
+flutter run --dart-define=API_BASE=http://10.0.2.2:8080
+```
 
 검증 명령:
 
 ```bash
 cd app     && flutter analyze --no-fatal-warnings --no-fatal-infos && flutter test
-cd backend && ./gradlew test jacocoTestCoverageVerification
+cd backend && ./gradlew test jacocoTestCoverageVerification   # Docker 필요 (Testcontainers)
 ```
 
 ---
@@ -147,7 +154,7 @@ M2와 M3는 병렬 진행이 가능합니다. 인증이 막히면 다른 서버 
 
 | | |
 | :--- | :--- |
-| [개발 환경 세팅](docs/05-build/setup.md) | 설치 · `.env` · 에뮬레이터 · 빌드 · 소셜 로그인 로컬 테스트 |
+| [개발 환경 세팅](docs/05-build/setup.md) | 설치 · `--dart-define` · 에뮬레이터 · 빌드 · 소셜 로그인 로컬 테스트 |
 | [로드맵](docs/05-build/roadmap.md) · [구현 현황](docs/05-build/implementation-status.md) | 마일스톤 · 화면별 실제 상태 |
 | [시스템 개요](docs/02-architecture/system-overview.md) · [기술 스택](docs/02-architecture/tech-stack.md) | 구성도 · 버전 표 |
 | [ERD](docs/03-database/erd.md) · [스키마](docs/03-database/schema.md) | MySQL 공간형 데이터 모델 |
@@ -162,7 +169,7 @@ M2와 M3는 병렬 진행이 가능합니다. 인증이 막히면 다른 서버 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 의 **CI** 워크플로가 PR과 `main` 푸시마다 돕니다.
 
 - **경로 필터** — `backend/**` 가 바뀐 PR에서는 백엔드 잡만, `app/**` 이면 앱 잡만 돕니다.
-- **백엔드** — `./gradlew test jacocoTestReport jacocoTestCoverageVerification`. 커버리지 게이트는 인증 패키지에만 걸려 있고 **내리는 것은 금지**입니다.
+- **백엔드** — `./gradlew test jacocoTestReport jacocoTestCoverageVerification`. 커버리지 게이트는 인증 패키지에만 걸려 있고 **내리는 것은 금지**입니다. 검색 테스트가 MySQL FULLTEXT 를 Testcontainers 로 실제 실행하므로 **로컬에서도 Docker 가 필요**합니다([#26](https://github.com/sanghyunbang/heattrip/issues/26)).
 - **앱** — `flutter analyze` (에러 0건) + `flutter test --coverage`.
 - **`CI 통과`** 잡 하나가 최종 판정입니다. 브랜치 보호 규칙에는 이 잡만 등록하면 됩니다.
 
