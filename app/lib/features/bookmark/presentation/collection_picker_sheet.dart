@@ -18,15 +18,15 @@ class CollectionPickerResult {
 /// 인스타 스타일: 하트를 눌렀을 때 띄우는 바텀시트
 /// - alreadyBookmarked: 현재 북마크 상태(해제 버튼 노출 여부 판단)
 Future<CollectionPickerResult?> showCollectionPickerSheet(
-    BuildContext context, {
-      required bool alreadyBookmarked,
-    }) async {
+  BuildContext context, {
+  required bool alreadyBookmarked,
+}) async {
   // 최신 목록 보장
   await CollectionStore.instance.refresh();
 
-  const int _maxVisibleRows = 4;    // 최대 보이는 줄 수
-  const double _rowExtent = 68.0;   // 아이템 대략 높이(타일 + 패딩)
-  const double _dividerHeight = 1;  // 구분선 높이
+  const int maxVisibleRows = 4; // 최대 보이는 줄 수
+  const double rowExtent = 68.0; // 아이템 대략 높이(타일 + 패딩)
+  const double dividerHeight = 1; // 구분선 높이
 
   return showModalBottomSheet<CollectionPickerResult>(
     context: context,
@@ -92,11 +92,12 @@ Future<CollectionPickerResult?> showCollectionPickerSheet(
                     );
                   }
 
-                  final int visible = items.length > _maxVisibleRows
-                      ? _maxVisibleRows
+                  final int visible = items.length > maxVisibleRows
+                      ? maxVisibleRows
                       : items.length;
-                  final double maxHeight = (visible * _rowExtent) +
-                      (visible > 1 ? (visible - 1) * _dividerHeight : 0);
+                  final double maxHeight =
+                      (visible * rowExtent) +
+                      (visible > 1 ? (visible - 1) * dividerHeight : 0);
 
                   return SizedBox(
                     height: maxHeight,
@@ -104,11 +105,12 @@ Future<CollectionPickerResult?> showCollectionPickerSheet(
                       shrinkWrap: true,
                       physics: const BouncingScrollPhysics(),
                       itemCount: items.length,
-                      separatorBuilder: (_, __) => const Divider(height: _dividerHeight),
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: dividerHeight),
                       itemBuilder: (_, i) {
                         final c = items[i];
                         return SizedBox(
-                          height: _rowExtent, // ✅ 고정 높이
+                          height: rowExtent, // ✅ 고정 높이
                           child: ListTile(
                             onTap: () => Navigator.pop(
                               ctx,
@@ -116,7 +118,9 @@ Future<CollectionPickerResult?> showCollectionPickerSheet(
                             ),
                             title: Text(
                               c.name,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text('항목 ${c.count}개'),
@@ -163,7 +167,7 @@ Future<CollectionPickerResult?> showCollectionPickerSheet(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _brand,
                       side: const BorderSide(color: _brand),
-                      overlayColor: _brand.withOpacity(0.06),
+                      overlayColor: _brand.withValues(alpha: 0.06),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -206,7 +210,10 @@ Future<String?> _promptNewCollection(BuildContext context) async {
           return AlertDialog(
             backgroundColor: Colors.white,
             surfaceTintColor: Colors.white,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 32,
+              vertical: 32,
+            ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -228,7 +235,10 @@ Future<String?> _promptNewCollection(BuildContext context) async {
               decoration: InputDecoration(
                 hintText: '예: 제주도 맛집',
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -251,8 +261,11 @@ Future<String?> _promptNewCollection(BuildContext context) async {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _brand,
                   side: const BorderSide(color: _brand),
-                  overlayColor: _brand.withOpacity(0.06),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  overlayColor: _brand.withValues(alpha: 0.06),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -261,13 +274,18 @@ Future<String?> _promptNewCollection(BuildContext context) async {
               ),
               const SizedBox(width: 12),
               FilledButton(
-                onPressed: enabled ? () => Navigator.pop(ctx, value.trim()) : null,
+                onPressed: enabled
+                    ? () => Navigator.pop(ctx, value.trim())
+                    : null,
                 style: FilledButton.styleFrom(
                   backgroundColor: _brand,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: _brand.withOpacity(0.35),
+                  disabledBackgroundColor: _brand.withValues(alpha: 0.35),
                   disabledForegroundColor: Colors.white70,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

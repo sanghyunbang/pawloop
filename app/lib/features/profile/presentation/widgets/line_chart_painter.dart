@@ -34,7 +34,7 @@ class LineChartPainter extends CustomPainter {
 
     final areaPaint = Paint()
       ..shader = LinearGradient(
-        colors: [Colors.black.withOpacity(.05), Colors.transparent],
+        colors: [Colors.black.withValues(alpha: .05), Colors.transparent],
         begin: Alignment.bottomCenter,
         end: Alignment.topCenter,
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));

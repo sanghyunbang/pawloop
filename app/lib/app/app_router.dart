@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/app/navigator_keys.dart';
 import 'package:heat_trip_flutter/core/widgets/layout/main_nav_shell.dart';
@@ -31,7 +30,9 @@ final GoRouter appRouter = GoRouter(
         StatefulShellBranch(routes: recordRoutes), // 1 (Schedule, 네비 강등)
         StatefulShellBranch(routes: forYouV2Routes), // 2 오늘
         StatefulShellBranch(routes: journeyRoutes), // 3 피드
-        StatefulShellBranch(routes: [...profileRoutes, ...bookmarkRoutes]), // 4 나
+        StatefulShellBranch(
+          routes: [...profileRoutes, ...bookmarkRoutes],
+        ), // 4 나
         StatefulShellBranch(routes: emotionMapRoutes), // 5 감정지도
       ],
     ),

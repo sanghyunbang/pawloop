@@ -32,9 +32,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   Future<void> _submit() async {
     final content = _controller.text.trim();
     if (content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('내용을 입력해 주세요.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('내용을 입력해 주세요.')));
       return;
     }
 
@@ -53,9 +53,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     if (ok) {
       _controller.clear();
       setState(() => _category = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('의견이 제출되었어요. 감사합니다!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('의견이 제출되었어요. 감사합니다!')));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('제출에 실패했어요. 잠시 후 다시 시도해 주세요.')),
@@ -91,17 +91,19 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: DropdownButtonFormField<String>(
-                value: _category,
+                initialValue: _category,
                 isExpanded: true,
-                itemHeight: 52,                // 펼쳐진 메뉴에서 각 항목 높이
-                menuMaxHeight: 280,            // 메뉴 최대 높이
-                dropdownColor: Colors.white,   // 펼쳐진 메뉴 배경
+                itemHeight: 52, // 펼쳐진 메뉴에서 각 항목 높이
+                menuMaxHeight: 280, // 메뉴 최대 높이
+                dropdownColor: Colors.white, // 펼쳐진 메뉴 배경
                 borderRadius: BorderRadius.circular(14), // 메뉴 모서리
-                icon: const Icon(              // 오른쪽 화살표 아이콘
+                icon: const Icon(
+                  // 오른쪽 화살표 아이콘
                   Icons.keyboard_arrow_down_rounded,
                   color: kPrimary,
                 ),
-                style: const TextStyle(        // 선택된 값 텍스트 스타일
+                style: const TextStyle(
+                  // 선택된 값 텍스트 스타일
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Colors.black87,
@@ -109,37 +111,37 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 items: _categories
                     .map(
                       (c) => DropdownMenuItem<String>(
-                    value: c,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: kPrimary.withOpacity(.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _categoryIcon(c),
-                            size: 18,
-                            color: kPrimary,
-                          ),
+                        value: c,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: kPrimary.withValues(alpha: .12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _categoryIcon(c),
+                                size: 18,
+                                color: kPrimary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              c,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: (_category == c)
+                                    ? kPrimary
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 10),
-                        Text(
-                          c,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: (_category == c)
-                                ? kPrimary
-                                : Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
+                      ),
+                    )
                     .toList(),
                 onChanged: (v) => setState(() => _category = v),
                 decoration: InputDecoration(
@@ -150,12 +152,16 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   ),
                   filled: true,
                   fillColor: const Color(0xFFFAF4EE), // 살짝 톤 있는 배경
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                    BorderSide(color: kPrimary.withOpacity(.35), width: 1),
+                    borderSide: BorderSide(
+                      color: kPrimary.withValues(alpha: .35),
+                      width: 1,
+                    ),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -174,7 +180,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               maxLines: 8,
               decoration: InputDecoration(
                 hintText: '앱 사용 중 불편 사항이나 제안을 알려주세요.',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
 
@@ -189,7 +197,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kPrimary,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: kPrimary.withOpacity(.4),
+                  disabledBackgroundColor: kPrimary.withValues(alpha: .4),
                   disabledForegroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -198,11 +206,13 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 ),
                 child: _sending
                     ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child:
-                  CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                )
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Text('보내기'),
               ),
             ),

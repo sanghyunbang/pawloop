@@ -11,7 +11,7 @@ class AuthFlowManager extends StatelessWidget {
   final Widget loginScreen;
 
   const AuthFlowManager({
-    Key? key,
+    super.key,
     required this.homeScreen,
     required this.loginScreen,
   });

@@ -526,7 +526,7 @@ class _IconChoice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color bg = selected
-        ? _ProfileEditScreenState.kPrimary.withOpacity(.18)
+        ? _ProfileEditScreenState.kPrimary.withValues(alpha: .18)
         : Colors.white;
     final Color fg = selected
         ? _ProfileEditScreenState.kPrimary
@@ -581,7 +581,7 @@ class _RoundChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color bg = selected
-        ? _ProfileEditScreenState.kPrimary.withOpacity(.18)
+        ? _ProfileEditScreenState.kPrimary.withValues(alpha: .18)
         : Colors.white;
     final Color fg = selected
         ? _ProfileEditScreenState.kPrimary

@@ -1,5 +1,7 @@
 /// place_detail.dart
 /// 화면에서 사용하는 '병합된' 도메인 엔티티
+library;
+
 import '../../domain_detail/content_type.dart';
 
 class Review {

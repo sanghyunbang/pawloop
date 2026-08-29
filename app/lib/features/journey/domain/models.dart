@@ -1,5 +1,6 @@
 /// 도메인 모델/타입 정의: DB 스키마에 맞춘 Schedule, 다이어리, 통계
 /// - 상태/표시문자열은 모델 내부에서 계산(getter)로 제공
+library;
 
 export 'diary_entry.dart';
 export 'schedule.dart';
@@ -46,16 +47,16 @@ class Schedule {
 
   /// 서버 schedule JSON → 모델 (snake_case 가정)
   factory Schedule.fromScheduleJson(Map<String, dynamic> json) {
-    DateTime? _parse(dynamic v) =>
+    DateTime? parse(dynamic v) =>
         v == null ? null : DateTime.tryParse(v.toString());
     return Schedule(
       id: (json['schedule_id'] as num).toInt(),
       title: (json['title'] ?? '') as String,
       content: json['content'] as String?,
-      dateFrom: _parse(json['date_from']),
-      dateTo: _parse(json['date_to']),
-      createdAt: _parse(json['created_at']),
-      updatedAt: _parse(json['updated_at']),
+      dateFrom: parse(json['date_from']),
+      dateTo: parse(json['date_to']),
+      createdAt: parse(json['created_at']),
+      updatedAt: parse(json['updated_at']),
       userId: (json['user_id'] as num).toInt(),
       // 확장 필드(있으면 사용)
       location: (json['location'] ?? json['countryOrCity']) as String?,
@@ -69,13 +70,13 @@ class Schedule {
 
   /// 저장/수정 payload (서버 정책에 맞게 조정)
   Map<String, dynamic> toSchedulePayload() {
-    String? _dateOnly(DateTime? d) => d?.toIso8601String().split('T').first;
+    String? dateOnly(DateTime? d) => d?.toIso8601String().split('T').first;
     return {
       'schedule_id': id,
       'title': title,
       'content': content,
-      'date_from': _dateOnly(dateFrom),
-      'date_to': _dateOnly(dateTo),
+      'date_from': dateOnly(dateFrom),
+      'date_to': dateOnly(dateTo),
       'user_id': userId,
     };
   }

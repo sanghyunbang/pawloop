@@ -104,11 +104,7 @@ class _BookmarkTabState extends State<BookmarkTab> {
       // contentTypeId가 없으면 관광지(12)로 폴백
       final ctype = (meta?['contentTypeId'] as int?) ?? 12;
 
-      posts.add(_Post(
-        contentId: id,
-        contentTypeId: ctype,
-        imageUrl: img,
-      ));
+      posts.add(_Post(contentId: id, contentTypeId: ctype, imageUrl: img));
     }
     return posts;
   }
@@ -123,8 +119,10 @@ class _BookmarkTabState extends State<BookmarkTab> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
-                const Text('컬렉션',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                const Text(
+                  '컬렉션',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: _onPressSeeAll,
@@ -132,7 +130,10 @@ class _BookmarkTabState extends State<BookmarkTab> {
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(0, 0),
                   ),
-                  child: const Text('모두 보기', style: TextStyle(fontSize: 13, color: Color(0xFF929292))),
+                  child: const Text(
+                    '모두 보기',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF929292)),
+                  ),
                 ),
               ],
             ),
@@ -180,7 +181,11 @@ class _BookmarkTabState extends State<BookmarkTab> {
 
               return Column(
                 children: [
-                  const Divider(height: 1, thickness: 0.5, color: Color(0xFFE9E9E9)),
+                  const Divider(
+                    height: 1,
+                    thickness: 0.5,
+                    color: Color(0xFFE9E9E9),
+                  ),
                   ...List.generate(preview.length, (i) {
                     final c = preview[i];
                     return Column(
@@ -189,7 +194,11 @@ class _BookmarkTabState extends State<BookmarkTab> {
                           collection: c,
                           onTap: () => _openCollection(c),
                         ),
-                        const Divider(height: 1, thickness: 0.5, color: Color(0xFFE9E9E9)),
+                        const Divider(
+                          height: 1,
+                          thickness: 0.5,
+                          color: Color(0xFFE9E9E9),
+                        ),
                       ],
                     );
                   }),
@@ -207,8 +216,10 @@ class _BookmarkTabState extends State<BookmarkTab> {
             padding: EdgeInsets.fromLTRB(16, 20, 16, 20),
             child: Row(
               children: [
-                Text('내가 저장한 관광지',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text(
+                  '내가 저장한 관광지',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
                 Spacer(),
               ],
             ),
@@ -260,12 +271,13 @@ class _BookmarkTabState extends State<BookmarkTab> {
                       physics: const NeverScrollableScrollPhysics(),
                       shrinkWrap: true,
                       itemCount: posts.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 2,
-                        crossAxisSpacing: 2,
-                        childAspectRatio: 1,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 2,
+                            crossAxisSpacing: 2,
+                            childAspectRatio: 1,
+                          ),
                       itemBuilder: (context, i) => _PostTile(post: posts[i]),
                     ),
                   );
@@ -295,16 +307,14 @@ class _CollectionSummary {
     required this.title,
     required this.count,
     this.latestItemContentId,
-    this.latestItemImageUrl,
-  });
+  }) : latestItemImageUrl = null;
 
   factory _CollectionSummary.fromJson(Map<String, dynamic> j) {
     return _CollectionSummary(
       id: (j['id'] as num).toInt(),
       title: (j['name'] ?? '').toString(),
       count: (j['count'] as num?)?.toInt() ?? 0,
-      latestItemContentId:
-      j['latestItemContentId'] == null ? null : j['latestItemContentId'].toString(),
+      latestItemContentId: j['latestItemContentId']?.toString(),
     );
   }
 }
@@ -337,15 +347,20 @@ class _Api {
 
   /// 컬렉션 목록 + 프리뷰 4개의 썸네일 resolve
   Future<List<_CollectionSummary>> fetchCollectionsAndResolvePreviews() async {
-    final res = await http.get(Uri.parse('$base/collections'), headers: await _headers());
+    final res = await http.get(
+      Uri.parse('$base/collections'),
+      headers: await _headers(),
+    );
     if (res.statusCode != 200) {
       throw Exception('컬렉션 조회 실패(${res.statusCode})');
     }
     final list = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
     final cols = list.map(_CollectionSummary.fromJson).toList();
 
-    final preview =
-    cols.take(4).where((c) => (c.latestItemContentId ?? '').isNotEmpty).toList();
+    final preview = cols
+        .take(4)
+        .where((c) => (c.latestItemContentId ?? '').isNotEmpty)
+        .toList();
 
     if (preview.isNotEmpty) {
       final ids = preview.map((c) => c.latestItemContentId!).toList();
@@ -359,7 +374,9 @@ class _Api {
   }
 
   /// contentIds → { imageUrl:String, contentTypeId:int } 맵으로 반환
-  Future<Map<String, Map<String, dynamic>>> resolveMetaBatch(List<String> contentIds) async {
+  Future<Map<String, Map<String, dynamic>>> resolveMetaBatch(
+    List<String> contentIds,
+  ) async {
     if (contentIds.isEmpty) return {};
     final res = await http.post(
       Uri.parse('$base/bookmarks/images:batchResolve'),
@@ -410,8 +427,9 @@ class _CollectionRowTile extends StatelessWidget {
                 child: SizedBox(
                   width: 56,
                   height: 56,
-                  child: (collection.latestItemImageUrl != null &&
-                      collection.latestItemImageUrl!.isNotEmpty)
+                  child:
+                      (collection.latestItemImageUrl != null &&
+                          collection.latestItemImageUrl!.isNotEmpty)
                       ? _NetImage(collection.latestItemImageUrl!)
                       : const _ThumbPlaceholder(),
                 ),
@@ -425,11 +443,19 @@ class _CollectionRowTile extends StatelessWidget {
                       collection.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 4),
-                    Text('항목 ${collection.count}개',
-                        style: const TextStyle(fontSize: 12.5, color: Colors.black54)),
+                    Text(
+                      '항목 ${collection.count}개',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.black54,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -465,7 +491,9 @@ class _PostTile extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: hasImage ? _NetImage(post.imageUrl) : const _ThumbPlaceholder(),
+            child: hasImage
+                ? _NetImage(post.imageUrl)
+                : const _ThumbPlaceholder(),
           ),
         ],
       ),
@@ -487,10 +515,19 @@ class _NetImage extends StatelessWidget {
         loadingBuilder: (c, w, p) => p == null
             ? w
             : const Center(
-            child: SizedBox(
-                width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
         errorBuilder: (c, e, s) => const Center(
-            child: Icon(Icons.broken_image_outlined, size: 28, color: Colors.black26)),
+          child: Icon(
+            Icons.broken_image_outlined,
+            size: 28,
+            color: Colors.black26,
+          ),
+        ),
       ),
     );
   }
@@ -526,16 +563,24 @@ class _EmptyStateCard extends StatelessWidget {
         children: [
           Icon(icon, size: 46, color: subtle),
           const SizedBox(height: 14),
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
           if (subtitle != null) ...[
             const SizedBox(height: 8),
-            Text(subtitle!,
-                style: TextStyle(fontSize: 13, color: subtle),
-                textAlign: TextAlign.center),
+            Text(
+              subtitle!,
+              style: TextStyle(fontSize: 13, color: subtle),
+              textAlign: TextAlign.center,
+            ),
           ],
           if (actionText != null && onAction != null) ...[
             const SizedBox(height: 14),
-            TextButton(onPressed: onAction, child: Text(actionText!, style: const TextStyle(fontSize: 13))),
+            TextButton(
+              onPressed: onAction,
+              child: Text(actionText!, style: const TextStyle(fontSize: 13)),
+            ),
           ],
         ],
       ),
@@ -551,7 +596,11 @@ class _ThumbPlaceholder extends StatelessWidget {
     return const DecoratedBox(
       decoration: BoxDecoration(color: Color(0xFFF3F4F6)),
       child: Center(
-        child: Icon(Icons.photo_size_select_actual_outlined, color: Colors.black26, size: 22),
+        child: Icon(
+          Icons.photo_size_select_actual_outlined,
+          color: Colors.black26,
+          size: 22,
+        ),
       ),
     );
   }

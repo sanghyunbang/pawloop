@@ -15,6 +15,37 @@ class FamilyScreen extends StatefulWidget {
 }
 
 class _FamilyScreenState extends State<FamilyScreen> {
+  @override
+  void initState() {
+    super.initState();
+    ensureCareFreshForToday(); // 날 바뀌면 반복 항목 체크 리셋 · 일회성 제거
+  }
+
+  // 케어/주의사항 공용 삭제 확인 다이얼로그.
+  Future<bool> _confirmDelete(String what) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFFFCFAFF),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('삭제할까요?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+        content: Text("'$what' 항목이 가족 모두에게서 삭제돼요.",
+            style: const TextStyle(fontSize: 13.5, color: T.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('취소', style: TextStyle(color: T.textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('삭제', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFFF6B7E))),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
@@ -59,6 +90,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   _membersCard(),
                   const SizedBox(height: 16),
                   _careCard(),
+                  const SizedBox(height: 16),
+                  _distanceCard(),
                   const SizedBox(height: 16),
                   _walkNotesCard(),
                   const SizedBox(height: 16),
@@ -216,7 +249,26 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
     Widget item(CareTask t, {required bool last}) {
       final c = careColor(t.type);
-      return GestureDetector(
+      return Dismissible(
+        key: ObjectKey(t),
+        direction: DismissDirection.endToStart,
+        background: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF6B7E).withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(Icons.delete_outline_rounded, size: 22, color: Color(0xFFFF6B7E)),
+        ),
+        onDismissed: (_) {
+          setState(() => kCareToday.remove(t));
+          kCareRev.value++;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("'${t.label}' 항목을 삭제했어요"), duration: const Duration(milliseconds: 1600)),
+          );
+        },
+        child: GestureDetector(
         onTap: () => setState(() {
           t.done = !t.done;
           if (t.done) {
@@ -226,7 +278,14 @@ class _FamilyScreenState extends State<FamilyScreen> {
             t.by = null;
             t.time = null;
           }
+          kCareRev.value++;
         }),
+        onLongPress: () async {
+          if (await _confirmDelete(t.label)) {
+            setState(() => kCareToday.remove(t));
+            kCareRev.value++;
+          }
+        },
         behavior: HitTestBehavior.opaque,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 13),
@@ -246,13 +305,19 @@ class _FamilyScreenState extends State<FamilyScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(t.label,
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: t.done ? T.textMuted : T.textPrimary,
-                    decoration: t.done ? TextDecoration.lineThrough : null,
-                  )),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(t.label,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: t.done ? T.textMuted : T.textPrimary,
+                      decoration: t.done ? TextDecoration.lineThrough : null,
+                    )),
+                if (t.product != null) ...[
+                  const SizedBox(height: 3),
+                  Text(t.product!, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+                ],
+              ]),
             ),
             Text(
               t.done ? '${t.by} · ${t.time}' : '아직',
@@ -270,6 +335,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
             ),
           ]),
         ),
+      ),
       );
     }
 
@@ -279,16 +345,373 @@ class _FamilyScreenState extends State<FamilyScreen> {
           Text('오늘의 케어',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
           Spacer(),
-          Text('탭해서 완료 표시', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+          Text('탭 완료 · 길게 눌러 삭제', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
         ]),
         const SizedBox(height: 4),
-        for (int i = 0; i < kCareToday.length; i++)
-          item(kCareToday[i], last: i == kCareToday.length - 1),
+        if (kCareToday.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text('아직 케어 항목이 없어요 · 아래에서 추가해 보세요',
+                style: TextStyle(fontSize: 13, color: T.textMuted)),
+          )
+        else
+          for (int i = 0; i < kCareToday.length; i++)
+            item(kCareToday[i], last: i == kCareToday.length - 1),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: _openAddCareSheet,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFA96B).withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.35)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+              Icon(Icons.add_rounded, size: 19, color: Color(0xFFE07A4E)),
+              SizedBox(width: 6),
+              Text('케어 항목 추가',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
+            ]),
+          ),
+        ),
       ]),
     );
   }
 
-  // ───────────── 산책 주의사항 ─────────────
+  // 케어 항목 추가 시트 — 가족 누구나 자유롭게 등록.
+  void _openAddCareSheet() {
+    CareType selType = CareType.etc;
+    bool daily = true;
+    final labelCtrl = TextEditingController();
+    final productCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) => StatefulBuilder(builder: (sheetCtx, setSheet) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFAFCFAFF),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+              22, 12, 22, 20 + MediaQuery.of(sheetCtx).viewInsets.bottom + MediaQuery.of(sheetCtx).padding.bottom),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(
+              child: Container(
+                width: 42, height: 5,
+                decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('케어 항목 추가', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(height: 4),
+            const Text('가족 모두의 오늘의 케어에 추가돼요', style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+            const SizedBox(height: 14),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final t in CareType.values)
+                GestureDetector(
+                  onTap: () => setSheet(() => selType = t),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: selType == t ? careColor(t) : const Color(0xFFF1ECF7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(careIcon(t), size: 15, color: selType == t ? Colors.white : T.textSecondary),
+                      const SizedBox(width: 5),
+                      Text(t.label,
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700,
+                              color: selType == t ? Colors.white : T.textSecondary)),
+                    ]),
+                  ),
+                ),
+            ]),
+            const SizedBox(height: 14),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0x9EFFFFFF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0x338C7BFF)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: labelCtrl,
+                autofocus: true,
+                style: const TextStyle(fontSize: 15, color: T.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: '항목 이름 (예: 저녁 약, 빗질, 놀아주기)',
+                  hintStyle: TextStyle(fontSize: 14, color: T.textMuted),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            // 밥/간식은 제품명(선택) 입력 — 추후 소진 예측·추천의 재료. 강제 아님.
+            if (selType == CareType.meal || selType == CareType.snack) ...[
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0x9EFFFFFF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0x338C7BFF)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: productCtrl,
+                  style: const TextStyle(fontSize: 15, color: T.textPrimary),
+                  decoration: const InputDecoration(
+                    hintText: '제품명 (선택 · 예: 로얄캐닌 미니 어덜트)',
+                    hintStyle: TextStyle(fontSize: 14, color: T.textMuted),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            // 매일 반복 여부 — 반복이면 날마다 체크만 초기화, 끄면 오늘 하루만.
+            GestureDetector(
+              onTap: () => setSheet(() => daily = !daily),
+              behavior: HitTestBehavior.opaque,
+              child: Row(children: [
+                Icon(Icons.repeat_rounded, size: 18, color: daily ? const Color(0xFFE07A4E) : T.textMuted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('매일 반복', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text(daily ? '매일 아침 체크만 초기화되고 항목은 유지돼요' : '오늘 하루만 — 내일이면 자동으로 사라져요',
+                        style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+                  ]),
+                ),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 46, height: 27,
+                  padding: const EdgeInsets.all(3),
+                  alignment: daily ? Alignment.centerRight : Alignment.centerLeft,
+                  decoration: BoxDecoration(
+                    gradient: daily ? _warm : null,
+                    color: daily ? null : const Color(0x1F8C7BFF),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Container(
+                    width: 21, height: 21,
+                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () {
+                final label = labelCtrl.text.trim();
+                if (label.isEmpty) return;
+                final product = productCtrl.text.trim();
+                setState(() => kCareToday.add(CareTask(
+                    type: selType, label: label, product: product.isEmpty ? null : product, daily: daily)));
+                kCareRev.value++;
+                Navigator.pop(sheetCtx);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(15)),
+                child: const Text('추가하기',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+              ),
+            ),
+          ]),
+        );
+      }),
+    );
+  }
+
+  // ───────────── 오늘 걸은 거리 (가족 공유 — 위치정보 제3자 제공) ─────────────
+  Widget _distanceCard() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: kShareMyDistance,
+      builder: (context, sharing, __) {
+        final maxKm = kFamilyMembers.fold<double>(0.1, (m, f) => f.todayKm > m ? f.todayKm : m);
+
+        Widget memberRow(FamilyMember m) {
+          final isMe = m.name == '나';
+          final hidden = isMe && !sharing;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(children: [
+              Container(
+                width: 34, height: 34, alignment: Alignment.center,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: m.color),
+                child: Text(m.name.characters.first,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 42,
+                child: Text(m.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textPrimary)),
+              ),
+              Expanded(
+                child: hidden
+                    ? const Text('공유 꺼짐 — 오른쪽 스위치로 켤 수 있어요',
+                        style: TextStyle(fontSize: 12, color: T.textMuted))
+                    : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            widthFactor: (m.todayKm / maxKm).clamp(0.02, 1.0),
+                            child: Container(
+                              height: 8,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: [m.color.withValues(alpha: 0.75), m.color]),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ]),
+              ),
+              const SizedBox(width: 10),
+              Text(hidden ? '-' : '${m.todayKm.toStringAsFixed(1)}km',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800,
+                      color: hidden ? T.textMuted : T.textSecondary)),
+            ]),
+          );
+        }
+
+        return GlassCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Icon(Icons.route_rounded, size: 18, color: Color(0xFF33BFA6)),
+              const SizedBox(width: 7),
+              const Text('오늘 걸은 거리',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
+              const Spacer(),
+              // 내 거리 공유 토글(제3자 제공 동의 — 켤 때 동의 시트 필수)
+              GestureDetector(
+                onTap: () => _toggleShare(sharing),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 46, height: 27,
+                  padding: const EdgeInsets.all(3),
+                  alignment: sharing ? Alignment.centerRight : Alignment.centerLeft,
+                  decoration: BoxDecoration(
+                    gradient: sharing ? _warm : null,
+                    color: sharing ? null : const Color(0x1F8C7BFF),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Container(
+                    width: 21, height: 21,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle, color: Colors.white,
+                      boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 1))],
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            Text(sharing ? '내 거리가 가족에게 공유되고 있어요' : '내 거리 공유가 꺼져 있어요',
+                style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+            const SizedBox(height: 14),
+            for (final m in kFamilyMembers) memberRow(m),
+            const Text('내 거리·위치는 동의한 가족에게만 제공되고, 제공될 때마다 알림으로 알려드려요',
+                style: TextStyle(fontSize: 11, color: T.textMuted)),
+          ]),
+        );
+      },
+    );
+  }
+
+  void _toggleShare(bool current) {
+    if (current) {
+      kShareMyDistance.value = false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('가족 거리 공유를 중단했어요'), duration: Duration(milliseconds: 1600)),
+      );
+    } else {
+      _openShareConsentSheet();
+    }
+  }
+
+  // 제3자 제공 동의 시트 — 위치정보법 요건(제공받는 자·목적·기간 고지 후 명시적 동의).
+  void _openShareConsentSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFAFCFAFF),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: EdgeInsets.fromLTRB(24, 12, 24, 20 + MediaQuery.of(sheetCtx).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(
+            child: Container(
+              width: 42, height: 5,
+              decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text('가족에게 내 산책 거리를 공유할까요?',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 14),
+          _consentRow('제공받는 자', '내가 속한 가족 그룹의 구성원'),
+          _consentRow('제공 목적', '가족 간 산책 거리·활동 공유'),
+          _consentRow('보유·이용 기간', '공유를 끄거나 그룹을 나갈 때까지'),
+          _consentRow('통지', '내 위치·거리가 제공될 때마다 알림으로 알려드려요'),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {
+              kShareMyDistance.value = true;
+              Navigator.pop(sheetCtx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('공유를 시작했어요 · 제공될 때마다 알림으로 알려드려요'),
+                  duration: Duration(milliseconds: 2000),
+                ),
+              );
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(15)),
+              child: const Text('동의하고 공유 시작',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.pop(sheetCtx),
+              child: const Text('다음에 할게요', style: TextStyle(fontSize: 13.5, color: T.textMuted)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _consentRow(String k, String v) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+            width: 92,
+            child: Text(k, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: T.textSecondary)),
+          ),
+          Expanded(child: Text(v, style: const TextStyle(fontSize: 12.5, height: 1.4, color: Color(0xCC463C64)))),
+        ]),
+      );
+
+  // ───────────── 산책 주의사항 (가족 누구나 추가/삭제) ─────────────
   Widget _walkNotesCard() {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -297,28 +720,147 @@ class _FamilyScreenState extends State<FamilyScreen> {
           SizedBox(width: 7),
           Text('산책 주의사항',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          Spacer(),
+          Text('길게 눌러 삭제', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
         ]),
         const SizedBox(height: 12),
-        for (final note in kWalkNotes)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 9),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 6,
-                height: 6,
-                margin: const EdgeInsets.only(top: 7),
-                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFFA96B)),
+        if (kWalkNotes.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 9),
+            child: Text('아직 주의사항이 없어요 · 가족과 공유할 메모를 남겨보세요',
+                style: TextStyle(fontSize: 13, color: T.textMuted)),
+          )
+        else
+          for (int i = 0; i < kWalkNotes.length; i++)
+            Dismissible(
+              key: ValueKey('walk-note-$i-${kWalkNotes[i]}'),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B7E).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.delete_outline_rounded, size: 19, color: Color(0xFFFF6B7E)),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(note,
-                    style: const TextStyle(fontSize: 13.5, height: 1.45, color: T.textSecondary)),
+              onDismissed: (_) => setState(() => kWalkNotes.removeAt(i)),
+              child: GestureDetector(
+                onLongPress: () async {
+                  if (await _confirmDelete(kWalkNotes[i])) {
+                    setState(() => kWalkNotes.removeAt(i));
+                  }
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(top: 7),
+                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFFA96B)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(kWalkNotes[i],
+                        style: const TextStyle(fontSize: 13.5, height: 1.45, color: T.textSecondary)),
+                  ),
+                ]),
               ),
+              ),
+            ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: _openAddNoteSheet,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFA96B).withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.35)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+              Icon(Icons.add_rounded, size: 18, color: Color(0xFFE07A4E)),
+              SizedBox(width: 5),
+              Text('주의사항 추가',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
             ]),
           ),
-        const SizedBox(height: 2),
+        ),
+        const SizedBox(height: 8),
         const Text('주의사항은 가족 모두에게 보여요', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
       ]),
+    );
+  }
+
+  // 주의사항 추가 시트.
+  void _openAddNoteSheet() {
+    final ctrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFAFCFAFF),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+            22, 12, 22, 20 + MediaQuery.of(sheetCtx).viewInsets.bottom + MediaQuery.of(sheetCtx).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(
+            child: Container(
+              width: 42, height: 5,
+              decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('산책 주의사항 추가', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0x9EFFFFFF),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0x338C7BFF)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: ctrl,
+              autofocus: true,
+              maxLines: 2,
+              minLines: 1,
+              style: const TextStyle(fontSize: 15, color: T.textPrimary),
+              decoration: const InputDecoration(
+                hintText: '예: 더운 날은 저녁 8시 이후에 나가기',
+                hintStyle: TextStyle(fontSize: 14, color: T.textMuted),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {
+              final text = ctrl.text.trim();
+              if (text.isEmpty) return;
+              setState(() => kWalkNotes.add(text));
+              Navigator.pop(sheetCtx);
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(15)),
+              child: const Text('추가하기',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 

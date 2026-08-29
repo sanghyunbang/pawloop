@@ -1,5 +1,7 @@
 /// header_info.dart
 /// - 상세 헤더: 타입 칩 + 타이틀 + 메타(평점/거리/시간)
+library;
+
 import 'package:flutter/material.dart';
 import '../../domain_detail/content_type.dart';
 import '../../domain/entity_detail/place_detail.dart';
