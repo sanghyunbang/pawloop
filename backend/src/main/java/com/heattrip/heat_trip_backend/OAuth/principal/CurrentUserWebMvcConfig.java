@@ -19,6 +19,21 @@ import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 @Configuration
 public class CurrentUserWebMvcConfig implements WebMvcConfigurer {
 
+    static {
+        // springdoc 은 커스텀 리졸버를 모른다. 알려 주지 않으면 @CurrentUser User me 를
+        // @ModelAttribute 처럼 보고 **required=true 인 query 파라미터** `me`(스키마는 User 전체)로
+        // 문서화한다 — 실측으로 /v3/api-docs 의 오퍼레이션 33개가 그렇게 오염됐다.
+        // 런타임은 멀쩡하지만(리졸버가 먼저 잡는다) 깨지는 건 계약이다: Swagger UI 의 Try it out 이
+        // 없는 파라미터를 요구하고, openapi-generator 로 뽑은 클라이언트는 33개 시그니처가 틀린다.
+        // 손으로 쓴 정본(docs/04-api/openapi.yaml)에는 그 파라미터가 없으므로 정본과 생성본이 갈린다.
+        //
+        // 여기 한 곳에서 끈다. 대안은 컨트롤러 33곳에 @Parameter(hidden = true) 를 붙이는 것이고,
+        // 그건 아홉 번째 컨트롤러에서 다시 빠진다.
+        // 정적 초기화인 이유: @Bean 메서드로 두면 springdoc 이 스캔을 시작한 뒤에 실행될 수 있다.
+        // 잠그는 테스트: GeneratedOpenApiSpecTest.
+        org.springdoc.core.utils.SpringDocUtils.getConfig().addAnnotationsToIgnore(CurrentUser.class);
+    }
+
     private final UserRepository userRepository;
 
     public CurrentUserWebMvcConfig(UserRepository userRepository) {
