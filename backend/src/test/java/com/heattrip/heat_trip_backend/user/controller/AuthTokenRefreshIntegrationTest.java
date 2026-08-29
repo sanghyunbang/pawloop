@@ -149,6 +149,64 @@ class AuthTokenRefreshIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(body(empty)).isEmpty();
     }
 
+    // ─────────────────── 형식이 깨진 요청 (계약의 400·415·405) ───────────────────
+
+    @Test
+    @DisplayName("형식이 깨진 refresh 요청은 500 이 아니라 400·415·405 다")
+    void 형식이_깨진_요청은_500이_아니다() throws Exception {
+        // 이 경로는 비인증 공개 표면이라 누구나 이 입력들을 보낼 수 있다. 핸들러가 없으면
+        // 전부 catch-all 에 잡혀 500 이 되고, 계약에 없는 코드가 나가는 데다 앱은
+        // "다시 로그인하라" 와 "서버가 고장났다" 를 구분하지 못해 재시도 루프를 돈다.
+        assertThat(mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON).content("{"))
+                        .andReturn().getResponse().getStatus())
+                .as("읽을 수 없는 JSON — HttpMessageNotReadableException 핸들러가 없으면 500 이다")
+                .isEqualTo(400);
+
+        assertThat(mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON).content("[]"))
+                        .andReturn().getResponse().getStatus())
+                .as("배열 본문도 같은 예외다")
+                .isEqualTo(400);
+
+        assertThat(mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"refreshToken\":{}}"))
+                        .andReturn().getResponse().getStatus())
+                .as("문자열 자리에 객체가 오는 것도 본문을 읽지 못하는 경우다")
+                .isEqualTo(400);
+
+        assertThat(mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.TEXT_PLAIN).content("{\"refreshToken\":\"x\"}"))
+                        .andReturn().getResponse().getStatus())
+                .as("Content-Type 불일치는 415 다 — HttpMediaTypeNotSupportedException 핸들러가 없으면 500")
+                .isEqualTo(415);
+
+        assertThat(mockMvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                .get("/auth/token/refresh"))
+                        .andReturn().getResponse().getStatus())
+                .as("메서드 불일치는 405 다 — HttpRequestMethodNotSupportedException 핸들러가 없으면 500")
+                .isEqualTo(405);
+    }
+
+    @Test
+    @DisplayName("400 응답 본문에 요청으로 보낸 refresh 토큰 조각이 실리지 않는다")
+    void 형식오류_응답은_요청본문을_되비추지_않는다() throws Exception {
+        // Jackson 의 파싱 실패 메시지에는 요청 본문 조각이 그대로 섞인다. 그 본문이
+        // refresh 토큰 원문인 경로에서 그건 곧 유출이다 (#6).
+        String secret = "leak-canary-refresh-token-value";
+
+        MvcResult broken = mockMvc.perform(post("/auth/token/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"" + secret + "\"")).andReturn();
+
+        assertThat(broken.getResponse().getStatus()).isEqualTo(400);
+        assertThat(body(broken))
+                .as("예외 메시지를 그대로 실으면 요청 본문이 응답으로 되돌아온다")
+                .doesNotContain(secret)
+                .doesNotContain("JsonParseException", "HttpMessageNotReadableException");
+    }
+
     // ─────────────────── 만료 (완료 조건 5) ───────────────────
 
     @Test

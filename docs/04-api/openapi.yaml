@@ -252,7 +252,18 @@ paths:
         > 서버는 유예 창을 두지 않습니다 — 유예를 두면 정당한 클라이언트와 탈취자를 구분하지
         > 못한 채 탈취자에게도 유예를 주게 됩니다.
 
-        실패는 원인과 무관하게 **본문 없는 401** 입니다(형식이 맞지만 유효하지 않은 값 포함).
+        **형식이 맞는 요청**의 실패는 원인과 무관하게 **본문 없는 401** 입니다 — 없는 토큰,
+        빈 문자열, `{}`(필드 생략), 만료, 폐기, 재사용이 전부 같은 모양입니다.
+
+        **형식 자체가 깨진 요청**은 401 이 아니라 400·415·405 입니다(이슈 #9). 읽을 수 없는
+        JSON·배열 본문·`refreshToken` 이 문자열이 아닌 경우는 **400**, `Content-Type` 이
+        `application/json` 이 아니면 **415**, `POST` 가 아닌 메서드는 **405** 입니다.
+        이 세 응답의 본문은 `{ status, error, message, path, timestamp }` 형태이며
+        **예외 메시지를 싣지 않습니다** — 파서 메시지에 요청 본문(= refresh 토큰 원문)
+        조각이 섞이기 때문입니다(#6). 오류 본문 형태를 공통 `Error` 로 통일하는 것은 #10 입니다.
+
+        > 앱에게: **400·415·405 를 401 처럼 다루지 마세요.** 그건 재로그인 사유가 아니라
+        > 클라이언트 요청이 잘못됐다는 신호이고, 재시도해도 결과가 같습니다.
 
         refresh 토큰은 JWT 가 아니라 256bit 난수를 패딩 없는 Base64URL 로 적은 43자 불투명
         문자열이며, 서버에는 SHA-256 해시만 저장됩니다. 파싱하지 마세요.
@@ -272,7 +283,15 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthTokens' }
+        '400':
+          description: |
+            요청 본문을 읽을 수 없음(깨진 JSON·배열 본문·타입 불일치). 본문은
+            `{ status, error, message, path, timestamp }` 이고 `message` 는 고정 문구입니다 —
+            파서 메시지를 그대로 실으면 refresh 토큰 원문 조각이 새어 나갑니다(#6).
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '415':
+          description: |
+            `Content-Type` 이 `application/json` 이 아님. 본문 형태는 400 과 같습니다.
 
   /auth/me:
     get:

@@ -54,11 +54,32 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Query("update RefreshToken r set r.revokedAt = :now where r.userId = :userId and r.revokedAt is null")
     int revokeAllByUserId(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 
-    /** 탈퇴 정리. 폐기가 아니라 삭제다 — 사용자가 사라지면 원장에 남길 이유가 없다. */
+    /**
+     * 탈퇴 정리. 폐기가 아니라 삭제다 — 사용자가 사라지면 원장에 남길 이유가 없다.
+     *
+     * <p>파생 쿼리가 아니라 {@code @Query} 인 이유: 파생 삭제는 Spring Data 가 대상 행을
+     * 전부 SELECT 해 영속화한 뒤 {@code EntityManager.remove} 를 <b>행마다</b> 부른다
+     * (실측: {@code delete from refresh_token where id=?} 가 행 수만큼). 폐기 두 건은
+     * 이미 단일 벌크 UPDATE 인데 삭제만 N+1 이던 것을 맞춘 것이다.
+     */
     @Transactional
-    int deleteByUserId(Long userId);
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from RefreshToken r where r.userId = :userId")
+    int deleteByUserId(@Param("userId") Long userId);
 
-    /** 만료 정리. 폐기 여부와 무관하게 지운다 — 만료된 토큰은 어차피 401 이다. */
+    /**
+     * 만료 정리. 폐기 여부와 무관하게 지운다 — 만료된 토큰은 어차피 401 이다.
+     *
+     * <p>야간 정리 잡이 부르는 메서드다. 대상이 "가장 많이 쌓인 시점의 행 전량" 이라
+     * 행별 DELETE 가 가장 나쁘게 작용하던 자리다 — 한 트랜잭션 안에서 N번 왕복하며
+     * InnoDB 행 잠금이 누적된다. 단일 벌크 DELETE 한 문장으로 보낸다.
+     *
+     * <p>한 번에 지우는 양을 {@code LIMIT} 으로 잘라 잠금 시간을 줄이는 것은 아직 하지
+     * 않았다 — JPQL 에 {@code LIMIT} 이 없어 네이티브 쿼리 + 반복이 필요하고, 그 형태가
+     * 정당해지는 행 수(수십만 건)에 아직 도달하지 않았다. 도달하면 #14 와 함께 본다.
+     */
     @Transactional
-    int deleteByExpiresAtBefore(LocalDateTime cutoff);
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from RefreshToken r where r.expiresAt < :cutoff")
+    int deleteByExpiresAtBefore(@Param("cutoff") LocalDateTime cutoff);
 }

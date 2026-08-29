@@ -59,7 +59,21 @@ public class RefreshTokenService {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshTokenService.class);
 
-    /** 256bit. 무차별 대입이 성립하지 않는 크기이므로 refresh 에 rate limit 을 걸지 않는다(#14 참고). */
+    /**
+     * 256bit. 무차별 대입이 성립하지 않는 크기다 — 토큰을 맞히려는 공격은 이 경로로 성립하지 않는다.
+     *
+     * <p><b>다만 {@code POST /auth/token/refresh} 는 현재 rate limit 이 전혀 없는 상태로 열려 있다.</b>
+     * {@code ApiRateLimitFilter} 는 경로를 하나씩 열거하는데 이 경로가 그 목록에 없고, 동시에
+     * {@code SecurityConfig.publicMatchers} 에 있어 인증 없이 도달한다. 남는 위험은 무차별 대입이
+     * 아니라 비용 비대칭이다 — 인증 없이 누구나 요청 1건당 SHA-256 1회 + 인덱스 조회 1회를
+     * 강제할 수 있고, 앱이 토큰 만료마다 자동으로 때리는 경로라 오작동하는 클라이언트 한 대가
+     * 그대로 트래픽이 된다({@code /auth/login} 은 10회/분으로 묶여 있다).
+     *
+     * <p>여기서 닫지 않은 이유: 버킷 하나를 더하는 것은 {@code PublicSecurityProperties}·
+     * {@code application.properties}·{@code .env.example} 을 함께 건드리는 일이고, 임계값을 잘못
+     * 잡으면 정상 클라이언트가 갱신에 실패해 로그아웃된다. rate limit 정책의 소유자는 #14 다 —
+     * <b>이 경로가 이미 무제한으로 열려 있다는 사실을 그쪽에 넘긴다.</b>
+     */
     private static final int TOKEN_BYTES = 32;
 
     private final RefreshTokenRepository refreshTokenRepository;
@@ -143,7 +157,12 @@ public class RefreshTokenService {
         //    서버는 둘을 구별할 수 없고 대응도 같다.
         if (refreshTokenRepository.revokeIfLive(stored.getId(), now) == 0) {
             refreshTokenRepository.revokeAllByUserId(stored.getUserId(), now);
-            log.warn("폐기된 refresh 토큰이 다시 사용되어 해당 사용자의 세션을 전부 끊었다.");
+            // 문구가 사건을 단정하지 않는 이유: 이 분기는 '회전으로 폐기된 옛 RT 재사용'(진짜
+            // 유출 신호)과 '로그아웃으로 폐기된 RT 로 앱이 무심코 갱신을 시도'(아주 흔한 일)를
+            // 함께 탄다. 서버는 둘을 구별할 수단이 없다. "유출됐다"고 적으면 로그 기반 알림에
+            // 오탐이 상시로 뜨고, 그러면 진짜 신호가 그 소음에 묻힌다.
+            log.warn("살아 있지 않은 refresh 토큰이 제시되어 해당 사용자의 세션을 전량 폐기했다 "
+                    + "— 회전 재사용 또는 로그아웃 이후 재시도.");
             throw new UnauthenticatedException();
         }
 

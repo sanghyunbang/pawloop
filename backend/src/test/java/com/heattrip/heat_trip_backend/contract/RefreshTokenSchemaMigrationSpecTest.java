@@ -28,6 +28,24 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>단언에 쓰는 문자열은 <b>파일 안에서 유일한 것</b>으로 골랐다. #7 에서 §C 가드와 §D 검증에
  * 똑같이 있는 문자열로 잠근 탓에 검증 블록을 통째로 지워도 초록불이던 전례가 있다.
  *
+ * <h2>이 테스트가 <b>하지 않는</b> 것 — 후속 작업</h2>
+ * <p>여기 있는 것은 전부 <b>텍스트 검사</b>다. 파일이 제자리에 있고 핵심 문장이 남아 있는지만
+ * 본다. 그래서 문법 오류·{@code PREPARE} 조립 실패·"중단 관문이 실제로는 중단하지 않는 형태"
+ * 는 전부 초록불로 통과한다. 스크립트 자체는 실 MySQL 8 에서 손으로 돌려
+ * 정상 동작·멱등을 확인했지만, 그건 CI 가 매번 확인해 주는 것이 아니다.
+ *
+ * <p>이 브랜치가 갈라진 뒤 {@code main} 에 이슈 #57(`test/56-migration-sql-execution`)이 들어와
+ * {@code 04_users_social_account_model.sql} 은 이제 Testcontainers 위에서 저장소의 운영
+ * 스크립트를 그대로 <b>실행</b>해 검증한다({@code UserSchemaMigrationExecutionTest}).
+ * <b>05 도 같은 형태로 올려야 한다</b> — 최소 세 가지면 충분하다:
+ * ①빈 스키마에 적용 후 UNIQUE·인덱스가 실제로 걸리는가 ②재실행 멱등 ③Hibernate 가 UNIQUE
+ * 없이 먼저 만든 테이블에 중복 {@code token_hash} 를 심어 두면 §0-5 가 스키마를 건드리기
+ * 전에 중단하는가.
+ *
+ * <p><b>여기서 하지 않은 이유:</b> 그 실행 인프라는 이 브랜치의 분기점에 존재하지 않는다.
+ * {@code main} 을 머지해야 쓸 수 있고, 그 머지는 리뷰 중인 diff 의 범위를 바꾼다.
+ * 후속 작업으로 남긴다 — 이 문단이 그 기록이다.
+ *
  * <p>네트워크를 타지 않는다. 저장소 안의 파일만 읽는다.
  */
 class RefreshTokenSchemaMigrationSpecTest {

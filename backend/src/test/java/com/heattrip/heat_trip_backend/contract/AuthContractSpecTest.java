@@ -371,6 +371,29 @@ class AuthContractSpecTest {
     }
 
     @Test
+    @DisplayName("/auth/token/refresh 가 형식 오류의 실제 응답 코드(400·415)를 계약에 등재한다")
+    void refreshOperation_declaresTheMalformedRequestStatuses() {
+        // 이 경로는 비인증 공개 표면이다. 계약이 200·401 만 선언하고 있던 동안 실제로는
+        // 깨진 JSON·잘못된 Content-Type·잘못된 메서드가 전부 500 으로 나갔다(#9 에서 실측).
+        // 앱은 그걸 '서버 고장'으로 읽고 재시도 루프를 돈다.
+        Map<String, Object> responses = asMap(asMap(asMap(asMap(spec.get("paths"))
+                .get("/auth/token/refresh")).get("post")).get("responses"));
+
+        assertThat(responses.keySet())
+                .as("계약에 없는 상태 코드가 나가면 앱은 '재로그인하라' 와 '서버가 고장났다' 를 구분할 수 없다")
+                .contains("200", "400", "401", "415");
+
+        String description = String.valueOf(asMap(asMap(asMap(spec.get("paths"))
+                .get("/auth/token/refresh")).get("post")).get("description"));
+        assertThat(description)
+                .as("400·415·405 를 401 처럼 다루면 앱이 멀쩡한 세션을 버리고 재로그인시킨다")
+                .contains("400·415·405");
+        assertThat(description)
+                .as("파서 메시지를 본문에 실으면 요청 본문(= refresh 토큰 원문) 조각이 새어 나간다 (#6)")
+                .contains("예외 메시지를 싣지 않습니다");
+    }
+
+    @Test
     @DisplayName("소셜 로그인 딥링크 서술에 refresh 파라미터와 그 파싱 주의가 적혀 있다")
     void spec_documentsTheRefreshTokenOnTheDeepLink() {
         // 액세스 토큰이 URL 의 꼬리가 아니게 되었다는 사실이 계약에 없으면, 'token=' 뒤를 전부

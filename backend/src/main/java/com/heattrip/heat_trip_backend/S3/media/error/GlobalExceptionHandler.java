@@ -154,6 +154,59 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * <b>형식이 깨진 요청</b>을 500 이 아니라 제 코드로 내보낸다. [⑫] (이슈 #9)
+     *
+     * <p>여기 오는 세 예외는 전부 "서버가 고장난 것" 이 아니라 "요청이 규격에 맞지 않는 것"
+     * 이다. 그런데 핸들러가 없으면 아래 {@code @ExceptionHandler(Exception.class)} 가 잡아
+     * <b>전부 500</b> 이 된다. 실측한 것: {@code POST /auth/token/refresh} 에 깨진 JSON
+     * ({@code "{"}), 배열 본문({@code "[]"}), {@code Content-Type} 없음, {@code text/plain},
+     * {@code GET} 메서드 — 다섯 경우 모두 500 이었다. {@code /auth/login}·{@code /auth/signup}
+     * 도 같았다.
+     *
+     * <p>이게 왜 인증 경로에서 특히 나쁜가: {@code /auth/token/refresh} 는 비인증 공개
+     * 경로이고 계약({@code openapi.yaml})은 그 오퍼레이션의 응답으로 200·400·401·415 만
+     * 선언한다. 500 은 계약에 없는 코드이며, 앱은 "다시 로그인하라"와 "서버가 고장났다"를
+     * 구분할 수 없다 — 후자로 읽으면 재시도 루프를 돈다.
+     *
+     * <p><b>{@code ex.getMessage()} 를 본문에 싣지 않는다.</b> Jackson 의 파싱 실패 메시지에는
+     * 요청 본문 조각이 그대로 섞여 들어온다. 그 본문이 refresh 토큰 원문인 경로에서 그건
+     * 곧 유출이다(#6). 원인은 로그에도 남기지 않는다 — 같은 이유다.
+     *
+     * <p><b>이 핸들러도 반드시 이 클래스 안에 있어야 한다.</b> 별도 advice 로 빼면 예외
+     * 구체성이 아니라 advice 빈 순서로 승자가 정해져 catch-all 이 먼저 잡는다(#44 에서 실측).
+     */
+    @ExceptionHandler({
+        org.springframework.http.converter.HttpMessageNotReadableException.class,
+        org.springframework.web.HttpMediaTypeNotSupportedException.class,
+        org.springframework.web.HttpRequestMethodNotSupportedException.class
+    })
+    public ResponseEntity<ErrorResponse> handleMalformedRequest(
+        Exception ex, org.springframework.web.context.request.WebRequest req
+    ) {
+        final HttpStatus status;
+        final String message;
+        if (ex instanceof org.springframework.web.HttpMediaTypeNotSupportedException) {
+            status = HttpStatus.UNSUPPORTED_MEDIA_TYPE;
+            message = "지원하지 않는 Content-Type 입니다.";
+        } else if (ex instanceof org.springframework.web.HttpRequestMethodNotSupportedException) {
+            status = HttpStatus.METHOD_NOT_ALLOWED;
+            message = "이 경로가 지원하지 않는 HTTP 메서드입니다.";
+        } else {
+            status = HttpStatus.BAD_REQUEST;
+            message = "요청 본문을 읽을 수 없습니다.";
+        }
+
+        var body = new ErrorResponse(
+            status.value(),
+            status.getReasonPhrase(),
+            message,
+            req.getDescription(false).replace("uri=", ""),
+            Instant.now()
+        );
+        return ResponseEntity.status(status).body(body);
+    }
+
+    /**
      * 500 Internal Server Error 매핑. [⑨]
      * - 마지막 안전망: 처리되지 않은 모든 예외.
      *
@@ -201,4 +254,5 @@ public class GlobalExceptionHandler {
 [⑨] 500: 내부 처리 중 예기치 못한 오류(운영 시 로깅/트레이싱 권장).
 [⑩] 401: 인증 주체 해석 실패. 본문 없이 상태 코드만 — 메시지를 실으면 그게 유출 경로가 된다(#5·#6).
 [⑪] ResponseStatusException: 컨트롤러가 스스로 정한 상태 코드. catch-all 보다 먼저 잡아야 한다(#44).
+[⑫] 400/415/405: 형식이 깨진 요청. 핸들러가 없으면 전부 500 이었다(#9 에서 실측). 본문에 예외 메시지 금지 — 요청 본문 조각이 섞인다(#6).
 ────────────────────────────────────────────────────────────────────────── */
