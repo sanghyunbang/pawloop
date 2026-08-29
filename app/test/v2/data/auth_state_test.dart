@@ -279,6 +279,40 @@ void main() {
     });
   });
 
+  group('clearLocalSession() — 서버를 부르지 않는 정리(회원 탈퇴)', () {
+    test('서버를 부르지 않는다 — 계정이 이미 지워졌으므로 /auth/logout 은 401 이다', () async {
+      final seen = <http.Request>[];
+      final store = _install((req) async {
+        seen.add(req);
+        return http.Response('', 204);
+      });
+      AuthState.status.value = AuthStatus.authenticated;
+
+      await AuthState.clearLocalSession();
+
+      expect(seen, isEmpty, reason: '탈퇴 뒤에는 부를 세션이 없다');
+      expect(store.access, isNull);
+      expect(store.refresh, isNull);
+    });
+
+    test('상태도 함께 내린다 — 이게 없으면 로그인 화면이 홈으로 되튕긴다', () async {
+      // 실제로 났던 결함이다. 화면이 저장소만 비우고 status 를 authenticated 로
+      // 두면, authRedirect 가 로그인 화면 진입을 홈으로 돌려보낸다.
+      _install((req) async => http.Response('', 204));
+      AuthState.status.value = AuthStatus.authenticated;
+
+      await AuthState.clearLocalSession();
+
+      expect(AuthState.status.value, AuthStatus.unauthenticated);
+      expect(AuthState.user, isNull);
+      expect(
+        AuthState.sessionEnded,
+        isTrue,
+        reason: '방금 세션이 끝난 사람이므로 로그인 화면을 띄워야 한다',
+      );
+    });
+  });
+
   group('AuthUser.fromJson', () {
     test('id 가 없으면 null — 계약이 required 로 못 박은 유일한 필드다', () {
       expect(AuthUser.fromJson({'nickname': '보리'}), isNull);

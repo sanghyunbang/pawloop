@@ -287,6 +287,21 @@ class AuthState {
       }
     }
 
+    await clearLocalSession();
+  }
+
+  /// 서버를 부르지 않고 **로컬 세션만** 지운다.
+  ///
+  /// 서버측 세션이 이미 없는 경우에만 쓴다 — 지금은 회원 탈퇴 한 곳뿐이다
+  /// (계정이 지워졌으므로 `POST /auth/logout` 은 401 이다).
+  ///
+  /// > ⚠️ **토큰 저장소를 화면에서 직접 비우지 마라.** 그렇게 하면 토큰은
+  /// > 없는데 [status] 는 `authenticated` 로 남는 상태가 만들어지고,
+  /// > `authRedirect` 가 그 상태에서 로그인 화면 진입을 홈으로 되튕긴다 —
+  /// > 사용자는 로그아웃 버튼을 눌렀는데 계속 로그인된 것처럼 보인다.
+  /// > 이 함정을 구조적으로 막기 위해 `TokenStorage.clearToken()` 은
+  /// > **삭제했다**(#12). 지우는 경로는 이 파일 하나다.
+  static Future<void> clearLocalSession() async {
     await _store.clear();
     _user = null;
     _sessionEnded = true;

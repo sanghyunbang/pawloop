@@ -16,7 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
+import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/features/profile/presentation/widgets/tabs/bookmark_tab.dart';
 
 // 공용 위젯들 (ProfileHeader, RightSideMenuPanel 등)
@@ -155,9 +155,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  /// 로그아웃: 토큰 삭제 후 로그인 화면으로
+  /// 로그아웃: 서버 세션 폐기 + 토큰 삭제 후 로그인 화면으로 ([AuthState] 가 전부 한다, #12)
   Future<void> _logout() async {
-    await TokenStorage.clearToken();
+    await AuthState.logout();
     if (!mounted) return;
     context.goNamed('login');
   }
