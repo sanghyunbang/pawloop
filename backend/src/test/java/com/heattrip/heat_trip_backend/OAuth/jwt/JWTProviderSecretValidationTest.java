@@ -122,11 +122,11 @@ class JWTProviderSecretValidationTest {
     }
 
     @Test
-    @DisplayName("스프링 컨텍스트에서도 짧은 jwt.secret 이면 JWTProvider 빈 생성이 실패한다.")
-    void 스프링컨텍스트_짧은시크릿이면_빈생성이실패한다() {
+    @DisplayName("스프링 컨텍스트에서도 31바이트 jwt.secret 이면 JWTProvider 빈 생성이 실패한다.")
+    void 스프링컨텍스트_31바이트시크릿이면_빈생성이실패한다() {
         new ApplicationContextRunner()
                 .withUserConfiguration(JWTProvider.class)
-                .withPropertyValues("jwt.secret=short", "jwt.expiration=3600000")
+                .withPropertyValues("jwt.secret=" + TOO_SHORT_SECRET, "jwt.expiration=3600000")
                 .run(context -> assertThat(context)
                         .hasFailed()
                         .getFailure()
@@ -148,8 +148,8 @@ class JWTProviderSecretValidationTest {
     }
 
     @Test
-    @DisplayName("짧은 jwt.secret 으로 애플리케이션을 띄우면 기동이 실패한다.")
-    void 애플리케이션기동_짧은시크릿이면_실패한다() {
+    @DisplayName("31바이트 jwt.secret 으로 애플리케이션을 띄우면 기동이 실패한다.")
+    void 애플리케이션기동_31바이트시크릿이면_실패한다() {
         // --jwt.secret 은 커맨드라인 인자라 application-test.properties 보다 우선한다.
         // 웹 타입은 그대로 두고 포트만 0(임의 포트)으로 — 컨텍스트가 죽으면 바로 반납된다.
         SpringApplicationBuilder builder = new SpringApplicationBuilder(HeatTripBackendApplication.class)
@@ -157,7 +157,7 @@ class JWTProviderSecretValidationTest {
 
         assertThatThrownBy(() -> {
             try (ConfigurableApplicationContext context =
-                         builder.run("--spring.profiles.active=test", "--server.port=0", "--jwt.secret=short")) {
+                         builder.run("--spring.profiles.active=test", "--server.port=0", "--jwt.secret=" + TOO_SHORT_SECRET)) {
                 // 여기에 도달하면 검증이 없는 것이다.
             }
         })
