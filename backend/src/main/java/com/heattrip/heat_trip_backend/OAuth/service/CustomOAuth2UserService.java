@@ -89,11 +89,10 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
      public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
         
         try {
-            System.out.println("[V] CustomOAuth2UserService.loadUser 진입");
+            log.debug("CustomOAuth2UserService.loadUser 진입");
             // 기존 처리
         } catch (Exception e) {
-            System.out.println("[!] CustomOAuth2UserService.loadUser에서 예외 발생: " + e.getMessage());
-            e.printStackTrace();
+            log.error("CustomOAuth2UserService.loadUser 처리 중 예외 발생", e);
             throw e;
         }
 
@@ -129,9 +128,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
         }
 
-        // 사용자 정보 로그 출력
-        log.info("[OAuth2 로그인] provider: {}, userId: {}, email: {}", 
-            userInfo.getProvider(), userInfo.getProviderId(), userInfo.getEmail());
+        // 사용자 정보 로그 출력 — 소셜 ID(providerId)와 이메일은 남기지 않는다. 제공자 이름만. (이슈 #6)
+        log.info("[OAuth2 로그인] provider: {}", userInfo.getProvider());
         
         // 여기서 DB 조회 및 회원 가입 로직 등을 추가할 수 있음
         //    - 사용자 정보 저장
@@ -164,7 +162,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         // 새 사용자 저장
         userRepository.save(user); // ← 신규 유저는 저장도 필요
 
-        System.out.println("[DEBUG] Returning CustomOAuth2User for provider: " + registrationId); // [0802 디버깅 추가]
+        log.debug("신규 사용자 생성 후 CustomOAuth2User 반환 (provider={})", registrationId); // 제공자 이름만 남긴다 (이슈 #6)
 
 
         // 사용자 정보를 우리 CustomOAuth2User 객체에 담아서 반환 ( getName() 메서드로 사용자 식별 가능하게 해놓음 ( SucessHanlder와 관련 ) )
