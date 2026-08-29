@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.explore.web;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +64,7 @@ class ExploreSearchSqlLogTest {
     }
 
     @Test
+    @Tag("mysql")   // MATCH(...) AGAINST — MySQL FULLTEXT. H2 에서는 500. 이슈 #26 참조
     @DisplayName("Case 5 - q = 카페")
     void search_case5_keywordCafe() throws Exception {
         performCase("Case 5 - q=카페",
@@ -71,6 +73,7 @@ class ExploreSearchSqlLogTest {
     }
 
     @Test
+    @Tag("mysql")   // MATCH(...) AGAINST — MySQL FULLTEXT. H2 에서는 500. 이슈 #26 참조
     @DisplayName("Case 6 - 모든 조건 조합")
     void search_case6_allFilters() throws Exception {
         performCase("Case 6 - all filters",
