@@ -5,6 +5,17 @@
 ## `init`와 `post-start` 차이
 
 - `mysql/init`: MySQL 컨테이너가 새 볼륨으로 처음 초기화될 때만 실행됩니다.
+  - **`01_schema.sql` — 운영 스키마 정본입니다 (이슈 #58).** 빈 DB 에 이 앱을 올릴 때
+    가장 먼저 실행합니다. 예전에는 이 디렉터리가 비어 있어서, **빈 운영 DB 에 앱을
+    올릴 방법이 저장소에 없었습니다** — prod 는 `ddl-auto=validate` 라 아무것도 만들지
+    않고, 아래 `post-start` 는 전부 `ALTER TABLE` 이라 테이블이 이미 있다고 전제합니다.
+  - 이 파일은 **손으로 고치지 않습니다.** JPA 엔티티에서 뽑습니다:
+    ```
+    cd backend
+    ./gradlew test --tests '*SchemaDdlDriftTest*'
+    cp build/generated-schema.sql mysql/init/01_schema.sql
+    ```
+    `SchemaDdlDriftTest` 가 이 파일과 엔티티가 어긋나면 CI 를 빨간불로 만듭니다.
 - `mysql/post-start`: 백엔드 앱이 뜬 뒤 수동으로 실행하는 SQL입니다.
 
 이 프로젝트는 `places` 같은 테이블을 Spring/Hibernate가 앱 시작 시점에 생성합니다. 그래서 `places` 테이블을 대상으로 하는 `ALTER TABLE`은 `mysql/init`에 넣으면 새 볼륨에서 실패할 수 있습니다.
