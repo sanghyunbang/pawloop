@@ -120,6 +120,30 @@ class GeneratedOpenApiSpecTest {
                 .isEmpty();
     }
 
+    @Test
+    @DisplayName("생성된 계약의 어떤 401 응답도 본문 스키마를 선언하지 않는다")
+    void generatedSpec_401NeverDeclaresABody() throws Exception {
+        // 401 은 우리 코드가 만들지 않는다 — Spring Security 의 HttpStatusEntryPoint 가
+        // 본문 없이 상태 코드만 돌려준다(SecurityConfig 의 exceptionHandling). 손으로 쓴 계약
+        // (openapi.yaml 의 components/responses/Unauthorized)도 #5 에서 본문 없음으로 확정했다.
+        //
+        // 그런데 컨트롤러의 @ApiResponse 애너테이션은 그 사실을 모른다. MediaController 4곳이
+        // 401 에 JSON ErrorResponse 본문을 선언하고 있었고, 그래서 손으로 쓴 계약과 생성된
+        // 계약이 서로 다른 말을 했다. 클라이언트가 생성된 쪽을 믿으면 오지 않는 본문을 파싱한다.
+        List<String> withBody = new ArrayList<>();
+
+        forEachOperation(generatedSpec().path("paths"), (label, operation) -> {
+            JsonNode content = operation.path("responses").path("401").path("content");
+            if (!content.isMissingNode() && content.size() > 0) {
+                withBody.add(label + " → " + content.fieldNames().next());
+            }
+        });
+
+        assertThat(withBody)
+                .as("401 은 본문 없이 나간다. 계약이 본문을 약속하면 클라이언트가 없는 것을 기다린다")
+                .isEmpty();
+    }
+
     // ─────────────────────────── 지그 ───────────────────────────
 
     /**

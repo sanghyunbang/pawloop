@@ -57,9 +57,9 @@ public class MediaController {
         @ApiResponse(responseCode = "400", description = "Bad request",
             content = @Content(mediaType = "application/json",
                 schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "401", description = "Unauthorized",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = ErrorResponse.class))),
+        // 401 은 Spring Security 의 HttpStatusEntryPoint 가 만들고 본문이 없다.
+        // 계약(openapi.yaml components/responses/Unauthorized)도 본문 없음으로 확정돼 있다. (#5)
+        @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @ApiResponse(responseCode = "500", description = "Internal Server Error",
             content = @Content(mediaType = "application/json",
                 schema = @Schema(implementation = ErrorResponse.class)))
@@ -155,9 +155,9 @@ public class MediaController {
         @ApiResponse(responseCode = "400", description = "Bad request",
             content = @Content(mediaType = "application/json",
                 schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "401", description = "Unauthorized",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = ErrorResponse.class))),
+        // 401 은 Spring Security 의 HttpStatusEntryPoint 가 만들고 본문이 없다.
+        // 계약(openapi.yaml components/responses/Unauthorized)도 본문 없음으로 확정돼 있다. (#5)
+        @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @ApiResponse(responseCode = "404", description = "Media not found",
             content = @Content(mediaType = "application/json",
                 schema = @Schema(implementation = ErrorResponse.class))),
@@ -198,9 +198,9 @@ public class MediaController {
     )
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Deleted"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = ErrorResponse.class))),
+        // 401 은 Spring Security 의 HttpStatusEntryPoint 가 만들고 본문이 없다.
+        // 계약(openapi.yaml components/responses/Unauthorized)도 본문 없음으로 확정돼 있다. (#5)
+        @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @ApiResponse(responseCode = "404", description = "Media not found",
             content = @Content(mediaType = "application/json",
                 schema = @Schema(implementation = ErrorResponse.class))),
@@ -228,9 +228,9 @@ public class MediaController {
     )
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Deleted"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = ErrorResponse.class))),
+        // 401 은 Spring Security 의 HttpStatusEntryPoint 가 만들고 본문이 없다.
+        // 계약(openapi.yaml components/responses/Unauthorized)도 본문 없음으로 확정돼 있다. (#5)
+        @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @ApiResponse(responseCode = "500", description = "Internal Server Error",
             content = @Content(mediaType = "application/json",
                 schema = @Schema(implementation = ErrorResponse.class)))

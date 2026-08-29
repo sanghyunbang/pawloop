@@ -114,7 +114,7 @@ ALTER TABLE places ADD SPATIAL INDEX spx_places_geom (geom);
 
 ---
 
-## 3-1. 데이터 마이그레이션 — `media_object.owner_id` 의 키가 바뀐다 (#5)
+## 3-1. 데이터 마이그레이션 — `media_objects.owner_id` 의 키가 바뀐다 (#5)
 
 > 스키마가 아니라 **값의 의미**가 바뀌는 마이그레이션이다. `ddl-auto` 도 Flyway 도 이런 변경은 알려 주지 않는다. 이 절이 그 결정을 기록하는 자리다.
 
@@ -145,7 +145,7 @@ ALTER TABLE places ADD SPATIAL INDEX spx_places_geom (geom);
 ```sql
 -- 1) 백필 대상이 있는지부터 본다. 0 이면 (B).
 SELECT COUNT(*) AS legacy_rows
-  FROM media_object
+  FROM media_objects
  WHERE owner_id NOT REGEXP '^[0-9]+$';
 ```
 
@@ -153,19 +153,19 @@ SELECT COUNT(*) AS legacy_rows
 
 ```sql
 -- 2-a) 이메일로 올린 행
-UPDATE media_object m
+UPDATE media_objects m
   JOIN users u ON u.email = m.owner_id
    SET m.owner_id = CAST(u.id AS CHAR)
  WHERE m.owner_id NOT REGEXP '^[0-9]+$';
 
 -- 2-b) 소셜 subject(provider_socialId)로 올린 행
-UPDATE media_object m
+UPDATE media_objects m
   JOIN users u ON CONCAT(u.provider, '_', u.social_id) = m.owner_id
    SET m.owner_id = CAST(u.id AS CHAR)
  WHERE m.owner_id NOT REGEXP '^[0-9]+$';
 
 -- 3) 남은 것은 계정이 이미 지워진 고아 행이다. 지우지 말고 목록만 뽑아 S3 정리 대상으로 넘긴다.
-SELECT id, owner_id, media_key FROM media_object WHERE owner_id NOT REGEXP '^[0-9]+$';
+SELECT id, owner_id, media_key FROM media_objects WHERE owner_id NOT REGEXP '^[0-9]+$';
 ```
 
 **(B) 대상 행이 0 건이면 — 백필 없이 배포한다.** 그 사실(실행 일시·`legacy_rows=0`)을 이 절에 한 줄로 남긴다.
