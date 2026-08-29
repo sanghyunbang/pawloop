@@ -11,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,8 +21,10 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,6 +40,10 @@ class UserServiceTest {
 
     @Mock
     private JWTProvider jwtProvider;
+
+    /** RT 를 만지는 유일한 통로. UserService 는 RefreshTokenRepository 를 직접 보지 않는다. (이슈 #9) */
+    @Mock
+    private RefreshTokenService refreshTokenService;
 
     @InjectMocks
     private UserService userService;
@@ -326,20 +333,59 @@ class UserServiceTest {
                 .hasMessageNotContaining("7");
     }
 
-    // TODO(#9): RefreshToken 도입 시 아래 테스트를 되살린다.
+    // ─────────────────── refresh 토큰 (이슈 #9) ───────────────────
     //
-    // 이 테스트는 RefreshTokenRepository 가 생기기 전에 먼저 쓰였고(TDD),
-    // 그 타입이 아직 없어 **테스트 소스가 컴파일되지 않는 상태**로 남아 있었다.
-    // CI 가 붙으면서 드러났다. 의도를 잃지 않도록 명세만 남긴다.
-    //
-    // 현재 UserService.logout(email) 은 본문이 비어 있다(UserService.java:163).
-    // #9 에서 RefreshToken 엔티티·저장소를 만들고 폐기를 구현할 때
-    // 아래를 그대로 살리면 된다.
-    //
-    // @Test
-    // @DisplayName("로그아웃: 해당 사용자의 refreshToken을 폐기한다.")
-    // void logout_revokesRefreshToken() {
-    //     userService.logout("bori@x.com");
-    //     verify(refreshTokenRepository).deleteByEmail("bori@x.com");
-    // }
+    // 이 자리에는 오래도록 주석 블록이 있었다 — RefreshTokenRepository 가 생기기 전에 TDD 로
+    // 먼저 쓰였고, 타입이 없어 컴파일이 죽는 바람에 주석으로 봉인된 명세였다.
+    // 되살리되 그대로는 아니다: 그 초안은 `deleteByEmail("bori@x.com")` 이었는데, 이메일 기반
+    // 조회 규약은 #5 가 죽였다. 폐기는 users.id 로 한다.
+
+    @Test
+    @DisplayName("로그아웃은 그 사용자의 refresh 토큰을 users.id 기준으로 전량 폐기한다")
+    void logout_revokesAllRefreshTokensOfThatUser() {
+        // 기기 하나만 끊지 않는 이유는 계약이 '전 기기'로 선언했기 때문이다
+        // (openapi.yaml 의 POST /auth/logout: "특정 기기 하나만 끊는 요청 본문은 정의하지 않습니다").
+        userService.logout(7L);
+
+        verify(refreshTokenService).revokeAllByUserId(7L);
+    }
+
+    @Test
+    @DisplayName("탈퇴는 사용자를 지우기 전에 그 사용자의 refresh 토큰을 먼저 삭제한다")
+    void deleteMe_removesRefreshTokensBeforeDeletingTheUser() {
+        // 순서가 계약이다. users 로의 FK 를 걸지 않기로 했으므로 DB 가 원장을 대신 정리해 주지
+        // 않는다 — 여기서 빠뜨리면 탈퇴한 사용자의 RT 행이 남는다 (완료 조건 7).
+        User existing = User.builder().id(7L).email("bori@example.com").build();
+        when(userRepository.findById(7L)).thenReturn(Optional.of(existing));
+
+        userService.deleteMe(7L);
+
+        InOrder order = inOrder(refreshTokenService, userRepository);
+        order.verify(refreshTokenService).deleteAllByUserId(7L);
+        order.verify(userRepository).delete(existing);
+    }
+
+    @Test
+    @DisplayName("이메일 로그인도 액세스 토큰과 함께 refresh 토큰을 발급·저장한다")
+    void login_issuesRefreshTokenForThatUser() {
+        // 응답 모양(현행 JWT 평문 문자열)은 바꾸지 않는다 — 그건 #10 의 범위다.
+        // 그래도 발급·저장까지 해 두어야 이 경로가 '한 번도 실행되지 않은 코드' 로 남지 않는다.
+        LoginRequest request = new LoginRequest();
+        request.setEmail("bori@example.com");
+        request.setPassword("test1234");
+
+        User user = User.builder()
+                .id(7L)
+                .email("bori@example.com")
+                .password("encoded-password")
+                .build();
+
+        when(userRepository.findByEmail("bori@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("test1234", "encoded-password")).thenReturn(true);
+        when(jwtProvider.createAccessToken(7L, "ROLE_USER")).thenReturn("jwt-token");
+
+        assertThatCode(() -> userService.login(request)).doesNotThrowAnyException();
+
+        verify(refreshTokenService).issueFor(7L);
+    }
 }

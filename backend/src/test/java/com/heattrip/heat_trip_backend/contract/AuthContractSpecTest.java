@@ -1,8 +1,15 @@
 package com.heattrip.heat_trip_backend.contract;
 
+import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
@@ -10,8 +17,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -119,17 +129,99 @@ class AuthContractSpecTest {
     // 지금 그 자리를 지키는 것은 AuthMeIntegrationTest 다: 소셜 계정 토큰으로 실제 200 이 나오는지
     // 매번 확인한다. 기록이 아니라 행동으로 잠긴 상태다.
 
+    /** 계약 검증용 HS256 키. 정확히 32바이트 — 값 자체에는 의미가 없다. */
+    private static final String CONTRACT_TEST_SECRET = "test-only-secret-key-32bytes-min!!";
+
     @Test
-    @DisplayName("bearerAuth 는 실제 발급 클레임(sub·role·iat·exp)을 description 으로 밝힌다")
+    @DisplayName("bearerAuth 의 클레임 표가 실제로 발급되는 토큰의 클레임 집합과 정확히 일치한다")
     void bearerAuth_documentsActualClaims() {
+        // 예전 이 테스트의 단언은 contains("`jti`") 하나뿐이었다. 그래서 문서가 "jti 가 없다"고
+        // 적어도 "jti 가 있다"고 적어도 똑같이 통과했다 — 잠그려던 것(거짓 서술 방지)을 전혀
+        // 잠그지 못하는 형태였다. 문자열 포함 검사를 걷어내고 실제 토큰과 대조한다. (#5 코멘트 → #9)
+        String description = bearerAuthDescription();
+
+        Claims actual = issueRealAccessToken();
+
+        assertThat(documentedPresentClaims(description))
+                .as("문서의 클레임 표와 발급 토큰의 클레임 키 집합이 어긋나면 계약이 거짓이다")
+                .containsExactlyInAnyOrderElementsOf(actual.keySet());
+
+        // 문서가 "아직 없다"고 적은 클레임은 토큰에도 실제로 없어야 한다. 누군가 코드에
+        // .setId(UUID) 를 넣으면 문서를 고치기 전까지 여기서 빨간불이 난다.
+        for (String absent : documentedAbsentClaims(description)) {
+            assertThat(actual.keySet())
+                    .as("문서가 '아직 없는 클레임' 이라고 적은 %s 가 토큰에 실제로 들어 있다", absent)
+                    .doesNotContain(absent);
+        }
+    }
+
+    @Test
+    @DisplayName("jti 를 도입하지 않기로 한 판단과 그 소유자가 계약에 적혀 있다")
+    void bearerAuth_recordsWhyJtiIsAbsent() {
+        // 이 문장이 사라지면 "왜 없는지" 를 아무도 모른 채 다시 논의가 시작된다.
+        // 예전에는 "도입은 이슈 #9" 라고 적혀 있었는데, #9 가 jti 없이 닫혔으므로 그 문장은
+        // 거짓이 되었다. 사실에 맞게 고치는 것까지가 #9 의 일이다.
+        String description = bearerAuthDescription();
+
+        assertThat(description).contains("`jti`", "`prv`");
+        assertThat(description)
+                .as("소비자(블록리스트 저장소) 없이 형식만 먼저 박지 않는다는 것이 판단의 근거다")
+                .contains("블록리스트");
+        assertThat(apiSpecRaw)
+                .as("openapi.yaml 만 고치면 api-spec.md 에 옛 소유자 지목이 남는다")
+                .doesNotContain("`jti` 가 없어 로그아웃해도 액세스 토큰은 만료까지 유효하다(#9).");
+    }
+
+    private static String bearerAuthDescription() {
         Map<String, Object> bearerAuth =
                 asMap(asMap(asMap(spec.get("components")).get("securitySchemes")).get("bearerAuth"));
-        String description = String.valueOf(bearerAuth.get("description"));
+        return String.valueOf(bearerAuth.get("description"));
+    }
 
-        assertThat(description).contains("`sub`", "`role`", "`iat`", "`exp`");
-        assertThat(description)
-                .as("아직 없는 클레임(jti)을 있는 것처럼 적으면 안 된다")
-                .contains("`jti`");
+    /** 클레임 표의 각 행 첫 칸(백틱으로 감싼 이름)을 뽑는다. */
+    private static List<String> documentedPresentClaims(String description) {
+        List<String> claims = new ArrayList<>();
+        Matcher matcher = Pattern.compile("(?m)^\\s*\\|\\s*`([a-zA-Z]+)`\\s*\\|").matcher(description);
+        while (matcher.find()) {
+            claims.add(matcher.group(1));
+        }
+        assertThat(claims).as("클레임 표를 하나도 못 읽었다면 이 테스트는 아무것도 지키지 못한다").isNotEmpty();
+        return claims;
+    }
+
+    /** "아직 **없는** 클레임:" 문단에 적힌 이름들. 그 문단은 첫 빈 줄에서 끝난다. */
+    private static List<String> documentedAbsentClaims(String description) {
+        int start = description.indexOf("아직 **없는** 클레임:");
+        assertThat(start).as("없는 클레임을 밝히는 문단이 사라졌다").isNotNegative();
+        int end = description.indexOf("\n\n", start);
+        String paragraph = (end < 0) ? description.substring(start) : description.substring(start, end);
+
+        List<String> claims = new ArrayList<>();
+        Matcher matcher = Pattern.compile("`([a-zA-Z]+)`").matcher(paragraph);
+        while (matcher.find()) {
+            claims.add(matcher.group(1));
+        }
+        assertThat(claims).isNotEmpty();
+        return claims;
+    }
+
+    /**
+     * 프로덕션 발급기로 토큰을 하나 만들어 파싱한다.
+     *
+     * <p>클레임 목록을 테스트에 다시 적지 않는 이유: 그러면 코드가 아니라 테스트의 사본과
+     * 문서를 대조하게 되어, 코드가 바뀌어도 두 사본이 나란히 낡은 채 초록불이 된다.
+     */
+    private static Claims issueRealAccessToken() {
+        JWTProvider provider = new JWTProvider();
+        ReflectionTestUtils.setField(provider, "secret", CONTRACT_TEST_SECRET);
+        ReflectionTestUtils.setField(provider, "expirationMillis", 3_600_000L);
+        ReflectionTestUtils.invokeMethod(provider, "init");
+
+        return Jwts.parserBuilder()
+                .setSigningKey(Keys.hmacShaKeyFor(CONTRACT_TEST_SECRET.getBytes(StandardCharsets.UTF_8)))
+                .build()
+                .parseClaimsJws(provider.createAccessToken(42L, "ROLE_USER"))
+                .getBody();
     }
 
     // ─────────────────────────── C. 실재하는 경로의 등재 ───────────────────────────
@@ -170,10 +262,11 @@ class AuthContractSpecTest {
     @DisplayName("구현이 없는 계약 경로는 description 에 미구현임이 명시돼 있다")
     void unimplementedOperations_areMarkedAsSuch() {
         record Op(String path, String method) {}
+        // /auth/token/refresh 는 #9 에서 구현되어 이 목록에서 빠졌다. 아래
+        // refreshOperation_isNoLongerMarkedUnimplemented 가 그 자리를 지킨다.
         List<Op> unimplemented = List.of(
                 new Op("/auth/oauth/{provider}", "get"),
-                new Op("/auth/oauth/{provider}/callback", "post"),
-                new Op("/auth/token/refresh", "post"));
+                new Op("/auth/oauth/{provider}/callback", "post"));
 
         Map<String, Object> paths = asMap(spec.get("paths"));
         for (Op op : unimplemented) {
@@ -222,16 +315,97 @@ class AuthContractSpecTest {
     // ─────────────────────────── E. 보안·응답 정합 ───────────────────────────
 
     @Test
-    @DisplayName("/auth/logout 은 401 응답과 전 기기 로그아웃 범위를 명시한다")
+    @DisplayName("/auth/logout 은 401 응답과 전 기기 로그아웃 범위를 summary·description 양쪽에 명시한다")
     void logout_declares401AndScope() {
         Map<String, Object> logout = asMap(asMap(asMap(spec.get("paths")).get("/auth/logout")).get("post"));
 
         assertThat(asMap(logout.get("responses")))
                 .as("인증을 요구하면서 401 을 선언하지 않은 유일한 오퍼레이션이었다")
                 .containsKeys("204", "401");
-        assertThat(String.valueOf(logout.get("summary")) + String.valueOf(logout.get("description")))
+
+        // 예전에는 summary 와 description 을 **이어 붙인 문자열**에 대고 단언했다. 그래서 둘 중
+        // 하나를 통째로 지워도 초록불이었다 — 잠근 척만 하는 형태다. 개별 필드로 조인다.
+        assertThat(String.valueOf(logout.get("summary")))
+                .as("목록에서 요약만 보는 사람에게도 범위가 보여야 한다")
+                .contains("전 기기");
+        assertThat(String.valueOf(logout.get("description")))
                 .as("현재 기기만인지 전 기기인지가 어디에도 없었다")
                 .contains("전 기기");
+    }
+
+    @Test
+    @DisplayName("/auth/logout 설명이 '서버측 폐기가 실제로 일어난다' 와 '액세스 토큰은 만료까지 유효하다' 를 함께 말한다")
+    void logout_declaresServerSideRevocationAndItsLimit() {
+        // 두 문장이 함께 있어야 한다. 폐기가 일어난다는 사실만 적으면 앱이 로그아웃 직후 옛
+        // 액세스 토큰이 통하는 것을 버그로 오해하고, 한계만 적으면 #9 이전의 거짓 서술로 돌아간다.
+        String description = String.valueOf(
+                asMap(asMap(asMap(spec.get("paths")).get("/auth/logout")).get("post")).get("description"));
+
+        assertThat(description).contains("서버측 폐기가 실제로 일어납니다");
+        assertThat(description)
+                .as("알려진 한계는 거짓 서술이 아니다 — 지우면 안 된다")
+                .contains("만료(≤1시간)까지 유효합니다");
+    }
+
+    @Test
+    @DisplayName("/auth/token/refresh 는 더 이상 미구현이 아니며 회전·재사용 감지·직렬화 요구를 계약이 말한다")
+    void refreshOperation_isNoLongerMarkedUnimplemented() {
+        Map<String, Object> refresh =
+                asMap(asMap(asMap(spec.get("paths")).get("/auth/token/refresh")).get("post"));
+
+        assertThat(refresh)
+                .as("기계가 읽는 미구현 표식이 남아 있으면 클라이언트 생성기가 이 경로를 건너뛴다")
+                .doesNotContainKey("x-implementation-status");
+
+        String description = String.valueOf(refresh.get("description"));
+        assertThat(description).doesNotContain("미구현");
+        assertThat(description)
+                .as("회전한다는 사실을 모르면 앱이 옛 refresh 토큰을 계속 쓰다 전 기기가 끊긴다")
+                .contains("회전");
+        assertThat(description)
+                .as("재사용 감지의 결과(전량 폐기)를 모르면 앱은 그것을 서버 버그로 신고한다")
+                .contains("재사용 감지", "세션을 폐기");
+        assertThat(description)
+                .as("유예 창이 없으므로 동시 갱신 직렬화는 클라이언트의 책임이다 — 계약이 그걸 요구해야 한다")
+                .contains("single-flight");
+    }
+
+    @Test
+    @DisplayName("/auth/token/refresh 가 형식 오류의 실제 응답 코드(400·415)를 계약에 등재한다")
+    void refreshOperation_declaresTheMalformedRequestStatuses() {
+        // 이 경로는 비인증 공개 표면이다. 계약이 200·401 만 선언하고 있던 동안 실제로는
+        // 깨진 JSON·잘못된 Content-Type·잘못된 메서드가 전부 500 으로 나갔다(#9 에서 실측).
+        // 앱은 그걸 '서버 고장'으로 읽고 재시도 루프를 돈다.
+        Map<String, Object> responses = asMap(asMap(asMap(asMap(spec.get("paths"))
+                .get("/auth/token/refresh")).get("post")).get("responses"));
+
+        assertThat(responses.keySet())
+                .as("계약에 없는 상태 코드가 나가면 앱은 '재로그인하라' 와 '서버가 고장났다' 를 구분할 수 없다")
+                .contains("200", "400", "401", "415");
+
+        String description = String.valueOf(asMap(asMap(asMap(spec.get("paths"))
+                .get("/auth/token/refresh")).get("post")).get("description"));
+        assertThat(description)
+                .as("400·415·405 를 401 처럼 다루면 앱이 멀쩡한 세션을 버리고 재로그인시킨다")
+                .contains("400·415·405");
+        assertThat(description)
+                .as("파서 메시지를 본문에 실으면 요청 본문(= refresh 토큰 원문) 조각이 새어 나간다 (#6)")
+                .contains("예외 메시지를 싣지 않습니다");
+    }
+
+    @Test
+    @DisplayName("소셜 로그인 딥링크 서술에 refresh 파라미터와 그 파싱 주의가 적혀 있다")
+    void spec_documentsTheRefreshTokenOnTheDeepLink() {
+        // 액세스 토큰이 URL 의 꼬리가 아니게 되었다는 사실이 계약에 없으면, 'token=' 뒤를 전부
+        // 잘라 쓰는 클라이언트가 조용히 손상된 토큰을 저장한다(모든 요청 401).
+        String description = String.valueOf(asMap(asMap(asMap(spec.get("paths"))
+                .get("/oauth2/authorization/{provider}")).get("get")).get("description"));
+
+        assertThat(description).contains("&refresh=<refreshToken>");
+        assertThat(description).contains("queryParameters['token']");
+        assertThat(description)
+                .as("자격증명 두 개가 URL 로 나가는 위험과 그 대체(#14)를 계약이 숨기면 안 된다")
+                .contains("#14");
     }
 
     @Test

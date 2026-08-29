@@ -6,8 +6,11 @@ import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import org.springframework.web.bind.annotation.*;
 
+import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
+import com.heattrip.heat_trip_backend.user.dto.RefreshTokenRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
+import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
 import com.heattrip.heat_trip_backend.user.service.UserService;
 
 import lombok.RequiredArgsConstructor;
@@ -21,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 public class AuthController implements AuthApiDoc{
     
     private final UserService userService;
+    private final RefreshTokenService refreshTokenService;
 
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody SignupRequest request) {
@@ -34,6 +38,22 @@ public class AuthController implements AuthApiDoc{
         return ResponseEntity.ok(token);
     }
 
+
+    /**
+     * 액세스 토큰 갱신 — refresh 토큰 회전. (이슈 #9)
+     *
+     * <p>인증이 필요 없다({@code SecurityConfig.publicMatchers} 에 이미 있다). 그래서 이 경로의
+     * 401 은 Spring Security 가 만들지 않는다 — 서비스가 던진 {@code UnauthenticatedException}
+     * 이 {@code GlobalExceptionHandler} 에 매핑되어 <b>본문 없는 401</b> 이 된다. 그 매핑이
+     * 끊기면 같은 요청이 조용히 500 으로 새므로 통합 테스트가 그것을 못 박는다.
+     *
+     * <p>로그인 응답(현행 JWT 평문 문자열)과 모양이 다른 것은 의도다. 로그인 응답을 이 JSON 으로
+     * 맞추는 것은 #10 의 범위다.
+     */
+    @PostMapping("/token/refresh")
+    public ResponseEntity<AuthTokensResponse> refresh(@RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(refreshTokenService.rotate(request.getRefreshToken()));
+    }
 
     /**
      * 내 프로필 조회.
