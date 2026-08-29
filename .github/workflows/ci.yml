@@ -103,6 +103,14 @@ jobs:
           channel: stable
           cache: true
 
+      # pubspec.yaml 의 assets 에 .env 가 선언돼 있어 없으면 에셋 번들 빌드가
+      # 실패한다("Failed to build asset bundle"). .env 는 gitignore 대상이라
+      # CI 에는 없으므로 템플릿을 복사해 쓴다. 값은 전부 비어 있어도 된다 —
+      # 테스트가 실제 키를 요구하면 그 테스트가 잘못 설계된 것이다.
+      # .env 를 에셋으로 번들링하는 것 자체의 문제는 이슈 #29.
+      - name: .env 준비 (템플릿 복사)
+        run: cp .env.example .env
+
       - name: 의존성 설치
         run: flutter pub get
 

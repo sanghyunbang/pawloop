@@ -13,6 +13,7 @@ import com.heattrip.heat_trip_backend.tour.repository.PlaceDescriptionRepo;
 import com.opencsv.CSVReader;
 import com.opencsv.CSVReaderBuilder;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
@@ -23,6 +24,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class TraitBootstrap {
@@ -38,6 +40,15 @@ public class TraitBootstrap {
         if (traitRepo.count() > 0) return;
 
         var res = new ClassPathResource("data/place_traits.csv");
+        // 시드 CSV 는 .gitignore 대상(backend/.gitignore: **/src/main/resources/data/**)이라
+        // 새로 클론한 환경과 CI 에는 없다. 없으면 건너뛴다 — 선택적 시드 데이터가
+        // 없다고 애플리케이션이 뜨지 못하면 안 된다.
+        // 같은 패턴이 Cat3DictionaryService.loadFromCsvIfExists 에도 있다.
+        if (!res.exists()) {
+            log.warn("시드 CSV 없음 — 형질 부트스트랩 건너뜀: {}", res.getPath());
+            return;
+        }
+
         try (var is = res.getInputStream();
              var br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
 
