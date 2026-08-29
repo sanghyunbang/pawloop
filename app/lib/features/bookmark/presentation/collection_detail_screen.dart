@@ -2,10 +2,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 
 class CollectionDetailScreen extends StatefulWidget {
   const CollectionDetailScreen({
@@ -222,21 +221,13 @@ class _ItemSummary {
 class _Api {
   final String base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
 
-  Future<Map<String, String>> _headers() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('로그인이 필요합니다');
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
-  }
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  final AuthedClient _client = AuthedClient.instance;
 
   /// 특정 컬렉션의 아이템(contentId + (optional) contentTypeId) 목록을 최신순으로 반환
   Future<List<_ItemSummary>> fetchCollectionItems(int collectionId) async {
-    final res = await http.get(
+    final res = await _client.getJson(
       Uri.parse('$base/collections/$collectionId/items'),
-      headers: await _headers(),
     );
     if (res.statusCode != 200) {
       throw Exception('컬렉션 아이템 조회 실패(${res.statusCode})');
@@ -265,10 +256,9 @@ class _Api {
     List<String> contentIds,
   ) async {
     if (contentIds.isEmpty) return {};
-    final res = await http.post(
+    final res = await _client.postJson(
       Uri.parse('$base/bookmarks/images:batchResolve'),
-      headers: await _headers(),
-      body: jsonEncode({'contentIds': contentIds}),
+      body: {'contentIds': contentIds},
     );
     if (res.statusCode != 200) return {};
     final list = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();

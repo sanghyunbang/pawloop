@@ -2,12 +2,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/features/bookmark/service/collection_store.dart';
 import 'package:heat_trip_flutter/features/bookmark/presentation/collection_detail_screen.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 class CollectionListScreen extends StatefulWidget {
   const CollectionListScreen({super.key});
@@ -383,23 +382,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 class _ApiColl {
   final String base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
 
-  Future<Map<String, String>> _headers() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('로그인이 필요합니다');
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
-  }
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  final AuthedClient _client = AuthedClient.instance;
 
   /// /collections 에서 최신 아이템 contentId를 받고, 배치로 이미지 URL 매핑
   /// return: { collectionId : imageUrl }
   Future<Map<int, String>> fetchCollectionThumbs() async {
-    final res = await http.get(
-      Uri.parse('$base/collections'),
-      headers: await _headers(),
-    );
+    final res = await _client.getJson(Uri.parse('$base/collections'));
     if (res.statusCode != 200) {
       throw Exception('컬렉션 조회 실패(${res.statusCode})');
     }
@@ -435,10 +424,9 @@ class _ApiColl {
     List<String> contentIds,
   ) async {
     if (contentIds.isEmpty) return {};
-    final res = await http.post(
+    final res = await _client.postJson(
       Uri.parse('$base/bookmarks/images:batchResolve'),
-      headers: await _headers(),
-      body: jsonEncode({'contentIds': contentIds}),
+      body: {'contentIds': contentIds},
     );
     if (res.statusCode != 200) return {};
     final list = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();

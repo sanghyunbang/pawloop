@@ -1,28 +1,20 @@
 import 'dart:convert';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/features/bookmark/domain/bookmark_repository.dart';
-import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 class BookmarkRepositoryImpl implements BookmarkRepository {
   final String base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
 
-  Future<Map<String, String>> _headers() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('로그인이 필요합니다');
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
-  }
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  final AuthedClient _client = AuthedClient.instance;
 
   @override
   Future<List<String>> fetchAllOrdered() async {
     // 서버가 정렬을 지원한다면 쿼리 파라미터를 사용하세요(스프링 데이터 JPA 예시)
     // final url = Uri.parse('$base/bookmarks').replace(queryParameters: {'sort':'createdAt,desc'});
     final url = Uri.parse('$base/bookmarks');
-    final r = await http.get(url, headers: await _headers());
+    final r = await _client.getJson(url);
     if (r.statusCode != 200) return const <String>[];
 
     final list = (jsonDecode(r.body) as List).cast<Map<String, dynamic>>();
@@ -58,31 +50,26 @@ class BookmarkRepositoryImpl implements BookmarkRepository {
 
   @override
   Future<void> add(String contentId, {String? collectionId}) async {
-    await http.post(
+    await _client.postJson(
       Uri.parse('$base/bookmarks'),
-      headers: await _headers(),
-      body: jsonEncode({
+      body: {
         'contentId': contentId,
         if (collectionId != null) 'collectionId': collectionId,
-      }),
+      },
     );
   }
 
   @override
   Future<void> remove(String contentId) async {
-    await http.delete(
-      Uri.parse('$base/bookmarks/$contentId'),
-      headers: await _headers(),
-    );
+    await _client.deleteJson(Uri.parse('$base/bookmarks/$contentId'));
   }
 
   @override
   Future<Map<String, String>> fetchImagesBatch(List<String> contentIds) async {
     if (contentIds.isEmpty) return {};
-    final r = await http.post(
+    final r = await _client.postJson(
       Uri.parse('$base/bookmarks/images:batchResolve'),
-      headers: await _headers(),
-      body: jsonEncode({'contentIds': contentIds}),
+      body: {'contentIds': contentIds},
     );
     if (r.statusCode != 200) return {};
     final list = (jsonDecode(r.body) as List).cast<Map<String, dynamic>>();
@@ -97,10 +84,7 @@ class BookmarkRepositoryImpl implements BookmarkRepository {
 
   @override
   Future<String?> fetchImage(String contentId) async {
-    final r = await http.get(
-      Uri.parse('$base/bookmarks/img/$contentId'),
-      headers: await _headers(),
-    );
+    final r = await _client.getJson(Uri.parse('$base/bookmarks/img/$contentId'));
     if (r.statusCode != 200) return null;
     final j = (jsonDecode(r.body) as Map<String, dynamic>);
     final url = (j['imageUrl'] ?? j['firstimage'] ?? '').toString().trim();

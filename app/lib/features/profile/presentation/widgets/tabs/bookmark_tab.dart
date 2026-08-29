@@ -1,10 +1,8 @@
 // lib/features/profile/presentation/widgets/tabs/bookmark_tab.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart'; // ★ go_router 내비게이션
 
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
 import 'package:heat_trip_flutter/features/bookmark/service/bookmark_store.dart';
 import 'package:heat_trip_flutter/features/bookmark/service/collection_store.dart';
 // 아래 두 import는 화면 직접 push 안 쓰면 사실 필요 없지만,
@@ -12,6 +10,7 @@ import 'package:heat_trip_flutter/features/bookmark/service/collection_store.dar
 import 'package:heat_trip_flutter/features/bookmark/presentation/collection_list_screen.dart';
 import 'package:heat_trip_flutter/features/bookmark/presentation/collection_detail_screen.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 class BookmarkTab extends StatefulWidget {
   const BookmarkTab({
@@ -334,22 +333,12 @@ class _Post {
 class _Api {
   final String base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
 
-  Future<Map<String, String>> _headers() async {
-    final token = await TokenStorage.getToken();
-    if (token == null) throw Exception('로그인이 필요합니다');
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
-  }
+  /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
+  final AuthedClient _client = AuthedClient.instance;
 
   /// 컬렉션 목록 + 프리뷰 4개의 썸네일 resolve
   Future<List<_CollectionSummary>> fetchCollectionsAndResolvePreviews() async {
-    final res = await http.get(
-      Uri.parse('$base/collections'),
-      headers: await _headers(),
-    );
+    final res = await _client.getJson(Uri.parse('$base/collections'));
     if (res.statusCode != 200) {
       throw Exception('컬렉션 조회 실패(${res.statusCode})');
     }
@@ -377,10 +366,9 @@ class _Api {
     List<String> contentIds,
   ) async {
     if (contentIds.isEmpty) return {};
-    final res = await http.post(
+    final res = await _client.postJson(
       Uri.parse('$base/bookmarks/images:batchResolve'),
-      headers: await _headers(),
-      body: jsonEncode({'contentIds': contentIds}),
+      body: {'contentIds': contentIds},
     );
     if (res.statusCode != 200) return {};
     final list = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();

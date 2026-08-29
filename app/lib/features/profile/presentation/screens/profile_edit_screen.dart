@@ -15,7 +15,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
-import 'package:heat_trip_flutter/features/auth/service/token_storage.dart';
+import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
 import 'package:heat_trip_flutter/features/profile/data/dto/update_profile_request.dart';
 
 // ↓ shared/media 배럴 (models, repository, widgets 포함)
@@ -98,7 +98,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     } catch (_) {}
 
     try {
-      final token = await TokenStorage.getToken();
+      final token = await SecureTokenStore.instance.readAccessToken();
       if (token == null) {
         setState(() {
           _loadError = '로그인이 필요합니다.';
@@ -190,7 +190,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
     setState(() => _saving = true);
 
-    final token = await TokenStorage.getToken();
+    final token = await SecureTokenStore.instance.readAccessToken();
     if (token == null) {
       if (!mounted) return;
       setState(() => _saving = false);
