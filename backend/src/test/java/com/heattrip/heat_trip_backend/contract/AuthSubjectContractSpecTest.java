@@ -107,7 +107,9 @@ class AuthSubjectContractSpecTest {
         // 필터의 principal 은 AuthenticatedUser 다. 타입이 맞지 않는 @AuthenticationPrincipal 은
         // 예외도 경고도 없이 null 을 주입하고 요청은 200 으로 끝난다 — MediaController 의
         // 소유권 검사 4곳이 통째로 무력화되는데 컴파일도 다른 테스트도 이를 잡지 못한다.
-        Pattern principalAsString = Pattern.compile("@AuthenticationPrincipal\\s+String\\b");
+        // 패키지를 앞에 붙인 형태(@org.springframework...AuthenticationPrincipal String)도 잡는다.
+        // 되돌리는 사람이 import 를 다시 추가하기 싫어 전체 이름을 쓰는 일이 실제로 있다.
+        Pattern principalAsString = Pattern.compile("@(?:[\\w.]+\\.)?AuthenticationPrincipal\\s+String\\b");
         assertThat(filesMatching(principalAsString))
                 .as("이 이슈에서 유일하게 '조용한' 회귀다 — 이 단언이 그것을 잡는 유일한 자동 장치다")
                 .isEmpty();
