@@ -147,7 +147,7 @@
 
 ## 6. 구현 노트 (함정 위주)
 
-1. **JWT subject 불일치(가장 중요)** — 계약/스키마는 `subject = email`. 그러나 `OAuth2SuccessHandler`는 `authentication.getName()`(= `CustomOAuth2User`의 `provider_providerId`)을 subject로 넣고, `UserService.login`은 `email`을 넣는다. `GET /auth/me` 등에서 `emailFromAuth` → `findByEmail`을 쓰므로 **소셜 로그인 토큰으로는 me 조회가 깨진다.** 소셜 흐름의 subject도 `email`로 통일하거나, subject를 사용자 PK로 통일하고 조회를 `findById`로 바꿀 것.
+1. **JWT subject — 결정: `users.id` 로 통일(#5 완료).** 예전에는 `OAuth2SuccessHandler`가 `authentication.getName()`(= `provider_providerId`)을, `UserService.login`이 `email`을 subject로 넣어 한 토큰 형식에 두 규약이 공존했고, 소비처가 전부 email 을 가정해 **소셜 로그인 토큰으로는 me 조회가 깨졌다.** 이제 발급은 `createAccessToken(Long userId, String role)` 한 곳이고(타입이 email·소셜 ID 를 컴파일 단계에서 막는다), 해석은 `JWTAuthenticationFilter` → `AuthenticatedUser` → `@CurrentUser` 한 줄기다. 컨트롤러가 Authorization 헤더를 다시 읽지 않는다는 것은 `AuthSubjectContractSpecTest` 가 소스 스캔으로 잠근다.
 2. **Access token 만료** — `JWTProvider.TOKEN_VALID_TIME = 1000L*60*60*10000`(주석은 "1시간"이나 실제 ~416일)로 사실상 무기한. 계약 `expiresIn`(예 3600)과 어긋남. access는 짧게(예 1h) 재설정하고, 실제 만료초를 `expiresIn`으로 정확히 반환할 것.
 3. **Refresh token 부재** — 발급/저장/검증/회전/폐기 로직이 전무. `JWTProvider`에 `createRefreshToken`(또는 불투명 랜덤 토큰) 추가 + `RefreshToken` 저장소(§5-2)로 폐기 가능하게. 로그아웃/탈퇴는 반드시 저장된 refresh를 무효화.
 4. **로그인 시작 경로 이중화** — 실제 Spring OAuth2 진입점은 `/oauth2/authorization/{provider}`(SecurityConfig `oauth2Login`). 계약 `GET /auth/oauth/{provider}`는 이 진입점으로의 **302 리다이렉트 래퍼**만 두면 됨(성공 시 딥링크는 기존 SuccessHandler가 처리). 별도 인증 로직 재구현 금지.
