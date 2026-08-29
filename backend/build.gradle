@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.PathSensitivity
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.4'
@@ -124,6 +126,28 @@ tasks.named('test') {
     // 제외하면 검색의 핵심 경로가 CI 에서 한 번도 검증되지 않는 상태로 돌아간다.
     // 전제: Docker 가 있어야 한다(GitHub Actions ubuntu-latest 는 기본 탑재).
     useJUnitPlatform()
+
+    // ── 스펙 테스트가 읽는 저장소 파일을 태스크 입력으로 선언한다 (이슈 #46) ──
+    //
+    // 왜 필요한가: AuthContractSpecTest 는 docs/04-api/openapi.yaml 을,
+    // UserSchemaMigrationSpecTest 는 mysql/post-start/*.sql 과 mysql/README.md 를,
+    // MySqlComposeParityTest 는 docker-compose.yml 을 읽는다. 그런데 Gradle 은 그
+    // 파일들을 모르므로, 자바 소스가 그대로인 채 계약 문서만 바뀌면 test 태스크가
+    // UP-TO-DATE 로 건너뛴다 — **계약이 깨졌는데 초록불이다.**
+    //
+    // 그걸 알기 때문에 지금까지는 매번 cleanTest 를 붙였고, 그러면 한 파일만 바뀌어도
+    // 전체가 재실행된다. 입력을 선언하면 정확성과 속도가 함께 해결된다.
+    //
+    // 파일을 새로 읽는 스펙 테스트를 만들면 여기에 그 경로도 추가할 것.
+    inputs.files(fileTree(dir: file('mysql'), include: '**/*'))
+            .withPropertyName('operationalSqlAndRunbook')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(file('docker-compose.yml'))
+            .withPropertyName('dockerCompose')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(fileTree(dir: file('../docs/04-api'), include: '**/*'))
+            .withPropertyName('apiContract')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
 
     // 테스트는 'test' 프로파일로 돈다 → src/test/resources/application-test.properties.
     // 이게 없으면 jwt.secret 등 기본값 없는 플레이스홀더 10개가 해결되지 않아
