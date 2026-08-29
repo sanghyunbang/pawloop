@@ -1,0 +1,38 @@
+name: 결정 필요 (ADR 후보)
+description: 되돌리기 비싼 선택 — 논의하고 ADR로 기록할 사안
+title: "[결정] "
+labels: ["type/adr", "status/needs-decision"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        판단 기준: **6개월 뒤에 "왜 이렇게 했지?"라는 질문이 나올 만한가.**
+        결정되면 `docs/99-decisions/decision-log.md`에 ADR로 기록하고, 이 이슈에 요약과 링크를 남긴 뒤 닫습니다.
+  - type: textarea
+    id: context
+    attributes:
+      label: 맥락 — 왜 지금 정해야 하나
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: 선택지와 트레이드오프
+      description: 각 선택지의 장단점. "아무것도 안 한다"도 선택지입니다.
+      value: |
+        | 선택지 | 장점 | 단점 |
+        |:---|:---|:---|
+        | A. | | |
+        | B. | | |
+        | C. 지금은 하지 않는다 | | |
+    validations:
+      required: true
+  - type: textarea
+    id: recommend
+    attributes:
+      label: 추천안과 근거
+  - type: textarea
+    id: reversible
+    attributes:
+      label: 되돌리기 비용
+      description: 나중에 마음이 바뀌면 얼마나 비싼가. 싸면 빨리 정하고 넘어가면 됩니다.
