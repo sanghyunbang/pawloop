@@ -112,6 +112,24 @@ class AuthContractSpecTest {
     }
 
     @Test
+    @DisplayName("계약이 '소셜 토큰으로는 /auth/me 계열이 아직 400 이다'라는 알려진 결함을 #5 와 함께 적어 둔다")
+    void spec_recordsKnownAuthMeDefectAndItsOwner() {
+        // 왜 테스트인가: 이 결함은 코드가 아니라 '기록'으로만 존재한다. 이슈 #7 은 저장 구조만
+        // 고치고 조회 경로(AuthController.me → findByEmail)를 일부러 남겼다 — 그건 #5 의 범위다.
+        // 기록이 사라지면 #7 이 완료 조건 2("이메일 없는 카카오 계정으로 GET /auth/me 가 200")를
+        // 만족한 것처럼 보인 채 닫힌다. 실제로는 지금 모든 소셜 계정에서 400 이다.
+        // #5 가 들어와 결함이 사라지면 이 테스트가 빨간불이 되고, 그때 이 문단을 지우면 된다.
+        String description = String.valueOf(asMap(spec.get("info")).get("description"));
+
+        assertThat(description)
+                .as("알려진 결함이라는 사실과 영향 범위가 계약에 적혀 있다")
+                .contains("알려진 결함", "/auth/me", "400");
+        assertThat(description)
+                .as("누가 고치는지(#5)가 함께 적혀 있지 않으면 기록이 미아가 된다")
+                .contains("#5");
+    }
+
+    @Test
     @DisplayName("bearerAuth 는 실제 발급 클레임(sub·role·iat·exp)을 description 으로 밝힌다")
     void bearerAuth_documentsActualClaims() {
         Map<String, Object> bearerAuth =

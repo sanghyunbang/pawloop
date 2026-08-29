@@ -57,6 +57,11 @@
 -- 조건부로 던지려면 프로시저 한 겹이 필요하다. CALL 은 PREPARE 가능하다.
 -- MESSAGE_TEXT 는 128자가 상한이다(넘기면 ERROR 1648). 자세한 내용은 메시지가 아니라
 -- 바로 앞의 진단 SELECT 로 보여 준다.
+--
+-- ⓘ 중단하면 스크립트 끝의 DROP PROCEDURE 에 도달하지 못해 이 프로시저가 스키마에 남는다.
+--   무해하고(아무도 호출하지 않는다) 다음 실행의 DROP PROCEDURE IF EXISTS 가 지우지만,
+--   재실행하지 않을 거라면 손으로 지워도 된다: DROP PROCEDURE IF EXISTS heattrip_migration_abort;
+--   실행 계정에 CREATE ROUTINE 권한이 필요하다 — 없으면 users 를 건드리기 전에 실패한다(안전 실패).
 DROP PROCEDURE IF EXISTS heattrip_migration_abort;
 CREATE PROCEDURE heattrip_migration_abort(IN msg VARCHAR(128))
   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = msg;
@@ -107,19 +112,27 @@ SET @legacy_match := IF(@col_username = 1,
     ' AND SUBSTRING_INDEX(u.username, ''_'', 1) IN (''kakao'', ''google'', ''naver''))',
     '(1 = 0)');
 
+--      username 은 §E 의 후속 이슈에서 언젠가 사라진다. 그 뒤에 이 스크립트를 다시 돌려도
+--      죽지 않도록, username 을 참조하는 조각은 전부 @col_username 가드 안에 둔다.
+--      (가드 없이 COALESCE(u.provider, … u.username …) 을 조립하면 username 이 없는 DB 에서
+--       ERROR 1054 'Unknown column u.username' 로 사전 점검 자체가 죽는다.)
 SET @prov_expr := IF(@col_provider = 1,
-    'COALESCE(u.provider, SUBSTRING_INDEX(u.username, ''_'', 1))',
-    'SUBSTRING_INDEX(u.username, ''_'', 1)');
+    IF(@col_username = 1, 'COALESCE(u.provider, SUBSTRING_INDEX(u.username, ''_'', 1))', 'u.provider'),
+    IF(@col_username = 1, 'SUBSTRING_INDEX(u.username, ''_'', 1)', '''unknown'''));
 SET @sid_expr := IF(@col_social_id = 1,
-    'COALESCE(u.social_id, SUBSTRING(u.username, LOCATE(''_'', u.username) + 1))',
-    'SUBSTRING(u.username, LOCATE(''_'', u.username) + 1)');
+    IF(@col_username = 1, 'COALESCE(u.social_id, SUBSTRING(u.username, LOCATE(''_'', u.username) + 1))', 'u.social_id'),
+    IF(@col_username = 1, 'SUBSTRING(u.username, LOCATE(''_'', u.username) + 1)', '''unknown'''));
 SET @row_filter := IF(@col_social_id = 1,
     CONCAT('(u.social_id IS NOT NULL OR ', @legacy_match, ')'),
     @legacy_match);
 
-SET @stmt := CONCAT(
-    'INSERT INTO heattrip_social_key_precheck (user_id, provider, social_id) ',
-    'SELECT u.id, ', @prov_expr, ', ', @sid_expr, ' FROM users u WHERE ', @row_filter);
+-- social_id 도 username 도 없는 DB 에는 모을 후보 자체가 없다. 그런 DB 에서는 문장을
+-- 아예 만들지 않는다(위 식이 'unknown' 리터럴로 떨어지므로 조립은 되지만 의미가 없다).
+SET @stmt := IF(@col_social_id = 0 AND @col_username = 0,
+    'SELECT ''[0-3] provider/social_id 후보 없음 — 사전 점검 대상 0행'' AS message',
+    CONCAT(
+        'INSERT INTO heattrip_social_key_precheck (user_id, provider, social_id) ',
+        'SELECT u.id, ', @prov_expr, ', ', @sid_expr, ' FROM users u WHERE ', @row_filter));
 PREPARE stmt FROM @stmt;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;

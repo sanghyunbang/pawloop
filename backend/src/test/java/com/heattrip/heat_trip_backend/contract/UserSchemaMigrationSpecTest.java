@@ -92,18 +92,67 @@ class UserSchemaMigrationSpecTest {
     }
 
     @Test
-    @DisplayName("실행 전 중복 사전 점검과 실행 후 제약 검증이 둘 다 있고, 실패하면 중단한다")
-    void migration_hasPreflightAndPostflightGates() {
-        // DDL 은 MySQL 에서 암묵 커밋을 일으켜 롤백되지 않는다. 트랜잭션 대신 이 두 관문이
-        // '반쯤 적용된 채 성공처럼 끝나는' 상태를 막는다.
+    @DisplayName("실행 전 중복 사전 점검이 있고, 걸리면 users 를 건드리기 전에 중단한다")
+    void migration_hasPreflightGate() {
+        // DDL 은 MySQL 에서 암묵 커밋을 일으켜 롤백되지 않는다. 트랜잭션 대신 두 관문이
+        // '반쯤 적용된 채 성공처럼 끝나는' 상태를 막는다. 이 테스트는 그 첫 번째다.
         assertThat(migrationSql).contains("SIGNAL SQLSTATE '45000'");
         assertThat(migrationSql).contains("heattrip_migration_abort");
         assertThat(migrationSql)
-                .as("사전 점검: 중복 (provider, social_id) 가 있으면 아무것도 바꾸지 않고 중단한다")
+                .as("중복 (provider, social_id) 를 그룹으로 집계해 찾는다")
                 .contains("HAVING COUNT(*) > 1");
+        // 중단 조건과 메시지는 §0-6 에만 있다. 진단 SELECT 만 남기고 중단을 지우면 여기서 걸린다.
         assertThat(migrationSql)
-                .as("사후 검증: UNIQUE 제약이 실제로 걸렸는지 확인한다")
-                .contains("index_name = 'uk_users_provider_social_id'");
+                .as("중복·길이초과가 하나라도 있으면 실제로 중단한다")
+                .contains("IF(@dup_groups > 0 OR @too_long > 0,");
+        assertThat(migrationSql).contains("ABORT: 중복 소셜 계정 ");
+    }
+
+    @Test
+    @DisplayName("실행 후 사후 검증이 있고, 컬럼·제약·백필 중 하나라도 빠지면 실패로 끝낸다")
+    void migration_hasPostflightGate() {
+        // 왜 별도 테스트인가: 예전에는 사후 검증(§D)을 겨눈 단언이
+        // "index_name = 'uk_users_provider_social_id'" 하나뿐이었는데, 그 문자열은 §C 의
+        // 멱등 가드에도 똑같이 있다. 그래서 §D 블록을 통째로 지워도 스펙 테스트가 전부
+        // 초록불이었다 — 잠근 척만 하는 단언이었다. 아래 문자열들은 §D 에만 있다.
+        assertThat(migrationSql)
+                .as("UNIQUE 인덱스가 두 컬럼짜리로 실제 걸렸는지 센다(§C 가드는 이 조건을 쓰지 않는다)")
+                .contains("non_unique = 0");
+        assertThat(migrationSql)
+                .as("컬럼 3개·UNIQUE 2컬럼·provider NULL 0행·role 공백 0행을 한 조건으로 검사한다")
+                .contains("IF(@new_columns <> 3 OR @unique_cols <> 2 "
+                        + "OR @provider_nulls > 0 OR @role_blanks > 0,");
+        assertThat(migrationSql)
+                .as("어긋나면 성공이 아니라 실패로 끝난다")
+                .contains("ABORT: 반쯤 적용됨");
+    }
+
+    @Test
+    @DisplayName("두 관문의 중단 메시지가 서로 다르다 — 어느 관문에서 멈췄는지 로그로 구분된다")
+    void migration_abortMessagesAreDistinguishable() {
+        // 같은 메시지를 쓰면 운영자가 '데이터가 더러워서 안 시작한 것'과
+        // '반쯤 적용되고 멈춘 것'을 구분할 수 없다. 후자는 즉시 복구가 필요하다.
+        assertThat(migrationSql.split("ABORT: 중복 소셜 계정 ", -1).length - 1).isEqualTo(1);
+        assertThat(migrationSql.split("ABORT: 반쯤 적용됨", -1).length - 1).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("username 을 참조하는 사전 점검 조각은 전부 컬럼 존재 가드 안에 있다")
+    void migration_precheckToleratesDroppedUsernameColumn() {
+        // §E 의 후속 이슈가 username 을 지운 뒤 이 스크립트를 다시 돌리면,
+        // 가드 없이 조립된 COALESCE(u.provider, … u.username …) 이
+        // ERROR 1054 'Unknown column u.username' 로 사전 점검 자체를 죽인다.
+        assertThat(migrationSql).contains("@col_username := (");
+        assertThat(migrationSql)
+                .as("provider 식이 username 가드 안에서만 username 을 참조한다")
+                .contains("IF(@col_username = 1, "
+                        + "'COALESCE(u.provider, SUBSTRING_INDEX(u.username, ''_'', 1))', 'u.provider')");
+        assertThat(migrationSql)
+                .as("social_id 식도 마찬가지다")
+                .contains("'u.social_id')");
+        assertThat(migrationSql)
+                .as("둘 다 없으면 INSERT 문장을 아예 만들지 않는다")
+                .contains("IF(@col_social_id = 0 AND @col_username = 0,");
     }
 
     @Test
