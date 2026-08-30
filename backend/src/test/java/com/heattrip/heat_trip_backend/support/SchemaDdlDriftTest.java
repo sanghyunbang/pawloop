@@ -131,6 +131,18 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
         assertThat(sql)
                 .as("#9 가 만든 refresh 토큰 원장도 들어 있어야 한다")
                 .containsIgnoringCase("create table `refresh_token`");
+
+        // #74 — 방·멤버십·초대 3표. 이름으로 못 박는 이유는 위 두 테스트가 '엔티티가 만드는
+        // 것과 같은가' 만 보기 때문이다. 엔티티를 통째로 지우면 그 둘은 여전히 초록불이다.
+        assertThat(sql)
+                .as("ADR-0011 이 정한 방 표다. 없으면 빈 운영 DB 에 채팅을 올릴 방법이 없다")
+                .containsIgnoringCase("create table `chat_room`");
+        assertThat(sql)
+                .as("멤버십 표는 이것 하나다 — group_member 를 따로 만들지 않는다")
+                .containsIgnoringCase("create table `chat_room_member`");
+        assertThat(sql)
+                .as("초대코드는 그룹 행의 컬럼이 아니라 별도 표다 (만료·사용횟수·회수)")
+                .containsIgnoringCase("create table `chat_room_invite`");
     }
 
     @Test
