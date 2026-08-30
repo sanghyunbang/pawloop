@@ -153,7 +153,9 @@ class FamilyGroupInviteIntegrationTest extends AbstractMySqlIntegrationTest {
 
         join(late, code)
                 .andExpect(status().isGone())
-                .andExpect(jsonPath("$.error.code").value("INVITE_REVOKED"));
+                .andExpect(jsonPath("$.error.code").value("INVITE_REVOKED"))
+                .andExpect(jsonPath("$.error.message").isNotEmpty())
+                .andExpect(jsonPath("$.error.traceId").isNotEmpty());
 
         assertThat(memberSummary(myGroup(early)))
                 .as("""
@@ -243,7 +245,9 @@ class FamilyGroupInviteIntegrationTest extends AbstractMySqlIntegrationTest {
 
         join(late, code)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error.code").value("ROOM_MEMBER_LIMIT"));
+                .andExpect(jsonPath("$.error.code").value("ROOM_MEMBER_LIMIT"))
+                .andExpect(jsonPath("$.error.message").isNotEmpty())
+                .andExpect(jsonPath("$.error.traceId").isNotEmpty());
 
         assertThat(chatRoomInviteRepository.findByCode(code).orElseThrow().getUsedCount())
                 .as("""
@@ -281,7 +285,9 @@ class FamilyGroupInviteIntegrationTest extends AbstractMySqlIntegrationTest {
         exhaust(usedUp);
         join(late, usedUp)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error.code").value("INVITE_USES_EXHAUSTED"));
+                .andExpect(jsonPath("$.error.code").value("INVITE_USES_EXHAUSTED"))
+                .andExpect(jsonPath("$.error.message").isNotEmpty())
+                .andExpect(jsonPath("$.error.traceId").isNotEmpty());
     }
 
     // ─────────────────── 완료 조건 4 — OWNER 만 ───────────────────
