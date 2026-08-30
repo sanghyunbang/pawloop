@@ -20,15 +20,16 @@ erDiagram
     users ||--o{ care_log  : "수행(done_by)"
 
     family_group ||--o| chat_room    : "origin_kind/origin_ref — FK 아님"
-    family_group ||--o{ walk_note    : "산책 주의사항"
+    family_group ||--o| walk_note    : "산책 주의사항 (그룹당 한 장)"
     family_group |o--o{ care_log     : "케어 공유"
+    users ||--o{ walk_note : "마지막 수정(updated_by)"
 
     chat_room ||--o{ chat_room_member : "멤버십"
     chat_room ||--o{ chat_room_invite : "초대코드"
     chat_room ||--o{ chat_message     : "메시지(room_seq 순)"
 
     dog      ||--o{ walk      : "산책 기록"
-    dog      ||--o{ care_log  : "케어 기록"
+    dog      ||--o{ care_log  : "케어 기록 (계획 - dog 표가 생기는 날 FK 를 건다)"
 
     place    ||--o{ post      : "태그"
     place    ||--o{ bookmark  : "저장 대상"
@@ -82,15 +83,13 @@ erDiagram
 
     care_log {
         BIGINT   id PK
-        BIGINT   dog_id FK
+        BIGINT   dog_id      "nullable - dog 표가 아직 없어 FK 없이 항상 NULL"
         BIGINT   group_id FK "nullable - 가족 그룹 공유"
         VARCHAR  type        "water|meal|walk|med|vet"
         BIGINT   done_by FK  "수행자(users.id)"
         DATETIME occurred_at
-        VARCHAR  title
-        VARCHAR  value
         VARCHAR  memo
-        VARCHAR  photo
+        DATETIME created_at
     }
 
     family_group {
@@ -146,9 +145,10 @@ erDiagram
 
     walk_note {
         BIGINT   id PK
-        BIGINT   group_id FK
-        VARCHAR  body      "산책 시 주의사항"
-        DATETIME created_at
+        BIGINT   group_id FK   "UNIQUE - 그룹당 한 장"
+        VARCHAR  body         "산책 시 주의사항"
+        BIGINT   updated_by FK "마지막으로 고친 사람(users.id)"
+        DATETIME updated_at
     }
 
     place {
@@ -215,13 +215,13 @@ erDiagram
 | `refresh_token` | 앱 세션의 refresh 토큰 원장(#9). RT 는 JWT 가 아니라 불투명 난수이고 SHA-256 해시로 저장한다. 회전·재사용 감지·전 기기 로그아웃이 이 테이블 위에서 돈다. **실재.** |
 | `dog` | 사용자의 반려견 프로필. 견종·크기·생일·중성화 여부. `users` 1:N `dog`. |
 | `walk` | 산책 기록 1건. GPS 경로를 `LINESTRING`으로, 거리·시간·페이스·메모 저장. `dog` 1:N `walk`. |
-| `care_log` | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. `dog` 1:N `care_log`. |
+| `care_log` | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. **`dog_id` 에는 FK 가 없다** — `dog` 표가 정본 스키마에 아직 없어서이고, 그 표가 생기는 날 건다([schema.md §17](./schema.md)). |
 | `family_group` | 가족 케어 그룹. **이름과 생성 시각만** 든다 — 초대코드도 멤버십도 여기 없다. 방은 `chat_room` 이 `origin_kind`/`origin_ref` 로 불투명하게 가리킨다. |
 | `chat_room` | 채팅방. **가족 그룹 종속이 아니다** — 산책 크루 방도 같은 표에 산다. `UNIQUE(origin_kind, origin_ref)` 가 같은 출처에 방이 둘 생기는 것을 막고, `last_seq` 가 `room_seq` 발급기이자 미읽음 뺄셈의 좌변이다. |
 | `chat_room_member` | 방 멤버십. **멤버십 표는 이것 하나다**(`group_member` 를 따로 만들지 않는다). 강퇴는 행 삭제가 아니라 `removed_at`+`rejoin_blocked`, 미읽음은 `last_read_seq` 뺄셈. |
 | `chat_room_invite` | 초대코드. 유효기간·사용횟수·회수를 갖는다. 재발급하면 이전 코드가 즉시 막히되 기존 멤버는 남는다. |
 | `chat_message` | 채팅 메시지. 순서·델타·미읽음의 기준은 방별 `room_seq` 이고 **`id` 는 커서로 쓰지 않는다**(배정 시점과 가시성 시점이 달라 폴링이 메시지를 영구히 건너뛴다). 발신자는 값만 들고 `sender_name` 스냅샷을 함께 둔다. MVP는 폴링, 소켓은 트리거 기반(M2.9). |
-| `walk_note` | 산책 시 주의사항(가족 공유 메모). `family_group` 1:N. |
+| `walk_note` | 산책 시 주의사항(가족 공유 메모). **`family_group` 1:1** — `UNIQUE(group_id)` 로 그룹당 한 장이고, 마지막으로 고친 사람(`updated_by`)과 시각을 든다. |
 | `place` | 동반장소·동물병원·펫샵 POI 캐시. 좌표 `POINT` + `SPATIAL INDEX`. 공공데이터 원본 `raw_json` 보관. |
 | `trail` | 산책로 코스. 경로를 `LINESTRING`으로 저장(두루누비 걷기여행길). |
 | `post` | 커뮤니티 게시글. 게시판(board) 분류, 장소(`place`) 선택 태그 가능. `users` 1:N `post`. |

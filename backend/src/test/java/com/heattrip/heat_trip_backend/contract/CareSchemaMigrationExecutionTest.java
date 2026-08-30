@@ -1,0 +1,371 @@
+package com.heattrip.heat_trip_backend.contract;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import com.heattrip.heat_trip_backend.support.MySqlTestContainer;
+import com.heattrip.heat_trip_backend.support.TestProjectPaths;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.MySQLContainer;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/**
+ * {@code 08_care_log.sql} 을 <b>실제 MySQL 에 돌려</b> 검증한다 — 이슈 #76.
+ *
+ * <h2>왜 필요한가</h2>
+ * <p>{@code mysql/init/01_schema.sql} 은 <b>빈 DB</b> 를 세우는 파일이라 이미 돌고 있는 운영
+ * DB 에는 실행하지 않는다. 그래서 살아 있는 DB 에 {@code care_log}·{@code walk_note} 를 넣는
+ * 경로는 {@code post-start/08} 하나뿐이고, prod 는 {@code ddl-auto=validate} 라 이 스크립트가
+ * 틀리면 <b>앱이 부팅에 실패한다.</b> {@code FamilyGroupSchemaMigrationExecutionTest}(#75)가
+ * 07 에 대해 하는 일을 08 에 대해 한다.
+ *
+ * <p>08 은 07 과 다른 것을 한 가지 더 본다 — <b>FK 가 실제로 걸렸는지</b>다. 07 의 표는 FK 가
+ * 0개인 것이 요점이었지만 여기는 chat 경계 밖이라 FK 를 정상적으로 건다. 그리고
+ * {@code ddl-auto=validate} 도 {@code SchemaDdlDriftTest} 도 <b>FK 를 보지 않으므로</b>,
+ * 여기서 안 보면 아무도 안 알려준다.
+ *
+ * <p>스프링을 띄우지 않는다 — 필요한 것이 <b>그 표가 아직 없는 DB</b> 라서다. 공유 컨테이너
+ * 안에 테스트마다 별도 데이터베이스를 만든다. 컨텍스트를 하나도 늘리지 않는다(#21).
+ */
+class CareSchemaMigrationExecutionTest {
+
+    private static final String SCRIPT = "mysql/post-start/08_care_log.sql";
+    private static final String PARENTS = "mysql/post-start/07_family_group.sql";
+    private static final String RUNBOOK = "mysql/README.md";
+
+    /** 데이터베이스 이름 충돌을 피하기 위한 카운터. 컨테이너 하나를 여러 테스트가 공유한다. */
+    private static int dbCounter = 0;
+
+    // ─────────────────────────── 테스트 ───────────────────────────
+
+    @Test
+    @DisplayName("빈 DB(부모 표만 있는)에 돌리면 두 표가 생기고 FK 넷이 걸린다")
+    void migration_createsBothTablesWithTheirForeignKeys() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+
+            assertThat(db.tables()).contains("care_log", "walk_note");
+            assertThat(db.columns("care_log"))
+                    .as("이슈가 정한 컬럼 여덟이다. title·value·photo 는 M4 이고 지금 넣지 않는다")
+                    .containsExactly("created_at", "dog_id", "done_by", "group_id", "id",
+                            "memo", "occurred_at", "type");
+            assertThat(db.columns("walk_note"))
+                    .as("그룹당 한 장이라 created_at 이 아니라 updated_by·updated_at 이다")
+                    .containsExactly("body", "group_id", "id", "updated_at", "updated_by");
+
+            assertThat(db.foreignKeys())
+                    .as("""
+                            여기는 chat 경계 밖이라 FK 를 정상적으로 건다 — 걸지 않으면 그룹을 지운 뒤 \
+                            아무도 못 보는 행이 남고, 탈퇴한 계정의 기록이 이름 없이 떠돈다.
+                            ddl-auto=validate 도 SchemaDdlDriftTest 도 FK 를 안 본다. 여기서 안 보면 \
+                            아무도 안 알려준다.""")
+                    .containsExactlyInAnyOrder(
+                            "care_log → family_group",
+                            "care_log → users",
+                            "walk_note → family_group",
+                            "walk_note → users");
+        }
+    }
+
+    @Test
+    @DisplayName("care_log.dog_id 는 nullable 이고 dog 로 가는 FK 가 없다 — 참조할 표 자체가 없다")
+    void dogId_isNullableAndUnreferenced() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+
+            assertThat(db.query("""
+                    SELECT is_nullable FROM information_schema.columns
+                    WHERE table_schema = DATABASE() AND table_name = 'care_log'
+                      AND column_name = 'dog_id'
+                    """))
+                    .as("""
+                            NOT NULL 로 두면 이 앱은 이 표에 한 행도 못 넣는다 — 채울 값이 없기 \
+                            때문이다. dog 표가 정본 스키마에 없다는 것이 판단이 아니라 사실이라 \
+                            이 컬럼은 오늘 항상 NULL 이다 (#76).""")
+                    .containsExactly("YES");
+
+            assertThat(db.query("""
+                    SELECT table_name FROM information_schema.referential_constraints
+                    WHERE constraint_schema = DATABASE() AND referenced_table_name = 'dog'
+                    """))
+                    .as("""
+                            없는 표에는 FK 를 걸 수 없다. 이것을 #9 의 '일부러 FK 를 안 걸었다' 와 \
+                            같은 것으로 읽으면 안 된다 — #9 는 users 표가 있는데도 걸지 않은 판단이고 \
+                            여기는 참조할 표가 아직 없는 것이다. dog 표가 생기는 날 여기는 건다.""")
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("walk_note 는 그룹당 한 장이다 — UNIQUE(group_id) 가 두 번째 행을 거절한다")
+    void walkNote_isOneSheetPerGroupAndTheDatabaseEnforcesIt() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+
+            db.exec("INSERT INTO family_group (id, name, created_at) VALUES (1, '가족', NOW(6))");
+            db.exec("INSERT INTO users (id, role) VALUES (1, 'ROLE_USER')");
+            db.exec("INSERT INTO walk_note (group_id, body, updated_by, updated_at) "
+                    + "VALUES (1, '첫 장', 1, NOW(6))");
+
+            assertThatThrownBy(() -> db.exec(
+                    "INSERT INTO walk_note (group_id, body, updated_by, updated_at) "
+                            + "VALUES (1, '두 번째 장', 1, NOW(6))"))
+                    .as("""
+                            '있으면 고치고 없으면 만든다' 는 확인-후-쓰기라 정확히 동시에 오는 두 \
+                            요청이 둘 다 없다고 볼 수 있다. 그때 두 번째를 거절하는 것은 이 제약이다 \
+                            (📌 #86 원칙 5 — 마지막 방어선은 DB).""")
+                    .isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("CHECK 제약이 여섯 번째 케어 종류를 거절한다 — 애플리케이션 검증을 지나쳐도")
+    void anUnknownCareType_isRejectedByTheDatabase() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+
+            db.exec("INSERT INTO users (id, role) VALUES (1, 'ROLE_USER')");
+
+            assertThatThrownBy(() -> db.exec(
+                    "INSERT INTO care_log (type, done_by, occurred_at, created_at) "
+                            + "VALUES ('grooming', 1, NOW(6), NOW(6))"))
+                    .as("""
+                            CareType 이 다섯인 것은 계약이고, 그 계약을 DB 가 마지막으로 받친다. \
+                            손으로 INSERT 하는 사람이나 M4 의 새 코드가 종류를 늘릴 때 여기가 먼저 \
+                            막고, 그러면 계약·CHECK·enum 셋을 함께 넓히게 된다.""")
+                    .isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("두 번 돌려도 성공한다 — 재실행이 안전하다")
+    void migration_isIdempotentAgainstRealMySql() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+            db.runMigration();   // ERROR 1050(표 중복)이 나면 실패한다
+
+            assertThat(db.tables()).contains("care_log", "walk_note");
+        }
+    }
+
+    @Test
+    @DisplayName("부모 표가 없으면 아무것도 만들지 않고 중단한다 — errno 150 대신 사람 말로")
+    void withoutTheParentTables_itAbortsBeforeCreatingAnything() throws Exception {
+        try (Fixture db = fixture()) {
+            assertThatThrownBy(db::runMigration)
+                    .as("""
+                            07 을 건너뛰고 08 을 돌리는 것이 실제로 일어나는 실수다. FK 실패의 기본 \
+                            메시지(errno 150)는 무엇이 없는지 안 알려준다.""")
+                    .isInstanceOf(SQLException.class);
+
+            assertThat(db.tables())
+                    .as("중단은 '아무것도 안 바뀐 채로' 여야 한다 — 반쯤 만들어진 스키마가 더 나쁘다")
+                    .doesNotContain("care_log", "walk_note");
+        }
+    }
+
+    @Test
+    @DisplayName("옛 계획대로 dog_id NOT NULL 인 care_log 가 있으면 중단한다")
+    void aLegacyCareLogWithNotNullDogId_aborts() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            // docs/03-database/schema.md §17 이 오래 적어 온 계획 모양이다.
+            db.exec("""
+                    CREATE TABLE care_log (
+                        id      BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                        dog_id  BIGINT NOT NULL,
+                        done_by BIGINT NOT NULL
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """);
+
+            assertThatThrownBy(db::runMigration)
+                    .as("""
+                            CREATE TABLE IF NOT EXISTS 는 이미 있는 표를 고치지 않는다. 이 관문이 \
+                            없으면 스크립트가 조용히 성공하고, 그 표에는 이 앱이 한 행도 못 넣는다 — \
+                            dog_id 를 채울 값이 없기 때문이다.""")
+                    .isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("옛 목록 모양(created_at)의 walk_note 가 있으면 중단한다 — 지금은 그룹당 한 장이다")
+    void aLegacyListShapedWalkNote_aborts() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.exec("""
+                    CREATE TABLE walk_note (
+                        id         BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                        group_id   BIGINT       NOT NULL,
+                        body       VARCHAR(500) NOT NULL,
+                        created_at DATETIME(6)  NOT NULL
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """);
+
+            assertThatThrownBy(db::runMigration)
+                    .as("""
+                            그 모양에는 updated_by 가 없다 — '누가 고쳤는지' 를 보여 줄 수 없고, \
+                            엔티티가 요구하는 컬럼이 없어 prod 부팅(validate)이 실패한다.""")
+                    .isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("런북(mysql/README.md)이 이 파일의 실행 커맨드를 담고 있다")
+    void runbook_listsThisScript() throws Exception {
+        String runbook = Files.readString(
+                TestProjectPaths.requireFile(RUNBOOK), StandardCharsets.UTF_8);
+
+        assertThat(runbook)
+                .as("실행 순서에 없는 스크립트는 아무도 돌리지 않는다 — 그러면 운영 DB 에 표가 안 생기고 "
+                        + "prod 는 ddl-auto=validate 라 부팅이 실패한다")
+                .contains("post-start\\08_care_log.sql");
+    }
+
+    // ─────────────────────────── 지그 ───────────────────────────
+
+    private static Fixture fixture() throws SQLException {
+        return new Fixture();
+    }
+
+    /** 공유 컨테이너 안의 <b>일회용 데이터베이스</b> 하나. {@link #close()} 가 통째로 지운다. */
+    private static final class Fixture implements AutoCloseable {
+
+        private final String name;
+        private final Connection connection;
+
+        Fixture() throws SQLException {
+            MySQLContainer<?> mysql = MySqlTestContainer.instance();
+            synchronized (CareSchemaMigrationExecutionTest.class) {
+                name = "care_mig_test_" + (++dbCounter);
+            }
+            // 앱 계정에는 CREATE DATABASE 권한이 없다 — root 로 붙는다(#56 에서 실측).
+            String serverUrl = mysql.getJdbcUrl().replaceAll("/[^/?]+(\\?|$)", "/$1");
+
+            try (Connection admin = DriverManager.getConnection(
+                    serverUrl, "root", mysql.getPassword());
+                 Statement st = admin.createStatement()) {
+                st.execute("DROP DATABASE IF EXISTS " + name);
+                st.execute("CREATE DATABASE " + name + " CHARACTER SET utf8mb4");
+            }
+
+            connection = DriverManager.getConnection(
+                    serverUrl.replaceFirst("/(\\?|$)", "/" + name + "$1"),
+                    "root", mysql.getPassword());
+        }
+
+        /**
+         * 부모 표 둘을 세운다.
+         *
+         * <p>{@code family_group} 은 <b>저장소의 07 스크립트를 그대로</b> 돌린다 — 베껴 쓰면
+         * 07 이 깨져도 여기는 초록불이다. {@code users} 는 컬럼이 20개가 넘고 이 테스트가 쓰는
+         * 것은 {@code id} 뿐이라 최소 모양으로 만든다(정본은 {@code mysql/init/01_schema.sql}).
+         */
+        void createParents() throws Exception {
+            runScript(PARENTS);
+            exec("""
+                    CREATE TABLE users (
+                        id   BIGINT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                        role VARCHAR(20) NOT NULL
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """);
+        }
+
+        /** 저장소의 운영 스크립트를 그대로 한 커넥션에서 순서대로 실행한다. */
+        void runMigration() throws Exception {
+            runScript(SCRIPT);
+        }
+
+        private void runScript(String path) throws Exception {
+            String sql = Files.readString(
+                    TestProjectPaths.requireFile(path), StandardCharsets.UTF_8);
+            try (Statement st = connection.createStatement()) {
+                for (String statement : splitStatements(sql)) {
+                    st.execute(statement);
+                }
+            }
+        }
+
+        void exec(String sql) throws SQLException {
+            try (Statement st = connection.createStatement()) {
+                st.execute(sql);
+            }
+        }
+
+        List<String> tables() throws SQLException {
+            return query("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'
+                    ORDER BY table_name
+                    """);
+        }
+
+        List<String> columns(String table) throws SQLException {
+            return query("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema = DATABASE() AND table_name = '%s'
+                    ORDER BY column_name
+                    """.formatted(table));
+        }
+
+        /** {@code care_log}·{@code walk_note} 가 거는 FK 를 "자식 → 부모" 로. */
+        List<String> foreignKeys() throws SQLException {
+            return query("""
+                    SELECT CONCAT(table_name, ' → ', referenced_table_name)
+                    FROM information_schema.referential_constraints
+                    WHERE constraint_schema = DATABASE()
+                      AND table_name IN ('care_log', 'walk_note')
+                    ORDER BY table_name, constraint_name
+                    """);
+        }
+
+        List<String> query(String sql) throws SQLException {
+            List<String> out = new ArrayList<>();
+            try (Statement st = connection.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                while (rs.next()) {
+                    out.add(rs.getString(1));
+                }
+            }
+            return out;
+        }
+
+        @Override
+        public void close() throws SQLException {
+            try (Statement st = connection.createStatement()) {
+                st.execute("DROP DATABASE IF EXISTS " + name);
+            } finally {
+                connection.close();
+            }
+        }
+    }
+
+    /** 세미콜론으로 문장을 나눈다. 줄 주석은 먼저 걷는다 — 주석 안의 DOWN SQL 이 실행되면 안 된다. */
+    private static List<String> splitStatements(String script) {
+        String withoutComments = Arrays.stream(script.split("\\R"))
+                .map(String::strip)
+                .filter(line -> !line.startsWith("--") && !line.startsWith("#"))
+                .collect(Collectors.joining("\n"));
+        return Arrays.stream(withoutComments.split(";"))
+                .map(String::strip)
+                .filter(statement -> !statement.isEmpty())
+                .toList();
+    }
+}

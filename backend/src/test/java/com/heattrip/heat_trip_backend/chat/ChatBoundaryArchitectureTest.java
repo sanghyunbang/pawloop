@@ -463,22 +463,54 @@ class ChatBoundaryArchitectureTest {
     }
 
     @Test
-    @DisplayName("정본 스키마에서 family_group 은 FK 를 내지도 받지도 않고, group_member 표는 없다")
+    @DisplayName("정본 스키마에서 family_group 은 FK 를 내지 않고, 받는 것은 care_log·walk_note 둘뿐이다")
     void committedSchema_keepsFamilyGroupAndChatUnlinked() throws Exception {
         try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
             assertThat(db.queryStrings("""
                     SELECT CONCAT(table_name, ' → ', referenced_table_name)
                     FROM information_schema.referential_constraints
                     WHERE constraint_schema = DATABASE()
-                      AND (table_name = 'family_group' OR referenced_table_name = 'family_group')
+                      AND table_name = 'family_group'
+                    ORDER BY constraint_name
+                    """))
+                    .as("""
+                            나가는 FK 는 0개여야 한다. family_group → chat_room 은 07 의 §D 그물 \
+                            밖이다 — 이 표를 만드는 순간이 그 FK 를 걸고 싶어지는 순간이라 여기서 \
+                            본다 (ADR-0011 · 이슈 #75).""")
+                    .isEmpty();
+
+            assertThat(db.queryStrings("""
+                    SELECT CONCAT(table_name, ' → ', referenced_table_name)
+                    FROM information_schema.referential_constraints
+                    WHERE constraint_schema = DATABASE()
+                      AND referenced_table_name = 'family_group'
                     ORDER BY table_name, constraint_name
                     """))
                     .as("""
-                            양쪽 다 0개여야 한다. chat_* → family_group 이면 §D 가 이미 잡지만, \
-                            family_group → chat_room 은 §D 의 그물 밖이다 — 이 표를 만드는 순간이 \
-                            그 FK 를 걸고 싶어지는 순간이라 여기서 본다 (ADR-0011 · 이슈 #75).
-                            지금 family_group 을 가리키는 표가 아직 없다는 것도 함께 확인된다 — \
-                            walk_note·care_log 가 들어오면 그때 이 단언을 그 표들로 넓힌다.""")
+                            들어오는 FK 는 **이 목록 그대로**여야 한다 (이슈 #76 이 이 단언을 넓혔다).
+                            #75 시점에는 0개였고 그때 'walk_note·care_log 가 들어오면 이 단언을 그 \
+                            표들로 넓힌다' 고 적어 뒀다 — 케어는 chat 경계 밖이라 FK 를 정상적으로 \
+                            건다.
+                            새 이름이 여기 늘어나면 그건 자동 통과가 아니라 이 목록을 고치는 판단이 \
+                            있었다는 뜻이어야 한다. 특히 chat_* 가 여기 끼면 ADR-0011 결정 4 가 \
+                            깨진 것이다 — containsExactly 라 그 순간 빨간불이다.""")
+                    .containsExactly("care_log → family_group", "walk_note → family_group");
+
+            assertThat(db.queryStrings("""
+                    SELECT CONCAT(table_name, ' → ', referenced_table_name)
+                    FROM information_schema.referential_constraints
+                    WHERE constraint_schema = DATABASE()
+                      AND ((table_name IN ('care_log', 'walk_note')
+                            AND referenced_table_name LIKE 'chat\\_%')
+                        OR (table_name LIKE 'chat\\_%'
+                            AND referenced_table_name IN ('care_log', 'walk_note')))
+                    ORDER BY table_name, constraint_name
+                    """))
+                    .as("""
+                            케어와 chat 사이에는 양방향 모두 FK 가 없다. 케어는 그룹 단위로 공유되고 \
+                            방에서는 **인가만** 받는다 — 표끼리 묶으면 방 삭제가 케어 기록 삭제 순서에 \
+                            묶이고, 산책 크루 방이 케어 컬럼을 NULL 로 들고 다니게 된다 \
+                            (ADR-0011 결정 4 · 이슈 #76).""")
                     .isEmpty();
 
             assertThat(db.queryStrings("""
