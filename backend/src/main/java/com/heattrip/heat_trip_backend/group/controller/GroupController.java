@@ -27,9 +27,12 @@ import java.util.NoSuchElementException;
  * 않은 것이 판단이다: 여기에 경로를 하나 더 적으면 "인증 필요" 를 두 곳에서 관리하게 된다.
  * 토큰 없이 부르면 401 이라는 것을 통합 테스트가 잠근다.
  *
- * <p><b>rate limit 은 등록하지 않았다.</b> {@code ApiRateLimitFilter.resolveRule} 의 표에 없는
- * 경로는 무제한이며, 그 판단과 조건은 그 메서드의 주석에 적었다(이슈 #75 의 NOTE 가 참여
- * 경로 버킷을 M2.6 으로 미뤘다).
+ * <p><b>rate limit — {@code POST /api/groups} 는 {@code group-write} 버킷이다.</b>
+ * {@code ApiRateLimitFilter.resolveRule} 의 표에 없는 경로는 <b>무제한</b>이고, 이 경로는
+ * 한동안 실제로 그랬다 — 한 계정으로 200번 불러 429 가 0건이었다. 지금은 초대 발급
+ * ({@code POST /api/chat/rooms/{roomId}/invites}) 과 같은 버킷을 쓴다. 아직 표 밖인 것은
+ * <b>참여 경로 하나</b>이고, 그건 이슈 #75 의 NOTE 가 M2.6 으로 미룬 것이다.
+ * {@code GET /api/groups/me} 는 읽기라 표에 넣지 않았다.
  *
  * <p>인증 주체는 {@code @CurrentUser} 가 해석한다 — 컨트롤러가 Authorization 헤더를 다시
  * 읽지 않는다(#5).
@@ -48,6 +51,10 @@ public class GroupController {
      * 발급합니다" 였는데, ADR-0011 이 초대코드를 방으로 옮기면서 그 문장은 옛 모양이 됐다.
      * 발급은 {@code POST /api/chat/rooms/{roomId}/invites} 이고, 응답의 {@code roomId} 가
      * 그 경로로 가는 열쇠다.
+     *
+     * <p><b>이미 가족 그룹에 속해 있으면 409 다.</b> 두 번 만들면 두 번째 그룹을
+     * {@code GET /api/groups/me} 가 영원히 보여주지 않아 사용자가 존재도 모르는 행이 된다 —
+     * 이유는 {@code FamilyGroupService.create} javadoc.
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

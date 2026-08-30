@@ -55,14 +55,22 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
      * 들어와 마지막 자리를 함께 가져간다(📌 #86 원칙 5 — 확인-후-쓰기는 DB 로 받친다).
      * 조건을 같은 문장 안에 두면 계산 시점과 쓰기 시점이 갈라지지 않는다.
      *
-     * <p><b>어디까지 보증하는가 — 과장하지 않고 적는다.</b> 참여 경로는 언제나
-     * {@code ChatRoomInviteRepository.consumeOneUse} 를 먼저 통과하고, 그 조건부 UPDATE 가
-     * 커밋까지 초대 행의 배타 잠금을 쥔다. 그래서 <b>같은 코드로 들어오는 동시 참여는 전부
-     * 줄을 서고</b> 정원이 정확하다. 남는 창은 <b>같은 방에 살아 있는 코드가 여럿일 때</b>
-     * 서로 다른 코드로 동시에 들어오는 경우이고, 그때는 동시 코드 수만큼 정원을 넘을 수 있다.
-     * 지금 방마다 코드는 발급-회수로 관리되는 소수이고, 이 창을 없애려면 {@code chat_room}
-     * 행을 잠그거나 멤버 수를 컬럼으로 들고 CHECK 를 걸어야 한다 — 둘 다 #78 이 시퀀스
-     * 발급으로 잠금을 처음 들여올 때 함께 판단하는 것이 맞다.
+     * <p><b>어디까지 보증하는가 — 실측대로 적는다.</b> 이 문단은 예전에 "남는 창은 서로 다른
+     * 코드로 동시에 들어올 때이고 그때는 정원을 넘을 수 있다" 고 적혀 있었다. <b>스레드를
+     * 띄워 보니 관측된 증상은 정원 초과가 아니었다.</b> 정원 50 인 방에 50명을 동시에 밀어
+     * 넣어도 최종 멤버는 정확히 50이었고, 대신 나온 것은
+     * {@code Deadlock found when trying to get lock} → 500 이었다(4명 동시에 3명이 졌다).
+     * 이 문장이 같은 인덱스 범위를 <b>읽으면서(정원 세는 서브쿼리) 그 범위에 INSERT</b> 하기
+     * 때문이고, 두 트랜잭션이 서로의 잠금을 기다리면 InnoDB 가 한쪽을 죽인다.
+     *
+     * <p>그래서 참여 경로는 {@code ChatRoomRepository#lockForMemberChange} 로 <b>방을 잠그고
+     * 시작한다.</b> 같은 방에 대한 참여는 코드가 몇 개든 한 줄로 서므로 이 문장이 자기 자신과
+     * 경합하지 않는다. 락 순서는 그 메서드 javadoc 에 못 박혀 있다 —
+     * {@code chat_room → chat_room_invite → chat_room_member}. <b>그 순서를 어기는 경로를
+     * 새로 만들면 데드락이 돌아온다.</b>
+     *
+     * <p>{@code consumeOneUse} 의 초대 행 배타 잠금은 그대로 남아 있지만, 이제 그것이 정원의
+     * 근거는 아니다 — 그 잠금은 <b>같은 코드</b>만 줄 세우고 방을 줄 세우지 못한다.
      *
      * <p>네이티브 SQL 인 이유: JPQL 에는 {@code INSERT ... SELECT} 가 없다.
      * 조인 대상은 {@code chat_room}·{@code chat_room_member} 둘뿐이라 경계 안이다.
@@ -93,6 +101,11 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
      *
      * <p>{@code where ... and removed_at is not null} 이 조건부 UPDATE 다. 되살아난 뒤에
      * 다시 부르면 0 을 받는다 — 즉 두 번 되살아나 자리를 둘 쓰는 일이 없다.
+     *
+     * <p><b>여기서 0 은 "자리가 없다" 가 아니라 "이미 되살아났다" 다.</b> 호출부가 그 0 을
+     * {@code ROOM_MEMBER_LIMIT} 로 옮겨 정원 50 인 방에 2명일 때 "정원이 찼습니다" 를 낸
+     * 적이 있다({@code ChatRoomService#reviveWithinCapacity} javadoc). 정원은 정원 검사가
+     * 답하고, 이 0 은 멱등 200 이다.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

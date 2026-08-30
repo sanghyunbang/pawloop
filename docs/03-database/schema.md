@@ -500,7 +500,9 @@ CREATE TABLE chat_room_member (
 
 ## 14. `chat_room_invite` — 초대코드 (**실재**)
 
-초대코드를 그룹 행의 컬럼 하나로 두지 않고 별도 표에 둔다. 유효기간·사용횟수·회수를 처음부터 갖추고, **누가 언제 발급했는지가 남는다.** 기본값은 **7일 · 사용 횟수 무제한**이다. 방장이 재발급하면 이전 코드는 즉시 `revoked_at` 이 찍히고 **기존 멤버는 그대로 남는다** — 코드가 유출됐을 때의 유일한 대응 수단이다. 폐기한 `code` 는 UNIQUE 라 재사용하지 않는다.
+초대코드를 그룹 행의 컬럼 하나로 두지 않고 별도 표에 둔다. 유효기간·사용횟수·회수를 처음부터 갖추고, **누가 언제 발급했는지가 남는다.** 기본값은 **7일 · 사용 횟수 무제한**이다. 방장이 `DELETE /api/chat/rooms/{roomId}/invites/{code}` 로 **회수**하면 그 코드에 즉시 `revoked_at` 이 찍히고 **기존 멤버는 그대로 남는다** — 코드가 유출됐을 때의 대응 수단이다. 폐기한 `code` 는 UNIQUE 라 재사용하지 않는다.
+
+> **재발급은 이전 코드를 죽이지 않는다.** 2026-08 이전에는 이 문단이 발급을 다시 하면 옛 코드에 `revoked_at` 이 찍힌다고 적었는데, 구현은 한 번도 그렇게 하지 않았다(`ChatRoomService.issueInvite` 는 새 행을 저장할 뿐이다). 발급을 두 번 하면 코드 둘이 각각 TTL 동안 독립된 열쇠로 산다. 유출 대응은 **유출된 그 코드를 지목해 `DELETE` 하는 것뿐**이고, 코드 문자열을 잃어버렸을 때의 목록 조회·일괄 회수는 M2.6 이다. 이 문장은 `DocDriftTest` 가 지킨다.
 
 ```sql
 CREATE TABLE chat_room_invite (
@@ -511,7 +513,7 @@ CREATE TABLE chat_room_invite (
   expires_at DATETIME    NULL COMMENT 'NULL = 무기한. 기본은 발급 + 7일',
   max_uses   INT         NULL COMMENT 'NULL = 무제한(기본)',
   used_count INT         NOT NULL DEFAULT 0,
-  revoked_at DATETIME    NULL COMMENT '재발급·회수 시각',
+  revoked_at DATETIME    NULL COMMENT '회수 시각. 재발급은 이전 코드를 건드리지 않는다',
   created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_invite_code (code),

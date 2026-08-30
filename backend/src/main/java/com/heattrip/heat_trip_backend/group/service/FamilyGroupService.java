@@ -12,8 +12,10 @@ import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,10 +90,36 @@ public class FamilyGroupService {
      * {@code FamilyGroupInviteIntegrationTest.whenTheRoomCannotBeCreated_theGroupRowIsRolledBackToo}
      * 가 빨간불이다. 반대로 {@code openRoom} 을 {@code REQUIRES_NEW} 로 바꾸는 것은 지금
      * 그 테스트에 안 잡힌다 — 이유는 {@code ChatRoomService} javadoc 에 적었다.
+     *
+     * <h2>이미 가족이 있으면 409 다 — 두 번째 가족은 유령이었다</h2>
+     * <p>예전에는 같은 계정으로 두 번 부르면 <b>둘 다 201</b> 이었다. 그런데
+     * {@link #findMyGroup} 은 참여 순서로 첫 그룹 하나만 답하고, 방을 여럿 보는 화면은
+     * {@code GET /api/chat/rooms}(M2.6) 라 아직 없다. 즉 <b>두 번째 그룹은 구현된 어떤
+     * 읽기 경로로도 볼 수 없는 행</b>이었다 — 사용자는 그것이 생긴 줄도 지울 방법도 모른다.
+     * 앱에서 이게 실제로 벌어지는 모양은 "생성 응답이 타임아웃돼서 다시 눌렀다" 이고,
+     * 참여 경로는 그 상황을 멱등으로 공들여 막아 놓고 생성 경로만 비어 있었다.
+     *
+     * <p>판정 조건을 {@link #findMyGroup} 과 <b>같은 것</b>으로 둔다 — "지금
+     * {@code GET /api/groups/me} 가 무언가를 돌려주는가". 조건이 갈리면 만들지도 못하는데
+     * 조회도 404 인 계정이 생긴다.
+     *
+     * <p><b>남는 창을 정직하게 적는다.</b> 이건 확인-후-쓰기이고 DB 제약이 받치지 않는다
+     * (📌 #86 원칙 5 의 1·2번을 쓸 자리가 없다 — 한 사람이 여러 방에 속하는 것은 정상이고,
+     * "FAMILY 방에는 하나만" 을 표현하는 유니크 키가 {@code chat_room_member} 에는 없다).
+     * 그래서 <b>정확히 동시에</b> 두 번 부르면 지금도 둘이 만들어질 수 있다. 막는 것은
+     * 순차 재시도(=실제로 보고된 모양)와 rate limit 이다. 방을 여럿 갖는 것이 계약이 되는
+     * M2.6 에서 이 제한 자체를 다시 판단한다.
+     *
+     * @throws ResponseStatusException 409 — 이미 가족 그룹에 속해 있으면
      */
     @Transactional
     public GroupResponse create(long ownerUserId, String requestedName) {
         String name = validName(requestedName);
+
+        if (alreadyInAFamily(ownerUserId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "이미 가족 그룹에 속해 있습니다.");
+        }
 
         // saveAndFlush 로 id 를 먼저 받는다 — 그 id 가 방의 origin_ref 다.
         FamilyGroup group = familyGroups.saveAndFlush(
@@ -124,6 +152,18 @@ public class FamilyGroupService {
     }
 
     // ─────────────────────────── 지그 ───────────────────────────
+
+    /**
+     * {@link #findMyGroup} 이 무언가를 돌려주는가 — 생성 거절의 조건이다.
+     *
+     * <p>{@code roomsOfMember} 가 비어 있지 않은 것만 보지 않는다. 그룹 행이 사라진 방은
+     * {@link #findMyGroup} 이 조용히 건너뛰므로, 그 방만 가진 계정은 조회가 404 다.
+     * 그 계정의 생성을 409 로 막으면 만들 수도 볼 수도 없는 상태에 갇힌다.
+     */
+    private boolean alreadyInAFamily(long userId) {
+        return chatRooms.roomsOfMember(ORIGIN_KIND, userId).stream()
+                .anyMatch(room -> groupOf(room).isPresent());
+    }
 
     /**
      * {@code origin_ref} 로 그룹 행을 되찾는다.

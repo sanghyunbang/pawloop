@@ -35,10 +35,19 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li><b>역할</b> — 발급·회수는 방장만이고, 그 판정은 {@code ChatRoomService.requireOwner} 가
  *       한다. {@code @PreAuthorize} 를 쓰지 않은 이유는 그 메서드의 javadoc 에 있다:
  *       여기서 필요한 것은 토큰의 role 이 아니라 <b>이 방에서의 역할</b>이다.</li>
- *   <li><b>rate limit</b> — <b>등록하지 않았다.</b> 이슈 #75 의 NOTE 가 참여 경로 버킷을
- *       M2.6 으로 미뤘고 그 판단을 따랐다. {@code ApiRateLimitFilter.resolveRule} 의 표에
- *       없는 경로는 한도가 0 이 아니라 <b>무한</b>이라는 사실을 그 메서드 주석에 남겼다.</li>
+ *   <li><b>rate limit</b> — 셋의 처지가 다르다. <b>발급은 {@code group-write} 버킷</b>이다
+ *       ({@code POST /api/groups} 와 공유). 요청 한 건이 "7일 동안 인증 없이 방에 들어올 수
+ *       있는 열쇠" 를 하나 만들기 때문이고, 등록 전에는 한 방이 살아 있는 코드 200개를
+ *       가질 수 있었다. <b>회수는 넣지 않았다</b> — 자기 방 코드를 죽이는 것뿐이라 반복해도
+ *       새로 생기는 것이 없고, 유출 대응을 한도로 막으면 그게 더 나쁘다. <b>참여는 아직
+ *       표 밖이다</b> — 이슈 #75 의 NOTE 가 M2.6 으로 미뤘고 그 판단을 따랐다. 표에 없는
+ *       경로는 한도가 0 이 아니라 <b>무한</b>이다.</li>
  * </ul>
+ *
+ * <p><b>초대코드는 경로에 실린다 — 그래서 로그에서 가린다.</b> 계약이 정한 URL 모양이라
+ * 경로 자체는 바꾸지 않고, {@code SensitiveDataMasker.maskUri} 가 로그·알림에 나가는
+ * 문자열에서 코드 세그먼트를 {@code ***} 로 바꾼다. 가리기 전에는 요청 로그·오류 로그·
+ * Slack 알림 셋 다에 코드 원문이 평문으로 남았다.
  */
 @RestController
 @RequiredArgsConstructor

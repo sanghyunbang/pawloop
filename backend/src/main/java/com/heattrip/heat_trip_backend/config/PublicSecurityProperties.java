@@ -78,5 +78,25 @@ public class PublicSecurityProperties {
         private int uploadMaxRequests = 20;
         private int feedbackMaxRequests = 30;
         private int searchMaxRequests = 120;
+
+        /**
+         * 가족·채팅 쓰기 버킷의 창당 한도 — {@code POST /api/groups},
+         * {@code POST /api/chat/rooms/{roomId}/invites}. (이슈 #75)
+         *
+         * <p>둘 다 요청 한 건이 <b>행을 만드는</b> 경로다. 표에 없던 동안 실제로 무제한이었고
+         * (한 계정으로 200번씩 불러 429 가 0건), 그 상태는 {@code POST /auth/signup} 이
+         * 무제한이었던 것과 같은 모양이다(📌 #86 원칙 4).
+         *
+         * <p>30 인 이유: 사람이 가족을 만들거나 초대 링크를 새로 뽑는 것은 한 창(기본 60초)에
+         * 몇 번이면 충분하고, 30 이면 화면을 잘못 눌러 몇 번 반복하는 정상 사용자는 절대
+         * 닿지 않는다. 낮추면 "가족 만들기가 가끔 안 돼요" 가 되고, 이 한도의 목적은 사람을
+         * 막는 것이 아니라 <b>스크립트가 행을 무한히 만드는 것</b>을 막는 것이다.
+         *
+         * <p><b>계정 기준 상한이 아니다.</b> 카운터의 열쇠는 IP 라, 계정 하나가 만들 수 있는
+         * 방의 총 개수를 정하지는 못한다. 그 상한은 {@code ChatLimits} 자리에 두는 것이 맞고
+         * (한도의 출처가 한 곳), 지금은 "이미 가족이 있으면 409"({@code FamilyGroupService})
+         * 가 그 역할의 대부분을 한다.
+         */
+        private int groupWriteMaxRequests = 30;
     }
 }

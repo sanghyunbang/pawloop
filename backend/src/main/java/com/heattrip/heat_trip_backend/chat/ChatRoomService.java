@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -140,6 +141,21 @@ public class ChatRoomService {
      * <p>기본값(유효기간·사용 횟수)은 {@link ChatLimits} 가 답한다. 여기에 숫자를 적으면
      * {@code ChatLimitsTest} 가 빨간불이다 — 한도가 두 곳에 사는 것을 막는 장치다.
      *
+     * <h2>재발급은 이전 코드를 회수하지 않는다 — 의도이고, 문서 셋이 반대말을 했었다</h2>
+     * <p>부를 때마다 코드가 하나 더 생기고 이전 코드는 자기 TTL 동안 그대로 산다.
+     * {@code revokeIfLive} 를 여기서 부르지 않는 것이 그 뜻이다.
+     *
+     * <p>2026-08 이전에는 {@code schema.md §14}·{@code openapi.yaml}·{@code ChatErrorCode}
+     * 세 곳이 "방장이 재발급하면 이전 코드는 즉시 폐기된다" 고 적었고, {@code schema.md} 는
+     * 그것을 "유출 대응의 유일한 수단" 이라고까지 적었다. <b>구현은 한 번도 그렇게 하지
+     * 않았다</b> — 코드 A 발급 → 코드 B 발급 → A 로 참여가 200 이고 A 의 {@code revoked_at}
+     * 은 {@code null} 이다(프로브로 확인). 그 서술을 믿고 앱에 "새 코드 발급" 을 유출 대응
+     * 버튼으로 붙이면 보안 기능이 아닌 것을 보안 기능으로 광고하게 된다. 세 곳을 실측에
+     * 맞췄고, {@code FamilyGroupInviteIntegrationTest} 가 이 동작을 잠근다.
+     *
+     * <p>일괄 회수와 방의 코드 목록 조회는 아직 없다 — 코드 문자열을 손에 들고 있지 않은
+     * 방장은 그 코드를 지목할 수 없다. 그 둘은 M2.6 이다.
+     *
      * @throws ResponseStatusException 403 — 멤버가 아니거나 방장이 아니면
      */
     @Transactional
@@ -211,29 +227,55 @@ public class ChatRoomService {
      * 자체의 상태라 누가 물어도 답이 같아야 한다: 회수한 코드는 <b>이미 들어와 있던 사람에게도</b>
      * 즉시 410 이고, 그래도 그 사람의 멤버십은 그대로다(완료 조건 2).
      *
-     * <h2>동시성</h2>
-     * <p>세 가지가 전부 DB 로 판정된다(📌 #86 원칙 5).
+     * <h2>동시성 — 방 잠금 하나로 줄을 세운다</h2>
+     * <p><b>예전에는 여기가 500 을 냈다.</b> 실제 스레드를 띄워 재현한 것 둘:
      * <ul>
-     *   <li><b>중복 참여</b> — {@code UNIQUE (room_id, user_id)}. 같은 사람이 동시에 두 번
-     *       들어와도 행은 하나다.</li>
-     *   <li><b>사용 횟수</b> — {@code consumeOneUse} 의 <b>영향 행 수</b>. 0 이면 진 것이고,
-     *       무엇에 졌는지는 다시 읽어 판정한다.</li>
-     *   <li><b>정원</b> — {@code insertMemberIfRoomHasSpace} 의 <b>영향 행 수</b>. 세는 문장과
-     *       넣는 문장을 하나로 합쳤다. 보증 범위는 그 메서드의 javadoc 에 정확히 적혀 있다.</li>
+     *   <li>같은 사람이 같은 코드로 동시에 두 번 → {@code Duplicate entry ... uq_chat_member}
+     *       → 500. 12번 시도해서 12번 다 그랬다. 계약은 이 경우를 <b>멱등 200</b> 이라고
+     *       선언하고, 실제로 그 사람은 방에 들어와 있는데 앱에는 서버 오류로 보였다.</li>
+     *   <li>서로 다른 사람이 서로 다른 코드로 같은 방에 동시에 → InnoDB 데드락 → 500.
+     *       4명이 동시에 누르면 3명이 졌다. 정원이 텅 빈 방에서도 재현됐다.</li>
      * </ul>
+     * <p>원인은 하나였다 — <b>판정에 쓰는 값을 직렬화 지점보다 먼저 읽었다.</b> 멤버십을
+     * {@code consumeOneUse} 앞에서 읽어 두고, 잠금에 진 쪽은 그 낡은 값("나는 멤버가 아니다")
+     * 으로 INSERT 까지 내려갔다. 정원 검사의 카운트 서브쿼리는 그 INSERT 와 같은 문장 안에서
+     * 같은 인덱스 범위를 훑어 데드락을 만들었다.
+     *
+     * <p>그래서 두 가지를 함께 한다.
+     * <ol>
+     *   <li><b>{@code ChatRoomRepository#lockForMemberChange} 로 방을 잠그고 시작한다.</b>
+     *       이 방의 참여는 한 번에 하나만 진행한다. 락 순서는 그 메서드 javadoc 에 못 박았다
+     *       (📌 #86 원칙 5).</li>
+     *   <li><b>격리 수준을 {@code READ_COMMITTED} 로 낮춘다.</b> 기본값
+     *       {@code REPEATABLE READ} 에서는 트랜잭션의 첫 읽기에 스냅샷이 고정돼, 잠금을
+     *       기다린 뒤에 다시 읽어도 <b>기다리는 동안 커밋된 것을 보지 못한다.</b> 잠금은
+     *       줄을 세울 뿐이고, 줄을 선 보람이 있으려면 내 차례에 최신을 읽어야 한다.
+     *       그래서 이 메서드는 코드→방 id 만 스칼라로 읽고( {@code findRoomIdByCode} ),
+     *       <b>방을 잠근 뒤에</b> 초대와 멤버십을 읽는다.</li>
+     * </ol>
+     *
+     * <p>DB 제약은 그대로 마지막 방어선이다(원칙 5) — {@code UNIQUE (room_id, user_id)} 와
+     * {@code consumeOneUse}·{@code insertMemberIfRoomHasSpace} 의 영향 행 수. 잠금이 빠지면
+     * 데이터가 오염되는 것이 아니라 위의 500 이 돌아온다.
+     *
      * <p>실패하면 예외가 트랜잭션을 통째로 되돌리므로 <b>못 들어온 요청은 사용 횟수를 쓰지 않는다.</b>
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ChatJoinResult joinByInviteCode(String code, long userId) {
         LocalDateTime now = LocalDateTime.now(clock);
 
         // ① 없음 — 404. 여기서 코드 값을 메시지에 싣지 않는다(#6).
-        ChatRoomInvite invite = invites.findByCode(code)
+        //    엔티티가 아니라 방 id 만 읽는다 — 이유는 findRoomIdByCode javadoc.
+        long roomId = invites.findRoomIdByCode(code)
                 .orElseThrow(() -> new NoSuchElementException("초대코드를 찾을 수 없습니다."));
 
-        // 아래 쓰기들이 영속성 컨텍스트를 비우므로 방의 값은 먼저 읽어 둔다.
-        ChatRoomView room = viewOf(invite.getRoom());
-        long roomId = room.id();
+        // ★ 직렬화 지점. 이 줄 아래의 읽기는 전부 "내 차례의 최신" 이다.
+        ChatRoom lockedRoom = rooms.lockForMemberChange(roomId)
+                .orElseThrow(() -> new NoSuchElementException("초대코드를 찾을 수 없습니다."));
+        ChatRoomView room = viewOf(lockedRoom);
+
+        ChatRoomInvite invite = invites.findByCode(code)
+                .orElseThrow(() -> new NoSuchElementException("초대코드를 찾을 수 없습니다."));
 
         // ② 만료 ③ 폐기 — 코드 자체의 상태다.
         ChatErrorCode dead = deadStateOf(invite, now);
@@ -260,10 +302,10 @@ public class ChatRoomService {
 
         // ⑥ 정원 — 새 행이든 되살리는 행이든 자리를 하나 쓴다.
         int capacity = limits.maxMembersPerRoom(userId);
-        int seated = existing.isPresent()
-                ? reviveWithinCapacity(existing.get().getId(), roomId, capacity)
-                : members.insertMemberIfRoomHasSpace(roomId, userId, now, capacity);
-        if (seated == 0) {
+        if (existing.isPresent()) {
+            return reviveWithinCapacity(existing.get().getId(), roomId, capacity, room);
+        }
+        if (members.insertMemberIfRoomHasSpace(roomId, userId, now, capacity) == 0) {
             throw new ChatLimitViolationException(ChatErrorCode.ROOM_MEMBER_LIMIT);
         }
 
@@ -322,21 +364,71 @@ public class ChatRoomService {
      * <p>0 을 받았다는 것은 읽은 뒤 쓰기 전에 코드가 죽었다는 뜻이고, 그 사이 벌어질 수 있는
      * 일은 셋이다 — 만료 시각이 지났거나, 방장이 회수했거나, 마지막 자리를 다른 요청이
      * 가져갔거나. 판정 자체를 지어내지 않고 지금 상태를 다시 읽는다.
+     *
+     * <p><b>{@code Optional.map(...).orElse(...)} 로 쓰면 안 된다 — 그렇게 적혀 있었고
+     * 그게 버그였다.</b> {@code deadStateOf} 는 "살아 있다" 를 {@code null} 로 답하는데
+     * {@code Optional.map} 은 매퍼가 {@code null} 을 돌려주면 <b>empty 를 만든다.</b> 그래서
+     * {@code orElse(INVITE_REVOKED)} 가 발동해, 아무도 회수하지 않은 코드에 대해 언제나
+     * {@code INVITE_REVOKED}(410) 가 나갔고 바로 아랫줄의 {@code INVITE_USES_EXHAUSTED}
+     * 분기는 <b>도달할 수 없는 죽은 코드</b>였다. {@code max_uses=1} 코드를 두 사람이 동시에
+     * 쓰는 프로브에서 진 쪽이 6번 다 "회수된 초대코드입니다" 를 받았다. 앱은
+     * {@code error.code} 로 화면을 가르므로 "방장이 링크를 내렸습니다" 라는 거짓 안내였다.
+     *
+     * <p>다시 읽은 값이 최신인 것은 이 트랜잭션이 {@code READ_COMMITTED} 이고
+     * {@code consumeOneUse} 가 영속성 컨텍스트를 비우기 때문이다. {@code REPEATABLE READ}
+     * 에서는 여기서도 낡은 스냅샷을 봤다 — 계측해서 확인했다({@code used=0} 인데 DB 는 1).
+     *
+     * <p><b>지금 {@code null} 분기가 실제로 도달하는지 — 정직하게 적는다.</b> 방 잠금과
+     * 최신 읽기가 함께 들어온 뒤로는 <b>도달하지 않는다.</b> 지면 진 이유가 반드시 셋 중
+     * 하나로 보이기 때문이다. 되돌려 확인했다 — 이 메서드만 옛 {@code .map(...).orElse(...)}
+     * 형태로 바꾸면 테스트는 <b>전부 초록</b>이다. 그래도 고쳐 두는 이유는 두 가지다:
+     * 잠금이 빠지거나 격리 수준이 되돌아가면 그 즉시 다시 도달하고(셋을 함께 되돌리면
+     * {@code whenTheLastUseIsRacedFor_theLoserIsToldItIsExhausted} 가 실제로 빨간불이다),
+     * 그때 나가는 답이 "회수됐습니다" 라는 거짓말이기 때문이다.
      */
     private ChatErrorCode recheckDeadState(Long inviteId, LocalDateTime now) {
-        ChatErrorCode dead = invites.findById(inviteId)
-                .map(fresh -> deadStateOf(fresh, now))
-                .orElse(ChatErrorCode.INVITE_REVOKED);
+        ChatRoomInvite fresh = invites.findById(inviteId).orElse(null);
+        if (fresh == null) {
+            // 초대 행은 지우지 않는 것이 규칙이다(revokeInvite 참조). 여기 오면 규칙이 깨진 것이고,
+            // 그때 앱에 줄 수 있는 가장 정확한 답은 "이 코드는 이제 안 된다" 다.
+            return ChatErrorCode.INVITE_REVOKED;
+        }
+        ChatErrorCode dead = deadStateOf(fresh, now);
         // 셋 다 아닌데 졌다면 남는 설명은 "누가 마지막 자리를 가져갔다" 하나다.
         return dead == null ? ChatErrorCode.INVITE_USES_EXHAUSTED : dead;
     }
 
-    /** 나갔던 사람의 재입장. 자리가 없으면 0 을 돌려준다 — 정원 판정은 호출부가 한다. */
-    private int reviveWithinCapacity(Long memberId, long roomId, int capacity) {
+    /**
+     * 나갔던 사람의 재입장.
+     *
+     * <p><b>영향 행 수 0 을 정원 초과로 번역하지 않는다 — 그렇게 적혀 있었고 그게 버그였다.</b>
+     * {@code reviveIfRemoved} 의 {@code where ... and removed_at is not null} 은 <b>이미
+     * 되살아난 뒤</b>에도 0 을 돌려준다. 그 0 을 {@code ROOM_MEMBER_LIMIT} 로 옮기는 바람에,
+     * 정원 50 인 방에 2명이 있는 상태에서 "방 정원이 찼습니다" 가 나갔다(재입장 동시 2회 프로브).
+     * 영향 행 수 0 에 뜻이 둘이면 그건 판정이 아니다 — {@code revokeIfLive}·
+     * {@code consumeOneUse} 가 세운 원칙을 여기서만 잘못 적용한 자리였다.
+     *
+     * <p>이제 자리 부족은 <b>정원 검사 자체</b>가 답하고, 되살리기가 0 을 돌려주면 그건
+     * "다른 요청이 나를 먼저 되살렸다" 이므로 멱등 200 이다. 방 잠금을 쥔 채 읽고 오므로
+     * 실제로는 도달하지 않지만, 잠금이 사라져도 답이 틀리지 않게 남겨 둔다.
+     *
+     * <p>정원을 세는 문장과 되살리는 문장이 둘인 것은 그대로다. {@code READ_COMMITTED}
+     * 에서도 두 문장 사이는 열려 있고, 그 창을 닫는 것은 여기서는 방 잠금이다.
+     *
+     * <p><b>{@code alreadyBack} 이 실제로 참이 되는지 — 정직하게 적는다.</b> 방 잠금이
+     * 들어온 뒤로는 되지 않는다. 뒤에 온 요청은 ④ 에서 {@code removed_at == null} 을 보고
+     * 이미 단락하기 때문이다. 되돌려 확인했다 — 이 메서드만 옛 형태(0 을 무조건
+     * {@code ROOM_MEMBER_LIMIT} 로)로 바꾸면 테스트는 <b>전부 초록</b>이고, 잠금·격리와
+     * 함께 되돌려야 {@code rejoiningTwiceAtTheSameMomentIsNotAMemberLimit} 가 빨간불이 된다.
+     * 그래도 남겨 두는 이유는 위와 같다 — 잠금이 사라지는 날 이 답이 거짓말이 되지 않도록.
+     */
+    private ChatJoinResult reviveWithinCapacity(Long memberId, long roomId, int capacity,
+                                                ChatRoomView room) {
         if (members.countByRoomIdAndRemovedAtIsNull(roomId) >= capacity) {
-            return 0;
+            throw new ChatLimitViolationException(ChatErrorCode.ROOM_MEMBER_LIMIT);
         }
-        return members.reviveIfRemoved(memberId);
+        boolean alreadyBack = members.reviveIfRemoved(memberId) == 0;
+        return new ChatJoinResult(room, alreadyBack);
     }
 
     /** 겹치지 않는 코드 하나. 최종 방어선은 {@code UNIQUE (code)} 다. */

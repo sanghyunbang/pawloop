@@ -270,7 +270,12 @@ public class GlobalExceptionHandler {
         Exception ex,
         org.springframework.web.context.request.WebRequest req
     ) {
-        log.error("처리되지 않은 예외 — {} {}", req.getDescription(false), ex.getClass().getName(), ex);
+        // uri 를 그대로 찍지 않는다. 경로에 비밀값이 실리는 오퍼레이션이 있고
+        // (초대코드 — 이슈 #75), 여기 오는 것은 정의상 예외 경로라 그 값이 가장 많이 찍힌다.
+        log.error("처리되지 않은 예외 — {} {}",
+                com.heattrip.heat_trip_backend.observability.logging.SensitiveDataMasker
+                        .maskUri(req.getDescription(false)),
+                ex.getClass().getName(), ex);
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of(codeOf(HttpStatus.INTERNAL_SERVER_ERROR),

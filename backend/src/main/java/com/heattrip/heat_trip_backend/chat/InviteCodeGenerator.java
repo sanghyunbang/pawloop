@@ -16,9 +16,16 @@ import java.security.SecureRandom;
  * <p>초대는 카톡으로 붙여넣기도 하지만 화면을 보고 손으로 옮겨 적기도 한다. 그래서 두 가지를
  * 함께 지킨다.
  * <ul>
- *   <li><b>헷갈리는 글자를 뺀다.</b> {@code 0}/{@code O}, {@code 1}/{@code I}/{@code L} 을 빼고
- *       남은 32글자만 쓴다(Crockford Base32 와 같은 계열). 빼지 않으면 "안 되는 코드"의
- *       상당수가 실은 오타이고, 그 문의는 서버 로그로 구별되지 않는다.</li>
+ *   <li><b>헷갈리는 글자를 뺀다.</b> {@code 0}·{@code O}·{@code 1}·{@code I} 넷을 빼고 남은
+ *       <b>32글자</b>를 쓴다(Crockford Base32 와 같은 계열). 빼지 않으면 "안 되는 코드"의
+ *       상당수가 실은 오타이고, 그 문의는 서버 로그로 구별되지 않는다.
+ *       <p><b>{@code L} 은 남겼다 — 그리고 그건 실수가 아니라 산수다.</b> 다섯 글자를 전부
+ *       빼면 31글자라 아래 "글자당 5비트" 가 성립하지 않는다. {@code L} 을 헷갈리게 만드는
+ *       짝({@code 1}·{@code I})이 둘 다 빠져 있으므로 남겨도 혼동이 생기지 않는다.
+ *       2026-08 이전에는 이 문장과 계약이 "{@code 1}/{@code I}/{@code L} 을 뺀 32글자" 라고
+ *       적었는데 그 숫자 자체가 성립하지 않았고, 그 서술로 입력 검증기를 만들면 실제 코드의
+ *       약 27%(10글자 기준 1-(31/32)^10)를 "잘못된 코드" 로 튕긴다.
+ *       {@code InviteCodeGeneratorTest} 가 이 알파벳을 런타임에 읽어 문장과 대조한다.</li>
  *   <li><b>가운데에 하이픈을 넣는다.</b> 다섯 글자씩 끊으면 눈이 자리를 잃지 않는다.
  *       계약({@code openapi.yaml})의 예시 {@code PAW-2K7Q} 도 같은 모양이다.</li>
  * </ul>
@@ -40,8 +47,15 @@ import java.security.SecureRandom;
 @Component
 public class InviteCodeGenerator {
 
-    /** {@code 0}·{@code O}·{@code 1}·{@code I}·{@code L} 을 뺀 32글자. */
-    private static final char[] ALPHABET =
+    /**
+     * {@code 0}·{@code O}·{@code 1}·{@code I} 를 뺀 32글자. <b>{@code L} 은 들어 있다</b> —
+     * 이유는 클래스 javadoc.
+     *
+     * <p>{@code package-private} 인 것은 테스트가 이 배열을 <b>실제로 읽어</b> 금지 글자와
+     * 길이를 검사하기 위해서다. 사본을 테스트에 적으면 둘이 나란히 낡는다
+     * ({@code ChatLimitsTest} 가 한도를 다루는 방식과 같다).
+     */
+    static final char[] ALPHABET =
             "23456789ABCDEFGHJKLMNPQRSTUVWXYZ".toCharArray();
 
     private static final int CODE_LENGTH = 10;

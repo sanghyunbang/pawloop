@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -408,6 +409,204 @@ class FamilyGroupInviteIntegrationTest extends AbstractMySqlIntegrationTest {
                 .isEqualTo(1);
     }
 
+    // ─────────────────── 동시 요청 (📌 #86 원칙 5) ───────────────────
+
+    @Test
+    @DisplayName("같은 사람이 같은 코드로 동시에 두 번 들어와도 둘 다 200 이다 — 예전에는 한쪽이 500 이었다")
+    void joiningTwiceAtTheSameMomentIsStillIdempotent() throws Exception {
+        Account owner = account("방장");
+        Account joiner = account("두 번 동시에 누른 사람");
+
+        long roomId = createGroup(owner, "동시 멱등").path("roomId").asLong();
+        String code = issueInvite(owner, roomId);
+
+        List<Integer> statuses = joinAtTheSameMoment(List.of(joiner, joiner), List.of(code, code));
+
+        assertThat(statuses)
+                .as("""
+                        계약은 이 경우를 멱등 200 이라고 선언한다. 예전에는 뒤에 온 요청이 '멤버 아님' \
+                        스냅샷을 들고 INSERT 로 내려가 Duplicate entry '<room>-<user>' for key \
+                        'chat_room_member.uq_chat_member' 를 냈고, 그게 500 INTERNAL 로 나갔다 — \
+                        실제로는 가입에 성공했는데 앱에는 서버 오류로 보였다. \
+                        ChatRoomService.joinByInviteCode 에서 lockForMemberChange 를 지우거나 \
+                        READ_COMMITTED 를 지우면 여기가 [200, 500] 로 빨간불이다.""")
+                .containsExactly(200, 200);
+        assertThat(chatRoomMemberRepository.findByRoomIdAndRemovedAtIsNull(roomId)).hasSize(2);
+        assertThat(chatRoomInviteRepository.findByCode(code).orElseThrow().getUsedCount())
+                .as("멱등 경로는 사용 횟수를 쓰지 않는다")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("네 사람이 서로 다른 코드로 같은 방에 동시에 들어와도 전원 200 이다 — 예전에는 InnoDB 데드락이었다")
+    void fourPeopleWithFourCodesCanEnterTheSameRoomAtOnce() throws Exception {
+        Account owner = account("방장");
+        long roomId = createGroup(owner, "동시 참여").path("roomId").asLong();
+
+        List<Account> joiners = new ArrayList<>();
+        List<String> codes = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            joiners.add(account("동시에 온 사람 " + i));
+            codes.add(issueInvite(owner, roomId));
+        }
+
+        List<Integer> statuses = joinAtTheSameMoment(joiners, codes);
+
+        assertThat(statuses)
+                .as("""
+                        '가족 단톡방에 링크를 뿌리면 여러 명이 동시에 누른다' 가 이 기능의 가장 흔한 \
+                        사용 패턴이다. 예전에는 insertMemberIfRoomHasSpace 가 정원을 세는 서브쿼리로 \
+                        chat_room_member 를 room_id 범위로 훑으면서 같은 범위에 INSERT 해서 \
+                        'Deadlock found when trying to get lock' 이 났고, 넷 중 셋이 500 이었다. \
+                        방을 잠그고 시작하는 것이 그 경합을 없앤다 — lockForMemberChange 를 지우면 \
+                        여기가 빨간불이다.""")
+                .containsExactly(200, 200, 200, 200);
+        assertThat(chatRoomMemberRepository.countByRoomIdAndRemovedAtIsNull(roomId))
+                .as("방장 + 넷")
+                .isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("마지막 한 번 남은 코드를 두 사람이 동시에 쓰면 진 쪽은 409 INVITE_USES_EXHAUSTED 다")
+    void whenTheLastUseIsRacedFor_theLoserIsToldItIsExhausted() throws Exception {
+        Account owner = account("방장");
+        Account first = account("먼저 쓴 사람");
+        Account second = account("한 발 늦은 사람");
+
+        long roomId = createGroup(owner, "소진 경합").path("roomId").asLong();
+        String code = issueInvite(owner, roomId);
+        limitToOneUse(code);
+
+        List<String> errorCodes = new ArrayList<>();
+        List<Integer> statuses =
+                joinAtTheSameMoment(List.of(first, second), List.of(code, code), errorCodes);
+
+        assertThat(statuses).containsExactlyInAnyOrder(200, 409);
+        assertThat(errorCodes)
+                .as("""
+                        예전에는 진 쪽이 INVITE_REVOKED(410) 를 받았다 — 아무도 회수하지 않은 코드에 \
+                        대해서다. recheckDeadState 가 Optional.map(...).orElse(INVITE_REVOKED) 였고, \
+                        Optional.map 은 매퍼가 null 을 돌려주면 empty 를 만들기 때문에 '살아 있다(null)' \
+                        가 전부 orElse 로 흘렀다. 앱은 error.code 로 화면을 가르므로 \
+                        '방장이 링크를 내렸습니다' 라는 거짓 안내가 나갔다. \
+                        recheckDeadState 를 그 형태로 되돌리면 여기가 빨간불이다.""")
+                .contains("INVITE_USES_EXHAUSTED")
+                .doesNotContain("INVITE_REVOKED");
+        assertThat(chatRoomInviteRepository.findByCode(code).orElseThrow().getUsedCount())
+                .as("상한이 1이면 정확히 한 번만 쓰인다")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("나갔던 사람이 동시에 두 번 재입장해도 둘 다 200 이다 — 정원 50 인 방에 409 를 내지 않는다")
+    void rejoiningTwiceAtTheSameMomentIsNotAMemberLimit() throws Exception {
+        Account owner = account("방장");
+        Account leaver = account("나갔다 동시에 두 번 온 사람");
+
+        long roomId = createGroup(owner, "재입장 경합").path("roomId").asLong();
+        String code = issueInvite(owner, roomId);
+        join(leaver, code).andExpect(status().isOk());
+
+        ChatRoomMember row = chatRoomMemberRepository
+                .findByRoomIdAndUserId(roomId, leaver.id()).orElseThrow();
+        row.setRemovedAt(LocalDateTime.now());
+        chatRoomMemberRepository.saveAndFlush(row);
+
+        List<String> errorCodes = new ArrayList<>();
+        List<Integer> statuses =
+                joinAtTheSameMoment(List.of(leaver, leaver), List.of(code, code), errorCodes);
+
+        assertThat(statuses)
+                .as("""
+                        예전에는 진 쪽이 409 ROOM_MEMBER_LIMIT 을 받았다 — 정원은 50 이고 방에는 \
+                        2명뿐인데도. reviveIfRemoved 의 'where removed_at is not null' 은 이미 \
+                        되살아난 뒤에 0 을 돌려주는데, 호출부가 그 0 을 무조건 정원 초과로 옮겼기 \
+                        때문이다. 영향 행 수 0 에 뜻이 둘이면 그건 판정이 아니다.""")
+                .containsExactly(200, 200);
+        assertThat(errorCodes).doesNotContain("ROOM_MEMBER_LIMIT");
+        assertThat(chatRoomMemberRepository.countByRoomIdAndRemovedAtIsNull(roomId)).isEqualTo(2);
+    }
+
+    // ─────────────────── 재발급은 이전 코드를 죽이지 않는다 ───────────────────
+
+    @Test
+    @DisplayName("코드를 다시 발급해도 이전 코드는 살아 있다 — 유출 대응은 회수(DELETE)뿐이다")
+    void issuingASecondCodeDoesNotRevokeTheFirstOne() throws Exception {
+        Account owner = account("방장");
+        Account joiner = account("옛 코드를 들고 온 사람");
+
+        long roomId = createGroup(owner, "재발급 테스트").path("roomId").asLong();
+        String first = issueInvite(owner, roomId);
+        String second = issueInvite(owner, roomId);
+
+        assertThat(second).isNotEqualTo(first);
+        assertThat(chatRoomInviteRepository.findByCode(first).orElseThrow().getRevokedAt())
+                .as("""
+                        2026-08 이전에는 schema.md §14 · openapi.yaml · ChatErrorCode 셋이 \
+                        '재발급하면 이전 코드는 즉시 폐기된다' 고 적었고 구현은 그렇게 하지 않았다. \
+                        문서를 믿고 '새 코드 발급' 을 유출 대응 버튼으로 만들면 그 버튼은 \
+                        아무것도 막지 않는다. 이 테스트는 셋 중 어느 쪽으로 가든 코드와 문서가 \
+                        같은 말을 하게 잡아 둔다 — 구현을 바꾸기로 하면 여기를 함께 바꿔야 한다.""")
+                .isNull();
+        join(joiner, first).andExpect(status().isOk());
+
+        // 유출 대응 수단은 그 코드를 지목해 회수하는 것뿐이다.
+        Account late = account("회수 뒤에 온 사람");
+        revoke(owner, roomId, first).andExpect(status().isNoContent());
+        join(late, first)
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.error.code").value("INVITE_REVOKED"));
+        join(late, second)
+                .andExpect(status().isOk());
+    }
+
+    // ─────────────────── 생성은 한 번뿐 ───────────────────
+
+    @Test
+    @DisplayName("이미 가족이 있는 계정의 두 번째 생성은 409 다 — 보이지 않는 그룹을 만들지 않는다")
+    void creatingASecondFamilyIsRejected() throws Exception {
+        Account owner = account("두 번 만든 사람");
+
+        JsonNode first = createGroup(owner, "첫 가족");
+        long groupsBefore = familyGroupRepository.count();
+
+        mockMvc.perform(post("/api/groups")
+                        .header("Authorization", "Bearer " + owner.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"둘째 가족\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("CONFLICT"));
+
+        assertThat(myGroup(owner).path("id").asLong())
+                .as("""
+                        예전에는 둘 다 201 이었고, GET /api/groups/me 는 참여 순서로 첫 그룹만 \
+                        돌려주므로 두 번째 그룹은 구현된 어떤 읽기 경로로도 볼 수 없었다 — \
+                        사용자가 존재도 삭제도 모르는 행이다. 생성 응답이 타임아웃돼 앱이 재시도하면 \
+                        조용히 그 상태가 된다.""")
+                .isEqualTo(first.path("id").asLong());
+        assertThat(familyGroupRepository.count())
+                .as("거절된 요청은 그룹 행을 남기지 않는다")
+                .isEqualTo(groupsBefore);
+    }
+
+    @Test
+    @DisplayName("가족을 나갔던(removed_at) 계정은 다시 만들 수 있다 — 조회가 404 인데 생성도 막으면 갇힌다")
+    void anAccountWithNoLiveFamilyCanCreateAgain() throws Exception {
+        Account owner = account("나갔던 사람");
+
+        long roomId = createGroup(owner, "옛 가족").path("roomId").asLong();
+        ChatRoomMember row = chatRoomMemberRepository
+                .findByRoomIdAndUserId(roomId, owner.id()).orElseThrow();
+        row.setRemovedAt(LocalDateTime.now());
+        chatRoomMemberRepository.saveAndFlush(row);
+
+        mockMvc.perform(get("/api/groups/me").header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNotFound());
+
+        // 시끄러운 게이트는 지워진다 — 409 는 "지금 조회가 답하는 가족이 있을 때" 만이다.
+        createGroup(owner, "새 가족");
+    }
+
     // ─────────────────── 완료 조건 7 — 원자성 ───────────────────
 
     @Test
@@ -535,6 +734,77 @@ class FamilyGroupInviteIntegrationTest extends AbstractMySqlIntegrationTest {
     private ResultActions join(Account account, String code) throws Exception {
         return mockMvc.perform(post("/api/chat/invites/{code}/join", code)
                 .header("Authorization", "Bearer " + account.token()));
+    }
+
+    /**
+     * 여러 요청을 <b>실제로 같은 순간에</b> 출발시킨다 — {@link CyclicBarrier} 가 출발선이다.
+     *
+     * <p>이 지그가 없어서 동시성 결함 넷이 466건의 초록불을 그대로 통과했다. 스레드를 띄우는
+     * 테스트가 저장소에 하나도 없었고, 순차 재요청만 보는 테스트는 이 경로를 정의상 지나지
+     * 않는다({@code joiningTwiceChangesNothingTheSecondTime} 이 그랬다).
+     *
+     * <p>{@code MockMvc} 는 서블릿 컨테이너 없이 디스패처를 직접 부르므로 스레드마다 요청이
+     * 독립이고, 서비스·트랜잭션·실제 MySQL 은 그대로 지나간다 — 여기서 재는 것이 정확히 그
+     * 셋의 경합이다.
+     */
+    private List<Integer> joinAtTheSameMoment(List<Account> accounts, List<String> codes)
+            throws Exception {
+        return joinAtTheSameMoment(accounts, codes, new ArrayList<>());
+    }
+
+    private List<Integer> joinAtTheSameMoment(List<Account> accounts, List<String> codes,
+                                              List<String> errorCodesOut) throws Exception {
+        int size = accounts.size();
+        CyclicBarrier startLine = new CyclicBarrier(size);
+        int[] statuses = new int[size];
+        String[] errorCodes = new String[size];
+        List<Thread> threads = new ArrayList<>();
+
+        for (int i = 0; i < size; i++) {
+            final int index = i;
+            Thread thread = new Thread(() -> {
+                try {
+                    startLine.await();
+                    MockHttpServletResponse response =
+                            join(accounts.get(index), codes.get(index)).andReturn().getResponse();
+                    statuses[index] = response.getStatus();
+                    errorCodes[index] =
+                            errorCodeOf(response.getContentAsString(StandardCharsets.UTF_8));
+                } catch (Exception thrown) {
+                    // 여기로 오면 요청이 응답조차 못 만든 것이다. 상태 코드 자리에 그것을 남긴다.
+                    statuses[index] = -1;
+                    errorCodes[index] = thrown.getClass().getSimpleName();
+                }
+            });
+            threads.add(thread);
+            thread.start();
+        }
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        List<Integer> result = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            result.add(statuses[i]);
+            errorCodesOut.add(errorCodes[i]);
+        }
+        return result;
+    }
+
+    /** 오류 본문의 {@code error.code}. 성공 응답이면 {@code "-"} 다. */
+    private static String errorCodeOf(String payload) {
+        try {
+            return MAPPER.readTree(payload).path("error").path("code").asText("-");
+        } catch (Exception notAnError) {
+            return "-";
+        }
+    }
+
+    /** 사용 횟수를 한 번만 쓸 수 있게 만든다. 지금 기본값은 무제한이라 경합을 만들 수 없다. */
+    private void limitToOneUse(String code) {
+        ChatRoomInvite invite = chatRoomInviteRepository.findByCode(code).orElseThrow();
+        invite.setMaxUses(1);
+        chatRoomInviteRepository.saveAndFlush(invite);
     }
 
     private JsonNode myGroup(Account account) throws Exception {

@@ -28,6 +28,21 @@ public interface ChatRoomInviteRepository extends JpaRepository<ChatRoomInvite, 
 
     Optional<ChatRoomInvite> findByCode(String code);
 
+    /**
+     * 코드가 가리키는 방 id <b>하나만</b> 읽는다. 엔티티를 만들지 않는 것이 요점이다.
+     *
+     * <p>참여 경로가 가장 먼저 부르는 문장이다({@code ChatRoomService.joinByInviteCode}).
+     * 방을 잠그려면 방 id 를 알아야 하는데, 그 id 를 얻자고 {@code findByCode} 로 엔티티를
+     * 먼저 읽으면 그 엔티티가 <b>영속성 컨텍스트에 눌러앉아</b> 잠금을 얻은 뒤에 다시 읽어도
+     * 낡은 값이 그대로 돌아온다(Hibernate 는 이미 관리 중인 인스턴스를 덮어쓰지 않는다).
+     * 스칼라 투영은 그 문제가 없다 — 잠금 뒤의 {@code findByCode} 가 DB 를 실제로 읽는다.
+     *
+     * <p>{@code i.room.id} 는 조인을 만들지 않는다. {@code chat_room_invite.room_id} 를
+     * 그대로 읽는다 — 경계를 넘지 않는다.
+     */
+    @Query("select i.room.id from ChatRoomInvite i where i.code = :code")
+    Optional<Long> findRoomIdByCode(@Param("code") String code);
+
     /** 발급 직후 중복 확인용. 최종 방어선은 {@code UNIQUE (code)} 다. */
     boolean existsByCode(String code);
 

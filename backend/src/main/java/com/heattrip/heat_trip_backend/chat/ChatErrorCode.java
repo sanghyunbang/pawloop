@@ -31,7 +31,13 @@ public enum ChatErrorCode {
     /** 초대코드의 유효기간이 지났다. 410 인 이유는 "있었는데 이제 없다" 이기 때문이다. */
     INVITE_EXPIRED(HttpStatus.GONE, "만료된 초대코드입니다."),
 
-    /** 방장이 회수했거나 재발급하면서 이전 코드가 폐기됐다. */
+    /**
+     * 방장이 이 코드를 회수했다({@code DELETE .../invites/{code}}).
+     *
+     * <p><b>재발급은 이전 코드를 회수하지 않는다.</b> 예전에는 이 자리에 "회수했거나
+     * 재발급하면서 이전 코드가 폐기됐다" 고 적혀 있었는데 구현은 그렇게 하지 않는다 —
+     * {@code ChatRoomService#issueInvite} 는 새 행을 저장할 뿐이다.
+     */
     INVITE_REVOKED(HttpStatus.GONE, "회수된 초대코드입니다."),
 
     /** 사용 횟수 상한을 다 썼다. 코드 자체는 아직 유효하므로 410 이 아니라 409 다. */
