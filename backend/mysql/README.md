@@ -30,6 +30,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\03_add_journey_place_id.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\04_users_social_account_model.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\05_refresh_token.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\06_chat_rooms.sql
 ```
 
 | 파일 | 무엇을 |
@@ -39,6 +40,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `03_add_journey_place_id.sql` | 다이어리↔장소 연결용 `journey.place_id` |
 | `04_users_social_account_model.sql` | 소셜 계정 모델 — `users.provider`·`social_id`·`role` 추가, 레거시 `username` 백필, `UNIQUE(provider, social_id)` (이슈 #7) |
 | `05_refresh_token.sql` | refresh 토큰 원장 — `refresh_token` 테이블 생성, `UNIQUE(token_hash)`, `user_id`·`expires_at` 인덱스 (이슈 #9) |
+| `06_chat_rooms.sql` | 방·멤버십·초대 — `chat_room`·`chat_room_member`·`chat_room_invite` 생성, `UNIQUE(origin_kind, origin_ref)`·`UNIQUE(room_id, user_id)`·`UNIQUE(code)`, `chat_room` 으로의 FK 둘 (이슈 #74 · [ADR-0011](../../docs/99-decisions/decision-log.md)) |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
@@ -63,3 +65,13 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 **실행 순서**: `05`는 앱 배포 **전**에 돌립니다. 테이블이 없으면 로그인이 실패하므로 이 순서는 사실상 강제됩니다. 되돌릴 때는 앱을 먼저 내립니다. 되돌리는 SQL(DOWN)은 `05_refresh_token.sql` 헤더 주석에 있습니다.
 
 만료된 `refresh_token` 행은 이 스크립트가 아니라 애플리케이션의 야간 스케줄 잡이 지웁니다(기본 04:30 Asia/Seoul, `auth.refresh-token.purge-cron`으로 조정).
+
+### 06도 실패하면 멈춥니다 — 관문이 하나 더 있습니다
+
+`06`은 04·05와 같은 사전 점검·사후 검증을 갖고, 여기에 **경계 검증**을 하나 더 답니다.
+
+- **사전 점검**: dev가 `ddl-auto=update`라 앱이 먼저 뜨면 Hibernate가 세 표를 이미 만들어 둡니다. 그 표에 중복 `(origin_kind, origin_ref)`나 중복 초대코드가 들어 있으면 `UNIQUE`를 걸 수 없습니다. 그럴 때는 스키마를 한 글자도 바꾸지 않고 목록을 출력한 뒤 `ERROR 1644`로 중단합니다.
+- **사후 검증**: 표 3개·컬럼·`UNIQUE` 3개·`chat_room`으로의 FK 2개가 전부 걸렸는지 확인합니다. `UNIQUE`는 이름이 아니라 **컬럼 수**로 셉니다 — 이름만 보면 "한 컬럼만 걸린 `UNIQUE`"를 통과시키고, 그러면 같은 가족 그룹에 방이 둘 생기는 것을 못 막습니다.
+- **경계 검증**: `chat_*` 표에서 `chat_*` 밖으로 나가는 FK가 **0개**인지 봅니다. `users`·`family_group`·`dog`로 FK를 내지 않는 것이 [ADR-0011](../../docs/99-decisions/decision-log.md)의 결정이고, `refresh_token.user_id`(이슈 #9)가 이미 같은 방식입니다. 저장소 쪽은 `ChatBoundaryArchitectureTest`가 같은 것을 잡습니다.
+
+**실행 순서**: `06`은 앱 배포 **전**에 돌립니다. prod는 `ddl-auto=validate`라 표가 없으면 부팅 자체가 실패하므로 이 순서는 사실상 강제됩니다. 빈 DB를 새로 세우는 경우에는 필요 없습니다 — `mysql/init/01_schema.sql`이 세 표를 이미 담고 있습니다. 되돌리는 SQL(DOWN)은 `06_chat_rooms.sql` 헤더 주석에 있습니다.
