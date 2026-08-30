@@ -48,14 +48,25 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code table_name}·{@code column_name}·{@code column_type}·{@code is_nullable} 넷만 읽는다 —
  * <b>FK 도 UNIQUE 도 인덱스도 안 본다.</b> {@code ddl-auto=validate} 도 마찬가지다.
  *
- * <h2>네 자리를 잠근다</h2>
+ * <h2>다섯 자리를 잠근다</h2>
  * <ul>
  *   <li><b>§A 엔티티 매핑</b> — 리플렉션으로 필드가 실제로 가리키는 타입을 본다.</li>
  *   <li><b>§B 소스</b> — chat 의 main 소스 어디에도 다른 도메인 패키지 이름이 나오면 안 된다.</li>
  *   <li><b>§C 쿼리 문자열</b> — {@code FROM}·{@code JOIN} 뒤에 chat 밖의 표·엔티티가 오면 안 된다.</li>
  *   <li><b>§D 정본 DDL</b> — {@code mysql/init/01_schema.sql} 을 <b>빈 DB 에 실제로 적용해</b>
  *       {@code information_schema} 를 읽는다.</li>
+ *   <li><b>§E 반대 방향</b>(이슈 #75) — {@code family_group} 도 chat 을 참조하지 않고,
+ *       밖에서 chat 을 부를 때는 <b>공개 표면</b>만 부른다.</li>
  * </ul>
+ *
+ * <h2>§E 가 왜 §A~§D 와 다른 것을 보는가</h2>
+ * <p>§A~§D 는 전부 "chat 이 밖을 안 본다" 다. 그런데 #75 가 <b>밖이 chat 을 부르는 방향</b>을
+ * 열었다 — 가족 그룹을 만들면 같은 트랜잭션에서 방과 방장이 생기고, 그 호출은 group 에서
+ * chat 으로 간다. 허용한 방향이지만 <b>무엇을 부를 수 있는가</b>는 정해야 한다.
+ * 정하지 않으면 다음 사람이 {@code ChatRoomMemberRepository} 를 직접 주입받고,
+ * 그 순간 chat 의 저장 구조가 남의 모듈의 컴파일 의존이 된다
+ * ({@code backend/docs/architecture/ModularMonolithMigrationPlan.md} 가 글로만 정해 뒀던 규칙이
+ * 이것이고, 📌 #86 원칙 6 이 "강제 장치가 0건" 이라고 적은 자리다).
  *
  * <h2>세 번 뚫렸던 자리</h2>
  * <p>처음 판은 셋 다 우회가 가능했다. 무엇이 어떻게 뚫렸는지 적어 둔다 — 같은 판단을 다시
@@ -361,7 +372,177 @@ class ChatBoundaryArchitectureTest {
         }
     }
 
+    // ─────────────────── E. 반대 방향 — 밖에서 chat 을 부를 때 (이슈 #75) ───────────────────
+
+    @Test
+    @DisplayName("family_group 엔티티의 어떤 필드도 chat 을 가리키지 않는다 — 화살표는 chat_room → family_group 한쪽이다")
+    void familyGroupEntity_pointsAtNothingInChat() throws Exception {
+        Class<?> familyGroup = Class.forName(FAMILY_GROUP_CLASS);
+
+        assertThat(familyGroup.isAnnotationPresent(Entity.class))
+                .as("%s 이 엔티티가 아니면 이 검사는 아무것도 지키지 않는다", FAMILY_GROUP_CLASS)
+                .isTrue();
+
+        List<String> offenders = new ArrayList<>();
+        for (Field field : familyGroup.getDeclaredFields()) {
+            if (field.isSynthetic()) {
+                continue;
+            }
+            Class<?> target = targetTypeOf(field);
+            if (target != null && target.getName().startsWith(CHAT_PACKAGE + ".")) {
+                offenders.add("FamilyGroup." + field.getName() + " → " + target.getName());
+            }
+        }
+
+        assertThat(offenders)
+                .as("""
+                        방을 가리키는 필드를 여기 두면 화살표가 양방향이 되고, 그때부터 두 표는 \
+                        어느 쪽도 혼자 못 움직인다.
+                        방이 origin_kind='FAMILY' · origin_ref=<이 행의 id> 로 그룹을 불투명하게 \
+                        가리키는 것이 유일한 통로다 (ADR-0011).""")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("chat 밖의 소스는 chat 의 공개 표면만 부른다 — chat.entity·chat.repository 는 부르지 못한다")
+    void outsideSources_nameOnlyThePublishedSurfaceOfChat() throws IOException {
+        Set<String> published = publishedChatTypeNames();
+        List<String> offenders = new ArrayList<>();
+
+        for (Path file : mainSourceFilesOutsideChat()) {
+            String[] lines = stripComments(Files.readString(file, StandardCharsets.UTF_8))
+                    .split("\\R", -1);
+            for (int i = 0; i < lines.length; i++) {
+                Matcher m = CHAT_MEMBER_REFERENCE.matcher(lines[i]);
+                while (m.find()) {
+                    if (!published.contains(m.group(1))) {
+                        offenders.add("%s:%d  %s".formatted(
+                                file.getFileName(), i + 1, lines[i].strip()));
+                    }
+                }
+            }
+        }
+
+        assertThat(offenders)
+                .as("""
+                        #75 가 group → chat 방향을 열었다. 허용한 방향이지만 부를 수 있는 것은 \
+                        chat 패키지 바로 아래의 타입(ChatRoomService 와 Chat*View 레코드)뿐이다.
+                        chat.entity·chat.repository 를 직접 부르면 chat 의 저장 구조가 남의 모듈의 \
+                        컴파일 의존이 되고, 지연 로딩된 연관을 트랜잭션 밖에서 건드리는 사고도 \
+                        같은 문에서 들어온다.
+                        필요한 것이 지금 공개 표면에 없다면 메서드를 하나 더하는 것이 맞다 — \
+                        리포지토리를 꺼내 쓰는 것이 아니라.""")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("그 공개 표면 검사가 실제로 잡는다 — chat 클래스 이름을 하나도 못 모으면 공허하게 통과한다")
+    void thePublishedSurfaceScannerActuallyCatchesAReachIntoTheInternals() throws IOException {
+        Set<String> published = publishedChatTypeNames();
+
+        assertThat(published)
+                .as("공개 표면이 비어 있으면 위 검사는 모든 참조를 위반으로 보거나(오탐) "
+                        + "패키지 구조가 바뀐 것이다")
+                .contains("ChatRoomService");
+        assertThat(published)
+                .as("하위 패키지 이름이 공개 표면에 섞이면 그 안의 무엇이든 부를 수 있게 된다")
+                .doesNotContain("entity", "repository");
+
+        assertThat(firstGroupsIn(CHAT_MEMBER_REFERENCE,
+                "import com.heattrip.heat_trip_backend.chat.repository.ChatRoomMemberRepository;"))
+                .as("리포지토리 직접 주입이 안 걸리면 이 게이트는 아무것도 지키지 않는다")
+                .containsExactly("repository");
+        assertThat(firstGroupsIn(CHAT_MEMBER_REFERENCE,
+                "private final com.heattrip.heat_trip_backend.chat.entity.ChatRoom room;"))
+                .as("완전수식명으로 엔티티를 드는 것도 같은 위반이다")
+                .containsExactly("entity");
+        assertThat(firstGroupsIn(CHAT_MEMBER_REFERENCE,
+                "import com.heattrip.heat_trip_backend.chat.ChatRoomService;"))
+                .as("공개 표면 호출이 여기서 걸리면 group 이 방을 열 방법이 없어진다")
+                .containsExactly("ChatRoomService");
+    }
+
+    @Test
+    @DisplayName("정본 스키마에서 family_group 은 FK 를 내지도 받지도 않고, group_member 표는 없다")
+    void committedSchema_keepsFamilyGroupAndChatUnlinked() throws Exception {
+        try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
+            assertThat(db.queryStrings("""
+                    SELECT CONCAT(table_name, ' → ', referenced_table_name)
+                    FROM information_schema.referential_constraints
+                    WHERE constraint_schema = DATABASE()
+                      AND (table_name = 'family_group' OR referenced_table_name = 'family_group')
+                    ORDER BY table_name, constraint_name
+                    """))
+                    .as("""
+                            양쪽 다 0개여야 한다. chat_* → family_group 이면 §D 가 이미 잡지만, \
+                            family_group → chat_room 은 §D 의 그물 밖이다 — 이 표를 만드는 순간이 \
+                            그 FK 를 걸고 싶어지는 순간이라 여기서 본다 (ADR-0011 · 이슈 #75).
+                            지금 family_group 을 가리키는 표가 아직 없다는 것도 함께 확인된다 — \
+                            walk_note·care_log 가 들어오면 그때 이 단언을 그 표들로 넓힌다.""")
+                    .isEmpty();
+
+            assertThat(db.queryStrings("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = DATABASE() AND table_name IN ('family_group', 'group_member')
+                    ORDER BY table_name
+                    """))
+                    .as("""
+                            멤버십 표는 chat_room_member 하나다 (ADR-0011 결정 1). group_member 를 \
+                            두면 '가족인데 방에 없는 사람'·'방에 있는데 가족이 아닌 사람' 이라는 상태가 \
+                            생기고, 그걸 막는 코드를 영원히 쓴다.
+                            family_group 이 목록에 없다면 정본 스키마에서 표가 빠진 것이다.""")
+                    .containsExactly("family_group");
+        }
+    }
+
     // ─────────────────────────── 지그 ───────────────────────────
+
+    private static final String FAMILY_GROUP_CLASS =
+            APP_PACKAGE + ".group.entity.FamilyGroup";
+
+    private static final String MAIN_SOURCE_DIR = "src/main/java/com/heattrip/heat_trip_backend";
+
+    /** {@code com.heattrip.heat_trip_backend.chat.<무엇>} 에서 그 {@code <무엇>} 을 집는다. */
+    private static final Pattern CHAT_MEMBER_REFERENCE = Pattern.compile(
+            "\\b" + Pattern.quote(CHAT_PACKAGE) + "\\.(\\w+)");
+
+    /** chat 패키지 <b>바로 아래</b>의 타입 이름 — 밖에서 부를 수 있는 것은 이것뿐이다. */
+    private static Set<String> publishedChatTypeNames() throws IOException {
+        Path root = TestProjectPaths.requireDirectory(CHAT_SOURCE_DIR);
+        try (Stream<Path> files = Files.list(root)) {
+            return files.filter(p -> p.toString().endsWith(".java"))
+                    .map(p -> p.getFileName().toString())
+                    .map(name -> name.substring(0, name.length() - ".java".length()))
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        }
+    }
+
+    /** chat 패키지를 뺀 main 소스 전부. */
+    private static List<Path> mainSourceFilesOutsideChat() throws IOException {
+        Path root = TestProjectPaths.requireDirectory(MAIN_SOURCE_DIR);
+        Path chat = TestProjectPaths.requireDirectory(CHAT_SOURCE_DIR);
+        try (Stream<Path> files = Files.walk(root)) {
+            List<Path> found = files
+                    .filter(p -> p.toString().endsWith(".java"))
+                    .filter(p -> !p.startsWith(chat))
+                    .sorted()
+                    .toList();
+            if (found.isEmpty()) {
+                throw new IllegalStateException(root + " 아래에 chat 밖 자바 소스가 없다.");
+            }
+            return found;
+        }
+    }
+
+    /** 한 줄에서 정규식의 첫 그룹을 전부 모은다. 위 검사와 자기검증이 같은 코드를 쓴다. */
+    private static List<String> firstGroupsIn(Pattern pattern, String line) {
+        List<String> found = new ArrayList<>();
+        Matcher m = pattern.matcher(line);
+        while (m.find()) {
+            found.add(m.group(1));
+        }
+        return found;
+    }
 
     /** chat 패키지의 main 소스 파일 전부. 하나도 없으면 던진다 — 빈 목록을 훑고 통과하지 않는다. */
     private static List<Path> chatSourceFiles() throws IOException {

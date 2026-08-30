@@ -29,7 +29,10 @@ public class RequestLoggingAspect {
         var req = attrs != null ? attrs.getRequest() : null;
 
         String method = req != null ? req.getMethod() : "N/A";
-        String path = req != null ? req.getRequestURI() : pjp.getSignature().toShortString();
+        // 경로에 비밀값이 실리는 오퍼레이션이 있다 — 초대코드가 그렇다(이슈 #75).
+        // 마스킹을 빼면 "인증 없이 방에 들어오는 열쇠" 가 평문으로 로그에 남는다.
+        String path = SensitiveDataMasker.maskUri(
+                req != null ? req.getRequestURI() : pjp.getSignature().toShortString());
 
         try {
             Object result = pjp.proceed();

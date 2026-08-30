@@ -103,6 +103,35 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/oauth2/authorization/")) {
             return new Rule("auth", rateLimit.getAuthMaxRequests());
         }
+        // ── 가족·채팅 쓰기 버킷 (이슈 #75 · 📌 #86 원칙 4) ─────────────────────
+        //
+        // 요청 한 건이 **행을 만드는** 두 경로다. `POST /api/groups` 하나가
+        // family_group·chat_room·chat_room_member 세 행을 만들고, 초대 발급 하나가
+        // "7일 동안 인증 없이 방에 들어올 수 있는 열쇠" 를 하나 더 만든다.
+        //
+        // 이 둘이 표에 없던 동안 실제로 무제한이었다 — 한 계정으로 POST /api/groups 를
+        // 200번, 같은 방에 초대 발급을 200번 불러 429 가 **0건**이었다(OWASP API4).
+        // `/auth/signup` 이 같은 이유로 무제한이었던 것과 같은 모양이고, 여기가 그 사고를
+        // 두 번 반복하지 않기로 한 자리다.
+        //
+        // 버킷을 새로 만든 것은 한도를 따로 움직일 수 있게 하려는 것이다 — 이 둘은 피드백
+        // 전송과 성격이 달라서(행을 만들고 열쇠를 만든다) 같은 숫자에 묶어 두면 한쪽을
+        // 조일 때 다른 쪽이 함께 조여진다.
+        if ("POST".equals(method) && "/api/groups".equals(path)) {
+            return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
+        }
+        if ("POST".equals(method) && path.matches("^/api/chat/rooms/\\d+/invites$")) {
+            return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
+        }
+        // 회수(DELETE .../invites/{code})는 넣지 않는다. 자기 방의 코드를 죽이는 것뿐이라
+        // 반복해도 새로 생기는 것이 없고, 유출 대응을 한도로 막으면 그게 더 나쁘다.
+        //
+        // **참여 경로(`POST /api/chat/invites/{code}/join`)는 여전히 표에 없다 — 즉 무제한이다.**
+        // #75 의 NOTE 가 "코드 추측 공격을 견디는지는 M2.6 의 rate limit 이슈에서 참여 경로에
+        // 버킷을 붙여 다룬다" 고 정했고 그 판단을 따랐다. **미룬 것이지 안전한 것이 아니다** —
+        // 표에 없는 경로는 한도가 0 이 아니라 무한이고(resolveRule 이 null 을 돌려주면 필터가
+        // 그대로 통과시킨다), 지금 그것을 견디는 것은 초대코드의 길이 하나뿐이다(50비트,
+        // `InviteCodeGenerator`). M2.6 에서 이 자리에 `chat-invite` 버킷을 넣는다.
         if (path.startsWith("/api/curation/")) {
             return new Rule("curation", rateLimit.getCurationMaxRequests());
         }

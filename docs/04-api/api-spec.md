@@ -674,16 +674,18 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq\|beforeSeq&limit` | 폴링/스크롤 겸용. 응답은 `{ items, lastSeq, hasMore }` | M2.6 |
 | `POST` | `/api/chat/rooms/{roomId}/messages` | 전송 `{ "body": "...", "clientMsgId": "..." }`. 멱등키로 재시도 중복을 막고 201 에 배정된 `roomSeq` 를 싣는다 | M2.6 |
 | `POST` | `/api/chat/rooms/{roomId}/read` | `lastReadSeq` 올리기. **단조 증가만** | M2.6 |
-| `POST` | `/api/chat/rooms/{roomId}/invites` | 초대코드 발급(`expiresAt`·`maxUses`. 기본 7일·무제한) | M2.5 |
-| `DELETE` | `/api/chat/rooms/{roomId}/invites/{code}` | 초대코드 폐기. 기존 멤버는 남는다 | M2.5 |
-| `POST` | `/api/chat/invites/{code}/join` | 코드로 입장. 재입장 금지 대상이면 `403` | M2.5 |
+| `POST` | `/api/chat/rooms/{roomId}/invites` | 초대코드 발급(방장만. 7일·무제한 고정 — **본문을 받지 않는다**) | M2.5 ✅ |
+| `DELETE` | `/api/chat/rooms/{roomId}/invites/{code}` | 초대코드 폐기. **행을 지우지 않는다**(회수된 코드와 없던 코드를 구별해야 한다). 기존 멤버는 남는다 | M2.5 ✅ |
+| `POST` | `/api/chat/invites/{code}/join` | 코드로 입장. 없음 `404` → 만료 `410` → 회수 `410` → **이미 멤버면 `200`** → 소진 `409` → 정원 `409`. 재입장 금지 대상이면 `403` | M2.5 ✅ |
 | `DELETE` | `/api/chat/rooms/{roomId}/members/me` | 나가기 | M2.6 |
 | `DELETE` | `/api/chat/rooms/{roomId}/members/{userId}` | 강퇴(방장). `removed_at` + `rejoin_blocked` | M2.7 |
 | `DELETE` | `/api/chat/messages/{messageId}` | 삭제 — **소프트**(`deleted_at`). 빈틈이 나면 델타가 깨진다 | M2.6 |
 | `POST` | `/api/chat/messages/{messageId}/reports` | 신고(사유 코드 + 메모). 서버가 본문 스냅샷을 남긴다 | M2.7 |
 | `POST`·`DELETE` | `/api/chat/blocks` · `/api/chat/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다 | M2.7 |
 
-- 방 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 확인은 서비스 경계의 `requireMember(roomId, userId)` 한 곳이다.
+- **✅ 표시는 구현됐다는 뜻이다**(이슈 #75). 나머지는 아직 계획이다.
+- 방 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 확인은 서비스 경계 한 곳이다 — 지금 발급·회수는 `ChatRoomService.requireOwner(roomId, userId)` 다. **404 가 아니라 403 인 것은 의도다**: 404 로 답하면 남의 방 id 를 훑어 있는 방과 없는 방을 가려낼 수 있다.
+- **초대·참여 경로에 rate limit 이 아직 없다.** `ApiRateLimitFilter.resolveRule` 의 표에 없는 경로는 한도가 0 이 아니라 **무한**이다. 이슈 #75 의 NOTE 가 참여 경로 버킷을 M2.6 으로 미뤘고, 지금 코드 추측을 견디는 것은 초대코드의 길이(50비트)뿐이다.
 - 한도·상태 위반은 봉투를 새로 만들지 않고 공통 `Error` 의 `error.code` 로 갈린다 — `ROOM_MEMBER_LIMIT`(409) · `INVITE_EXPIRED`(410) · `INVITE_REVOKED`(410) · `INVITE_USES_EXHAUSTED`(409).
 - 만 14세 미만(`users.age_group = 'UNDER14'`)은 방 생성과 초대코드로 새 방 참여를 막고 **가족방만 예외로 허용**한다(M2.7).
 
@@ -710,14 +712,16 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| `POST` | `/api/groups` | 그룹 생성(생성자 `OWNER`. 방과 첫 초대코드가 함께 생긴다) |
-| `GET` | `/api/groups/me` | 내 그룹 + 멤버 목록(없으면 `404`) |
+| `POST` | `/api/groups` | 그룹 생성 — **같은 트랜잭션에서 방과 `OWNER` 멤버십이 함께 생긴다.** 초대코드는 여기서 발급하지 않는다(응답의 `roomId` 로 7장의 발급 경로를 부른다) |
+| `GET` | `/api/groups/me` | 내 그룹 + 멤버 목록(없으면 `404`). 멤버 목록의 출처는 `chat_room_member` 다 |
 | `GET` | `/api/groups/{groupId}/care-logs?date&type` | 오늘의 케어 조회 — 누가·언제 물/밥/산책을 했는지 |
 | `POST` | `/api/groups/{groupId}/care-logs` | 케어 기록 `{ "dogId": 7, "type": "meal", "memo": "" }` (`done_by`는 토큰 사용자) |
 | `GET` | `/api/groups/{groupId}/walk-notes` | 산책 시 주의사항(가족 공유 메모) |
 | `PUT` | `/api/groups/{groupId}/walk-notes` | 주의사항 전체 교체 `{ "notes": ["..."] }` |
 
+- **`POST /api/groups` 와 `GET /api/groups/me` 는 구현됐다**(이슈 #75). 케어 로그·주의사항은 아직 계획이다.
 - 그룹 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 초대코드로 들어오는 경로는 7장(`POST /api/chat/invites/{code}/join`)이다.
+- **`POST /api/groups/join` 은 없다.** 예전 계약에 있던 그 경로는 초대코드가 `family_group.invite_code` 컬럼이던 시절의 것이고, [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다) 이후로는 7장의 참여 경로 하나다. 이슈 #75 가 계약에서 걷어냈다.
 - **post-MVP:** 친구 추가(가족 외), 케어 알림/리마인더, 케어 히스토리 통계.
 
 ---

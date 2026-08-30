@@ -54,6 +54,7 @@ class DocDriftTest {
     private static String implementationStatus;
     private static String schema;
     private static String erd;
+    private static String contract;
 
     @BeforeAll
     static void loadDocs() {
@@ -62,6 +63,7 @@ class DocDriftTest {
         implementationStatus = RepositoryDocs.requireDoc("05-build/implementation-status.md");
         schema = RepositoryDocs.requireDoc("03-database/schema.md");
         erd = RepositoryDocs.requireDoc("03-database/erd.md");
+        contract = RepositoryDocs.requireDoc("04-api/openapi.yaml");
     }
 
     // ─────────────────────────── A. 공급자 서술 ───────────────────────────
@@ -184,6 +186,61 @@ class DocDriftTest {
         assertThat(createTable(schema, "chat_room"))
                 .as("같은 그룹에 방이 둘 생기는 것을 막는 제약이다 (📌 #86 원칙 5)")
                 .containsIgnoringCase("UNIQUE KEY uq_chat_room_origin (origin_kind, origin_ref)");
+    }
+
+    @Test
+    @DisplayName("스키마 문서의 family_group 이 초대코드도 방 참조도 들지 않는다 — 그게 이 표의 요점이다")
+    void schema_documentsFamilyGroupWithoutAnInviteCodeOrARoomReference() {
+        // 이슈 #75. 이 표를 만들 때 가장 자연스럽게 되살아나는 것이 옛 모양 둘이다 —
+        // invite_code 컬럼과 chat_room 으로 가는 FK. 문서가 그걸 그리면 문서를 보고 만든
+        // DB 가 ADR-0011 과 반대말을 한다.
+        assertThat(schema).contains("CREATE TABLE family_group (");
+
+        String familyGroup = createTable(schema, "family_group");
+        assertThat(familyGroup)
+                .as("""
+                        초대코드는 chat_room_invite 다. 컬럼 하나로 두면 그룹당 코드 하나가 영구히 \
+                        살고 만료·사용횟수·회수를 걸 자리가 없다 (schema.md §14 · ADR-0011).""")
+                .doesNotContain("invite_code");
+        assertThat(familyGroup)
+                .as("""
+                        화살표는 chat_room → family_group 한쪽이다. 반대 방향을 그리면 두 표가 \
+                        서로를 알게 되어 어느 쪽도 혼자 못 움직인다 (ADR-0011 결정 4).""")
+                .doesNotContain("REFERENCES chat_room")
+                .doesNotContain("room_id");
+        assertThat(familyGroup)
+                .as("멤버십 표는 chat_room_member 하나다 — 여기에 사용자 컬럼이 생기면 둘이 된다")
+                .doesNotContain("user_id");
+    }
+
+    @Test
+    @DisplayName("스키마 문서와 계약이 '재발급은 이전 코드를 죽이지 않는다' 로 같은 말을 한다")
+    void schemaAndContract_agreeThatIssuingAgainDoesNotRevokeTheOldCode() {
+        // 이 검사는 **실측 때문에** 있다. 코드 A 발급 → 코드 B 발급 → A 로 참여가 200 이고
+        // A 의 revoked_at 은 null 이다(ChatRoomService.issueInvite 는 revokeIfLive 를 부르지
+        // 않는다). 그런데 schema.md §14 는 "방장이 재발급하면 이전 코드는 즉시 revoked_at 이
+        // 찍힌다 — 코드가 유출됐을 때의 유일한 대응 수단이다" 라고 단언했고, openapi.yaml 의
+        // 같은 문장만 조용히 고쳐져 두 SSOT 문서가 서로 반대말을 하게 됐다.
+        //
+        // 왜 이게 위험한가: 유출 대응 절차를 문서대로 수행하는 사람(= 새 코드를 재발급)이
+        // 유출된 코드를 그대로 살려 둔다. 앱이 그 서술을 보고 "재발급 = 무효화" 버튼을
+        // 만들면 보안 기능이 아닌 것을 보안 기능으로 광고하게 된다.
+        String inviteSection = section(schema, "## 14. `chat_room_invite`");
+
+        assertThat(inviteSection)
+                .as("""
+                        문서가 구현보다 강한 약속을 하고 있다. 구현을 바꾸기로 했다면 \
+                        (issueInvite 에서 같은 방의 살아 있는 코드를 함께 revokeIfLive) \
+                        FamilyGroupInviteIntegrationTest.issuingASecondCodeDoesNotRevokeTheFirstOne \
+                        을 먼저 바꾸고 여기로 오라 — 셋이 같은 말을 해야 한다.""")
+                .doesNotContain("재발급하면 이전 코드는");
+        assertThat(inviteSection)
+                .as("지우기만 하면 다음 사람이 '재발급하면 되겠지' 라고 다시 믿는다. 아니라고 적어야 한다")
+                .contains("재발급은 이전 코드를 죽이지 않는다");
+
+        assertThat(contract)
+                .as("openapi.yaml 은 앱이 보고 만드는 단일 출처다 — 여기가 schema.md 와 갈리면 앱이 갈린다")
+                .contains("재발급은 이전 코드를 회수하지 않습니다");
     }
 
     @Test

@@ -34,7 +34,8 @@ public class ErrorEventFactory {
                 .service(props.getServiceName())
                 .correlationId(MDC.get(CorrelationIdFilter.MDC_KEY))
                 .method(req != null ? req.getMethod() : "N/A")
-                .path(req != null ? req.getRequestURI() : "N/A")
+                // 경로에도 비밀값이 실린다 — 초대코드(이슈 #75). 이 이벤트는 Slack 으로 나간다.
+                .path(SensitiveDataMasker.maskUri(req != null ? req.getRequestURI() : "N/A"))
                 .exceptionClass(ex.getClass().getName())
                 .message(masker.mask(ex.getMessage()))
                 .stackTraceSnippet(masker.mask(stack))

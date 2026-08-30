@@ -61,6 +61,13 @@ class ApiRateLimitFilterTest {
         return new ApiRateLimitFilter(p, MAPPER);
     }
 
+    /** 가족·채팅 쓰기 버킷({@code POST /api/groups}·초대 발급)의 한도를 지정한 필터. */
+    private static ApiRateLimitFilter filterWithGroupWriteLimit(int groupWriteLimit) {
+        PublicSecurityProperties p = props(100);
+        p.getRateLimit().setGroupWriteMaxRequests(groupWriteLimit);
+        return new ApiRateLimitFilter(p, MAPPER);
+    }
+
     /** 신뢰 프록시 뒤에서 {@code X-Real-IP} 하나만 실어 보내는, 운영과 같은 모양의 요청. */
     private static MockHttpServletResponse call(ApiRateLimitFilter filter,
                                                 String method, String path, String realIp) throws Exception {
@@ -147,6 +154,68 @@ class ApiRateLimitFilterTest {
         assertThat(call(f, "POST", "/auth/signup", "203.0.113.9").getStatus())
                 .as("로그인 1 + 가입 1 로 한도 2 를 이미 썼으므로 세 번째는 막혀야 한다")
                 .isEqualTo(429);
+    }
+
+    // ─────────────────── A'. 가족·채팅 쓰기 경로 (이슈 #75 · 📌 #86 원칙 4) ───────────────────
+
+    @Test
+    @DisplayName("POST /api/groups 는 group-write 버킷이다 — 한도+1 번째에서 429")
+    void groupCreation_isRateLimited() throws Exception {
+        // 이 분기가 없던 동안 그룹 생성은 **무제한**이었다 — 한 계정으로 200번 불러
+        // 429 가 0건이었고, 요청 한 건마다 family_group·chat_room·chat_room_member
+        // 세 행이 생겼다(OWASP API4). resolveRule 에서 이 분기를 지우면 여기가 빨간불이다.
+        MockHttpServletResponse blocked =
+                exhaust(filterWithGroupWriteLimit(3), "POST", "/api/groups", 3);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("POST /api/chat/rooms/{roomId}/invites 도 group-write 버킷이다 — 한도+1 번째에서 429")
+    void inviteIssuing_isRateLimited() throws Exception {
+        // 초대 발급 하나가 "7일 동안 인증 없이 방에 들어올 수 있는 열쇠" 를 하나 더 만든다.
+        // 무제한이던 동안 방 하나가 살아 있는 코드 200개를 든 상태가 됐다.
+        MockHttpServletResponse blocked = exhaust(
+                filterWithGroupWriteLimit(2), "POST", "/api/chat/rooms/7/invites", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("그룹 생성과 초대 발급은 같은 버킷을 나눠 쓴다 — 합쳐서 한도다")
+    void groupCreationAndInviteIssuing_shareTheSameBucket() throws Exception {
+        ApiRateLimitFilter f = filterWithGroupWriteLimit(2);
+
+        assertThat(call(f, "POST", "/api/groups", "203.0.113.9").getStatus()).isNotEqualTo(429);
+        assertThat(call(f, "POST", "/api/chat/rooms/7/invites", "203.0.113.9").getStatus())
+                .isNotEqualTo(429);
+
+        assertThat(call(f, "POST", "/api/groups", "203.0.113.9").getStatus())
+                .as("생성 1 + 발급 1 로 한도 2 를 이미 썼으므로 세 번째는 막혀야 한다")
+                .isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("가족 읽기와 회수·참여는 group-write 버킷이 아니다 — 시끄러운 게이트는 지워진다")
+    void readsAndRevokeAndJoin_areNotInTheGroupWriteBucket() throws Exception {
+        ApiRateLimitFilter f = filterWithGroupWriteLimit(1);
+
+        // 읽기는 행을 만들지 않는다. 여기까지 묶으면 화면 전환마다 429 다.
+        assertThat(call(f, "GET", "/api/groups/me", "198.51.100.7").getStatus()).isEqualTo(200);
+        assertThat(call(f, "GET", "/api/groups/me", "198.51.100.7").getStatus()).isEqualTo(200);
+
+        // 회수는 자기 방 코드를 죽이는 것뿐이다. 유출 대응을 한도로 막으면 그게 더 나쁘다.
+        assertThat(call(f, "DELETE", "/api/chat/rooms/7/invites/AAAAA-AAAAA", "198.51.100.7")
+                .getStatus()).isEqualTo(200);
+        assertThat(call(f, "DELETE", "/api/chat/rooms/7/invites/AAAAA-AAAAA", "198.51.100.7")
+                .getStatus()).isEqualTo(200);
+
+        // 참여 경로는 아직 표 밖이다 — #75 의 NOTE 가 M2.6 으로 미뤘다. 미룬 것이지
+        // 안전한 것이 아니고, 이 단언이 그 사실을 눈에 보이게 남겨 둔다.
+        assertThat(call(f, "POST", "/api/chat/invites/AAAAA-AAAAA/join", "198.51.100.7")
+                .getStatus()).isEqualTo(200);
+        assertThat(call(f, "POST", "/api/chat/invites/AAAAA-AAAAA/join", "198.51.100.7")
+                .getStatus()).isEqualTo(200);
     }
 
     @Test
