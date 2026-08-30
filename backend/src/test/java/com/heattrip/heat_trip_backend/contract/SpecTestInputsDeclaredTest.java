@@ -36,7 +36,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <h2>새 스펙 테스트를 만들 때</h2>
  * <p>저장소 파일을 새로 읽는 테스트를 추가했다면 {@code build.gradle} 의
  * {@code tasks.named('test')} 안에 그 경로도 {@code inputs.files(...)} 로 더해야 한다.
- * 이 테스트는 <b>이미 아는 세 경로</b>만 지킨다 — 새 경로까지 자동으로 알 수는 없다.
+ * 이 테스트는 <b>이미 아는 경로</b>만 지킨다 — 새 경로까지 자동으로 알 수는 없다.
+ * (지금 아는 것: {@code mysql/} · {@code docker-compose.yml} · {@code docs/04-api} ·
+ * {@code docs/02-architecture/backend} · {@code docs/99-decisions} · {@code docs/05-build} ·
+ * {@code docs/03-database})
  *
  * <p>네트워크를 타지 않는다. 저장소 안의 파일만 읽는다.
  */
@@ -67,6 +70,28 @@ class SpecTestInputsDeclaredTest {
         assertThat(buildGradle)
                 .contains("file('mysql')")
                 .contains("withPropertyName('operationalSqlAndRunbook')");
+    }
+
+    @Test
+    @DisplayName("ADR 로그·로드맵·DB 문서가 test 태스크의 입력으로 선언돼 있다")
+    void repositoryDocs_areDeclaredAsTestInputs() {
+        // DecisionLogTest 는 docs/99-decisions/ 를, DocDriftTest 는 docs/05-build/ 와
+        // docs/03-database/ 를 읽는다 (#15). 선언하지 않으면 문서만 고쳤을 때 test 가
+        // UP-TO-DATE 로 건너뛴다.
+        //
+        // 이걸 실측으로 확인했다. ADR-0010 의 제목 한 줄을 깨고 `./gradlew test` 를 돌리면
+        //   선언 전: Task :test UP-TO-DATE / BUILD SUCCESSFUL in 2s   ← 드리프트를 놓친다
+        //   선언 후: DecisionLogTest … FAILED / BUILD FAILED in 14s
+        assertThat(buildGradle)
+                .as("선언이 없으면 ADR 인덱스 앵커가 깨져도 test 가 UP-TO-DATE 로 건너뛴다 (#15)")
+                .contains("file('../docs/99-decisions')")
+                .contains("withPropertyName('decisionLog')");
+        assertThat(buildGradle)
+                .contains("file('../docs/05-build')")
+                .contains("withPropertyName('roadmapAndStatus')");
+        assertThat(buildGradle)
+                .contains("file('../docs/03-database')")
+                .contains("withPropertyName('databaseDocs')");
     }
 
     @Test

@@ -161,6 +161,20 @@ tasks.named('test') {
     inputs.files(fileTree(dir: file('../docs/02-architecture/backend'), include: '**/*'))
             .withPropertyName('backendBlueprints')
             .withPathSensitivity(PathSensitivity.RELATIVE)
+    // DecisionLogTest 가 읽는 ADR 로그(이슈 #15). 인덱스 앵커와 본문이 어긋나도 렌더링은
+    // 실패하지 않는다 — 링크가 죽어도 아무도 모른다. 그래서 테스트가 지키는데, 입력으로
+    // 선언하지 않으면 ADR 만 고쳤을 때 그 테스트가 아예 돌지 않는다.
+    inputs.files(fileTree(dir: file('../docs/99-decisions'), include: '**/*'))
+            .withPropertyName('decisionLog')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    // DocDriftTest 가 읽는 로드맵·구현현황(이슈 #15).
+    inputs.files(fileTree(dir: file('../docs/05-build'), include: '**/*'))
+            .withPropertyName('roadmapAndStatus')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    // DocDriftTest 가 읽는 ERD·테이블 스키마(이슈 #15).
+    inputs.files(fileTree(dir: file('../docs/03-database'), include: '**/*'))
+            .withPropertyName('databaseDocs')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
 
     // 테스트는 'test' 프로파일로 돈다 → src/test/resources/application-test.properties.
     // 이게 없으면 jwt.secret 등 기본값 없는 플레이스홀더 10개가 해결되지 않아
