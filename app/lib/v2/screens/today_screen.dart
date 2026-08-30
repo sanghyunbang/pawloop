@@ -3,6 +3,7 @@ import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/today_care_card.dart';
 import 'main_shell.dart';
 import 'walk_tracking_screen.dart';
 import 'family_screen.dart';
@@ -79,7 +80,10 @@ class TodayScreen extends StatelessWidget {
                     child: _walkSummary(const WalkToday()),
                   ),
                   const SizedBox(height: 12),
-                  const _CareCard(),
+                  TodayCareCard(
+                    onOpenFamily: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const FamilyScreen())),
+                  ),
                   const SizedBox(height: 12),
                   _ctas(context),
                   const SizedBox(height: 12),
@@ -233,106 +237,6 @@ class TodayScreen extends StatelessWidget {
           ]),
         ),
       ]),
-    );
-  }
-}
-
-/// 오늘의 케어 — 가족 공유(물·밥·산책). 탭하면 완료 토글, 헤더로 가족 화면 진입.
-class _CareCard extends StatefulWidget {
-  const _CareCard();
-  @override
-  State<_CareCard> createState() => _CareCardState();
-}
-
-class _CareCardState extends State<_CareCard> {
-  void _toggle(CareTask t) {
-    setState(() {
-      t.done = !t.done;
-      if (t.done) {
-        final n = DateTime.now();
-        t.by = '나';
-        t.time = '${n.hour.toString().padLeft(2, '0')}:${n.minute.toString().padLeft(2, '0')}';
-      } else {
-        t.by = null;
-        t.time = null;
-      }
-    });
-    kCareRev.value++;
-  }
-
-  void _openFamily() =>
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FamilyScreen()));
-
-  @override
-  Widget build(BuildContext context) {
-    // 가족 화면에서 항목 추가/삭제 시에도 홈 카드가 함께 갱신되도록 구독.
-    return ValueListenableBuilder<int>(
-      valueListenable: kCareRev,
-      builder: (_, __, ___) {
-        ensureCareFreshForToday(); // 날 바뀌면 반복 항목 체크 리셋 · 일회성 제거
-        final visible = kCareToday.take(3).toList();
-        final more = kCareToday.length - visible.length;
-        return GlassCard(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Column(children: [
-        Row(children: [
-          const Icon(Icons.diversity_1_rounded, size: 17, color: Color(0xFFFF8F63)),
-          const SizedBox(width: 6),
-          const Text('오늘의 케어', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
-          const Spacer(),
-          GestureDetector(
-            onTap: _openFamily,
-            behavior: HitTestBehavior.opaque,
-            child: Row(children: [
-              Text(more > 0 ? '+$more · 우리 가족' : '우리 가족',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
-              const Icon(Icons.chevron_right, size: 16, color: Color(0xFFE07A4E)),
-            ]),
-          ),
-        ]),
-        const SizedBox(height: 10),
-        if (visible.isEmpty)
-          GestureDetector(
-            onTap: _openFamily,
-            behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('케어 항목을 추가해 보세요 →', style: TextStyle(fontSize: 12.5, color: T.textMuted)),
-            ),
-          )
-        else
-          Row(children: [
-            for (int i = 0; i < visible.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              Expanded(child: _item(visible[i])),
-            ],
-          ]),
-      ]),
-        );
-      },
-    );
-  }
-
-  Widget _item(CareTask t) {
-    final c = careColor(t.type);
-    return GestureDetector(
-      onTap: () => _toggle(t),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: t.done ? c.withValues(alpha: 0.13) : const Color(0xB3FFFFFF),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: t.done ? c.withValues(alpha: 0.35) : const Color(0x66FFFFFF)),
-        ),
-        child: Column(children: [
-          Icon(t.done ? Icons.check_circle_rounded : careIcon(t.type), size: 19, color: t.done ? c : T.textMuted),
-          const SizedBox(height: 4),
-          Text(t.label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: T.textSecondary)),
-          const SizedBox(height: 2),
-          Text(t.done ? '${t.by} · ${t.time}' : '아직',
-              style: TextStyle(fontSize: 10, color: t.done ? c : T.textMuted)),
-        ]),
-      ),
     );
   }
 }
