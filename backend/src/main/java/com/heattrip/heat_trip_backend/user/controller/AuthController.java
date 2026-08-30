@@ -7,6 +7,7 @@ import com.heattrip.heat_trip_backend.user.entity.User;
 import org.springframework.web.bind.annotation.*;
 
 import com.heattrip.heat_trip_backend.OAuth.code.OAuthCodeExchangeService;
+import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.OAuthCodeExchangeRequest;
@@ -52,6 +53,13 @@ public class AuthController implements AuthApiDoc{
      * 살아 있고, 계약도 enum 에 유지한다.
      */
     private static final List<String> SUPPORTED_PROVIDERS = List.of("kakao", "naver", "google");
+
+    /**
+     * 호환 래퍼가 302 대상에 실어 보내도 되는 {@code state} 의 형태.
+     * <b>패턴을 여기 다시 적지 않는다</b> — {@link OAuthAppStateFilter#SAFE_STATE} 가 정본이고,
+     * 사본을 만들면 한쪽만 넓어져 래퍼는 통과시키는데 필터는 버리는 값이 생긴다.
+     */
+    private static final java.util.regex.Pattern SAFE_OAUTH_STATE = OAuthAppStateFilter.SAFE_STATE;
 
     /**
      * 이메일/비밀번호 회원가입.
@@ -156,7 +164,8 @@ public class AuthController implements AuthApiDoc{
      * 사유 문구에 {@code provider} 원문을 되싣지 않는다 — 그건 곧 반사형 XSS 재료다.
      */
     @GetMapping("/oauth/{provider}")
-    public ResponseEntity<Void> startOAuth(@PathVariable("provider") String provider) {
+    public ResponseEntity<Void> startOAuth(@PathVariable("provider") String provider,
+                                           @RequestParam(value = "state", required = false) String state) {
         String normalized = provider == null ? "" : provider.trim().toLowerCase(Locale.ROOT);
 
         if (!SUPPORTED_PROVIDERS.contains(normalized)) {
@@ -165,8 +174,32 @@ public class AuthController implements AuthApiDoc{
         }
 
         return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(SPRING_OAUTH2_ENTRY_POINT + normalized))
+                .location(URI.create(SPRING_OAUTH2_ENTRY_POINT + normalized + stateQuery(state)))
                 .build();
+    }
+
+    /**
+     * 302 대상에 이어 붙일 {@code ?state=...}. 통과하지 못한 값은 <b>붙이지 않는다</b>. (이슈 #14)
+     *
+     * <h2>왜 필요한가</h2>
+     * #14 는 "돌아온 {@code state} 가 보낸 값과 다르면 로그인 실패로 처리하라" 를 계약 본문에
+     * 못 박았다. 그런데 이 래퍼는 쿼리스트링을 옮기지 않아서, {@code GET /auth/oauth/kakao?state=S}
+     * 로 시작한 클라이언트의 {@code S} 가 302 에서 사라졌다. 그러면 {@code OAuthAppStateFilter}
+     * 는 {@code state} 없는 요청만 보게 되어 세션에 아무것도 담지 않고, 성공 딥링크는
+     * {@code ?code=X&state=}(빈 값)으로 나가며, 앱의 대조는 <b>반드시</b> 실패한다.
+     * 계약이 이 경로를 "막다른 길에 빠지지 않게 하는 호환 표면" 이라고 광고하는데, 그것을
+     * 따르는 클라이언트는 100% 로그인에 실패하는 상태였다.
+     *
+     * <h2>왜 화이트리스트인가</h2>
+     * 이 값은 {@code Location} 헤더에 그대로 들어간다. 검증 없이 이어 붙이면 개행이나
+     * {@code &}·{@code #} 한 글자로 헤더·파라미터를 주입할 수 있다. {@code OAuthAppStateFilter}
+     * 와 <b>같은</b> 문자 집합만 통과시킨다 — 어차피 그 필터를 통과하지 못하는 값을 실어 보내
+     * 봐야 앱은 빈 {@code state} 를 받게 되고, 그때 실패의 이유를 알 수 없다.
+     */
+    private static String stateQuery(String state) {
+        return (state != null && SAFE_OAUTH_STATE.matcher(state).matches())
+                ? "?state=" + state
+                : "";
     }
 
     /**

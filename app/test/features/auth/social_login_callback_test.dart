@@ -33,6 +33,25 @@ void main() {
 
       expect(values.length, 20);
     });
+
+    test('기본 난수원이 Random.secure 다 — 소스를 직접 읽어 잠근다', () {
+      // 위 두 테스트는 `Random.secure()` 를 예측 가능한 `Random()` 으로 낮춰도 **둘 다
+      // 초록이다**(실측: 185/185 통과). 정규식도, 20개가 서로 다르다는 것도 비암호학적
+      // PRNG 가 만족한다. 그리고 `newOAuthState([Random? random])` 의 주입점으로는
+      // **기본값**을 검사할 수 없다 — 주입하는 순간 기본값을 지나가지 않기 때문이다.
+      //
+      // 그래서 소스를 읽는다. 이 저장소에는 no_token_logging_test.dart 라는 같은 형태의
+      // 소스 검사 테스트가 이미 있다. 이 값이 예측 가능해지는 순간 state 대조는 문자
+      // 그대로 통과 의식이 된다.
+      final source = File('lib/features/auth/service/oauth_callback.dart')
+          .readAsStringSync();
+
+      expect(
+        source,
+        contains('random ?? Random.secure()'),
+        reason: '기본 난수원이 Random.secure 가 아니면 state 를 공격자가 예측할 수 있다',
+      );
+    });
   });
 
   group('codeFromCallback', () {
@@ -51,6 +70,17 @@ void main() {
     test('URL 형식이 깨져도 예외를 던지지 않고 null 을 돌려준다', () {
       expect(codeFromCallback('http://[invalid'), isNull);
       expect(codeFromCallback(''), isNull);
+    });
+
+    test('깨진 퍼센트 인코딩에도 던지지 않는다 — Uri.parse 는 통과시키고 디코딩이 던진다', () {
+      // Uri.parse 는 깨진 이스케이프를 그 자리에서 거부하지 않는다. queryParameters 가
+      // **접근 시점에 지연 디코딩**하며 FormatException 을 던진다. 실측:
+      //   FormatException: Missing extension byte (at offset 2)
+      expect(
+        codeFromCallback(
+            'heattrip://login-callback?code=C&state=$_state&x=%E0%A4%A'),
+        isNull,
+      );
     });
   });
 
@@ -145,6 +175,24 @@ void main() {
       expect(resolveOAuthCallback('http://[invalid', _state).outcome,
           SocialLoginOutcome.serverError);
       expect(resolveOAuthCallback('', _state).outcome,
+          SocialLoginOutcome.serverError);
+    });
+
+    test('깨진 퍼센트 인코딩은 serverError 로 떨어진다 — 예외로 새 나가지 않는다', () {
+      // 이 함수는 "순수 함수" 라고 선언돼 있는데 여기서 FormatException 을 밖으로
+      // 던지고 있었다. SocialLoginService.signIn 은 이 호출을 try/catch 로 감싸지
+      // 않아서(앞뒤의 authenticator·exchanger·saveTokens 는 감싼다) 그 예외는
+      // SocialLoginResult 로 분류되지 못하고 **처리되지 않은 비동기 오류**가 됐다 —
+      // 사용자에게는 아무 반응 없는 버튼으로 보인다.
+      const broken =
+          'heattrip://login-callback?code=C&state=$_state&x=%E0%A4%A';
+
+      expect(
+        () => resolveOAuthCallback(broken, _state),
+        returnsNormally,
+        reason: '순수 함수가 결말 대신 예외를 내보내면 호출부가 그것을 분류할 자리가 없다',
+      );
+      expect(resolveOAuthCallback(broken, _state).outcome,
           SocialLoginOutcome.serverError);
     });
   });

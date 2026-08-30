@@ -53,8 +53,15 @@ public class OAuthAppStateFilter extends OncePerRequestFilter {
     /** 세션에 담아 두는 이름. 성공 핸들러가 같은 이름으로 꺼내 간다. */
     public static final String SESSION_ATTRIBUTE = "HEATTRIP_OAUTH_APP_STATE";
 
-    /** 딥링크 쿼리에 그대로 붙여도 되는 형태만 통과시킨다. */
-    private static final Pattern SAFE_STATE = Pattern.compile("[A-Za-z0-9_-]{1,128}");
+    /**
+     * 딥링크 쿼리에 그대로 붙여도 되는 형태만 통과시킨다.
+     *
+     * <p><b>이 저장소에서 {@code state} 의 허용 문자를 정하는 자리는 여기 하나다.</b>
+     * {@code AuthController.startOAuth} 의 호환 래퍼도 같은 패턴으로 검사한다 —
+     * 사본을 만들면 한쪽만 넓어져서, 래퍼는 통과시키는데 이 필터는 버리는 값이 생긴다.
+     * 그러면 앱은 빈 {@code state} 를 받고 실패의 이유를 알 수 없다.
+     */
+    public static final Pattern SAFE_STATE = Pattern.compile("[A-Za-z0-9_-]{1,128}");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,

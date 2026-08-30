@@ -75,7 +75,7 @@ public class AuthCodeStore {
      *
      * @return 코드 원문(43자)
      */
-    public String issue(Long userId, String role, String provider, String state, boolean isNew) {
+    public String issue(Long userId, String provider, String state, boolean isNew) {
         if (userId == null) {
             throw new IllegalArgumentException("1회용 코드의 주체(users.id)가 없습니다.");
         }
@@ -86,7 +86,7 @@ public class AuthCodeStore {
         String code = base64Url.encodeToString(bytes);
 
         Instant expiresAt = clock.instant().plus(Duration.ofSeconds(ttlSeconds()));
-        codes.put(code, new AuthCode(userId, role, provider, state, isNew, expiresAt));
+        codes.put(code, new AuthCode(userId, provider, state, isNew, expiresAt));
 
         // 코드 원문도, users.id 도, state 도 남기지 않는다. 발급이 일어났다는 사실만. (이슈 #6)
         log.debug("소셜 로그인 1회용 코드 발급");

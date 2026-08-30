@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.user.controller;
 
+import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.GoogleOAuth2User;
@@ -253,6 +254,14 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     /**
+     * 앱이 인증 시작 때 붙였을 난수. 실제 로그인에서는 {@code OAuthAppStateFilter} 가
+     * 진입 요청에서 이 값을 세션에 담고 성공 핸들러가 꺼내 간다. 이 지그는 진입 요청을
+     * 흉내내지 않으므로 세션에 직접 넣는다 — 넣지 않으면 딥링크의 {@code state} 가 빈 값이
+     * 되고, 서버는 그 코드를 교환하지 않는다(#14: 빈 state 로 발급된 코드는 401).
+     */
+    private static final String APP_STATE = "st-jig-ABC123";
+
+    /**
      * 실제 발급 경로로 토큰을 얻는다.
      *
      * <p>{@code JWTProvider} 로 직접 만들면 "핸들러는 고쳤는데 필터체인에 붙어 있지 않은" 상태를
@@ -269,9 +278,12 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
 
     private String tokenIssuedByRealSocialLogin(CustomOAuth2User principal, String registrationId)
             throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession(true)
+                .setAttribute(OAuthAppStateFilter.SESSION_ATTRIBUTE, APP_STATE);
         MockHttpServletResponse response = new MockHttpServletResponse();
         registeredSuccessHandler().onAuthenticationSuccess(
-                new MockHttpServletRequest(), response,
+                request, response,
                 new OAuth2AuthenticationToken(principal, principal.getAuthorities(), registrationId));
 
         String redirect = response.getRedirectedUrl();
@@ -287,7 +299,7 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
 
         String body = mockMvc.perform(post("/auth/oauth/" + registrationId + "/callback")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"" + queryParam(redirect, "code") + "\",\"state\":\"\"}"))
+                        .content("{\"code\":\"" + queryParam(redirect, "code") + "\",\"state\":\"" + APP_STATE + "\"}"))
                 .andReturn().getResponse().getContentAsString();
 
         return com.jayway.jsonpath.JsonPath.read(body, "$.accessToken");

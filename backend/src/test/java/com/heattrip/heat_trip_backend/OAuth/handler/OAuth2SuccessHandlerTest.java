@@ -82,7 +82,6 @@ class OAuth2SuccessHandlerTest {
 
         assertThat(consumed).isPresent();
         assertThat(consumed.get().userId()).isEqualTo(USER_ID);
-        assertThat(consumed.get().role()).isEqualTo("ROLE_USER");
         assertThat(consumed.get().provider())
                 .as("교환 요청의 경로 변수와 대조하려면 공급자가 코드에 실려 있어야 한다")
                 .isEqualTo("google");

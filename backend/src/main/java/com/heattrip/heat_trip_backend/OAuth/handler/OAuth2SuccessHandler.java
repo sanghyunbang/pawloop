@@ -92,14 +92,15 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
             return;
         }
 
-        String role = authentication.getAuthorities().iterator().next().getAuthority();
+        // 권한은 코드에 싣지 않는다. 교환 시점에 users 행에서 다시 읽는다 —
+        // 발급~교환 사이(≤60초)의 탈퇴·권한 변경이 반영돼야 하기 때문이다.
         String provider = providerOf(authentication);
 
         // 앱이 인증 시작 때 붙여 보낸 난수. 없으면 빈 문자열이고, 그때는 앱쪽 대조가 실패한다 —
         // 그게 옳다. state 없이 성공시키면 검사가 있다고 말할 수 없다.
         String state = OAuthAppStateFilter.consume(request);
 
-        String code = authCodeStore.issue(userId, role, provider, state, principal.isNew());
+        String code = authCodeStore.issue(userId, provider, state, principal.isNew());
 
         // 코드와 state 는 Base64URL/화이트리스트를 통과한 값이라 URL 인코딩이 필요 없다.
         response.sendRedirect(redirectBase + "?code=" + code + "&state=" + state);

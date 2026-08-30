@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.user.controller;
 
+import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.KakaoOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.OAuth2UserInfo;
@@ -323,9 +324,14 @@ class AuthTokenRefreshIntegrationTest extends AbstractMySqlIntegrationTest {
         CustomOAuth2User principal =
                 new CustomOAuth2User(userInfo, attributes, seeded.getId(), seeded.getRole(), false);
 
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        // 앱이 진입 요청에 붙였을 state. 넣지 않으면 딥링크의 state 가 빈 값이 되고,
+        // 서버는 그 코드를 교환하지 않는다(#14: 빈 state 로 발급된 코드는 401).
+        request.getSession(true)
+                .setAttribute(OAuthAppStateFilter.SESSION_ATTRIBUTE, "st-jig-ABC123");
         MockHttpServletResponse response = new MockHttpServletResponse();
         registeredSuccessHandler().onAuthenticationSuccess(
-                new MockHttpServletRequest(), response,
+                request, response,
                 new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "kakao"));
 
         String redirect = response.getRedirectedUrl();
@@ -339,7 +345,7 @@ class AuthTokenRefreshIntegrationTest extends AbstractMySqlIntegrationTest {
 
         String body = mockMvc.perform(post("/auth/oauth/kakao/callback")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"" + queryParam(redirect, "code") + "\",\"state\":\"\"}"))
+                        .content("{\"code\":\"" + queryParam(redirect, "code") + "\",\"state\":\"st-jig-ABC123\"}"))
                                 .andReturn().getResponse().getContentAsString();
 
         return new Session(seeded.getId(),

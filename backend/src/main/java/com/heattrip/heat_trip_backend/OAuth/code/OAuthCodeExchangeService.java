@@ -24,8 +24,8 @@ import java.util.Optional;
  * 코드만 만들고, 토큰은 여기서 응답 본문으로만 나간다 — URL 로는 나가지 않는다.
  *
  * <h2>실패는 전부 본문 없는 401 이다</h2>
- * 없는 코드·이미 쓴 코드·만료된 코드·공급자 불일치·{@code state} 불일치·주체 소실이 전부
- * 같은 모양이다. 구분해 주면 그 응답 차이 자체가 "그 코드가 존재하긴 했는가" 를 알려 주는
+ * 없는 코드·이미 쓴 코드·만료된 코드·공급자 불일치·{@code state} 부재·{@code state} 불일치·
+ * 주체 소실이 전부 같은 모양이다. 구분해 주면 그 응답 차이 자체가 "그 코드가 존재하긴 했는가" 를 알려 주는
  * 오라클이 된다. {@code UnauthenticatedException} 은 {@code GlobalExceptionHandler} 가
  * 본문 없는 401 로 매핑한다(#44 가 정한 자리 — 새 advice 를 만들면 catch-all 이 먼저 잡아 500 이 샌다).
  */
@@ -73,16 +73,30 @@ public class OAuthCodeExchangeService {
             throw new UnauthenticatedException();
         }
 
-        // 서버쪽 state 대조. 앱쪽 대조(응답 바꿔치기 방어)를 대신하지 않는다 — 코드를
-        // 그것이 시작된 인증 왕복에 묶어 두는 두 번째 줄이다. 옛 앱처럼 state 를 보내지
-        // 않은 경우는 양쪽 다 빈 문자열이라 그대로 통과한다.
-        if (!constantTimeEquals(nullToEmpty(authCode.state()), nullToEmpty(state))) {
+        // ── 서버쪽 state 대조 ────────────────────────────────────────────────
+        //
+        // 앱쪽 대조(응답 바꿔치기 방어)를 대신하지 않는다 — 코드를 그것이 시작된 인증
+        // 왕복에 묶어 두는 두 번째 줄이다.
+        //
+        // ⚠️ 빈 state 로 발급된 코드는 **교환하지 않는다.** 예전에는 "옛 앱은 state 를
+        // 보내지 않으니 양쪽 다 빈 문자열이면 통과" 였는데, 그러면 이 검사의 존재 여부를
+        // 왕복을 시작한 쪽이 정하게 된다 — state 를 생략하기만 하면 두 번째 줄이 사라진다.
+        // 검사를 켜고 끄는 스위치를 클라이언트에게 주는 것과 같다.
+        //
+        // 하위 호환을 잃지 않는가: 잃을 것이 없다. `?token=` 딥링크를 기다리던 옛 앱은
+        // 이 브랜치가 딥링크 모양을 바꾼 시점에 이미 로그인이 성립하지 않는다. 지금
+        // 출시되는 앱은 `newOAuthState()` 로 항상 state 를 만들어 보낸다.
+        if (nullToEmpty(authCode.state()).isBlank()) {
+            log.warn("[소셜 코드 교환] state 없이 시작된 인증의 코드는 교환하지 않는다.");
+            throw new UnauthenticatedException();
+        }
+        if (!constantTimeEquals(authCode.state(), nullToEmpty(state))) {
             log.warn("[소셜 코드 교환] state 가 코드 발급 시점의 값과 다르다.");
             throw new UnauthenticatedException();
         }
 
-        // role 은 코드에 실려 있지만 사용자 행은 다시 읽는다 — 발급과 교환 사이(≤60초)에
-        // 탈퇴했으면 토큰을 주면 안 된다.
+        // 권한은 코드가 아니라 사용자 행에서 읽는다 — 발급과 교환 사이(≤60초)에
+        // 탈퇴하거나 권한이 내려갔으면 그 변화가 토큰에 반영돼야 한다.
         User user = Optional.ofNullable(authCode.userId())
                 .flatMap(userRepository::findById)
                 .orElseThrow(UnauthenticatedException::new);

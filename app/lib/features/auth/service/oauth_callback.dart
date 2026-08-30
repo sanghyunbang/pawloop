@@ -69,18 +69,43 @@ class OAuthCallbackResult {
 /// **`state` 를 보지 않는다.** 대조는 [resolveOAuthCallback] 의 일이고, 이 함수는
 /// "코드가 실려 있는가" 만 답한다. 호출부는 대체로 [resolveOAuthCallback] 을 쓰면 된다.
 String? codeFromCallback(String callbackUrl) {
-  final uri = _tryParse(callbackUrl);
-  if (uri == null) return null;
+  final params = _queryParametersOf(callbackUrl);
+  if (params == null) return null;
 
-  final code = uri.queryParameters['code'];
+  final code = params['code'];
   if (code == null || code.trim().isEmpty) return null;
   return code;
+}
+
+/// 쿼리 파라미터를 꺼낸다. 꺼낼 수 없으면 null. **던지지 않는다.**
+///
+/// `Uri.parse` 는 깨진 퍼센트 인코딩을 그 자리에서 거부하지 않는다 —
+/// `uri.queryParameters` 가 **접근 시점에 지연 디코딩**하며 `FormatException` 을 던진다.
+/// 그래서 `Uri.parse` 만 try/catch 로 감싸는 것으로는 부족하다. 실측:
+///
+/// ```
+/// heattrip://login-callback?code=C&state=S&x=%E0%A4%A
+///   -> FormatException: Missing extension byte (at offset 2)
+/// ```
+///
+/// 이 예외는 [SocialLoginService.signIn] 이 감싸지 않는 자리에서 나와
+/// **처리되지 않은 비동기 오류**가 됐다 — 사용자에게는 아무 반응 없는 버튼으로 보인다.
+/// (`?code=%ZZ` 처럼 16진수가 아닌 경우는 던지지 않고 그대로 통과한다. 서버가 401 로
+/// 거절하므로 무해하다. 던지는 것은 불완전한 UTF-8 다바이트 시퀀스다.)
+Map<String, String>? _queryParametersOf(String callbackUrl) {
+  try {
+    return Uri.parse(callbackUrl).queryParameters;
+  } on FormatException {
+    return null;
+  } on ArgumentError {
+    return null;
+  }
 }
 
 /// 콜백 URL 하나와 기대하는 [expectedState] 로 결말을 판정한다. 순수 함수.
 ///
 /// 판정 순서가 곧 규칙이다.
-/// 1. URL 이 깨졌으면 [SocialLoginOutcome.serverError].
+/// 1. URL 이 깨졌으면(파싱 실패 또는 **깨진 퍼센트 인코딩**) [SocialLoginOutcome.serverError].
 /// 2. `error` 파라미터가 있으면 그 코드로 취소/서버오류를 가른다.
 ///    **`state` 대조보다 먼저** 본다 — 취소 딥링크에는 `state` 가 실려 오지 않으므로,
 ///    순서를 뒤집으면 스스로 창을 닫은 사용자에게 "서버에 문제가 있다" 고 말하게 된다.
@@ -95,12 +120,15 @@ String? codeFromCallback(String callbackUrl) {
 /// 말해 봐야 할 수 있는 일이 없고, 결말을 늘리면 [loginFailureMessage] 류의 분기가
 /// 그만큼 늘어난다.
 OAuthCallbackResult resolveOAuthCallback(String callbackUrl, String expectedState) {
-  final uri = _tryParse(callbackUrl);
-  if (uri == null) {
+  // 파싱과 **디코딩**을 여기서 한 번에 끝낸다. 아래 어디에서도 uri.queryParameters 를
+  // 다시 만지지 않는다 — 그 접근이 곧 지연 디코딩이고, 그것이 던지면 이 "순수 함수" 가
+  // 결말 대신 예외를 밖으로 내보낸다.
+  final params = _queryParametersOf(callbackUrl);
+  if (params == null) {
     return const OAuthCallbackResult(SocialLoginOutcome.serverError);
   }
 
-  final error = uri.queryParameters['error']?.trim().toLowerCase();
+  final error = params['error']?.trim().toLowerCase();
   if (error != null && error.isNotEmpty) {
     // 공급자마다 철자가 다르다. 카카오/구글은 access_denied, 일부 SDK 는 user_cancelled.
     const canceledCodes = {
@@ -128,23 +156,15 @@ OAuthCallbackResult resolveOAuthCallback(String callbackUrl, String expectedStat
   if (expectedState.isEmpty) {
     return const OAuthCallbackResult(SocialLoginOutcome.serverError);
   }
-  if (uri.queryParameters['state'] != expectedState) {
+  if (params['state'] != expectedState) {
     return const OAuthCallbackResult(SocialLoginOutcome.serverError);
   }
 
-  final code = codeFromCallback(callbackUrl);
-  if (code == null) {
+  final code = params['code'];
+  if (code == null || code.trim().isEmpty) {
     return const OAuthCallbackResult(SocialLoginOutcome.serverError);
   }
   return OAuthCallbackResult(SocialLoginOutcome.success, code: code);
-}
-
-Uri? _tryParse(String callbackUrl) {
-  try {
-    return Uri.parse(callbackUrl);
-  } on FormatException {
-    return null;
-  }
 }
 
 /// 소셜 로그인 시도의 결말. 화면이 **무엇을 말해야 하는지**를 정한다.

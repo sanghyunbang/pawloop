@@ -32,9 +32,14 @@ import jakarta.servlet.http.HttpServletResponse;
  * 에러 코드만 실어 돌려보낸다.
  *
  * <pre>
- *   성공: heattrip://login-callback?token=&lt;access-token&gt;
+ *   성공: heattrip://login-callback?code=&lt;1회용 코드&gt;&amp;state=&lt;앱이 만든 난수&gt;
  *   실패: heattrip://login-callback?error=email_already_registered
  * </pre>
+ *
+ * <p><b>토큰은 딥링크로 나가지 않는다.</b> {@code POST /auth/oauth/{provider}/callback} 의
+ * 응답 본문이 유일한 통로다(이슈 #14). 이 블록은 2026-08 까지 성공 경로를
+ * {@code ?token=&lt;access-token&gt;} 이라고 <b>현재형으로</b> 적고 있었다 — 그 설계는
+ * #14 가 걷어낸 것이고, 여기를 보고 새 딥링크 경로를 만드는 사람이 되살릴 여지였다.
  *
  * <p><b>에러 파라미터에는 코드만 담는다.</b> 이메일·토큰·소셜 ID·예외 메시지 원문은 넣지 않는다.
  * 리다이렉트 URL 은 액세스 로그와 리버스 프록시 로그에 남는다(이슈 #6). 코드는

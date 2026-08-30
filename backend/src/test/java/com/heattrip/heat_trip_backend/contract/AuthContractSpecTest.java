@@ -318,6 +318,21 @@ class AuthContractSpecTest {
         assertThat(asMap(startOAuth.get("responses")).keySet())
                 .as("화이트리스트 밖 공급자는 302 가 아니라 400 이다 (완료 조건 5·11)")
                 .contains("302", "400");
+
+        // #14 는 "돌아온 state 가 다르면 로그인 실패로 처리하라" 를 계약 본문에 못 박았다.
+        // 이 호환 경로가 state 를 선언하지 않으면, 계약만 보고 구현한 클라이언트는 state 를
+        // 실을 자리를 못 찾거나 실어도 버려진다 — 그러면 로그인이 100% 실패한다.
+        @SuppressWarnings("unchecked")
+        List<Object> parameters = (List<Object>) startOAuth.get("parameters");
+        assertThat(parameters)
+                .as("파라미터 목록 자체가 없다")
+                .isNotNull();
+        assertThat(parameters.stream()
+                .map(AuthContractSpecTest::asMap)
+                .map(param -> String.valueOf(param.get("name")))
+                .toList())
+                .as("state 를 옮긴다는 사실이 계약에 없으면 그 경로로 시작한 클라이언트가 조용히 실패한다")
+                .contains("state");
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.OAuth;
 
+import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.OAuth.code.AuthCodeStore;
 import com.heattrip.heat_trip_backend.OAuth.code.OAuthCodeExchangeService;
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2SuccessHandler;
@@ -108,6 +109,11 @@ final class OAuthLoginProbe {
         AuthCodeStore codeStore = new AuthCodeStore(Clock.systemDefaultZone(), oauthProperties);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
+        // 앱이 진입 요청에 붙였을 state 를 세션에 심는다. 이 프로브는 진입 요청을 흉내내지
+        // 않으므로 OAuthAppStateFilter 가 담을 기회가 없다. 비워 두면 딥링크의 state 가
+        // 빈 값이 되고, 교환이 401 이라 로그 위생 테스트가 태워야 할 두 번째 걸음이 사라진다.
+        request.getSession(true)
+                .setAttribute(OAuthAppStateFilter.SESSION_ATTRIBUTE, "st-probe-ABC123");
         MockHttpServletResponse response = new MockHttpServletResponse();
         OAuth2AuthenticationToken authentication =
                 new OAuth2AuthenticationToken(user, user.getAuthorities(), "google");
@@ -146,8 +152,8 @@ final class OAuthLoginProbe {
     /**
      * 딥링크 쿼리스트링에서 파라미터 하나를 꺼낸다. 값에는 URL 예약문자가 없다(Base64URL).
      *
-     * <p>{@code state} 는 값이 빈 문자열일 수 있다 — 이 지그는 진입 요청을 흉내내지 않으므로
-     * 앱이 붙인 state 가 없다. 그때도 키는 존재하므로 빈 문자열을 돌려준다.
+     * <p>{@code state} 는 값이 빈 문자열일 수 있다(취소 딥링크 등). 그때도 키는 존재하므로
+     * 빈 문자열을 돌려준다.
      */
     static String queryParam(String url, String name) {
         String query = url.substring(url.indexOf('?') + 1);

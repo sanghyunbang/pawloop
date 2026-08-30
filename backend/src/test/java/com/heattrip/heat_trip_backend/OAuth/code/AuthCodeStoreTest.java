@@ -57,7 +57,7 @@ class AuthCodeStoreTest {
     }
 
     private static String issue(AuthCodeStore store) {
-        return store.issue(42L, "ROLE_USER", "kakao", "state-abc", false);
+        return store.issue(42L, "kakao", "state-abc", false);
     }
 
     // ─────────────────────── ① 재사용 차단 (완료 조건 2) ───────────────────────
@@ -155,12 +155,14 @@ class AuthCodeStoreTest {
     @DisplayName("코드에 실린 사실이 그대로 돌아온다 — 토큰 재료는 URL 이 아니라 여기 있다")
     void 코드에_실린_사실이_그대로_돌아온다() {
         AuthCodeStore store = new AuthCodeStore(new ShiftableClock(Clock.fixed(BASE, ZoneOffset.UTC)), props(60));
-        String code = store.issue(7L, "ROLE_ADMIN", "google", "state-xyz", true);
+        String code = store.issue(7L, "google", "state-xyz", true);
 
         AuthCode consumed = store.consume(code).orElseThrow();
 
         assertThat(consumed.userId()).isEqualTo(7L);
-        assertThat(consumed.role()).isEqualTo("ROLE_ADMIN");
+        // role 은 여기 없다. 예전에는 실려 있었지만 프로덕션이 읽지 않았고
+        // (교환 시점에 users 행에서 다시 읽는다), 그 단언만 "코드를 타고 전달된다" 는
+        // 인상을 주고 있었다. 값이 틀려도 아무 일이 없는 필드는 초록불을 거짓말시킨다.
         assertThat(consumed.provider()).isEqualTo("google");
         assertThat(consumed.state()).isEqualTo("state-xyz");
         assertThat(consumed.isNew()).isTrue();
@@ -215,7 +217,7 @@ class AuthCodeStoreTest {
     void userId없이_발급하지_않는다() {
         AuthCodeStore store = new AuthCodeStore(new ShiftableClock(Clock.fixed(BASE, ZoneOffset.UTC)), props(60));
 
-        assertThatThrownBy(() -> store.issue(null, "ROLE_USER", "kakao", "s", false))
+        assertThatThrownBy(() -> store.issue(null, "kakao", "s", false))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
