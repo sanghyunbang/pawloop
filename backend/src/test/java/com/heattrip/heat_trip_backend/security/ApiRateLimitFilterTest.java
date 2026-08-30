@@ -196,6 +196,27 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("POST /api/groups/{id}/care-logs 도 group-write 버킷이다 — 한도+1 번째에서 429")
+    void careLogWriting_isRateLimited() throws Exception {
+        // 요청 한 건이 care_log 행을 하나 만들고, 그 행은 가족 전원의 홈 카드에 뜬다.
+        // 표에 없으면 한도가 0 이 아니라 무한이다 — resolveRule 에서 이 분기를 지우면 여기가 빨간불이다.
+        MockHttpServletResponse blocked = exhaust(
+                filterWithGroupWriteLimit(3), "POST", "/api/groups/12/care-logs", 3);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("PUT /api/groups/{id}/walk-notes 도 group-write 버킷이다 — 한도+1 번째에서 429")
+    void walkNoteRewriting_isRateLimited() throws Exception {
+        // 주의사항은 그룹당 한 장이라 PUT 한 번이 **가족 모두가 보는 문서를 통째로** 바꾼다.
+        MockHttpServletResponse blocked = exhaust(
+                filterWithGroupWriteLimit(2), "PUT", "/api/groups/12/walk-notes", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
     @DisplayName("가족 읽기와 회수·참여는 group-write 버킷이 아니다 — 시끄러운 게이트는 지워진다")
     void readsAndRevokeAndJoin_areNotInTheGroupWriteBucket() throws Exception {
         ApiRateLimitFilter f = filterWithGroupWriteLimit(1);
@@ -203,6 +224,18 @@ class ApiRateLimitFilterTest {
         // 읽기는 행을 만들지 않는다. 여기까지 묶으면 화면 전환마다 429 다.
         assertThat(call(f, "GET", "/api/groups/me", "198.51.100.7").getStatus()).isEqualTo(200);
         assertThat(call(f, "GET", "/api/groups/me", "198.51.100.7").getStatus()).isEqualTo(200);
+
+        // 케어 읽기 둘도 같은 이유로 표 밖이다(이슈 #76). 홈 화면이 진입할 때마다 부르는
+        // 경로라 숫자를 정하려면 앱의 폴링 주기부터 정해야 하고, 그건 M2.6 이다.
+        // **미룬 것이지 안전한 것이 아니다** — 이 단언이 그 사실을 눈에 보이게 남겨 둔다.
+        assertThat(call(f, "GET", "/api/groups/12/care-logs", "198.51.100.7").getStatus())
+                .isEqualTo(200);
+        assertThat(call(f, "GET", "/api/groups/12/care-logs", "198.51.100.7").getStatus())
+                .isEqualTo(200);
+        assertThat(call(f, "GET", "/api/groups/12/walk-notes", "198.51.100.7").getStatus())
+                .isEqualTo(200);
+        assertThat(call(f, "GET", "/api/groups/12/walk-notes", "198.51.100.7").getStatus())
+                .isEqualTo(200);
 
         // 회수는 자기 방 코드를 죽이는 것뿐이다. 유출 대응을 한도로 막으면 그게 더 나쁘다.
         assertThat(call(f, "DELETE", "/api/chat/rooms/7/invites/AAAAA-AAAAA", "198.51.100.7")

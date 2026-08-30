@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` 여섯이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§3 dog`·`§15 chat_message` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
+> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§16 walk_note` · `§17 care_log` 여덟이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§3 dog`·`§15 chat_message` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -582,75 +582,102 @@ CREATE TABLE chat_message (
 
 ## 16. `walk_note` — 산책 주의사항 (가족 공유 메모)
 
-산책 시 주의사항을 가족이 공유하는 메모. `family_group` 1:N (`GET|PUT /api/groups/{groupId}/walk-notes`).
+산책 시 주의사항을 가족이 공유하는 메모. **그룹당 한 장**이다 (`GET|PUT /api/groups/{groupId}/walk-notes`). 이슈 [#76](https://github.com/sanghyunbang/heattrip/issues/76).
+
+> **2026-08 에 모양이 바뀌었다 — 이 절은 그 전까지 1:N 목록이었다.** 행마다 `created_at` 을 두고 PUT 은 `{notes:[...]}` 로 전량 교체하는 모양이었는데, 그러면 PUT 때마다 행을 지우고 다시 넣게 되어 행마다 붙는 `updated_by`·`id` 가 매번 갈린다 — "누가 고쳤는지" 가 사실은 아무것도 가리키지 않는다. 이슈 #76 이 정한 `walk_note(id, group_id, body, updated_by, updated_at)` 한 장으로 맞췄고 `openapi.yaml`·`api-spec.md` 도 함께 고쳤다. **앱이 줄 단위 목록으로 그리는 것은 화면의 표현이다** — 서버가 아는 것은 메모 한 장과 그것을 마지막으로 고친 사람뿐이다.
 
 ```sql
 CREATE TABLE walk_note (
   id         BIGINT       NOT NULL AUTO_INCREMENT,
   group_id   BIGINT       NOT NULL,
-  body       VARCHAR(500) NOT NULL COMMENT '산책 시 주의사항',
-  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  body       VARCHAR(500) NOT NULL COMMENT '산책 시 주의사항 — 그룹당 한 장',
+  updated_by BIGINT       NULL COMMENT '마지막으로 고친 사람(users.id). 탈퇴하면 NULL 이다',
+  updated_at DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
-  KEY idx_walknote_group (group_id, created_at),
+  UNIQUE KEY uq_walknote_group (group_id),
+  KEY fk_walknote_updatedby (updated_by),
   CONSTRAINT fk_walknote_group FOREIGN KEY (group_id)
-    REFERENCES family_group (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    REFERENCES family_group (id) ON DELETE CASCADE,
+  CONSTRAINT fk_walknote_updatedby FOREIGN KEY (updated_by)
+    REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `group_id` | `BIGINT` | FK→`family_group.id`, NOT NULL, INDEX(group,created_at) | 소속 그룹 |
-| `body` | `VARCHAR(500)` | NOT NULL | 주의사항 내용 |
-| `created_at` | `DATETIME` | NOT NULL, 기본 now | 작성 시각 |
+| `group_id` | `BIGINT` | FK→`family_group.id`, NOT NULL, **UNIQUE** | 소속 그룹. UNIQUE 가 "그룹당 한 장" 을 지킨다 |
+| `body` | `VARCHAR(500)` | NOT NULL | 메모 전문. 빈 문자열은 "다 지웠다" 는 정상 상태다 |
+| `updated_by` | `BIGINT` | FK→`users.id` nullable, **ON DELETE SET NULL** | 마지막으로 고친 사람. 그 사람이 탈퇴하면 `NULL` — 아래 경고 참조 |
+| `updated_at` | `DATETIME(6)` | NOT NULL | 마지막으로 고친 시각 |
+
+> `UNIQUE (group_id)` 가 없으면 애플리케이션의 "있으면 고치고 없으면 만든다"(확인-후-쓰기)를 동시에 통과한 두 요청이 메모를 둘 만들고, 조회는 그중 하나만 보여 준다. 마지막 방어선은 DB 다(📌 [#86](https://github.com/sanghyunbang/heattrip/issues/86) 원칙 5).
+
+> ### ⚠️ `updated_by` 는 `ON DELETE SET NULL` 이다 — CASCADE 였다가 고쳤다
+>
+> 2026-08 까지 이 FK 는 `ON DELETE CASCADE` 였다. 그 상태에서 엄마가 메모를 쓰고 `DELETE /auth/me` 로 탈퇴하면(`UserService.deleteMe` 는 `users` 행을 실제로 지운다) **그룹의 메모 행이 통째로 사라졌다.** 남은 가족의 화면은 "아직 주의사항이 없어요" 를 그리므로 **지워진 것과 한 번도 안 쓴 것을 구별할 수 없다** — 사라졌다는 신호가 아무 데도 없다. 지워지는 내용이 "계단 피하기"·"대형견 만나면 리드줄 짧게" 같은 안전 메모라 실사용 피해가 크다.
+>
+> 판단의 요점은 **이 컬럼이 문서의 소유자가 아니라 메타데이터**라는 것이다. 메모의 주인은 `group_id` 이고 그 그룹은 살아 있다. `care_log.group_id` 가 이미 같은 질문에 `SET NULL` 로 답했다(가족을 해산했다는 이유로 개인의 케어 이력이 증발하면 안 된다). **사람이 사라지면 이름만 잃는다** — 응답의 표시 이름은 `User.UNKNOWN_DISPLAY_NAME`(`알 수 없음`)으로 떨어지고, `GroupMemberResponse.nickname` 이 같은 상황에서 이미 그 문구를 쓴다.
+>
+> FK 만 고치는 것으로는 부족했다. `WalkNoteRepository.findByGroupId` 의 fetch join 이 **inner** 인 동안은 행이 DB 에 남아도 쿼리가 못 찾아 서비스가 빈 본문을 답했다 — 화면에서는 CASCADE 로 지우던 것과 글자 하나 다르지 않다. 지금은 `left join fetch` 다. `CareSharingIntegrationTest.whenOneMemberWithdraws_theFamilysNotesAndLogsSurvive` 가 둘을 함께 잠근다.
 
 ---
 
 ## 17. `care_log` — 케어 로그 (가족 케어 공유)
 
-당초 post-MVP 확장으로 계획했던 테이블을 **가족 케어 공유**에 맞춰 확장한 정의. 물/밥/산책/투약/병원 로그를 하나의 유연 스키마로 저장하고, 누가(`done_by`)·언제 했는지를 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지한다. FK 관계상 `family_group`(§11) 생성 후 적용한다.
+물/밥/산책/투약/병원 다섯 종류의 케어를 누가(`done_by`)·언제(`occurred_at`) 했는지 기록해 가족 그룹(`group_id`)에 공유한다. **이중 급여와 산책 누락을 막는 것**이 이 표의 목적이다. 이슈 [#76](https://github.com/sanghyunbang/heattrip/issues/76).
+
+**같은 종류를 하루에 두 번 찍어도 두 행이 남는다.** 두 번째가 실수인지 사실인지 서버는 모르고(아침·저녁 두 번 주는 집에서 두 번째 밥은 정상이다), 막으면 실제로 한 일이 기록에서 사라진다. 확인 문구는 앱이 조회 결과를 보고 만든다.
+
+**`done_by` 도 `ON DELETE SET NULL` 이다** — 여기도 2026-08 까지 CASCADE 였다. 그러면 엄마가 탈퇴하는 순간 "오늘 엄마가 산책을 다녀왔다" 가 **아빠 화면에서도** 사라지고, 이 표가 막으려는 사고(산책 누락)가 바로 그 자리에서 생긴다. 기록은 엄마의 소유물이 아니라 **가족이 함께 보는 사건**이다. 판단의 근거는 [§16 의 경고](#16-walk_note--산책-주의사항-가족-공유-메모)와 같고, `CareLogRepository.findDayOfGroup` 의 fetch join 이 **left** 여야 하는 이유도 같다 — inner 면 `done_by` 가 `NULL` 인 행이 조회에서 조용히 빠져 CASCADE 와 구별되지 않는다.
 
 ```sql
 CREATE TABLE care_log (
-  id          BIGINT      NOT NULL AUTO_INCREMENT,
-  dog_id      BIGINT      NOT NULL,
-  group_id    BIGINT      NULL COMMENT '가족 그룹 공유(nullable — 미소속 시 개인 기록)',
-  type        VARCHAR(10) NOT NULL COMMENT 'water|meal|walk|med|vet',
-  done_by     BIGINT      NOT NULL COMMENT '수행자(users.id) — 누가 했는지',
-  occurred_at DATETIME    NOT NULL,
-  title       VARCHAR(100) NULL,
-  value       VARCHAR(100) NULL COMMENT '수치/양 등 (예: 몸무게 5.2kg)',
+  id          BIGINT       NOT NULL AUTO_INCREMENT,
+  dog_id      BIGINT       NULL COMMENT '대상 강아지. dog 표가 아직 없어 FK 없이 항상 NULL 이다 (#76)',
+  group_id    BIGINT       NULL COMMENT '가족 그룹 공유(nullable — 미소속 시 개인 기록)',
+  type        VARCHAR(10)  NOT NULL COMMENT 'water|meal|walk|med|vet',
+  done_by     BIGINT       NULL COMMENT '수행자(users.id) — 토큰의 사용자다. 탈퇴하면 NULL 이다',
+  occurred_at DATETIME(6)  NOT NULL,
   memo        VARCHAR(500) NULL,
-  photo       VARCHAR(255) NULL,
-  created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY (id),
-  KEY idx_carelog_dog (dog_id, occurred_at),
   KEY idx_carelog_group (group_id, occurred_at),
   KEY idx_carelog_doneby (done_by),
-  CONSTRAINT fk_carelog_dog FOREIGN KEY (dog_id)
-    REFERENCES dog (id) ON DELETE CASCADE,
   CONSTRAINT fk_carelog_group FOREIGN KEY (group_id)
     REFERENCES family_group (id) ON DELETE SET NULL,
   CONSTRAINT fk_carelog_doneby FOREIGN KEY (done_by)
-    REFERENCES users (id) ON DELETE CASCADE,
+    REFERENCES users (id) ON DELETE SET NULL,
   CONSTRAINT ck_carelog_type CHECK (type IN ('water','meal','walk','med','vet'))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `dog_id` | `BIGINT` | FK→`dog.id`, NOT NULL, INDEX(dog,occurred_at) | 대상 강아지 |
+| `dog_id` | `BIGINT` | **NULL, FK 없음** | 대상 강아지. 아래 경고 참조 — 오늘은 항상 `NULL` 이다 |
 | `group_id` | `BIGINT` | FK→`family_group.id` nullable, ON DELETE SET NULL, INDEX(group,occurred_at) | 공유 대상 가족 그룹 |
-| `type` | `VARCHAR(10)` | NOT NULL, CHECK | `water`(물)/`meal`(밥)/`walk`(산책)/`med`(투약)/`vet`(병원) |
-| `done_by` | `BIGINT` | FK→`users.id`, NOT NULL, INDEX | 수행자(누가 했는지) |
-| `occurred_at` | `DATETIME` | NOT NULL | 발생 시각(언제 했는지) |
-| `title` | `VARCHAR(100)` | NULL | 제목 |
-| `value` | `VARCHAR(100)` | NULL | 수치/양 |
+| `type` | `VARCHAR(10)` | NOT NULL, CHECK | `water`(물)/`meal`(밥)/`walk`(산책)/`med`(투약)/`vet`(병원). **소문자다** |
+| `done_by` | `BIGINT` | FK→`users.id` nullable, **ON DELETE SET NULL**, INDEX | 수행자. 토큰의 사용자이지 요청 본문의 값이 아니다. 그 사람이 탈퇴하면 `NULL` — §16 의 경고와 같은 판단이다 |
+| `occurred_at` | `DATETIME(6)` | NOT NULL | 발생 시각. 서버 시계다 |
 | `memo` | `VARCHAR(500)` | NULL | 메모 |
-| `photo` | `VARCHAR(255)` | NULL | 사진 경로 |
+| `created_at` | `DATETIME(6)` | NOT NULL, 기본 now | 행 생성 시각 |
 
-> "오늘의 케어" 조회(`GET /api/groups/{groupId}/care-logs`)는 `idx_carelog_group(group_id, occurred_at)`으로 그룹·당일 범위를 스캔한다.
+> ### ⚠️ `dog_id` 에 FK 가 없는 이유 — #9 의 "일부러 안 걸었다" 와 **다른 이유**다
+>
+> 이슈 #76 본문은 `dog_id FK` 라고 적었지만 **`dog` 표가 정본 스키마에 없다.** `backend/mysql/init/01_schema.sql` 에 `CREATE TABLE dog` 가 0건이고(위 [§3](#3-dog--반려견-프로필)은 **계획**이다), 앱의 `DogProfile`·`kMyPets` 는 전부 클라이언트 더미라 서버 쪽 강아지 id 자체가 존재하지 않는다. **없는 표에는 FK 를 걸 수 없다.**
+>
+> 그래서 컬럼은 `NULL` 허용으로 지금 넣고 값은 항상 `NULL` 이다. 지금 넣는 이유는 나중에 넣으면 운영 데이터 위의 `ALTER` 가 되기 때문이고, `dog` 표가 생기는 날 그 자리에 FK 를 걸고 `idx_carelog_dog(dog_id, occurred_at)` 도 함께 넣는다.
+>
+> **#9(`refresh_token.user_id`)와 같은 것으로 읽으면 안 된다.** #9 는 `users` 표가 **있는데도** 걸지 않은 판단이다 — 탈퇴 경로가 DB 삭제 순서에 묶이는 것을 피했다. 여기는 **참조할 표가 아직 없는 것**이고 판단이 아니라 사실이다. 그날이 오면 여기는 FK 를 걸고 #9 는 안 건다.
+
+> **`group_id` 가 `NULL` 인 행은 지금 0건이다.** 이 이슈가 여는 경로는 `/api/groups/{groupId}/care-logs` 뿐이라 여기서 만들어지는 행은 전부 그룹을 든다. 개인 기록을 만드는 경로(`POST /api/dogs/{dogId}/care-logs`, M4)는 아직 없고, 조회 필터가 `group_id = :groupId` 라서 만약 `NULL` 행이 생겨도 **어떤 조회에도 나오지 않는다** — 의도다. 컬럼을 nullable 로 두는 것은 그 경로가 생길 자리를 비워 두는 것이고, 그때 개인 기록 조회도 함께 온다.
+
+> `ON DELETE SET NULL` 이라 그룹을 해산해도 "내가 밥을 줬다" 는 사실은 남는다(그 행은 개인 기록이 된다). CASCADE 로 지우면 가족을 해산했다는 이유로 개인의 케어 이력이 통째로 증발한다.
+
+> "오늘의 케어" 조회(`GET /api/groups/{groupId}/care-logs`)는 `idx_carelog_group(group_id, occurred_at)`으로 그룹·당일 범위를 스캔한다. **인가(403)와 이 `group_id` 필터는 서로 다른 방어다** — 인가만 있으면 두 가족에 속한 사람이 옆집 기록까지 본다.
+
+> 건강·식사·병원 상세(`title`·`value`·`photo`)는 M4 다. 지금 넣지 않는 이유는 쓰지 않는 컬럼이 무슨 뜻인지 아무도 모르는 채로 남기 때문이다. M4 가 그 컬럼과 함께 `CareType` 상수·CHECK 제약·계약의 `enum` 을 같이 넓힌다.
 
 ---
 
@@ -681,8 +708,8 @@ CREATE TABLE care_log (
 | `chat_room_invite` | `idx_chat_invite_room(room_id, created_at)` | 보조 | 방별 초대코드 이력 |
 | `chat_message` | `uq_chat_room_seq(room_id, room_seq)` | UNIQUE | 방별 순서·델타·미읽음의 유일한 근거 |
 | `chat_message` | `idx_chat_sender(sender_user_id)` | 보조 | 발신자별 조회(신고 처리) |
-| `walk_note` | `idx_walknote_group(group_id, created_at)` | 보조 | 그룹별 산책 주의사항 조회 |
-| `care_log` | `idx_carelog_dog(dog_id, occurred_at)` | 보조 | 강아지별 케어 이력 |
+| `walk_note` | `uq_walknote_group(group_id)` | UNIQUE | 그룹당 주의사항 한 장 |
 | `care_log` | `idx_carelog_group(group_id, occurred_at)` | 보조 | 그룹별 "오늘의 케어" 조회 |
+| `care_log` | `idx_carelog_doneby(done_by)` | 보조 | 사용자 삭제 시 `SET NULL` 이 훑는 자리 |
 
 > 공간 컬럼(`walk.path`, `place.geom`, `trail.path`)은 모두 `SRID 4326` + `NOT NULL` + `SPATIAL INDEX`. 초기에는 MySQL 공간형 단일 저장소로 운영하고, 대량 GPS 시계열·장소검색(ES/Redis)은 규모 확장 시 옵션이다. 관계 개요는 [ERD](./erd.md) 참조.

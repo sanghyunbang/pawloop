@@ -703,24 +703,28 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 ---
 
-## 9. 가족 케어 (Groups) — 🟡 계획
+## 9. 가족 케어 (Groups) — 🟢 구현됨
 
 반려는 혼자가 아니라 **가족이 함께** 돌본다. 가족 그룹으로 오늘의 케어(물/밥/산책)를 공유해 이중 급여(밥 두 번)·산책 누락을 막는다. **채팅은 여기 없다** — 방은 가족 그룹에 종속되지 않는 범용 리소스라 7장으로 나갔다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-프론트 도메인: `app/lib/v2/domain/pet.dart` → `CareType/CareTask/kCareToday/FamilyMember/kFamilyMembers/kFamilyInviteCode/kWalkNotes` (현재 더미).
-데이터 모델: `family_group(id,name,created_at)` — **초대코드도 멤버십도 여기 없다.** 초대는 `chat_room_invite`, 멤버십은 `chat_room_member` 가 가지고(7장), 방이 `origin_kind`/`origin_ref` 로 이 그룹을 불투명하게 가리킨다. 나머지는 `walk_note(id,group_id,body,created_at)` · `care_log`는 기존 계획 확장 — `group_id`(nullable)·`done_by(user_id)` 추가, `type`은 `water|meal|walk|med|vet`.
+프론트: 홈의 "오늘의 케어" 카드(`app/lib/v2/widgets/today_care_card.dart`)와 `family_screen` 의 멤버·케어·주의사항이 **서버 응답으로 그려진다**(이슈 #76). 아직 더미인 것은 초대코드(`kFamilyInviteCode` — 발급은 7장의 방 경로다)와 거리 공유(`FamilyMember.todayKm`)뿐이다.
+데이터 모델: `family_group(id,name,created_at)` — **초대코드도 멤버십도 여기 없다.** 초대는 `chat_room_invite`, 멤버십은 `chat_room_member` 가 가지고(7장), 방이 `origin_kind`/`origin_ref` 로 이 그룹을 불투명하게 가리킨다. 나머지는 `walk_note(id,group_id,body,updated_by,updated_at)` — **그룹당 한 장**이고 `UNIQUE(group_id)` 가 그것을 지킨다 — 과 `care_log(id,dog_id,group_id,type,done_by,occurred_at,memo,created_at)` 이다. `type` 은 `water|meal|walk|med|vet` **소문자**이고 계약·DB CHECK·앱 enum 이 같은 문자열을 쓴다. **`dog_id` 에는 FK 가 없다** — `dog` 표가 정본 스키마에 아직 없어서다([schema.md §17](../03-database/schema.md)).
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | `POST` | `/api/groups` | 그룹 생성 — **같은 트랜잭션에서 방과 `OWNER` 멤버십이 함께 생긴다.** 초대코드는 여기서 발급하지 않는다(응답의 `roomId` 로 7장의 발급 경로를 부른다) |
 | `GET` | `/api/groups/me` | 내 그룹 + 멤버 목록(없으면 `404`). 멤버 목록의 출처는 `chat_room_member` 다 |
-| `GET` | `/api/groups/{groupId}/care-logs?date&type` | 오늘의 케어 조회 — 누가·언제 물/밥/산책을 했는지 |
-| `POST` | `/api/groups/{groupId}/care-logs` | 케어 기록 `{ "dogId": 7, "type": "meal", "memo": "" }` (`done_by`는 토큰 사용자) |
-| `GET` | `/api/groups/{groupId}/walk-notes` | 산책 시 주의사항(가족 공유 메모) |
-| `PUT` | `/api/groups/{groupId}/walk-notes` | 주의사항 전체 교체 `{ "notes": ["..."] }` |
+| `GET` | `/api/groups/{groupId}/care-logs?date&type` | 오늘의 케어 조회 — 누가·언제 물/밥/산책을 했는지. `date` 생략 시 오늘 |
+| `POST` | `/api/groups/{groupId}/care-logs` | 케어 기록 `{ "type": "meal", "memo": "" }`. **`done_by`·`occurredAt` 은 서버가 정한다** |
+| `GET` | `/api/groups/{groupId}/walk-notes` | 산책 시 주의사항 한 장. 아직 없으면 404 가 아니라 `body: ""` |
+| `PUT` | `/api/groups/{groupId}/walk-notes` | 주의사항 전체 교체 `{ "body": "..." }` |
 
-- **`POST /api/groups` 와 `GET /api/groups/me` 는 구현됐다**(이슈 #75). 케어 로그·주의사항은 아직 계획이다.
-- 그룹 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 초대코드로 들어오는 경로는 7장(`POST /api/chat/invites/{code}/join`)이다.
+- **여섯 경로 모두 구현됐다** — `POST /api/groups`·`GET /api/groups/me` 는 이슈 #75, 케어 넷은 이슈 #76.
+- 그룹 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. **없는 `groupId` 도 404 가 아니라 403 이다** — 404 로 답하면 id 를 훑어 "있는 가족/없는 가족" 을 가려낼 수 있다. 초대코드로 들어오는 경로는 7장(`POST /api/chat/invites/{code}/join`)이다.
+- 멤버십 판정의 원본은 **`chat_room_member` 하나**다. `care` 패키지는 `ChatRoomService` 의 공개 표면(`findRoom`·`isLiveMember`)으로만 묻는다 — chat 밖에서 `chat.repository` 를 부르는 것은 `ChatBoundaryArchitectureTest §E` 가 막는다.
+- **인가와 조회 필터는 서로 다른 방어다.** 인가는 요청을 통째로 막고, `care_log.group_id = :groupId` 필터는 통과한 요청이 어느 행을 보는지를 정한다. 한 사람이 여러 방에 속하는 것은 정상이라(초대코드로 들어오면 그렇게 된다) 인가만 있으면 가족 A 의 멤버가 가족 B 의 기록을 함께 본다.
+- **같은 종류를 하루에 두 번 찍어도 서버는 막지 않는다.** 둘 다 남고, 확인 문구는 앱이 `GET` 응답을 보고 만든다 — 그 목록에 답이 이미 들어 있는데 응답에 "이미 있음" 필드를 더하면 같은 사실의 출처가 둘이 된다.
+- **쓰기 둘(`POST care-logs`·`PUT walk-notes`)은 `group-write` 버킷**(rate limit)이다. 읽기 둘은 표 밖이라 **한도가 무한**이다 — 미룬 것이고 M2.6 에서 앱의 폴링 주기와 함께 정한다.
 - **`POST /api/groups/join` 은 없다.** 예전 계약에 있던 그 경로는 초대코드가 `family_group.invite_code` 컬럼이던 시절의 것이고, [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다) 이후로는 7장의 참여 경로 하나다. 이슈 #75 가 계약에서 걷어냈다.
 - **post-MVP:** 친구 추가(가족 외), 케어 알림/리마인더, 케어 히스토리 통계.
 
@@ -749,7 +753,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | 산책 통계 (fl_chart) | `kWeekKm`(로컬) | `GET /api/walks/stats` |
 | 커뮤니티 (더미) | `kPetPosts`(로컬) | `GET/POST /api/posts`, `/comments`, `/reactions` |
 | 강아지 프로필/편집 | `kMyDog`(로컬) | `GET/POST/PATCH /api/dogs` |
-| 홈 오늘의 케어 카드 · family_screen (멤버·초대코드·케어·주의사항) | `kCareToday`, `kFamilyMembers`, `kWalkNotes`(로컬) | `GET /api/groups/me`, `GET/POST /api/groups/{id}/care-logs`, `GET/PUT /api/groups/{id}/walk-notes` |
+| 홈 오늘의 케어 카드 · family_screen (멤버·케어·주의사항) | ~~`kCareToday`, `kFamilyMembers`, `kWalkNotes`~~ → **서버 연동 완료**(#76). 남은 더미는 `kFamilyInviteCode`·`FamilyMember.todayKm` | `GET /api/groups/me`, `GET/POST /api/groups/{id}/care-logs`, `GET/PUT /api/groups/{id}/walk-notes` |
 | chat_list_screen (방 목록·미읽음) | `kChatRooms`(로컬) | `GET /api/chat/rooms` |
 | family_chat_screen (방 안 대화) | `kChatMessages`(로컬) | `GET/POST /api/chat/rooms/{id}/messages`, `POST /api/chat/rooms/{id}/read` |
 

@@ -329,6 +329,15 @@ void ensureCareFreshForToday() {
 }
 
 /// 오늘의 케어 목록(샘플).
+///
+/// ⚠️ **화면은 더 이상 이것을 그리지 않는다** — 이슈 #76. 홈과 `family_screen` 의
+/// "오늘의 케어" 는 `TodayCareCard` 가 `GET /api/groups/{id}/care-logs` 로 그린다.
+/// 여기 남은 것은 `CareType`·`careIcon`·`careColor`(아이콘·색 팔레트)를 쓰기 위해서다.
+///
+/// 이 리스트로 돌아가면 안 되는 이유: 로컬 리스트는 **한 기기 안에서만** 산다.
+/// 엄마가 밥을 줘도 아빠 화면에는 아무 일도 일어나지 않고, 그게 이 이슈가 막으려는
+/// 이중 급여다. 자유 항목(`label`·`product`·`daily`)은 서버 모델(다섯 종류)에 없어
+/// M4 로 미뤘다.
 final List<CareTask> kCareToday = [
   CareTask(
     type: CareType.water,
@@ -357,6 +366,9 @@ class FamilyMember {
   const FamilyMember(this.name, this.role, this.color, {this.todayKm = 0});
 }
 
+/// ⚠️ **가족 화면은 더 이상 이것을 그리지 않는다** — 이슈 #76 이 `GET /api/groups/me` 로
+/// 바꿨다. 아직 남아 있는 것은 `family_chat_screen`(발신자 색 팔레트)과 `kChatRooms` 의
+/// `memberCount` 뿐이고, 그 둘은 채팅 이슈(M2.6)가 서버로 옮긴다.
 const List<FamilyMember> kFamilyMembers = [
   FamilyMember('나', '보호자', Color(0xFFFF8F63), todayKm: 2.4),
   FamilyMember('엄마', '가족', Color(0xFF57C98A), todayKm: 1.1),
@@ -367,10 +379,21 @@ const List<FamilyMember> kFamilyMembers = [
 /// 켤 때 반드시 동의 시트를 거치고, 제공 시마다 알림 통지(법 제19조) — 푸시는 백엔드 연동 시.
 final ValueNotifier<bool> kShareMyDistance = ValueNotifier<bool>(false);
 
-/// 가족 초대 코드(더미 — 백엔드 그룹 연동 전).
+/// 가족 초대 코드(옛 더미).
+///
+/// ⚠️ **화면은 더 이상 이것을 보여주지 않는다** — 이슈 #76. 발급은
+/// `POST /api/chat/rooms/{roomId}/invites` 이고 `family_screen` 이 그것을 부른다.
+///
+/// 이 문자열을 화면에 다시 띄우면 안 된다: **아무도 이 코드로 들어올 수 없다.**
+/// 초대는 `chat_room_invite` 행이고 만료·사용횟수·회수를 가진다(ADR-0011). 진짜처럼
+/// 보이는 코드를 가족에게 보내면 가족은 조용히 실패한다.
 const String kFamilyInviteCode = 'PAW-2481';
 
-/// 산책 시 주의사항(가족 공유 메모). 가족 누구나 추가/삭제 가능.
+/// 산책 시 주의사항(옛 더미).
+///
+/// ⚠️ **화면은 더 이상 이것을 그리지 않는다** — 이슈 #76. `family_screen` 은
+/// `GET|PUT /api/groups/{id}/walk-notes` 를 쓴다. 서버가 아는 것은 **그룹당 메모 한 장**
+/// 이고, 줄 단위 목록은 화면의 표현이다(`WalkNoteSheet.lines`).
 final List<String> kWalkNotes = [
   '오른쪽 뒷다리 슬개골 — 계단·점프 피하기',
   '대형견 만나면 예민해요. 리드줄 짧게 잡기',
