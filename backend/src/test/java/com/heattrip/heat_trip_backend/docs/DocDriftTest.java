@@ -187,6 +187,31 @@ class DocDriftTest {
     }
 
     @Test
+    @DisplayName("스키마 문서의 family_group 이 초대코드도 방 참조도 들지 않는다 — 그게 이 표의 요점이다")
+    void schema_documentsFamilyGroupWithoutAnInviteCodeOrARoomReference() {
+        // 이슈 #75. 이 표를 만들 때 가장 자연스럽게 되살아나는 것이 옛 모양 둘이다 —
+        // invite_code 컬럼과 chat_room 으로 가는 FK. 문서가 그걸 그리면 문서를 보고 만든
+        // DB 가 ADR-0011 과 반대말을 한다.
+        assertThat(schema).contains("CREATE TABLE family_group (");
+
+        String familyGroup = createTable(schema, "family_group");
+        assertThat(familyGroup)
+                .as("""
+                        초대코드는 chat_room_invite 다. 컬럼 하나로 두면 그룹당 코드 하나가 영구히 \
+                        살고 만료·사용횟수·회수를 걸 자리가 없다 (schema.md §14 · ADR-0011).""")
+                .doesNotContain("invite_code");
+        assertThat(familyGroup)
+                .as("""
+                        화살표는 chat_room → family_group 한쪽이다. 반대 방향을 그리면 두 표가 \
+                        서로를 알게 되어 어느 쪽도 혼자 못 움직인다 (ADR-0011 결정 4).""")
+                .doesNotContain("REFERENCES chat_room")
+                .doesNotContain("room_id");
+        assertThat(familyGroup)
+                .as("멤버십 표는 chat_room_member 하나다 — 여기에 사용자 컬럼이 생기면 둘이 된다")
+                .doesNotContain("user_id");
+    }
+
+    @Test
     @DisplayName("ERD 가 users 엔티티를 그리고 refresh_token 을 포함한다")
     void erd_drawsUsersAndTheRefreshTokenLedger() {
         // 산문의 "예전에는 app_user 로 그렸다" 는 남아야 한다 — 지우면 이름이 왜 바뀌었는지가 사라진다.

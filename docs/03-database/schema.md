@@ -15,7 +15,9 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** `§1 users` 와 `§2 refresh_token` 만 **지금 DB 에 있다** — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. `§3 dog` 이하는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
+> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` 여섯이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§3 dog`·`§15 chat_message` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
+>
+> 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
 ---
 
@@ -395,11 +397,13 @@ CREATE TABLE bookmark (
 
 ---
 
-## 11. `family_group` — 가족 케어 그룹
+## 11. `family_group` — 가족 케어 그룹 (**실재**)
 
 가족이 함께 반려를 돌보는 그룹. **이름과 생성 시각만 든다** — 초대코드도 멤버십도 여기 없다. 초대는 `chat_room_invite`(§14), 멤버십은 `chat_room_member`(§13)가 가지고, 이 그룹의 방은 `chat_room`(§12)이 `origin_kind='FAMILY'` / `origin_ref=family_group.id` 로 **불투명하게** 가리킨다. `chat_room` → `family_group` 방향 FK 는 없고, `chat_room` 의 `UNIQUE(origin_kind, origin_ref)` 가 같은 그룹에 방이 둘 생기는 것을 DB 수준에서 막는다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-> **예전 정의에는 `invite_code VARCHAR(12)` + `UNIQUE KEY uq_group_invite` 가 있었다.** 그건 그룹당 코드 하나가 영구히 사는 모양이라 만료·사용횟수·폐기를 걸 자리가 없고, 코드를 바꾸려면 그룹 행을 UPDATE 해야 해서 누가 언제 발급했는지가 남지 않는다. 초대코드는 §14 로 나갔다.
+> **예전 정의에는 `invite_code VARCHAR(12)` + `UNIQUE KEY uq_group_invite` 가 있었다.** 그건 그룹당 코드 하나가 영구히 사는 모양이라 만료·사용횟수·폐기를 걸 자리가 없고, 코드를 바꾸려면 그룹 행을 UPDATE 해야 해서 누가 언제 발급했는지가 남지 않는다. 초대코드는 §14 로 나갔다. `post-start/07_family_group.sql` 의 사전 점검이 이 컬럼을 발견하면 마이그레이션을 중단한다.
+
+> **이 표에 행을 넣는 곳은 하나다.** `FamilyGroupService.create` 이고, 그 메서드가 **같은 트랜잭션에서** `chat_room`(§12)과 `chat_room_member(role='OWNER')`(§13)을 함께 INSERT 한다(이슈 #75). 문을 하나로 둔 이유는 "방 없는 그룹" 을 만들 방법 자체를 없애기 위해서다 — 방이 없으면 초대코드를 발급할 사람이 없어 아무도 못 들어온다. 방향은 **group → chat** 한쪽이고, 그 반대(chat 이 이 표를 아는 것)는 `ChatBoundaryArchitectureTest` 가 막는다.
 
 ```sql
 CREATE TABLE family_group (
@@ -418,7 +422,7 @@ CREATE TABLE family_group (
 
 ---
 
-## 12. `chat_room` — 채팅방 (범용)
+## 12. `chat_room` — 채팅방 (범용) (**실재**)
 
 방은 가족 그룹에 종속되지 않는다. `origin_kind`(방을 만든 도메인)와 `origin_ref`(그 도메인의 id 를 문자열로) 한 쌍으로 출처를 들고, 산책 크루 방처럼 가족이 아닌 방도 같은 표에 산다. **`last_seq` 는 `chat_message.room_seq` 의 발급 카운터이자 미읽음 뺄셈의 좌변이다** — 두 값이 다른 문장에서 움직여 어긋날 여지를 없애려고 한 컬럼으로 둔다.
 
@@ -452,7 +456,7 @@ CREATE TABLE chat_room (
 
 ---
 
-## 13. `chat_room_member` — 방 멤버십
+## 13. `chat_room_member` — 방 멤버십 (**실재**)
 
 멤버십 표는 이것 하나다. **`group_member` 를 따로 만들지 않는다** — 둘을 두면 "가족인데 방에 없는 사람" 같은 상태가 생기고 그걸 막는 코드를 영원히 쓴다. 강퇴·재입장 금지가 전부 여기 붙는다. **행을 지우지 않는다**: 미읽음이 `last_read_seq` 뺄셈이라 지우면 되돌릴 수 없다.
 
@@ -494,7 +498,7 @@ CREATE TABLE chat_room_member (
 
 ---
 
-## 14. `chat_room_invite` — 초대코드
+## 14. `chat_room_invite` — 초대코드 (**실재**)
 
 초대코드를 그룹 행의 컬럼 하나로 두지 않고 별도 표에 둔다. 유효기간·사용횟수·회수를 처음부터 갖추고, **누가 언제 발급했는지가 남는다.** 기본값은 **7일 · 사용 횟수 무제한**이다. 방장이 재발급하면 이전 코드는 즉시 `revoked_at` 이 찍히고 **기존 멤버는 그대로 남는다** — 코드가 유출됐을 때의 유일한 대응 수단이다. 폐기한 `code` 는 UNIQUE 라 재사용하지 않는다.
 

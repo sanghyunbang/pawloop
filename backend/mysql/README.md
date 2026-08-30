@@ -31,6 +31,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\04_users_social_account_model.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\05_refresh_token.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\06_chat_rooms.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\07_family_group.sql
 ```
 
 | 파일 | 무엇을 |
@@ -41,6 +42,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `04_users_social_account_model.sql` | 소셜 계정 모델 — `users.provider`·`social_id`·`role` 추가, 레거시 `username` 백필, `UNIQUE(provider, social_id)` (이슈 #7) |
 | `05_refresh_token.sql` | refresh 토큰 원장 — `refresh_token` 테이블 생성, `UNIQUE(token_hash)`, `user_id`·`expires_at` 인덱스 (이슈 #9) |
 | `06_chat_rooms.sql` | 방·멤버십·초대 — `chat_room`·`chat_room_member`·`chat_room_invite` 생성, `UNIQUE(origin_kind, origin_ref)`·`UNIQUE(room_id, user_id)`·`UNIQUE(code)`, `chat_room` 으로의 FK 둘 (이슈 #74 · [ADR-0011](../../docs/99-decisions/decision-log.md)) |
+| `07_family_group.sql` | 가족 케어 그룹 — `family_group(id, name, created_at)` 생성. **초대코드도 멤버십도 여기 없다** (이슈 #75 · [ADR-0011](../../docs/99-decisions/decision-log.md)) |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
@@ -75,3 +77,12 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 - **경계 검증**: `chat_*` 표에서 `chat_*` 밖으로 나가는 FK가 **0개**인지 봅니다. `users`·`family_group`·`dog`로 FK를 내지 않는 것이 [ADR-0011](../../docs/99-decisions/decision-log.md)의 결정이고, `refresh_token.user_id`(이슈 #9)가 이미 같은 방식입니다. 저장소 쪽은 `ChatBoundaryArchitectureTest`가 같은 것을 잡습니다.
 
 **실행 순서**: `06`은 앱 배포 **전**에 돌립니다. prod는 `ddl-auto=validate`라 표가 없으면 부팅 자체가 실패하므로 이 순서는 사실상 강제됩니다. 빈 DB를 새로 세우는 경우에는 필요 없습니다 — `mysql/init/01_schema.sql`이 세 표를 이미 담고 있습니다. 되돌리는 SQL(DOWN)은 `06_chat_rooms.sql` 헤더 주석에 있습니다.
+
+### 07은 `06` 다음입니다 — FK 때문이 아닙니다
+
+`07_family_group.sql`이 만드는 `family_group`에는 **FK가 하나도 없습니다.** 그런데도 `06` 뒤인 이유는, 그룹을 만드는 코드가 **같은 트랜잭션에서** `chat_room`과 `chat_room_member(OWNER)`를 함께 INSERT하기 때문입니다. 세 표가 없으면 그룹 생성이 통째로 실패합니다.
+
+- **사전 점검**: 같은 이름의 표가 **다른 모양**으로 이미 있으면 멈춥니다. `CREATE TABLE IF NOT EXISTS`는 이미 있는 표를 고치지 않으므로, 이 관문이 없으면 스크립트는 조용히 성공하고 그 차이는 prod 부팅(`ddl-auto=validate`)에서야 드러납니다. 특히 옛 정의의 `invite_code` 컬럼이 남아 있으면 `ERROR 1644`로 중단합니다 — 초대코드는 `chat_room_invite`로 옮겼습니다([ADR-0011](../../docs/99-decisions/decision-log.md)).
+- **사후 검증**: 표·컬럼과 함께 **경계를 양방향으로** 봅니다. `family_group`이 내보내는 FK 0개, `chat_*`가 `family_group`으로 거는 FK 0개, 그리고 `group_member` 표가 **없을 것**. 마지막 것이 ADR-0011 결정 1(멤버십 표는 `chat_room_member` 하나)을 실행 가능한 형태로 적은 것입니다.
+
+되돌리는 SQL(DOWN)은 `07_family_group.sql` 헤더 주석에 있습니다. 되돌려도 **방과 대화는 남습니다** — `chat_room`은 이 표로 FK를 걸지 않기 때문입니다.
