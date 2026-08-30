@@ -326,6 +326,45 @@ void main() {
       expect(expiredHookCalls, 0, reason: '세션 만료 훅이 돌면 화면이 로그인으로 튄다');
     });
 
+    test('갱신이 응답하지 않으면 타임아웃으로 끊고 토큰은 지킨다 — 영원히 걸리지 않는다', () async {
+      // 이게 없으면 응답을 주지 않는 서버에서 갱신 future 가 영원히 걸린다. 단일 비행이라
+      // 그 하나가 걸리면 뒤따르는 모든 401 재시도가 같은 future 를 기다리며 함께 멈추고,
+      // 앱은 로딩만 돌면서 사용자에게 아무 문구도 띄우지 않는다.
+      //
+      // `.timeout(refreshTimeout)` 을 지우면 이 테스트가 **끝나지 않는다**(빨간불이 아니라
+      // 행). 그래서 여기서는 테스트 자체에 상한을 걸어 그 상태를 실패로 만든다.
+      var expiredHookCalls = 0;
+      final store = _FakeTokenStore(access: 'AT-1', refresh: 'RT-STILL-VALID');
+
+      final client = AuthedClient(
+        inner: MockClient((req) async {
+          if (_isRefresh(req)) {
+            // 실제 타임아웃(15초)보다 길게 붙잡아 둔다.
+            await Future<void>.delayed(const Duration(seconds: 30));
+            return http.Response('', 200);
+          }
+          return http.Response('', 401);
+        }),
+        baseUrl: _base,
+        store: store,
+        onSessionExpired: () async => expiredHookCalls++,
+      );
+
+      final res = await client
+          .getJson(Uri.parse('$_base/api/bookmarks'))
+          .timeout(
+            const Duration(seconds: 25),
+            onTimeout: () => throw StateError(
+              '갱신이 refreshTimeout 안에 끊기지 않았다 — .timeout() 이 빠졌다',
+            ),
+          );
+
+      expect(res.statusCode, 401, reason: '이번 요청은 실패다');
+      expect(store.clearCount, 0, reason: '응답이 없는 것은 "이 RT 가 죽었다" 는 확답이 아니다');
+      expect(store.refresh, 'RT-STILL-VALID');
+      expect(expiredHookCalls, 0);
+    }, timeout: const Timeout(Duration(seconds: 40)));
+
     test('갱신이 5xx 나 네트워크 오류로 실패해도 토큰을 지키고 401 만 돌려준다', () async {
       final store = _FakeTokenStore(access: 'AT-1', refresh: 'RT-1');
 

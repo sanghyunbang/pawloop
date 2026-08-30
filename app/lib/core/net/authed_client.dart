@@ -137,6 +137,18 @@ class AuthedClient extends http.BaseClient {
   /// 본문이 있는 요청의 기본 Content-Type. 이 문자열은 여기 한 곳에만 있다.
   static const String jsonContentType = 'application/json; charset=utf-8';
 
+  /// 토큰 갱신 왕복의 상한.
+  ///
+  /// 이게 없으면 응답을 주지 않는 서버(끊긴 연결·죽은 프로세스·중간 장비)에서
+  /// 갱신 future 가 **영원히** 걸립니다. 단일 비행(single-flight)이라 그 하나가
+  /// 걸리면 뒤따르는 모든 401 재시도가 같은 future 를 기다리며 함께 멈춥니다 —
+  /// 앱은 로딩만 돌고 사용자에게는 아무 문구도 뜨지 않습니다.
+  ///
+  /// 15초인 이유: 이 왕복은 사람이 기다리는 화면 뒤에 있고, 모바일 네트워크가
+  /// 느려도 정상 응답은 그 안에 옵니다. 타임아웃은 실패로 분류되지만
+  /// **세션 종료는 아닙니다** — 토큰을 지우지 않고 다음 요청이 다시 시도합니다.
+  static const Duration refreshTimeout = Duration(seconds: 15);
+
   // ── 편의 메서드 ────────────────────────────────────────────────────────
   //
   // `http` 패키지의 `post(url, body: jsonEncode(x))` 는 헤더를 안 주면
@@ -287,11 +299,13 @@ class AuthedClient extends http.BaseClient {
     }
 
     try {
-      final res = await _inner.post(
-        Uri.parse('$baseUrl/auth/token/refresh'),
-        headers: const {'Content-Type': jsonContentType},
-        body: jsonEncode({'refreshToken': refreshToken}),
-      );
+      final res = await _inner
+          .post(
+            Uri.parse('$baseUrl/auth/token/refresh'),
+            headers: const {'Content-Type': jsonContentType},
+            body: jsonEncode({'refreshToken': refreshToken}),
+          )
+          .timeout(refreshTimeout);
 
       if (res.statusCode != 200) {
         if (kDebugMode) {

@@ -77,6 +77,13 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && "/auth/login".equals(path)) {
             return new Rule("login", rateLimit.getLoginMaxRequests());
         }
+        // 회원가입도 login 버킷을 쓴다. 이 줄이 없던 동안 `POST /auth/signup` 은 **무제한**
+        // 이었다 — `resolveRule` 이 null 을 돌려주면 필터가 그대로 통과시키기 때문이다.
+        // 계정 대량 생성은 이메일 열거·스팸 계정의 입구이고, 비용은 로그인 시도와 같은 급이라
+        // 버킷을 나누지 않고 함께 쓴다.
+        if ("POST".equals(method) && "/auth/signup".equals(path)) {
+            return new Rule("login", rateLimit.getLoginMaxRequests());
+        }
         // ── 인증 버킷 (이슈 #14) ────────────────────────────────────────────────
         // 세 분기를 하나의 || 로 합치지 않는다. 합치면 "어느 경로가 언제 목록에서
         // 빠졌는지" 가 한 줄 안에 묻히고, 한 경로만 지웠을 때 어느 테스트가 빨간불이

@@ -7,3 +7,9 @@ application-private.properties
 .env
 *.iml
 *.log
+
+# 시드 CSV — .gitignore 로 저장소 밖이라 클론에는 없다. 그런데 여기서 빼지 않으면
+# 로컬에 파일이 있는 기계에서 빌드한 이미지에만 들어가서, **같은 태그의 이미지가
+# 빌드한 기계에 따라 다른 데이터를 담는다.** "내 로컬에선 되는데" 가 이미지 레벨에서
+# 재현되는 자리라 명시적으로 뺀다. 시드는 운영 SQL 로 넣는다.
+src/main/resources/data/
