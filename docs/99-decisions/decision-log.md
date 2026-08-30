@@ -13,12 +13,13 @@
 | [0001](#adr-0001--감정여행heattrip--반려앱pawloop-피벗) | 감정여행(heattrip) → 반려앱(Pawloop) 피벗 | 채택 (Accepted) | 2026-07 |
 | [0002](#adr-0002--앱-이름-pawloop포루프-채택) | 앱 이름 Pawloop(포루프) 채택 | 채택 (Accepted) | 2026-07 |
 | [0003](#adr-0003--rdbmysql-공간형-중심-nosql-보류) | RDB(MySQL 공간형) 중심, NoSQL 보류 | 채택 (Accepted) | 2026-07 |
-| [0004](#adr-0004--관광공사-kto-반려동반-api-korpettourservice2-채택) | 관광공사 KTO 반려동반 API(KorPetTourService2) 채택 | 채택 (Accepted) | 2026-07 |
+| [0004](#adr-0004--관광공사-kto-반려동반-apikorpettourservice2-채택) | 관광공사 KTO 반려동반 API(KorPetTourService2) 채택 | 채택 (Accepted) | 2026-07 |
 | [0005](#adr-0005--flutter-332--344-업그레이드--fl_chart-도입) | Flutter 3.32 → 3.44 업그레이드 + fl_chart 도입 | 채택 (Accepted) | 2026-07 |
 | [0006](#adr-0006--kto-앱에서-직접-호출임시--백엔드-프록시-계획) | KTO 앱에서 직접 호출(임시) → 백엔드 프록시 계획 | 임시 채택 (Accepted, 임시) | 2026-07 |
 | [0007](#adr-0007--fluent-emoji-3d-아이콘-채택) | Fluent Emoji 3D 아이콘 채택 | 채택 (Accepted) | 2026-07 |
 | [0008](#adr-0008--저장소가-담는-문서의-범위) | 저장소가 담는 문서의 범위 — 기술 문서를 코드와 함께 관리 | 채택 (Accepted) | 2026-08 |
 | [0009](#adr-0009--소셜-로그인에-pkce-를-도입하지-않는다) | 소셜 로그인에 PKCE 를 도입하지 않는다 — 백엔드가 공급자와 코드 교환을 수행하는 동안 | 채택 (Accepted) | 2026-08 |
+| [0010](#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) | 소셜 로그인 공급자(카카오·구글)와 앱 세션 토큰 전략 — 네이버·Redis 보류 | 채택 (Accepted) | 2026-08 |
 
 > 상태 범례: **채택(Accepted)** = 현재 유효 · **임시(Accepted, 임시)** = 채택했으나 대체 계획 존재 · (필요 시) 폐기(Superseded)/거절(Rejected).
 
@@ -126,7 +127,7 @@ Pawloop의 데이터는 대부분 **공간(geo) 데이터**다: 산책 경로(LI
 ### 결과
 - 서울 ~45곳을 **실연동**해 지도에 표시(유일한 실데이터 레이어). 병원/펫샵(LOCALDATA)·산책로(두루누비)는 **더미** 상태로 남아 향후 연동 대상(→ [외부 공개데이터 연동](../02-architecture/external-data.md)).
 - **호출 한도 1,000 calls/day**(개발계정) → 프리로드/캐시 전제, 앱 직접 호출은 임시(→ ADR-0006).
-- **serviceKey 취급 주의**: `.env`의 `YOUR_DECODING_SERVICE_KEY`는 명칭과 달리 **이미 URL 인코딩된** 키라 재인코딩 금지(재인코딩 시 이중 인코딩 → `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`).
+- **serviceKey 취급 주의**: `--dart-define=YOUR_DECODING_SERVICE_KEY`로 주입하는 값(`Env.tourServiceKey`)은 명칭과 달리 **이미 URL 인코딩된** 키라 재인코딩 금지(재인코딩 시 이중 인코딩 → `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`). 예전에는 이 값이 `.env` 에셋에 있었고 #29 가 `--dart-define` 으로 옮겼다.
 - 응답 형태 불안정(`items` 빈 문자열, `item` 객체/배열 혼재) → 방어적 파싱 구현(`pet_places_repository.dart`의 `_parse`).
 
 ---
@@ -300,6 +301,99 @@ PKCE(RFC 7636)가 푸는 문제는 **공개 클라이언트(앱)가 공급자와
 - 코드에 PKCE 파라미터를 넣지 않는다. 계약 문서 두 곳의 각주는 이 ADR 로 링크되는 요약으로 남는다.
 - **트리거:** 앱이 공급자와 **직접** 말하도록 바꾸는 PR 은 이 ADR 을 `Superseded` 로 바꾸고 PKCE 를 필수로 넣는 새 ADR 을 추가한다. 그 PR 에서 함께 바뀌는 것: 클라이언트 시크릿의 위치, 사용자 upsert 지점, 딥링크 계약, `AuthCodeStore` 의 존재 이유.
 - 위 세 장치 중 하나라도 약해지면 이 결정의 전제가 무너진다. 그래서 셋은 각각 독립된 테스트로 잠겨 있다 — `AuthCodeStoreTest`(1회성·만료가 서로 독립), `OAuthCodeExchangeServiceTest`(`state` 부재·불일치), `social_login_callback_test.dart`(앱쪽 대조).
+
+---
+
+## ADR-0010 — 소셜 로그인 공급자와 앱 세션 토큰 전략
+
+- **상태**: 채택 (Accepted)
+- **날짜**: 2026-08
+- **관련**: Epic #2 · 이슈 #15 · #3 · #7 · #9 · #13 · #14 · ADR-0003(RDB 단일 저장소) · ADR-0009(PKCE)
+
+### 맥락
+
+M2(로그인) Epic 에서 **되돌리기 비싼 결정을 다섯 개** 내렸는데, 그 결정들이 전부 코드에만 남았다. 코드는 "무엇을 했는가" 를 말하지만 "무엇을 하지 않기로 했는가" 는 말하지 않는다. 그래서 안 한 결정(네이버·Redis)이 가장 먼저 잊힌다.
+
+문서와 코드가 이미 서로 다른 말을 하고 있었다.
+
+| 무엇 | 문서가 말한 것 | 실제 |
+| --- | --- | --- |
+| 소셜 공급자 | 로드맵 M2 는 "카카오/네이버" (5곳) | 앱 로그인 화면은 카카오·구글 둘만 띄운다. 네이버 버튼은 **#3 에서 내렸다** |
+| 계약 enum | `parameters.Provider` 와 `User.provider` 가 `naver` 를 포함 | 같은 파일의 설명은 이미 "MVP 는 kakao·google" — **설명과 enum 이 서로 모순** |
+| 사용자 테이블 | `schema.md`·`erd.md` 가 `app_user` 를 정의 | 실제 테이블은 `users` (`@Table(name = "users")`). `refresh_token` 은 양쪽 문서에 **0건** |
+
+즉 결정 자체가 없는 것이 아니라, 결정이 **한 곳에 적혀 있지 않아서** 문서마다 다른 시점의 사실이 굳어 있었다. 이 ADR 은 그 다섯 결정을 한자리에 적고, 각각이 어느 파일에서 기계로 잠기는지까지 남긴다.
+
+### 결정
+
+**1. 소셜 공급자는 카카오·구글 둘이다. 네이버는 보류한다.**
+
+계약(`docs/04-api/openapi.yaml`)의 `parameters.Provider` enum 과 `User.provider` enum, 그리고 코드의 `AuthController.SUPPORTED_PROVIDERS` 가 **같은 집합**이어야 한다. 세 곳에서 `naver` 를 뺐다.
+
+**2. JWT 의 `sub` 는 `users.id` 다.** 이메일도 소셜 ID 도 아니다.
+
+카카오의 `account_email` 은 **선택 동의**라서 사용자가 거부하면 이메일이 오지 않고, 나중에 동의를 켜면 값이 생긴다(#7). 시간에 따라 나타났다 사라지는 값은 식별 키가 될 수 없다. 소셜 계정의 식별 키는 `(provider, social_id)` 쌍이고, 토큰이 싣는 주체는 그 행의 `users.id` 하나다.
+
+**3. Refresh Token 은 JWT 가 아니라 불투명 랜덤 문자열 + MySQL 원장이다.**
+
+`SecureRandom` 32바이트를 패딩 없는 Base64URL 로 적은 43자이고, 서버는 원문이 아니라 **SHA-256 해시**를 저장한다(`refresh_token.token_hash`). 회전(refresh 때 새 RT 발급 + 옛 RT 폐기)과 재사용 감지(폐기된 RT 가 다시 오면 그 사용자의 RT 전부 폐기)가 여기에 얹혀 있다(#9). **폐기는 삭제가 아니다** — 행을 남긴 채 `revoked_at` 을 찍는다.
+
+**4. Redis(RT 검증 캐시 · 액세스 토큰 블록리스트)는 이번에 넣지 않는다.**
+
+인증 상태의 진실은 MySQL 원장이다. Redis 는 그 원장의 대체가 아니라 캐시이고, 지금은 캐시가 값을 하지 못한다(→ 대안 5). ADR-0003 이 이미 "캐시(Redis)는 규모 확장 시 옵션" 이라고 정했고, 이 ADR 은 그것을 **인증 맥락에서 재확인**한다. 남은 작업 목록은 `backend/TODO/refresh-token-redis.md` 가 소유한다.
+
+**5. 소셜 로그인 딥링크는 토큰이 아니라 1회용 코드를 싣는다.**
+
+`heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 다(#14). 코드는 우리가 만든 256bit 난수이고 TTL 60초·1회 소비다. 구현이 왕복 한 번만큼 복잡해지는 대가를 치르는 이유: 커스텀 스킴은 어느 앱이든 등록할 수 있고, URL 은 302 의 `Location` 헤더와 브라우저 히스토리에 남는다. 예전에는 그 채널로 1시간짜리 액세스 토큰과 14일짜리 refresh 토큰이 함께 나갔다.
+
+> **PKCE 는 이 ADR 이 다루지 않는다.** 그 판단은 [ADR-0009](#adr-0009--소셜-로그인에-pkce-를-도입하지-않는다) 가 소유한다 — 백엔드가 공급자와 코드 교환을 수행하는 동안에는 `code_verifier` 를 검증할 주체가 없다는 내용이다. 계약 두 곳이 그 번호로 링크를 걸고 있으므로 여기서 다시 쓰지 않는다.
+
+### 대안
+
+**1. 네이버를 지금 켠다.** 기각(보류).
+
+공급자를 하나 더 켜는 비용은 코드가 아니라 **운영과 데이터 모델**에 붙는다.
+
+- 개발자센터 앱 등록·검수, 개인정보 제3자 제공 항목, 프로덕션 시크릿 관리가 하나씩 더 생긴다.
+- 식별 키가 `(provider, social_id)` 이므로(#7) **같은 사람이 공급자를 바꾸면 다른 계정**이 된다. 이메일로 합치지 않기로 이미 정했기 때문에 병합은 자동으로 되지 않는다. 공급자가 셋이면 그 갈래가 세 개가 되고, MVP 에서 계정 병합 UX 를 감당할 수 없다.
+- 얻는 것은 "네이버로만 가입할 수 있는 사람" 인데, 그 집합은 카카오도 구글도 없는 사람이다. 지금 그 크기를 측정할 방법이 없다. **측정되지 않은 이득을 위해 위 비용을 먼저 치르지 않는다.**
+
+무엇보다 제품은 이미 두 공급자로 돌고 있었다 — 앱 로그인 화면은 **#3 에서 네이버 버튼을 내렸다.** 계약과 로드맵만 셋을 광고하고 있었다. 이 결정은 새로 좁히는 것이 아니라 이미 벌어진 일을 문서에 맞추는 것이다.
+
+**2. 세 공급자를 계약 enum 에 남기고 코드만 좁힌다.** 기각.
+
+계약이 "이 값을 보내도 된다" 고 광고하는데 서버가 400 을 주면, 계약만 보고 만든 클라이언트가 조용히 깨진다. 반대로 코드만 넓으면 계약에 없는 값이 302 로 통과한다. `docs/02-architecture/backend/auth.md` 가 이 불변식을 글로 적어 두었지만 글은 지켜지지 않았다 — 그래서 이번에 테스트로 옮겼다.
+
+**3. JWT 의 `sub` 를 email 또는 소셜 ID 로 둔다.** 기각.
+
+email 은 카카오 경로에서 null 일 수 있고(#7) 사용자가 바꿀 수도 있다. 소셜 ID 는 공급자마다 형식이 다르고 공급자가 바뀌면 같은 사람을 못 알아본다. `users.id` 는 우리가 발급하고 우리가 보증하는 유일한 불변 키다.
+
+**4. Refresh Token 도 JWT 로 만든다.** 기각.
+
+"JWT 면 DB 없이 된다" 는 것이 그대로 문제다. 서명만으로 검증되는 토큰은 **폐기할 수 없다.** 로그아웃·회전·재사용 감지는 전부 "이 토큰이 지금도 살아 있는가" 를 서버가 판정해야 성립하는데, 그 판정에는 상태가 필요하다. 상태를 어차피 둘 것이라면 토큰 안에 클레임을 넣을 이유가 없다 — 불투명 난수가 더 짧고, 유출됐을 때 알려주는 정보도 없다.
+
+**5. Redis 를 지금 넣는다.** 기각(보류).
+
+- 지금 배포 단위는 `backend/docker-compose.yml` 의 `app` 서비스 하나, 즉 **단일 인스턴스**다. 인스턴스 간에 공유할 상태가 없으므로 캐시가 주는 이득이 없고, 운영 요소만 하나 늘어난다.
+- 액세스 토큰 블록리스트(`jti`)는 Redis 가 있어야 값을 하는데, 지금 AT 수명이 1시간이라 블록리스트가 줄이는 창이 **최대 1시간**이다. 그 대가로 모든 인증 요청에 조회가 1회 붙는다. MySQL 로 대신하면 그 조회가 DB 로 간다 — 더 나쁘다.
+- 재사용 감지에 필요한 것은 캐시가 아니라 **영속 원장**이다(#9). Redis 를 넣어도 MySQL 원장은 남는다. 즉 Redis 는 지금 있는 것을 대체하지 않고 얹히기만 한다.
+
+**6. 딥링크에 토큰을 그대로 싣는다(현행 유지).** 기각 — #14 가 걷어냈다. 이유는 결정 5 에 적었다.
+
+### 결과
+
+- **잠긴 곳.** 이 ADR 의 결정들은 산문이 아니라 테스트로 지켜진다.
+  - `OpenApiAuthContractTest` — 계약의 `Provider`·`User.provider` enum 이 `[kakao, google]`(+`local`·`null`)인지, 그리고 **코드의 `AuthController.SUPPORTED_PROVIDERS` 와 같은 집합**인지. `naver` 를 어느 한쪽에 되돌리면 빨간불이다.
+  - `DecisionLogTest` — 이 ADR 이 인덱스에 있고 앵커가 살아 있는지, 4개 절과 다섯 결정이 있는지.
+  - `AuthSubjectContractSpecTest` — `sub` 가 `users.id` 라는 규약.
+  - `RefreshTokenServiceTest`·`AuthTokenRefreshIntegrationTest` — 회전과 재사용 감지.
+  - `AuthCodeStoreTest`·`OAuthCodeExchangeServiceTest`·`social_login_callback_test.dart` — 1회용 코드·`state` 대조.
+- **아직 덮지 못한 것 — 네이버는 계약에서만 닫혔다.** 백엔드에는 네이버 클라이언트 등록(`application-dev.properties`·`application-prod.properties`)과 `CustomOAuth2UserService` 의 `naver` 분기·`NaverOAuth2User` 가 그대로 있다. 앱이 실제로 여는 것은 `GET /auth/oauth/{provider}` 래퍼가 아니라 스프링 시큐리티 자체 진입점 `/oauth2/authorization/{provider}` 이고(`social_login_service.dart`), 그 경로는 `permitAll` 이다. **따라서 `/oauth2/authorization/naver` 는 지금도 열려 있다.** 이 ADR 은 그 구멍을 닫지 않는다 — 닫는 일은 **#13** 이 소유한다(등록 제거 + 매핑 코드 제거 + `CustomOAuth2UserServiceTest` 의 네이버 블록 제거).
+  - 매핑 코드를 이번에 지우지 않은 이유: 등록이 살아 있는 동안 그 분기는 **죽은 코드가 아니다.** 코드만 먼저 지우면 네이버로 들어온 요청이 매핑 예외로 죽는다 — 지금과 다른 실패지 닫힌 상태가 아니다. 등록과 코드는 같은 변경에서 함께 나가야 한다.
+- **되돌리는 조건(트리거).**
+  - 네이버를 켜려면: 이 ADR 을 갱신하고 계약 enum·`SUPPORTED_PROVIDERS` 를 함께 넓힌다. 한쪽만 넓히면 위 테스트가 막는다.
+  - Redis 를 넣으려면: 인스턴스가 둘 이상이 되거나, AT 수명을 늘려 블록리스트의 창이 의미 있어질 때다. 그 시점에 `backend/TODO/refresh-token-redis.md` 의 목록을 실행하고 이 ADR 을 `Superseded` 로 바꾼다.
+- 문서 정합도 함께 맞췄다: 로드맵 M2 의 "카카오/네이버" 5곳, `schema.md`·`erd.md` 의 `app_user` → 실제 테이블 `users`(+`refresh_token` 추가), 구현현황의 "로그인 ❌ 미구현".
 
 ---
 
