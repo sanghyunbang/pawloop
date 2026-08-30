@@ -50,7 +50,7 @@ Entity/DB    @Entity → MySQL (공간형 POINT/LINESTRING + SPATIAL INDEX)
 
 ```
 com.heattrip.heat_trip_backend
-├── user            # Auth (기존 AuthController) + app_user
+├── user            # Auth (기존 AuthController) + users
 ├── OAuth           # JWT Provider/Filter, OAuth2 SuccessHandler (재사용)
 ├── dog             # ← 신규: 반려견 프로필
 ├── place           # ← 신규: 장소(KTO/병원/펫샵/산책로) 프록시+캐시

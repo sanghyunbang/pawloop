@@ -15,7 +15,7 @@
 | --- | --- |
 | 리소스 책임 | 로그인 사용자의 반려견 프로필 CRUD. 목록/상세/등록/부분수정/삭제 + 아바타 이미지 업로드. |
 | 소유권 규칙 | 모든 쓰기(등록 제외)·상세는 `dog.user_id == 현재 userId` 여야 한다. 타인 dog 수정/삭제 시 **403 Forbidden**. |
-| 관련 테이블 | `dog`(주), `app_user`(FK 소유자). 삭제 시 `walk`가 `dog` FK를 `ON DELETE CASCADE` 하므로 산책 기록도 함께 삭제됨(구현 노트 참고). |
+| 관련 테이블 | `dog`(주), `users`(FK 소유자). 삭제 시 `walk`가 `dog` FK를 `ON DELETE CASCADE` 하므로 산책 기록도 함께 삭제됨(구현 노트 참고). |
 | 재사용 가능한 기존 자산 | ① JWT→User 추출: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (#5 이전 서술이던 `requireUser(HttpServletRequest)` 패턴은 삭제됐다.) ② 아바타 업로드: `S3/media/MediaController`(`POST /media`, `multipart`, `UploadCategory`) + `MediaService.uploadMany/publicUrl`. ③ 에러 응답: social의 `Map.of("error", msg)` + `ResponseStatusException` 패턴. ④ 엔티티/DTO/레포 스타일: `social` 패키지(Lombok `@Getter/@Builder`, record DTO, Spring Data). |
 | SSOT 주의 | `size` enum은 `small/medium/large` 3종(openapi `DogSize` = schema `ck_dog_size` CHECK 와 일치). 임의 값 금지. |
 
@@ -105,7 +105,7 @@ schema.md §2 `dog` 테이블 기준. 엔티티 필드 ↔ 컬럼:
 | 엔티티 필드 : 타입 | 컬럼 | 제약 | 비고 |
 | --- | --- | --- | --- |
 | `id : Long` | `id` | PK, `@GeneratedValue(IDENTITY)` | |
-| `userId : Long` | `user_id` | FK→`app_user.id`, NOT NULL | 소유자. 인덱스 `idx_dog_user(user_id)` |
+| `userId : Long` | `user_id` | FK→`users.id`, NOT NULL | 소유자. 인덱스 `idx_dog_user(user_id)` |
 | `name : String` | `name` | `VARCHAR(50)` NOT NULL | |
 | `breed : String` | `breed` | `VARCHAR(50)` NULL | |
 | `size : String` | `size` | `VARCHAR(10)` NOT NULL DEFAULT `'small'`, CHECK(small/medium/large) | 문자열 저장(enum 매핑 대신 String + 서비스 검증 권장, social 스타일) |

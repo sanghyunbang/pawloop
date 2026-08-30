@@ -2,18 +2,22 @@
 
 > Pawloop(포루프) MySQL 공간형 데이터 모델의 개체-관계도. GPS 산책 경로(`LINESTRING`)와 장소 좌표(`POINT`)를 공간 컬럼으로 저장하고, `SPATIAL INDEX` + `ST_Distance_Sphere`/`MBRContains`로 주변 검색을 수행한다. **가족 케어 공유** 기능으로 `family_group`·`group_member`·`chat_message`·`walk_note` 엔티티가 추가되고, `care_log`는 `group_id`/`done_by`를 더해 "누가·언제 했는지"를 가족과 공유하는 케어 기록으로 확장된다.
 
+> **어디까지가 실재인가.** `users` 와 `refresh_token` 만 지금 DB 에 있다 — 정본은 `backend/mysql/init/01_schema.sql` 이다. 나머지 엔티티는 아직 **계획**이다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
+
 ## ER 다이어그램
 
 ```mermaid
 erDiagram
-    app_user ||--o{ dog       : "기른다"
-    app_user ||--o{ post      : "작성"
-    app_user ||--o{ comment   : "작성"
-    app_user ||--o{ reaction  : "남긴다"
-    app_user ||--o{ bookmark  : "저장"
-    app_user ||--o{ group_member : "그룹 참여"
-    app_user ||--o{ chat_message : "작성"
-    app_user ||--o{ care_log  : "수행(done_by)"
+    users ||--o{ refresh_token : "세션(기기별 1행)"
+
+    users ||--o{ dog       : "기른다"
+    users ||--o{ post      : "작성"
+    users ||--o{ comment   : "작성"
+    users ||--o{ reaction  : "남긴다"
+    users ||--o{ bookmark  : "저장"
+    users ||--o{ group_member : "그룹 참여"
+    users ||--o{ chat_message : "작성"
+    users ||--o{ care_log  : "수행(done_by)"
 
     family_group ||--o{ group_member : "구성원"
     family_group ||--o{ chat_message : "그룹 채팅"
@@ -29,11 +33,24 @@ erDiagram
     post     ||--o{ comment   : "댓글"
     post     ||--o{ reaction  : "반응"
 
-    app_user {
+    users {
         BIGINT   id PK
-        VARCHAR  provider   "kakao|naver|google (post-MVP)"
-        VARCHAR  social_id  "소셜 고유 ID"
+        VARCHAR  provider   "local|kakao|google - naver 는 ADR-0010 에서 보류. nullable"
+        VARCHAR  social_id  "소셜 고유 ID. 이메일 가입자는 NULL"
+        VARCHAR  role       "ROLE_USER (NOT NULL)"
+        VARCHAR  email      "로그인 ID. 카카오 미동의 시 NULL. UNIQUE"
         VARCHAR  nickname
+        VARCHAR  name
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
+    refresh_token {
+        BIGINT   id PK
+        BIGINT   user_id    "users.id (DB FK 제약은 없음)"
+        VARCHAR  token_hash "RT 원문의 SHA-256. UNIQUE"
+        DATETIME expires_at "발급 + 14일"
+        DATETIME revoked_at "폐기 시각 - 폐기는 삭제가 아니다"
         DATETIME created_at
     }
 
@@ -65,7 +82,7 @@ erDiagram
         BIGINT   dog_id FK
         BIGINT   group_id FK "nullable - 가족 그룹 공유"
         VARCHAR  type        "water|meal|walk|med|vet"
-        BIGINT   done_by FK  "수행자(app_user.id)"
+        BIGINT   done_by FK  "수행자(users.id)"
         DATETIME occurred_at
         VARCHAR  title
         VARCHAR  value
@@ -163,20 +180,21 @@ erDiagram
 
 | 엔티티 | 한 줄 설명 |
 | --- | --- |
-| `app_user` | 앱 사용자 계정. 소셜 로그인(provider/social_id) 기반, 닉네임 보유 (로그인은 post-MVP). |
-| `dog` | 사용자의 반려견 프로필. 견종·크기·생일·중성화 여부. `app_user` 1:N `dog`. |
+| `users` | 앱 사용자 계정. **지금 DB 에 실재하는 테이블**이다. 소셜 계정의 식별 키는 `(provider, social_id)` 쌍이며 이메일이 아니다(#7). `role` 은 토큰 발급이 쓰고, `email` 은 카카오 미동의 시 NULL 이다. 공급자 집합은 [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략). |
+| `refresh_token` | 앱 세션의 refresh 토큰 원장(#9). RT 는 JWT 가 아니라 불투명 난수이고 SHA-256 해시로 저장한다. 회전·재사용 감지·전 기기 로그아웃이 이 테이블 위에서 돈다. **실재.** |
+| `dog` | 사용자의 반려견 프로필. 견종·크기·생일·중성화 여부. `users` 1:N `dog`. |
 | `walk` | 산책 기록 1건. GPS 경로를 `LINESTRING`으로, 거리·시간·페이스·메모 저장. `dog` 1:N `walk`. |
 | `care_log` | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. `dog` 1:N `care_log`. |
 | `family_group` | 가족 케어 그룹. 이름·초대코드(`invite_code`)로 생성·참여. 케어 공유·주의사항·채팅의 단위. |
-| `group_member` | 그룹 구성원. `family_group`↔`app_user` 연결(N:M 해소), `role`(owner/member)·참여 시각 보유. |
-| `chat_message` | 가족 그룹 채팅 메시지. 커서 페이지네이션 조회(MVP는 폴링, 실시간 WebSocket/STOMP는 post-MVP). `family_group` 1:N, `app_user` 1:N. |
+| `group_member` | 그룹 구성원. `family_group`↔`users` 연결(N:M 해소), `role`(owner/member)·참여 시각 보유. |
+| `chat_message` | 가족 그룹 채팅 메시지. 커서 페이지네이션 조회(MVP는 폴링, 실시간 WebSocket/STOMP는 post-MVP). `family_group` 1:N, `users` 1:N. |
 | `walk_note` | 산책 시 주의사항(가족 공유 메모). `family_group` 1:N. |
 | `place` | 동반장소·동물병원·펫샵 POI 캐시. 좌표 `POINT` + `SPATIAL INDEX`. 공공데이터 원본 `raw_json` 보관. |
 | `trail` | 산책로 코스. 경로를 `LINESTRING`으로 저장(두루누비 걷기여행길). |
-| `post` | 커뮤니티 게시글. 게시판(board) 분류, 장소(`place`) 선택 태그 가능. `app_user` 1:N `post`. |
-| `comment` | 게시글 댓글. `post` 1:N, `app_user` 1:N. |
-| `reaction` | 게시글 반응(도움돼요/귀여워요/공감). `post` 1:N, `app_user` 1:N. |
-| `bookmark` | 사용자가 저장한 장소. `app_user`·`place` 각각 1:N (사용자-장소 조합 유니크 권장). |
+| `post` | 커뮤니티 게시글. 게시판(board) 분류, 장소(`place`) 선택 태그 가능. `users` 1:N `post`. |
+| `comment` | 게시글 댓글. `post` 1:N, `users` 1:N. |
+| `reaction` | 게시글 반응(도움돼요/귀여워요/공감). `post` 1:N, `users` 1:N. |
+| `bookmark` | 사용자가 저장한 장소. `users`·`place` 각각 1:N (사용자-장소 조합 유니크 권장). |
 
 ## 공간(Spatial) 컬럼 요약
 

@@ -160,7 +160,7 @@ flowchart TD
 ```
 
 **구현 메모 (예정 범위)**
-- 데이터: `app_user(provider, social_id, nickname)` + `dog(user_id FK, name, breed, size, birth, neutered, avatar)`.
+- 데이터: `users(provider, social_id, role, email nullable, nickname)` + `dog(user_id FK, name, breed, size, birth, neutered, avatar)`.
 - 프로필 편집 화면(`edit_screen`)·강아지 도메인(`DogProfile`)은 이미 존재 — 온보딩은 이를 최초 등록 플로우로 재사용.
 - 위치 권한(`geolocator`)은 현재 미도입. 도입 시 지도(플로우 2)의 중심을 "서울시청 기본" → "현재 위치"로 전환.
 

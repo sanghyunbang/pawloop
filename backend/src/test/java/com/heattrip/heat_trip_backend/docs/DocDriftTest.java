@@ -162,9 +162,13 @@ class DocDriftTest {
     @Test
     @DisplayName("ERD 가 users 엔티티를 그리고 refresh_token 을 포함한다")
     void erd_drawsUsersAndTheRefreshTokenLedger() {
+        // 산문의 "예전에는 app_user 로 그렸다" 는 남아야 한다 — 지우면 이름이 왜 바뀌었는지가 사라진다.
+        // 금지하는 것은 **엔티티 정의와 관계선**, 즉 그림이 실제로 그 이름을 쓰는 자리다.
         assertThat(erd)
                 .as("ERD 의 엔티티 이름이 실제 테이블과 다르면 그림을 보고 만든 쿼리가 전부 틀린다")
-                .doesNotContain("app_user");
+                .doesNotContain("app_user {")
+                .doesNotContain("app_user ||--")
+                .doesNotContain("app_user |o--");
         assertThat(erd).contains("users {");
         assertThat(erd)
                 .as("#9 가 만든 테이블이 ERD 에 없으면 인증 데이터 모델이 그림에서 통째로 빠진다")

@@ -222,7 +222,7 @@ sequenceDiagram
     App->>BE: code 전달
     BE->>P: 토큰 교환 + 사용자 정보 조회
     P-->>BE: 프로필(social_id 등)
-    BE->>BE: app_user upsert + JWT 발급
+    BE->>BE: users upsert + JWT 발급
     BE-->>App: JWT
     App->>BE: 이후 요청 시 Authorization: Bearer JWT
     Note over App,BE: 로그인은 백엔드에 구현되어 있으나 앱 v2 연동은 확장(post-MVP) 범위

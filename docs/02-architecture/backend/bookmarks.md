@@ -25,7 +25,7 @@
 - **관련 테이블**:
   - `bookmark` (본 리소스 소유. `user_id` + `place_id` UNIQUE) — [schema.md §9](../../03-database/schema.md)
   - `place` (조인 대상, 읽기 전용. `geom POINT`, `SPATIAL INDEX`) — [schema.md §4](../../03-database/schema.md)
-  - `app_user` (FK 대상) — [schema.md §1](../../03-database/schema.md)
+  - `users` (FK 대상) — [schema.md §1](../../03-database/schema.md)
 - **재사용 가능한 기존 자산**:
   - JWT 인증 추출: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (이 줄은 #5 이전 서술이었다 — 두 패턴 중 하나를 고르라고 안내했으나 둘 다 삭제됐다.)
   - 커서 페이지네이션 응답: `explore.dto.CursorPageResponse<T>`(items/nextCursor/hasNext) 및 `explore.dto.PageResponse` 참고. **단, openapi Bookmarks GET은 배열 반환(페이지네이션 없음)** — §2 주의.
@@ -110,7 +110,7 @@
 | 엔티티 필드 | 타입 | 컬럼 | 매핑/제약 |
 | --- | --- | --- | --- |
 | `id` | `Long` | `id` | `@Id @GeneratedValue(IDENTITY)` |
-| `userId` | `Long` | `user_id` | `@Column(nullable=false)`. FK→`app_user.id`. (연관 대신 스칼라 FK 권장 — Social `EmotionCard.userId` 패턴) |
+| `userId` | `Long` | `user_id` | `@Column(nullable=false)`. FK→`users.id`. (연관 대신 스칼라 FK 권장 — Social `EmotionCard.userId` 패턴) |
 | `placeId` | `Long` | `place_id` | `@Column(nullable=false)`. FK→`place.id`. |
 | `createdAt` | `LocalDateTime` | `created_at` | `@Column(nullable=false, updatable=false)`, `@PrePersist`에서 `now()` (EmotionCard 패턴) |
 

@@ -12,7 +12,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 책임 | 산책 1건의 GPS 경로·거리·시간 저장/조회, 내 반려견 산책 이력 목록(커서 페이지네이션), 주간(월~일) 거리 통계 집계 |
-| 관련 테이블 | `walk`(주), `dog`(소유 검증 FK), `app_user`(소유 사용자) |
+| 관련 테이블 | `walk`(주), `dog`(소유 검증 FK), `users`(소유 사용자) |
 | 공간 컬럼 | `walk.path` = `LINESTRING SRID 4326 NOT NULL` (GPS 폴리라인) |
 | 인증 | **전부 인증 필요.** openapi에서 Walks 경로는 `security: []` 미지정 → 전역 `bearerAuth` 적용. 소유권은 `walk → dog → dog.user_id == 요청 userId`로 확인 |
 | 재사용 가능한 것 | JWT 필터/`userId` 추출 규약(`AuthController` 참조), `Error`/`Page` 공통 응답 패턴, `dog` 엔티티/`DogRepository`(소유 검증), 프로젝트 표준 `record` DTO + `ResponseEntity<?>` 스타일 |
