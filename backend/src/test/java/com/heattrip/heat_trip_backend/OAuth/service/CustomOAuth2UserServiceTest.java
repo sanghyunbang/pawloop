@@ -332,13 +332,20 @@ class CustomOAuth2UserServiceTest {
     }
 
     @Test
-    @DisplayName("google·naver 도 대소문자와 무관하게 매핑되고, 실제 응답 모양에서 값을 꺼낸다")
+    @DisplayName("google 은 매핑되고, 아직 지우지 않은 naver 파서도 응답 모양에서 값을 꺼낸다")
     void toUserInfo_mapsOtherProviders() {
         OAuth2UserInfo googleInfo = CustomOAuth2UserService.toUserInfo(
                 "Google", Map.of("sub", "g-1", "name", "보리아빠", "email", "bori@example.com"));
         assertThat(googleInfo).isInstanceOf(GoogleOAuth2User.class);
         assertThat(googleInfo.getProviderId()).isEqualTo("g-1");
 
+        // ⚠️ 아래 naver 단언은 "우리가 네이버를 지원한다" 는 뜻이 **아니다.**
+        // ADR-0010 이 네이버를 보류로 확정했고, 계약 enum 과 AuthController.SUPPORTED_PROVIDERS
+        // 에서 빠졌다. 여기 남은 것은 파서가 아직 지워지지 않았다는 사실뿐이다 — 네이버
+        // 클라이언트 등록(application-dev/prod.properties)이 살아 있어 /oauth2/authorization/naver
+        // 로 들어오면 이 분기가 실제로 실행되기 때문에, 지우기 전까지는 동작이 맞아야 한다.
+        // 파서와 등록을 함께 걷어내는 것은 #13 이 소유한다. 그때 이 블록도 함께 지운다.
+        //
         // 네이버는 값이 전부 response 아래에 중첩돼 있다. 빈 맵으로 instanceof 만 보던 옛 단언은
         // 키 이름이나 캐스팅이 틀려도 초록불이었다 — 그러면 네이버 로그인 전원이 missing_social_id 로 죽는다.
         OAuth2UserInfo naverInfo = CustomOAuth2UserService.toUserInfo("NAVER", Map.of(

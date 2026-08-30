@@ -10,7 +10,7 @@
 
 | 계약 엔드포인트 | 상태 | 비고 |
 | --- | --- | --- |
-| `GET /auth/oauth/{provider}` (로그인 시작 302) | **있음(#10 완료)** | `AuthController.startOAuth` 가 `Location: /oauth2/authorization/{provider}` 로 302 한다. 화이트리스트(`kakao`·`naver`·`google`) 밖은 400 + `Error`(`VALIDATION`). 예전에는 핸들러가 **빈 200** 을 주면서 계약은 "미구현" 이라고 적고 있었다. |
+| `GET /auth/oauth/{provider}` (로그인 시작 302) | **있음(#10 완료)** | `AuthController.startOAuth` 가 `Location: /oauth2/authorization/{provider}` 로 302 한다. 화이트리스트(`kakao`·`google`) 밖은 400 + `Error`(`VALIDATION`). `naver` 는 ADR-0010 이 보류로 확정하면서 계약 enum 과 함께 빠졌다 — 이 래퍼로는 400 이다(#15). 예전에는 핸들러가 **빈 200** 을 주면서 계약은 "미구현" 이라고 적고 있었다. |
 | `POST /auth/signup` | **있음(#10 완료)** | `201` + 계약의 `User`. 중복 이메일은 **409**. 예전에는 `200` + 평문 `"회원가입 성공"` 이었고 중복이 400 이었다. 토큰은 발급하지 않는다 — 가입 직후 로그인은 `POST /auth/login` 이다. |
 | `POST /auth/login` | **있음(#10 완료)** | `200` + `AuthTokensResponse`(계약의 `AuthTokens`). #9 가 발급·저장하던 refresh 토큰이 드디어 응답에 실린다. 자격증명 실패는 **본문 없는 401**(예전에는 500). |
 | (SuccessHandler → `heattrip://login-callback?code=&state=`) | **있음(#14 완료)** | `OAuth2SuccessHandler` 가 토큰 대신 60초짜리 1회용 코드를 내보낸다. 리다이렉트 대상은 `app.security.oauth.redirect-allowlist` 가 정한다. 예전에는 `?token=<AT>&refresh=<RT>` 였다. |
@@ -36,8 +36,8 @@
 
 ## 1. 개요
 
-- **책임**: 소셜(카카오/네이버/구글) 로그인 진입·콜백 처리, 앱 세션 토큰(access/refresh) 발급·갱신·폐기, 내 정보 조회/탈퇴.
-- **관련 테이블**: `app_user`(스키마 문서) — **현재 코드 실체는 `users` 테이블 + `User` 엔티티**. 두 스키마가 다름(§6 정합성 함정 참조). refresh token 원장은 **`refresh_token` 테이블로 존재한다**(#9). 운영 적용 SQL 은 `backend/mysql/post-start/05_refresh_token.sql`, 런북은 `backend/mysql/README.md`(§5-2).
+- **책임**: 소셜(카카오/구글) 로그인 진입·콜백 처리, 앱 세션 토큰(access/refresh) 발급·갱신·폐기, 내 정보 조회/탈퇴.
+- **관련 테이블**: `users` (+ `User` 엔티티). 스키마 문서도 `users` 로 통일했다(#15) — 예전에는 문서만 `app_user` 라는 이름을 썼고 그 이름의 테이블은 만들어진 적이 없다. refresh token 원장은 **`refresh_token` 테이블로 존재한다**(#9). 운영 적용 SQL 은 `backend/mysql/post-start/05_refresh_token.sql`, 런북은 `backend/mysql/README.md`(§5-2).
 - **인증 규약**: JWT Bearer, **subject = `users.id`**(#5 완료). 계약(`openapi.yaml`)은 이 값을 "파싱 금지의 불투명 사용자 키"로 선언한다 — 이메일도 `provider_providerId`도 아니다. 해석은 `JWTAuthenticationFilter` → `AuthenticatedUser` → `@CurrentUser` 한 줄기뿐이다(§6-1).
 
 ---
@@ -65,7 +65,7 @@
 > `startOAuth` 는 `HttpServletRequest`/`Response` 를 받지 않는다 — 302 를 `ResponseEntity` 로
 > 만들면 서블릿 API 를 컨트롤러에 들일 이유가 없다(#10).
 
-- `provider` 파라미터: `kakao|naver|google` 이외 값 → 400 + `Error`(`code: VALIDATION`). 대소문자·앞뒤 공백은 정규화한다. 사유 문구에 입력값을 되싣지 않는다 — 반사형 XSS 재료다.
+- `provider` 파라미터: `kakao|google` 이외 값 → 400 + `Error`(`code: VALIDATION`). 네이버는 ADR-0010 의 보류 대상이라 이 목록에 없다. 대소문자·앞뒤 공백은 정규화한다. 사유 문구에 입력값을 되싣지 않는다 — 반사형 XSS 재료다.
 - 인증 필요 메서드는 `@CurrentUser User me` 하나로 끝난다. 주입에 실패하는 모든 경우(인증 없음 · principal 타입 불일치 · 그 id 의 행 없음)는 **본문 없는 401** 이다. `SocialController.requireUser(...)` 같은 컨트롤러별 헬퍼는 #5 에서 전부 사라졌다.
 - 오류 응답은 계약의 `Error` 형태(`{ error: { code, message, traceId } }`) 하나뿐이다(#10 완료) — §6-7.
 
@@ -136,19 +136,18 @@
 ### 5-1. 사용자 엔티티
 
 - **현행**: `user.entity.User` → `@Table(name="users")`. `id`, `username`(=`provider_providerId`), `email`(unique), `name`, `nickname`, `gender`, `travelType`, 동의필드 등.
-- **스키마 문서(`app_user`) 대비 매핑**:
+- **소셜 계정 모델은 #7 에서 실렸다.** 예전 이 자리에는 "스키마 문서(`app_user`) 대비 매핑" 표가 있었고 `provider`·`social_id` 를 **"없음 — 추가 권장"** 이라고 적고 있었다. 지금은 둘 다 컬럼으로 있다. 그 표를 그대로 읽은 다음 사람은 이미 있는 것을 또 만든다.
 
-| `app_user`(문서) 컬럼 | 현행 `users` 필드 | 처리 |
+| 컬럼 | 현행 | 비고 |
 | --- | --- | --- |
-| `id BIGINT PK` | `id Long` | 동일 |
-| `provider VARCHAR(20)` | (없음 — `username` 접두어에 내포) | **추가 권장**: `provider` 컬럼 신설 or `username` 파싱. |
-| `social_id VARCHAR(191)` | (없음 — `username` 접미어에 내포) | **추가 권장**: `social_id` 컬럼 신설. `UNIQUE(provider, social_id)` 목표. |
-| `nickname VARCHAR(50)` | `nickname` | 동일 |
-| `created_at DATETIME` | `createdAt` | 동일 |
+| `id BIGINT PK` | `id Long` | **JWT `sub` 가 이 값**(ADR-0010) |
+| `provider VARCHAR(20)` | `provider` | `local`/`kakao`/`google`. `naver` 는 ADR-0010 에서 보류 |
+| `social_id VARCHAR(191)` | `socialId` | 이메일 가입자는 NULL |
+| `role VARCHAR(20) NOT NULL` | `role` | 기본 `ROLE_USER`. 토큰 발급이 쓴다 |
+| `email VARCHAR(255) NULL UNIQUE` | `email` | 카카오 미동의 시 NULL |
+| `username` | `username` | 레거시 식별자(`provider_socialId`). 백필용으로만 남는다 |
 
-> MVP에선 기존 `users`/`User`를 그대로 재사용해도 됨. 다만 계약 `User.provider` 응답을 위해 provider 값을 어디서든 복원할 수 있어야 함(컬럼 추가 또는 `username` prefix 파싱).
-
-- 인덱스: `email` UNIQUE(현행). 목표 `UNIQUE(provider, social_id)`.
+- 인덱스: `uk_users_provider_social_id(provider, social_id)` UNIQUE + `email` UNIQUE. 정본 DDL 은 `backend/mysql/init/01_schema.sql`, 문서 요약은 [테이블 스키마 §1](../../03-database/schema.md).
 
 ### 5-2. Refresh Token 엔티티 (**#9 에서 구현됨 — 아래는 shipped 사실이다**)
 
@@ -246,7 +245,7 @@
    - **Hibernate 바인딩 로그를 TRACE 로 올리지 마라.** 올리면 `token_hash`(SHA-256)·이메일·BCrypt 해시·소셜 ID 가 전부 운영 로그로 나간다(#6). 기본값은 `application.properties` 에서 껐고 같은 테스트가 잠근다.
 4. **로그인 시작 경로 이중화 — #10 에서 래퍼를 두었다.** 실제 Spring OAuth2 진입점은 `/oauth2/authorization/{provider}`(SecurityConfig `oauth2Login`). 계약 `GET /auth/oauth/{provider}` 는 그 진입점으로의 **302 리다이렉트 래퍼**뿐이다(성공 시 딥링크는 기존 SuccessHandler 가 처리). **별도 인증 로직 재구현 금지** — 그래서 `AuthController.startOAuth` 는 어떤 서비스도 부르지 않고, `AuthControllerTest` 가 그것을 `verifyNoMoreInteractions` 로 잠근다. 앱은 이 경로를 쓸 필요가 없다(진입점을 직접 열면 리다이렉트 한 번을 아낀다) — 계약을 보고 구현한 클라이언트가 막다른 길에 빠지지 않게 하는 호환 표면이다.
 5. **콜백 대안 흐름(callback POST)의 토큰 교환** — `flutter_web_auth_2` 딥링크 흐름과 별개로, SPA/네이티브가 인가코드를 직접 넘기는 경우. 공급자 token endpoint 호출은 `WebClientConfig` 빈 + `TourApiClient` 스타일(WebClient, 타임아웃/에러 매핑)로. secret은 `@Value`로 주입, 로그에 노출 금지.
-6. **provider 화이트리스트 — #10 에서 구현됨.** `AuthController.SUPPORTED_PROVIDERS` 가 `kakao|naver|google` 만 허용하고, 그 외는 400 + `Error`(`code: VALIDATION`)다. 목록은 계약(`components/parameters/Provider`)의 enum 과 **같아야 한다** — 여기서만 넓히면 계약에 없는 값이 302 로 통과한다. 입력은 `trim().toLowerCase()` 로 정규화한다(`CustomOAuth2UserService` 의 `switch` 에 `"Kakao"` 대문자 중복 case 가 있던 것과 같은 함정을 여기서는 만들지 않는다).
+6. **provider 화이트리스트 — #10 에서 구현됨.** `AuthController.SUPPORTED_PROVIDERS` 가 `kakao|google` 만 허용하고, 그 외는 400 + `Error`(`code: VALIDATION`)다. 목록은 계약(`components/parameters/Provider`)의 enum 과 **같아야 한다** — 여기서만 넓히면 계약에 없는 값이 302 로 통과한다. 이제 글이 아니라 테스트가 지킨다: `OpenApiAuthContractTest.supportedProviders_matchTheContractEnum` 이 두 집합을 대조한다(#15). `naver` 는 ADR-0010 에 따라 양쪽에서 함께 빠졌다. 입력은 `trim().toLowerCase()` 로 정규화한다(`CustomOAuth2UserService` 의 `switch` 에 `"Kakao"` 대문자 중복 case 가 있던 것과 같은 함정을 여기서는 만들지 않는다).
 7. **에러 포맷 통일 — #10 에서 완료.** 4xx/5xx 본문은 계약의 `Error`(`{ error: { code, message, traceId } }`) 하나뿐이고, 만드는 곳은 `GlobalExceptionHandler` 한 곳뿐이다. `code` 는 HTTP 상태에서 파생된다(`codeOf`) — 던지는 쪽이 문자열을 손으로 적지 않는다. 그 어휘는 계약의 `Error.code` enum 이 소유하며 `AuthContractSpecTest.errorSchema_declaresTheClosedCodeVocabulary` 가 둘을 대조한다.
 
    정리 전에는 세 갈래였다: 계약의 봉투, `GlobalExceptionHandler` 의 `{ status, error, message, path, timestamp }`, `SocialController` 의 `{ error: "msg" }`(문자열). `SocialController` 의 다섯 핸들러에 있던 `try/catch` 두 겹을 걷어냈다 — 그 `catch (Exception)` 은 예상하지 못한 예외를 스택트레이스도 남기지 않고 삼키고 있었다.
@@ -256,6 +255,6 @@
    > ⚠️ **이슈 #10 본문은 401 에도 `{"error":{"code":"UNAUTHORIZED"}}` 본문을 요구했다. 따르지 않았다.** 그 요구는 #5 보다 먼저 쓰였고, #5 가 그 뒤에 '401 은 본문 없음' 으로 확정하면서 계약과 두 테스트(`AuthContractSpecTest.unauthorizedResponse_declaresNoBody`, `GeneratedOpenApiSpecTest.generatedSpec_401NeverDeclaresABody`)가 그것을 잠갔다. 본문을 되붙이면 그 둘이 빨간불이 된다. 계약이 코드보다 우선이라는 규약(#4)을 그대로 따른 결과다.
 8. **트랜잭션** — `exchangeCode`(사용자 upsert + refresh 저장), `deleteMe`(사용자 + refresh 삭제)는 `@Transactional` 경계로 묶기. 외부 공급자 HTTP 호출은 트랜잭션 밖에서 수행 후, DB 쓰기만 트랜잭션 내부로(장시간 커넥션 점유 방지).
 9. **좌표/공간 무관** — Auth 리소스는 EPSG:5174→WGS84·`ST_Distance_Sphere` 등 공간 처리와 무관(그쪽 함정은 Places/Walks 문서에서 다룸).
-10. **테이블명 정합** — 스키마 문서는 `app_user`, 코드 실체는 `users`. 문서·코드 중 한쪽으로 명칭을 수렴시키거나, 문서에 "실 테이블=`users`" 주석을 남길 것(마이그레이션 혼선 방지).
+10. **테이블명 정합 — #15 에서 해소됐다.** 스키마 문서는 `app_user`, 코드 실체는 `users` 였다. `users` 로 수렴시켰고 `schema.md` §1 이 그 이름이 어디서 왔는지를 각주로 남긴다. `DocDriftTest` 가 `app_user` 가 정의로 되살아나면 빨간불을 낸다.
 
 완료: C:/Users/mm206/git_projects/heattrip/docs/02-architecture/backend/auth.md

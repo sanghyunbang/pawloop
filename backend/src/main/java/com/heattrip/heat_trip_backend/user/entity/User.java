@@ -67,8 +67,12 @@ public class User {
     private String username;
 
     /**
-     * 계정 출처. {@code local} · {@code kakao} · {@code naver} · {@code google}.
+     * 계정 출처. {@code local} · {@code kakao} · {@code google}.
      * 계약(openapi.yaml)의 {@code User.provider} enum 과 값이 같아야 한다.
+     *
+     * <p>{@code naver} 는 ADR-0010 이 보류로 확정해 계약 enum 에서 빠졌다. 다만 <b>컬럼 값에
+     * 제약이 있는 것은 아니다</b> — 운영 DB 에 {@code provider='naver'} 인 옛 행이 남아 있을
+     * 수 있고, 백필 SQL 도 그 행을 다룬다({@code 04_users_social_account_model.sql}).
      */
     @Column(length = 20)
     private String provider;

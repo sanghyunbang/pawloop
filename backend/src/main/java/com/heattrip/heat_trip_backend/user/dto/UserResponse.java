@@ -26,7 +26,7 @@ public class UserResponse {
     private String email;      // 소셜 공급자가 이메일을 주지 않으면 null
     private String travelType; // 현재 스키마는 단일 문자열
     private String imageUrl;
-    private String provider;   // "local" / "kakao" / "naver" / "google" — 계약의 User.provider
+    private String provider;   // "local" / "kakao" / "google" — 계약의 User.provider (naver 는 ADR-0010 에서 보류)
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

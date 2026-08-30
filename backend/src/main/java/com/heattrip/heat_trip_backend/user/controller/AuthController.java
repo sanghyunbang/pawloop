@@ -49,10 +49,17 @@ public class AuthController implements AuthApiDoc{
      * 계약({@code docs/04-api/openapi.yaml} 의 {@code components/parameters/Provider})의
      * enum 과 <b>같은 목록</b>이어야 한다. 여기서만 넓히면 계약에 없는 값이 302 로 통과한다.
      *
-     * <p>{@code naver} 가 있는 이유: 제품 결정상 보류(#15)일 뿐 백엔드 설정과 매핑 코드가
-     * 살아 있고, 계약도 enum 에 유지한다.
+     * <p>{@code naver} 는 <b>없다</b> — ADR-0010 이 보류로 확정했고 계약 enum 에서도 뺐다.
+     * 예전에는 여기 있었고 계약에도 있었다. 두 곳을 같이 좁힌 것이지 한쪽만 좁힌 것이 아니다.
+     *
+     * <p><b>이것만으로 네이버 로그인이 막히지는 않는다.</b> 앱이 실제로 여는 것은 이 래퍼가
+     * 아니라 스프링 시큐리티 자체 진입점 {@code /oauth2/authorization/{provider}} 이고
+     * ({@code social_login_service.dart}), 네이버 클라이언트 등록은
+     * {@code application-dev/prod.properties} 에 아직 살아 있다. 그 구멍을 닫는 것은 #13 이
+     * 소유한다. 여기서 좁히는 것은 "계약이 광고하는 집합과 코드가 통과시키는 집합을 같게
+     * 유지한다" 는 불변식이다 — {@code OpenApiAuthContractTest} 가 두 집합을 대조한다.
      */
-    private static final List<String> SUPPORTED_PROVIDERS = List.of("kakao", "naver", "google");
+    private static final List<String> SUPPORTED_PROVIDERS = List.of("kakao", "google");
 
     /**
      * 호환 래퍼가 302 대상에 실어 보내도 되는 {@code state} 의 형태.

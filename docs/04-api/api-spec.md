@@ -107,7 +107,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## 2. 인증 (Auth)
 
-카카오·구글 OAuth 중심(레거시 `kakao/`, `OAuth/` 패키지 계승). 네이버는 코드·설정이 남아 있으나 제품 결정상 **보류**다(#15). 프론트는 `flutter_web_auth_2`로 소셜 로그인 콜백을 받는다.
+카카오·구글 OAuth 중심(레거시 `kakao/`, `OAuth/` 패키지 계승). 네이버는 **보류**다 — [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) 이 확정했고 계약 enum 과 `AuthController.SUPPORTED_PROVIDERS` 에서 함께 뺐다. 다만 클라이언트 등록과 `NaverOAuth2User` 매핑은 아직 남아 있어 `/oauth2/authorization/naver` 는 열려 있다 — 그 구멍은 #13 소유다. 프론트는 `flutter_web_auth_2`로 소셜 로그인 콜백을 받는다.
 
 > JWT 의 `sub` 는 서버가 발급한 **불투명 사용자 키**다. 이메일이라고 가정하거나 파싱하지 말 것. 사용자 정보는 `GET /auth/me` 로 조회한다.
 
@@ -204,7 +204,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 }
 ```
 
-> `provider` 는 내려온다 — `users.provider` 컬럼은 #7 에서 생겼고 `UserResponse` 가 매핑한다. 값은 `local`(이메일 가입)·`kakao`·`naver`·`google` 중 하나다. (이 문서는 오래도록 "컬럼이 없어 아직 내려오지 않는다"고 적고 있었다.) 필드명은 `profileImage` 가 아니라 **`imageUrl`** 이다.
+> `provider` 는 내려온다 — `users.provider` 컬럼은 #7 에서 생겼고 `UserResponse` 가 매핑한다. 값은 `local`(이메일 가입)·`kakao`·`google` 중 하나다(`naver` 는 ADR-0010 에서 보류. 백필 전 옛 행은 `null` 일 수 있다). (이 문서는 오래도록 "컬럼이 없어 아직 내려오지 않는다"고 적고 있었다.) 필드명은 `profileImage` 가 아니라 **`imageUrl`** 이다.
 > `isNew` 는 여기에 없다 — 로그인 응답(`AuthTokens`)의 1회성 이벤트 속성이지 프로필의 영속 속성이 아니다(#23).
 
 ### 2.5 이메일 회원가입 — ✅ 구현(#10)
