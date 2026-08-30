@@ -41,14 +41,21 @@ ALLOW='예전|걷어냈|걷어내|제거했|버렸|이력|더 이상|이제는|d
 #
 # 고쳐지면 이 목록에서 지운다. 지우지 않으면 게이트가 그 줄을 계속 눈감아 준다.
 KNOWN_STALE=(
-  # docs/04-api/api-spec.md 의 serviceKey 줄은 #10 에서 고쳤다 — 이제 dart-define 을 말하고
-  # `.env` 는 "예전에는" 이라는 이력 서술로만 남아 ALLOW 를 탄다. 예외를 지우지 않으면
-  # 게이트가 그 줄을 영원히 눈감아 준다.
-  "docs/99-decisions/decision-log.md:.*serviceKey 취급 주의"           # 소유 #15 (ADR·문서 정합)
+  # 지금은 비어 있다.
+  #
+  # 마지막 항목이었던 decision-log.md 의 "serviceKey 취급 주의" 는 #15 에서 고쳤다 —
+  # ADR-0004 의 그 줄이 이제 `--dart-define=YOUR_DECODING_SERVICE_KEY` 를 말하고
+  # `.env` 는 "예전에는 … #29 가 옮겼다" 는 이력 서술로만 남아 ALLOW 를 탄다.
+  # 예외를 지우지 않으면 게이트가 그 줄을 영원히 눈감아 준다.
+  #
+  # 새로 추가할 때는 **소유 이슈 번호를 반드시 적을 것.**
 )
 
 is_known_stale() {
   local line="$1"
+  # 목록이 비면 `"${arr[@]}"` 가 오래된 bash(<4.4) + `set -u` 에서 unbound 로 죽는다.
+  # 지금은 비어 있는 것이 정상 상태이므로 먼저 막는다.
+  [ "${#KNOWN_STALE[@]}" -eq 0 ] && return 1
   for pattern in "${KNOWN_STALE[@]}"; do
     if printf '%s' "$line" | grep -qE "$pattern"; then
       return 0

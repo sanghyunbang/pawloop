@@ -15,37 +15,107 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
+> **어디까지가 실재인가.** `§1 users` 와 `§2 refresh_token` 만 **지금 DB 에 있다** — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. `§3 dog` 이하는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
+
 ---
 
-## 1. `app_user` — 사용자 계정
+## 1. `users` — 사용자 계정 (**실재**)
 
-소셜 로그인 기반 계정(로그인 자체는 post-MVP). `provider + social_id` 조합이 유니크.
+앱이 실제로 쓰는 사용자 테이블이다. 이름이 `users` 인 것은 감정여행(heattrip) 시절부터 있던 테이블을 그대로 이어받았기 때문이고(ADR-0001), JPA 엔티티가 `@Table(name = "users")` 로 그 이름을 고정한다(`backend/.../user/entity/User.java`).
+
+> **각주 — `app_user` 는 어디로 갔나.** 피벗 당시 이 문서와 [ERD](./erd.md)는 새 사용자 테이블을 `app_user` 라는 이름으로 계획했다. 실제로는 새로 만들지 않고 기존 `users` 를 확장하는 쪽으로 갔다(마이그레이션 비용 회피 — ADR-0002 가 `applicationId` 를 그대로 둔 것과 같은 이유). 그래서 이 문서의 `app_user` 는 **한 번도 존재한 적 없는 이름**이었다. 지금은 `users` 로 통일한다.
+>
+> **정본은 이 문서가 아니다.** 운영 스키마의 정본은 `backend/mysql/init/01_schema.sql` 이고, 그 파일은 JPA 엔티티에서 뽑은 것이다. `SchemaDdlDriftTest` 가 엔티티와 정본이 어긋나면 빨간불을 낸다(#58). 아래 DDL 은 **읽기용 요약**이며, 값이 다르면 정본을 따른다.
+
+소셜 계정의 식별 키는 `(provider, social_id)` 쌍이다 — **이메일이 아니다**(#7). 카카오의 `account_email` 은 선택 동의라서 사용자가 거부하면 이메일이 오지 않고, 시간에 따라 나타났다 사라지는 값은 식별 키가 될 수 없다. 공급자 집합(`kakao`·`google`)은 [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) 이 정한다.
 
 ```sql
-CREATE TABLE app_user (
-  id         BIGINT       NOT NULL AUTO_INCREMENT,
-  provider   VARCHAR(20)  NOT NULL COMMENT 'kakao|naver|google (post-MVP)',
-  social_id  VARCHAR(191) NOT NULL COMMENT '소셜 제공자 고유 ID',
-  nickname   VARCHAR(50)  NOT NULL,
-  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE users (
+  id                  BIGINT       NOT NULL AUTO_INCREMENT,
+
+  -- 계정 출처 / 식별
+  provider            VARCHAR(20)  NULL COMMENT 'local|kakao|google — naver 는 ADR-0010 에서 보류',
+  social_id           VARCHAR(191) NULL COMMENT '소셜 공급자가 발급한 고유 ID. 이메일 가입자는 NULL',
+  username            VARCHAR(255) NULL COMMENT '레거시 소셜 식별자(예: google_123456). 백필용으로만 남아 있다',
+  role                VARCHAR(20)  NOT NULL COMMENT '기본 ROLE_USER. 토큰 발급이 이 값을 쓴다',
+
+  -- 로그인
+  email               VARCHAR(255) NULL COMMENT '로그인 ID. 카카오가 이메일을 주지 않으면 NULL 이다',
+  password            VARCHAR(255) NULL COMMENT 'BCrypt 해시. 응답에 절대 싣지 않는다(@JsonIgnore)',
+
+  -- 프로필
+  name                VARCHAR(255) NULL,
+  nickname            VARCHAR(255) NULL COMMENT '소셜 가입 경로에서는 설정되지 않아 NULL 일 수 있다',
+  gender              ENUM('MALE','FEMALE','OTHER') NULL,
+  age                 INT          NULL,
+  age_group           ENUM('OVER14','UNDER14') NULL,
+  image_url           VARCHAR(255) NULL,
+  travel_type         VARCHAR(255) NULL COMMENT '감정여행(heattrip) 시절 잔재 — ADR-0001',
+
+  -- 약관 동의
+  agree_tos           BIT(1)       NULL,
+  agree_privacy       BIT(1)       NULL,
+  agree_marketing     BIT(1)       NULL,
+  tos_version         VARCHAR(255) NULL,
+  privacy_version     VARCHAR(255) NULL,
+  marketing_version   VARCHAR(255) NULL,
+  tos_agreed_at       DATETIME(6)  NULL,
+  privacy_agreed_at   DATETIME(6)  NULL,
+  marketing_agreed_at DATETIME(6)  NULL,
+
+  created_at          DATETIME(6)  NULL,
+  updated_at          DATETIME(6)  NULL,
+
   PRIMARY KEY (id),
-  UNIQUE KEY uq_user_social (provider, social_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  UNIQUE KEY uk_users_provider_social_id (provider, social_id),
+  UNIQUE KEY uk_users_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
-| `id` | `BIGINT` | PK, AUTO_INCREMENT | |
-| `provider` | `VARCHAR(20)` | NOT NULL | `kakao`/`naver`/`google` (post-MVP) |
-| `social_id` | `VARCHAR(191)` | NOT NULL, UNIQUE(provider,social_id) | 소셜 고유 ID |
-| `nickname` | `VARCHAR(50)` | NOT NULL | 표시 닉네임 |
-| `created_at` | `DATETIME` | NOT NULL, 기본 now | 가입 시각 |
+| `id` | `BIGINT` | PK, AUTO_INCREMENT | **JWT 의 `sub` 가 이 값이다**(ADR-0010) |
+| `provider` | `VARCHAR(20)` | NULL, UNIQUE(provider, social_id) | `local`/`kakao`/`google`. 백필 전 옛 행은 NULL |
+| `social_id` | `VARCHAR(191)` | NULL, UNIQUE(provider, social_id) | 191자 = utf8mb4 기준 InnoDB 단일 컬럼 인덱스 상한(767바이트) 관례값 |
+| `username` | `VARCHAR(255)` | NULL | 레거시 식별자. 백필 SQL(`mysql/post-start/04_...`)이 이 값을 분해해 위 두 컬럼을 채운다 |
+| `role` | `VARCHAR(20)` | **NOT NULL** | `ROLE_USER` 기본. 엔티티의 `@Builder.Default` + `@PrePersist` 가 보장 |
+| `email` | `VARCHAR(255)` | **NULL**, UNIQUE | 카카오 미동의 시 NULL. UNIQUE 인덱스는 NULL 을 서로 다른 값으로 보므로 여럿이어도 충돌하지 않는다 |
+| `password` | `VARCHAR(255)` | NULL | 소셜 가입자는 NULL. 직렬화 금지 |
+| `gender` / `age` / `age_group` / `image_url` | | NULL | 프로필 |
+| `travel_type` | `VARCHAR(255)` | NULL | 감정여행 잔재. 정리 대상 |
+| `agree_*` / `*_version` / `*_agreed_at` | | NULL | 약관 동의 플래그·버전·시각 |
+| `created_at` / `updated_at` | `DATETIME(6)` | NULL | `@PrePersist`/`@PreUpdate` 가 채운다 |
 
 ---
 
-## 2. `dog` — 반려견 프로필
+## 2. `refresh_token` — refresh 토큰 원장 (**실재**)
 
-사용자의 강아지 프로필. `app_user` 1:N `dog`. 앱 도메인(`DogProfile`)의 `size`(small/medium/large)·`neutered`·`avatar`와 매핑. 나이는 앱에서 개월 수로 표시하나 DB는 `birth`(생일)로 저장하는 것이 정규.
+앱 세션의 refresh 토큰을 담는 원장이다(#9). RT 는 JWT 가 아니라 **불투명 랜덤 문자열**이고(`SecureRandom` 32바이트 → 패딩 없는 Base64URL 43자), 서버는 원문이 아니라 **SHA-256 해시**를 저장한다. 왜 JWT 가 아닌지는 [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) 의 대안 4 에 있다.
+
+한 행 = 토큰 1개다. 여러 기기로 로그인하면 행이 여럿 생긴다.
+
+```sql
+CREATE TABLE refresh_token (
+  id         BIGINT      NOT NULL AUTO_INCREMENT,
+  user_id    BIGINT      NOT NULL COMMENT 'users.id. FK 제약은 걸려 있지 않다(정본 DDL 기준)',
+  token_hash VARCHAR(64) NOT NULL COMMENT 'RT 원문의 SHA-256. 원문은 어디에도 저장하지 않는다',
+  expires_at DATETIME(6) NOT NULL COMMENT '발급 + 14일(jwt.refresh-expiration)',
+  revoked_at DATETIME(6) NULL     COMMENT '폐기 시각',
+  created_at DATETIME(6) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_refresh_token_token_hash (token_hash),
+  KEY idx_refresh_token_user_id (user_id),
+  KEY idx_refresh_token_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+> ⚠️ **폐기는 삭제가 아니다.** 로그아웃·회전·재사용 감지는 행을 남긴 채 `revoked_at` 을 찍는다. 지우면 폐기된 RT 가 다시 왔을 때 "없는 토큰" 과 구별되지 않아 **재사용 감지가 통째로 무력해진다.** 행을 실제로 지우는 것은 탈퇴 정리와 만료 정리(`RefreshTokenPurgeScheduler`) 둘뿐이다.
+
+---
+
+## 3. `dog` — 반려견 프로필
+
+사용자의 강아지 프로필. `users` 1:N `dog`. 앱 도메인(`DogProfile`)의 `size`(small/medium/large)·`neutered`·`avatar`와 매핑. 나이는 앱에서 개월 수로 표시하나 DB는 `birth`(생일)로 저장하는 것이 정규.
 
 ```sql
 CREATE TABLE dog (
@@ -61,7 +131,7 @@ CREATE TABLE dog (
   PRIMARY KEY (id),
   KEY idx_dog_user (user_id),
   CONSTRAINT fk_dog_user FOREIGN KEY (user_id)
-    REFERENCES app_user (id) ON DELETE CASCADE,
+    REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT ck_dog_size CHECK (size IN ('small','medium','large'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
@@ -69,7 +139,7 @@ CREATE TABLE dog (
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `user_id` | `BIGINT` | FK→`app_user.id`, NOT NULL, INDEX | 소유 사용자 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL, INDEX | 소유 사용자 |
 | `name` | `VARCHAR(50)` | NOT NULL | 이름 |
 | `breed` | `VARCHAR(50)` | NULL | 견종 |
 | `size` | `VARCHAR(10)` | NOT NULL, CHECK | 소/중/대형견 |
@@ -79,7 +149,7 @@ CREATE TABLE dog (
 
 ---
 
-## 3. `walk` — 산책 기록 (GPS 경로)
+## 4. `walk` — 산책 기록 (GPS 경로)
 
 산책 1건. GPS 경로를 `LINESTRING`으로 저장하고 거리(`distance_m`)·시간(`duration_s`)·메모·날씨를 함께 보관. `dog` 1:N `walk`. 페이스는 `distance_m`/`duration_s`로 파생(비저장).
 
@@ -119,7 +189,7 @@ CREATE TABLE walk (
 
 ---
 
-## 4. `place` — 장소 POI 캐시 (좌표 POINT)
+## 5. `place` — 장소 POI 캐시 (좌표 POINT)
 
 동반장소(KTO)·동물병원·펫샵(LOCALDATA) POI 캐시. 좌표를 `POINT`로 저장하고 `SPATIAL INDEX`로 주변 검색. 공공데이터 원본은 `raw_json`에 보관. `source + external_id`로 중복 방지.
 
@@ -174,7 +244,7 @@ LIMIT 80;
 
 ---
 
-## 5. `trail` — 산책로 코스 (경로 LINESTRING)
+## 6. `trail` — 산책로 코스 (경로 LINESTRING)
 
 두루누비(걷기여행길) 산책로 코스. 경로를 `LINESTRING`으로 저장. 현재 다른 엔티티와 FK 없이 지도 레이어(`trail` 카테고리)에만 사용(향후 `walk`/`post` 연결 확장 여지).
 
@@ -201,9 +271,9 @@ CREATE TABLE trail (
 
 ---
 
-## 6. `post` — 커뮤니티 게시글
+## 7. `post` — 커뮤니티 게시글
 
-커뮤니티 글. 게시판(`board`)으로 분류하고 장소(`place`) 선택 태그 가능(`place_id` nullable). `app_user` 1:N `post`.
+커뮤니티 글. 게시판(`board`)으로 분류하고 장소(`place`) 선택 태그 가능(`place_id` nullable). `users` 1:N `post`.
 
 ```sql
 CREATE TABLE post (
@@ -219,7 +289,7 @@ CREATE TABLE post (
   KEY idx_post_user (user_id),
   KEY idx_post_place (place_id),
   CONSTRAINT fk_post_user FOREIGN KEY (user_id)
-    REFERENCES app_user (id) ON DELETE CASCADE,
+    REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT fk_post_place FOREIGN KEY (place_id)
     REFERENCES place (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -228,7 +298,7 @@ CREATE TABLE post (
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `user_id` | `BIGINT` | FK→`app_user.id`, NOT NULL, INDEX | 작성자 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL, INDEX | 작성자 |
 | `board` | `VARCHAR(20)` | NOT NULL, INDEX(board,created_at) | 게시판 |
 | `place_id` | `BIGINT` | FK→`place.id` nullable, ON DELETE SET NULL | 태그 장소 |
 | `title` | `VARCHAR(150)` | NOT NULL | 제목 |
@@ -236,9 +306,9 @@ CREATE TABLE post (
 
 ---
 
-## 7. `comment` — 댓글
+## 8. `comment` — 댓글
 
-게시글 댓글. `post` 1:N, `app_user` 1:N.
+게시글 댓글. `post` 1:N, `users` 1:N.
 
 ```sql
 CREATE TABLE comment (
@@ -253,7 +323,7 @@ CREATE TABLE comment (
   CONSTRAINT fk_comment_post FOREIGN KEY (post_id)
     REFERENCES post (id) ON DELETE CASCADE,
   CONSTRAINT fk_comment_user FOREIGN KEY (user_id)
-    REFERENCES app_user (id) ON DELETE CASCADE
+    REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
@@ -261,14 +331,14 @@ CREATE TABLE comment (
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
 | `post_id` | `BIGINT` | FK→`post.id`, NOT NULL, INDEX | 대상 글 |
-| `user_id` | `BIGINT` | FK→`app_user.id`, NOT NULL | 작성자 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 작성자 |
 | `body` | `TEXT` | NOT NULL | 내용 |
 
 ---
 
-## 8. `reaction` — 반응
+## 9. `reaction` — 반응
 
-게시글 반응(도움돼요/귀여워요/공감). 사용자당 글별 반응 유형 유니크. `post` 1:N, `app_user` 1:N.
+게시글 반응(도움돼요/귀여워요/공감). 사용자당 글별 반응 유형 유니크. `post` 1:N, `users` 1:N.
 
 ```sql
 CREATE TABLE reaction (
@@ -283,7 +353,7 @@ CREATE TABLE reaction (
   CONSTRAINT fk_reaction_post FOREIGN KEY (post_id)
     REFERENCES post (id) ON DELETE CASCADE,
   CONSTRAINT fk_reaction_user FOREIGN KEY (user_id)
-    REFERENCES app_user (id) ON DELETE CASCADE,
+    REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT ck_reaction_type CHECK (type IN ('help','cute','empathy'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
@@ -292,14 +362,14 @@ CREATE TABLE reaction (
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
 | `post_id` | `BIGINT` | FK→`post.id`, NOT NULL, UNIQUE(post,user,type) | 대상 글 |
-| `user_id` | `BIGINT` | FK→`app_user.id`, NOT NULL | 남긴 사람 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 남긴 사람 |
 | `type` | `VARCHAR(10)` | NOT NULL, CHECK | `help`(도움돼요)/`cute`(귀여워요)/`empathy`(공감) |
 
 ---
 
-## 9. `bookmark` — 장소 저장
+## 10. `bookmark` — 장소 저장
 
-사용자가 저장한 장소. `app_user`·`place` 각각 1:N, 사용자-장소 조합 유니크.
+사용자가 저장한 장소. `users`·`place` 각각 1:N, 사용자-장소 조합 유니크.
 
 ```sql
 CREATE TABLE bookmark (
@@ -311,7 +381,7 @@ CREATE TABLE bookmark (
   UNIQUE KEY uq_bookmark (user_id, place_id),
   KEY idx_bookmark_place (place_id),
   CONSTRAINT fk_bookmark_user FOREIGN KEY (user_id)
-    REFERENCES app_user (id) ON DELETE CASCADE,
+    REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT fk_bookmark_place FOREIGN KEY (place_id)
     REFERENCES place (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -320,12 +390,12 @@ CREATE TABLE bookmark (
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `user_id` | `BIGINT` | FK→`app_user.id`, NOT NULL, UNIQUE(user,place) | 저장한 사람 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL, UNIQUE(user,place) | 저장한 사람 |
 | `place_id` | `BIGINT` | FK→`place.id`, NOT NULL, INDEX | 저장 대상 |
 
 ---
 
-## 10. `family_group` — 가족 케어 그룹
+## 11. `family_group` — 가족 케어 그룹
 
 가족이 함께 반려를 돌보는 그룹. 초대코드(`invite_code`)로 멤버가 참여하며, 케어 공유·산책 주의사항·그룹 채팅의 단위가 된다.
 
@@ -349,9 +419,9 @@ CREATE TABLE family_group (
 
 ---
 
-## 11. `group_member` — 그룹 구성원
+## 12. `group_member` — 그룹 구성원
 
-`family_group`↔`app_user` 연결(N:M 해소). 그룹 생성자는 `owner`, 초대코드로 참여한 멤버는 `member`. 그룹-사용자 조합 유니크.
+`family_group`↔`users` 연결(N:M 해소). 그룹 생성자는 `owner`, 초대코드로 참여한 멤버는 `member`. 그룹-사용자 조합 유니크.
 
 ```sql
 CREATE TABLE group_member (
@@ -366,7 +436,7 @@ CREATE TABLE group_member (
   CONSTRAINT fk_member_group FOREIGN KEY (group_id)
     REFERENCES family_group (id) ON DELETE CASCADE,
   CONSTRAINT fk_member_user FOREIGN KEY (user_id)
-    REFERENCES app_user (id) ON DELETE CASCADE,
+    REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT ck_member_role CHECK (role IN ('owner','member'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
@@ -375,15 +445,15 @@ CREATE TABLE group_member (
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
 | `group_id` | `BIGINT` | FK→`family_group.id`, NOT NULL, UNIQUE(group,user) | 소속 그룹 |
-| `user_id` | `BIGINT` | FK→`app_user.id`, NOT NULL, INDEX | 구성원 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL, INDEX | 구성원 |
 | `role` | `VARCHAR(10)` | NOT NULL 기본 member, CHECK | `owner`/`member` |
 | `joined_at` | `DATETIME` | NOT NULL, 기본 now | 참여 시각 |
 
 ---
 
-## 12. `chat_message` — 가족 그룹 채팅
+## 13. `chat_message` — 가족 그룹 채팅
 
-그룹 채팅 메시지. 커서 페이지네이션(`id` 커서)으로 조회하며, MVP는 폴링·실시간(WebSocket/STOMP)은 post-MVP. `family_group` 1:N, `app_user` 1:N.
+그룹 채팅 메시지. 커서 페이지네이션(`id` 커서)으로 조회하며, MVP는 폴링·실시간(WebSocket/STOMP)은 post-MVP. `family_group` 1:N, `users` 1:N.
 
 ```sql
 CREATE TABLE chat_message (
@@ -398,7 +468,7 @@ CREATE TABLE chat_message (
   CONSTRAINT fk_chat_group FOREIGN KEY (group_id)
     REFERENCES family_group (id) ON DELETE CASCADE,
   CONSTRAINT fk_chat_user FOREIGN KEY (user_id)
-    REFERENCES app_user (id) ON DELETE CASCADE
+    REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
@@ -406,13 +476,13 @@ CREATE TABLE chat_message (
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | 커서 페이지네이션 기준 |
 | `group_id` | `BIGINT` | FK→`family_group.id`, NOT NULL, INDEX(group_id,id) | 대상 그룹 |
-| `user_id` | `BIGINT` | FK→`app_user.id`, NOT NULL | 작성자 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 작성자 |
 | `body` | `TEXT` | NOT NULL | 메시지 본문 |
 | `created_at` | `DATETIME` | NOT NULL, 기본 now | 전송 시각 |
 
 ---
 
-## 13. `walk_note` — 산책 주의사항 (가족 공유 메모)
+## 14. `walk_note` — 산책 주의사항 (가족 공유 메모)
 
 산책 시 주의사항을 가족이 공유하는 메모. `family_group` 1:N (`GET|PUT /api/groups/{groupId}/walk-notes`).
 
@@ -438,7 +508,7 @@ CREATE TABLE walk_note (
 
 ---
 
-## 14. `care_log` — 케어 로그 (가족 케어 공유)
+## 15. `care_log` — 케어 로그 (가족 케어 공유)
 
 당초 post-MVP 확장으로 계획했던 테이블을 **가족 케어 공유**에 맞춰 확장한 정의. 물/밥/산책/투약/병원 로그를 하나의 유연 스키마로 저장하고, 누가(`done_by`)·언제 했는지를 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지한다. FK 관계상 `family_group`(10) 생성 후 적용한다.
 
@@ -448,7 +518,7 @@ CREATE TABLE care_log (
   dog_id      BIGINT      NOT NULL,
   group_id    BIGINT      NULL COMMENT '가족 그룹 공유(nullable — 미소속 시 개인 기록)',
   type        VARCHAR(10) NOT NULL COMMENT 'water|meal|walk|med|vet',
-  done_by     BIGINT      NOT NULL COMMENT '수행자(app_user.id) — 누가 했는지',
+  done_by     BIGINT      NOT NULL COMMENT '수행자(users.id) — 누가 했는지',
   occurred_at DATETIME    NOT NULL,
   title       VARCHAR(100) NULL,
   value       VARCHAR(100) NULL COMMENT '수치/양 등 (예: 몸무게 5.2kg)',
@@ -464,7 +534,7 @@ CREATE TABLE care_log (
   CONSTRAINT fk_carelog_group FOREIGN KEY (group_id)
     REFERENCES family_group (id) ON DELETE SET NULL,
   CONSTRAINT fk_carelog_doneby FOREIGN KEY (done_by)
-    REFERENCES app_user (id) ON DELETE CASCADE,
+    REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT ck_carelog_type CHECK (type IN ('water','meal','walk','med','vet'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
@@ -475,7 +545,7 @@ CREATE TABLE care_log (
 | `dog_id` | `BIGINT` | FK→`dog.id`, NOT NULL, INDEX(dog,occurred_at) | 대상 강아지 |
 | `group_id` | `BIGINT` | FK→`family_group.id` nullable, ON DELETE SET NULL, INDEX(group,occurred_at) | 공유 대상 가족 그룹 |
 | `type` | `VARCHAR(10)` | NOT NULL, CHECK | `water`(물)/`meal`(밥)/`walk`(산책)/`med`(투약)/`vet`(병원) |
-| `done_by` | `BIGINT` | FK→`app_user.id`, NOT NULL, INDEX | 수행자(누가 했는지) |
+| `done_by` | `BIGINT` | FK→`users.id`, NOT NULL, INDEX | 수행자(누가 했는지) |
 | `occurred_at` | `DATETIME` | NOT NULL | 발생 시각(언제 했는지) |
 | `title` | `VARCHAR(100)` | NULL | 제목 |
 | `value` | `VARCHAR(100)` | NULL | 수치/양 |
@@ -490,7 +560,11 @@ CREATE TABLE care_log (
 
 | 테이블 | 인덱스 | 종류 | 목적 |
 | --- | --- | --- | --- |
-| `app_user` | `uq_user_social(provider, social_id)` | UNIQUE | 소셜 계정 중복 방지 |
+| `users` | `uk_users_provider_social_id(provider, social_id)` | UNIQUE | 소셜 계정 중복 방지 |
+| `users` | `uk_users_email(email)` | UNIQUE | 이메일 중복 방지 (NULL 은 서로 다른 값) |
+| `refresh_token` | `uk_refresh_token_token_hash(token_hash)` | UNIQUE | 같은 RT 가 두 행이 되지 않게 |
+| `refresh_token` | `idx_refresh_token_user_id(user_id)` | 보조 | 전 기기 로그아웃(사용자별 폐기) |
+| `refresh_token` | `idx_refresh_token_expires_at(expires_at)` | 보조 | 만료 RT 정리 배치 |
 | `dog` | `idx_dog_user(user_id)` | 보조 | 사용자별 강아지 조회 |
 | `walk` | `idx_walk_dog(dog_id, started_at)` | 보조 | 강아지별 산책 이력 |
 | `walk` | `spx_walk_path(path)` | **SPATIAL** | GPS 경로 공간 연산 |

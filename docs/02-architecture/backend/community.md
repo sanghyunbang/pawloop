@@ -13,7 +13,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 책임 | 커뮤니티 게시글 목록/작성/상세, 댓글 목록/작성, 게시글 반응(help/cute/empathy) 토글. |
-| 관련 테이블 | `post`(글), `comment`(댓글), `reaction`(반응). 읽기 조인: `app_user`(작성자 닉네임), `place`(태그 장소, nullable FK). |
+| 관련 테이블 | `post`(글), `comment`(댓글), `reaction`(반응). 읽기 조인: `users`(작성자 닉네임), `place`(태그 장소, nullable FK). |
 | 재사용 후보 | 기존 `social` 패키지의 `EmotionCard/CardReaction/CardComment` 구조가 거의 동일 → **패턴을 그대로 복제/개편**한다. 특히 (a) 반응 토글 로직(`SocialService.toggleReaction`), (b) 반응/댓글 수 N+1 방지 배치 집계(`findByCardIdIn`, `countByCardIdInGroupBy`), (c) `ReactionSummary`(reactions map + mine)는 social의 `{reactions, myReactions}` 개편판이다. |
 | 기존과 차이 | ① 반응 타입이 `SAME/CHEER/CALM`(social) → `help/cute/empathy`(community). ② `ReactionSummary.mine`은 **문자열 단수**(내가 누른 1개 또는 null)로, social의 `myReactions`(리스트)와 다르다. openapi `reaction`은 단일 유형 라디오형 → 유저당 글별 **1개만** 유지하는 정책 권장. ③ 목록이 **커서 페이지네이션**(`items`/`nextCursor`/`hasMore`)이다(social은 limit-only). ④ `board` enum·`placeId` nullable FK 존재. |
 | 인증 정책 | 읽기(GET 목록/상세/댓글목록)는 **비인증 허용**(openapi `security: []`). 쓰기(글/댓글 작성, 반응 토글)는 **인증 필요**. SecurityConfig에서 `/api/community/**` GET은 permitAll, 그 외 authenticated 로 열어야 함(social은 전부 authenticated였음 — 주의). |
@@ -142,7 +142,7 @@
 | 엔티티 필드 | 컬럼 | 타입/제약 | 비고 |
 | --- | --- | --- | --- |
 | `id` | `id` | `Long` PK IDENTITY | |
-| `userId` | `user_id` | `Long` NOT NULL | FK→`app_user.id`. (연관관계 대신 social처럼 id 스칼라 매핑 권장) |
+| `userId` | `user_id` | `Long` NOT NULL | FK→`users.id`. (연관관계 대신 social처럼 id 스칼라 매핑 권장) |
 | `board` | `board` | `String` NOT NULL | Board enum 문자열 저장 |
 | `placeId` | `place_id` | `Long` NULL | **nullable FK**→`place.id`, ON DELETE SET NULL |
 | `title` | `title` | `String` NOT NULL | |
@@ -154,7 +154,7 @@
 | --- | --- | --- |
 | `id` | `id` | `Long` PK |
 | `postId` | `post_id` | `Long` NOT NULL, FK→`post.id` |
-| `userId` | `user_id` | `Long` NOT NULL, FK→`app_user.id` |
+| `userId` | `user_id` | `Long` NOT NULL, FK→`users.id` |
 | `body` | `body` | `String`(`TEXT`) NOT NULL |
 | `createdAt` | `created_at` | `LocalDateTime` NOT NULL, `@PrePersist` |
 
@@ -163,7 +163,7 @@
 | --- | --- | --- |
 | `id` | `id` | `Long` PK |
 | `postId` | `post_id` | `Long` NOT NULL, FK→`post.id` |
-| `userId` | `user_id` | `Long` NOT NULL, FK→`app_user.id` |
+| `userId` | `user_id` | `Long` NOT NULL, FK→`users.id` |
 | `type` | `type` | `String(10)` NOT NULL, CHECK in(help,cute,empathy) |
 | `createdAt` | `created_at` | `LocalDateTime` NOT NULL, `@PrePersist` |
 

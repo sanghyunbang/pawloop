@@ -91,7 +91,9 @@ class AuthControllerTest {
     @Test
     @DisplayName("소셜 로그인 시작 API는 Spring 진입점으로 302 리다이렉트만 하고 인증 로직을 재구현하지 않는다")
     void startOAuth_redirectsToTheSpringEntryPoint() {
-        for (String provider : new String[] {"kakao", "naver", "google"}) {
+        // naver 는 ADR-0010 이 보류로 확정하면서 계약 enum 과 SUPPORTED_PROVIDERS 에서
+        // 함께 빠졌다(#15). 이제 이 래퍼에서 400 이다 — AuthContractIntegrationTest 가 확인한다.
+        for (String provider : new String[] {"kakao", "google"}) {
             var response = authController.startOAuth(provider, null);
 
             assertThat(response.getStatusCode())

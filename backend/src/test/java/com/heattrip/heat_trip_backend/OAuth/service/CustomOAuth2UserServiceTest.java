@@ -3,7 +3,6 @@ package com.heattrip.heat_trip_backend.OAuth.service;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.GoogleOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.KakaoOAuth2User;
-import com.heattrip.heat_trip_backend.OAuth.user.NaverOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.OAuth2UserInfo;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
@@ -332,38 +331,20 @@ class CustomOAuth2UserServiceTest {
     }
 
     @Test
-    @DisplayName("google·naver 도 대소문자와 무관하게 매핑되고, 실제 응답 모양에서 값을 꺼낸다")
-    void toUserInfo_mapsOtherProviders() {
+    @DisplayName("google 은 매핑되고, naver 는 지원 공급자가 아니라 거절된다")
+    void toUserInfo_mapsGoogleAndRefusesNaver() {
         OAuth2UserInfo googleInfo = CustomOAuth2UserService.toUserInfo(
                 "Google", Map.of("sub", "g-1", "name", "보리아빠", "email", "bori@example.com"));
         assertThat(googleInfo).isInstanceOf(GoogleOAuth2User.class);
         assertThat(googleInfo.getProviderId()).isEqualTo("g-1");
 
-        // 네이버는 값이 전부 response 아래에 중첩돼 있다. 빈 맵으로 instanceof 만 보던 옛 단언은
-        // 키 이름이나 캐스팅이 틀려도 초록불이었다 — 그러면 네이버 로그인 전원이 missing_social_id 로 죽는다.
-        OAuth2UserInfo naverInfo = CustomOAuth2UserService.toUserInfo("NAVER", Map.of(
-                "response", Map.of(
-                        "id", "n-1",
-                        "name", "보리아빠",
-                        "email", "bori@example.com",
-                        "profile_image", "https://cdn.example.com/n.jpg")));
-        assertThat(naverInfo).isInstanceOf(NaverOAuth2User.class);
-        assertThat(naverInfo.getProvider()).isEqualTo("naver");
-        assertThat(naverInfo.getProviderId()).isEqualTo("n-1");
-        assertThat(naverInfo.getName()).isEqualTo("보리아빠");
-        assertThat(naverInfo.getEmail()).isEqualTo("bori@example.com");
-        assertThat(naverInfo.getImageUrl()).isEqualTo("https://cdn.example.com/n.jpg");
-    }
-
-    @Test
-    @DisplayName("네이버 응답에 response 키가 없어도 접근자가 예외 없이 null 을 돌려준다")
-    void naverUserInfo_toleratesMissingResponseKey() {
-        OAuth2UserInfo naverInfo = CustomOAuth2UserService.toUserInfo("naver", Map.of());
-
-        assertThat(naverInfo.getProviderId()).isNull();
-        assertThat(naverInfo.getName()).isNull();
-        assertThat(naverInfo.getEmail()).isNull();
-        assertThat(naverInfo.getImageUrl()).isNull();
+        // ADR-0010 이 네이버를 보류로 확정했다. 그 결정을 산문이 아니라 여기서 잠근다 —
+        // 파서(NaverOAuth2User)와 클라이언트 등록을 함께 걷어냈으므로, 되살리려면
+        // 이 테스트가 먼저 빨간불이 되고 그때 ADR 을 고칠지 결정하게 된다. (#15, #13)
+        assertThatThrownBy(() -> CustomOAuth2UserService.toUserInfo("NAVER", Map.of(
+                        "response", Map.of("id", "n-1", "name", "보리아빠"))))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .hasMessageContaining("naver");
     }
 
     @Test

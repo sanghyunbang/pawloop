@@ -71,7 +71,7 @@ spring.jpa.hibernate.ddl-auto=${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
 
 ```
 backend/src/main/resources/db/migration/
-├── V1__baseline_schema.sql          # 현재 스키마 덤프(app_user/dog/place/...)
+├── V1__baseline_schema.sql          # 현재 스키마 덤프(users/refresh_token/dog/place/...)
 ├── V2__place_add_geom_point.sql     # mapx/mapy(Double) → geom POINT + SPATIAL INDEX
 ├── V3__add_walk_trail_spatial.sql   # walk.path / trail.path LINESTRING
 ├── V4__community_tables.sql         # post/comment/reaction/bookmark

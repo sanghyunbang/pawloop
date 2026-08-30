@@ -197,7 +197,11 @@ class AuthContractIntegrationTest extends AbstractMySqlIntegrationTest {
     @DisplayName("지원 공급자로 소셜 로그인을 시작하면 302 와 Location: /oauth2/authorization/{provider} 를 받는다")
     void 소셜_로그인_시작은_302_래퍼다() throws Exception {
         // 예전에는 이 경로가 빈 200 이었고, 계약은 "미구현" 이라고 적었다 (완료 조건 4).
-        for (String provider : new String[] {"kakao", "google", "naver"}) {
+        //
+        // naver 는 여기 있었다. ADR-0010 이 보류로 확정하면서 계약 enum 과
+        // AuthController.SUPPORTED_PROVIDERS 에서 함께 빠졌다(#15). 아래
+        // 화이트리스트_밖_공급자는_400_이다 가 그 자리를 이어받는다.
+        for (String provider : new String[] {"kakao", "google"}) {
             MockHttpServletResponse response = mockMvc.perform(get("/auth/oauth/" + provider))
                     .andReturn().getResponse();
 
@@ -224,6 +228,23 @@ class AuthContractIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(response.getContentAsString(StandardCharsets.UTF_8))
                 .as("입력값을 본문에 되싣으면 반사형 XSS 재료가 된다")
                 .doesNotContain("facebook");
+    }
+
+    @Test
+    @DisplayName("보류된 공급자 naver 도 이 래퍼에서는 400 이다 — ADR-0010")
+    void 보류된_공급자_naver_는_400_이다() throws Exception {
+        // ADR-0010 이 네이버를 보류로 확정했다. 계약 enum 에서 빼면서 코드 화이트리스트도
+        // 같이 좁혔다 — 한쪽만 좁히면 계약이 광고하지 않는 값이 302 로 통과한다.
+        //
+        // 이것으로 네이버 로그인이 막히지는 **않는다.** 앱이 실제로 여는 것은 이 래퍼가 아니라
+        // /oauth2/authorization/naver 이고, 클라이언트 등록은 아직 살아 있다. 그 구멍은 #13 소유다.
+        MockHttpServletResponse response = mockMvc.perform(get("/auth/oauth/naver"))
+                .andReturn().getResponse();
+
+        assertThat(response.getStatus())
+                .as("naver 를 화이트리스트에 되돌리면 여기가 302 를 받아 빨간불이 된다")
+                .isEqualTo(400);
+        assertThat(errorBody(response).path("code").asText()).isEqualTo("VALIDATION");
     }
 
     // ─────────────────── /auth/me (완료 조건 3·6) ───────────────────

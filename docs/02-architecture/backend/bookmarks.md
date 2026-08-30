@@ -23,9 +23,9 @@
 
 - **책임**: 로그인 사용자가 특정 장소(`place`)를 저장/조회/삭제한다. 사용자-장소 조합은 유니크(중복 저장 시 409). 목록은 `place` 조인으로 장소 카드(`Place` 스키마) 형태로 반환한다.
 - **관련 테이블**:
-  - `bookmark` (본 리소스 소유. `user_id` + `place_id` UNIQUE) — [schema.md §9](../../03-database/schema.md)
-  - `place` (조인 대상, 읽기 전용. `geom POINT`, `SPATIAL INDEX`) — [schema.md §4](../../03-database/schema.md)
-  - `app_user` (FK 대상) — [schema.md §1](../../03-database/schema.md)
+  - `bookmark` (본 리소스 소유. `user_id` + `place_id` UNIQUE) — [schema.md §10](../../03-database/schema.md)
+  - `place` (조인 대상, 읽기 전용. `geom POINT`, `SPATIAL INDEX`) — [schema.md §5](../../03-database/schema.md)
+  - `users` (FK 대상) — [schema.md §1](../../03-database/schema.md)
 - **재사용 가능한 기존 자산**:
   - JWT 인증 추출: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (이 줄은 #5 이전 서술이었다 — 두 패턴 중 하나를 고르라고 안내했으나 둘 다 삭제됐다.)
   - 커서 페이지네이션 응답: `explore.dto.CursorPageResponse<T>`(items/nextCursor/hasNext) 및 `explore.dto.PageResponse` 참고. **단, openapi Bookmarks GET은 배열 반환(페이지네이션 없음)** — §2 주의.
@@ -110,11 +110,11 @@
 | 엔티티 필드 | 타입 | 컬럼 | 매핑/제약 |
 | --- | --- | --- | --- |
 | `id` | `Long` | `id` | `@Id @GeneratedValue(IDENTITY)` |
-| `userId` | `Long` | `user_id` | `@Column(nullable=false)`. FK→`app_user.id`. (연관 대신 스칼라 FK 권장 — Social `EmotionCard.userId` 패턴) |
+| `userId` | `Long` | `user_id` | `@Column(nullable=false)`. FK→`users.id`. (연관 대신 스칼라 FK 권장 — Social `EmotionCard.userId` 패턴) |
 | `placeId` | `Long` | `place_id` | `@Column(nullable=false)`. FK→`place.id`. |
 | `createdAt` | `LocalDateTime` | `created_at` | `@Column(nullable=false, updatable=false)`, `@PrePersist`에서 `now()` (EmotionCard 패턴) |
 
-- 테이블 제약: `UNIQUE KEY uq_bookmark (user_id, place_id)`, `KEY idx_bookmark_place (place_id)` — schema.md §9. **엔티티에 `@Table(uniqueConstraints=@UniqueConstraint(columnNames={"user_id","place_id"}))`** 명시(기존 Bookmark 스타일과 동일).
+- 테이블 제약: `UNIQUE KEY uq_bookmark (user_id, place_id)`, `KEY idx_bookmark_place (place_id)` — schema.md §10. **엔티티에 `@Table(uniqueConstraints=@UniqueConstraint(columnNames={"user_id","place_id"}))`** 명시(기존 Bookmark 스타일과 동일).
 - **공간 컬럼 없음**(bookmark 자체엔 geom 없음). 좌표는 조인한 `place.geom(POINT, SRID 4326, SPATIAL INDEX)`에서 읽는다.
 - FK `ON DELETE CASCADE`(user/place 삭제 시 북마크 정리) — DDL에 이미 정의됨. JPA에선 DB 제약에 위임(앱단 cascade 불필요).
 
@@ -160,7 +160,7 @@ ORDER BY b.created_at DESC
 
 2. **좌표계·좌표 순서**
    - DB `POINT(x, y) = POINT(lng, lat)`. 응답 매핑 시 **`lat = ST_Y`, `lng = ST_X`** (뒤바꾸면 지도가 엉킴).
-   - `place`는 조회만 하므로 이 리소스에서 좌표 삽입은 없다. 단, `place` 적재 파이프라인(Places 리소스)에서 LOCALDATA 좌표는 **EPSG:5174→WGS84(4326)** 변환 후 저장됨을 전제(schema.md §4). Bookmarks는 변환에 관여하지 않는다.
+   - `place`는 조회만 하므로 이 리소스에서 좌표 삽입은 없다. 단, `place` 적재 파이프라인(Places 리소스)에서 LOCALDATA 좌표는 **EPSG:5174→WGS84(4326)** 변환 후 저장됨을 전제(schema.md §5). Bookmarks는 변환에 관여하지 않는다.
    - `ST_Distance_Sphere`는 이 리소스에서 **불필요**(북마크 목록엔 거리 기준점 없음, distM=null). 거리 계산은 Places `/nearby`의 몫.
 
 3. **중복(409) 처리 경합**
