@@ -184,6 +184,33 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 채팅 한도·초대 상태 위반. [⑭] (이슈 #74)
+     *
+     * <p>봉투는 위 {@link ErrorResponse} 그대로다 — <b>사본을 만들지 않는다.</b>
+     * {@code ApiRateLimitFilter} 가 이미 같은 봉투를 재사용하고 앱은 {@code error.code} 로
+     * 분기한다. 두 벌이 되면 한쪽만 낡는다.
+     *
+     * <p><b>코드를 {@link #codeOf(HttpStatus)} 로 만들지 않는다.</b> 그 표는 "같은 상태에
+     * 서로 다른 코드가 붙는" 것을 막는 장치이고 그 목적은 여전히 옳지만, 여기 넷은
+     * <b>같은 상태 안에서 서로 다른 뜻</b>이다 — {@code ROOM_MEMBER_LIMIT} 과
+     * {@code INVITE_USES_EXHAUSTED} 가 둘 다 409 인데 앱이 보여줄 화면이 다르다.
+     * 어휘의 출처는 여전히 한 곳이다: {@code ChatErrorCode} enum.
+     *
+     * <p>{@code 410 GONE} 이 {@code codeOf} 표에 없는 것도 그래서 문제가 아니다 —
+     * 이 경로는 표를 타지 않는다.
+     *
+     * <p>메시지는 {@code ChatErrorCode} 가 든 고정 문구다. 예외 메시지를 그대로 싣는
+     * 형태가 아니므로 식별자가 섞여 나갈 여지가 없다(#6).
+     */
+    @ExceptionHandler(com.heattrip.heat_trip_backend.chat.ChatLimitViolationException.class)
+    public ResponseEntity<ErrorResponse> handleChatLimitViolation(
+            com.heattrip.heat_trip_backend.chat.ChatLimitViolationException ex) {
+        var code = ex.errorCode();
+        return ResponseEntity.status(code.status())
+                .body(ErrorResponse.of(code.name(), code.message()));
+    }
+
+    /**
      * <b>형식이 깨진 요청</b>을 500 이 아니라 제 코드로 내보낸다. [⑫] (이슈 #9)
      *
      * <p>여기 오는 세 예외는 전부 "서버가 고장난 것" 이 아니라 "요청이 규격에 맞지 않는 것"
@@ -269,4 +296,6 @@ public class GlobalExceptionHandler {
 [⑫] 400/415/405: 형식이 깨진 요청. 핸들러가 없으면 전부 500 이었다(#9 에서 실측). 본문에 예외 메시지 금지 — 요청 본문 조각이 섞인다(#6).
 [⑬] code 어휘: 400 VALIDATION · 403 FORBIDDEN · 404 NOT_FOUND · 405 METHOD_NOT_ALLOWED ·
     409 CONFLICT · 415 UNSUPPORTED_MEDIA_TYPE · 429 RATE_LIMITED · 그 밖 INTERNAL. 401 은 본문 없음(#10).
+[⑭] 채팅 한도 4종: ROOM_MEMBER_LIMIT(409) · INVITE_EXPIRED(410) · INVITE_REVOKED(410) ·
+    INVITE_USES_EXHAUSTED(409). 상태에서 파생하지 않는다 — 같은 409 안에서 뜻이 갈린다(#74).
 ────────────────────────────────────────────────────────────────────────── */

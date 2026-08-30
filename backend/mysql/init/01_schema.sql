@@ -73,6 +73,51 @@ CREATE TABLE `cat3_category_mapping` (
   PRIMARY KEY (`mapping_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `chat_room` (
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `last_seq` bigint NOT NULL DEFAULT '0',
+  `origin_kind` varchar(20) NOT NULL,
+  `tag` varchar(20) NOT NULL,
+  `name` varchar(50) NOT NULL,
+  `origin_ref` varchar(64) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_chat_room_origin` (`origin_kind`,`origin_ref`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `chat_room_invite` (
+  `max_uses` int DEFAULT NULL,
+  `used_count` int NOT NULL DEFAULT '0',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `created_by` bigint NOT NULL,
+  `expires_at` datetime(6) DEFAULT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `revoked_at` datetime(6) DEFAULT NULL,
+  `room_id` bigint NOT NULL,
+  `code` varchar(32) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_chat_invite_code` (`code`),
+  KEY `idx_chat_invite_room` (`room_id`,`created_at`),
+  CONSTRAINT `fk_chat_invite_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `chat_room_member` (
+  `rejoin_blocked` bit(1) NOT NULL DEFAULT b'0',
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `joined_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `last_read_seq` bigint NOT NULL DEFAULT '0',
+  `removed_at` datetime(6) DEFAULT NULL,
+  `removed_by` bigint DEFAULT NULL,
+  `room_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  `role` varchar(10) NOT NULL DEFAULT 'MEMBER',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_chat_member` (`room_id`,`user_id`),
+  KEY `idx_chat_member_user` (`user_id`),
+  CONSTRAINT `fk_chat_member_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `chat_room_member_chk_1` CHECK ((`role` in (_utf8mb4'OWNER',_utf8mb4'MEMBER')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `collection_items` (
   `collection_id` bigint NOT NULL,
   `created_at` datetime(6) DEFAULT NULL,
@@ -243,7 +288,7 @@ CREATE TABLE `place_hashtags` (
   PRIMARY KEY (`id`),
   KEY `idx_ph_place` (`place_id`),
   KEY `idx_ph_hashtag` (`hashtag`)
-) ENGINE=InnoDB AUTO_INCREMENT=286 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `place_kakao_links` (
   `kakao_mapx` double DEFAULT NULL,
@@ -263,7 +308,7 @@ CREATE TABLE `place_simple_tags` (
   PRIMARY KEY (`id`),
   KEY `idx_pst_place` (`place_id`),
   KEY `idx_pst_tag` (`tag`)
-) ENGINE=InnoDB AUTO_INCREMENT=286 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `place_star_ratings` (
   `rating` double DEFAULT NULL,

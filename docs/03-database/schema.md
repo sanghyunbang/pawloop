@@ -427,7 +427,8 @@ CREATE TABLE chat_room (
   id          BIGINT      NOT NULL AUTO_INCREMENT,
   origin_kind VARCHAR(20) NOT NULL COMMENT '방을 만든 도메인 — FAMILY 등',
   origin_ref  VARCHAR(64) NOT NULL COMMENT '그 도메인의 id 를 문자열로 — FK 아님',
-  title       VARCHAR(50) NOT NULL COMMENT '방 이름',
+  name        VARCHAR(50) NOT NULL COMMENT '방 이름',
+  tag         VARCHAR(20) NOT NULL COMMENT '화면이 방 종류를 가르는 꼬리표 — 가족·산책 크루',
   last_seq    BIGINT      NOT NULL DEFAULT 0 COMMENT 'room_seq 발급 카운터 = 미읽음 뺄셈의 좌변',
   created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -440,9 +441,12 @@ CREATE TABLE chat_room (
 | `id` | `BIGINT` | PK | |
 | `origin_kind` | `VARCHAR(20)` | NOT NULL, UNIQUE(kind,ref) | 출처 도메인 이름 |
 | `origin_ref` | `VARCHAR(64)` | NOT NULL, UNIQUE(kind,ref) | 출처의 id. **FK 를 걸지 않는다** |
-| `title` | `VARCHAR(50)` | NOT NULL | 방 이름 |
+| `name` | `VARCHAR(50)` | NOT NULL | 방 이름 |
+| `tag` | `VARCHAR(20)` | NOT NULL | 화면이 방 종류를 가르는 꼬리표 |
 | `last_seq` | `BIGINT` | NOT NULL, 기본 0 | 발급기. `UPDATE ... SET last_seq = LAST_INSERT_ID(last_seq + 1)` 로 올린다 |
 | `created_at` | `DATETIME` | NOT NULL, 기본 now | 생성 시각 |
+
+> **각주 — 왜 `title` 이 아니라 `name` 이고, 왜 `tag` 가 붙었나.** 이 절의 예전 초안은 이름 컬럼을 `title` 로 적고 `tag` 를 빼먹었다. 이미 커밋돼 있는 앱의 `ChatRoom`(`app/lib/v2/domain/pet.dart:437`)이 `name:` 과 `tag:` 를 요구하고, `chat_list_screen.dart` 는 두 방을 같은 화면으로 넘기면서 **종류를 `tag` 로만 가른다.** [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)의 출발점이 "화면이 먼저 커밋돼 있고 그 화면이 데이터 모양을 정해 놨다" 인 이상, 이름이 갈리면 API 계층이 매번 두 이름을 옮겨 적어야 한다. 그래서 화면 쪽으로 맞췄다.
 
 > 발급과 메시지 INSERT 는 **하나의 트랜잭션**이다. 발급만 별도 트랜잭션으로 떼면 `id` 커서와 똑같은 구멍(§15 참조)이 생긴다. 락 순서는 항상 `chat_room` → `chat_room_member` 이고, **락을 쥔 트랜잭션 안에서 외부 호출(푸시·S3)을 하지 않는다.**
 
@@ -462,15 +466,19 @@ CREATE TABLE chat_room_member (
   last_read_seq  BIGINT      NOT NULL DEFAULT 0 COMMENT '미읽음 = room.last_seq − 이 값',
   removed_at     DATETIME    NULL COMMENT '강퇴 시각 — 행은 남긴다',
   removed_by     BIGINT      NULL COMMENT '강퇴한 방장(users.id) — FK 없음',
-  rejoin_blocked BOOLEAN     NOT NULL DEFAULT FALSE COMMENT '강퇴 = 재입장 금지',
+  rejoin_blocked BIT(1)      NOT NULL DEFAULT b'0' COMMENT '강퇴 = 재입장 금지',
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_member (room_id, user_id),
   KEY idx_chat_member_user (user_id),
   CONSTRAINT fk_chat_member_room FOREIGN KEY (room_id)
     REFERENCES chat_room (id) ON DELETE CASCADE,
-  CONSTRAINT ck_chat_member_role CHECK (role IN ('OWNER','MEMBER'))
+  CHECK (role IN ('OWNER','MEMBER'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
+
+> **각주 — 왜 `BOOLEAN` 이 아니라 `BIT(1)` 인가.** Hibernate 는 `boolean` 필드를 `bit(1)` 로 만든다 — 정본(`backend/mysql/init/01_schema.sql`)도 `post-start/06_chat_rooms.sql` 도 그 타입으로 적혀 있다. MySQL 에서 `BOOLEAN` 은 `TINYINT(1)` 의 별칭이라, 이 절을 그대로 손으로 실행한 DB 는 정본과 **다른 타입**을 갖게 되고 prod 는 `ddl-auto=validate` 라 그 차이가 부팅에서 드러난다. 문서가 정본을 따라가는 자리다.
+
+> **각주 — CHECK 에 이름을 붙이지 않는다.** Hibernate 가 `@Enumerated(STRING)` 매핑에서 이 CHECK 를 스스로 만드는데 무명이라, MySQL 이 `chat_room_member_chk_1` 로 붙인다. 여기서만 `ck_chat_member_role` 이라고 이름을 주면 같은 내용의 제약이 두 개 생기거나(엔티티에 `@Check` 를 함께 달았을 때 — 실측), `mysql/init` 으로 세운 DB 와 `mysql/post-start` 로 세운 DB 의 제약 이름이 갈린다.
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
@@ -482,7 +490,7 @@ CREATE TABLE chat_room_member (
 | `last_read_seq` | `BIGINT` | NOT NULL, 기본 0 | `GREATEST`·`LEAST` 로만 갱신 — 뒤로 못 가고 `room.last_seq` 를 넘지 못한다 |
 | `removed_at` | `DATETIME` | NULL | 강퇴 시각 |
 | `removed_by` | `BIGINT` | NULL, **FK 없음** | 강퇴한 방장 |
-| `rejoin_blocked` | `BOOLEAN` | NOT NULL, 기본 FALSE | 유효한 초대코드로도 다시 못 들어온다 |
+| `rejoin_blocked` | `BIT(1)` | NOT NULL, 기본 `b'0'` | 유효한 초대코드로도 다시 못 들어온다 |
 
 ---
 
