@@ -92,7 +92,7 @@ class AuthControllerTest {
     @DisplayName("소셜 로그인 시작 API는 Spring 진입점으로 302 리다이렉트만 하고 인증 로직을 재구현하지 않는다")
     void startOAuth_redirectsToTheSpringEntryPoint() {
         for (String provider : new String[] {"kakao", "naver", "google"}) {
-            var response = authController.startOAuth(provider);
+            var response = authController.startOAuth(provider, null);
 
             assertThat(response.getStatusCode())
                     .as("계약은 이 경로를 302 로 선언한다. 예전 구현은 빈 200 이었다")
@@ -106,11 +106,37 @@ class AuthControllerTest {
     }
 
     @Test
+    @DisplayName("호환 래퍼가 state 를 302 대상까지 옮긴다 — 옮기지 않으면 그 경로로 시작한 로그인은 100% 실패한다")
+    void startOAuth_forwardsTheAppState() {
+        // #14 가 "돌아온 state 가 다르면 로그인 실패로 처리하라" 를 계약에 못 박았다.
+        // 이 래퍼가 state 를 버리면 OAuthAppStateFilter 는 state 없는 요청만 보고, 딥링크는
+        // ?code=X&state=(빈 값)으로 나가며, 앱의 대조는 반드시 실패한다. 계약이 이 경로를
+        // "막다른 길에 빠지지 않게 하는 호환 표면" 이라고 광고하는데 그 반대였다.
+        var response = authController.startOAuth("kakao", "AbC_123-xyz");
+
+        assertThat(response.getHeaders().getLocation())
+                .hasToString("/oauth2/authorization/kakao?state=AbC_123-xyz");
+    }
+
+    @Test
+    @DisplayName("래퍼가 옮기는 state 는 화이트리스트를 통과한 값뿐이다 — 통과 못 하면 아예 붙이지 않는다")
+    void startOAuth_dropsUnsafeState() {
+        // 이 값은 Location 헤더에 그대로 들어간다. 검증 없이 이어 붙이면 & 나 개행 한 글자로
+        // 파라미터·헤더를 주입할 수 있다. 잘라 쓰거나 인코딩하지 않고 **버린다** —
+        // OAuthAppStateFilter 가 어차피 같은 이유로 버리는 값이다(패턴은 그쪽이 정본).
+        for (String unsafe : new String[] {"a&b=c", "with space", "%0d%0aX-Injected: 1", "", "x".repeat(129)}) {
+            assertThat(authController.startOAuth("kakao", unsafe).getHeaders().getLocation())
+                    .as("불안전한 state(%s)는 붙지 않아야 한다", unsafe)
+                    .hasToString("/oauth2/authorization/kakao");
+        }
+    }
+
+    @Test
     @DisplayName("화이트리스트에 없는 공급자는 302 가 아니라 400 이고 사유에 입력값을 되싣지 않는다")
     void startOAuth_rejectsUnsupportedProvider() {
         // 화이트리스트를 지우면 facebook 이 302 를 받아 이 테스트가 빨간불이 된다.
         // (이슈 #10 완료 조건 11)
-        assertThatThrownBy(() -> authController.startOAuth("facebook"))
+        assertThatThrownBy(() -> authController.startOAuth("facebook", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 // 메시지는 그대로 400 응답 본문이 된다. 입력을 되싣으면 반사형 XSS 재료다.
                 .hasMessageNotContaining("facebook");
@@ -119,7 +145,7 @@ class AuthControllerTest {
     @Test
     @DisplayName("공급자 이름은 대소문자와 앞뒤 공백을 가리지 않는다")
     void startOAuth_normalizesTheProviderName() {
-        var response = authController.startOAuth("  Kakao ");
+        var response = authController.startOAuth("  Kakao ", null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         assertThat(response.getHeaders().getLocation())

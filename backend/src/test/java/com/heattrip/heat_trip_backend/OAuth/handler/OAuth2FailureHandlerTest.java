@@ -22,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class OAuth2FailureHandlerTest {
 
-    private final OAuth2FailureHandler handler = new OAuth2FailureHandler();
+    private final OAuth2FailureHandler handler =
+            new OAuth2FailureHandler(new com.heattrip.heat_trip_backend.config.OAuthSecurityProperties());
 
     private String redirectFor(AuthenticationException exception) throws IOException {
         MockHttpServletResponse response = new MockHttpServletResponse();

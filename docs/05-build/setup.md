@@ -236,7 +236,7 @@ flutter run --dart-define-from-file=dart-define.json \
 
 #### 딥링크 복귀 설정 (이게 없으면 로그인이 끝나도 앱으로 못 돌아온다)
 
-`flutter_web_auth_2` 는 로그인 후 `heattrip://login-callback?token=...` 로 앱에 돌아온다. 양 플랫폼 모두 OS 에 스킴이 등록돼 있어야 한다.
+`flutter_web_auth_2` 는 로그인 후 `heattrip://login-callback?code=...&state=...` 로 앱에 돌아온다(#14 이전에는 `?token=...` 이었다). 양 플랫폼 모두 OS 에 스킴이 등록돼 있어야 한다.
 
 | 플랫폼 | 파일 | 내용 |
 | --- | --- | --- |

@@ -51,3 +51,6 @@ tmp/
 
 # 블로그 초안 — 발행 전 원고는 저장소 범위 밖
 blog/
+
+# Kotlin Gradle 플러그인이 빌드마다 만드는 세션 파일 — 생성물이다
+/backend/.kotlin/

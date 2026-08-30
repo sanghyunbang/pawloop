@@ -237,8 +237,12 @@ class AuthState {
   /// 로그인이 성공해 토큰이 저장된 **뒤에** 부른다.
   ///
   /// `GET /auth/me` 로 나를 확정하고, [isNew] 면 온보딩으로 보낸다.
-  /// [isNew] 는 로그인 응답(`AuthTokens.isNew`) 또는 소셜 콜백 딥링크의
-  /// `isNew` 파라미터에서 온다 — **프로필의 영속 속성이 아니라 1회성 이벤트**다.
+  /// [isNew] 는 로그인 응답(`AuthTokens.isNew`)에서 온다 — 이메일 로그인은
+  /// `POST /auth/login`, 소셜은 1회용 코드 교환(`POST /auth/oauth/{provider}/callback`)의
+  /// 응답이다(#14). **프로필의 영속 속성이 아니라 1회성 이벤트**다.
+  ///
+  /// #14 이전에는 소셜 경로에 이 값을 실어 나를 채널이 없어(딥링크는 토큰만 실었다)
+  /// 소셜 신규 가입자가 온보딩으로 가지 못했다.
   static Future<void> completeLogin({required bool isNew}) async {
     final me = await _repo.fetchMe();
     if (me.outcome == MeOutcome.unauthorized) {

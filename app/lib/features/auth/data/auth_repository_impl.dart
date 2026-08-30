@@ -158,6 +158,51 @@ class AuthRepositoryImpl {
     }
   }
 
+  /// 1회용 코드 → 토큰 교환 — `POST /auth/oauth/{provider}/callback`. (이슈 #14)
+  ///
+  /// **소셜 로그인에서 토큰이 앱에 도달하는 유일한 통로다.** 딥링크에는 코드와
+  /// `state` 만 실린다 — 예전에는 `?token=<AT>&refresh=<RT>` 로 URL 에 실려 왔고,
+  /// 그 URL 은 302 의 `Location` 헤더와 브라우저 히스토리에 남았다.
+  ///
+  /// 비인증 경로다. 주체는 [code] 자체가 증명하므로 [AuthedClient] 를 태우지 않는다 —
+  /// 이 시점에는 붙일 토큰이 아직 없다.
+  ///
+  /// 성공하면 계약의 `AuthTokens`, 실패하면 null. 코드 재사용·만료·`state` 불일치·
+  /// 공급자 불일치가 전부 **본문 없는 401** 로 온다. 서버가 구분해 주지 않는 이유는
+  /// 그 차이가 "그 코드가 존재하긴 했는가" 를 알려 주는 오라클이 되기 때문이다.
+  ///
+  /// **네트워크 예외는 삼키지 않는다.** 호출부([SocialLoginService])가 취소·네트워크·
+  /// 서버 오류를 구분해 다른 문장을 보여줘야 하는데, 여기서 null 로 뭉개면 그 구분이
+  /// 사라진다. 계약 위반(200 인데 본문이 다름)만 null 이다.
+  Future<AuthTokens?> exchangeOAuthCode({
+    required String provider,
+    required String code,
+    required String state,
+  }) async {
+    final url = Uri.parse('$baseUrl/auth/oauth/$provider/callback');
+
+    final response = await _plain.post(
+      url,
+      headers: const {'Content-Type': AuthedClient.jsonContentType},
+      body: jsonEncode({'code': code, 'state': state}),
+    );
+
+    if (response.statusCode == 200) {
+      final tokens = AuthTokens.tryParse(response.body);
+      if (tokens == null && kDebugMode) {
+        // 본문은 절대 그대로 찍지 않는다 — 성공 본문에는 토큰이 들어 있다.
+        debugPrint('[X] 코드 교환 응답이 계약(AuthTokens)과 다르다');
+      }
+      return tokens;
+    }
+
+    if (kDebugMode) {
+      // 코드도 state 도 찍지 않는다. 상태 코드만 남긴다. (#61)
+      debugPrint('[X] 소셜 코드 교환 실패: ${response.statusCode}');
+    }
+    return null;
+  }
+
   /// 사용자 정보 조회 — `GET /auth/me`.
   ///
   /// 토큰 인자를 받지 않는다. 헤더 부착은 [AuthedClient] 의 일이고, 액세스 토큰이

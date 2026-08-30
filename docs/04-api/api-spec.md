@@ -96,7 +96,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 | 405 | `METHOD_NOT_ALLOWED` | 그 경로가 지원하지 않는 HTTP 메서드 |
 | 409 | `CONFLICT` | 중복(예: 이미 가입된 이메일) |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | `Content-Type` 이 `application/json` 이 아님 |
-| 429 | `RATE_LIMITED` | 외부 데이터(예: KTO 1000콜/일) 한도 |
+| 429 | `RATE_LIMITED` | 외부 데이터(예: KTO 1000콜/일) 한도, 또는 서버의 요청 빈도 제한. 인증 경로(`POST /auth/login`·`POST /auth/token/refresh`·`POST /auth/oauth/{provider}/callback`·`GET /oauth2/authorization/*`)가 여기 걸린다(#14). `Retry-After` 헤더에 창 길이(초)가 실린다. 버킷 이름·한도 수치는 본문에 싣지 않는다 |
 | 500 | `INTERNAL` | 서버 오류. `message` 는 고정 문구다 — 예외 메시지에는 SQL 조각·경로·이메일·토큰이 섞인다(#6) |
 
 > 2026-08 이전에는 실제 응답이 세 갈래였다: 이 봉투(계약), 전역 처리기의
@@ -117,29 +117,39 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 `GET /oauth2/authorization/{provider}` — `provider ∈ {kakao, google}` (naver 보류)
 
-앱(`flutter_web_auth_2`)이 실제로 여는 URL. 소셜 인증 화면으로 302 리다이렉트되고, 성공 시 백엔드가 앱 딥링크 `heattrip://login-callback?token=<JWT>&refresh=<refreshToken>` 로 되돌린다(#9).
+앱(`flutter_web_auth_2`)이 실제로 여는 URL. 소셜 인증 화면으로 302 리다이렉트되고, 성공 시 백엔드가 앱 딥링크 `heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 로 되돌린다(#14).
 
-> ⚠️ `token` 은 더 이상 URL 의 꼬리가 아니다. `'token='` 뒤를 전부 잘라 쓰면 `&refresh=...` 까지 삼켜 손상된 액세스 토큰을 저장하게 된다. `Uri.parse(url).queryParameters['token']` 로 읽어야 한다.
-> 딥링크에 자격증명 두 개가 실리는 위험(302 Location 헤더·브라우저 히스토리)과 그 대체(1회용 코드 교환)는 `openapi.yaml` 의 같은 경로 설명과 #14 를 보라.
+**딥링크에는 토큰이 없다.** 쿼리 파라미터는 정확히 `code` 와 `state` 둘뿐이고, 토큰은 §2.2 의 교환 응답 본문으로만 온다.
+
+> ⚠️ `state` 는 앱이 만들어 앱이 대조한다. 인증을 시작할 때 `?state=<난수>` 로 보내면 서버가 왕복 동안 붙들었다가 딥링크에 그대로 실어 돌려준다. **돌아온 값이 보낸 값과 다르면 로그인 실패로 처리하라** — 응답 바꿔치기를 막는 장치가 그것뿐이다. 허용 문자는 `[A-Za-z0-9_-]{1,128}`.
+> `state` 없이 시작하면 딥링크의 `state` 가 빈 값이 되고, **그 코드는 §2.2 교환 단계에서 401 이다**(#14). 서버쪽 대조의 존재 여부를 왕복을 시작한 쪽이 정하지 못하게 하기 위한 것이다 — 항상 보내라.
+> 예전에는 이 딥링크가 `?token=<JWT>&refresh=<refreshToken>` 이었다(#9). 커스텀 스킴은 어느 앱이든 등록할 수 있고 URL 은 302 의 `Location` 헤더·브라우저 히스토리에 남는다 — 그 채널로 1시간짜리 AT 와 14일짜리 RT 가 함께 나가고 있었다. #14 가 60초짜리 1회용 코드로 바꿨다.
 
 > 계약에 있는 `GET /auth/oauth/{provider}` 는 이 경로로의 **302 래퍼**다(#10 에서 구현).
 > 앱은 그걸 쓸 필요가 없다 — 위 경로를 직접 열면 리다이렉트 한 번을 아낀다.
 > 예전에는 계약이 "미구현" 이라고 적었는데 실제로는 핸들러가 있었고 **빈 200** 을 줬다.
+> `state` 는 그 래퍼를 통과해 전달된다(#14): `GET /auth/oauth/kakao?state=S` → `Location: /oauth2/authorization/kakao?state=S`. 화이트리스트(`[A-Za-z0-9_-]{1,128}`)를 통과하지 못한 값은 붙지 않는다 — 이 값은 `Location` 헤더에 그대로 들어가므로 검증 없이 이어 붙이면 헤더 주입이 된다. **2026-08 초에는 래퍼가 쿼리를 옮기지 않아** 이 경로로 시작한 로그인이 빈 `state` 를 받아 대조에서 항상 실패했다.
 > 딥링크 스킴은 `heattrip://` 다 — 코드(`social_login_service.dart`, `OAuth2SuccessHandler.java`)가 그렇게 동작한다. 이 문서가 예전에 예시로 들던 `pawloop` 스킴은 오기였고, 그대로 구현하면 콜백을 받지 못한다.
 
-### 2.2 소셜 로그인 콜백 → 토큰 교환 — 🟡 계획(미구현)
+### 2.2 소셜 로그인 콜백 → 토큰 교환 — ✅ 구현(#14)
 
 `POST /auth/oauth/{provider}/callback`
 
+소셜 로그인의 **마지막 단계**다. 딥링크로 받은 1회용 코드를 토큰으로 바꾼다. 인증이 필요 없다 — 주체는 코드 자체가 증명한다.
+
 ```json
 // Request
-{ "code": "authorization_code_from_provider", "redirectUri": "heattrip://login-callback" }
+{ "code": "딥링크로 받은 1회용 코드(패딩 없는 Base64URL 43자)", "state": "인증 시작 때 앱이 만든 난수" }
 ```
+
+> `code` 는 **공급자가 준 인가코드가 아니다.** 공급자와의 코드 교환은 백엔드(Spring Security)가 이미 끝냈다. 그래서 이 흐름에는 PKCE 가 없다 — 앱이 공급자와 직접 말하게 바꾸는 날 필수가 된다. 그 판단의 근거와 트리거는 [ADR-0009](../99-decisions/decision-log.md#adr-0009--소셜-로그인에-pkce-를-도입하지-않는다) 에 있다.
+> `redirectUri` 를 함께 보내도 **리다이렉트 대상으로 쓰이지 않는다.** 이 시점에는 리다이렉트가 이미 끝났고, 대상은 서버 설정(`app.security.oauth.redirect-allowlist`)이 정한다.
 
 ```json
 // 200 OK
 {
   "accessToken": "eyJhbGci...",
+  "refreshToken": "9qQ1t...(패딩 없는 Base64URL 43자, JWT 아님)",
   "expiresIn": 3600,
   "isNew": false,
   "user": {
@@ -151,7 +161,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 - `isNew` 는 **로그인 응답의 1회성 이벤트 속성**이라 `user` 블록 밖(`AuthTokens` 최상위)에 있다. `true` 면 프론트는 온보딩(강아지 프로필 등록)으로 유도.
-- `refreshToken` 은 이 경로(미구현)에는 없다. 소셜 로그인은 딥링크의 `refresh` 파라미터로, 갱신은 `POST /auth/token/refresh` 응답으로 전달된다(#9).
+- `refreshToken` 이 이 응답에 함께 실린다(#14). 소셜 로그인에서 refresh 토큰이 앱에 도달하는 **유일한 경로**다 — #14 이전에는 딥링크의 `refresh` 파라미터였다.
+- 실패는 원인과 무관하게 **본문 없는 401** 이다 — 코드 재사용·만료(60초)·공급자 불일치·`state` 불일치가 전부 같은 모양이다. 구분해 주면 그 차이가 "그 코드가 존재하긴 했는가" 를 알려 주는 오라클이 된다. **실패한 교환도 코드를 죽인다** — 코드 하나에 시도 한 번이다.
+- 한도에 걸리면 **429** 이고 본문은 §1.3 의 공통 `Error`(`error.code = RATE_LIMITED`)다.
 
 ### 2.3 토큰 갱신 — ✅ 구현(#9)
 

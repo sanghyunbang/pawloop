@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.user.controller;
 
+import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.KakaoOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.OAuth2UserInfo;
@@ -323,17 +324,33 @@ class AuthTokenRefreshIntegrationTest extends AbstractMySqlIntegrationTest {
         CustomOAuth2User principal =
                 new CustomOAuth2User(userInfo, attributes, seeded.getId(), seeded.getRole(), false);
 
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        // 앱이 진입 요청에 붙였을 state. 넣지 않으면 딥링크의 state 가 빈 값이 되고,
+        // 서버는 그 코드를 교환하지 않는다(#14: 빈 state 로 발급된 코드는 401).
+        request.getSession(true)
+                .setAttribute(OAuthAppStateFilter.SESSION_ATTRIBUTE, "st-jig-ABC123");
         MockHttpServletResponse response = new MockHttpServletResponse();
         registeredSuccessHandler().onAuthenticationSuccess(
-                new MockHttpServletRequest(), response,
+                request, response,
                 new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "kakao"));
 
         String redirect = response.getRedirectedUrl();
+        // #14 이후 딥링크에는 1회용 코드만 실린다. refresh 토큰이 클라이언트에 도달하는 경로는
+        // 이제 교환 엔드포인트의 응답 본문이다 — #9 완료 조건 1 이 요구한 "클라이언트에 도달하는
+        // 경로" 는 그대로 살아 있고, 채널만 URL 에서 응답 본문으로 옮겨졌다.
         assertThat(redirect)
-                .as("완료 조건 1 — 로그인하면 딥링크에 refreshToken 이 포함된다")
-                .startsWith("heattrip://login-callback?token=")
-                .contains("&refresh=");
-        return new Session(seeded.getId(), queryParam(redirect, "token"), queryParam(redirect, "refresh"));
+                .as("#14 완료 조건 1 — 딥링크에는 code 와 state 만 실린다")
+                .startsWith("heattrip://login-callback?code=");
+        assertThat(redirect).doesNotContain("token=", "refresh=");
+
+        String body = mockMvc.perform(post("/auth/oauth/kakao/callback")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + queryParam(redirect, "code") + "\",\"state\":\"st-jig-ABC123\"}"))
+                                .andReturn().getResponse().getContentAsString();
+
+        return new Session(seeded.getId(),
+                com.jayway.jsonpath.JsonPath.read(body, "$.accessToken"),
+                com.jayway.jsonpath.JsonPath.read(body, "$.refreshToken"));
     }
 
     private MvcResult refresh(String refreshToken) throws Exception {

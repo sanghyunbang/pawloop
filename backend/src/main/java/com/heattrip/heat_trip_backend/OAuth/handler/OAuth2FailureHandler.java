@@ -12,6 +12,8 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
 
+import com.heattrip.heat_trip_backend.config.OAuthSecurityProperties;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -30,9 +32,14 @@ import jakarta.servlet.http.HttpServletResponse;
  * 에러 코드만 실어 돌려보낸다.
  *
  * <pre>
- *   성공: heattrip://login-callback?token=&lt;access-token&gt;
+ *   성공: heattrip://login-callback?code=&lt;1회용 코드&gt;&amp;state=&lt;앱이 만든 난수&gt;
  *   실패: heattrip://login-callback?error=email_already_registered
  * </pre>
+ *
+ * <p><b>토큰은 딥링크로 나가지 않는다.</b> {@code POST /auth/oauth/{provider}/callback} 의
+ * 응답 본문이 유일한 통로다(이슈 #14). 이 블록은 2026-08 까지 성공 경로를
+ * {@code ?token=&lt;access-token&gt;} 이라고 <b>현재형으로</b> 적고 있었다 — 그 설계는
+ * #14 가 걷어낸 것이고, 여기를 보고 새 딥링크 경로를 만드는 사람이 되살릴 여지였다.
  *
  * <p><b>에러 파라미터에는 코드만 담는다.</b> 이메일·토큰·소셜 ID·예외 메시지 원문은 넣지 않는다.
  * 리다이렉트 URL 은 액세스 로그와 리버스 프록시 로그에 남는다(이슈 #6). 코드는
@@ -45,8 +52,18 @@ public class OAuth2FailureHandler implements AuthenticationFailureHandler {
 
     private static final Logger log = LoggerFactory.getLogger(OAuth2FailureHandler.class);
 
-    /** 성공 경로와 같은 커스텀 스킴. flutter_web_auth_2 가 이 스킴을 기다린다. */
-    static final String REDIRECT_BASE = "heattrip://login-callback";
+    /**
+     * 성공 경로와 <b>같은</b> 리다이렉트 대상을 쓴다. 값은 설정의 허용 목록이 정한다 (이슈 #14).
+     *
+     * <p>예전에는 여기에 {@code "heattrip://login-callback"} 이 박혀 있었다. 성공 경로만
+     * 설정으로 빼면 웹 콜백을 추가하는 날 실패만 옛 스킴으로 가고, 그 로그인 시트는
+     * 사용자가 취소할 때까지 멈춰 있는다.
+     */
+    private final OAuthSecurityProperties oauthProperties;
+
+    public OAuth2FailureHandler(OAuthSecurityProperties oauthProperties) {
+        this.oauthProperties = oauthProperties;
+    }
 
     /** 알 수 없는/안전하지 않은 코드는 전부 이 값으로 뭉갠다. */
     static final String DEFAULT_ERROR_CODE = "authentication_failed";
@@ -64,7 +81,9 @@ public class OAuth2FailureHandler implements AuthenticationFailureHandler {
         // 남기는 것은 정규화된 코드 하나뿐이다. (이슈 #6)
         log.warn("[OAuth2 로그인] 인증 실패 — error={}", code);
 
-        response.sendRedirect(REDIRECT_BASE + "?error=" + code);
+        // 요청이 말한 대상은 허용 목록에 있을 때만 쓰인다. Referer·X-Forwarded-Host 는 읽지 않는다.
+        response.sendRedirect(oauthProperties.resolveRedirect(request.getParameter("redirect_uri"))
+                + "?error=" + code);
     }
 
     /**
