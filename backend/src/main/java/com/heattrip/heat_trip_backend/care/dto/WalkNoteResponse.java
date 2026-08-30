@@ -16,7 +16,14 @@ import java.time.LocalDateTime;
  * <p><b>{@code id} 를 싣지 않는다.</b> 그룹당 한 장이라 그 id 로 갈 수 있는 경로가 없다.
  * 아무 데도 못 쓰는 식별자를 계약에 두면 앱이 그걸 키로 삼는다.
  *
- * @param updatedBy 마지막으로 고친 사람. 아직 아무도 안 썼으면 {@code null}
+ * <h2>{@code null} 과 {@code 알 수 없음} 은 다른 상태다</h2>
+ * <p>{@code updatedBy} 가 JSON {@code null} 인 것은 <b>{@link #empty} 하나뿐</b>이다 — 그룹에
+ * 행 자체가 없는, 아직 아무도 안 쓴 상태다. 메모는 있는데 <b>쓴 사람이 탈퇴한</b> 경우는
+ * {@code CareDoerResponse.WITHDRAWN}({@code 알 수 없음})으로 나간다. 둘을 같은 모양으로
+ * 뭉개면 "가족이 쓴 안전 메모" 와 "빈 그룹" 이 화면에서 구별되지 않는다.
+ *
+ * @param updatedBy 마지막으로 고친 사람. 아직 아무도 안 썼으면 {@code null},
+ *                  고친 사람이 탈퇴했으면 {@code 알 수 없음}
  */
 public record WalkNoteResponse(
         long groupId,

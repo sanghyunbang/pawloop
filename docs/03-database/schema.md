@@ -591,7 +591,7 @@ CREATE TABLE walk_note (
   id         BIGINT       NOT NULL AUTO_INCREMENT,
   group_id   BIGINT       NOT NULL,
   body       VARCHAR(500) NOT NULL COMMENT '산책 시 주의사항 — 그룹당 한 장',
-  updated_by BIGINT       NOT NULL COMMENT '마지막으로 고친 사람(users.id)',
+  updated_by BIGINT       NULL COMMENT '마지막으로 고친 사람(users.id). 탈퇴하면 NULL 이다',
   updated_at DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_walknote_group (group_id),
@@ -599,7 +599,7 @@ CREATE TABLE walk_note (
   CONSTRAINT fk_walknote_group FOREIGN KEY (group_id)
     REFERENCES family_group (id) ON DELETE CASCADE,
   CONSTRAINT fk_walknote_updatedby FOREIGN KEY (updated_by)
-    REFERENCES users (id) ON DELETE CASCADE
+    REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
@@ -608,10 +608,18 @@ CREATE TABLE walk_note (
 | `id` | `BIGINT` | PK | |
 | `group_id` | `BIGINT` | FK→`family_group.id`, NOT NULL, **UNIQUE** | 소속 그룹. UNIQUE 가 "그룹당 한 장" 을 지킨다 |
 | `body` | `VARCHAR(500)` | NOT NULL | 메모 전문. 빈 문자열은 "다 지웠다" 는 정상 상태다 |
-| `updated_by` | `BIGINT` | FK→`users.id`, NOT NULL | 마지막으로 고친 사람 |
+| `updated_by` | `BIGINT` | FK→`users.id` nullable, **ON DELETE SET NULL** | 마지막으로 고친 사람. 그 사람이 탈퇴하면 `NULL` — 아래 경고 참조 |
 | `updated_at` | `DATETIME(6)` | NOT NULL | 마지막으로 고친 시각 |
 
 > `UNIQUE (group_id)` 가 없으면 애플리케이션의 "있으면 고치고 없으면 만든다"(확인-후-쓰기)를 동시에 통과한 두 요청이 메모를 둘 만들고, 조회는 그중 하나만 보여 준다. 마지막 방어선은 DB 다(📌 [#86](https://github.com/sanghyunbang/heattrip/issues/86) 원칙 5).
+
+> ### ⚠️ `updated_by` 는 `ON DELETE SET NULL` 이다 — CASCADE 였다가 고쳤다
+>
+> 2026-08 까지 이 FK 는 `ON DELETE CASCADE` 였다. 그 상태에서 엄마가 메모를 쓰고 `DELETE /auth/me` 로 탈퇴하면(`UserService.deleteMe` 는 `users` 행을 실제로 지운다) **그룹의 메모 행이 통째로 사라졌다.** 남은 가족의 화면은 "아직 주의사항이 없어요" 를 그리므로 **지워진 것과 한 번도 안 쓴 것을 구별할 수 없다** — 사라졌다는 신호가 아무 데도 없다. 지워지는 내용이 "계단 피하기"·"대형견 만나면 리드줄 짧게" 같은 안전 메모라 실사용 피해가 크다.
+>
+> 판단의 요점은 **이 컬럼이 문서의 소유자가 아니라 메타데이터**라는 것이다. 메모의 주인은 `group_id` 이고 그 그룹은 살아 있다. `care_log.group_id` 가 이미 같은 질문에 `SET NULL` 로 답했다(가족을 해산했다는 이유로 개인의 케어 이력이 증발하면 안 된다). **사람이 사라지면 이름만 잃는다** — 응답의 표시 이름은 `User.UNKNOWN_DISPLAY_NAME`(`알 수 없음`)으로 떨어지고, `GroupMemberResponse.nickname` 이 같은 상황에서 이미 그 문구를 쓴다.
+>
+> FK 만 고치는 것으로는 부족했다. `WalkNoteRepository.findByGroupId` 의 fetch join 이 **inner** 인 동안은 행이 DB 에 남아도 쿼리가 못 찾아 서비스가 빈 본문을 답했다 — 화면에서는 CASCADE 로 지우던 것과 글자 하나 다르지 않다. 지금은 `left join fetch` 다. `CareSharingIntegrationTest.whenOneMemberWithdraws_theFamilysNotesAndLogsSurvive` 가 둘을 함께 잠근다.
 
 ---
 
@@ -621,13 +629,15 @@ CREATE TABLE walk_note (
 
 **같은 종류를 하루에 두 번 찍어도 두 행이 남는다.** 두 번째가 실수인지 사실인지 서버는 모르고(아침·저녁 두 번 주는 집에서 두 번째 밥은 정상이다), 막으면 실제로 한 일이 기록에서 사라진다. 확인 문구는 앱이 조회 결과를 보고 만든다.
 
+**`done_by` 도 `ON DELETE SET NULL` 이다** — 여기도 2026-08 까지 CASCADE 였다. 그러면 엄마가 탈퇴하는 순간 "오늘 엄마가 산책을 다녀왔다" 가 **아빠 화면에서도** 사라지고, 이 표가 막으려는 사고(산책 누락)가 바로 그 자리에서 생긴다. 기록은 엄마의 소유물이 아니라 **가족이 함께 보는 사건**이다. 판단의 근거는 [§16 의 경고](#16-walk_note--산책-주의사항-가족-공유-메모)와 같고, `CareLogRepository.findDayOfGroup` 의 fetch join 이 **left** 여야 하는 이유도 같다 — inner 면 `done_by` 가 `NULL` 인 행이 조회에서 조용히 빠져 CASCADE 와 구별되지 않는다.
+
 ```sql
 CREATE TABLE care_log (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
   dog_id      BIGINT       NULL COMMENT '대상 강아지. dog 표가 아직 없어 FK 없이 항상 NULL 이다 (#76)',
   group_id    BIGINT       NULL COMMENT '가족 그룹 공유(nullable — 미소속 시 개인 기록)',
   type        VARCHAR(10)  NOT NULL COMMENT 'water|meal|walk|med|vet',
-  done_by     BIGINT       NOT NULL COMMENT '수행자(users.id) — 토큰의 사용자다',
+  done_by     BIGINT       NULL COMMENT '수행자(users.id) — 토큰의 사용자다. 탈퇴하면 NULL 이다',
   occurred_at DATETIME(6)  NOT NULL,
   memo        VARCHAR(500) NULL,
   created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -637,7 +647,7 @@ CREATE TABLE care_log (
   CONSTRAINT fk_carelog_group FOREIGN KEY (group_id)
     REFERENCES family_group (id) ON DELETE SET NULL,
   CONSTRAINT fk_carelog_doneby FOREIGN KEY (done_by)
-    REFERENCES users (id) ON DELETE CASCADE,
+    REFERENCES users (id) ON DELETE SET NULL,
   CONSTRAINT ck_carelog_type CHECK (type IN ('water','meal','walk','med','vet'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
@@ -648,7 +658,7 @@ CREATE TABLE care_log (
 | `dog_id` | `BIGINT` | **NULL, FK 없음** | 대상 강아지. 아래 경고 참조 — 오늘은 항상 `NULL` 이다 |
 | `group_id` | `BIGINT` | FK→`family_group.id` nullable, ON DELETE SET NULL, INDEX(group,occurred_at) | 공유 대상 가족 그룹 |
 | `type` | `VARCHAR(10)` | NOT NULL, CHECK | `water`(물)/`meal`(밥)/`walk`(산책)/`med`(투약)/`vet`(병원). **소문자다** |
-| `done_by` | `BIGINT` | FK→`users.id`, NOT NULL, INDEX | 수행자. 토큰의 사용자이지 요청 본문의 값이 아니다 |
+| `done_by` | `BIGINT` | FK→`users.id` nullable, **ON DELETE SET NULL**, INDEX | 수행자. 토큰의 사용자이지 요청 본문의 값이 아니다. 그 사람이 탈퇴하면 `NULL` — §16 의 경고와 같은 판단이다 |
 | `occurred_at` | `DATETIME(6)` | NOT NULL | 발생 시각. 서버 시계다 |
 | `memo` | `VARCHAR(500)` | NULL | 메모 |
 | `created_at` | `DATETIME(6)` | NOT NULL, 기본 now | 행 생성 시각 |
@@ -700,6 +710,6 @@ CREATE TABLE care_log (
 | `chat_message` | `idx_chat_sender(sender_user_id)` | 보조 | 발신자별 조회(신고 처리) |
 | `walk_note` | `uq_walknote_group(group_id)` | UNIQUE | 그룹당 주의사항 한 장 |
 | `care_log` | `idx_carelog_group(group_id, occurred_at)` | 보조 | 그룹별 "오늘의 케어" 조회 |
-| `care_log` | `idx_carelog_doneby(done_by)` | 보조 | 사용자 삭제 시 CASCADE 가 훑는 자리 |
+| `care_log` | `idx_carelog_doneby(done_by)` | 보조 | 사용자 삭제 시 `SET NULL` 이 훑는 자리 |
 
 > 공간 컬럼(`walk.path`, `place.geom`, `trail.path`)은 모두 `SRID 4326` + `NOT NULL` + `SPATIAL INDEX`. 초기에는 MySQL 공간형 단일 저장소로 운영하고, 대량 GPS 시계열·장소검색(ES/Redis)은 규모 확장 시 옵션이다. 관계 개요는 [ERD](./erd.md) 참조.

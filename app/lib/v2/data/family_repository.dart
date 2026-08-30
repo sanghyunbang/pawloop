@@ -201,6 +201,18 @@ enum FamilyFailureKind {
   /// 그 가족의 멤버가 아니다(403).
   forbidden,
 
+  /// 서버가 입력을 거절했다(400). **다시 시도해도 같은 결과다.**
+  ///
+  /// 이 네 경로에서 사용자가 실제로 만들 수 있는 400 은 **길이**다 — 주의사항 본문과
+  /// 케어 메모가 각각 500자까지고(`CareService.MAX_TEXT_LENGTH`), 서버는 잘라서
+  /// 저장하지 않고 거절한다. 케어 종류는 [ServerCareType] 에서만 나가므로 앱이 잘못된
+  /// 값을 보낼 길이 없다.
+  ///
+  /// [network] 로 뭉치면 화면이 "연결이 불안정해요 · 다시 시도" 를 그린다 — 네트워크는
+  /// 멀쩡하고 다시 눌러도 영원히 같은 결과라, 사용자가 할 수 있는 일이 화면 어디에도
+  /// 없다. 종류를 나누는 이유가 정확히 이것이다.
+  invalid,
+
   /// 요청이 너무 잦다(429).
   rateLimited,
 
@@ -221,6 +233,8 @@ class FamilyFailure implements Exception {
         FamilyFailureKind.noGroup => '아직 가족 그룹이 없어요',
         FamilyFailureKind.unauthorized => '다시 로그인해 주세요',
         FamilyFailureKind.forbidden => '이 가족의 멤버가 아니에요',
+        FamilyFailureKind.invalid =>
+          '메모는 모두 합쳐 ${FamilyRepository.maxTextLength}자까지 쓸 수 있어요',
         FamilyFailureKind.rateLimited => '잠시 후 다시 시도해 주세요',
         FamilyFailureKind.network => '연결이 불안정해요 · 다시 시도',
       };
@@ -234,6 +248,13 @@ class FamilyRepository {
   /// 요청 하나의 상한. 없으면 응답을 주지 않는 서버에서 화면이 영원히 로딩만 돈다 —
   /// `AuthedClient.refreshTimeout` 이 갱신 왕복에 대해 같은 것을 한다.
   static const Duration timeout = Duration(seconds: 12);
+
+  /// 주의사항 본문·케어 메모의 최대 길이. 서버의 `CareService.MAX_TEXT_LENGTH` 와 같은
+  /// 값이고 계약(`openapi.yaml` 의 `WalkNoteInput.body.maxLength`)에도 같은 숫자가 있다.
+  ///
+  /// 화면이 이 숫자를 직접 적지 않고 여기를 가리키는 이유: 숫자가 두 곳에 살면 한쪽만
+  /// 늘어나는 날이 오고, 그때 사용자는 "500자까지" 라고 적힌 화면에서 저장에 실패한다.
+  static const int maxTextLength = 500;
 
   final String baseUrl;
   final AuthedClient _authed;
@@ -356,6 +377,9 @@ class FamilyRepository {
     }
 
     final kind = switch (res.statusCode) {
+      // 서버가 입력을 거절했다. 여기가 없으면 `_ => network` 로 떨어져 화면이
+      // "연결이 불안정해요 · 다시 시도" 를 그리는데, 다시 눌러도 영원히 같은 결과다.
+      400 => FamilyFailureKind.invalid,
       // AuthedClient 가 갱신 + 재시도까지 끝낸 뒤의 401 이다. 세션이 끝났다.
       401 => FamilyFailureKind.unauthorized,
       403 => FamilyFailureKind.forbidden,

@@ -65,7 +65,7 @@ import java.time.LocalDateTime;
         indexes = {
                 // "오늘의 케어" 조회가 이 인덱스 하나로 그룹·당일 범위를 훑는다.
                 @Index(name = "idx_carelog_group", columnList = "group_id, occurred_at"),
-                // 사용자 탈퇴 시 CASCADE 가 훑는 자리. 없으면 users 삭제가 이 표 전체 스캔이다.
+                // 사용자 탈퇴 시 SET NULL 이 훑는 자리. 없으면 users 삭제가 이 표 전체 스캔이다.
                 @Index(name = "idx_carelog_doneby", columnList = "done_by")
         })
 // DB 가 마지막 방어선이다 (📌 #86 원칙 5). 애플리케이션의 CareType 검증이 뚫리거나
@@ -124,11 +124,25 @@ public class CareLog {
     /**
      * 수행자. <b>토큰의 사용자</b>이지 요청 본문의 값이 아니다 — 남의 이름으로 기록을 남길 수
      * 있으면 "오늘 아빠가 밥을 줬다" 라는 화면 문구 자체를 믿을 수 없게 된다.
+     *
+     * <p><b>그 사람이 탈퇴하면 {@code null} 이 된다</b>({@code ON DELETE SET NULL}).
+     * 여기는 2026-08 까지 {@code CASCADE} 였고, 그러면 엄마가 탈퇴하는 순간 "오늘 엄마가
+     * 산책을 다녀왔다" 가 <b>아빠 화면에서도</b> 사라졌다 — 이 표가 막으려는 사고(산책 누락)가
+     * 정확히 그 자리에서 생긴다. 기록은 엄마의 소유물이 아니라 <b>가족이 함께 보는 사건</b>이고,
+     * 그래서 {@link #group} 이 이미 고른 답({@code SET NULL} — "가족을 해산했다는 이유로 개인의
+     * 케어 이력이 통째로 증발한다")과 같은 답을 여기서도 고른다.
+     *
+     * <p>사람이 사라지면 <b>이름만</b> 잃는다. {@code CareDoerResponse} 가
+     * {@link User#UNKNOWN_DISPLAY_NAME}({@code 알 수 없음})으로 떨어뜨린다.
+     *
+     * <p>⚠️ {@code CareLogRepository.findDayOfGroup} 의 fetch join 이 <b>left</b> 여야 한다.
+     * inner join 이면 이 값이 {@code null} 인 행이 조회에서 조용히 빠지고, CASCADE 로 지우던
+     * 것과 화면에서 구별되지 않는다.
      */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "done_by", nullable = false,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "done_by",
             foreignKey = @ForeignKey(name = "fk_carelog_doneby"))
-    @OnDelete(action = OnDeleteAction.CASCADE)
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private User doneBy;
 
     /**

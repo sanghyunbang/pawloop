@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -75,6 +77,13 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private CareLogRepository careLogRepository;
+
+    /**
+     * {@code chat_room_member.removed_at} 을 찍는 유일한 수단이다 — 강퇴 엔드포인트는 M2.6 이라
+     * 아직 없다. 나머지 픽스처는 전부 공개 경로로 만든다({@link #family}).
+     */
+    @Autowired
+    private JdbcTemplate jdbc;
 
     // ─────────────────── 완료 조건 1 — 한 가족의 두 계정이 서로의 기록을 본다 ───────────────────
 
@@ -172,6 +181,52 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                 LocalDate.now().atStartOfDay(), LocalDate.now().plusDays(1).atStartOfDay()))
                 .as("거절된 POST 가 행을 만들지 않았는지 — 403 인데 저장은 됐다면 그게 더 나쁘다")
                 .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("나간·강퇴된 멤버는 옛 가족의 케어를 못 본다 — removed_at 이 찍히면 네 경로 모두 403")
+    void aRemovedMember_seesNothingOfTheirFormerFamily() throws Exception {
+        Account dad = account("남는 아빠");
+        Account leaver = account("나간 사람");
+        Family family = family(dad, "누가 나간 집", leaver);
+
+        postCare(dad, family.groupId(), "meal", "비밀 사료").andExpect(status().isCreated());
+        replaceWalkNote(dad, family.groupId(), "계단 피하기").andExpect(status().isOk());
+
+        assertThat(stampRemovedAt(family.roomId(), leaver.id()))
+                .as("""
+                        행을 지우지 않고 removed_at 만 찍는다 — 강퇴가 실제로 하는 일이 그것이고\
+                        (ChatRoomMember javadoc), 이 테스트가 보는 것도 '행이 있는가' 가 아니라 \
+                        '그 행이 살아 있는가' 여야 한다.""")
+                .isEqualTo(1);
+
+        for (ResultActions attempt : List.of(
+                mockMvc.perform(get("/api/groups/{id}/care-logs", family.groupId())
+                        .header("Authorization", "Bearer " + leaver.token())),
+                postCare(leaver, family.groupId(), "walk", "나간 사람의 산책"),
+                mockMvc.perform(get("/api/groups/{id}/walk-notes", family.groupId())
+                        .header("Authorization", "Bearer " + leaver.token())),
+                replaceWalkNote(leaver, family.groupId(), "내 마음대로"))) {
+
+            assertThat(attempt.andExpect(status().isForbidden())
+                    .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8))
+                    .as("""
+                            완료 조건 6 을 잠그는 다른 테스트(anOutsider_...)는 '한 번도 멤버였던 적 \
+                            없는 남' 만 본다. 나간 사람은 chat_room_member 행이 남아 있어 검사의 \
+                            종류가 다르다 — 존재 여부가 아니라 removed_at 이다. \
+                            ChatRoomService.isLiveMember 의 '.filter(removedAt == null)' 을 지우면 \
+                            여기가 빨간불이고, 그 줄 없이 초록인 테스트만 있으면 M2.6 의 강퇴가 \
+                            새는 채로 들어온다.""")
+                    .doesNotContain("비밀 사료")
+                    .doesNotContain("계단 피하기");
+        }
+
+        assertThat(body(walkNote(dad, family.groupId())).path("body").asText())
+                .as("나간 사람의 PUT 이 남은 가족의 메모를 덮지 않았다 — 403 인데 쓰기는 됐다면 그게 더 나쁘다")
+                .isEqualTo("계단 피하기");
+        assertThat(memos(careLogs(dad, family.groupId(), null)))
+                .as("나간 사람의 POST 도 행을 만들지 않았다")
+                .containsExactly("비밀 사료");
     }
 
     @Test
@@ -338,6 +393,54 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    // ─────────────────── 탈퇴 — 남은 가족의 것은 남은 가족의 것이다 ───────────────────
+
+    @Test
+    @DisplayName("한 명이 탈퇴해도 가족의 주의사항과 케어 기록은 남는다 — 이름만 '알 수 없음' 으로 떨어진다")
+    void whenOneMemberWithdraws_theFamilysNotesAndLogsSurvive() throws Exception {
+        Account dad = account("아빠");
+        Account mom = account("엄마");
+        Family family = family(dad, "한 명이 탈퇴하는 집", mom);
+
+        replaceWalkNote(mom, family.groupId(), "오른쪽 뒷다리 슬개골 — 계단 피하기")
+                .andExpect(status().isOk());
+        postCare(dad, family.groupId(), "meal", "아빠가 준 밥").andExpect(status().isCreated());
+        postCare(mom, family.groupId(), "walk", "엄마가 간 산책").andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/auth/me").header("Authorization", "Bearer " + mom.token()))
+                .andExpect(status().isNoContent());
+
+        JsonNode note = body(walkNote(dad, family.groupId()));
+        assertThat(note.path("body").asText())
+                .as("""
+                        walk_note 는 개인 기록이 아니라 가족 전원이 보는 안전 메모다(슬개골·계단). \
+                        '마지막으로 고친 사람' 은 메타데이터인데, updated_by 에 ON DELETE CASCADE 를 \
+                        걸면 그 메타데이터 하나 때문에 그룹 소유 문서가 통째로 지워진다. 그러면 남은 \
+                        가족의 화면은 '아직 주의사항이 없어요' 를 그리고, 사라졌다는 신호가 아무 데도 \
+                        없다 — 빈 화면이 곧 거짓말이 되는 자리다.""")
+                .isEqualTo("오른쪽 뒷다리 슬개골 — 계단 피하기");
+        assertThat(note.path("updatedBy").path("nickname").asText())
+                .as("""
+                        이름은 users 행에서 오므로 탈퇴하면 답할 수 없다. 그때 쓰는 문구는 \
+                        User.UNKNOWN_DISPLAY_NAME 하나이고, GroupMemberResponse.nickname 이 같은 \
+                        상황에서 이미 그 문구를 쓴다 — 같은 사람이 화면마다 다른 이름으로 보이면 안 된다.""")
+                .isEqualTo("알 수 없음");
+
+        JsonNode logs = careLogs(dad, family.groupId(), null);
+        assertThat(memos(logs))
+                .as("""
+                        care_log.done_by 의 CASCADE 도 같은 값이다 — 엄마가 탈퇴하면 '오늘 엄마가 \
+                        산책을 다녀왔다' 가 아빠 화면에서도 사라지고, 이 이슈가 막으려던 산책 누락이 \
+                        바로 그 자리에서 생긴다. '오늘 누가 무엇을 했나' 의 답이 부분적으로 거짓이 된다.""")
+                .containsExactly("아빠가 준 밥", "엄마가 간 산책");
+        assertThat(doers(logs)).containsExactly("아빠", "알 수 없음");
+        assertThat(logs.get(1).path("doneBy").path("userId").asLong())
+                .as("""
+                        가리킬 사람이 없으면 id 도 없다. 0 은 어떤 users.id 와도 같지 않아서 앱의 \
+                        '내가 했는가' 판정(doneBy.userId == 내 id)이 조용히 참이 되는 일이 없다.""")
+                .isZero();
+    }
+
     // ─────────────────────────── 지그 ───────────────────────────
 
     private record Account(long id, String token) { }
@@ -432,6 +535,21 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                 .occurredAt(LocalDateTime.now().minusDays(1))
                 .memo(memo)
                 .build());
+    }
+
+    /**
+     * 그 방의 그 사람에게 {@code removed_at} 을 찍는다 — 강퇴/나가기가 실제로 하는 일이다.
+     *
+     * <p>공개 경로로 하지 않는 것은 <b>그 경로가 아직 없기 때문</b>이다(강퇴는 M2.6). 그렇다고
+     * 그때까지 이 판정을 안 잠그면, 그 이슈가 이 경로를 건드릴 때 이미 새고 있는 상태로
+     * 들어간다. 행을 만들지는 않고 이미 공개 경로로 만들어진 행 하나를 고칠 뿐이다.
+     *
+     * @return 갱신된 행 수. 1 이 아니면 픽스처가 틀린 것이다
+     */
+    private int stampRemovedAt(long roomId, long userId) {
+        return jdbc.update(
+                "UPDATE chat_room_member SET removed_at = ? WHERE room_id = ? AND user_id = ?",
+                LocalDateTime.now(), roomId, userId);
     }
 
     private static JsonNode body(ResultActions actions) throws Exception {

@@ -25,14 +25,21 @@ import 'family_chat_screen.dart';
 /// 특히 `kFamilyInviteCode`(`PAW-2481`)는 **아무도 그 코드로 들어올 수 없는 문자열**이라,
 /// 구성원만 서버로 바꾸고 코드를 더미로 두면 전보다 더 나쁜 화면이 된다.
 class FamilyScreen extends StatefulWidget {
-  const FamilyScreen({super.key});
+  /// 테스트가 가짜 저장소를 꽂는 자리. 운영 경로에서는 null 이다 —
+  /// [TodayCareCard] 가 같은 구멍을 같은 이유로 이미 갖고 있다.
+  ///
+  /// 이 구멍이 없는 동안 이 화면(구성원 카드·주의사항 왕복·초대 시트·상태 카드)은
+  /// 어느 앱 테스트에도 잡히지 않았다.
+  final FamilyRepository? repository;
+
+  const FamilyScreen({super.key, this.repository});
 
   @override
   State<FamilyScreen> createState() => _FamilyScreenState();
 }
 
 class _FamilyScreenState extends State<FamilyScreen> {
-  final FamilyRepository _repo = FamilyRepository();
+  late final FamilyRepository _repo = widget.repository ?? FamilyRepository();
 
   FamilyGroupSummary? _group;
   WalkNoteSheet _note = WalkNoteSheet.empty;
@@ -81,9 +88,18 @@ class _FamilyScreenState extends State<FamilyScreen> {
     final group = _group;
     if (group == null || _savingNote) return;
 
+    final body = WalkNoteSheet.fromLines(lines);
+    // 왕복 전에 막는다. 서버도 400 으로 거절하지만(CareSharingIntegrationTest
+    // .anOverlongWalkNote_is400), 그때 사용자가 보는 것은 실패한 뒤의 문구다 —
+    // 여기서 걸러야 "왜 안 되는지" 를 누르기 전에 알려줄 수 있다.
+    if (body.length > FamilyRepository.maxTextLength) {
+      _toast(FamilyFailure.messageFor(FamilyFailureKind.invalid));
+      return;
+    }
+
     setState(() => _savingNote = true);
     try {
-      final saved = await _repo.replaceWalkNote(group.id, WalkNoteSheet.fromLines(lines));
+      final saved = await _repo.replaceWalkNote(group.id, body);
       if (!mounted) return;
       setState(() {
         _note = saved;
@@ -92,8 +108,14 @@ class _FamilyScreenState extends State<FamilyScreen> {
     } on FamilyFailure catch (e) {
       if (!mounted) return;
       setState(() => _savingNote = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      _toast(e.message);
     }
+  }
+
+  /// 실패 문구 한 줄. [FamilyFailure.messageFor] 가 만든 것을 그대로 띄운다 —
+  /// 화면이 문구를 따로 적으면 같은 실패가 자리마다 다른 말을 한다.
+  void _toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // 케어/주의사항 공용 삭제 확인 다이얼로그.
@@ -171,7 +193,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     const SizedBox(height: 16),
                     // 홈과 **같은 위젯**이다. 두 화면이 같은 데이터를 그리는데 코드가 둘이면
                     // 확인 문구가 한쪽에만 생기는 날이 온다.
-                    const TodayCareCard(),
+                    TodayCareCard(repository: widget.repository),
                     const SizedBox(height: 16),
                     _distanceCard(),
                     const SizedBox(height: 16),
@@ -699,8 +721,24 @@ class _FamilyScreenState extends State<FamilyScreen> {
     await _saveNotes(remaining);
   }
 
+  /// 이번 줄에 더 쓸 수 있는 글자 수.
+  ///
+  /// 서버가 아는 것은 메모 **한 장**이라 한도는 줄이 아니라 **합계**에 걸린다. 이미 쓴
+  /// 본문에 줄바꿈 한 칸을 더한 만큼이 예산에서 빠진다 — 그래야 화면이 허락한 길이가
+  /// 그대로 저장된다.
+  int get _noteBudget {
+    final used = WalkNoteSheet.fromLines(_note.lines).length;
+    return FamilyRepository.maxTextLength - (used == 0 ? 0 : used + 1);
+  }
+
   // 주의사항 추가 시트.
   void _openAddNoteSheet() {
+    // 남은 예산이 없으면 시트를 열지 않는다. 열어 두면 사용자가 글을 다 쓰고 나서야
+    // 실패를 보게 되고, 그 사이에 쓴 것은 어디에도 안 남는다.
+    if (_noteBudget <= 0) {
+      _toast(FamilyFailure.messageFor(FamilyFailureKind.invalid));
+      return;
+    }
     final ctrl = TextEditingController();
     showModalBottomSheet(
       context: context,
@@ -735,6 +773,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
               autofocus: true,
               maxLines: 2,
               minLines: 1,
+              // 합계 한도 안에서 이번 줄이 쓸 수 있는 만큼. 카운터가 함께 뜨므로
+              // 사용자가 남은 글자 수를 보면서 쓴다.
+              maxLength: _noteBudget,
               style: const TextStyle(fontSize: 15, color: T.textPrimary),
               decoration: const InputDecoration(
                 hintText: '예: 더운 날은 저녁 8시 이후에 나가기',

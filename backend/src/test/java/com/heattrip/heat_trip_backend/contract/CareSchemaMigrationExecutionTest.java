@@ -112,6 +112,84 @@ class CareSchemaMigrationExecutionTest {
     }
 
     @Test
+    @DisplayName("users 로 가는 FK 둘은 ON DELETE SET NULL 이다 — 탈퇴가 가족 기록을 지우지 않는다")
+    void theTwoUserForeignKeys_setNullInsteadOfCascading() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+
+            assertThat(db.deleteRuleOf("fk_carelog_doneby"))
+                    .as("""
+                            CASCADE 면 엄마가 탈퇴하는 순간 '오늘 엄마가 산책을 다녀왔다' 가 아빠 \
+                            화면에서도 사라진다 — 이 표가 막으려던 산책 누락이 그 자리에서 생긴다.""")
+                    .isEqualTo("SET NULL");
+            assertThat(db.deleteRuleOf("fk_walknote_updatedby"))
+                    .as("""
+                            walk_note 는 가족 전원이 보는 안전 메모다. '마지막으로 고친 사람' 이라는 \
+                            메타데이터 하나 때문에 그룹 소유 문서를 지우면, 남은 가족의 화면은 한 번도 \
+                            안 쓴 그룹과 구별되지 않는다.""")
+                    .isEqualTo("SET NULL");
+
+            assertThat(db.query("""
+                    SELECT CONCAT(table_name, '.', column_name)
+                    FROM information_schema.columns
+                    WHERE table_schema = DATABASE() AND is_nullable = 'NO'
+                      AND ((table_name = 'care_log'  AND column_name = 'done_by')
+                        OR (table_name = 'walk_note' AND column_name = 'updated_by'))
+                    """))
+                    .as("SET NULL 은 NULL 허용 컬럼에만 걸 수 있다 — 둘은 함께 움직인다")
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("옛 CASCADE 모양으로 이미 만들어진 표는 이 스크립트가 SET NULL 로 고친다")
+    void anExistingCascadeShape_isConvertedInPlace() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            // 2026-08 이전의 08 이 만들던 모양 그대로다.
+            db.exec("""
+                    CREATE TABLE walk_note (
+                        id         BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                        group_id   BIGINT       NOT NULL,
+                        body       VARCHAR(500) NOT NULL,
+                        updated_by BIGINT       NOT NULL,
+                        updated_at DATETIME(6)  NOT NULL,
+                        UNIQUE KEY uq_walknote_group (group_id),
+                        KEY fk_walknote_updatedby (updated_by),
+                        CONSTRAINT fk_walknote_group FOREIGN KEY (group_id)
+                          REFERENCES family_group (id) ON DELETE CASCADE,
+                        CONSTRAINT fk_walknote_updatedby FOREIGN KEY (updated_by)
+                          REFERENCES users (id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """);
+
+            db.exec("INSERT INTO family_group (id, name, created_at) VALUES (1, '가족', NOW(6))");
+            db.exec("INSERT INTO users (id, role) VALUES (1, 'ROLE_USER')");
+            db.exec("INSERT INTO walk_note (group_id, body, updated_by, updated_at) "
+                    + "VALUES (1, '계단 피하기', 1, NOW(6))");
+
+            db.runMigration();
+
+            assertThat(db.deleteRuleOf("fk_walknote_updatedby"))
+                    .as("""
+                            CREATE TABLE IF NOT EXISTS 는 이미 있는 표를 고치지 않는다. 그래서 이 \
+                            스크립트를 CASCADE 시절에 한 번 돌린 DB 는 §B 없이는 영원히 CASCADE 로 \
+                            남는다 — 그 DB 에서는 탈퇴 한 번이 가족의 메모를 지운다.""")
+                    .isEqualTo("SET NULL");
+
+            db.exec("DELETE FROM users WHERE id = 1");
+
+            assertThat(db.query("SELECT body FROM walk_note"))
+                    .as("고친 뒤에는 사람이 사라져도 메모가 남는다 — 이게 이 ALTER 가 실제로 사는 값이다")
+                    .containsExactly("계단 피하기");
+            assertThat(db.query("SELECT IFNULL(updated_by, 'NULL') FROM walk_note"))
+                    .as("이름만 잃는다. 응답에서는 '알 수 없음' 으로 나간다(CareDoerResponse.WITHDRAWN)")
+                    .containsExactly("NULL");
+        }
+    }
+
+    @Test
     @DisplayName("walk_note 는 그룹당 한 장이다 — UNIQUE(group_id) 가 두 번째 행을 거절한다")
     void walkNote_isOneSheetPerGroupAndTheDatabaseEnforcesIt() throws Exception {
         try (Fixture db = fixture()) {
@@ -334,6 +412,14 @@ class CareSchemaMigrationExecutionTest {
                       AND table_name IN ('care_log', 'walk_note')
                     ORDER BY table_name, constraint_name
                     """);
+        }
+
+        /** 그 FK 의 삭제 규칙({@code CASCADE}·{@code SET NULL}·{@code NO ACTION}). */
+        String deleteRuleOf(String constraint) throws SQLException {
+            return query("""
+                    SELECT delete_rule FROM information_schema.referential_constraints
+                    WHERE constraint_schema = DATABASE() AND constraint_name = '%s'
+                    """.formatted(constraint)).stream().findFirst().orElse("(FK 없음)");
         }
 
         List<String> query(String sql) throws SQLException {

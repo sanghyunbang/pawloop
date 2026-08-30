@@ -43,16 +43,21 @@ public interface CareLogRepository extends JpaRepository<CareLog, Long> {
      * </ul>
      * <p>죽는 테스트가 서로 다르다는 것이 곧 "둘은 다른 방어" 라는 증거다.
      *
-     * <p>{@code join fetch c.doneBy} 는 응답의 이름 때문이다. 없으면 기록 수만큼
+     * <p>{@code left join fetch c.doneBy} 는 응답의 이름 때문이다. 없으면 기록 수만큼
      * {@code users} 조회가 더 나간다 — {@code FamilyGroupService.nicknamesOf} 가 같은 이유로
      * 한 번에 모은다.
+     *
+     * <p><b>{@code left} 여야 한다.</b> {@code done_by} 는 {@code ON DELETE SET NULL} 이라
+     * 수행자가 탈퇴한 행은 {@code null} 을 든다({@code CareLog.doneBy} javadoc). inner join 이면
+     * 그 행이 조회에서 <b>조용히 빠지고</b>, 화면에서는 CASCADE 로 지우던 옛 동작과 구별되지
+     * 않는다 — 즉 FK 만 고치고 여기를 안 고치면 아무것도 안 고친 것이다.
      *
      * <p>경계는 <b>[from, to)</b> 다. {@code between} 은 양끝을 포함해서 하루의 마지막
      * 마이크로초와 다음 날 00:00:00.000000 이 둘 다 걸린다.
      */
     @Query("""
             select c from CareLog c
-              join fetch c.doneBy
+              left join fetch c.doneBy
              where c.group.id = :groupId
                and c.occurredAt >= :from
                and c.occurredAt <  :to

@@ -134,6 +134,45 @@ void main() {
       );
     });
 
+    test('GET /api/groups/me — 구성원과 roomId 를 계약대로 읽는다', () async {
+      final f = repositoryThatAnswers((_) => _json({
+            'id': 3,
+            'name': '보리네 가족',
+            'roomId': 9,
+            'members': [
+              {'userId': 11, 'nickname': '아빠', 'role': 'OWNER'},
+              {'userId': 12, 'nickname': '엄마', 'role': 'MEMBER'},
+            ],
+          }));
+
+      final group = await f.repo.myGroup();
+
+      expect(f.seen.single.url.path, '/api/groups/me');
+      expect(group.id, 3);
+      expect(
+        group.roomId,
+        9,
+        reason: '초대 발급이 이 값으로 간다 — 틀리면 남의 방 코드를 발급하거나 403 이 된다',
+      );
+      expect(group.members.map((m) => m.nickname), ['아빠', '엄마']);
+      expect(
+        group.members.map((m) => m.isOwner),
+        [true, false],
+        reason: 'isOwner 는 대문자 OWNER 문자열 비교다. 서버가 소문자로 바뀌면 모두가 '
+            '조용히 "가족" 으로 보이고 초대 버튼이 사라진다 — 그 회귀를 여기서 잡는다',
+      );
+      expect(group.members.first.userId, 11);
+    });
+
+    test('members 가 없거나 모양이 다르면 빈 목록이다 — 화면 전체가 죽지 않는다', () async {
+      final f = repositoryThatAnswers((_) => _json({'id': 3, 'name': '보리네'}));
+
+      final group = await f.repo.myGroup();
+
+      expect(group.members, isEmpty);
+      expect(group.roomId, 0, reason: 'roomId 가 없으면 0 이다 — null 역참조로 죽지 않는다');
+    });
+
     test('초대 발급은 그룹이 아니라 방 경로다 — 초대코드는 방에 붙는다(ADR-0011)', () async {
       final f = repositoryThatAnswers((_) => _json({'code': 'ABCDE-FGHIJ'}, status: 201));
 
@@ -162,6 +201,29 @@ void main() {
         () => f.repo.careLogs(3),
         throwsA(isA<FamilyFailure>()
             .having((e) => e.kind, 'kind', FamilyFailureKind.forbidden)),
+      );
+    });
+
+    test('400 은 invalid — "연결이 불안정해요 · 다시 시도" 가 아니다', () async {
+      final f = repositoryThatAnswers((_) => _json({
+            'error': {
+              'code': 'VALIDATION_ERROR',
+              'message': '산책 주의사항은 500자 이하여야 합니다.',
+            }
+          }, status: 400));
+
+      await expectLater(
+        () => f.repo.replaceWalkNote(3, '가' * 501),
+        throwsA(isA<FamilyFailure>()
+            .having((e) => e.kind, 'kind', FamilyFailureKind.invalid)
+            .having(
+              (e) => e.message,
+              'message',
+              contains('500자'),
+              // 400 을 network 로 떨어뜨리면 화면은 "연결이 불안정해요 · 다시 시도" 를 그린다.
+              // 네트워크는 멀쩡하고 다시 눌러도 영원히 같은 결과라, 사용자가 할 수 있는 일이
+              // 화면 어디에도 없다. 이 저장소가 FamilyFailure 를 만든 이유가 바로 그거다.
+            )),
       );
     });
 

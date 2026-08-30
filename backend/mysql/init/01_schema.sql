@@ -69,7 +69,7 @@ CREATE TABLE `card_reaction` (
 CREATE TABLE `care_log` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `dog_id` bigint DEFAULT NULL,
-  `done_by` bigint NOT NULL,
+  `done_by` bigint DEFAULT NULL,
   `group_id` bigint DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `occurred_at` datetime(6) NOT NULL,
@@ -78,7 +78,7 @@ CREATE TABLE `care_log` (
   PRIMARY KEY (`id`),
   KEY `idx_carelog_group` (`group_id`,`occurred_at`),
   KEY `idx_carelog_doneby` (`done_by`),
-  CONSTRAINT `fk_carelog_doneby` FOREIGN KEY (`done_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_carelog_doneby` FOREIGN KEY (`done_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_carelog_group` FOREIGN KEY (`group_id`) REFERENCES `family_group` (`id`) ON DELETE SET NULL,
   CONSTRAINT `ck_carelog_type` CHECK ((`type` in (_utf8mb4'water',_utf8mb4'meal',_utf8mb4'walk',_utf8mb4'med',_utf8mb4'vet')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -472,13 +472,13 @@ CREATE TABLE `walk_note` (
   `group_id` bigint NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `updated_at` datetime(6) NOT NULL,
-  `updated_by` bigint NOT NULL,
+  `updated_by` bigint DEFAULT NULL,
   `body` varchar(500) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_walknote_group` (`group_id`),
   KEY `fk_walknote_updatedby` (`updated_by`),
   CONSTRAINT `fk_walknote_group` FOREIGN KEY (`group_id`) REFERENCES `family_group` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_walknote_updatedby` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
+  CONSTRAINT `fk_walknote_updatedby` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

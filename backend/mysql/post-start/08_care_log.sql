@@ -28,6 +28,20 @@
 --                    실패로 끝낸다. validate 는 FK 도 UNIQUE 도 CHECK 도 안 본다.
 --
 -- ─────────────────────────────────────────────────────────────────────────────
+-- users 로 가는 FK 둘은 ON DELETE **SET NULL** 이다 — CASCADE 였다가 고쳤다
+--
+-- care_log.done_by 와 walk_note.updated_by 는 2026-08 까지 ON DELETE CASCADE 였다.
+-- 그 상태에서 DELETE /auth/me (users 행 하드 삭제) 한 번이면
+--   · 그 사람이 마지막으로 고친 **가족 공유 산책 주의사항 한 장이 통째로** 사라지고
+--     (남은 가족의 화면은 '아직 주의사항이 없어요' 라 지워진 줄도 모른다),
+--   · 그 사람이 남긴 케어 기록도 함께 사라져 '오늘 누가 무엇을 했나' 가 거짓이 된다.
+-- 두 컬럼은 문서의 소유자가 아니라 **메타데이터**다. 메모의 주인은 group_id 이고 그 그룹은
+-- 살아 있다. care_log.group_id 가 이미 같은 질문에 SET NULL 로 답했다.
+-- 이름은 응답에서 '알 수 없음'(User.UNKNOWN_DISPLAY_NAME)으로 떨어진다.
+--
+-- 이 스크립트를 CASCADE 시절에 이미 돌린 DB 가 있으므로 §B 가 그것을 고친다.
+--
+-- ─────────────────────────────────────────────────────────────────────────────
 -- ⚠️ care_log.dog_id 에 FK 가 없다 — 판단이 아니라 사실이다
 --
 -- 이슈 본문은 dog_id FK 라고 적었지만 **dog 표가 정본 스키마에 없다.**
@@ -181,7 +195,7 @@ CREATE TABLE IF NOT EXISTS care_log (
     dog_id      BIGINT       NULL COMMENT '대상 강아지. dog 표가 아직 없어 FK 없이 항상 NULL 이다 (#76)',
     group_id    BIGINT       NULL COMMENT '가족 그룹 공유(nullable — 미소속 시 개인 기록)',
     type        VARCHAR(10)  NOT NULL COMMENT 'water|meal|walk|med|vet',
-    done_by     BIGINT       NOT NULL COMMENT '수행자(users.id) — 토큰의 사용자다',
+    done_by     BIGINT       NULL COMMENT '수행자(users.id) — 토큰의 사용자다. 탈퇴하면 NULL 이다',
     occurred_at DATETIME(6)  NOT NULL,
     memo        VARCHAR(500) NULL,
     created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -191,7 +205,7 @@ CREATE TABLE IF NOT EXISTS care_log (
     CONSTRAINT fk_carelog_group FOREIGN KEY (group_id)
       REFERENCES family_group (id) ON DELETE SET NULL,
     CONSTRAINT fk_carelog_doneby FOREIGN KEY (done_by)
-      REFERENCES users (id) ON DELETE CASCADE,
+      REFERENCES users (id) ON DELETE SET NULL,
     CONSTRAINT ck_carelog_type CHECK (type IN ('water','meal','walk','med','vet'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -199,7 +213,7 @@ CREATE TABLE IF NOT EXISTS walk_note (
     id         BIGINT       NOT NULL AUTO_INCREMENT,
     group_id   BIGINT       NOT NULL,
     body       VARCHAR(500) NOT NULL COMMENT '산책 시 주의사항 — 그룹당 한 장',
-    updated_by BIGINT       NOT NULL COMMENT '마지막으로 고친 사람(users.id)',
+    updated_by BIGINT       NULL COMMENT '마지막으로 고친 사람(users.id). 탈퇴하면 NULL 이다',
     updated_at DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_walknote_group (group_id),
@@ -207,8 +221,84 @@ CREATE TABLE IF NOT EXISTS walk_note (
     CONSTRAINT fk_walknote_group FOREIGN KEY (group_id)
       REFERENCES family_group (id) ON DELETE CASCADE,
     CONSTRAINT fk_walknote_updatedby FOREIGN KEY (updated_by)
-      REFERENCES users (id) ON DELETE CASCADE
+      REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ── B. 이미 만들어진 표 고치기 (멱등) ───────────────────────────────────────
+-- CREATE TABLE IF NOT EXISTS 는 **이미 있는 표를 고치지 않는다.** 이 스크립트를 먼저
+-- 돌려 본 개발 DB 에는 done_by·updated_by 가 NOT NULL + ON DELETE CASCADE 로 남아 있다.
+-- 그 상태를 그대로 두면 사용자 한 명의 탈퇴가 가족의 케어 기록과 산책 주의사항을
+-- 지운다 — 그 자리를 여기서 SET NULL 로 내린다.
+--
+-- 왜 SET NULL 인가: 두 컬럼은 **문서의 소유자가 아니라 메타데이터**다. 메모의 주인은
+-- group_id 이고 그 그룹은 살아 있다. '마지막으로 고친 사람' 하나 때문에 가족이 함께 보는
+-- 안전 메모('계단 피하기')와 '오늘 엄마가 산책을 다녀왔다' 를 지우면, 남은 가족의 화면은
+-- 한 번도 안 쓴 상태와 구별되지 않는다. care_log.group_id 가 이미 같은 질문에 SET NULL 로
+-- 답했고(가족 해산이 개인 기록을 지우지 않는다) 두 컬럼도 같은 답을 쓴다.
+-- 이름은 응답에서 '알 수 없음' 으로 떨어진다(User.UNKNOWN_DISPLAY_NAME).
+--
+-- 순서가 정해져 있다: FK 를 먼저 떼야 컬럼을 NULL 허용으로 바꿀 수 있고, 컬럼을 바꿔야
+-- SET NULL 로 다시 걸 수 있다. 방금 §A 가 새로 만든 표라면 셋 다 이미 맞아서 아무 일도
+-- 일어나지 않는다.
+
+SET @carelog_fk_wrong := (
+    SELECT COUNT(*) FROM information_schema.referential_constraints
+    WHERE constraint_schema = DATABASE() AND table_name = 'care_log'
+      AND constraint_name = 'fk_carelog_doneby' AND delete_rule <> 'SET NULL');
+
+SET @walknote_fk_wrong := (
+    SELECT COUNT(*) FROM information_schema.referential_constraints
+    WHERE constraint_schema = DATABASE() AND table_name = 'walk_note'
+      AND constraint_name = 'fk_walknote_updatedby' AND delete_rule <> 'SET NULL');
+
+SELECT '[B] 옛 CASCADE 점검' AS section,
+       @carelog_fk_wrong  AS carelog_doneby_needs_fix,
+       @walknote_fk_wrong AS walknote_updatedby_needs_fix;
+
+-- B-1. care_log.done_by : FK 떼기 → 컬럼 NULL 허용 → SET NULL 로 다시 걸기
+SET @stmt := IF(@carelog_fk_wrong > 0,
+    'ALTER TABLE care_log DROP FOREIGN KEY fk_carelog_doneby',
+    'SELECT ''[B-1] care_log.done_by 는 이미 SET NULL 이다'' AS message');
+PREPARE stmt FROM @stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @stmt := IF(@carelog_fk_wrong > 0,
+    'ALTER TABLE care_log MODIFY done_by BIGINT NULL COMMENT ''수행자(users.id) — 토큰의 사용자다. 탈퇴하면 NULL 이다''',
+    'SELECT ''[B-1] care_log.done_by 컬럼 그대로'' AS message');
+PREPARE stmt FROM @stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @stmt := IF(@carelog_fk_wrong > 0,
+    'ALTER TABLE care_log ADD CONSTRAINT fk_carelog_doneby FOREIGN KEY (done_by) REFERENCES users (id) ON DELETE SET NULL',
+    'SELECT ''[B-1] care_log.done_by FK 그대로'' AS message');
+PREPARE stmt FROM @stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- B-2. walk_note.updated_by : 같은 순서
+SET @stmt := IF(@walknote_fk_wrong > 0,
+    'ALTER TABLE walk_note DROP FOREIGN KEY fk_walknote_updatedby',
+    'SELECT ''[B-2] walk_note.updated_by 는 이미 SET NULL 이다'' AS message');
+PREPARE stmt FROM @stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @stmt := IF(@walknote_fk_wrong > 0,
+    'ALTER TABLE walk_note MODIFY updated_by BIGINT NULL COMMENT ''마지막으로 고친 사람(users.id). 탈퇴하면 NULL 이다''',
+    'SELECT ''[B-2] walk_note.updated_by 컬럼 그대로'' AS message');
+PREPARE stmt FROM @stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @stmt := IF(@walknote_fk_wrong > 0,
+    'ALTER TABLE walk_note ADD CONSTRAINT fk_walknote_updatedby FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL',
+    'SELECT ''[B-2] walk_note.updated_by FK 그대로'' AS message');
+PREPARE stmt FROM @stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 
 -- ── D. 사후 검증 ────────────────────────────────────────────────────────────
@@ -236,6 +326,21 @@ SET @fks := (
     WHERE constraint_schema = DATABASE()
       AND constraint_name IN ('fk_carelog_group', 'fk_carelog_doneby',
                               'fk_walknote_group', 'fk_walknote_updatedby'));
+
+-- users 로 가는 FK 둘의 **삭제 규칙**. 둘 다 SET NULL 이어야 한다 — CASCADE 면 한 사람의
+-- 탈퇴가 가족의 케어 기록과 산책 주의사항을 지운다(§B 참고). 이것도 validate 는 안 본다.
+SET @user_fk_cascade := (
+    SELECT COUNT(*) FROM information_schema.referential_constraints
+    WHERE constraint_schema = DATABASE()
+      AND constraint_name IN ('fk_carelog_doneby', 'fk_walknote_updatedby')
+      AND delete_rule <> 'SET NULL');
+
+-- 같은 판단의 컬럼 쪽. SET NULL 은 NULL 허용 컬럼에만 걸 수 있다.
+SET @user_cols_not_null := (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND is_nullable = 'NO'
+      AND ((table_name = 'care_log'  AND column_name = 'done_by')
+        OR (table_name = 'walk_note' AND column_name = 'updated_by')));
 
 -- '그룹당 한 장' 을 지키는 것은 애플리케이션이 아니라 이 UNIQUE 다 (📌 #86 원칙 5).
 SET @walknote_unique := (
@@ -282,6 +387,16 @@ SET @abort_msg := CONCAT(
 SET @stmt := IF(@fks <> 4 OR @walknote_unique <> 1,
     'CALL heattrip_migration_abort(@abort_msg)',
     'SELECT ''[D] FK 4개 · walk_note UNIQUE 확인'' AS message');
+PREPARE stmt FROM @stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @abort_msg := CONCAT(
+    'ABORT: users FK 중 ', @user_fk_cascade, '개가 SET NULL 이 아니고 컬럼 ',
+    @user_cols_not_null, '개가 NOT NULL 이다. 탈퇴 한 번에 가족 기록이 지워진다.');
+SET @stmt := IF(@user_fk_cascade > 0 OR @user_cols_not_null > 0,
+    'CALL heattrip_migration_abort(@abort_msg)',
+    'SELECT ''[D] done_by · updated_by 는 NULL 허용 + ON DELETE SET NULL'' AS message');
 PREPARE stmt FROM @stmt;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;

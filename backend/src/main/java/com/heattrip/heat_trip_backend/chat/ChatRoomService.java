@@ -148,6 +148,18 @@ public class ChatRoomService {
      * 목록을 받아 스스로 훑어야 한다 — 인가 판정이 호출부마다 한 벌씩 복사되고, 그중 하나가
      * {@code removedAt} 을 빠뜨리면 강퇴된 사람이 계속 본다. 판정을 이 안에 둔다.
      *
+     * <h2>{@code .filter(removedAt == null)} 을 지우면 무엇이 빨간불인가</h2>
+     * <p>{@code CareSharingIntegrationTest.aRemovedMember_seesNothingOfTheirFormerFamily}
+     * <b>하나</b>다. 그 줄을 지우고 전체를 돌려 실측했다 — 521건 중 그 한 건만 죽고
+     * ({@code Status expected:<403> but was:<200>}) 나머지는 전부 초록이었다.
+     *
+     * <p>그 테스트를 2026-08 에 <b>더했다.</b> 그 전에는 이 자리를 잠그는 테스트가 저장소에
+     * 하나도 없었다 — 완료 조건 6 을 보던 테스트({@code anOutsider_...})는 <b>한 번도 멤버였던
+     * 적 없는 남</b>만 봤고, 그건 이 줄이 아니라 {@code findByRoomIdAndUserId} 가 비어 있는
+     * 것으로 막힌다. 나간 사람은 행이 남아 있어 검사의 종류가 다르다: <b>존재 여부가 아니라
+     * {@code removedAt} 이다.</b> 강퇴 엔드포인트는 M2.6 에 오므로 그때까지 잠가 두지 않으면
+     * 그 이슈가 이 경로를 이미 새는 상태로 물려받는다.
+     *
      * <p><b>방이 없으면 이 메서드는 답할 수 없다.</b> 부르는 쪽이 {@link #findRoom} 으로 방을
      * 먼저 찾고, 못 찾으면 그것도 "멤버 아님" 으로 다룬다 — {@link #requireOwner} 가 없는 방을
      * 404 가 아니라 403 으로 다루는 것과 같은 이유다(방 존재 여부는 그 방 멤버에게만 의미가 있다).

@@ -88,11 +88,38 @@ public class WalkNote {
     @Column(name = "body", nullable = false, length = 500)
     private String body;
 
-    /** 마지막으로 고친 사람. 토큰의 사용자다. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "updated_by", nullable = false,
+    /**
+     * 마지막으로 고친 사람. 토큰의 사용자다. <b>그 사람이 탈퇴하면 {@code null} 이 된다.</b>
+     *
+     * <h2>{@code ON DELETE SET NULL} — CASCADE 였을 때 실제로 무슨 일이 났는가</h2>
+     * <p>여기는 2026-08 까지 {@code ON DELETE CASCADE} 였다. 그 상태에서 엄마가 메모를 쓰고
+     * {@code DELETE /auth/me} 로 탈퇴하면({@code UserService.deleteMe} 는 {@code users} 행을
+     * 실제로 지운다) <b>그룹의 메모 행이 통째로 사라졌다.</b> 남은 가족의 화면은 "아직
+     * 주의사항이 없어요" 를 그리므로 <b>지워진 것과 한 번도 안 쓴 것을 구별할 수 없다</b> —
+     * 사라졌다는 신호가 아무 데도 없다. 지워지는 내용이 "계단 피하기"·"대형견 만나면 리드줄
+     * 짧게" 같은 안전 메모라 실사용 피해가 크다.
+     *
+     * <p>판단의 요점은 <b>이 컬럼이 문서의 소유자가 아니라 메타데이터</b>라는 것이다.
+     * 메모의 주인은 {@link #group} 이고, 그 그룹은 멀쩡히 살아 있다. "마지막으로 고친 사람"
+     * 하나 때문에 가족 공유 문서를 지우는 것은 {@code care_log.group} 이 이미 같은 질문에
+     * 답한 것과 정확히 반대 방향이었다 — 그쪽 javadoc 은 "가족을 해산했다는 이유로 개인의
+     * 케어 이력이 통째로 증발한다" 고 적고 {@code SET NULL} 을 골랐다.
+     *
+     * <p>그래서 <b>사람이 사라지면 이름만 잃는다.</b> 응답의 표시 이름은
+     * {@code CareDoerResponse} 가 {@link User#UNKNOWN_DISPLAY_NAME}({@code 알 수 없음})으로
+     * 떨어뜨린다 — {@code GroupMemberResponse.nickname} 이 같은 상황에서 이미 그 문구를 쓴다.
+     * {@code CareSharingIntegrationTest.whenOneMemberWithdraws_theFamilysNotesAndLogsSurvive}
+     * 가 이 판단을 잠근다.
+     *
+     * <p><b>{@code updatedBy == null} 과 "행이 없다" 는 다른 상태다.</b> 아직 아무도 안 쓴
+     * 그룹은 행 자체가 없어 {@code WalkNoteResponse.empty} 로 답하고 거기서만
+     * {@code updatedBy} 가 JSON {@code null} 이다. 여기의 {@code null} 은 "쓴 사람이 있었는데
+     * 지금은 가리킬 수 없다" 이고 응답에는 {@code 알 수 없음} 으로 나간다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "updated_by",
             foreignKey = @ForeignKey(name = "fk_walknote_updatedby"))
-    @OnDelete(action = OnDeleteAction.CASCADE)
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private User updatedBy;
 
     /** 마지막으로 고친 시각. 서버 시계다. */
