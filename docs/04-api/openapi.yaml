@@ -70,7 +70,18 @@ tags:
   - name: Bookmarks
     description: 저장한 장소
   - name: Groups
-    description: 가족 그룹 · 오늘의 케어 공유 · 산책 주의사항 · 가족 채팅
+    description: 가족 그룹 · 오늘의 케어 공유 · 산책 주의사항
+  - name: Chat
+    description: |
+      범용 다중 방 채팅. **가족 그룹 전용이 아닙니다** — 방은 `chat_room` 이고,
+      가족 그룹은 `origin_kind`/`origin_ref` 로 방과 이어진 여러 출처 중 하나입니다.
+
+      **순서·델타·미읽음은 전부 방별 `roomSeq` 하나로 풉니다.** `id`(AUTO_INCREMENT)를
+      커서로 쓰지 않습니다 — 배정 시점과 가시성 시점이 달라 `afterId` 폴링이 메시지를
+      영구히 건너뜁니다. 그래서 이 태그의 목록 응답은 공용 `Page`(`nextCursor`)를
+      쓰지 않고 `lastSeq`/`hasMore` 를 직접 돌려줍니다.
+
+      MVP 는 **폴링**(`afterSeq`)입니다. 소켓은 실측 트리거가 걸릴 때만 엽니다(M2.9).
 
 security:
   - bearerAuth: []
@@ -865,7 +876,16 @@ paths:
     post:
       tags: [Groups]
       summary: 초대코드로 그룹 참여
-      description: 가족에게 받은 초대코드로 그룹에 `member` 역할로 참여합니다.
+      description: |
+        가족에게 받은 초대코드로 그룹에 `member` 역할로 참여합니다.
+
+        > ⚠️ **이 경로는 ADR-0011 이후 설계와 어긋납니다.** 초대코드는 `family_group` 이
+        > 아니라 `chat_room_invite` 로 옮겼고(방마다 초대코드, 만료·사용횟수·회수 지원),
+        > 멤버십도 `group_member` 가 아니라 `chat_room_member` 하나입니다. 이 경로와
+        > `Group.inviteCode`·`GroupMember` 스키마는 **아직 구현되지 않았고**, 그 정리는
+        > 이슈 #75 가 소유합니다. 지금 이걸 보고 구현하지 마십시오.
+        > 근거: [ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72)
+      x-implementation-status: superseded-by-adr-0011
       requestBody:
         required: true
         content:
@@ -946,55 +966,6 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-  /api/groups/{groupId}/messages:
-    parameters:
-      - $ref: '#/components/parameters/GroupId'
-    get:
-      tags: [Groups]
-      summary: 가족 채팅 메시지 목록
-      description: |
-        그룹 채팅 메시지(최신순, 커서 페이지네이션). MVP는 폴링으로 새 메시지를 확인하고,
-        실시간(WebSocket/STOMP)은 post-MVP로 확장합니다.
-      parameters:
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Limit'
-      responses:
-        '200':
-          description: 메시지 목록(커서 페이지네이션)
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/Page'
-                  - type: object
-                    properties:
-                      items:
-                        type: array
-                        items: { $ref: '#/components/schemas/ChatMessage' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-    post:
-      tags: [Groups]
-      summary: 메시지 전송
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [body]
-              properties:
-                body: { type: string, example: "보리 저녁밥 방금 줬어요! 또 주지 마세요 🐶" }
-      responses:
-        '201':
-          description: 전송됨
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ChatMessage' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-
   /api/groups/{groupId}/walk-notes:
     parameters:
       - $ref: '#/components/parameters/GroupId'
@@ -1037,6 +1008,345 @@ paths:
                 items: { $ref: '#/components/schemas/WalkNote' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ─────────────────────────── Chat ───────────────────────────
+  /api/chat/rooms:
+    get:
+      tags: [Chat]
+      summary: 내 방 목록
+      description: |
+        내가 속한 방을 돌려줍니다. 방마다 미읽음은 `lastSeq − lastReadSeq` **뺄셈**입니다 —
+        두 값 모두 이 조회가 이미 읽어 오는 컬럼이라 추가 쿼리가 0입니다.
+      responses:
+        '200':
+          description: 방 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ChatRoom' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/rooms/{roomId}:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    get:
+      tags: [Chat]
+      summary: 방 상세(멤버 목록 · 내 lastReadSeq · 역할)
+      responses:
+        '200':
+          description: 방 상세
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatRoom' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/rooms/{roomId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    get:
+      tags: [Chat]
+      summary: 메시지 목록(폴링 · 과거 스크롤 겸용)
+      description: |
+        `afterSeq`(델타·오름차순)와 `beforeSeq`(과거·내림차순) **둘 중 하나**에 `limit` 을
+        붙입니다. 둘 다 주면 400 입니다. 응답은 공용 `Page` 가 아니라
+        `{ items, lastSeq, hasMore }` 입니다 — 커서가 `roomSeq` 이고, 미읽음 계산이
+        `lastSeq` 를 필요로 하기 때문입니다.
+      parameters:
+        - $ref: '#/components/parameters/AfterSeq'
+        - $ref: '#/components/parameters/BeforeSeq'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 메시지 목록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatMessagePage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Chat]
+      summary: 메시지 전송
+      description: |
+        `clientMsgId` 는 **멱등키**입니다. 전송은 재시도 가능한 POST 인데 사용자가 답답해
+        다시 누르면 같은 메시지가 두 번 들어갑니다 — 서버가 `UNIQUE (room_id, client_msg_id)`
+        로 받치고, 같은 키가 다시 오면 처음 배정한 `roomSeq` 를 그대로 돌려줍니다.
+
+        201 응답에 배정된 `roomSeq` 가 실립니다. 발급(`chat_room.last_seq` 증가)과 INSERT 는
+        **하나의 트랜잭션**입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body, clientMsgId]
+              properties:
+                body:
+                  type: string
+                  example: "보리 저녁밥 방금 줬어요! 또 주지 마세요 🐶"
+                clientMsgId:
+                  type: string
+                  description: |
+                    클라이언트가 만드는 멱등키. `Random.secure()` 16바이트 → base64url 이며
+                    `uuid` 패키지를 쓰지 않습니다(신규 의존성 0).
+                  example: "Zm9vYmFyLWlkZW1wb3RlbmN5"
+                contentType:
+                  type: string
+                  default: text
+      responses:
+        '201':
+          description: 전송됨(배정된 roomSeq 포함)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatMessage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/rooms/{roomId}/read:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    post:
+      tags: [Chat]
+      summary: 읽음 워터마크 올리기
+      description: |
+        `lastReadSeq` 를 올립니다. **단조 증가만** 합니다 — 서버가
+        `GREATEST(last_read_seq, :seq)` 로 쓰고 `LEAST(:seq, room.last_seq)` 로 상한을 겁니다.
+        읽음 보고는 재시도·백그라운드 복귀로 순서가 뒤집혀 도착하고, 뒤늦게 온 작은 값이 큰
+        값을 덮으면 이미 읽은 메시지가 다시 미읽음으로 뜹니다. 상한이 없으면 뺄셈이 음수가 됩니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lastReadSeq]
+              properties:
+                lastReadSeq: { type: integer, format: int64, example: 142 }
+      responses:
+        '200':
+          description: 갱신된 워터마크
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lastReadSeq: { type: integer, format: int64 }
+                  unread: { type: integer }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/rooms/{roomId}/invites:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    post:
+      tags: [Chat]
+      summary: 초대코드 발급 (M2.5)
+      description: |
+        방장(`OWNER`)만 발급합니다. 기본값은 **7일 · 사용 횟수 무제한**입니다.
+        재발급하면 이전 코드는 즉시 `revokedAt` 이 찍히고 **기존 멤버는 그대로 남습니다** —
+        코드가 유출됐을 때의 유일한 대응 수단입니다.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresAt:
+                  type: [string, "null"]
+                  format: date-time
+                  description: 생략하면 발급 + 7일. `null` 이면 무기한(기본값으로 쓰지 않습니다)
+                maxUses:
+                  type: [integer, "null"]
+                  description: 생략·`null` 이면 무제한
+      responses:
+        '201':
+          description: 발급됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatInvite' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/rooms/{roomId}/invites/{code}:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+      - name: code
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Chat]
+      summary: 초대코드 폐기 (M2.5)
+      description: 방장만. 폐기한 `code` 는 UNIQUE 라 다시 만들어 쓰지 않습니다.
+      responses:
+        '204': { description: 폐기됨 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/invites/{code}/join:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Chat]
+      summary: 초대코드로 입장 (M2.5)
+      description: |
+        재입장 금지 대상(`rejoinBlocked`)이면 **403** 입니다. 한도·상태 위반은 봉투를 새로
+        만들지 않고 공통 `Error` 의 `error.code` 로 갈립니다 — `ROOM_MEMBER_LIMIT`(409) ·
+        `INVITE_EXPIRED`(410) · `INVITE_REVOKED`(410) · `INVITE_USES_EXHAUSTED`(409).
+
+        만 14세 미만(`users.age_group = 'UNDER14'`) 계정은 **가족방 외의 방**에 들어올 수
+        없습니다(M2.7). 방 안 대화는 건드리지 않습니다.
+      responses:
+        '200':
+          description: 입장됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatRoom' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410':
+          description: 만료·회수된 초대코드(`INVITE_EXPIRED` · `INVITE_REVOKED`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/rooms/{roomId}/members/me:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    delete:
+      tags: [Chat]
+      summary: 방 나가기
+      responses:
+        '204': { description: 나갔음 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/rooms/{roomId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+      - name: userId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      tags: [Chat]
+      summary: 강퇴 (M2.7)
+      description: |
+        방장만 합니다. 멤버 행을 **지우지 않고** `removedAt` + `rejoinBlocked` 를 찍습니다 —
+        미읽음이 그 행의 `lastReadSeq` 뺄셈이라 지우면 되돌릴 수 없습니다. 강퇴당한 사람의
+        **메시지는 남깁니다**(지우면 신고 근거가 사라집니다). 강퇴 = 재입장 금지이고,
+        방장이 나중에 풀 수 있습니다.
+      responses:
+        '204': { description: 강퇴됨 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/messages/{messageId}:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      tags: [Chat]
+      summary: 메시지 삭제
+      description: |
+        **소프트 삭제**입니다(`deletedAt`). 행을 실제로 지우면 뺀 자리가 `roomSeq` 빈틈이 되어
+        델타 폴링이 깨집니다.
+      responses:
+        '204': { description: 삭제됨 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/messages/{messageId}/reports:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      tags: [Chat]
+      summary: 메시지 신고 (M2.7)
+      description: |
+        신고의 단위는 **메시지**이고 한 번에 최대 3개입니다. 서버가 본문 사본·발신자·시각과
+        **앞뒤 각 5개의 `roomSeq` 범위**를 스냅샷으로 남깁니다 — 원본 참조만 하면 지워졌을 때
+        판단이 불가능합니다.
+
+        **신고자는 익명이고 피신고자에게는 아무 알림도 가지 않습니다.**
+        `alsoBlock` 기본값은 **꺼짐**입니다 — 자동 차단은 가족방에서 되돌릴 수 없는 사고가 됩니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  enum: [spam, abuse, sexual, fraud, other]
+                memo:
+                  type: string
+                alsoBlock:
+                  type: boolean
+                  default: false
+      responses:
+        '201': { description: 접수됨 }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/blocks:
+    post:
+      tags: [Chat]
+      summary: 사용자 차단 (M2.7)
+      description: |
+        차단은 **가리기**입니다 — 서버가 그 사람의 과거·미래 메시지를 목록에서 빼고 내려줍니다.
+        **삭제가 아닙니다**: 다른 사람 화면에는 그대로 남습니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: integer, format: int64 }
+      responses:
+        '201': { description: 차단됨 }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/blocks/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      tags: [Chat]
+      summary: 차단 해제 (M2.7)
+      responses:
+        '204': { description: 해제됨 }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
 components:
@@ -1089,7 +1399,9 @@ components:
       name: cursor
       in: query
       schema: { type: string }
-      description: 이전 응답의 nextCursor
+      description: |
+        이전 응답의 nextCursor. **Chat 은 이 파라미터를 쓰지 않습니다** —
+        채팅의 커서는 방별 `roomSeq` 이고 `afterSeq`/`beforeSeq` 로 받습니다.
     Limit:
       name: limit
       in: query
@@ -1103,6 +1415,25 @@ components:
       name: groupId
       in: path
       required: true
+      schema: { type: integer, format: int64 }
+    RoomId:
+      name: roomId
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    AfterSeq:
+      name: afterSeq
+      in: query
+      description: |
+        이 `roomSeq` **뒤에** 생긴 메시지를 오름차순으로. 폴링 델타용이며
+        `beforeSeq` 와 동시에 줄 수 없습니다.
+      schema: { type: integer, format: int64 }
+    BeforeSeq:
+      name: beforeSeq
+      in: query
+      description: |
+        이 `roomSeq` **앞의** 메시지를 내림차순으로. 과거 스크롤용이며
+        `afterSeq` 와 동시에 줄 수 없습니다.
       schema: { type: integer, format: int64 }
 
   responses:
@@ -1502,7 +1833,11 @@ components:
 
     GroupMember:
       type: object
-      description: 가족 그룹 멤버(group_member)
+      description: |
+        가족 그룹 멤버. ⚠️ **ADR-0011 이후 `group_member` 테이블은 만들지 않습니다** —
+        멤버십 표는 `chat_room_member` 하나입니다. 둘을 두면 "가족인데 방에 없는 사람" 이라는
+        상태가 생기고 강퇴·차단이 어느 쪽인지를 매번 물어야 합니다. 정리는 이슈 #75.
+        근거: [ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72)
       properties:
         id: { type: integer, format: int64 }
         userId: { type: integer, format: int64 }
@@ -1512,7 +1847,11 @@ components:
 
     Group:
       type: object
-      description: 가족 그룹(family_group). 초대코드로 가족을 초대한다.
+      description: |
+        가족 그룹(family_group). ⚠️ **`inviteCode` 는 ADR-0011 이후 `chat_room_invite` 로
+        옮겼습니다** — 초대코드는 그룹이 아니라 방에 붙고 만료·사용횟수·회수를 가집니다.
+        아래 `inviteCode`·`members` 는 아직 구현되지 않은 옛 설계이고, 정리는 이슈 #75.
+        근거: [ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72)
       properties:
         id: { type: integer, format: int64 }
         name: { type: string, example: "보리네 가족" }
@@ -1553,19 +1892,125 @@ components:
         occurredAt: { type: string, format: date-time, description: 생략 시 서버 현재 시각 }
         memo: { type: string }
 
-    ChatMessage:
+    ChatRoom:
       type: object
-      description: 가족 채팅 메시지(chat_message)
+      description: |
+        채팅방(chat_room). **가족 그룹 전용이 아닙니다** — 출처는 `originKind`/`originRef`
+        쌍이고, 가족 그룹은 그 여러 출처 중 하나입니다.
       properties:
         id: { type: integer, format: int64 }
-        groupId: { type: integer, format: int64 }
-        author:
-          type: object
-          properties:
-            userId: { type: integer, format: int64 }
-            nickname: { type: string, example: "보리아빠" }
+        title: { type: string, example: "우리 가족" }
+        tag:
+          type: string
+          description: 화면이 방 종류를 표시할 때 쓰는 값. `originKind` 를 그대로 내려줍니다
+          example: "가족"
+        originKind: { type: string, example: "FAMILY" }
+        originRef:
+          type: string
+          description: 출처 도메인의 id 를 문자열로. **FK 가 아닙니다**
+          example: "12"
+        isDefault:
+          type: boolean
+          description: 기본방(가족방) 표식
+        lastSeq:
+          type: integer
+          format: int64
+          description: 방의 마지막 `room_seq`. 발급 카운터와 같은 컬럼입니다
+        lastReadSeq: { type: integer, format: int64, description: 내 읽음 워터마크 }
+        unread:
+          type: integer
+          description: |
+            `lastSeq − lastReadSeq`. 서버가 뺄셈으로 냅니다 — 읽음 표를 두지 않습니다.
+        memberCount: { type: integer, example: 3 }
+        myRole: { type: string, enum: [OWNER, MEMBER] }
+        lastMessage: { $ref: '#/components/schemas/ChatMessage' }
+        members:
+          type: array
+          description: 방 상세 조회(`GET /api/chat/rooms/{roomId}`)에만 실립니다
+          items: { $ref: '#/components/schemas/ChatRoomMember' }
+        createdAt: { type: string, format: date-time }
+
+    ChatRoomMember:
+      type: object
+      description: 방 멤버십(chat_room_member). 멤버십 표는 이것 하나입니다
+      properties:
+        userId: { type: integer, format: int64 }
+        nickname: { type: string, example: "보리아빠" }
+        role: { type: string, enum: [OWNER, MEMBER] }
+        lastReadSeq: { type: integer, format: int64 }
+        joinedAt: { type: string, format: date-time }
+        removedAt:
+          type: [string, "null"]
+          format: date-time
+          description: 강퇴 시각. **행은 지우지 않습니다** — 미읽음이 이 행의 뺄셈입니다
+        rejoinBlocked:
+          type: boolean
+          description: 강퇴 = 재입장 금지. 유효한 초대코드로도 들어오지 못합니다
+
+    ChatInvite:
+      type: object
+      description: 초대코드(chat_room_invite). 그룹 행의 컬럼이 아니라 별도 표입니다
+      properties:
+        code: { type: string, example: "PAW-2K7Q" }
+        roomId: { type: integer, format: int64 }
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: '`null` 이면 무기한. 기본은 발급 + 7일'
+        maxUses:
+          type: [integer, "null"]
+          description: '`null` 이면 무제한(기본)'
+        usedCount: { type: integer }
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+          description: 재발급·회수 시각. 이 코드는 즉시 막히고 기존 멤버는 남습니다
+        createdAt: { type: string, format: date-time }
+
+    ChatMessage:
+      type: object
+      description: |
+        채팅 메시지(chat_message). 순서·델타·미읽음의 기준은 방별 `roomSeq` 하나이고,
+        `id` 는 커서가 아닙니다.
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: '**커서로 쓰지 마세요.** 배정 시점과 가시성 시점이 다릅니다'
+        roomId: { type: integer, format: int64 }
+        roomSeq:
+          type: integer
+          format: int64
+          description: 방 안에서 빈틈 없이 1씩 증가. 델타·순서·미읽음의 유일한 근거
+        senderUserId: { type: integer, format: int64 }
+        senderName:
+          type: string
+          description: |
+            `users` 에 있으면 현재 닉네임, 없으면(탈퇴) `알 수 없음` 입니다.
+            `"익명"` 은 쓰지 않습니다 — 커뮤니티 화면에서 이미 다른 뜻으로 쓰이고 있습니다.
+          example: "보리아빠"
+        contentType: { type: string, default: text }
         body: { type: string, example: "보리 저녁밥 방금 줬어요! 또 주지 마세요 🐶" }
         createdAt: { type: string, format: date-time }
+        deletedAt:
+          type: [string, "null"]
+          format: date-time
+          description: 소프트 삭제. 행을 지우면 뺀 자리가 `roomSeq` 빈틈이 됩니다
+
+    ChatMessagePage:
+      type: object
+      description: |
+        채팅 목록 응답. 공용 `Page`(`nextCursor`)를 쓰지 않습니다 — 커서가 `roomSeq` 이고,
+        클라이언트가 미읽음을 맞추려면 방의 현재 `lastSeq` 가 함께 필요하기 때문입니다.
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ChatMessage' }
+        lastSeq:
+          type: integer
+          format: int64
+          description: 방의 현재 마지막 `room_seq`
+        hasMore: { type: boolean }
 
     WalkNote:
       type: object

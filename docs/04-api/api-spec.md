@@ -657,7 +657,39 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 ---
 
-## 7. 북마크 (Bookmarks) — ⚪ post-MVP
+## 7. 채팅 (Chat) — 🟡 계획
+
+**가족 그룹 전용이 아니다.** 방은 `chat_room` 이고, 가족 그룹은 `origin_kind`/`origin_ref` 로 방과 이어진 여러 출처 중 하나다. 앱이 이미 방을 둘 들고 있고(`pet.dart` 의 `kChatRooms` — `우리 가족`·`서울숲 산책 크루`), 방별 화면은 이미 범용이다. 근거는 [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다).
+
+**순서·델타·미읽음은 전부 방별 `roomSeq` 하나로 푼다.** `id`(AUTO_INCREMENT)를 커서로 쓰지 않는다 — 배정 시점과 가시성 시점이 달라 `afterId` 폴링이 메시지를 영구히 건너뛴다. 그래서 이 장의 목록 응답은 §1.2 의 공용 페이지네이션(`nextCursor`)을 쓰지 않고 `{ items, lastSeq, hasMore }` 를 직접 돌려준다. 미읽음은 `room.lastSeq − member.lastReadSeq` **뺄셈**이라 읽음 표를 두지 않는다.
+
+MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때만 연다(M2.9).
+
+데이터 모델: `chat_room(origin_kind, origin_ref, title, last_seq)` · `chat_room_member(room_id, user_id, role, last_read_seq, removed_at, rejoin_blocked)` · `chat_room_invite(room_id, code, expires_at, max_uses, used_count, revoked_at)` · `chat_message(room_id, room_seq, sender_user_id, sender_name, content_type, body, deleted_at)`. **chat 경계 밖으로 나가는 FK 는 0개다.**
+
+| 메서드 | 경로 | 설명 | 마일스톤 |
+|---|---|---|---|
+| `GET` | `/api/chat/rooms` | 내 방 목록. 방마다 `unread`·`lastMessage`·`memberCount`·`tag`·`isDefault` | M2.6 |
+| `GET` | `/api/chat/rooms/{roomId}` | 방 상세(멤버 목록·내 `lastReadSeq`·역할) | M2.6 |
+| `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq\|beforeSeq&limit` | 폴링/스크롤 겸용. 응답은 `{ items, lastSeq, hasMore }` | M2.6 |
+| `POST` | `/api/chat/rooms/{roomId}/messages` | 전송 `{ "body": "...", "clientMsgId": "..." }`. 멱등키로 재시도 중복을 막고 201 에 배정된 `roomSeq` 를 싣는다 | M2.6 |
+| `POST` | `/api/chat/rooms/{roomId}/read` | `lastReadSeq` 올리기. **단조 증가만** | M2.6 |
+| `POST` | `/api/chat/rooms/{roomId}/invites` | 초대코드 발급(`expiresAt`·`maxUses`. 기본 7일·무제한) | M2.5 |
+| `DELETE` | `/api/chat/rooms/{roomId}/invites/{code}` | 초대코드 폐기. 기존 멤버는 남는다 | M2.5 |
+| `POST` | `/api/chat/invites/{code}/join` | 코드로 입장. 재입장 금지 대상이면 `403` | M2.5 |
+| `DELETE` | `/api/chat/rooms/{roomId}/members/me` | 나가기 | M2.6 |
+| `DELETE` | `/api/chat/rooms/{roomId}/members/{userId}` | 강퇴(방장). `removed_at` + `rejoin_blocked` | M2.7 |
+| `DELETE` | `/api/chat/messages/{messageId}` | 삭제 — **소프트**(`deleted_at`). 빈틈이 나면 델타가 깨진다 | M2.6 |
+| `POST` | `/api/chat/messages/{messageId}/reports` | 신고(사유 코드 + 메모). 서버가 본문 스냅샷을 남긴다 | M2.7 |
+| `POST`·`DELETE` | `/api/chat/blocks` · `/api/chat/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다 | M2.7 |
+
+- 방 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 확인은 서비스 경계의 `requireMember(roomId, userId)` 한 곳이다.
+- 한도·상태 위반은 봉투를 새로 만들지 않고 공통 `Error` 의 `error.code` 로 갈린다 — `ROOM_MEMBER_LIMIT`(409) · `INVITE_EXPIRED`(410) · `INVITE_REVOKED`(410) · `INVITE_USES_EXHAUSTED`(409).
+- 만 14세 미만(`users.age_group = 'UNDER14'`)은 방 생성과 초대코드로 새 방 참여를 막고 **가족방만 예외로 허용**한다(M2.7).
+
+---
+
+## 8. 북마크 (Bookmarks) — ⚪ post-MVP
 
 레거시 `bookmark/` 패키지 재사용. 장소 즐겨찾기.
 
@@ -669,33 +701,30 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 ---
 
-## 8. 가족 케어 + 채팅 (Groups) — 🟡 계획
+## 9. 가족 케어 (Groups) — 🟡 계획
 
-반려는 혼자가 아니라 **가족이 함께** 돌본다. 가족 그룹으로 오늘의 케어(물/밥/산책)를 공유해 이중 급여(밥 두 번)·산책 누락을 막고, 가족 채팅으로 앱의 일일 사용 이유(retention)를 만든다.
+반려는 혼자가 아니라 **가족이 함께** 돌본다. 가족 그룹으로 오늘의 케어(물/밥/산책)를 공유해 이중 급여(밥 두 번)·산책 누락을 막는다. **채팅은 여기 없다** — 방은 가족 그룹에 종속되지 않는 범용 리소스라 7장으로 나갔다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-프론트 도메인: `app/lib/v2/domain/pet.dart` → `CareType/CareTask/kCareToday/FamilyMember/kFamilyMembers/kFamilyInviteCode/kWalkNotes/ChatMessage/kChatMessages` (현재 더미).
-데이터 모델: `family_group(id,name,invite_code,created_at)` · `group_member(id,group_id,user_id,role[owner|member],joined_at)` · `chat_message(id,group_id,user_id,body,created_at)` · `walk_note(id,group_id,body,created_at)` · `care_log`는 기존 계획 확장 — `group_id`(nullable)·`done_by(user_id)` 추가, `type`은 `water|meal|walk|med|vet`.
+프론트 도메인: `app/lib/v2/domain/pet.dart` → `CareType/CareTask/kCareToday/FamilyMember/kFamilyMembers/kFamilyInviteCode/kWalkNotes` (현재 더미).
+데이터 모델: `family_group(id,name,created_at)` — **초대코드도 멤버십도 여기 없다.** 초대는 `chat_room_invite`, 멤버십은 `chat_room_member` 가 가지고(7장), 방이 `origin_kind`/`origin_ref` 로 이 그룹을 불투명하게 가리킨다. 나머지는 `walk_note(id,group_id,body,created_at)` · `care_log`는 기존 계획 확장 — `group_id`(nullable)·`done_by(user_id)` 추가, `type`은 `water|meal|walk|med|vet`.
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| `POST` | `/api/groups` | 그룹 생성(생성자 `owner`, 초대코드 발급) |
-| `POST` | `/api/groups/join` | `{ "inviteCode": "PAW-2K7Q" }` 초대코드로 참여 |
+| `POST` | `/api/groups` | 그룹 생성(생성자 `OWNER`. 방과 첫 초대코드가 함께 생긴다) |
 | `GET` | `/api/groups/me` | 내 그룹 + 멤버 목록(없으면 `404`) |
 | `GET` | `/api/groups/{groupId}/care-logs?date&type` | 오늘의 케어 조회 — 누가·언제 물/밥/산책을 했는지 |
 | `POST` | `/api/groups/{groupId}/care-logs` | 케어 기록 `{ "dogId": 7, "type": "meal", "memo": "" }` (`done_by`는 토큰 사용자) |
-| `GET` | `/api/groups/{groupId}/messages?limit&cursor` | 가족 채팅 목록(커서 페이지네이션, MVP는 폴링) |
-| `POST` | `/api/groups/{groupId}/messages` | 메시지 전송 `{ "body": "..." }` |
 | `GET` | `/api/groups/{groupId}/walk-notes` | 산책 시 주의사항(가족 공유 메모) |
 | `PUT` | `/api/groups/{groupId}/walk-notes` | 주의사항 전체 교체 `{ "notes": ["..."] }` |
 
-- 그룹 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 잘못된 초대코드 → `404`, 이미 참여한 그룹 → `409`.
-- **post-MVP:** 친구 추가(가족 외), 케어 알림/리마인더, 케어 히스토리 통계, 실시간 채팅(WebSocket/STOMP) 푸시.
+- 그룹 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 초대코드로 들어오는 경로는 7장(`POST /api/chat/invites/{code}/join`)이다.
+- **post-MVP:** 친구 추가(가족 외), 케어 알림/리마인더, 케어 히스토리 통계.
 
 ---
 
-## 9. 확장 로그 (Care Logs) — ⚪ post-MVP
+## 10. 확장 로그 (Care Logs) — ⚪ post-MVP
 
-건강·식사·병원·접종 기록. ERD `care_log(type[meal/health/vet/med], occurred_at, title, value, memo, photo)`. (8장의 가족 케어 공유가 MVP로 앞당겨지며 `type`·`group_id`·`done_by`가 확장됨 — 8장 참조.)
+건강·식사·병원·접종 기록. ERD `care_log(type[meal/health/vet/med], occurred_at, title, value, memo, photo)`. (9장의 가족 케어 공유가 MVP로 앞당겨지며 `type`·`group_id`·`done_by`가 확장됨 — 9장 참조.)
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
@@ -706,7 +735,7 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 ---
 
-## 10. 프론트↔API 매핑 요약
+## 11. 프론트↔API 매핑 요약
 
 | 화면(lib/v2) | 현재 데이터 소스 | 목표 API |
 |---|---|---|
@@ -717,11 +746,12 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 | 커뮤니티 (더미) | `kPetPosts`(로컬) | `GET/POST /api/posts`, `/comments`, `/reactions` |
 | 강아지 프로필/편집 | `kMyDog`(로컬) | `GET/POST/PATCH /api/dogs` |
 | 홈 오늘의 케어 카드 · family_screen (멤버·초대코드·케어·주의사항) | `kCareToday`, `kFamilyMembers`, `kWalkNotes`(로컬) | `GET /api/groups/me`, `GET/POST /api/groups/{id}/care-logs`, `GET/PUT /api/groups/{id}/walk-notes` |
-| family_chat_screen (가족 채팅) | `kChatMessages`(로컬) | `GET/POST /api/groups/{id}/messages` |
+| chat_list_screen (방 목록·미읽음) | `kChatRooms`(로컬) | `GET /api/chat/rooms` |
+| family_chat_screen (방 안 대화) | `kChatMessages`(로컬) | `GET/POST /api/chat/rooms/{id}/messages`, `POST /api/chat/rooms/{id}/read` |
 
 ---
 
-## 11. 이관 로드맵 (직접호출 → 백엔드)
+## 12. 이관 로드맵 (직접호출 → 백엔드)
 
 1. **Phase 1 — 장소 프록시:** `GET /api/places/nearby|{id}`로 KTO 호출을 백엔드 이전. `place` 캐시 테이블 + 공간 인덱스 + KTO 1000콜/일 완화(캐싱·TTL). 프론트 `Env.apiBase` 스위치만으로 전환.
 2. **Phase 2 — 계정·프로필:** 카카오/구글 OAuth + `/auth/me` + `/api/dogs`. 로컬 `kMyDog` → 서버 동기화.

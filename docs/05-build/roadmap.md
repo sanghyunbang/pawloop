@@ -1,6 +1,6 @@
 # 개발 로드맵 / 마일스톤
 
-> Pawloop(포루프) — 반려동물 산책·동반장소·커뮤니티 앱의 단계별 개발 로드맵. **더미 UX가 완성된 현재(M0)** 에서 출발해, 실위치 → 로그인 → 실데이터/백엔드 → 확장 로그 → 출시까지의 마일스톤과 산출물을 정리한다.
+> Pawloop(포루프) — 반려동물 산책·동반장소·커뮤니티 앱의 단계별 개발 로드맵. **더미 UX가 완성된 현재(M0)** 에서 출발해, 실위치 → 로그인 → **가족·채팅** → 실데이터/백엔드 → 확장 로그 → 출시까지의 마일스톤과 산출물을 정리한다.
 
 관련 문서: [기술 스택](../02-architecture/tech-stack.md) · [ERD](../03-database/erd.md)
 
@@ -12,13 +12,21 @@
 |---|---|---|---|
 | **M0** | 더미 UX 완성 | 5탭 셸 + 홈/지도/산책/커뮤니티/통계 화면, KTO 실연동 지도 | **완료(현재)** |
 | **M1** | 실위치 + 실시간 트래킹 실데이터 | `geolocator` 도입, GPS 경로 저장(walk.path), 통계 실데이터화 | 예정 |
-| **M2** | 로그인 | 카카오/구글 소셜 로그인, 사용자/강아지 프로필 서버 연동 | 진행 중 |
-| **M2.5** | 가족 케어 & 채팅 | 가족 그룹(초대코드), 오늘의 케어 공유, 산책 주의사항 메모, 가족 채팅(폴링) | 예정 |
+| **M2** | 로그인 | 카카오/구글 소셜 로그인, 사용자/강아지 프로필 서버 연동 | **하위 27개 닫힘 — 실기기 확인만 남음** |
+| **M2.5** | 가족 그룹 & 케어 공유 | 방·멤버십·초대 3테이블, 가족 그룹, 오늘의 케어, 산책 주의사항 | 예정 |
+| **M2.6** | 채팅(폴링) | `chat_message`(방별 `room_seq`), 방 목록·미읽음, 폴링 송수신 | 예정 |
+| **M2.7** | 채팅 안전 & 스토어 요건 | 신고·차단(가리기)·강퇴·재입장 금지, 14세 미만 게이트, 운영자 연락처 | 예정 |
+| **M2.8** | 알림(푸시) | FCM/APNs, `device_token`, 방별 음소거 | 예정 |
+| **M2.9** | 실시간(소켓) | nginx 업그레이드 경로, 받기만 소켓 | **트리거 기반** |
 | **M3** | 병원/펫샵/산책로 실데이터 + 백엔드 프록시 | LOCALDATA·두루누비 연동, KTO 프록시+캐싱 | 예정 |
 | **M4** | 확장 로그 | 건강/식사/병원(접종) 로그, care_log 도메인 | 예정 |
 | **M5** | 출시 | 스토어 심사 통과, CI/CD, 모니터링, 정식 배포 | 예정 |
 
-각 마일스톤은 앞 단계 산출물을 전제로 한다(선형 의존). 단, M2(로그인)와 M3(실데이터)는 병렬 진행 가능하다. M2.5(가족 케어 & 채팅)는 사용자 계정이 전제라 M2 이후 진행하되, M3와 병렬 가능하다(프론트 더미 UI는 그 전에도 선행 가능).
+각 마일스톤은 앞 단계 산출물을 전제로 한다(선형 의존). 단, M2(로그인)와 M3(실데이터)는 병렬 진행 가능하다.
+
+**2.x 밴드(M2.5~M2.9)는 계정 위에 바로 올라가는 다인(多人) 축이다.** 계정이 전제라 M2 이후에 진행하되 M3와는 전부 병렬 가능하다. 밴드 안에서는 M2.5 → M2.6 이 하드 의존이고(방이 있어야 메시지를 붙인다), M2.7(안전)과 M2.8(푸시)은 M2.6 뒤에서 서로 병렬이며, M2.9(소켓)는 실측 트리거가 걸릴 때만 연다. M4가 필요로 하는 것은 M2.5의 `care_log` 뿐이라 채팅이 늦어져도 확장 로그는 막히지 않는다. 프론트 화면(`chat_list_screen`·`family_chat_screen`·`family_screen`)은 이미 더미로 존재한다.
+
+> **번호 규칙.** 2.x 밴드는 여기서 닫는다. 더 나눌 일이 생기면 마일스톤이 아니라 해당 마일스톤 안의 Epic 이슈로 쪼갠다. 기존 M3·M4·M5를 밀지 않는 이유는 ① 다시 매겨도 **다음** 삽입에는 아무 도움이 안 되고 ② 닫힌 이슈(#26·#29)가 M3를 근거로 인용하고 있어 고치면 그때의 기록이 아니게 되며 ③ 소수점이 "계정을 전제로 한다" 는 밴드의 의미를 스스로 말해 주기 때문이다.
 
 ---
 
@@ -28,7 +36,7 @@
 
 **완료된 산출물**
 
-- **네비게이션.** `go_router` → `MainShell`(`lib/v2/screens/main_shell.dart`), 5탭 구조 홈 / 지도 / [산책 FAB] / 커뮤니티 / 통계.
+- **네비게이션.** `go_router` → `MainShell`(`lib/v2/screens/main_shell.dart`), 5탭 구조 홈 / 지도 / [산책 FAB] / 커뮤니티 / **채팅**. 통계(`insight_screen`)는 탭에서 내려가 `me_screen` 에서 진입한다.
 - **홈(today_screen).** 강아지 히어로 + 오늘 산책 요약(`WalkToday`, 현재 0부터 시작).
 - **지도(explore_screen).** 관광공사 KTO **실연동**(서울 반려동반 장소) + 병원/펫샵/산책로 **더미 레이어** + 카테고리 필터·범례·장소 시트.
 - **실시간 산책(walk_tracking_screen).** **더미 시뮬레이션**(서울숲 고정 좌표 루프를 타이머로 한 점씩 그림) + 경로 폴리라인 + 라이브 스탯(시간/거리).
@@ -93,28 +101,119 @@
 
 ---
 
-## M2.5 — 가족 케어 & 채팅
+## M2.5 — 가족 그룹 & 케어 공유
 
-**목표.** 반려는 혼자가 아니라 **가족이 함께** 돌본다. 가족 간 케어 공유로 이중 급여(밥 두 번)·산책 누락을 막고, 앱의 일일 사용 이유(리텐션)를 만든다.
+**목표.** 반려는 혼자가 아니라 **가족이 함께** 돌본다. 케어 공유로 이중 급여(밥 두 번)·산책 누락을 막고 앱을 매일 열 이유를 만든다. 그리고 뒤따르는 모든 다인(多人) 기능이 딛고 설 **"방과 멤버십"** 을 여기서 세운다.
 
 **작업**
 
-- **가족 그룹.** 그룹 생성·초대코드로 참여·멤버 목록 — `family_group(id, name, invite_code, created_at)` / `group_member(id, group_id FK, user_id FK, role[owner/member], joined_at)`. API: `POST /api/groups`(생성) · `POST /api/groups/join`(초대코드) · `GET /api/groups/me`(내 그룹+멤버).
-- **오늘의 케어 공유.** 물 갈아주기/밥/산책 여부를 누가·언제 했는지 공유 — 기존 care_log 계획 확장: `care_log(id, dog_id FK, group_id FK nullable, type[water/meal/walk/med/vet], done_by(user_id), occurred_at, memo)`. API: `GET/POST /api/groups/{groupId}/care-logs`(오늘 케어 조회/기록).
-- **산책 시 주의사항.** 가족 공유 메모 — `walk_note(id, group_id FK, body, created_at)` 또는 그룹의 공유 메모. API: `GET/PUT /api/groups/{groupId}/walk-notes`.
-- **가족 채팅.** 그룹 채팅 — `chat_message(id, group_id FK, user_id FK, body, created_at)`. API: `GET/POST /api/groups/{groupId}/messages`(커서 페이지네이션). **MVP는 폴링**, 실시간(WebSocket/STOMP)은 post-MVP.
-- **프론트.** 홈 "오늘의 케어" 카드 · `family_screen`(멤버·초대코드·케어 현황·주의사항·채팅 진입) · `family_chat_screen`. 도메인 SSOT(`lib/v2/domain/pet.dart`)에 `CareType`/`CareTask`/`kCareToday`/`FamilyMember`/`kFamilyMembers`/`kFamilyInviteCode`/`kWalkNotes`/`ChatMessage`/`kChatMessages` 추가. 더미(로컬 상수)로 선행 구현 가능 — 백엔드 연동 전에 UX 확정.
+- **방·멤버십·초대 3테이블.** `chat_room(origin_kind, origin_ref, title, last_seq)` · `chat_room_member(room_id, user_id, role, last_read_seq, removed_at, rejoin_blocked)` · `chat_room_invite(room_id, code, expires_at, max_uses, used_count, revoked_at)`. 이름은 `chat_` 인데 하는 일은 "방과 멤버십" 이라 채팅(M2.6)보다 먼저 태어난다. **chat 경계 밖으로 나가는 FK 는 0개다** — 근거는 [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다). API: `POST /api/chat/rooms/{roomId}/invites` · `DELETE /api/chat/rooms/{roomId}/invites/{code}` · `POST /api/chat/invites/{code}/join`.
+- **가족 그룹.** 그룹 생성·초대코드로 참여·멤버 목록 — `family_group(id, name, created_at)`. **초대코드는 `chat_room_invite` 로 나가고 `group_member` 는 만들지 않는다.** 방이 `origin_kind`/`origin_ref` 쌍으로 그룹을 불투명하게 가리키고, `UNIQUE(origin_kind, origin_ref)` 가 같은 그룹에 방이 둘 생기는 것을 DB 수준에서 막는다. API: `POST /api/groups`(생성) · `GET /api/groups/me`(내 그룹+멤버).
+- **오늘의 케어 공유.** 물 갈아주기/밥/산책 여부를 누가·언제 했는지 공유 — `care_log(id, dog_id FK, group_id FK nullable, type[water/meal/walk/med/vet], done_by(user_id), occurred_at, memo)`. API: `GET/POST /api/groups/{groupId}/care-logs`.
+- **산책 시 주의사항.** 가족 공유 메모 — `walk_note(id, group_id FK, body, created_at)`. API: `GET/PUT /api/groups/{groupId}/walk-notes`.
+- **프론트.** 홈 "오늘의 케어" 카드 · `family_screen`(멤버·초대코드·케어 현황·주의사항·채팅 진입). 도메인 SSOT(`lib/v2/domain/pet.dart`)에 `CareType`/`CareTask`/`kCareToday`/`FamilyMember`/`kFamilyMembers`/`kFamilyInviteCode`/`kWalkNotes` 가 이미 더미 상수로 있다 — UX 는 확정돼 있고 남은 것은 서버 연동이다.
 - UI/UX는 기존 바이브 유지 — AuroraBackground + GlassCard, 따뜻한 그라데이션(#FFA96B→#FF7E8A), Pretendard, Fluent Emoji 톤.
 
 **산출물**
 
-- 가족 그룹 생성/참여(초대코드), 오늘의 케어 공유 카드, 산책 주의사항 메모, 폴링 기반 가족 채팅.
+- 방·멤버십·초대 3테이블, 가족 그룹 생성/참여, 초대코드 발급·회수·재발급, 오늘의 케어 공유 카드, 산책 주의사항 메모.
 
-**완료 기준(DoD).** 두 계정이 한 그룹에 속해 오늘의 케어(물/밥/산책)를 서로 확인·기록하고, 가족 채팅으로 메시지를 주고받는다.
+**완료 기준(DoD).** 두 계정이 초대코드로 한 가족에 묶여 오늘의 케어(물·밥·산책)를 서로 확인·기록한다. 방장이 코드를 재발급하면 이전 코드가 즉시 막히되 기존 멤버는 그대로 남는다. `ChatBoundaryArchitectureTest`(chat 패키지 엔티티에 chat 밖 연관 0개)가 초록불이다.
 
-**post-MVP.** 친구 추가(가족 외), 케어 알림/리마인더, 케어 히스토리 통계, 실시간 푸시.
+**post-MVP.** 친구 추가(가족 외), 케어 알림/리마인더, 케어 히스토리 통계.
 
-**의존.** 그룹·케어·채팅 모두 사용자 계정이 전제 → M2(로그인) 이후. M3와 병렬 진행 가능하며, 프론트 더미 UI는 M2 이전에도 선행 가능.
+**의존.** 사용자 계정이 전제 → M2(로그인) 이후. M3와 병렬 진행 가능하다.
+
+---
+
+## M2.6 — 채팅 (폴링)
+
+**목표.** 이미 만들어져 있는 채팅 화면에 서버를 붙인다. 가족 방과 산책 크루 방이 **같은 코드**로 돈다 — 방 종류는 `tag`(=`origin_kind`)로만 갈린다.
+
+**작업**
+
+- **`chat_message` 와 방별 `room_seq`.** `chat_message(id, room_id, room_seq, sender_user_id, sender_name, content_type, body, created_at, deleted_at)` + `UNIQUE (room_id, room_seq)`. **`id` AUTO_INCREMENT 를 커서로 쓰지 않는다** — 배정 시점과 가시성 시점이 달라 `afterId` 폴링이 메시지를 영구히 건너뛴다. 발급은 `UPDATE chat_room SET last_seq = LAST_INSERT_ID(last_seq + 1)` 이고 **메시지 INSERT 와 같은 트랜잭션**이다.
+- **엔드포인트 4종.** `GET /api/chat/rooms`(방 목록·미읽음) · `GET|POST /api/chat/rooms/{roomId}/messages`(`afterSeq` 델타 / `clientMsgId` 멱등 전송) · `POST /api/chat/rooms/{roomId}/read`(읽음 워터마크, 단조 증가) · `DELETE /api/chat/messages/{messageId}`(소프트 삭제). 멤버 확인은 서비스 경계의 `requireMember(roomId, userId)` 한 곳이고, 남의 방 id 로 403 이 나오는 통합 테스트를 함께 넣는다.
+- **미읽음은 세지 않고 뺀다** — `room.last_seq − member.last_read_seq`. 읽음 표(`chat_message_read`)를 만들지 않는다. 추가 쿼리가 0이다.
+- **rate limit 버킷과 메트릭.** 폴링 경로를 `ApiRateLimitFilter.resolveRule` 의 새 버킷으로 등록한다(표에 없는 경로는 지금 무제한이다). `chat.poll{result}`·`/api/chat/**` p95·`hikaricp_connections_pending` 기준선을 **도입 전에** 찍어 둔다 — M2.9 트리거가 이 셋을 읽는다.
+- **프론트.** `chat_list_screen`·`family_chat_screen` 을 서버에 붙인다 — 적응형 폴링 간격, 낙관적 전송(+`clientMsgId` 재시도), 방 만들기·초대코드 참여. 폴링 호출에 `.timeout()` 을 반드시 단다.
+
+**산출물**
+
+- `chat_message` 테이블, 채팅 API 4종, 방 목록·미읽음 뱃지가 실데이터로 도는 채팅 탭, 채팅 전용 rate limit 버킷과 메트릭 3종.
+
+**완료 기준(DoD).** 같은 방의 두 계정이 메시지를 주고받고, 방 목록의 미읽음 뱃지가 실제 미읽음과 일치한다. 한쪽이 폴링을 30초 끊었다 다시 붙여도 그 사이 메시지를 하나도 놓치지 않는다. 도입 전 기준선 대비 `hikaricp_connections_pending` 이 1분 이상 0을 넘지 않는다.
+
+**의존.** M2.5 가 하드 전제다 — 방이 있어야 메시지를 붙인다.
+
+---
+
+## M2.7 — 채팅 안전 & 스토어 요건
+
+**목표.** 채팅을 켠 채로 스토어 심사를 통과할 수 있게 만든다. 이건 제품 판단이 아니라 **스토어가 강제하는 요건**이다.
+
+**작업**
+
+- **신고.** 단위는 메시지이고 한 번에 최대 3개. 서버가 `room_id`·`room_seq`·발신자·**본문 사본**·시각·유형을 스냅샷으로 남기고 **앞뒤 각 5개의 `room_seq` 범위**를 함께 기록한다 — 원본 참조만 하면 지워졌을 때 판단이 불가능하다. 신고자는 익명이고 피신고자에게 알림이 가지 않는다.
+- **차단은 가리기다.** `chat_block(blocker_id, blocked_id)` 한 장을 두고 그 사람의 **과거·미래 메시지를 모두 접어서** 내려준다. 삭제가 아니다 — 다른 사람 화면에는 그대로 남는다. **자동 차단은 하지 않는다**(체크박스, 기본값 꺼짐) — 가족방에서 되돌릴 수 없는 사고가 된다.
+- **강퇴와 재입장 금지.** 방장(`role = OWNER`)만 한다. 멤버 행을 **지우지 말고** `removed_at`·`removed_by` 를 찍는다 — 미읽음이 그 행의 `last_read_seq` 뺄셈이라 지우면 되돌릴 수 없다. 강퇴당한 계정은 유효한 초대코드로도 못 들어온다.
+- **만 14세 미만 게이트.** `users.age_group enum('OVER14','UNDER14')` 은 `01_schema.sql` 에 **이미 있고 아무 데도 쓰이지 않는다.** 채팅을 켜는 시점이 그 값을 쓰는 지점이다 — 방 생성과 초대코드로 새 방 참여를 막고 **가족방만 예외로 허용**한다. 방 안 대화는 건드리지 않는다.
+- **스토어 요건 나머지.** 설정 화면 하단에 운영자 연락처 고정, 채팅 첫 진입에 이용약관·운영정책 동의. 그리고 탈퇴 화면(`account_delete_screen.dart`)의 "모든 데이터가 삭제되며 복구할 수 없습니다" 와 `privacy_ko.md` 3항을 **채팅 본문은 남는다**는 사실에 맞게 고친다.
+
+**산출물**
+
+- 신고·차단·강퇴 API 와 화면, 신고 스냅샷 저장소, 14세 미만 게이트, 운영자 연락처·약관 동의, 탈퇴 문구 정합.
+
+**완료 기준(DoD).** 신고한 메시지가 원본이 지워진 뒤에도 스냅샷으로 조회된다. 가린 사람의 메시지가 과거·미래 모두 접힌다. 강퇴당한 계정이 유효한 초대코드로도 재입장하지 못한다. `age_group='UNDER14'` 계정이 가족방 외의 방을 만들거나 참여할 수 없다. 탈퇴 화면과 개인정보처리방침이 "채팅 본문은 남는다"를 말한다.
+
+**의존.** M2.6 이후. M2.8(푸시)과 서로 병렬이다 — 붙여 두면 애플 계정 대기가 신고 기능을 막는다. **그리고 이것이 M5의 하드 전제다.**
+
+---
+
+## M2.8 — 알림 (푸시)
+
+**목표.** 앱이 꺼져 있어도 메시지와 케어가 도착한 것을 안다.
+
+**작업**
+
+- **지금 저장소에 푸시가 0이다.** `google-services.json`·`GoogleService-Info.plist` 둘 다 없고, `pubspec.yaml` 에 firebase 의존성 0건, `build.gradle` 에 firebase-admin 0건, 발송 코드 0줄이다. 그러니 첫 작업은 기능이 아니라 **Firebase 프로젝트·APNs 키·애플 개발자 계정** 이다.
+- **`device_token` 테이블과 등록/해지 경로.** 로그아웃·탈퇴에서 토큰을 지운다.
+- **발송은 커밋 뒤 비동기.** 메시지 저장 트랜잭션 안에서 FCM 을 호출하지 않는다 — 락을 쥔 채 외부 호출을 하면 그 방의 모든 전송이 최대 `innodb_lock_wait_timeout`(기본 50초) 막힌다.
+- **방별 음소거**와 알림 설정 화면.
+
+**산출물**
+
+- FCM/APNs 연동, `device_token` 관리, 메시지·케어 알림 발송 경로, 방별 음소거.
+
+**완료 기준(DoD).** 앱을 완전히 종료한 상태에서 다른 계정이 보낸 메시지가 Android·iOS **실기기**에 알림으로 도착한다. 방을 음소거하면 그 방만 오지 않는다. 메시지 저장 응답 시간이 FCM 지연에 영향받지 않는다.
+
+**의존.** M2.6 이후. M2.7과 서로 병렬.
+
+---
+
+## M2.9 — 실시간 (소켓) · 트리거 기반
+
+**목표.** 폴링이 실제로 부족하다는 **실측**이 나왔을 때만 착수한다. 이 마일스톤은 "할 일" 이 아니라 **"조건이 충족되면 할 일"** 이다.
+
+**착수 트리거(하나라도 넘으면)**
+
+- `chat.poll{result=empty}` 비율이 **0.5 밑**으로 내려간다.
+- `/api/chat/**` p95 가 **500ms** 를 5분 넘긴다.
+- `hikaricp_connections_pending` 이 **1분 이상** 0을 넘는다. 이건 동시에 롤백 조건이기도 하다.
+
+**작업**
+
+- **nginx 가 코드보다 먼저 막힌다.** `nginx-production-template.conf` 의 location 6개가 전부 `proxy_set_header Connection "";` 이고 `Upgrade` 헤더도 `map $http_upgrade $connection_upgrade` 블록도 없다. 이 상태에서 101 Switching Protocols 은 업스트림에 닿지 못한다 — 지금 소켓을 넣으면 **로컬에서만 초록불**이다. SockJS 폴백으로 덮지 않는다.
+- **받기만 소켓, 보내기는 HTTP.** 전송이 HTTP 로 남아야 M2.6의 멱등키와 rate limit 이 그대로 산다. 소켓이 끊기면 폴링으로 되돌아간다.
+- **인스턴스 지역 상태가 여기서 처음 생긴다.** WebSocket 세션 자체가 그렇다. 인스턴스를 늘리는 날 함께 옮길 목록은 `backend/TODO/refresh-token-redis.md` §3 에 있다.
+
+**산출물**
+
+- nginx 업그레이드 경로, 수신 전용 소켓 핸들러, 소켓↔폴링 폴백, 소켓 테스트 베이스.
+
+**완료 기준(DoD).** 두 기기가 같은 방에 있을 때 한쪽이 보낸 메시지가 상대 화면에 1초 안에 나타난다. 소켓을 강제로 끊으면 폴링으로 되돌아가 메시지를 하나도 놓치지 않는다. **운영 nginx 를 거쳐 실기기에서** 확인한다 — 로컬 초록불은 DoD 가 아니다.
+
+**의존.** M2.6 이후. **트리거가 안 걸리면 열지 않고, 열지 않은 채로 M5에 들어가도 된다.**
 
 ---
 
@@ -174,6 +273,7 @@
 - **권한 정책.** 위치(특히 백그라운드), 사진 접근 사유 명문화 — Play/App Store 심사 대응(M1 리스크 정산).
 - **CI/CD.** 빌드 자동화, 버전/`versionCode` 관리(현재 `version: 2.0.0+1`), Android AGP 8.11.1 / Kotlin 2.2.20 / Gradle 8.13 / compileSdk 36 / minSdk 23 / Java 17.
 - **품질.** 크래시/에러 모니터링, 성능(지도·트래킹 프레임), KTO 프록시 호출 한도 모니터링.
+- **UGC 심사 요건(M2.7 정산).** 채팅을 켠 채로 심사에 넣으려면 Apple App Store Review Guideline 1.2(필터링 · 신고 창구와 적시 대응 · 차단 · 공개 연락처, https://developer.apple.com/app-store/review/guidelines/#user-generated-content)와 Google Play UGC 정책(인앱 신고·차단, https://support.google.com/googleplay/android-developer/answer/9876937)이 전부 동작해야 한다. **M2.7이 닫히지 않았으면 채팅을 끄고 심사에 넣거나 심사를 미룬다.**
 - **베타 → 정식.** 내부 테스트 → 클로즈드 베타 → 프로덕션 단계 출시.
 
 **산출물**
@@ -191,15 +291,23 @@ flowchart LR
     M0["M0 · 더미 UX 완성<br/>(현재)"] --> M1["M1 · 실위치+트래킹<br/>실데이터"]
     M1 --> M2["M2 · 로그인<br/>(카카오/구글)"]
     M1 --> M3["M3 · 병원/펫샵/산책로<br/>실데이터 + 백엔드 프록시"]
-    M2 --> M25["M2.5 · 가족 케어<br/>& 채팅"]
+    M2 --> M25["M2.5 · 가족 그룹<br/>& 케어 공유"]
+    M25 --> M26["M2.6 · 채팅<br/>(폴링)"]
+    M26 --> M27["M2.7 · 채팅 안전<br/>& 스토어 요건"]
+    M26 --> M28["M2.8 · 알림<br/>(푸시)"]
+    M26 -.실측 트리거.-> M29["M2.9 · 실시간<br/>(소켓)"]
     M25 --> M4["M4 · 확장 로그<br/>(건강/식사/병원)"]
     M3 --> M4
     M4 --> M5["M5 · 출시"]
+    M27 --> M5
+    M28 --> M5
 
     classDef done fill:#57C98A,stroke:#2E8B57,color:#fff;
     classDef todo fill:#FFE7D6,stroke:#FF7E8A,color:#5b3a2e;
+    classDef gated fill:#F2F2F2,stroke:#9A9A9A,color:#555,stroke-dasharray: 4 3;
     class M0 done;
-    class M1,M2,M25,M3,M4,M5 todo;
+    class M1,M2,M25,M26,M27,M28,M3,M4,M5 todo;
+    class M29 gated;
 ```
 
-M2(로그인)와 M3(실데이터/백엔드)는 M1 이후 **병렬 진행 가능**하며, M2 뒤에 M2.5(가족 케어 & 채팅)가 이어져 두 축이 M4에서 합류한다.
+M2(로그인)와 M3(실데이터/백엔드)는 M1 이후 **병렬 진행 가능**하며, M2 뒤에 2.x 밴드(가족·채팅)가 이어진다. M4는 M2.5의 `care_log`와 M3의 실데이터만 전제로 하므로 채팅 밴드가 늦어져도 막히지 않는다. **M2.7(채팅 안전)만은 M5의 하드 전제다** — 채팅을 켠 채로는 스토어 UGC 요건 없이 심사에 들어갈 수 없다. M2.9(소켓)를 점선으로 그린 것은 실측 트리거가 걸리기 전에는 열지 않는다는 뜻이다.

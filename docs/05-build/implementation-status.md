@@ -4,7 +4,7 @@
 
 - **기준 커밋/시점**: `app/lib/v2/` 현재 상태
 - **엔트리**: `app/lib/main.dart` → go_router(`app/lib/app/app_router.dart`) → `/home` = `v2/screens/main_shell.dart`(`MainShell`)
-- **네비**: 플로팅 글래스 알약 5탭 — 홈 / 지도 / **[산책 기록 FAB]** / 커뮤니티 / 통계
+- **네비**: 플로팅 글래스 알약 5탭 — 홈 / 지도 / **[산책 기록 FAB]** / 커뮤니티 / **채팅** (`main_shell.dart:108-111`). 통계(`insight_screen`)는 탭이 아니라 `me_screen` 에서 진입한다
 - **상태 표기**: `구현완료`(UI+동작) · `실연동`(외부 데이터 연동됨) · `더미`(하드코딩·시뮬) · `미구현`
 
 ---
@@ -23,6 +23,8 @@
 | 로그인 | ✅ 구현완료 (카카오·구글) | 소셜 로그인 화면 · 1회용 코드 교환 · 토큰 보관 · 401 자동 갱신 · 서버 로그아웃 |
 | 실위치 | ❌ 미구현 | 서울 시청 좌표 고정 |
 | 백엔드 반려 API | ❌ 미구현 | KTO 외 앱↔백엔드 연동 없음 |
+| 채팅 | 🟡 더미 | 방 목록·방별 대화·가족 화면 3개. 서버 없음. 도메인 상수 `kChatRooms`(방 2개) |
+| 채팅 서버 | ❌ 미구현 | `chat_room`·`chat_room_member`·`chat_message` 어느 것도 없음. `01_schema.sql` 27개 테이블에 채팅 없음 (ADR-0011 · #72) |
 
 ---
 
@@ -41,6 +43,9 @@
 | **산책 기록 작성** | `create_screen.dart` `CreateScreen` | 🟡 UI만 | 장소·날짜·거리/시간 스텝퍼·메모 입력, 저장 버튼 | 저장 = 스낵바 + pop만(리스트/백엔드에 미반영), 사진 첨부 "곧 지원", 날짜 선택 비동작 |
 | **내 산책 기록** | `myrecords_screen.dart` `MyRecordsScreen` | ✅ 구현완료 (더미) | 이번 달 요약, 기록하기 버튼, 전체 산책 카드 리스트 | `kWalks` 하드코딩 |
 | **위치 찍기** | `pin_picker_screen.dart` `PinPickerScreen` | 🟡 더미 | 스타일라이즈드 지도 탭 → 좌표 기록, pop 반환 | 실지도 아님(장식용 배경). 현재 플로우에서 호출부 없음 |
+| **채팅 (방 목록)** | `chat_list_screen.dart` `ChatListScreen` | 🟡 더미 | 방 카드 리스트(이름·태그·마지막 메시지·시각·미읽음 뱃지·멤버 수), 기본방 표식 | `kChatRooms` 하드코딩(방 2개: `우리 가족`·`서울숲 산책 크루`). 방 생성·검색 없음 |
+| **채팅 (방 안)** | `family_chat_screen.dart` `FamilyChatScreen` | 🟡 더미(로컬 동작) | 말풍선 목록(내 것/남의 것), 입력·전송이 로컬 리스트에 추가됨 | 화면을 나갔다 오면 초기화. 서버 미연동. 읽음 처리·재전송·페이지네이션 없음 |
+| **가족** | `family_screen.dart` `FamilyScreen` | 🟡 더미 | 멤버 목록, 초대코드, 오늘의 케어 현황, 산책 주의사항, 채팅 진입 | `kFamilyMembers`/`kFamilyInviteCode`/`kCareToday`/`kWalkNotes` 전부 하드코딩 |
 
 ---
 
@@ -87,6 +92,23 @@
 | 로그인/소셜 | ✅ 구현완료 | `v2/screens/login_screen.dart`(카카오·구글). `flutter_web_auth_2` 로 `/oauth2/authorization/{provider}?state=` 를 열고, 딥링크의 1회용 `code` 를 `POST /auth/oauth/{provider}/callback` 으로 교환한다(#14). 공급자 집합은 [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) |
 | 북마크 | ❌ 미구현 | 스낵바만 |
 
+### 3.5 채팅
+
+**서버 설계의 입력이 되는 것은 아래 표입니다.** 도메인 SSOT 는 `app/lib/v2/domain/pet.dart` 이고, 화면이 이미 요구하는 필드가 곧 계약입니다. 자세한 근거는 [ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72).
+
+| 클라 모델 | 필드(실측) | 서버에서 무엇이 되는가 |
+| --- | --- | --- |
+| `ChatRoom`(`pet.dart:413`) | `name` · `tag`('가족'/'산책 크루') · `color` · `icon` · `messages` · `unread` · `memberCount` · `isDefault` | `tag` → `chat_room.origin_kind`. `unread` → `room.last_seq − member.last_read_seq` **뺄셈**(캐시 아님). `memberCount` → 방 목록 쿼리의 집계. `color`·`icon` 은 클라 표현이라 서버로 가지 않는다 |
+| `ChatMessage`(`pet.dart:381`) | `sender`(String) · `text` · `time`(**표시 문자열** `'08:11'`) · `mine`(bool) | `sender` → `sender_name` 스냅샷. `mine` 은 서버가 주지 않고 `senderUserId == 내 id` 로 클라가 계산한다. ⚠️ **`time` 이 표시 문자열이라 `afterSeq` 커서를 붙이려면 클라 모델부터 바뀐다** — `roomSeq`(int)와 `createdAt`(DateTime) 두 필드가 새로 필요하다 |
+
+| 기능 | 상태 | 비고 |
+| --- | --- | --- |
+| 방 목록·미읽음 뱃지 | 🟡 더미 | `unread` 가 상수. 서버에서는 뺄셈 |
+| 메시지 송수신 | 🟡 로컬 | 폴링·재시도·멱등키(`clientMsgId`) 전부 없음 |
+| 읽음 처리 | ❌ 미구현 | `lastReadSeq` 개념 자체가 클라에 없음 |
+| 신고·차단·강퇴 | ❌ 미구현 | 스토어 UGC 심사 요건(Apple 1.2 · Google Play UGC). M2.7 |
+| 푸시 알림 | ❌ 미구현 | 저장소 전체에 푸시 자산 0. M2.8 |
+
 ---
 
 ## 4. 아키텍처/기술 스택 실측
@@ -112,6 +134,7 @@
 4. **백엔드 반려 API + KTO 프록시/캐싱**: 직접 호출 → Spring Boot 프록시(1000콜/일 회피·캐시), 커뮤니티/프로필 CRUD.
 5. ~~**로그인**~~: 카카오·구글 소셜 로그인과 `users` 연결은 #11·#12·#14 에서 실었다. 남은 것은 **로그인 사용자에 귀속되는 데이터**(강아지 프로필·산책 기록·커뮤니티 글)의 서버화다.
 6. **커뮤니티 글쓰기**: 작성 화면·서버 반영.
+7. **채팅 서버화**: 화면 셋(`chat_list_screen`·`family_chat_screen`·`family_screen`)이 이미 있고 탭 3번을 차지하는데 서버가 없다. 방·멤버십·메시지 3테이블 + 폴링 API(M2.5~M2.6). **여기서 `id` 커서를 쓰면 안 된다** — 이유는 [ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72).
 
 > 참조: [ERD](../03-database/erd.md), [외부 데이터 연동](../02-architecture/external-data.md) (경로는 문서 세트 기준, 없으면 생성 예정)
 
