@@ -103,6 +103,18 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/oauth2/authorization/")) {
             return new Rule("auth", rateLimit.getAuthMaxRequests());
         }
+        // ── 채팅 초대·참여 경로는 아직 표에 없다 — 즉 **무제한**이다 (이슈 #75 · 📌 #86 원칙 4)
+        //
+        // #75 가 `POST /api/chat/rooms/{roomId}/invites` · `DELETE .../invites/{code}` ·
+        // `POST /api/chat/invites/{code}/join` 셋을 열었는데, 여기에 분기를 더하지 않았다.
+        // #75 의 NOTE 가 "코드 추측 공격을 견디는지는 여기서 재현하지 않고 M2.6 의 rate limit
+        // 이슈에서 참여 경로에 버킷을 붙여 다룬다" 고 정했고 그 판단을 따랐다.
+        //
+        // **미룬 것이지 안전한 것이 아니다.** 표에 없는 경로는 한도가 0 이 아니라 무한이고
+        // (resolveRule 이 null 을 돌려주면 필터가 그대로 통과시킨다 — `/auth/signup` 이
+        // 그렇게 무제한이었다), 참여 경로는 인증만 있으면 코드를 무한히 던져 볼 수 있는
+        // 자리다. 지금 그것을 견디는 것은 초대코드의 길이 하나뿐이다(50비트,
+        // `InviteCodeGenerator`). M2.6 에서 이 자리에 `chat-invite` 버킷을 넣는다.
         if (path.startsWith("/api/curation/")) {
             return new Rule("curation", rateLimit.getCurationMaxRequests());
         }
