@@ -932,12 +932,21 @@ paths:
       tags: [Groups]
       summary: 오늘의 케어 조회
       description: |
-        그룹의 케어 기록(물 갈아주기/밥/산책 등)을 조회합니다. 기본은 오늘(KST) —
-        누가·언제 했는지 가족이 함께 봅니다.
+        그룹의 케어 기록(물/밥/산책/투약/병원)을 조회합니다. 기본은 **오늘**이고, 누가·언제
+        했는지를 가족이 함께 봅니다. 이른 것부터 오름차순입니다.
+
+        **요청자가 그 그룹의 방 멤버가 아니면 403 입니다.** 멤버십의 유일한 원본은
+        `chat_room_member` 이고([ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72)
+        결정 1) `family_group` 에는 사용자 컬럼 자체가 없습니다. 없는 `groupId` 도 404 가
+        아니라 403 입니다 — 404 로 답하면 id 를 훑어 "있는 가족/없는 가족" 을 가려낼 수 있고,
+        가족의 존재 여부는 그 가족에게만 의미가 있는 정보입니다.
+
+        **"오늘" 은 서버 시계의 로컬 날짜입니다.** 지금 운영·개발 모두 KST 라 지금은 KST 입니다.
+        기록 시각(`occurredAt`)도 같은 시계에서 나오므로 둘이 어긋나지 않습니다.
       parameters:
         - name: date
           in: query
-          description: 조회 날짜(생략 시 오늘, KST)
+          description: 조회 날짜(생략 시 오늘)
           schema: { type: string, format: date, example: "2026-07-10" }
         - name: type
           in: query
@@ -951,12 +960,24 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/CareLog' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '401': { $ref: '#/components/responses/Unauthorized' }
     post:
       tags: [Groups]
       summary: 케어 기록 남기기
-      description: "물/밥/산책 등을 기록합니다. done_by(수행자)는 토큰의 사용자로 서버가 기록합니다."
+      description: |
+        물/밥/산책 등을 기록합니다. **수행자(`doneBy`)와 시각(`occurredAt`)은 서버가 정합니다** —
+        본문으로 받으면 남의 이름으로 기록을 남기거나 오늘 기록을 어제로 밀 수 있고, 그러면
+        화면의 "아빠가 줬습니다" 를 믿을 수 없게 됩니다.
+
+        **같은 종류를 오늘 이미 누가 찍었어도 거절하지 않습니다.** 두 번째가 실수인지 사실인지
+        서버는 모릅니다 — 아침·저녁 두 번 주는 집에서 두 번째 밥은 정상이고, 막으면 실제로 한
+        일이 기록에서 사라집니다. 확인 문구("오늘 14:20 아빠가 밥을 줬습니다. 그래도
+        기록할까요?")는 **앱이 `GET` 응답을 보고 만듭니다** — 그 목록에 답이 이미 들어 있는데
+        여기에 "이미 있음" 필드를 더하면 같은 사실의 출처가 둘이 됩니다.
+
+        `group-write` 버킷(rate limit)에 등록된 경로입니다.
       requestBody:
         required: true
         content:
@@ -971,50 +992,62 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /api/groups/{groupId}/walk-notes:
     parameters:
       - $ref: '#/components/parameters/GroupId'
     get:
       tags: [Groups]
-      summary: 산책 주의사항 조회(가족 공유 메모)
+      summary: 산책 주의사항 조회(가족 공유 메모 한 장)
+      description: |
+        그룹의 산책 주의사항을 돌려줍니다. **그룹당 한 장**이라 배열이 아니라 객체입니다.
+
+        **아직 아무도 안 썼으면 404 가 아니라 `body: ""` 입니다.** "아직 없다" 는 정상 상태이고,
+        404 로 답하면 앱이 오류 화면과 빈 화면을 상태 코드로 갈라야 해서 네트워크 실패가 같은
+        자리에서 만납니다. 그때 `updatedBy`·`updatedAt` 은 `null` 입니다.
+
+        인가는 `care-logs` 와 같습니다 — 그 그룹의 방 멤버가 아니면 403.
       responses:
         '200':
-          description: 주의사항 목록
+          description: 주의사항 한 장(없으면 빈 본문)
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/WalkNote' }
+              schema: { $ref: '#/components/schemas/WalkNote' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '401': { $ref: '#/components/responses/Unauthorized' }
     put:
       tags: [Groups]
       summary: 산책 주의사항 전체 교체
-      description: 그룹의 공유 메모를 통째로 교체합니다(간단한 MVP 규약).
+      description: |
+        메모를 통째로 바꿉니다. 있으면 고치고 없으면 만듭니다. 본문·고친 사람·고친 시각이
+        **함께** 바뀝니다.
+
+        **본문은 `{"body": "..."}` 하나입니다.** 2026-08 이전 계약은 `{"notes": ["...", "..."]}`
+        목록 전량 교체였는데, 그러면 PUT 때마다 행을 지우고 다시 넣게 되어 행마다 붙는
+        `updatedBy` 가 아무것도 가리키지 않습니다. 이슈 #76 이 표를 **그룹당 한 장**으로
+        정하면서 계약도 맞췄습니다. 앱이 줄 단위 목록으로 그리는 것은 화면의 표현이고, 보낼
+        때는 편집된 전체 본문을 보냅니다.
+
+        빈 문자열은 "다 지웠다" 는 정상 요청입니다 — 행을 지우지 않습니다. 지우면 "한 번도 안
+        쓴 그룹" 과 구별되지 않습니다.
+
+        `group-write` 버킷(rate limit)에 등록된 경로입니다.
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [notes]
-              properties:
-                notes:
-                  type: array
-                  items: { type: string }
-                  example: ["횡단보도 앞에서 오토바이에 짖어요", "저녁 산책은 목줄 짧게"]
+            schema: { $ref: '#/components/schemas/WalkNoteInput' }
       responses:
         '200':
-          description: 교체 후 최신 목록
+          description: 교체 후 최신 한 장
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/WalkNote' }
+              schema: { $ref: '#/components/schemas/WalkNote' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   # ─────────────────────────── Chat ───────────────────────────
   /api/chat/rooms:
@@ -1919,31 +1952,52 @@ components:
       enum: [water, meal, walk, med, vet]
       description: 물 갈아주기/밥/산책/약/병원
 
+    CareDoer:
+      type: object
+      description: |
+        케어를 한 사람 / 주의사항을 고친 사람.
+
+        이름만으로는 부족해서 `userId` 를 함께 싣습니다 — 앱은 "아빠가 줬습니다" 와 "내가
+        줬습니다" 를 갈라 그리고, 그 판정은 닉네임이 아니라 id 로 합니다(닉네임은 겹칠 수도
+        바뀔 수도 있습니다).
+      required: [userId, nickname]
+      properties:
+        userId: { type: integer, format: int64 }
+        nickname:
+          type: string
+          description: 현재 닉네임. 없으면 이름, 그것도 없으면 `알 수 없음`
+          example: "보리엄마"
+
     CareLog:
       type: object
       description: "케어 기록(care_log): 누가·언제 어떤 케어를 했는지 가족과 공유."
       properties:
         id: { type: integer, format: int64 }
-        dogId: { type: integer, format: int64 }
+        dogId:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            대상 강아지. **지금은 항상 `null` 입니다** — `dog` 표가 정본 스키마에 없어서
+            (`docs/03-database/schema.md §3` 은 계획입니다) 서버가 검증할 수 있는 강아지 id 가
+            존재하지 않습니다. 필드를 미리 두는 것은 그 표가 생기는 날 앱이 스키마를 바꾸지
+            않아도 되게 하려는 것입니다.
         groupId: { type: [integer, "null"], format: int64, description: 가족 그룹(개인 기록이면 null) }
         type: { $ref: '#/components/schemas/CareType' }
-        doneBy:
-          type: object
-          description: 수행한 가족 구성원
-          properties:
-            userId: { type: integer, format: int64 }
-            nickname: { type: string, example: "보리엄마" }
+        doneBy: { $ref: '#/components/schemas/CareDoer' }
         occurredAt: { type: string, format: date-time }
-        memo: { type: [string, "null"], example: "사료 반 컵 + 습식 토핑" }
+        memo: { type: [string, "null"], maxLength: 500, example: "사료 반 컵 + 습식 토핑" }
 
     CareLogInput:
       type: object
-      required: [dogId, type]
+      description: |
+        필드가 둘뿐입니다. `dogId` 는 확인할 표가 없어서(위 `CareLog.dogId` 참조) 필수로 두면
+        앱이 더미 id 를 지어내야 하고, `occurredAt`·`doneBy` 는 서버가 정합니다 — 그 둘이 곧
+        "오늘 누가 했는지" 를 가르는 기준이라 클라이언트가 정하면 화면의 문구를 믿을 수 없게
+        됩니다. 지난 일을 나중에 적는 화면은 M4 입니다.
+      required: [type]
       properties:
-        dogId: { type: integer, format: int64 }
         type: { $ref: '#/components/schemas/CareType' }
-        occurredAt: { type: string, format: date-time, description: 생략 시 서버 현재 시각 }
-        memo: { type: string }
+        memo: { type: string, maxLength: 500 }
 
     ChatRoom:
       type: object
@@ -2071,9 +2125,34 @@ components:
 
     WalkNote:
       type: object
-      description: 산책 시 주의사항(walk_note — 가족 공유 메모)
+      description: |
+        산책 시 주의사항(`walk_note`) — **그룹당 한 장**입니다.
+
+        `id` 를 싣지 않습니다. 그룹당 한 장이라 그 id 로 갈 수 있는 경로가 없고, 아무 데도 못
+        쓰는 식별자를 두면 앱이 그걸 키로 삼습니다. 아직 아무도 안 쓴 그룹은 `body` 가 빈
+        문자열이고 `updatedBy`·`updatedAt` 이 `null` 입니다.
+      required: [groupId, body]
       properties:
-        id: { type: integer, format: int64 }
         groupId: { type: integer, format: int64 }
-        body: { type: string, example: "횡단보도 앞에서 오토바이에 짖어요" }
-        createdAt: { type: string, format: date-time }
+        body:
+          type: string
+          maxLength: 500
+          description: 메모 전문. 앱은 줄바꿈으로 나눠 목록처럼 그립니다
+          example: "횡단보도 앞에서 오토바이에 짖어요"
+        updatedBy:
+          oneOf:
+            - $ref: '#/components/schemas/CareDoer'
+            - type: "null"
+          description: 마지막으로 고친 사람. 아직 아무도 안 썼으면 null
+        updatedAt: { type: [string, "null"], format: date-time }
+
+    WalkNoteInput:
+      type: object
+      description: |
+        전체 교체 본문. 빈 문자열은 "다 지웠다" 는 정상 요청입니다.
+      required: [body]
+      properties:
+        body:
+          type: string
+          maxLength: 500
+          example: "횡단보도 앞에서 오토바이에 짖어요"

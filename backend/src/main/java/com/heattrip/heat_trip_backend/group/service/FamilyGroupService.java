@@ -67,8 +67,14 @@ public class FamilyGroupService {
     /** {@code family_group.name} · {@code chat_room.name} 의 컬럼 길이. 둘은 같아야 한다. */
     private static final int MAX_NAME_LENGTH = 50;
 
-    /** 탈퇴한 계정의 자리. 계약이 {@code ChatMessage.senderName} 에 쓰는 문구와 같다. */
-    private static final String WITHDRAWN_MEMBER = "알 수 없음";
+    /**
+     * 탈퇴한 계정의 자리 — {@code users} 행 자체가 없을 때 쓴다.
+     *
+     * <p>문자열을 여기 적지 않고 {@link User#UNKNOWN_DISPLAY_NAME} 을 가리키는 것이 요점이다.
+     * 이름을 고르는 규칙은 {@link User#displayName()} 하나이고(이슈 #76), 여기서 문구만 따로
+     * 적으면 같은 사람이 화면마다 다른 이름으로 보인다.
+     */
+    private static final String WITHDRAWN_MEMBER = User.UNKNOWN_DISPLAY_NAME;
 
     private final FamilyGroupRepository familyGroups;
     private final ChatRoomService chatRooms;
@@ -207,20 +213,11 @@ public class FamilyGroupService {
         List<Long> ids = members.stream().map(ChatMemberView::userId).toList();
         Map<Long, String> names = new LinkedHashMap<>();
         for (User user : users.findAllById(ids)) {
-            names.put(user.getId(), displayNameOf(user));
+            names.put(user.getId(), user.displayName());
         }
         return names;
     }
 
-    private static String displayNameOf(User user) {
-        if (user.getNickname() != null && !user.getNickname().isBlank()) {
-            return user.getNickname();
-        }
-        if (user.getName() != null && !user.getName().isBlank()) {
-            return user.getName();
-        }
-        return WITHDRAWN_MEMBER;
-    }
 
     /**
      * 이름 검증. <b>메시지에 입력값을 되싣지 않는다</b> — 이 문구는 그대로 응답 본문이 된다(#6).

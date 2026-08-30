@@ -133,6 +133,32 @@ public class ChatRoomService {
                 .toList();
     }
 
+    /**
+     * 이 사람이 이 방의 <b>살아 있는 멤버</b>인가 — 밖에서 인가를 물을 때 쓰는 자리다(이슈 #76).
+     *
+     * <h2>왜 이 메서드가 여기 있어야 하나</h2>
+     * <p>멤버십의 원본은 {@code chat_room_member} 하나다(ADR-0011 결정 1). 그래서 "이 사람이
+     * 이 가족의 케어 기록을 볼 수 있는가" 도 결국 이 표에 묻는 질문이다. 그런데
+     * {@code ChatBoundaryArchitectureTest §E} 가 chat 밖의 소스에서
+     * {@code chat.repository}·{@code chat.entity} 를 부르는 것을 막는다 — 그 테스트의 실패
+     * 메시지가 직접 이렇게 적었다: <b>"필요한 것이 지금 공개 표면에 없다면 메서드를 하나 더하는
+     * 것이 맞다 — 리포지토리를 꺼내 쓰는 것이 아니라."</b> 이 메서드가 그 한 줄이다.
+     *
+     * <p>{@link #liveMembers} 로도 같은 답을 낼 수 있지만, 그러면 부르는 쪽이 방 전체 멤버
+     * 목록을 받아 스스로 훑어야 한다 — 인가 판정이 호출부마다 한 벌씩 복사되고, 그중 하나가
+     * {@code removedAt} 을 빠뜨리면 강퇴된 사람이 계속 본다. 판정을 이 안에 둔다.
+     *
+     * <p><b>방이 없으면 이 메서드는 답할 수 없다.</b> 부르는 쪽이 {@link #findRoom} 으로 방을
+     * 먼저 찾고, 못 찾으면 그것도 "멤버 아님" 으로 다룬다 — {@link #requireOwner} 가 없는 방을
+     * 404 가 아니라 403 으로 다루는 것과 같은 이유다(방 존재 여부는 그 방 멤버에게만 의미가 있다).
+     */
+    @Transactional(readOnly = true)
+    public boolean isLiveMember(long roomId, long userId) {
+        return members.findByRoomIdAndUserId(roomId, userId)
+                .filter(member -> member.getRemovedAt() == null)
+                .isPresent();
+    }
+
     // ─────────────────────────── 초대 ───────────────────────────
 
     /**

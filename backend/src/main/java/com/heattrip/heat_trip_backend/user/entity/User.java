@@ -36,6 +36,13 @@ public class User {
     /** 기본 권한. DB 에 role 컬럼이 생기기 전에는 토큰 발급 때마다 하드코딩되던 값이다. (이슈 #7) */
     public static final String ROLE_USER = "ROLE_USER";
 
+    /**
+     * 이름을 알 수 없을 때 화면에 쓰는 자리. 계약이 {@code ChatMessage.senderName} 에 쓰는 문구와 같다.
+     *
+     * <p>탈퇴한 계정·닉네임과 이름이 모두 빈 계정이 여기로 온다.
+     */
+    public static final String UNKNOWN_DISPLAY_NAME = "알 수 없음";
+
     @Id // 이 필드가 엔티티의 기본 키임을 나타냄
     @GeneratedValue(strategy = GenerationType.IDENTITY) // 기본 키 생성 전략을 지정 (자동 증가)
     private Long id; // 사용자 ID(PK)
@@ -167,6 +174,24 @@ public class User {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 화면에 쓸 이름 — 닉네임 · 이름 · {@link #UNKNOWN_DISPLAY_NAME} 순서다.
+     *
+     * <p>이 규칙이 <b>여기 한 곳</b>에 있는 이유: 가족 멤버 목록({@code GroupMemberResponse.nickname})
+     * 과 케어 기록의 수행자({@code CareLogResponse.doneBy.nickname}) 가 같은 사람을 가리키는데
+     * 규칙이 갈리면 같은 화면 안에서 한 사람이 두 이름으로 보인다. 소셜 가입 경로는 닉네임을
+     * 설정하지 않을 수 있어서(#7) 이 폴백이 실제로 자주 발동한다.
+     */
+    public String displayName() {
+        if (nickname != null && !nickname.isBlank()) {
+            return nickname;
+        }
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+        return UNKNOWN_DISPLAY_NAME;
     }
 
     // Enum 선언 해놓기 : Gender는 세 값 중 하나만 가질 수 있음

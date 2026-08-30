@@ -132,6 +132,23 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         // 표에 없는 경로는 한도가 0 이 아니라 무한이고(resolveRule 이 null 을 돌려주면 필터가
         // 그대로 통과시킨다), 지금 그것을 견디는 것은 초대코드의 길이 하나뿐이다(50비트,
         // `InviteCodeGenerator`). M2.6 에서 이 자리에 `chat-invite` 버킷을 넣는다.
+        //
+        // ── 케어 쓰기 둘 (이슈 #76) ─────────────────────────────────────────
+        //
+        // POST care-logs 는 행을 하나 만들고, PUT walk-notes 는 **가족 모두가 보는 문서를
+        // 통째로** 바꾼다. 둘 다 그룹 안의 다른 사람 화면을 바꾸는 쓰기라 그룹 생성·초대
+        // 발급과 성격이 같고, 그래서 버킷을 새로 만들지 않고 group-write 를 함께 쓴다.
+        //
+        // **읽기 둘(GET care-logs · GET walk-notes)은 넣지 않았다.** GET /api/groups/me 가
+        // 표 밖인 것과 같은 판단이다. 미룬 것이지 안전한 것이 아니다 — 위에 적은 대로 표에
+        // 없는 경로는 한도가 무한이다. 이 둘은 홈 화면이 진입할 때마다 부르는 경로라
+        // 숫자를 정하려면 앱의 폴링 주기부터 정해야 하고, 그건 M2.6 이다.
+        if ("POST".equals(method) && path.matches("^/api/groups/\\d+/care-logs$")) {
+            return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
+        }
+        if ("PUT".equals(method) && path.matches("^/api/groups/\\d+/walk-notes$")) {
+            return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
+        }
         if (path.startsWith("/api/curation/")) {
             return new Rule("curation", rateLimit.getCurationMaxRequests());
         }
