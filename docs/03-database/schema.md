@@ -466,7 +466,7 @@ CREATE TABLE chat_room_member (
   last_read_seq  BIGINT      NOT NULL DEFAULT 0 COMMENT '미읽음 = room.last_seq − 이 값',
   removed_at     DATETIME    NULL COMMENT '강퇴 시각 — 행은 남긴다',
   removed_by     BIGINT      NULL COMMENT '강퇴한 방장(users.id) — FK 없음',
-  rejoin_blocked BOOLEAN     NOT NULL DEFAULT FALSE COMMENT '강퇴 = 재입장 금지',
+  rejoin_blocked BIT(1)      NOT NULL DEFAULT b'0' COMMENT '강퇴 = 재입장 금지',
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_member (room_id, user_id),
   KEY idx_chat_member_user (user_id),
@@ -475,6 +475,8 @@ CREATE TABLE chat_room_member (
   CHECK (role IN ('OWNER','MEMBER'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
+
+> **각주 — 왜 `BOOLEAN` 이 아니라 `BIT(1)` 인가.** Hibernate 는 `boolean` 필드를 `bit(1)` 로 만든다 — 정본(`backend/mysql/init/01_schema.sql`)도 `post-start/06_chat_rooms.sql` 도 그 타입으로 적혀 있다. MySQL 에서 `BOOLEAN` 은 `TINYINT(1)` 의 별칭이라, 이 절을 그대로 손으로 실행한 DB 는 정본과 **다른 타입**을 갖게 되고 prod 는 `ddl-auto=validate` 라 그 차이가 부팅에서 드러난다. 문서가 정본을 따라가는 자리다.
 
 > **각주 — CHECK 에 이름을 붙이지 않는다.** Hibernate 가 `@Enumerated(STRING)` 매핑에서 이 CHECK 를 스스로 만드는데 무명이라, MySQL 이 `chat_room_member_chk_1` 로 붙인다. 여기서만 `ck_chat_member_role` 이라고 이름을 주면 같은 내용의 제약이 두 개 생기거나(엔티티에 `@Check` 를 함께 달았을 때 — 실측), `mysql/init` 으로 세운 DB 와 `mysql/post-start` 로 세운 DB 의 제약 이름이 갈린다.
 
@@ -488,7 +490,7 @@ CREATE TABLE chat_room_member (
 | `last_read_seq` | `BIGINT` | NOT NULL, 기본 0 | `GREATEST`·`LEAST` 로만 갱신 — 뒤로 못 가고 `room.last_seq` 를 넘지 못한다 |
 | `removed_at` | `DATETIME` | NULL | 강퇴 시각 |
 | `removed_by` | `BIGINT` | NULL, **FK 없음** | 강퇴한 방장 |
-| `rejoin_blocked` | `BOOLEAN` | NOT NULL, 기본 FALSE | 유효한 초대코드로도 다시 못 들어온다 |
+| `rejoin_blocked` | `BIT(1)` | NOT NULL, 기본 `b'0'` | 유효한 초대코드로도 다시 못 들어온다 |
 
 ---
 

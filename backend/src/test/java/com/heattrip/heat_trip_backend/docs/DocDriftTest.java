@@ -163,6 +163,30 @@ class DocDriftTest {
     }
 
     @Test
+    @DisplayName("스키마 문서의 chat 세 표가 정본과 같은 타입을 적는다 — 이 문서만 보고 만든 DB 도 validate 를 통과해야 한다")
+    void schema_documentsTheChatTablesWithTheCommittedTypes() {
+        // users·refresh_token 과 같은 대접을 chat 세 표에도 한다. 이게 없어서 §13 만
+        // `rejoin_blocked BOOLEAN` 으로 남아 있었다(정본은 bit(1)).
+        assertThat(schema).contains("CREATE TABLE chat_room (");
+        assertThat(schema).contains("CREATE TABLE chat_room_member (");
+        assertThat(schema).contains("CREATE TABLE chat_room_invite (");
+
+        String member = createTable(schema, "chat_room_member");
+        assertThat(member)
+                .as("Hibernate 는 boolean 을 bit(1) 로 만든다. MySQL 의 BOOLEAN 은 TINYINT(1) 별칭이라 "
+                        + "이 문서를 그대로 실행한 DB 는 정본과 타입이 갈리고 ddl-auto=validate 가 그걸 본다")
+                .contains("rejoin_blocked BIT(1)")
+                .doesNotContain("BOOLEAN");
+        assertThat(member)
+                .as("user_id 에 FK 를 그리면 문서가 ADR-0011 결정 4 와 반대말을 한다")
+                .doesNotContain("REFERENCES users");
+
+        assertThat(createTable(schema, "chat_room"))
+                .as("같은 그룹에 방이 둘 생기는 것을 막는 제약이다 (📌 #86 원칙 5)")
+                .containsIgnoringCase("UNIQUE KEY uq_chat_room_origin (origin_kind, origin_ref)");
+    }
+
+    @Test
     @DisplayName("ERD 가 users 엔티티를 그리고 refresh_token 을 포함한다")
     void erd_drawsUsersAndTheRefreshTokenLedger() {
         // 산문의 "예전에는 app_user 로 그렸다" 는 남아야 한다 — 지우면 이름이 왜 바뀌었는지가 사라진다.

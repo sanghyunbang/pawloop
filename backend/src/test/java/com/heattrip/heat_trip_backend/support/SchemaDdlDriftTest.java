@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -21,7 +20,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.testcontainers.containers.MySQLContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -54,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
 
-    private static final String COMMITTED = "mysql/init/01_schema.sql";
+    private static final String COMMITTED = ScratchDatabase.COMMITTED_SCHEMA;
 
     private static final String REGENERATE = """
             재생성:
@@ -74,7 +72,7 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
         }
 
         try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
-            Map<String, List<String>> fromSql = describe(db.connection);
+            Map<String, List<String>> fromSql = describe(db.connection());
 
             assertThat(fromSql.keySet())
                     .as("커밋된 스키마에 없는 테이블이다. 운영 DB 를 새로 세우면 이만큼이 빠진 채로 "
@@ -97,7 +95,7 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
         }
 
         try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
-            Map<String, List<String>> fromSql = describe(db.connection);
+            Map<String, List<String>> fromSql = describe(db.connection());
 
             List<String> mismatched = new ArrayList<>();
             for (var entry : fromEntities.entrySet()) {
@@ -262,23 +260,11 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
     }
 
     /**
-     * <b>실행용</b> 분리기. 주석만 걷고 대소문자는 건드리지 않는다.
+     * <b>비교용</b> 분리기. 순서·공백·대소문자 차이를 지운다. 실행에 쓰지 마라.
      *
-     * <p>{@link #statements(String)} 은 비교용이라 소문자화하는데, 그걸 실행에 쓰면
-     * {@code ENUM('IN_PROGRESS','NEW','RESOLVED')} 가 소문자로 바뀌어 <b>스키마 자체가
-     * 달라진다</b>(실측으로 확인 — 컬럼 정의 비교가 전부 빨간불이었다).
+     * <p>실행용 분리기는 {@link ScratchDatabase} 안에 있다 — 소문자화하면
+     * {@code ENUM('IN_PROGRESS','NEW','RESOLVED')} 가 소문자로 바뀌어 스키마 자체가 달라진다.
      */
-    private static List<String> executableStatements(String ddl) {
-        String withoutComments = Arrays.stream(ddl.split("\\R"))
-                .filter(line -> !line.strip().startsWith("--"))
-                .collect(Collectors.joining("\n"));
-        return Arrays.stream(withoutComments.split(";"))
-                .map(String::strip)
-                .filter(s -> !s.isEmpty())
-                .toList();
-    }
-
-    /** <b>비교용</b> 분리기. 순서·공백·대소문자 차이를 지운다. 실행에 쓰지 마라. */
     private static List<String> statements(String ddl) {
         String withoutComments = Arrays.stream(ddl.split("\\R"))
                 .filter(line -> !line.strip().startsWith("--"))
@@ -289,50 +275,4 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
                 .toList();
     }
 
-    /** 커밋된 스키마만 적용한 일회용 데이터베이스. */
-    private static final class ScratchDatabase implements AutoCloseable {
-        private static int counter = 0;
-
-        private final String name;
-        private final Connection connection;
-
-        static ScratchDatabase withCommittedSchema() throws Exception {
-            ScratchDatabase db = new ScratchDatabase();
-            String sql = Files.readString(
-                    TestProjectPaths.requireFile(COMMITTED), StandardCharsets.UTF_8);
-            try (Statement st = db.connection.createStatement()) {
-                for (String statement : executableStatements(sql)) {
-                    st.execute(statement);
-                }
-            }
-            return db;
-        }
-
-        private ScratchDatabase() throws SQLException {
-            MySQLContainer<?> mysql = MySqlTestContainer.instance();
-            synchronized (SchemaDdlDriftTest.class) {
-                name = "schema_check_" + (++counter);
-            }
-            // 앱 계정에는 CREATE DATABASE 권한이 없다 — root 로 붙는다(#56 에서 실측).
-            String serverUrl = mysql.getJdbcUrl().replaceAll("/[^/?]+(\\?|$)", "/$1");
-            try (Connection admin = DriverManager.getConnection(
-                    serverUrl, "root", mysql.getPassword());
-                 Statement st = admin.createStatement()) {
-                st.execute("DROP DATABASE IF EXISTS " + name);
-                st.execute("CREATE DATABASE " + name + " CHARACTER SET utf8mb4");
-            }
-            connection = DriverManager.getConnection(
-                    serverUrl.replaceFirst("/(\\?|$)", "/" + name + "$1"),
-                    "root", mysql.getPassword());
-        }
-
-        @Override
-        public void close() throws SQLException {
-            try (Statement st = connection.createStatement()) {
-                st.execute("DROP DATABASE IF EXISTS " + name);
-            } finally {
-                connection.close();
-            }
-        }
-    }
 }
