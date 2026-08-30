@@ -110,7 +110,9 @@ class SocialLoginService {
     tokenStore = SecureAuthTokenStore();
   }
 
-  /// [provider]는 'google' · 'kakao' · 'naver' 중 하나.
+  /// [provider]는 'kakao' 또는 'google'. **네이버는 지원하지 않는다** — ADR-0010 이
+  /// 보류로 확정했고 백엔드의 클라이언트 등록과 매핑 파서도 걷어냈다(#15).
+  /// 되살리려면 ADR 을 먼저 고쳐야 한다.
   static Future<SocialLoginResult> signIn(String provider) async {
     if (kDebugMode) {
       debugPrint('[SocialLogin] 로그인 시작: $provider');

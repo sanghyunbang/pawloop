@@ -330,6 +330,17 @@ M2(로그인) Epic 에서 **되돌리기 비싼 결정을 다섯 개** 내렸는
 
 계약(`docs/04-api/openapi.yaml`)의 `parameters.Provider` enum 과 `User.provider` enum, 그리고 코드의 `AuthController.SUPPORTED_PROVIDERS` 가 **같은 집합**이어야 한다. 세 곳에서 `naver` 를 뺐다.
 
+> ⚠️ **그 셋만으로는 부족하다.** 앱이 여는 것은 우리 호환 래퍼(`GET /auth/oauth/{provider}`)가
+> 아니라 Spring 의 진입점이다 — `social_login_service.dart` 가 `/oauth2/authorization/{provider}` 를
+> 직접 연다. 즉 클라이언트 등록이 살아 있으면 `SUPPORTED_PROVIDERS` 를 좁혀도
+> `/oauth2/authorization/naver` 가 그대로 열려 있고, 그 경로로 만들어진 계정의
+> `GET /auth/me` 응답이 계약 enum 을 위반한다 — **계약이 지킬 수 없는 약속을 하는 상태**다.
+>
+> 그래서 `application-dev.properties`·`application-prod.properties` 의 네이버 클라이언트
+> 등록과 매핑 파서(`NaverOAuth2User`)도 함께 걷어냈다. 되살리면
+> `OAuthClientRegistrationsTest` 와 `CustomOAuth2UserServiceTest` 가 빨간불이 되므로,
+> 이 ADR 을 먼저 고쳐야 되살릴 수 있다.
+
 **2. JWT 의 `sub` 는 `users.id` 다.** 이메일도 소셜 ID 도 아니다.
 
 카카오의 `account_email` 은 **선택 동의**라서 사용자가 거부하면 이메일이 오지 않고, 나중에 동의를 켜면 값이 생긴다(#7). 시간에 따라 나타났다 사라지는 값은 식별 키가 될 수 없다. 소셜 계정의 식별 키는 `(provider, social_id)` 쌍이고, 토큰이 싣는 주체는 그 행의 `users.id` 하나다.

@@ -21,7 +21,6 @@ import java.util.Optional;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.GoogleOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.KakaoOAuth2User;
-import com.heattrip.heat_trip_backend.OAuth.user.NaverOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.OAuth2UserInfo;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
@@ -118,7 +117,10 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         return switch (provider) {
             case "google" -> new GoogleOAuth2User(attributes);
             case "kakao" -> new KakaoOAuth2User(attributes);
-            case "naver" -> new NaverOAuth2User(attributes);
+            // naver 는 여기 없다. ADR-0010 이 보류로 확정했고, 클라이언트 등록도
+            // application-dev/prod.properties 에서 걷어냈다(#15). 분기만 남겨 두면
+            // "지원한다" 는 인상을 주는 죽은 코드가 되고, 등록을 되살리는 사람이
+            // 그 분기를 근거로 삼는다. 되살리려면 ADR-0010 을 먼저 고쳐야 한다.
             default -> throw new OAuth2AuthenticationException(
                     new OAuth2Error("unsupported_provider"),
                     "지원하지 않는 소셜 공급자입니다: " + provider);
