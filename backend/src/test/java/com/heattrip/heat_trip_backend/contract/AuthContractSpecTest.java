@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.contract;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
+import com.heattrip.heat_trip_backend.chat.ChatErrorCode;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -530,12 +531,27 @@ class AuthContractSpecTest {
                 .as("traceId 가 없으면 사용자가 서버 로그에서 자기 요청을 지목할 방법이 없다")
                 .containsKey("traceId");
 
+        // 어휘의 출처는 둘이다. 하나는 상태→코드 표(GlobalExceptionHandler.codeOf)이고,
+        // 다른 하나는 ChatErrorCode 다 — 그 넷만 상태에서 파생되지 않는다. ROOM_MEMBER_LIMIT
+        // 과 INVITE_USES_EXHAUSTED 가 둘 다 409 인데 앱이 보여줄 화면이 다르기 때문이다(#74).
+        //
+        // 두 번째 목록을 여기 손으로 적지 않고 enum 에서 뽑는 이유: 적어 두면 코드를 하나
+        // 더할 때 계약과 테스트를 함께 고쳐야 한다는 사실을 아무도 안 알려준다. 지금은
+        // ChatErrorCode 에 값을 하나 더하는 순간 이 단언이 빨간불이고, 고치는 방법은
+        // 계약에 그 코드를 등재하는 것뿐이다 (이슈 #75).
+        List<String> expected = new ArrayList<>(List.of("VALIDATION", "FORBIDDEN", "NOT_FOUND",
+                "METHOD_NOT_ALLOWED", "CONFLICT", "UNSUPPORTED_MEDIA_TYPE",
+                "RATE_LIMITED", "INTERNAL"));
+        for (ChatErrorCode chatCode : ChatErrorCode.values()) {
+            expected.add(chatCode.name());
+        }
+
         List<String> codes = stringList(asMap(asMap(body.get("properties")).get("code")).get("enum"));
         assertThat(codes)
-                .as("전역 처리기의 상태→코드 표와 같아야 한다 (GlobalExceptionHandler.codeOf)")
-                .containsExactlyInAnyOrder("VALIDATION", "FORBIDDEN", "NOT_FOUND",
-                        "METHOD_NOT_ALLOWED", "CONFLICT", "UNSUPPORTED_MEDIA_TYPE",
-                        "RATE_LIMITED", "INTERNAL");
+                .as("계약의 code 어휘가 서버가 실제로 내보내는 집합과 갈라졌다 — "
+                        + "GlobalExceptionHandler.codeOf 의 여덟 + ChatErrorCode 의 %d 개다",
+                        ChatErrorCode.values().length)
+                .containsExactlyInAnyOrderElementsOf(expected);
         assertThat(codes)
                 .as("401 은 본문 자체가 없다 — 코드를 두면 앱이 오지 않는 본문을 기다린다 (#5)")
                 .doesNotContain("UNAUTHORIZED");
