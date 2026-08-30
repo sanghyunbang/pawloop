@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.config;
 
+import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,9 @@ class AuthEndpointAuthorizationTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private JWTProvider jwtProvider;
 
     @Test
     @DisplayName("토큰 없는 회원 탈퇴(DELETE /auth/me)는 401 로 거부된다")
@@ -93,5 +97,51 @@ class AuthEndpointAuthorizationTest extends AbstractMySqlIntegrationTest {
         assertThat(status)
                 .as("인가 계층이 막았다면 컨트롤러 계층의 400 은 나올 수 없다")
                 .isEqualTo(400);
+    }
+
+    // ── 관리자 배치 인가 (감사에서 나온 것) ────────────────────────────────
+
+    /** `/api/curation/admin/**` 은 전 장소를 돌며 외부 LLM 을 호출하는 배치다. */
+    private static final String ADMIN_BATCH = "/api/curation/admin/seed-emotions";
+
+    @Test
+    @DisplayName("관리자 배치는 토큰이 없으면 401 이다")
+    void adminBatch_withoutToken_isUnauthorized() throws Exception {
+        int status = mockMvc.perform(post(ADMIN_BATCH))
+                .andReturn().getResponse().getStatus();
+
+        assertThat(status).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("관리자 배치는 평범한 로그인 사용자에게 403 이다 — 예전에는 200 이었다")
+    void adminBatch_withPlainUserToken_isForbidden() throws Exception {
+        // 이 테스트가 있는 이유: `/api/curation/**` 이 `.authenticated()` 하나로만 걸려
+        // 있어서, **로그인한 아무나** 이 배치를 반복 호출해 외부 LLM 청구서를 늘릴 수
+        // 있었다. 규칙을 `/api/curation/**` 앞에 두지 않으면 이 테스트가 다시 200 을 본다
+        // — 먼저 일치하는 규칙이 이기기 때문이다.
+        String token = jwtProvider.createAccessToken(42L, "ROLE_USER");
+
+        int status = mockMvc.perform(post(ADMIN_BATCH).header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getStatus();
+
+        assertThat(status)
+                .as("평범한 사용자 토큰으로 관리자 배치가 열리면 안 된다")
+                .isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("ROLE_ADMIN 토큰은 인가를 통과한다 — 401·403 이 아니다")
+    void adminBatch_withAdminToken_passesAuthorization() throws Exception {
+        // 인가만 본다. 배치 자체는 외부 호출을 하므로 200 을 기대하지 않는다 —
+        // 여기서 확인할 것은 "인가 계층에서 막히지 않는다" 뿐이다.
+        String token = jwtProvider.createAccessToken(42L, "ROLE_ADMIN");
+
+        int status = mockMvc.perform(post(ADMIN_BATCH).header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getStatus();
+
+        assertThat(status)
+                .as("ROLE_ADMIN 이 인가에서 막히면 운영자가 배치를 돌릴 방법이 없어진다")
+                .isNotIn(401, 403);
     }
 }

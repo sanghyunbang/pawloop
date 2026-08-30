@@ -95,6 +95,21 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(publicMatchers.toArray(String[]::new)).permitAll()
+                // ── 관리자 배치는 로그인한 아무나 부를 수 있으면 안 된다 ──────────────
+                // `/api/curation/**` 보다 **먼저** 와야 한다. Spring Security 는 먼저
+                // 일치하는 규칙을 쓰므로, 순서를 뒤집으면 이 줄이 영영 실행되지 않는다
+                // (#14 에서 필터 등록 순서 때문에 rate limit 이 도달조차 못 한 것과 같은 종류다).
+                //
+                // 이 아래 `SeedEmotionAdminController` 는 전 장소를 돌며 외부 LLM 을
+                // 호출하는 배치다(`SeedEmotionBatchService`). `.authenticated()` 만 걸려
+                // 있던 동안에는 **로그인한 아무나 청구서를 늘릴 수 있었다.**
+                //
+                // 지금 `ROLE_ADMIN` 을 가진 계정은 없다 — `User.role` 기본값이 `ROLE_USER`
+                // 하나뿐이라(`User.java:37,99`) 사실상 아무도 못 지나간다. 그게 의도다.
+                // 운영자가 쓰려면 그 계정 행의 `users.role` 을 `ROLE_ADMIN` 으로 바꾸고
+                // 다시 로그인하면 된다 — 토큰의 role 클레임이 그대로 권한이 되므로
+                // (`JWTAuthenticationFilter.java:56`) 별도 배선이 필요 없다.
+                .requestMatchers("/api/curation/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/curation/**").authenticated()
                 .requestMatchers("/public/**").authenticated()
                 .anyRequest().authenticated()

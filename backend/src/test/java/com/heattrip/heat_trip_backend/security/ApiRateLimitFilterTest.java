@@ -54,6 +54,13 @@ class ApiRateLimitFilterTest {
         return new ApiRateLimitFilter(props(authLimit), MAPPER);
     }
 
+    /** login 버킷(이메일 로그인·회원가입)의 한도를 지정한 필터. */
+    private static ApiRateLimitFilter filterWithLoginLimit(int loginLimit) {
+        PublicSecurityProperties p = props(100);
+        p.getRateLimit().setLoginMaxRequests(loginLimit);
+        return new ApiRateLimitFilter(p, MAPPER);
+    }
+
     /** 신뢰 프록시 뒤에서 {@code X-Real-IP} 하나만 실어 보내는, 운영과 같은 모양의 요청. */
     private static MockHttpServletResponse call(ApiRateLimitFilter filter,
                                                 String method, String path, String realIp) throws Exception {
@@ -114,6 +121,32 @@ class ApiRateLimitFilterTest {
         MockHttpServletResponse blocked = exhaust(filter(2), "GET", "/oauth2/authorization/kakao", 2);
 
         assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("POST /auth/signup 도 login 버킷이다 — 한도+1 번째에서 429")
+    void signupEndpoint_isRateLimited() throws Exception {
+        // 이 분기가 없던 동안 회원가입은 **무제한**이었다. resolveRule 이 null 을 돌려주면
+        // 필터가 그대로 통과시키기 때문이다 — 표에 없는 경로는 한도가 0 이 아니라 무한이다.
+        // 계정 대량 생성은 이메일 열거와 스팸 계정의 입구다.
+        // resolveRule 에서 이 분기를 지우면 여기가 빨간불이다.
+        MockHttpServletResponse blocked = exhaust(filterWithLoginLimit(3), "POST", "/auth/signup", 3);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("회원가입과 로그인은 같은 버킷을 나눠 쓴다 — 합쳐서 한도다")
+    void signupAndLogin_shareTheSameBucket() throws Exception {
+        // 버킷 이름이 같으므로 카운터도 같아야 한다. 따로 세면 한도가 사실상 두 배가 된다.
+        ApiRateLimitFilter f = filterWithLoginLimit(2);
+
+        assertThat(call(f, "POST", "/auth/login", "203.0.113.9").getStatus()).isNotEqualTo(429);
+        assertThat(call(f, "POST", "/auth/signup", "203.0.113.9").getStatus()).isNotEqualTo(429);
+
+        assertThat(call(f, "POST", "/auth/signup", "203.0.113.9").getStatus())
+                .as("로그인 1 + 가입 1 로 한도 2 를 이미 썼으므로 세 번째는 막혀야 한다")
+                .isEqualTo(429);
     }
 
     @Test
