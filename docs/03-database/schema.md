@@ -1,6 +1,6 @@
 # 테이블 스키마 (MySQL DDL)
 
-> Pawloop(포루프) MySQL 공간형 스키마의 테이블별 상세 정의(DDL). 각 테이블의 컬럼·타입·제약·인덱스(특히 `SPATIAL INDEX`)·FK를 명세한다. GPS 산책 경로는 `walk.path`(`LINESTRING`), 장소 좌표는 `place.geom`(`POINT`)에 공간 컬럼으로 저장하고 `SPATIAL INDEX` + `ST_Distance_Sphere`/`MBRContains`로 주변 검색을 수행한다. **가족 케어 공유** 기능으로 `family_group`·`group_member`·`chat_message`·`walk_note` 테이블이 추가되고, `care_log`는 `group_id`/`done_by`를 더해 가족 공유 케어 기록으로 확장된다. 전체 관계는 [ERD](./erd.md) 참조.
+> Pawloop(포루프) MySQL 공간형 스키마의 테이블별 상세 정의(DDL). 각 테이블의 컬럼·타입·제약·인덱스(특히 `SPATIAL INDEX`)·FK를 명세한다. GPS 산책 경로는 `walk.path`(`LINESTRING`), 장소 좌표는 `place.geom`(`POINT`)에 공간 컬럼으로 저장하고 `SPATIAL INDEX` + `ST_Distance_Sphere`/`MBRContains`로 주변 검색을 수행한다. **가족 케어 공유**와 **채팅** 기능으로 `family_group`·`chat_room`·`chat_room_member`·`chat_room_invite`·`chat_message`·`walk_note` 테이블이 추가되고, `care_log`는 `group_id`/`done_by`를 더해 가족 공유 케어 기록으로 확장된다. 방·멤버십·초대는 가족 그룹에 종속되지 않는 범용 3테이블이고, `family_group` 은 `origin_kind`/`origin_ref` 쌍으로 방에 **불투명하게** 닿는다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)). 전체 관계는 [ERD](./erd.md) 참조.
 
 ## 공통 규약
 
@@ -397,92 +397,176 @@ CREATE TABLE bookmark (
 
 ## 11. `family_group` — 가족 케어 그룹
 
-가족이 함께 반려를 돌보는 그룹. 초대코드(`invite_code`)로 멤버가 참여하며, 케어 공유·산책 주의사항·그룹 채팅의 단위가 된다.
+가족이 함께 반려를 돌보는 그룹. **이름과 생성 시각만 든다** — 초대코드도 멤버십도 여기 없다. 초대는 `chat_room_invite`(§14), 멤버십은 `chat_room_member`(§13)가 가지고, 이 그룹의 방은 `chat_room`(§12)이 `origin_kind='FAMILY'` / `origin_ref=family_group.id` 로 **불투명하게** 가리킨다. `chat_room` → `family_group` 방향 FK 는 없고, `chat_room` 의 `UNIQUE(origin_kind, origin_ref)` 가 같은 그룹에 방이 둘 생기는 것을 DB 수준에서 막는다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
+
+> **예전 정의에는 `invite_code VARCHAR(12)` + `UNIQUE KEY uq_group_invite` 가 있었다.** 그건 그룹당 코드 하나가 영구히 사는 모양이라 만료·사용횟수·폐기를 걸 자리가 없고, 코드를 바꾸려면 그룹 행을 UPDATE 해야 해서 누가 언제 발급했는지가 남지 않는다. 초대코드는 §14 로 나갔다.
 
 ```sql
 CREATE TABLE family_group (
   id          BIGINT      NOT NULL AUTO_INCREMENT,
   name        VARCHAR(50) NOT NULL,
-  invite_code VARCHAR(12) NOT NULL COMMENT '가족 초대코드',
   created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_group_invite (invite_code)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
-| `id` | `BIGINT` | PK | |
+| `id` | `BIGINT` | PK | `chat_room.origin_ref` 가 이 값을 문자열로 든다 |
 | `name` | `VARCHAR(50)` | NOT NULL | 그룹 이름 |
-| `invite_code` | `VARCHAR(12)` | NOT NULL, UNIQUE | 초대코드(`POST /api/groups/join`) |
 | `created_at` | `DATETIME` | NOT NULL, 기본 now | 생성 시각 |
 
 ---
 
-## 12. `group_member` — 그룹 구성원
+## 12. `chat_room` — 채팅방 (범용)
 
-`family_group`↔`users` 연결(N:M 해소). 그룹 생성자는 `owner`, 초대코드로 참여한 멤버는 `member`. 그룹-사용자 조합 유니크.
+방은 가족 그룹에 종속되지 않는다. `origin_kind`(방을 만든 도메인)와 `origin_ref`(그 도메인의 id 를 문자열로) 한 쌍으로 출처를 들고, 산책 크루 방처럼 가족이 아닌 방도 같은 표에 산다. **`last_seq` 는 `chat_message.room_seq` 의 발급 카운터이자 미읽음 뺄셈의 좌변이다** — 두 값이 다른 문장에서 움직여 어긋날 여지를 없애려고 한 컬럼으로 둔다.
 
 ```sql
-CREATE TABLE group_member (
-  id        BIGINT      NOT NULL AUTO_INCREMENT,
-  group_id  BIGINT      NOT NULL,
-  user_id   BIGINT      NOT NULL,
-  role      VARCHAR(10) NOT NULL DEFAULT 'member' COMMENT 'owner|member',
-  joined_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE chat_room (
+  id          BIGINT      NOT NULL AUTO_INCREMENT,
+  origin_kind VARCHAR(20) NOT NULL COMMENT '방을 만든 도메인 — FAMILY 등',
+  origin_ref  VARCHAR(64) NOT NULL COMMENT '그 도메인의 id 를 문자열로 — FK 아님',
+  title       VARCHAR(50) NOT NULL COMMENT '방 이름',
+  last_seq    BIGINT      NOT NULL DEFAULT 0 COMMENT 'room_seq 발급 카운터 = 미읽음 뺄셈의 좌변',
+  created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_member (group_id, user_id),
-  KEY idx_member_user (user_id),
-  CONSTRAINT fk_member_group FOREIGN KEY (group_id)
-    REFERENCES family_group (id) ON DELETE CASCADE,
-  CONSTRAINT fk_member_user FOREIGN KEY (user_id)
-    REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT ck_member_role CHECK (role IN ('owner','member'))
+  UNIQUE KEY uq_chat_room_origin (origin_kind, origin_ref)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `group_id` | `BIGINT` | FK→`family_group.id`, NOT NULL, UNIQUE(group,user) | 소속 그룹 |
-| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL, INDEX | 구성원 |
-| `role` | `VARCHAR(10)` | NOT NULL 기본 member, CHECK | `owner`/`member` |
-| `joined_at` | `DATETIME` | NOT NULL, 기본 now | 참여 시각 |
+| `origin_kind` | `VARCHAR(20)` | NOT NULL, UNIQUE(kind,ref) | 출처 도메인 이름 |
+| `origin_ref` | `VARCHAR(64)` | NOT NULL, UNIQUE(kind,ref) | 출처의 id. **FK 를 걸지 않는다** |
+| `title` | `VARCHAR(50)` | NOT NULL | 방 이름 |
+| `last_seq` | `BIGINT` | NOT NULL, 기본 0 | 발급기. `UPDATE ... SET last_seq = LAST_INSERT_ID(last_seq + 1)` 로 올린다 |
+| `created_at` | `DATETIME` | NOT NULL, 기본 now | 생성 시각 |
+
+> 발급과 메시지 INSERT 는 **하나의 트랜잭션**이다. 발급만 별도 트랜잭션으로 떼면 `id` 커서와 똑같은 구멍(§15 참조)이 생긴다. 락 순서는 항상 `chat_room` → `chat_room_member` 이고, **락을 쥔 트랜잭션 안에서 외부 호출(푸시·S3)을 하지 않는다.**
 
 ---
 
-## 13. `chat_message` — 가족 그룹 채팅
+## 13. `chat_room_member` — 방 멤버십
 
-그룹 채팅 메시지. 커서 페이지네이션(`id` 커서)으로 조회하며, MVP는 폴링·실시간(WebSocket/STOMP)은 post-MVP. `family_group` 1:N, `users` 1:N.
+멤버십 표는 이것 하나다. **`group_member` 를 따로 만들지 않는다** — 둘을 두면 "가족인데 방에 없는 사람" 같은 상태가 생기고 그걸 막는 코드를 영원히 쓴다. 강퇴·재입장 금지가 전부 여기 붙는다. **행을 지우지 않는다**: 미읽음이 `last_read_seq` 뺄셈이라 지우면 되돌릴 수 없다.
 
 ```sql
-CREATE TABLE chat_message (
-  id         BIGINT   NOT NULL AUTO_INCREMENT,
-  group_id   BIGINT   NOT NULL,
-  user_id    BIGINT   NOT NULL,
-  body       TEXT     NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE chat_room_member (
+  id             BIGINT      NOT NULL AUTO_INCREMENT,
+  room_id        BIGINT      NOT NULL,
+  user_id        BIGINT      NOT NULL COMMENT 'users.id — FK 없음(경계)',
+  role           VARCHAR(10) NOT NULL DEFAULT 'MEMBER' COMMENT 'OWNER|MEMBER',
+  joined_at      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_read_seq  BIGINT      NOT NULL DEFAULT 0 COMMENT '미읽음 = room.last_seq − 이 값',
+  removed_at     DATETIME    NULL COMMENT '강퇴 시각 — 행은 남긴다',
+  removed_by     BIGINT      NULL COMMENT '강퇴한 방장(users.id) — FK 없음',
+  rejoin_blocked BOOLEAN     NOT NULL DEFAULT FALSE COMMENT '강퇴 = 재입장 금지',
   PRIMARY KEY (id),
-  KEY idx_chat_group (group_id, id),
-  KEY idx_chat_user (user_id),
-  CONSTRAINT fk_chat_group FOREIGN KEY (group_id)
-    REFERENCES family_group (id) ON DELETE CASCADE,
-  CONSTRAINT fk_chat_user FOREIGN KEY (user_id)
-    REFERENCES users (id) ON DELETE CASCADE
+  UNIQUE KEY uq_chat_member (room_id, user_id),
+  KEY idx_chat_member_user (user_id),
+  CONSTRAINT fk_chat_member_room FOREIGN KEY (room_id)
+    REFERENCES chat_room (id) ON DELETE CASCADE,
+  CONSTRAINT ck_chat_member_role CHECK (role IN ('OWNER','MEMBER'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
-| `id` | `BIGINT` | PK | 커서 페이지네이션 기준 |
-| `group_id` | `BIGINT` | FK→`family_group.id`, NOT NULL, INDEX(group_id,id) | 대상 그룹 |
-| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 작성자 |
-| `body` | `TEXT` | NOT NULL | 메시지 본문 |
-| `created_at` | `DATETIME` | NOT NULL, 기본 now | 전송 시각 |
+| `id` | `BIGINT` | PK | |
+| `room_id` | `BIGINT` | FK→`chat_room.id`, NOT NULL, UNIQUE(room,user) | 소속 방 |
+| `user_id` | `BIGINT` | NOT NULL, INDEX, **FK 없음** | 멤버(`users.id` 값만) |
+| `role` | `VARCHAR(10)` | NOT NULL 기본 MEMBER, CHECK | `OWNER` 만 강퇴·초대 회수를 한다 |
+| `joined_at` | `DATETIME` | NOT NULL, 기본 now | 참여 시각 |
+| `last_read_seq` | `BIGINT` | NOT NULL, 기본 0 | `GREATEST`·`LEAST` 로만 갱신 — 뒤로 못 가고 `room.last_seq` 를 넘지 못한다 |
+| `removed_at` | `DATETIME` | NULL | 강퇴 시각 |
+| `removed_by` | `BIGINT` | NULL, **FK 없음** | 강퇴한 방장 |
+| `rejoin_blocked` | `BOOLEAN` | NOT NULL, 기본 FALSE | 유효한 초대코드로도 다시 못 들어온다 |
 
 ---
 
-## 14. `walk_note` — 산책 주의사항 (가족 공유 메모)
+## 14. `chat_room_invite` — 초대코드
+
+초대코드를 그룹 행의 컬럼 하나로 두지 않고 별도 표에 둔다. 유효기간·사용횟수·회수를 처음부터 갖추고, **누가 언제 발급했는지가 남는다.** 기본값은 **7일 · 사용 횟수 무제한**이다. 방장이 재발급하면 이전 코드는 즉시 `revoked_at` 이 찍히고 **기존 멤버는 그대로 남는다** — 코드가 유출됐을 때의 유일한 대응 수단이다. 폐기한 `code` 는 UNIQUE 라 재사용하지 않는다.
+
+```sql
+CREATE TABLE chat_room_invite (
+  id         BIGINT      NOT NULL AUTO_INCREMENT,
+  room_id    BIGINT      NOT NULL,
+  code       VARCHAR(32) NOT NULL COMMENT '초대코드',
+  created_by BIGINT      NOT NULL COMMENT 'users.id — FK 없음(경계)',
+  expires_at DATETIME    NULL COMMENT 'NULL = 무기한. 기본은 발급 + 7일',
+  max_uses   INT         NULL COMMENT 'NULL = 무제한(기본)',
+  used_count INT         NOT NULL DEFAULT 0,
+  revoked_at DATETIME    NULL COMMENT '재발급·회수 시각',
+  created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_chat_invite_code (code),
+  KEY idx_chat_invite_room (room_id, created_at),
+  CONSTRAINT fk_chat_invite_room FOREIGN KEY (room_id)
+    REFERENCES chat_room (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `room_id` | `BIGINT` | FK→`chat_room.id`, NOT NULL, INDEX(room,created_at) | 대상 방 |
+| `code` | `VARCHAR(32)` | NOT NULL, UNIQUE | `POST /api/chat/invites/{code}/join` 이 쓰는 값 |
+| `created_by` | `BIGINT` | NOT NULL, **FK 없음** | 발급한 방장 |
+| `expires_at` | `DATETIME` | NULL | 만료 — `INVITE_EXPIRED`(410) |
+| `max_uses` | `INT` | NULL | 사용 상한 — 넘으면 `INVITE_USES_EXHAUSTED`(409) |
+| `used_count` | `INT` | NOT NULL, 기본 0 | 사용 횟수 |
+| `revoked_at` | `DATETIME` | NULL | 회수 — `INVITE_REVOKED`(410) |
+| `created_at` | `DATETIME` | NOT NULL, 기본 now | 발급 시각 |
+
+---
+
+## 15. `chat_message` — 채팅 메시지
+
+방 안의 메시지. 조회는 `afterSeq`(델타·오름차순) 또는 `beforeSeq`(과거·내림차순)이고 MVP 는 폴링이다. 소켓은 실측 트리거가 걸릴 때만 연다(M2.9).
+
+**`id` 를 커서로 쓰지 않는다.** `AUTO_INCREMENT` 는 **배정 시점**에 정해지고 커밋 순서와 다르다. 늦게 커밋된 작은 `id` 가 뒤늦게 보이면 `afterId` 폴링은 그 메시지를 **영구히** 건너뛴다. `room_seq` 는 방 단위로 빈틈 없이 발급하므로 델타·순서·미읽음이 전부 이 하나로 풀린다.
+
+**`sender_user_id` 에 FK 를 걸지 않는다.** chat 경계 밖으로 FK 를 내지 않는 것이 이 도메인의 규칙이고, `refresh_token`(#9)이 이미 같은 방식이다. 탈퇴한 사용자의 메시지가 남아야 대화가 읽히므로 `ON DELETE CASCADE` 는 특히 안 된다 — 예전 정의의 `fk_chat_user ... ON DELETE CASCADE` 는 탈퇴 한 번에 남의 대화 흐름을 지운다.
+
+**`sender_name` 은 스냅샷이다.** `users.nickname varchar(255)` 와 폭을 맞춘다. 닉네임이 바뀌어도 과거 대화의 화자는 바뀌지 않는다. 응답의 `senderName` 은 `users` 에 있으면 현재 닉네임, 없으면(탈퇴) "알 수 없음" 이다.
+
+```sql
+CREATE TABLE chat_message (
+  id             BIGINT       NOT NULL AUTO_INCREMENT,
+  room_id        BIGINT       NOT NULL,
+  room_seq       BIGINT       NOT NULL COMMENT '방 안에서 빈틈 없이 1씩 증가',
+  sender_user_id BIGINT       NOT NULL COMMENT 'users.id — FK 없음(경계)',
+  sender_name    VARCHAR(255) NOT NULL COMMENT '발신 시점 닉네임 스냅샷',
+  content_type   VARCHAR(16)  NOT NULL DEFAULT 'text',
+  body           TEXT         NOT NULL,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at     DATETIME     NULL COMMENT '삭제는 소프트 — 뺀 자리가 seq 빈틈이 되면 안 된다',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_chat_room_seq (room_id, room_seq),
+  KEY idx_chat_sender (sender_user_id),
+  CONSTRAINT fk_chat_room FOREIGN KEY (room_id)
+    REFERENCES chat_room (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | **커서로 쓰지 않는다** |
+| `room_id` | `BIGINT` | FK→`chat_room.id`, NOT NULL, UNIQUE(room,seq) | 소속 방 |
+| `room_seq` | `BIGINT` | NOT NULL, UNIQUE(room,seq) | 방별 순서. 델타·미읽음의 유일한 근거 |
+| `sender_user_id` | `BIGINT` | NOT NULL, INDEX, **FK 없음** | 발신자(`users.id` 값만) |
+| `sender_name` | `VARCHAR(255)` | NOT NULL | 발신 시점 닉네임 스냅샷 |
+| `content_type` | `VARCHAR(16)` | NOT NULL, 기본 `text` | 본문 종류 |
+| `body` | `TEXT` | NOT NULL | 메시지 본문 |
+| `created_at` | `DATETIME` | NOT NULL, 기본 now | 전송 시각 |
+| `deleted_at` | `DATETIME` | NULL | 소프트 삭제 |
+
+---
+
+## 16. `walk_note` — 산책 주의사항 (가족 공유 메모)
 
 산책 시 주의사항을 가족이 공유하는 메모. `family_group` 1:N (`GET|PUT /api/groups/{groupId}/walk-notes`).
 
@@ -508,9 +592,9 @@ CREATE TABLE walk_note (
 
 ---
 
-## 15. `care_log` — 케어 로그 (가족 케어 공유)
+## 17. `care_log` — 케어 로그 (가족 케어 공유)
 
-당초 post-MVP 확장으로 계획했던 테이블을 **가족 케어 공유**에 맞춰 확장한 정의. 물/밥/산책/투약/병원 로그를 하나의 유연 스키마로 저장하고, 누가(`done_by`)·언제 했는지를 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지한다. FK 관계상 `family_group`(10) 생성 후 적용한다.
+당초 post-MVP 확장으로 계획했던 테이블을 **가족 케어 공유**에 맞춰 확장한 정의. 물/밥/산책/투약/병원 로그를 하나의 유연 스키마로 저장하고, 누가(`done_by`)·언제 했는지를 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지한다. FK 관계상 `family_group`(§11) 생성 후 적용한다.
 
 ```sql
 CREATE TABLE care_log (
@@ -576,9 +660,13 @@ CREATE TABLE care_log (
 | `comment` | `idx_comment_post(post_id, created_at)` | 보조 | 글별 댓글 |
 | `reaction` | `uq_reaction(post_id, user_id, type)` | UNIQUE | 중복 반응 방지 |
 | `bookmark` | `uq_bookmark(user_id, place_id)` | UNIQUE | 중복 저장 방지 |
-| `family_group` | `uq_group_invite(invite_code)` | UNIQUE | 초대코드 중복 방지 |
-| `group_member` | `uq_member(group_id, user_id)` | UNIQUE | 그룹 중복 참여 방지 |
-| `chat_message` | `idx_chat_group(group_id, id)` | 보조 | 그룹별 채팅 커서 페이지네이션 |
+| `chat_room` | `uq_chat_room_origin(origin_kind, origin_ref)` | UNIQUE | 같은 출처에 방이 둘 생기는 것을 막는다 |
+| `chat_room_member` | `uq_chat_member(room_id, user_id)` | UNIQUE | 방 중복 참여 방지 |
+| `chat_room_member` | `idx_chat_member_user(user_id)` | 보조 | 내 방 목록 조회 |
+| `chat_room_invite` | `uq_chat_invite_code(code)` | UNIQUE | 초대코드 중복 방지. 폐기한 코드는 재사용하지 않는다 |
+| `chat_room_invite` | `idx_chat_invite_room(room_id, created_at)` | 보조 | 방별 초대코드 이력 |
+| `chat_message` | `uq_chat_room_seq(room_id, room_seq)` | UNIQUE | 방별 순서·델타·미읽음의 유일한 근거 |
+| `chat_message` | `idx_chat_sender(sender_user_id)` | 보조 | 발신자별 조회(신고 처리) |
 | `walk_note` | `idx_walknote_group(group_id, created_at)` | 보조 | 그룹별 산책 주의사항 조회 |
 | `care_log` | `idx_carelog_dog(dog_id, occurred_at)` | 보조 | 강아지별 케어 이력 |
 | `care_log` | `idx_carelog_group(group_id, occurred_at)` | 보조 | 그룹별 "오늘의 케어" 조회 |
