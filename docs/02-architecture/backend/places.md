@@ -20,7 +20,7 @@
 | `place` | KTO 동반장소 + LOCALDATA 병원/펫샵 POI 캐시 | `geom POINT` (SRID 4326, SPATIAL INDEX) |
 | `trail` | 두루누비 산책로 코스 | `path LINESTRING` (SRID 4326, SPATIAL INDEX) |
 
-> ⚠️ 주의: `place` 테이블은 이 리소스에서 **새로 정의**하는 스키마([schema.md §4](../../03-database/schema.md))이며, 기존 `tour.domain.Place`(테이블 `places`, PK=`contentid`, `mapx`/`mapy` Double)와는 **별개 테이블**이다. 기존 `places`는 관광공사 감정추천용, 여기 `place`는 반려동반 지도용. 패키지 충돌 방지를 위해 엔티티 클래스명을 `PetPlace`로 두는 것을 권장(테이블명은 `place`).
+> ⚠️ 주의: `place` 테이블은 이 리소스에서 **새로 정의**하는 스키마([schema.md §5](../../03-database/schema.md))이며, 기존 `tour.domain.Place`(테이블 `places`, PK=`contentid`, `mapx`/`mapy` Double)와는 **별개 테이블**이다. 기존 `places`는 관광공사 감정추천용, 여기 `place`는 반려동반 지도용. 패키지 충돌 방지를 위해 엔티티 클래스명을 `PetPlace`로 두는 것을 권장(테이블명은 `place`).
 
 ### 기존 재사용 가능한 것
 | 항목 | 위치 | 재사용 방법 |
@@ -194,7 +194,7 @@
    - **LOCALDATA 병원/펫샵 좌표는 EPSG:5174(중부원점 TM)** → 반드시 **WGS84(4326)로 변환** 후 저장(`CoordTransform`). 변환 없이 넣으면 좌표가 지구 반대편에 찍힘. (proj4j 등 라이브러리 활용 권장.)
 
 4. **주변 조회 성능 — SPATIAL INDEX를 태워라.**
-   - `ST_Distance_Sphere`만 걸면 풀스캔. 먼저 **bounding box**(`MBRContains(ST_MakeEnvelope(...), geom)`)로 SPATIAL INDEX를 태워 후보를 좁힌 뒤 정확 거리(`ST_Distance_Sphere`)로 필터·정렬. schema.md §4 예제 쿼리 참고.
+   - `ST_Distance_Sphere`만 걸면 풀스캔. 먼저 **bounding box**(`MBRContains(ST_MakeEnvelope(...), geom)`)로 SPATIAL INDEX를 태워 후보를 좁힌 뒤 정확 거리(`ST_Distance_Sphere`)로 필터·정렬. schema.md §5 예제 쿼리 참고.
    - radius로 bbox를 대략(위경도 델타 ≈ radius/111320 등) 잡거나 `ST_Buffer` 사용. limit 상한 200.
 
 5. **JWT 추출 — Places는 불필요.**

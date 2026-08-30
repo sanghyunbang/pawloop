@@ -4,7 +4,7 @@
 > ⚠️ 이 문서는 **청사진(무엇을 만들지)** 만 제공한다. 메서드 바디는 개발자가 직접 구현한다. 여기 코드는 시그니처/필드/쿼리 개요뿐이다.
 >
 > 참조 계약: [openapi.yaml](../../04-api/openapi.yaml) `paths./api/dogs*`, `schemas.Dog / DogInput / DogSize`
-> 데이터 모델: [schema.md §2 `dog`](../../03-database/schema.md), [erd.md `dog`](../../03-database/erd.md)
+> 데이터 모델: [schema.md §3 `dog`](../../03-database/schema.md), [erd.md `dog`](../../03-database/erd.md)
 > 컨벤션 출처: `social/{controller,service,repository,entity,dto}`, `user/controller/AuthController`, `S3/media/*`
 
 ---
@@ -69,7 +69,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | `neutered` | `Boolean` | 선택 | `neutered` | 기본 `false`(래퍼 타입으로 두어 PATCH 부분수정 구분) |
 
 - PATCH(부분 수정)는 `DogInputRequest` 재사용. **null=미변경** 규약(social의 `handle` null 처리 스타일). `size`는 값이 오면 검증, `name`은 create시 필수·patch시 선택으로 서비스에서 분기.
-- `ageMonths`는 요청에 없고 응답 전용 파생값(`birth` → 현재일 기준 개월). 정규 저장값은 `birth`(schema.md §2 주석: "나이는 앱에서 개월 수로 표시하나 DB는 birth로 저장").
+- `ageMonths`는 요청에 없고 응답 전용 파생값(`birth` → 현재일 기준 개월). 정규 저장값은 `birth`(schema.md §3 주석: "나이는 앱에서 개월 수로 표시하나 DB는 birth로 저장").
 - 아바타 업로드 요청 바디는 별도 DTO 없음 — multipart `file` 파트만(MediaController와 동일).
 - 공통 DTO: 에러는 별도 record 없이 social 관례대로 `Map.of("error", ...)` 사용(참조만). openapi `Error`/`Page` 스키마는 이 리소스 응답에 직접 등장하지 않음.
 
@@ -100,7 +100,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 
 ### 5.1 Entity — `dog/entity/Dog` (`@Entity @Table(name="dog")`, Lombok `@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder`)
 
-schema.md §2 `dog` 테이블 기준. 엔티티 필드 ↔ 컬럼:
+schema.md §3 `dog` 테이블 기준. 엔티티 필드 ↔ 컬럼:
 
 | 엔티티 필드 : 타입 | 컬럼 | 제약 | 비고 |
 | --- | --- | --- | --- |

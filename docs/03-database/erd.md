@@ -8,7 +8,7 @@
 
 ```mermaid
 erDiagram
-    users ||--o{ refresh_token : "세션(기기별 1행)"
+    users ||--o{ refresh_token : "발급된 refresh 토큰(회전마다 1행)"
 
     users ||--o{ dog       : "기른다"
     users ||--o{ post      : "작성"

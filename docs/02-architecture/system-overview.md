@@ -45,7 +45,7 @@ flowchart TB
     end
 
     subgraph backend["☁️ Spring Boot 백엔드 (api.heattrip.link : 8080)"]
-        AUTH["auth / OAuth2 + JWT<br/>구글·카카오·네이버"]
+        AUTH["auth / OAuth2 + JWT<br/>카카오·구글"]
         TOUR["tour · explore<br/>장소 조회/캐시/필터"]
         SOCIAL["social · bookmark<br/>커뮤니티·북마크 (예정)"]
         S3SVC["S3 / media<br/>이미지 업로드"]

@@ -1,6 +1,9 @@
 package com.heattrip.heat_trip_backend.docs;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -229,6 +232,76 @@ class DocDriftTest {
         int end = document.indexOf("\n)", start);
         assertThat(end).as("%s 의 CREATE TABLE 이 닫히지 않았다", table).isNotNegative();
         return document.substring(start, end);
+    }
+
+    // ───────────────── D. 다른 문서가 가리키는 schema.md 절 번호 ─────────────────
+
+    @Test
+    @DisplayName("다른 문서의 `schema.md §N` 참조가 실제로 그 테이블 절을 가리킨다")
+    void crossDocumentSectionReferences_pointAtTheRightTable() {
+        // 이 테스트는 **이 브랜치가 실제로 낸 사고** 때문에 있다.
+        // app_user -> users 로 고치면서 refresh_token 절을 2번에 끼워 넣었고,
+        // 그 아래 테이블이 전부 한 칸씩 밀렸다. 다른 문서 3개의 `schema.md §N`
+        // 참조는 그대로여서, dogs.md 의 "schema.md §2 dog 테이블 기준" 을 따라간
+        // 사람은 refresh_token 원장을 보고 강아지 엔티티를 매핑하게 됐다.
+        //
+        // 문서-코드 드리프트를 없애는 PR 이 같은 종류의 드리프트를 11곳 새로 만든 것이다.
+        // 절 번호는 앞으로도 밀린다. 사람이 세지 말고 여기서 잡는다.
+        Map<String, String> sectionTitles = schemaSectionTitles();
+        assertThat(sectionTitles)
+                .as("schema.md 에 번호가 붙은 절이 없다 — 파서가 깨졌거나 문서 구조가 바뀌었다")
+                .isNotEmpty();
+
+        List<String> broken = new ArrayList<>();
+        for (String relativePath : REFERRING_DOCS) {
+            String document = RepositoryDocs.requireDoc(relativePath);
+            Matcher matcher = SECTION_REFERENCE.matcher(document);
+            while (matcher.find()) {
+                String number = matcher.group(1);
+                String title = sectionTitles.get(number);
+                if (title == null) {
+                    broken.add("%s 가 schema.md §%s 를 가리키는데 그런 절이 없다"
+                            .formatted(relativePath, number));
+                    continue;
+                }
+                // 참조 뒤 40자 안에 백틱으로 감싼 테이블 이름이 있으면 절 제목과 대조한다.
+                // 이름을 안 적은 참조는 대조할 근거가 없으므로 절 존재만 확인하고 넘어간다.
+                String tail = document.substring(matcher.end(),
+                        Math.min(document.length(), matcher.end() + 40));
+                Matcher named = BACKTICKED.matcher(tail);
+                if (named.find() && !title.contains("`" + named.group(1) + "`")) {
+                    broken.add("%s 가 `%s` 를 schema.md §%s 라고 하는데 그 절은 %s 다"
+                            .formatted(relativePath, named.group(1), number, title.strip()));
+                }
+            }
+        }
+
+        assertThat(broken)
+                .as("절 번호가 밀렸다. schema.md 의 절 순서를 바꿨다면 참조하는 문서도 함께 고쳐라.")
+                .isEmpty();
+    }
+
+    /** {@code schema.md §N} 을 참조하는 문서들. */
+    private static final List<String> REFERRING_DOCS = List.of(
+            "02-architecture/backend/bookmarks.md",
+            "02-architecture/backend/dogs.md",
+            "02-architecture/backend/places.md");
+
+    /** {@code schema.md §12} 형태의 참조. */
+    private static final Pattern SECTION_REFERENCE =
+            Pattern.compile("schema\\.md\\s*§\\s*(\\d+)");
+
+    /** 참조 바로 뒤에 오는 {@code `table_name`}. */
+    private static final Pattern BACKTICKED = Pattern.compile("`([a-z_]+)`");
+
+    /** schema.md 의 {@code ## N. `table` — 설명} 에서 번호 → 제목. */
+    private static Map<String, String> schemaSectionTitles() {
+        Map<String, String> titles = new LinkedHashMap<>();
+        Matcher matcher = Pattern.compile("(?m)^## (\\d+)\\.(.*)$").matcher(schema);
+        while (matcher.find()) {
+            titles.put(matcher.group(1), matcher.group(2));
+        }
+        return titles;
     }
 
     /** mermaid {@code erDiagram} 의 {@code <name> { … }} 블록. */
