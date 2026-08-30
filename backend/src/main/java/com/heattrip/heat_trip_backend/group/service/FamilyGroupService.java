@@ -80,8 +80,14 @@ public class FamilyGroupService {
      * 행도 함께 롤백된다 — 완료 조건 7 이 요구하는 성질이 이것이다.
      *
      * <p>자기 호출이 아니다: {@code chatRooms} 는 주입받은 다른 빈이라 프록시를 지나간다.
-     * 이 두 줄을 한 클래스 안의 private 메서드로 나누면 그 순간 프록시가 빠지고, 지금은
-     * 우연히 같은 트랜잭션이라 초록불이 유지되다가 전파 설정을 바꾸는 날 조용히 깨진다.
+     * 이 두 줄을 한 클래스 안의 private 메서드로 나누면 그 순간 프록시가 빠진다.
+     *
+     * <p><b>이 애너테이션 한 줄이 실제로 값을 한다 — 떼어 보고 확인했다.</b> 떼면
+     * {@code SimpleJpaRepository.save} 가 자기 트랜잭션으로 그룹 행을 <b>커밋</b>하고, 그 뒤
+     * 방 생성이 실패하면 "방 없는 가족" 이 남는다. 그 상태에서
+     * {@code FamilyGroupInviteIntegrationTest.whenTheRoomCannotBeCreated_theGroupRowIsRolledBackToo}
+     * 가 빨간불이다. 반대로 {@code openRoom} 을 {@code REQUIRES_NEW} 로 바꾸는 것은 지금
+     * 그 테스트에 안 잡힌다 — 이유는 {@code ChatRoomService} javadoc 에 적었다.
      */
     @Transactional
     public GroupResponse create(long ownerUserId, String requestedName) {

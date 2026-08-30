@@ -450,10 +450,14 @@ class FamilyGroupInviteIntegrationTest extends AbstractMySqlIntegrationTest {
 
         assertThat(familyGroupRepository.findById(nextGroupId))
                 .as("""
-                        UNIQUE (origin_kind, origin_ref) 가 방 INSERT 를 거부한 상황이다. \
-                        그룹 INSERT 와 방 INSERT 를 서로 다른 트랜잭션으로 떼면(예: REQUIRES_NEW) \
-                        그룹 행만 커밋되어 '방 없는 가족' 이 남는다 — 그 그룹은 초대코드를 발급할 \
-                        방장이 없어 아무도 못 들어오고, 화면에서는 정상으로 보인다 (완료 조건 7).""")
+                        UNIQUE (origin_kind, origin_ref) 가 방 INSERT 를 거부한 상황이다.
+                        FamilyGroupService.create 에서 @Transactional 을 떼면 여기가 빨간불이다 \
+                        (실제로 떼어 확인했다) — SimpleJpaRepository.save 가 자기 트랜잭션으로 \
+                        그룹 행을 커밋해 버리고 '방 없는 가족' 이 남는다. 그 그룹은 초대코드를 \
+                        발급할 방장이 없어 아무도 못 들어오는데 화면에서는 정상으로 보인다 (완료 조건 7).
+                        반대로 openRoom 을 REQUIRES_NEW 로 바꾸는 것은 여기에 안 잡힌다 — 예외가 \
+                        create 밖으로 나가 바깥 트랜잭션도 함께 롤백되기 때문이고, 그 차이는 \
+                        ChatRoomService javadoc 에 적었다.""")
                 .isEmpty();
     }
 

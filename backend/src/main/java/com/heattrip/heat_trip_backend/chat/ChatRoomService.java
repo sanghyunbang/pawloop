@@ -44,8 +44,16 @@ import java.util.Optional;
  * <h2>트랜잭션</h2>
  * <p>모든 쓰기 메서드가 {@code @Transactional} 이고 전파는 기본값({@code REQUIRED})이다.
  * 그래서 {@code FamilyGroupService.create} 가 이 빈의 {@link #openRoom} 을 부르면
- * <b>같은 트랜잭션</b>에 들어온다 — 방 생성이 실패하면 그룹 행도 함께 롤백된다
- * (완료 조건 7). {@code REQUIRES_NEW} 로 바꾸면 그 원자성이 그 자리에서 사라진다.
+ * <b>같은 트랜잭션</b>에 들어온다 — 방 생성이 실패하면 그룹 행도 함께 롤백된다(완료 조건 7).
+ *
+ * <p><b>{@code REQUIRES_NEW} 로 바꿔도 지금은 그 테스트가 초록불이다 — 실측했다.</b>
+ * 방 생성이 실패하면 예외가 {@code create} 밖으로 나가고, 그러면 바깥 트랜잭션도 어차피
+ * 롤백되기 때문이다. {@code REQUIRES_NEW} 가 실제로 새는 것은 <b>openRoom 이 성공한 뒤
+ * 그 트랜잭션 밖에서 무언가 실패할 때</b>이고, {@code create} 에는 아직 그 자리가 없다.
+ * 잡히는 회귀는 다른 쪽이다: {@code create} 에서 {@code @Transactional} 을 떼면
+ * {@code SimpleJpaRepository.save} 가 자기 트랜잭션으로 그룹 행을 커밋해 버리고,
+ * 그때 "방 없는 그룹" 이 실제로 남는다(그 상태로 돌려 빨간불을 확인했다).
+ * 전파를 바꾸려는 사람은 그 차이를 알고 바꿔야 한다.
  */
 @Service
 @RequiredArgsConstructor
