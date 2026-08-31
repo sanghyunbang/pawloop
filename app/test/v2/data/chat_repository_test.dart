@@ -94,7 +94,7 @@ void main() {
       late Uri seen;
       final repo = _repo(MockClient((req) async {
         seen = req.url;
-        return _json({'messages': <Object>[], 'lastSeq': 42, 'hasMore': false}, 200);
+        return _json({'items': <Object>[], 'lastSeq': 42, 'hasMore': false}, 200);
       }));
 
       await repo.messages(7, afterSeq: 42);
@@ -114,7 +114,7 @@ id 는 전역 시퀀스라 방 안에서 연속이 아니다. 그것을 커서�
       final repo = _repo(MockClient((req) async {
         headersSeen.add(req.headers);
         return _json(
-          {'messages': <Object>[], 'lastSeq': 42, 'hasMore': false},
+          {'items': <Object>[], 'lastSeq': 42, 'hasMore': false},
           200,
           extraHeaders: {'etag': '"7:42"'},
         );
@@ -144,7 +144,7 @@ id 는 전역 시퀀스라 방 안에서 연속이 아니다. 그것을 커서�
 
     test('새 메시지가 오면 비어 있지 않다', () async {
       final repo = _repo(MockClient((req) async => _json({
-            'messages': [
+            'items': [
               {
                 'id': 100,
                 'roomSeq': 43,
@@ -259,6 +259,182 @@ id 는 전역 시퀀스라 방 안에서 연속이 아니다. 그것을 커서�
       } on ChatFailure catch (e) {
         expect(e.kind, ChatFailureKind.forbidden);
       }
+    });
+  });
+
+  // ─────────────────────────── 신고 · 가리기 (이슈 #82) ───────────────────────────
+
+  group('신고', () {
+    test('고른 번호와 사유를 보낸다 — 사유는 계약의 wire 값이다', () async {
+      Map<String, dynamic>? sent;
+      String? path;
+      final repo = _repo(MockClient((req) async {
+        path = req.url.path;
+        sent = jsonDecode(req.body) as Map<String, dynamic>;
+        return _json({'reportId': 12, 'createdAt': '2026-08-31T10:00:00'}, 201);
+      }));
+
+      final id = await repo.report(
+          7, [3, 4], ChatReportReason.sexual, memo: '  불쾌합니다  ');
+
+      expect(id, 12);
+      expect(path, '/api/chat/rooms/7/reports');
+      expect(sent!['roomSeqs'], [3, 4]);
+      expect(sent!['reason'], 'sexual',
+          reason: 'enum 이름(SEXUAL)이 아니라 계약의 소문자 값이어야 한다');
+      expect(sent!['memo'], '불쾌합니다', reason: '앞뒤 공백은 보내기 전에 턴다');
+    });
+
+    test('메모가 비면 아예 안 보낸다 — 빈 문자열을 저장할 이유가 없다', () async {
+      Map<String, dynamic>? sent;
+      final repo = _repo(MockClient((req) async {
+        sent = jsonDecode(req.body) as Map<String, dynamic>;
+        return _json({'reportId': 1, 'createdAt': 'x'}, 201);
+      }));
+
+      await repo.report(7, [1], ChatReportReason.spam, memo: '   ');
+
+      expect(sent!.containsKey('memo'), isFalse);
+    });
+
+    test('신고 오류 넷을 각각 다르게 가른다 — 사용자가 할 일이 다르다', () async {
+      const cases = {
+        'REPORT_EMPTY': ChatFailureKind.reportEmpty,
+        'REPORT_MESSAGE_LIMIT': ChatFailureKind.reportTooMany,
+        'REPORT_MIXED_SENDERS': ChatFailureKind.reportMixedSenders,
+        'REPORT_SELF': ChatFailureKind.reportSelf,
+      };
+
+      for (final entry in cases.entries) {
+        final repo = _repo(MockClient((req) async => _json({
+              'error': {'code': entry.key, 'message': 'x', 'traceId': 't'}
+            }, 400)));
+
+        try {
+          await repo.report(7, [1], ChatReportReason.abuse);
+          fail('실패해야 한다: ${entry.key}');
+        } on ChatFailure catch (e) {
+          expect(e.kind, entry.value, reason: entry.key);
+          expect(e.message, isNotEmpty);
+        }
+      }
+    });
+
+    test('사유 어휘가 계약과 같다 — 여기가 갈리면 서버가 400 을 낸다', () {
+      expect(
+        ChatReportReason.values.map((r) => r.wire).toList(),
+        ['spam', 'abuse', 'sexual', 'fraud', 'other'],
+      );
+    });
+  });
+
+  group('가리기', () {
+    test('가리기는 사람 단위다 — 경로에 방 id 가 없다', () async {
+      String? path;
+      Map<String, dynamic>? sent;
+      final repo = _repo(MockClient((req) async {
+        path = req.url.path;
+        sent = jsonDecode(req.body) as Map<String, dynamic>;
+        return http.Response('', 201);
+      }));
+
+      await repo.block(42);
+
+      expect(path, '/api/chat/blocks');
+      expect(sent!['userId'], 42);
+    });
+
+    test('가리기 해제는 DELETE 고 204 를 성공으로 읽는다', () async {
+      String? method;
+      String? path;
+      final repo = _repo(MockClient((req) async {
+        method = req.method;
+        path = req.url.path;
+        return http.Response('', 204);
+      }));
+
+      await repo.unblock(42);
+
+      expect(method, 'DELETE');
+      expect(path, '/api/chat/blocks/42');
+    });
+
+    test('가려진 메시지는 목록에서 빠지지 않고 본문도 온다', () async {
+      final repo = _repo(MockClient((req) async => _json({
+            'items': [
+              {
+                'id': 1,
+                'roomSeq': 5,
+                'senderUserId': 9,
+                'senderName': '가려진 사람',
+                'body': '접히지만 사라지지는 않는 말',
+                'createdAt': '2026-08-31T10:00:00',
+                'hiddenByBlock': true,
+              }
+            ],
+            'lastSeq': 5,
+            'hasMore': false,
+          }, 200)));
+
+      final page = await repo.messages(7);
+
+      expect(page.messages, hasLength(1),
+          reason: '빼면 그 roomSeq 가 도달하지 않아 미읽음 뱃지가 영원히 남는다');
+      expect(page.messages.single.hiddenByBlock, isTrue);
+      expect(page.messages.single.body, '접히지만 사라지지는 않는 말',
+          reason: '"보기" 를 누를 때 요청이 한 번 더 필요하지 않도록 본문이 함께 온다');
+    });
+
+    test('hiddenByBlock 이 없으면 false 다 — 옛 서버와도 화면이 그려져야 한다', () async {
+      final repo = _repo(MockClient((req) async => _json({
+            'items': [
+              {'id': 1, 'roomSeq': 5, 'senderUserId': 9, 'senderName': 'x', 'body': 'y'}
+            ],
+            'lastSeq': 5,
+            'hasMore': false,
+          }, 200)));
+
+      final page = await repo.messages(7);
+
+      expect(page.messages.single.hiddenByBlock, isFalse);
+    });
+
+    test('방 목록 미리보기도 접힘 여부를 읽는다', () async {
+      final repo = _repo(MockClient((req) async => _json([
+            {
+              'id': 1,
+              'title': '가족',
+              'tag': '가족',
+              'lastSeq': 5,
+              'lastReadSeq': 5,
+              'unread': 0,
+              'memberCount': 2,
+              'lastMessage': {'body': '샐 뻔한 말', 'senderName': 'x', 'hiddenByBlock': true},
+            }
+          ], 200)));
+
+      final rooms = await repo.rooms();
+
+      expect(rooms.single.lastMessageHidden, isTrue,
+          reason: '방 안에서 접어 놓고 목록에서 그대로 보여 주면 거기로 샌다');
+    });
+  });
+
+  group('강퇴', () {
+    test('강퇴와 재입장 금지 해제가 서로 다른 경로다', () async {
+      final calls = <String>[];
+      final repo = _repo(MockClient((req) async {
+        calls.add('${req.method} ${req.url.path}');
+        return http.Response('', 204);
+      }));
+
+      await repo.removeMember(7, 42);
+      await repo.allowRejoin(7, 42);
+
+      expect(calls, [
+        'DELETE /api/chat/rooms/7/members/42',
+        'DELETE /api/chat/rooms/7/bans/42',
+      ]);
     });
   });
 }

@@ -55,8 +55,40 @@ enum ChatFailureKind {
   /// 한도를 넘겼다(429). 채팅 버킷은 사용자 단위로 센다 (#80).
   rateLimited,
 
+  /// 신고할 메시지를 안 골랐다(400 · `REPORT_EMPTY`).
+  reportEmpty,
+
+  /// 세 개를 넘겨 골랐다(400 · `REPORT_MESSAGE_LIMIT`).
+  reportTooMany,
+
+  /// 고른 메시지의 발신자가 여럿이다(400 · `REPORT_MIXED_SENDERS`).
+  reportMixedSenders,
+
+  /// 자기 메시지를 골랐다(400 · `REPORT_SELF`).
+  reportSelf,
+
   /// 그 밖의 실패. 연결·타임아웃·5xx.
   network,
+}
+
+/// 신고 사유. **서버가 닫힌 목록으로 받는다** — 계약(`openapi.yaml`)이 어휘의 출처다.
+///
+/// 여기에 없는 값을 보내면 서버가 400 `REPORT_REASON_UNKNOWN` 을 낸다. 서버가 모르는 값을
+/// `other` 로 눕히지 않기 때문인데, 그래야 운영자가 세는 숫자가 소리 없이 틀어지지 않는다.
+enum ChatReportReason {
+  spam('spam', '광고 · 도배'),
+  abuse('abuse', '욕설 · 괴롭힘'),
+  sexual('sexual', '성적인 내용'),
+  fraud('fraud', '사기 · 금전 요구'),
+  other('other', '기타');
+
+  const ChatReportReason(this.wire, this.label);
+
+  /// 서버로 보내는 값. **화면 문구와 분리한다** — 문구를 다듬는다고 저장된 뜻이 바뀌면 안 된다.
+  final String wire;
+
+  /// 사용자가 고를 때 읽는 말.
+  final String label;
 }
 
 /// 화면에 그대로 띄울 수 있는 실패 하나.
@@ -78,6 +110,10 @@ class ChatFailure implements Exception {
         ChatFailureKind.inviteExhausted => '이 코드는 사용 횟수를 다 썼어요. 새 코드를 받아 주세요',
         ChatFailureKind.roomFull => '방 정원이 가득 찼어요',
         ChatFailureKind.invalid => '보낼 수 없는 내용이에요',
+        ChatFailureKind.reportEmpty => '신고할 메시지를 하나 이상 골라 주세요',
+        ChatFailureKind.reportTooMany => '메시지는 세 개까지 고를 수 있어요',
+        ChatFailureKind.reportMixedSenders => '한 번에 한 사람만 신고할 수 있어요',
+        ChatFailureKind.reportSelf => '내가 쓴 메시지는 신고할 수 없어요',
         ChatFailureKind.rateLimited => '너무 잦아요. 잠시 후 다시 시도해 주세요',
         ChatFailureKind.network => '연결이 불안정해요',
       };
@@ -101,6 +137,14 @@ class ChatRoomSummary {
   final String? lastMessageBody;
   final String? lastMessageSender;
 
+  /// 이 방에서의 내 역할. `OWNER` 면 방장이라 강퇴할 수 있다.
+  ///
+  /// 서버가 늘 주지만 모르는 값이 올 수 있어 문자열 그대로 든다 — [isOwner] 로만 읽는다.
+  final String myRole;
+
+  /// 미리보기의 발신자를 내가 가렸다. 방 안에서 접어 놓고 목록에서 그대로 보여 주면 샌다.
+  final bool lastMessageHidden;
+
   const ChatRoomSummary({
     required this.id,
     required this.title,
@@ -111,7 +155,12 @@ class ChatRoomSummary {
     required this.memberCount,
     this.lastMessageBody,
     this.lastMessageSender,
+    this.lastMessageHidden = false,
+    this.myRole = '',
   });
+
+  /// 내가 이 방의 방장인가. 강퇴 버튼을 띄울지의 유일한 근거다.
+  bool get isOwner => myRole == 'OWNER';
 
   static ChatRoomSummary? tryParse(Map<String, dynamic> json) {
     final id = json['id'];
@@ -129,6 +178,8 @@ class ChatRoomSummary {
       memberCount: _asInt(json['memberCount']),
       lastMessageBody: last is Map ? last['body']?.toString() : null,
       lastMessageSender: last is Map ? last['senderName']?.toString() : null,
+      lastMessageHidden: last is Map && last['hiddenByBlock'] == true,
+      myRole: '${json['myRole'] ?? ''}',
     );
   }
 }
@@ -146,6 +197,12 @@ class ChatMessageItem {
   final DateTime? createdAt;
   final bool deleted;
 
+  /// 내가 이 사람을 가렸다. **읽는 사람마다 다른 값이다** — 같은 메시지가 남에게는 false 다.
+  ///
+  /// 목록에서 빠지지 않고 [body] 도 그대로 온다. 빼면 그 [roomSeq] 가 도달하지 않아
+  /// 미읽음 뱃지가 영원히 남고, 본문을 지워 내리면 "보기" 를 누를 때 요청이 한 번 더 필요하다.
+  final bool hiddenByBlock;
+
   const ChatMessageItem({
     required this.id,
     required this.roomSeq,
@@ -154,6 +211,7 @@ class ChatMessageItem {
     required this.body,
     required this.createdAt,
     required this.deleted,
+    this.hiddenByBlock = false,
   });
 
   static ChatMessageItem? tryParse(Map<String, dynamic> json) {
@@ -170,6 +228,7 @@ class ChatMessageItem {
       body: '${json['body'] ?? ''}',
       createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}'),
       deleted: json['deletedAt'] != null,
+      hiddenByBlock: json['hiddenByBlock'] == true,
     );
   }
 }
@@ -262,7 +321,11 @@ class ChatRepository {
 
     final json = _decodeOrThrow(res) as Map<String, dynamic>;
     return ChatMessagePage(
-      messages: (json['messages'] as List? ?? const [])
+      // 서버가 주는 키는 items 다 (`ChatMessagePageResponse` · 계약의 `ChatMessagePage`).
+      // 여기가 한동안 messages 였다 — 서버가 그 키를 주지 않으니 목록이 **언제나 비었다**.
+      // 테스트도 messages 로 흉내 내고 있어서 초록불이었다. 그래서 계약의 키 이름을
+      // 테스트가 직접 단언한다(chat_repository_test.dart).
+      messages: (json['items'] as List? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(ChatMessageItem.tryParse)
           .whereType<ChatMessageItem>()
@@ -308,6 +371,68 @@ class ChatRepository {
       () => _authed.postJson(Uri.parse('$baseUrl/api/chat/invites/$code/join')),
     );
     return _asInt((json as Map)['roomId'] ?? json['id']);
+  }
+
+  /// 메시지 몇 개를 신고한다. **하나 이상 세 개 이하.**
+  ///
+  /// 서버가 본문 사본·발신자·발신 시각과 앞뒤 각 5개의 `roomSeq` 범위를 스냅샷으로 남긴다 —
+  /// 원본이 지워진 뒤에도 읽을 수 있어야 하기 때문이다.
+  ///
+  /// **가리기와 방 나가기를 여기서 하지 않는다.** 신고 화면의 체크박스를 켰으면 화면이
+  /// [block] 을 따로 부른다. 신고에 자동 차단을 묶으면 가족방에서 되돌릴 수 없는 사고가 된다.
+  Future<int> report(
+    int roomId,
+    List<int> roomSeqs,
+    ChatReportReason reason, {
+    String? memo,
+  }) async {
+    final json = await _send(
+      () => _authed.postJson(
+        Uri.parse('$baseUrl/api/chat/rooms/$roomId/reports'),
+        body: {
+          'roomSeqs': roomSeqs,
+          'reason': reason.wire,
+          if (memo != null && memo.trim().isNotEmpty) 'memo': memo.trim(),
+        },
+      ),
+    );
+    return _asInt((json as Map?)?['reportId']);
+  }
+
+  /// 이 사람을 가린다. **삭제가 아니다** — 내 화면에서만 접힌다.
+  ///
+  /// 이미 가려 뒀어도 성공이다. 방 단위가 아니라 사람 단위라 모든 방에서 접힌다.
+  Future<void> block(int userId) async {
+    await _send(
+      () => _authed.postJson(
+        Uri.parse('$baseUrl/api/chat/blocks'),
+        body: {'userId': userId},
+      ),
+    );
+  }
+
+  /// 가리기를 푼다. 가린 적 없어도 성공이다.
+  Future<void> unblock(int userId) async {
+    await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/chat/blocks/$userId')));
+  }
+
+  /// 이 사람을 방에서 내보낸다. **방장만.**
+  ///
+  /// 멤버 행은 남고 재입장이 금지된다 — 유효한 초대코드로도 못 들어온다. 그 사람이 쓴
+  /// 메시지는 방에 남는다.
+  Future<void> removeMember(int roomId, int userId) async {
+    await _send(
+      () => _authed.deleteJson(Uri.parse('$baseUrl/api/chat/rooms/$roomId/members/$userId')),
+    );
+  }
+
+  /// 재입장 금지를 푼다. **방장만.**
+  ///
+  /// 푸는 것은 금지뿐이다 — 그 사람이 초대코드로 다시 들어와야 방에 돌아온다.
+  Future<void> allowRejoin(int roomId, int userId) async {
+    await _send(
+      () => _authed.deleteJson(Uri.parse('$baseUrl/api/chat/rooms/$roomId/bans/$userId')),
+    );
   }
 
   // ─────────────────────────── 내부 ───────────────────────────
@@ -364,6 +489,12 @@ class ChatRepository {
       'INVITE_REVOKED' => ChatFailureKind.inviteRevoked,
       'INVITE_USES_EXHAUSTED' => ChatFailureKind.inviteExhausted,
       'ROOM_MEMBER_LIMIT' => ChatFailureKind.roomFull,
+      'REPORT_EMPTY' => ChatFailureKind.reportEmpty,
+      'REPORT_MESSAGE_LIMIT' => ChatFailureKind.reportTooMany,
+      'REPORT_MIXED_SENDERS' => ChatFailureKind.reportMixedSenders,
+      'REPORT_SELF' => ChatFailureKind.reportSelf,
+      // REPORT_MESSAGE_NOT_FOUND · REPORT_REASON_UNKNOWN 은 따로 안 가른다 —
+      // 둘 다 앱이 잘못 보낸 것이라 사용자가 할 수 있는 일이 없다. invalid 로 떨어진다.
       _ => switch (res.statusCode) {
           400 => ChatFailureKind.invalid,
           401 => ChatFailureKind.unauthorized,
