@@ -90,6 +90,15 @@ CREATE TABLE `cat3_category_mapping` (
   PRIMARY KEY (`mapping_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `chat_block` (
+  `blocked_user_id` bigint NOT NULL,
+  `blocker_user_id` bigint NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_chat_block` (`blocker_user_id`,`blocked_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `chat_message` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `deleted_at` datetime(6) DEFAULT NULL,

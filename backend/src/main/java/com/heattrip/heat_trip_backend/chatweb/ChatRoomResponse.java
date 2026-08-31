@@ -7,6 +7,7 @@ import com.heattrip.heat_trip_backend.chat.ChatRoomView;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 계약({@code openapi.yaml})의 {@code ChatRoom} 모양 — 이슈 #75·#79.
@@ -49,12 +50,16 @@ public record ChatRoomResponse(
      *
      * @param senderNames 미리보기 발신자의 <b>지금</b> 이름. {@link ChatSenderNames} 가
      *                    한 번의 조회로 모아 온 것이다
+     * @param blockedIds  읽는 사람이 가린 발신자들. <b>미리보기도 가려야 한다</b> — 방 안에서
+     *                    접어 놓고 목록에서 그대로 보여 주면 가린 사람의 말이 거기로 샌다(#82)
      */
-    static ChatRoomResponse of(ChatRoomSummaryView summary, Map<Long, String> senderNames) {
+    static ChatRoomResponse of(ChatRoomSummaryView summary, Map<Long, String> senderNames,
+                               Set<Long> blockedIds) {
         ChatRoomView room = summary.room();
         ChatMessageResponse preview = summary.lastMessage() == null ? null
                 : ChatMessageResponse.of(summary.lastMessage(),
-                        senderNames.get(summary.lastMessage().senderUserId()));
+                        senderNames.get(summary.lastMessage().senderUserId()),
+                        blockedIds.contains(summary.lastMessage().senderUserId()));
         return new ChatRoomResponse(room.id(), room.name(), room.tag(),
                 room.originKind(), room.originRef(), room.lastSeq(),
                 summary.lastReadSeq(), summary.unread(), summary.memberCount(),

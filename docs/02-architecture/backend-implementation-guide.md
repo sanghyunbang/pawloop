@@ -109,13 +109,13 @@ package com.heattrip.heat_trip_backend.care.api;
 
 ### 2.4 `chat` 에 2단을 적용할 때의 조건
 
-`chat` 은 지금 2단 구조가 **아니다** — 루트에 20개 + `entity/` + `repository/` + `metrics/` 다. 그런데 **그 모양이 구조 검사의 기본형과 정확히 일치해서** 켜자마자 위반 0건이다.
+`chat` 은 지금 2단 구조가 **아니다** — 루트에 21개 + `entity/` + `repository/` + `metrics/` 다. 그런데 **그 모양이 구조 검사의 기본형과 정확히 일치해서** 켜자마자 위반 0건이다.
 
-2단으로 옮기면 그 0건이 깨질 수 있다. 옮길 때 `api` 에 이름을 붙여야 하고, **무엇을 `api` 에 넣을지는 이미 정해져 있다.** 2026-08-31 실측으로 루트 20개가 이렇게 갈린다.
+2단으로 옮기면 그 0건이 깨질 수 있다. 옮길 때 `api` 에 이름을 붙여야 하고, **무엇을 `api` 에 넣을지는 이미 정해져 있다.** 2026-08-31 실측으로 루트 21개가 이렇게 갈린다.
 
-| 밖에서 실제로 부름 → `api/` 로 (14) | 밖에서 이름이 안 보임 (6) |
+| 밖에서 실제로 부름 → `api/` 로 (15) | 밖에서 이름이 안 보임 (6) |
 |:---|:---|
-| `ChatRoomService` · `ChatRoomView` · `ChatMessageView` · `ChatRoomSummaryView` · `ChatMessagePageView` · `ChatMemberView` · `ChatLimitViolationException` · `ChatReadView` · `ChatMessageSender` · `ChatMessageSendResult` · `ChatJoinResult` · `ChatInviteView` · `ChatReportService` · `ChatReportView` | `ChatErrorCode` · `ChatLimits` · `FixedChatLimits` · `InviteCodeGenerator` · `ChatReportedMessageView` · `ChatReportReason` |
+| `ChatRoomService` · `ChatRoomView` · `ChatMessageView` · `ChatRoomSummaryView` · `ChatMessagePageView` · `ChatMemberView` · `ChatLimitViolationException` · `ChatReadView` · `ChatMessageSender` · `ChatMessageSendResult` · `ChatJoinResult` · `ChatInviteView` · `ChatReportService` · `ChatReportView` · `ChatBlocks` | `ChatErrorCode` · `ChatLimits` · `FixedChatLimits` · `InviteCodeGenerator` · `ChatReportedMessageView` · `ChatReportReason` |
 
 **오른쪽 칸의 이름이 "내부로 옮겨도 된다" 는 뜻은 아니다.** 세는 방식이 **밖의 소스에 그 이름이 적혀 있는가** 라서 맹점이 하나 있다 — `ChatReportedMessageView` 는 밖 어디에도 안 적혀 있지만 `ChatReportView` 가 들고 있는 리스트의 원소 타입이라, 내부로 내리면 **공개 record 의 시그니처가 깨진다**(#82).
 

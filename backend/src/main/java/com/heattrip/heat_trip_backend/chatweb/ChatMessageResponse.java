@@ -21,8 +21,19 @@ import java.time.LocalDateTime;
  * <p>계약의 {@code ChatMessage} 스키마에 없다. 멱등키는 클라이언트가 만들어 보낸 값이라
  * 돌려줄 이유가 없고, 실으면 같은 방의 다른 사람에게 남의 키가 보인다.
  *
+ * <h2>{@code hiddenByBlock} 은 <b>읽는 사람마다 다른 값</b>이다</h2>
+ * <p>같은 메시지가 어떤 사람에게는 {@code true} 고 다른 사람에게는 {@code false} 다 —
+ * 가리기는 내 화면에서만 접는 것이기 때문이다(#82). 그래서 이 값은 캐시할 수 없고,
+ * 조립할 때마다 <b>읽는 사람</b>을 알아야 한다.
+ *
+ * <p>본문을 지워서 내리지 않는다. 가려진 자리에 "보기" 가 있어서, 지워 내리면 그것을 누를
+ * 때 요청이 한 번 더 필요해진다({@code ChatBlocks} javadoc).
+ *
  * @param deletedAt 소프트 삭제 시각. <b>{@code null} 이 아니어도 목록에서 빠지지 않는다</b> —
  *                  톰스톤이다. 본문을 가리는 것은 화면의 일이다(ADR-0011)
+ * @param hiddenByBlock 읽는 사람이 이 발신자를 가렸는가. <b>목록에서 빼지 않는 이유</b>는
+ *                  {@code deletedAt} 과 같다 — 빼면 그 {@code roomSeq} 가 도달하지 않아
+ *                  미읽음 뱃지가 영원히 남는다
  */
 public record ChatMessageResponse(
         long id,
@@ -33,11 +44,17 @@ public record ChatMessageResponse(
         String contentType,
         String body,
         LocalDateTime createdAt,
-        LocalDateTime deletedAt) {
+        LocalDateTime deletedAt,
+        boolean hiddenByBlock) {
 
     static ChatMessageResponse of(ChatMessageView message, String senderName) {
+        return of(message, senderName, false);
+    }
+
+    static ChatMessageResponse of(ChatMessageView message, String senderName,
+                                  boolean hiddenByBlock) {
         return new ChatMessageResponse(message.id(), message.roomId(), message.roomSeq(),
                 message.senderUserId(), senderName, message.contentType(), message.body(),
-                message.createdAt(), message.deletedAt());
+                message.createdAt(), message.deletedAt(), hiddenByBlock);
     }
 }
