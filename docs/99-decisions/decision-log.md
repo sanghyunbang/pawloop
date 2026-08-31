@@ -24,6 +24,7 @@
 | [0012](#adr-0012--모듈-경계는-spring-modulith-의-구조-검사만-들인다) | 모듈 경계 검사에 Spring Modulith 도입 — 구조 검사만, 이벤트 절반은 보류 | 채택 (Accepted) | 2026-08 |
 | [0013](#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다) | KTO 프록시 — 0.02° 격자 캐시 + DB 행이 지키는 일일 호출 예산 | 채택 (Accepted) | 2026-08 |
 | [0014](#adr-0014--제품-기획-문서도-저장소에-넣는다) | 제품 기획 문서(`00-product/`)도 저장소에 넣는다 — ADR-0008 의 한 줄을 뒤집는다 | 채택 (Accepted) | 2026-09 |
+| [0015](#adr-0015--산책-경로는-linestring-으로-저장하되-spatial-index-는-만들지-않는다) | 산책 경로는 LINESTRING 으로 저장하되 SPATIAL INDEX 는 만들지 않는다 — ADR-0013 의 절반을 뒤집는다 | 채택 (Accepted) | 2026-09 |
 
 > 상태 범례: **채택(Accepted)** = 현재 유효 · **임시(Accepted, 임시)** = 채택했으나 대체 계획 존재 · (필요 시) 폐기(Superseded)/거절(Rejected).
 
@@ -1407,6 +1408,79 @@ ADR-0008 이 04-api 계열을 올릴 때 쓴 것과 같은 기준이다.
 - `monetization.md` 와 `legal-lbs-compliance.md` 도 함께 올라간다. 둘은 이번 감사 대상이
   아니었으므로 **내용이 최신인지 확인되지 않았다.**
 
+
+---
+
+## ADR-0015 — 산책 경로는 LINESTRING 으로 저장하되 SPATIAL INDEX 는 만들지 않는다
+
+- **상태**: 채택 (Accepted)
+- **날짜**: 2026-09-01
+- **부분 대체**: [ADR-0013](#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다) 의 "`hibernate-spatial` 의존성을 들이지 않는다" 판단
+- **이슈**: [#145](https://github.com/sanghyunbang/heattrip/issues/145)
+
+### 맥락
+
+`schema.md §4` 는 처음부터 `path LINESTRING SRID 4326 NOT NULL` 과 `SPATIAL INDEX spx_walk_path`
+를 적어 뒀고, 계약의 `Walk.path` 도 "DB엔 LINESTRING으로 저장" 이라고 말한다. 그런데 **ADR-0013
+이 `hibernate-spatial` 을 기각했다.** 근거가 둘이었다.
+
+1. 조회가 `(lat_idx, lng_idx)` PK 하나뿐이라 공간 인덱스가 할 일이 없다.
+2. `hibernate-spatial` 의존성과 `SchemaDdlDriftTest` 의 geometry 대조 문제가 따라온다.
+
+이 둘은 **`place` 에 대한 판단**이었다. `walk` 에서도 같은지 확인하지 않은 채로 남아 있었고,
+확인하지 않으면 계약과 스키마 문서가 코드와 다른 말을 하는 상태가 계속된다.
+
+### 결정
+
+**둘째 근거만 뒤집는다. 첫째는 `walk` 에도 그대로 유효하다.**
+
+1. **`org.hibernate.orm:hibernate-spatial` 을 들인다.** 버전은 Boot BOM 이 관리한다.
+2. **`path` 는 `LINESTRING SRID 4326`.** `@Column(columnDefinition = "linestring srid 4326")`
+   으로 **명시한다.**
+3. **`SPATIAL INDEX` 는 만들지 않는다.**
+4. **`path` 는 NULL 을 허용한다.** `schema.md §4` 의 `NOT NULL` 을 뒤집는다.
+
+### 대안
+
+1. **`path_json LONGTEXT` 에 JSON 배열로 저장**(ADR-0013 의 회피안을 walk 로 연장): 의존성이
+   안 늘고 드리프트 걱정이 없다. 그런데 **서버가 경로를 이해하지 못한다** — 거리를 다시 잴 수도,
+   좌표가 말이 되는지 볼 수도 없고, 나중에 "이 산책로를 지난 산책" 같은 질문이 생기면 통째로
+   마이그레이션이다. 무엇보다 계약과 `schema.md` 가 이미 LINESTRING 이라고 적혀 있어서, 이 안을
+   고르면 **문서 두 곳을 코드에 맞춰 내려야 한다.** 기각.
+2. **LINESTRING + SPATIAL INDEX**(`schema.md §4` 원안): MySQL 의 `SPATIAL INDEX` 는 컬럼이
+   `NOT NULL` 이어야 한다. 그러면 **경로 없는 산책을 저장할 수 없다** — 손입력 기록과 위치 권한을
+   거부한 기록이 그렇다. 없는 경로를 만들어 넣는 것 말고는 방법이 없고, 그건 화면이 거짓말을
+   하게 만든다. 게다가 지금 저장소에 **`walk` 를 공간으로 묻는 질의가 하나도 없다.** 쓰지 않는
+   인덱스를 위해 쓰기 비용과 NOT NULL 제약을 사는 셈이다. 기각.
+3. **`hibernate-spatial` 없이 네이티브 쿼리로만 다루기**: `ST_GeomFromText` 로 넣고
+   `ST_AsText` 로 읽으면 의존성이 없다. 그런데 엔티티가 그 컬럼을 못 들어서 `@ManyToOne` 하나
+   없는 스칼라 매핑이 되고, `ddl-auto=validate` 가 매핑 없는 컬럼을 어떻게 볼지 또 확인해야
+   한다. 의존성 한 줄이 이 전부보다 싸다. 기각.
+
+### 결과
+
+- **실측으로 확인하고 결정했다.** 버리는 브랜치에서 의존성 한 줄과 엔티티 하나로 돌렸다.
+  Hibernate 6.6.22 가 `linestring /*!80003 SRID 4326 */` 을 발행하고, `SchemaDdlDriftTest`
+  4/4 가 통과하고(즉 그 DDL 이 **빈 DB 에 재적용된다**), 3점을 넣고 비운 뒤 다시 읽어
+  좌표와 `getSRID() == 4326` 이 그대로 돌아왔다.
+- **`columnDefinition` 을 빼면 `geometry` 가 된다.** 같은 스파이크에서 확인했다. `geometry`
+  컬럼은 점이든 다각형이든 받고 SRID 도 없다. **명시가 선택이 아니다.**
+- **`SchemaDdlDriftTest` 는 SRID 를 못 본다.** `information_schema.columns.column_type` 이
+  `linestring` 뿐이라 SRID 가 들어 있지 않다. 즉 **SRID 가 빠진 스키마와 있는 스키마를 같다고
+  본다.** 그래서 SRID 검증은 마이그레이션 사후검증에서 `st_geometry_columns.srs_id` 로 따로
+  한다. 이 구멍은 `walk` 밖의 다른 공간 컬럼이 생기면 그때도 그대로다.
+- **`ST_Length(path, 'metre')` 가 동작한다.** 서버가 경로에서 직접 거리를 잴 수 있다는 뜻이라,
+  앱이 신고한 `distanceM` 을 교차검증할 수단이 생겼다. 지금은 쓰지 않는다 — 두 값이 다를 때
+  무엇을 믿을지 정하지 않았고, GPS 표본이 성기면 실제보다 짧게 나오기 때문이다.
+- **`schema.md §4` 를 고쳐야 한다.** `NOT NULL` 과 `SPATIAL INDEX` 두 줄이다. 문서가 코드보다
+  먼저 쓰였고 이번에 코드가 그것과 다르게 간다.
+- **`place` 는 그대로다.** ADR-0013 의 격자 캐시는 아무것도 안 바뀐다. `hibernate-spatial` 이
+  클래스패스에 올라오지만 `place` 엔티티는 여전히 `lat`/`lng` 스칼라다 — 나중에 누군가 "이제
+  의존성이 있으니" 하고 `place` 를 공간 컬럼으로 바꾸려 하면, 그건 ADR-0013 의 **첫째** 근거를
+  다시 뒤집는 일이라 별도 판단이 필요하다.
+- **모르는 것을 적어 둔다**: 경로 점 수의 실제 분포(상한을 20,000 으로 잡았지만 관측이 아니다) ·
+  DAU(그래서 `walk` 표가 얼마나 커질지 모른다) · 점별 시각을 나중에 넣을지(LINESTRING 은 x,y 만
+  담으므로 넣으려면 컬럼이 하나 더 필요하다).
 
 ---
 

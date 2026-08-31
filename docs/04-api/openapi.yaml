@@ -658,9 +658,19 @@ paths:
     get:
       tags: [Walks]
       summary: 산책 기록 목록(내 반려견)
+      description: |
+        **정렬은 `(createdAt, id)` 내림차순입니다** — `startedAt` 이 아닙니다.
+
+        `startedAt` 은 클라이언트가 보낸 값이라, 오프라인에 쌓아 둔 산책이 며칠 뒤
+        과거 시각으로 들어옵니다. 그걸 커서 기준으로 쓰면 **이미 발급된 커서보다
+        아래 날짜의 행이 영원히 건너뛰어집니다.** 서버 시각으로 자르면 그 일이 없습니다.
+        (`chat_message` 가 `room_seq` 로 피한 것과 같은 종류의 실패입니다.)
+
+        그래서 목록 순서는 "걸은 순서" 가 아니라 **"기록된 순서"** 입니다.
       parameters:
         - name: dogId
           in: query
+          description: 생략하면 내 반려동물 전체의 산책을 섞어서 줍니다.
           schema: { type: integer, format: int64 }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
@@ -688,11 +698,21 @@ paths:
             schema: { $ref: '#/components/schemas/WalkInput' }
       responses:
         '201':
-          description: 저장됨
+          description: 새로 저장됨
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Walk' }
+        '200':
+          description: |
+            **같은 `clientWalkId` 로 이미 저장된 산책이 있어 그것을 그대로 돌려줍니다.**
+            재전송은 새 줄을 만들지 않습니다. 앱은 201 과 200 을 같게 취급하면 됩니다.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Walk' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: 그런 `dogId` 가 없거나 내 반려동물이 아닙니다. 두 경우를 구분하지 않습니다.
 
   /api/walks/{walkId}:
     get:
@@ -709,19 +729,47 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Walk' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            **없는 산책과 남의 산책이 똑같이 404 입니다.** 403 을 주면 "그 id 는 존재한다" 를
+            알려 주는 셈이라, id 를 훑어 남의 기록 수를 셀 수 있습니다. 응답 본문도 같습니다.
+    delete:
+      tags: [Walks]
+      summary: 산책 기록 삭제
+      description: |
+        멱등키(`clientWalkId`)가 있어 같은 산책을 두 번 저장할 수는 없으므로,
+        **잘못 저장한 것을 사용자가 지울 길이 반드시 있어야 합니다.**
+      parameters:
+        - name: walkId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: 삭제됨 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: 없는 산책과 남의 산책이 똑같이 404 입니다(위 `get` 과 같은 이유).
 
   /api/walks/stats/weekly:
     get:
       tags: [Walks]
-      summary: 주간 산책 통계
+      summary: 산책 통계(이번 주 + 전체 기간)
+      description: |
+        **한 번의 호출로 두 기간을 줍니다.** 화면이 둘 다 필요합니다 —
+        `me_screen` 은 "총 산책 / 총 거리 / 이번주" 를 한 카드에 나란히 놓고,
+        `myrecords_screen` 은 전체 기간의 거리·횟수·시간을 셉니다.
+        엔드포인트를 나누면 화면 하나가 두 번 부르고 요청 제한 항목도 하나 늘어납니다.
+
+        경로 이름에 `weekly` 가 남아 있는 것은 이미 쓰이고 있어서입니다.
       parameters:
         - name: dogId
           in: query
+          description: 생략하면 내 반려동물 전체를 합칩니다.
           schema: { type: integer, format: int64 }
       responses:
         '200':
-          description: 주간 통계(월~일 거리 + 요약)
+          description: 이번 주(월~일) + 전체 기간 요약
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WalkStats' }
@@ -1980,13 +2028,34 @@ components:
     DogSize:
       type: string
       enum: [small, medium, large]
-      description: 소형견/중형견/대형견
+      description: |
+        소형/중형/대형. 리소스 이름이 `Dog` 라 "견" 으로 읽히지만 **고양이에도 씁니다**
+        (`PetSpecies` 참조).
+
+    PetSpecies:
+      type: string
+      enum: [dog, cat, other]
+      default: dog
+      description: |
+        반려동물 종.
+
+        **`Dog` 라는 리소스 이름 안에 종 축이 들어 있는 것이 어색하지만, 이름을 바꾸지
+        않았습니다.** 경로(`/api/dogs`)와 `WalkInput.dogId` 가 이미 앱·계약 여러 곳에 박혀
+        있어서, 이름을 바꾸면 그 전부를 같은 PR 에서 함께 옮겨야 합니다. 이름은 나중에
+        `/api/pets` 로 옮기고 이 경로를 별칭으로 남기는 편이 안전합니다.
+
+        지금 이 필드를 넣는 이유는 **없으면 고양이를 키우는 사람이 반려동물을 서버에 못
+        올리고, 그 사람의 산책은 붙일 곳이 없기 때문**입니다. 앱에는 `PetSpecies` 가 이미
+        있고 더미 시드에 고양이가 들어 있습니다. 지금은 컬럼 하나지만 나중엔 마이그레이션
+        입니다.
 
     Dog:
       type: object
+      required: [id, name, size, species, neutered]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string, example: "보리" }
+        species: { $ref: '#/components/schemas/PetSpecies' }
         breed: { type: string, example: "믹스견" }
         size: { $ref: '#/components/schemas/DogSize' }
         birth: { type: [string, "null"], format: date, example: "2024-01-15" }
@@ -1998,8 +2067,11 @@ components:
       type: object
       required: [name, size]
       properties:
-        name: { type: string }
-        breed: { type: string }
+        name: { type: string, maxLength: 50 }
+        species:
+          $ref: '#/components/schemas/PetSpecies'
+          description: 생략하면 `dog` 입니다 — 이 필드가 없던 때 만들어진 앱과 계약이 맞습니다.
+        breed: { type: string, maxLength: 50 }
         size: { $ref: '#/components/schemas/DogSize' }
         birth: { type: [string, "null"], format: date }
         neutered: { type: boolean, default: false }
@@ -2057,16 +2129,30 @@ components:
 
     Walk:
       type: object
+      required: [id, dogId, clientWalkId, startedAt, distanceM, durationS]
       properties:
         id: { type: integer, format: int64 }
         dogId: { type: integer, format: int64 }
+        clientWalkId:
+          type: string
+          description: |
+            앱이 이 산책에 붙인 멱등키. 되돌려 주는 이유는 앱이 **전송 대기 큐의 어느 항목이
+            저장된 것인지** 맞춰 볼 수 있어야 하기 때문입니다.
+          example: "6d2f8b1a-3c4e-4a7f-9b0d-1e2f3a4b5c6d"
         startedAt: { type: string, format: date-time }
         endedAt: { type: [string, "null"], format: date-time }
         distanceM: { type: integer, example: 2400 }
         durationS: { type: integer, example: 2280 }
         path:
-          type: array
-          description: GPS 경로. [경도, 위도] 좌표 배열(GeoJSON LineString의 coordinates). DB엔 LINESTRING으로 저장.
+          type: [array, "null"]
+          description: |
+            GPS 경로. **`[경도, 위도]` 순서**입니다(GeoJSON LineString 의 coordinates 와 같고,
+            사람이 흔히 말하는 "위도, 경도" 와 **반대**입니다). DB 에는 `LINESTRING SRID 4326`
+            으로 저장합니다.
+
+            **`null` 일 수 있습니다.** 손으로 입력한 기록이나 위치 권한 없이 남긴 기록에는
+            경로가 없습니다. 목록(`GET /api/walks`)에서는 응답 크기 때문에 **항상 `null`** 이고,
+            상세(`GET /api/walks/{walkId}`)에서만 실제 경로가 옵니다.
           items:
             type: array
             items: { type: number, format: double }
@@ -2078,35 +2164,104 @@ components:
 
     WalkInput:
       type: object
-      required: [dogId, startedAt, distanceM, durationS]
+      description: |
+        **이 값들은 전부 앱이 스스로 신고한 것입니다.** 서버는 범위를 검사하지만, 범위 검사는
+        "말이 되는 값인가" 만 말하지 **"진짜 걸었는가" 는 말해 주지 않습니다.** 순위표나 보상에
+        쓰려면 그때 별도의 근거가 필요합니다.
+      required: [dogId, clientWalkId, startedAt, distanceM, durationS]
       properties:
         dogId: { type: integer, format: int64 }
-        startedAt: { type: string, format: date-time }
-        endedAt: { type: string, format: date-time }
-        distanceM: { type: integer }
-        durationS: { type: integer }
+        clientWalkId:
+          type: string
+          description: |
+            **앱이 만드는 멱등키(UUID v4 권장).** 산책이 끝나는 순간 한 번 만들고, 재전송에도
+            같은 값을 씁니다.
+
+            없으면 전송이 타임아웃 났을 때 앱이 두 가지를 구분할 수 없습니다 — 서버에 안 닿은
+            것인지, 저장은 됐는데 응답만 못 받은 것인지. 다시 보내면 같은 산책이 두 줄이 되고,
+            안 보내면 사라집니다. **둘 다 사용자가 겪으면 안 되는 일이라 키가 필요합니다.**
+          minLength: 8
+          maxLength: 64
+          example: "6d2f8b1a-3c4e-4a7f-9b0d-1e2f3a4b5c6d"
+        startedAt:
+          type: string
+          format: date-time
+          description: 지금보다 5분 넘게 미래면 400 입니다.
+        endedAt:
+          type: string
+          format: date-time
+          description: 주면 `startedAt` 보다 뒤여야 합니다.
+        distanceM:
+          type: integer
+          minimum: 0
+          maximum: 200000
+          description: 총 거리(m). 상한 200km 는 하루 산책으로 말이 되는 범위의 바깥 경계입니다.
+        durationS:
+          type: integer
+          minimum: 0
+          maximum: 86400
+          description: 총 소요(초). 상한은 24시간입니다.
         path:
           type: array
+          description: |
+            GPS 경로. **`[경도, 위도]` 순서**입니다 — 응답 `Walk.path` 와 같습니다.
+
+            뒤집어 보내면 서버가 400 으로 거절합니다(둘째 값의 절댓값이 90 을 넘으면 위도일 수
+            없습니다). 다만 **한국 안에서는 두 값이 모두 90 미만인 경우가 없어 이 검사가 걸리지만,
+            적도 근처 좌표라면 뒤집혀도 통과합니다.** 검사는 그물이지 보증이 아닙니다.
+
+            생략하거나 빈 배열이면 경로 없이 저장합니다(손입력 기록·위치 권한 거부).
+            점이 하나뿐이면 선이 아니므로 경로 없이 저장합니다.
+          minItems: 0
+          maxItems: 20000
           items:
             type: array
+            description: '[경도, 위도]'
             items: { type: number, format: double }
-        memo: { type: string }
-        weather: { type: string }
+            minItems: 2
+            maxItems: 2
+          example: [[127.0374, 37.5445], [127.0402, 37.5455]]
+        memo: { type: string, maxLength: 500 }
+        weather: { type: string, maxLength: 30 }
 
     WalkStats:
       type: object
+      description: |
+        **두 기간이 한 응답에 들어 있습니다.** `week*` 는 이번 주(월~일), `allTime*` 는 전체
+        기간입니다. 주 경계는 **KST 월요일 00:00** 입니다 — 서버 타임존이 아니라 한국 시각으로
+        자릅니다.
+      required: [weekKm, totalKm, walkCount, avgKm, allTimeKm, allTimeCount, allTimeMinutes]
       properties:
         weekKm:
           type: array
-          description: 월~일 요일별 거리(km). 길이 7.
+          description: 이번 주 요일별 거리(km). **월요일부터** 길이 7. 산책이 없는 요일은 0.
+          minItems: 7
+          maxItems: 7
           items: { type: number, format: double }
           example: [2.1, 2.9, 1.2, 0, 1.8, 3.1, 2.4]
-        totalKm: { type: number, format: double, example: 13.5 }
-        walkCount: { type: integer, example: 6 }
-        avgKm: { type: number, format: double, example: 2.3 }
+        totalKm: { type: number, format: double, description: 이번 주 합계 거리(km), example: 13.5 }
+        walkCount:
+          type: integer
+          description: |
+            이번 주 산책 **건수**입니다. "산책한 날 수" 가 아닙니다 — 하루에 두 번 걸으면 2 입니다.
+            (예전 더미 화면은 `weekKm` 에서 0 이 아닌 요일을 세어 날 수를 보여 줬습니다.)
+          example: 6
+        avgKm:
+          type: number
+          format: double
+          description: '`totalKm / walkCount`. 건수가 0 이면 0 입니다(나눗셈을 하지 않습니다).'
+          example: 2.3
+        allTimeKm: { type: number, format: double, description: 전체 기간 누적 거리(km), example: 128.4 }
+        allTimeCount: { type: integer, description: 전체 기간 산책 건수, example: 57 }
+        allTimeMinutes: { type: integer, description: 전체 기간 누적 시간(분), example: 2310 }
         topPlaces:
           type: array
-          description: 자주 간 곳 상위
+          description: |
+            자주 간 곳 상위.
+
+            **지금은 항상 빈 배열입니다.** `Walk` 에 장소 축이 없어서 셀 근거가 없습니다.
+            산책과 장소를 잇는 결정이 나오기 전까지 채우지 않습니다 — 그럴듯한 값을 만들어
+            넣으면 화면이 거짓말을 합니다.
           items:
             type: object
             properties:

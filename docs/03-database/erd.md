@@ -62,6 +62,7 @@ erDiagram
         BIGINT   id PK
         BIGINT   user_id FK
         VARCHAR  name
+        VARCHAR  species   "dog|cat|other - 표 이름과 달리 고양이도 들어온다"
         VARCHAR  breed
         VARCHAR  size      "small|medium|large"
         DATE     birth
@@ -72,13 +73,15 @@ erDiagram
     walk {
         BIGINT     id PK
         BIGINT     dog_id FK
-        DATETIME   started_at
+        DATETIME   started_at   "앱이 보낸 값 - 커서로 쓰지 않는다"
         DATETIME   ended_at
         INT        distance_m
         INT        duration_s
-        LINESTRING path       "GPS 경로 (공간타입)"
+        LINESTRING path         "SRID 4326. NULL 가능 - 손입력·권한거부 기록 (ADR-0015)"
         VARCHAR    memo
         VARCHAR    weather
+        VARCHAR    client_walk_id "재전송 멱등키. dog+client UNIQUE"
+        DATETIME   created_at   "서버 시각 - 목록 커서의 기준"
     }
 
     care_log {

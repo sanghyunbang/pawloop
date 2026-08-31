@@ -13,10 +13,10 @@
 | --- | --- |
 | 책임 | 산책 1건의 GPS 경로·거리·시간 저장/조회, 내 반려견 산책 이력 목록(커서 페이지네이션), 주간(월~일) 거리 통계 집계 |
 | 관련 테이블 | `walk`(주), `dog`(소유 검증 FK), `users`(소유 사용자) |
-| 공간 컬럼 | `walk.path` = `LINESTRING SRID 4326 NOT NULL` (GPS 폴리라인) |
+| 공간 컬럼 | `walk.path` = `LINESTRING SRID 4326` **NULL 허용** (GPS 폴리라인). [ADR-0015](../../99-decisions/decision-log.md#adr-0015--산책-경로는-linestring-으로-저장하되-spatial-index-는-만들지-않는다) |
 | 인증 | **전부 인증 필요.** openapi에서 Walks 경로는 `security: []` 미지정 → 전역 `bearerAuth` 적용. 소유권은 `walk → dog → dog.user_id == 요청 userId`로 확인 |
 | 재사용 가능한 것 | JWT 필터/`userId` 추출 규약(`AuthController` 참조), `Error`/`Page` 공통 응답 패턴, `dog` 엔티티/`DogRepository`(소유 검증), 프로젝트 표준 `record` DTO + `ResponseEntity<?>` 스타일 |
-| 재사용 **불가**(신규) | `Walk` 엔티티/매핑, `WalkRepository`(공간 native 쿼리), 좌표배열↔LINESTRING 변환 유틸, 주간 요일별 집계 로직 |
+| 재사용 **불가**(신규) | `Walk` 엔티티/매핑, `WalkRepository`, 좌표배열↔JTS `LineString` 변환 유틸, 주간 요일별 집계 로직 |
 | 패키지 | `com.heattrip.heat_trip_backend.walk.{controller,service,repository,entity,dto}` |
 
 ---
@@ -32,7 +32,9 @@
 | `GET /api/walks/{walkId}` | `getWalk(@PathVariable Long walkId, HttpServletRequest req)` | `ResponseEntity<WalkDto>` (경로 포함) | O |
 | `GET /api/walks/stats/weekly` | `weeklyStats(@RequestParam(required=false) Long dogId, HttpServletRequest req)` | `ResponseEntity<WalkStatsDto>` | O |
 
-> 메모: openapi에서 `GET /{walkId}`는 responses에 `401`을 명시하지 않았으나 전역 security가 적용되므로 인증 필수로 취급(미인증 401, 타인 산책 접근 403/404). `userId`는 기존 JWT 필터 규약대로 `HttpServletRequest`에서 추출.
+> 메모: `GET /{walkId}` 의 `401` 은 계약에 추가됐다(#24 · #145). **타인 산책과 없는 산책은 똑같이 404 다** — 403 을 주면 "그 id 는 존재한다" 를 알려 주는 셈이라 id 를 훑어 남의 기록 수를 셀 수 있다.
+>
+> `userId` 는 `@CurrentUser User me` 로 받는다. `HttpServletRequest` 에서 직접 꺼내는 것은 **금지**이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다(§6 참조). 위 표의 `HttpServletRequest req` 시그니처는 #5 이전 서술이라 더는 맞지 않는다.
 
 ---
 
@@ -136,10 +138,12 @@
 | `weather` | `weather` | `String` nullable (≤30) |
 | `createdAt` | `created_at` | `LocalDateTime` (DB 기본 now) |
 
-**인덱스(스키마 기준):** `KEY idx_walk_dog (dog_id, started_at)`, **`SPATIAL INDEX spx_walk_path (path)`**.
+**인덱스(스키마 기준):** `KEY idx_walk_dog (dog_id, started_at)`(주간 집계), `KEY idx_walk_dog_created (dog_id, created_at, id)`(목록 커서), `UNIQUE KEY uq_walk_client (dog_id, client_walk_id)`(멱등).
+
+**`SPATIAL INDEX` 는 만들지 않는다**(ADR-0015). 저장소에 `walk` 를 공간으로 묻는 질의가 하나도 없고, 그 인덱스는 `path NOT NULL` 을 요구하는데 **경로 없는 산책이 실제로 있다.**
 **FK:** `fk_walk_dog (dog_id) → dog(id) ON DELETE CASCADE`.
 
-> `path`는 SPATIAL INDEX 요건상 `NOT NULL`. 경로 미수신(빈 배열) 시 정책 필요 — 구현 노트 참조.
+> ~~`path`는 SPATIAL INDEX 요건상 `NOT NULL`.~~ **뒤집혔다(ADR-0015).** `path` 는 NULL 을 허용한다. 점이 0개거나 1개면(LINESTRING 은 점 1개로 만들 수 없다) 경로 없이 저장한다 — 400 으로 거부하지 않는다. 손입력 기록과 위치 권한을 거부한 기록이 그 경우다.
 
 ### 5.2 Repository — `WalkRepository extends JpaRepository<Walk, Long>`
 
@@ -161,8 +165,12 @@
 
 - **좌표 순서 (가장 흔한 버그).** openapi `path` = `[[lng, lat], ...]`(경도, 위도). MySQL `POINT(x, y) = POINT(lng, lat)`, WKT `LINESTRING(lng lat, lng lat, ...)`도 `경도 위도` 순. 배열 그대로 `x=배열[0], y=배열[1]`로 WKT 조립하면 일치. **lat/lng를 뒤집지 말 것.** 앱이 `[lat, lng]`로 보내는지 반드시 계약대로 `[lng, lat]`인지 재확인.
 - **SRID 필수.** `walk.path`는 `SRID 4326` 고정. 삽입 시 `ST_GeomFromText(:wkt, 4326)`로 SRID를 반드시 명시. SRID 누락/불일치 시 `SPATIAL INDEX`·거리 연산이 오동작하거나 삽입 오류.
-- **path NOT NULL 정책.** SPATIAL INDEX 요건상 `path`는 NOT NULL. 앱이 좌표 없이 저장 요청(실내/GPS 미허용) 시 정책 필요: (a) `startedAt` 단일점으로 초기화(단, LINESTRING은 최소 2점 필요 → 시작점을 2회 넣거나), (b) 좌표 부재 요청은 400 거부. **LINESTRING은 점 1개로 만들 수 없다** — 최소 2좌표 보장 또는 검증 필요.
-- **JPA와 공간타입.** 순수 Spring Data JPA는 `LINESTRING`을 표준 매핑하지 못한다. 위 §5.2 분리 패턴(native INSERT + `ST_AsText` SELECT) 권장. Hibernate Spatial 도입 시 dialect/JTS 의존성 및 `Point`/`LineString` 매핑 검증 필요.
+- **path 는 NULL 을 허용한다(ADR-0015).** **LINESTRING 은 점 1개로 만들 수 없다** — 점이 0~1개면 `path = NULL` 로 저장한다. 시작점을 두 번 넣어 가짜 선을 만들지 않는다(길이 0 짜리 경로가 지도에 찍힌다). 400 으로 거부하지도 않는다 — 실내 산책과 위치 권한 거부는 **정상적인 사용**이고, 그때 거절하면 사용자가 기록을 통째로 잃는다.
+- **JPA와 공간타입 — 분리 패턴이 필요 없다(ADR-0015에서 실측).** `org.hibernate.orm:hibernate-spatial` 을 넣으면 엔티티가 JTS `LineString` 을 직접 든다. 스파이크에서 확인한 것: Hibernate 6.6.22 가 `linestring /*!80003 SRID 4326 */` 을 발행하고, 3점을 넣고 영속성 컨텍스트를 비운 뒤 다시 읽어 좌표와 `getSRID() == 4326` 이 그대로 돌아왔다.
+
+  **`@Column(columnDefinition = "linestring srid 4326")` 을 반드시 명시할 것.** 빼면 Hibernate 가 `geometry` 로 만든다 — 점이든 다각형이든 받고 SRID 도 없다.
+
+  **JTS 는 `(x, y) = (경도, 위도)` 다.** `new Coordinate(lng, lat)` 이다. 뒤집으면 조용히 틀린다.
 - **JWT userId 추출.** `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. Walks 전 엔드포인트 공통. 미인증 → **본문 없는 401**(`Error` 스키마가 아니다 — `openapi.yaml` 의 `components/responses/Unauthorized` 참조).
 - **소유권 검증.** `walk`에는 `user_id`가 없고 `dog_id`만 있다. 반드시 `walk → dog → dog.user_id == userId`로 확인. 타인 산책 조회/목록 노출 금지. `createWalk`도 `dogId`가 요청자 소유인지 먼저 검증(아니면 403).
 - **커서 페이지네이션.** 커서는 불투명 토큰(예: base64로 감싼 `{"id":123}`) — openapi `nextCursor` 예시(`eyJpZCI6MTIzfQ==`)가 그 형태. `id DESC` 단일 키 또는 `started_at DESC, id DESC` 복합 키 중 택1(복합이면 커서에 두 값 인코딩). `limit+1`건 조회해 초과분 존재로 `hasMore` 판정 후 마지막 항목 커서를 `nextCursor`로.
