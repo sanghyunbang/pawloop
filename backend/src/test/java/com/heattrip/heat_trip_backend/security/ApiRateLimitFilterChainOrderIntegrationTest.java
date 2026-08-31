@@ -1,7 +1,6 @@
 package com.heattrip.heat_trip_backend.security;
 
 import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
-import com.heattrip.heat_trip_backend.config.PublicSecurityProperties;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 
 import jakarta.servlet.Filter;
@@ -65,12 +64,12 @@ class ApiRateLimitFilterChainOrderIntegrationTest extends AbstractMySqlIntegrati
     private FilterChainProxy filterChainProxy;
 
     @Autowired
-    private PublicSecurityProperties publicSecurityProperties;
+    private RateLimitProperties rateLimitProperties;
 
     @Test
     @DisplayName("배포되는 설정의 IP 헤더는 nginx 가 덮어쓰는 X-Real-IP 이고 신뢰 프록시 목록이 비어 있지 않다")
     void shippedConfiguration_trustsOnlyTheOverwrittenHeader() {
-        var rateLimit = publicSecurityProperties.getRateLimit();
+        var rateLimit = rateLimitProperties;
 
         assertThat(rateLimit.getIpHeader())
                 .as("""

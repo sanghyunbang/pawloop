@@ -6,7 +6,7 @@ import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.GoogleOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.OAuth2UserInfo;
-import com.heattrip.heat_trip_backend.config.OAuthSecurityProperties;
+import com.heattrip.heat_trip_backend.OAuth.OAuthSecurityProperties;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

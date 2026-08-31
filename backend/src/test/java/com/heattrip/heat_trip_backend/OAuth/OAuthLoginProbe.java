@@ -6,7 +6,7 @@ import com.heattrip.heat_trip_backend.OAuth.code.OAuthCodeExchangeService;
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2SuccessHandler;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
-import com.heattrip.heat_trip_backend.config.OAuthSecurityProperties;
+import com.heattrip.heat_trip_backend.OAuth.OAuthSecurityProperties;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.entity.RefreshToken;
 import com.heattrip.heat_trip_backend.user.entity.User;

@@ -1,6 +1,6 @@
 package com.heattrip.heat_trip_backend.OAuth.code;
 
-import com.heattrip.heat_trip_backend.config.OAuthSecurityProperties;
+import com.heattrip.heat_trip_backend.OAuth.OAuthSecurityProperties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

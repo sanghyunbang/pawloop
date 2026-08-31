@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import com.heattrip.heat_trip_backend.OAuth.code.AuthCodeStore;
 import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
-import com.heattrip.heat_trip_backend.config.OAuthSecurityProperties;
+import com.heattrip.heat_trip_backend.OAuth.OAuthSecurityProperties;
 
 import java.io.IOException;
 import jakarta.servlet.ServletException;

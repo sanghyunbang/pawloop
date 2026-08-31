@@ -90,10 +90,10 @@ class ModularityBaselineTest {
      * 되돌아간다. {@code -3 + 3 = 0}. <b>총계만 보면 아무 일도 안 일어난 것처럼 보이지만
      * 실제로는 바뀌었다</b> — 이 수 하나만 믿지 말고 위반 목록을 봐야 하는 이유다.
      */
-    private static final int BASELINE_VIOLATIONS = 245;
+    private static final int BASELINE_VIOLATIONS = 241;
 
     /** 순환 경로 개수. 쌍이 아니라 <b>경로</b>다 — 같은 두 모듈이 여러 경로에 걸쳐 나타난다. */
-    private static final int BASELINE_CYCLES = 5;
+    private static final int BASELINE_CYCLES = 1;
 
     private static final char NL = (char) 10;
 

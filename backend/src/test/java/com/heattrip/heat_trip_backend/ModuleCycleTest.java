@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.modulith.core.ApplicationModule;
 import org.springframework.modulith.core.ApplicationModules;
 
 /**
@@ -67,11 +68,7 @@ class ModuleCycleTest {
      * 하나만 내므로 도구가 낸 형태를 그대로 적는다.
      */
     private static final Set<String> KNOWN_CYCLES = new LinkedHashSet<>(List.of(
-            "OAuth -> config -> OAuth",
-            "OAuth -> config -> security -> S3 -> OAuth",
-            "OAuth -> config -> security -> S3 -> user -> OAuth",
-            "OAuth -> user -> OAuth",
-            "config -> security -> config"));
+            "OAuth -> user -> OAuth"));
 
     private static final String CYCLE_MARK = "- Cycle detected:";
     private static final String SLICE = "Slice ";
@@ -146,6 +143,69 @@ class ModuleCycleTest {
                         한 방향으로만 물면 갚아도 목록이 그대로 남고, 그만큼 이 검사가 무뎌진다.
                         나중에 같은 순환이 다시 생겨도 "원래 있던 것" 으로 통과한다.
                         """)
+                .isEmpty();
+    }
+
+    /**
+     * 서로를 부르는 모듈 쌍. 2026-08-31 실측. {@link #KNOWN_CYCLES} 와 같은 사실의 다른 표현이다.
+     */
+    private static final Set<String> KNOWN_MUTUAL_PAIRS = new LinkedHashSet<>(List.of("OAuth <-> user"));
+
+    /**
+     * 의존 그래프에서 <b>서로를 부르는 쌍</b>을 직접 찾는다. 위반 메시지를 파싱하지 않는다.
+     *
+     * <p><b>왜 이게 따로 필요한가.</b> #106 에서 {@code OAuth -> config} 를 끊었더니 도구가
+     * {@code config -> security -> config} 를 <b>보고하지 않기 시작했다.</b> 그런데
+     * {@code ApplicationModule#getDependencies} 로 간선을 직접 세어 보니 {@code config -> security}
+     * 와 {@code security -> config} 가 <b>둘 다 그대로 있었다.</b>
+     *
+     * <p>즉 도구의 순환 보고는 <b>순환 기저(cycle basis)</b>이지 "모든 순환" 이 아니다. 큰
+     * 덩어리가 쪼개지면 작은 쌍이 보고에서 빠질 수 있다. 메시지만 보면 "순환이 사라졌다" 로
+     * 읽히고, 그건 사실이 아니다.
+     *
+     * <p>그래서 이 검사는 메시지를 안 본다. 간선을 직접 훑어 {@code A -> B} 이면서
+     * {@code B -> A} 인 쌍을 찾는다.
+     */
+    @Test
+    @DisplayName("서로를 부르는 모듈 쌍이 늘지 않았다 — 메시지가 아니라 그래프를 직접 본다")
+    void noMutualDependencyHasAppeared() {
+        ApplicationModules modules = ApplicationModules.of(HeatTripBackendApplication.class);
+
+        // getName() 과 getDependencies(ApplicationModules) 는 1.3 부터 deprecated 다.
+        // getIdentifier() · getDirectDependencies() 를 쓴다.
+        Set<String> edges = new LinkedHashSet<>();
+        for (ApplicationModule module : modules) {
+            String from = module.getIdentifier().toString();
+            module.getDirectDependencies(modules).uniqueModules()
+                    .forEach(target -> edges.add(from + " -> " + target.getIdentifier()));
+        }
+
+        Set<String> mutual = new LinkedHashSet<>();
+        for (String edge : edges) {
+            String[] ends = edge.split(" -> ");
+            if (!edges.contains(ends[1] + " -> " + ends[0])) {
+                continue;
+            }
+            String a = ends[0].compareTo(ends[1]) <= 0 ? ends[0] : ends[1];
+            String b = ends[0].compareTo(ends[1]) <= 0 ? ends[1] : ends[0];
+            mutual.add(a + " <-> " + b);
+        }
+
+        Set<String> appeared = new LinkedHashSet<>(mutual);
+        appeared.removeAll(KNOWN_MUTUAL_PAIRS);
+        assertThat(appeared)
+                .as("""
+                        서로를 부르는 모듈 쌍이 새로 생겼다.
+
+                        도구의 순환 보고에는 안 나올 수 있다 — 그건 순환 기저라 작은 쌍을 빠뜨린다.
+                        이 검사는 간선을 직접 본다. 여기가 빨간불이면 진짜로 얽힌 것이다.
+                        """)
+                .isEmpty();
+
+        Set<String> gone = new LinkedHashSet<>(KNOWN_MUTUAL_PAIRS);
+        gone.removeAll(mutual);
+        assertThat(gone)
+                .as("박아 둔 쌍이 실제로는 없다. 끊었으면 KNOWN_MUTUAL_PAIRS 에서 지워라")
                 .isEmpty();
     }
 
