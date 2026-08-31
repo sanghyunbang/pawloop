@@ -153,4 +153,20 @@ public class RateLimitProperties {
      * 한도가 두 번째 벽이 된다.
      */
     private int chatJoinMaxRequests = 10;
+
+    /**
+     * 신고 버킷 — {@code POST /api/chat/rooms/{id}/reports}. (이슈 #82)
+     *
+     * <p>신고는 <b>쓰기</b>다. 한 사람이 같은 방을 계속 신고하면 운영자가 봐야 할 표가 그만큼
+     * 늘고, 그건 진짜 신고를 묻는 방식의 공격이 된다.
+     *
+     * <p>10 인 이유: 사람이 한 방에서 분당 10건을 신고할 일이 없다. 한 신고에 메시지를 3개까지
+     * 담을 수 있으니({@code ChatReportService#MAX_MESSAGES_PER_REPORT}) 분당 30개까지는 정상
+     * 경로로 신고할 수 있다.
+     *
+     * <p>참여 버킷과 같은 숫자인 것은 우연이 아니다 — 둘 다 "사람이 손으로 하는 드문 행동" 이다.
+     * 다만 <b>버킷을 따로 두는 이유</b>는 하나가 소진돼도 다른 하나가 살아 있어야 하기
+     * 때문이다. 신고를 쏟아부어 방 참여를 막을 수 있으면 안 된다.
+     */
+    private int chatReportMaxRequests = 10;
 }

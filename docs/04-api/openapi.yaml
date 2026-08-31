@@ -1429,43 +1429,80 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-  /api/chat/messages/{messageId}/reports:
+  /api/chat/rooms/{roomId}/reports:
     parameters:
-      - name: messageId
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
+      - $ref: '#/components/parameters/RoomId'
     post:
       tags: [Chat]
-      summary: 메시지 신고 (M2.7)
+      summary: 메시지 신고
       description: |
-        신고의 단위는 **메시지**이고 한 번에 최대 3개입니다. 서버가 본문 사본·발신자·시각과
+        신고의 단위는 **메시지**이고 한 번에 최대 3개입니다. 서버가 본문 사본·발신자·발신 시각과
         **앞뒤 각 5개의 `roomSeq` 범위**를 스냅샷으로 남깁니다 — 원본 참조만 하면 지워졌을 때
         판단이 불가능합니다.
 
-        **신고자는 익명이고 피신고자에게는 아무 알림도 가지 않습니다.**
-        `alsoBlock` 기본값은 **꺼짐**입니다 — 자동 차단은 가족방에서 되돌릴 수 없는 사고가 됩니다.
+        **경로가 바뀌었습니다** (2026-08-31, 이슈 #82). 예전 선언은
+        `POST /api/chat/messages/{messageId}/reports` 였는데, 경로가 메시지 하나를 지목하는
+        모양이라 **"한 번에 최대 3개" 를 표현할 수 없었습니다.** 구현된 적이 없는 초안이었고,
+        신고는 방 안에서 일어나므로 방을 경로로 잡고 메시지를 본문의 목록으로 받습니다.
+
+        메시지를 `id` 가 아니라 **`roomSeq`** 로 지목합니다. 목록 조회도 폴링 커서도 전부
+        `roomSeq` 라, 신고만 `id` 를 요구하면 앱이 좌표를 두 벌 들고 다녀야 합니다.
+
+        **신고자는 익명이고 피신고자에게는 아무 알림도 가지 않습니다.** 응답에는 접수 번호와
+        시각만 있습니다 — 피신고자 id 도 돌려주지 않습니다.
+
+        **자동 차단하지 않습니다.** 예전 초안의 `alsoBlock` 은 뺐습니다 — 차단 경로가 아직
+        없어서 받아도 아무 일이 일어나지 않고, 받는 척하는 필드가 계약에 있으면 앱이 그것을
+        믿습니다. 차단이 생기면 앱이 `POST /api/chat/blocks` 를 **따로** 부릅니다.
+
+        한도: `chat-report` 버킷 분당 10회.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [reason]
+              required: [roomSeqs, reason]
               properties:
+                roomSeqs:
+                  type: array
+                  minItems: 1
+                  maxItems: 3
+                  items: { type: integer, format: int64 }
+                  description: |
+                    신고할 메시지의 방 안 번호. 같은 값을 여러 번 보내도 하나로 셉니다.
                 reason:
                   type: string
                   enum: [spam, abuse, sexual, fraud, other]
+                  description: |
+                    분류입니다. **목록에 없는 값은 400 `REPORT_REASON_UNKNOWN`** 이고
+                    `other` 로 눕히지 않습니다 — 오타가 조용히 통과하면 운영자가 세는 숫자가
+                    소리 없이 틀어집니다.
                 memo:
                   type: string
-                alsoBlock:
-                  type: boolean
-                  default: false
+                  maxLength: 500
+                  description: 덧붙이는 말. 500자를 넘기면 잘립니다.
       responses:
-        '201': { description: 접수됨 }
-        '400': { $ref: '#/components/responses/ValidationError' }
+        '201':
+          description: 접수됨
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reportId, createdAt]
+                properties:
+                  reportId: { type: integer, format: int64 }
+                  createdAt: { type: string }
+        '400':
+          description: |
+            `REPORT_EMPTY` · `REPORT_MESSAGE_LIMIT` · `REPORT_MIXED_SENDERS` ·
+            `REPORT_SELF` · `REPORT_MESSAGE_NOT_FOUND` · `REPORT_REASON_UNKNOWN`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /api/chat/blocks:
     post:
@@ -1682,7 +1719,9 @@ components:
               example: NOT_FOUND
               enum: [VALIDATION, FORBIDDEN, NOT_FOUND, METHOD_NOT_ALLOWED, CONFLICT,
                      UNSUPPORTED_MEDIA_TYPE, RATE_LIMITED, INTERNAL,
-                     ROOM_MEMBER_LIMIT, INVITE_EXPIRED, INVITE_REVOKED, INVITE_USES_EXHAUSTED]
+                     ROOM_MEMBER_LIMIT, INVITE_EXPIRED, INVITE_REVOKED, INVITE_USES_EXHAUSTED,
+                     REPORT_EMPTY, REPORT_MESSAGE_LIMIT, REPORT_MIXED_SENDERS, REPORT_SELF,
+                     REPORT_MESSAGE_NOT_FOUND, REPORT_REASON_UNKNOWN]
               description: |
                 닫힌 목록입니다. 어휘의 출처는 둘뿐이고 던지는 쪽이 문자열을 손으로 적지 않습니다.
 
@@ -1693,9 +1732,17 @@ components:
 
                 **② 채팅 한도·초대 상태 넷** (`ChatErrorCode`)
                 409 `ROOM_MEMBER_LIMIT` · 410 `INVITE_EXPIRED` · 410 `INVITE_REVOKED` ·
-                409 `INVITE_USES_EXHAUSTED`. 이 넷만 상태에서 파생되지 않습니다 —
+                409 `INVITE_USES_EXHAUSTED`. 이 넷은 상태에서 파생되지 않습니다 —
                 `ROOM_MEMBER_LIMIT` 과 `INVITE_USES_EXHAUSTED` 가 **둘 다 409 인데 앱이
                 보여줄 화면이 다르기** 때문입니다(#74 · 이슈 #75).
+
+                **③ 신고 여섯** (`ChatErrorCode`, 이슈 #82) — **전부 400** 입니다.
+                `REPORT_EMPTY`(아무것도 안 골랐다) · `REPORT_MESSAGE_LIMIT`(세 개를 넘겼다) ·
+                `REPORT_MIXED_SENDERS`(고른 것의 발신자가 여럿이라 신고 대상이 하나가 아니다) ·
+                `REPORT_SELF`(자기 메시지다) · `REPORT_MESSAGE_NOT_FOUND`(그 방에 없는 번호다) ·
+                `REPORT_REASON_UNKNOWN`(사유 분류가 목록에 없다).
+                같은 400 을 다섯으로 나눈 이유도 같습니다 — "고른 것을 줄이세요" 와
+                "선택을 나누세요" 는 앱이 보여줄 안내도 다음 동작도 다릅니다.
             message:
               type: string
               example: "해당 장소를 찾을 수 없습니다."

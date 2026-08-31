@@ -50,9 +50,20 @@ class PackageConventionDocTest {
             "backend/src/main/java/com/heattrip/heat_trip_backend/chatweb/package-info.java",
             "backend/src/test/java/com/heattrip/heat_trip_backend/chat/ChatBoundaryArchitectureTest.java");
 
-    /** 2026-08-31 실측 — chat 루트에서 밖이 아무도 안 부르는 넷. */
+    /**
+     * 2026-08-31 실측 — chat 루트에서 <b>밖의 소스에 이름이 안 적힌</b> 여섯.
+     *
+     * <p><b>"내부로 옮겨도 된다" 는 목록이 아니다.</b> 세는 방식이 "밖에 이름이 적혀 있는가"
+     * 라서 맹점이 하나 있다 — {@code ChatReportedMessageView} 는 밖 어디에도 안 적혀 있지만
+     * {@code ChatReportView} 가 들고 있는 리스트의 원소 타입이라, 내부로 내리면 공개 record 의
+     * 시그니처가 깨진다(#82). 그 사실을 문서 2.4 절에도 적어 뒀다.
+     *
+     * <p>{@code ChatReportReason} 은 사정이 다르다 — 밖으로 나가는 것은 그 enum 이 아니라
+     * {@code wireValue()} 문자열이라 <b>진짜로 내부다</b>. 같은 칸에 있어도 이유가 다르다.
+     */
     private static final List<String> EXPECTED_UNUSED_ROOT_TYPES =
-            List.of("ChatErrorCode", "ChatLimits", "FixedChatLimits", "InviteCodeGenerator");
+            List.of("ChatErrorCode", "ChatLimits", "FixedChatLimits", "InviteCodeGenerator",
+                    "ChatReportedMessageView", "ChatReportReason");
 
     private static String guide;
 
@@ -118,7 +129,7 @@ class PackageConventionDocTest {
     // ─────────────────────────── 3. 표 ↔ 소스 ───────────────────────────
 
     @Test
-    @DisplayName("문서의 chat 12/4 구분이 실제 소스와 같다 — 낡으면 틀린 설계가 지시된다")
+    @DisplayName("문서의 chat 공개 표면 구분이 실제 소스와 같다 — 낡으면 틀린 설계가 지시된다")
     void guide_chatPublicSurfaceTableMatchesTheSource() {
         Path chatDir = TestProjectPaths.backendDir()
                 .resolve("src/main/java/com/heattrip/heat_trip_backend/chat");
@@ -160,7 +171,7 @@ class PackageConventionDocTest {
 
         assertThat(unused)
                 .as("""
-                        문서는 아무도 안 부르는 것이 넷이라고 적었다. 실측은 %s 다.
+                        문서가 적은 목록과 실측 %s 가 갈렸다.
 
                         이 목록이 바뀌면 chat 을 2단 구조로 옮길 때 api 하위 패키지에 들어갈 것도
                         바뀐다. 문서의 2.4 절 표를 함께 고쳐라.

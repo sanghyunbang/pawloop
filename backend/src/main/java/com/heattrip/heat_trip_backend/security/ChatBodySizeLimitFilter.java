@@ -64,6 +64,12 @@ public class ChatBodySizeLimitFilter extends OncePerRequestFilter {
      */
     static final int MAX_REQUEST_BYTES = 256 * 1024;
 
+    /** {@code POST /api/chat/rooms/{id}/messages}. */
+    private static final String MESSAGES_PATH = "^/api/chat/rooms/[0-9]+/messages$";
+
+    /** {@code POST /api/chat/rooms/{id}/reports}. (#82) */
+    private static final String REPORTS_PATH = "^/api/chat/rooms/[0-9]+/reports$";
+
     private static final String CODE = "PAYLOAD_TOO_LARGE";
     private static final String MESSAGE = "메시지가 너무 깁니다.";
 
@@ -76,7 +82,7 @@ public class ChatBodySizeLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        if (!isChatSend(request)) {
+        if (!isChatWrite(request)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -91,11 +97,19 @@ public class ChatBodySizeLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(new LimitedBodyRequest(request, MAX_REQUEST_BYTES), response);
     }
 
-    private static boolean isChatSend(HttpServletRequest request) {
+    /**
+     * 본문을 받는 채팅 경로.
+     *
+     * <p>신고({@code /reports})가 여기 있는 이유(#82): {@code ChatReportService} 가 사유를
+     * 500자에서 자르는데 그건 <b>파싱이 끝난 뒤</b>다. 20MB 사유를 보내면 그것을 전부 힙에
+     * 올린 뒤에 자른다 — {@code validBody} 가 그랬던 것과 <b>같은 구멍</b>이다.
+     */
+    private static boolean isChatWrite(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return "POST".equals(request.getMethod())
-                && path != null
-                && path.matches("^/api/chat/rooms/\\d+/messages$");
+        if (!"POST".equals(request.getMethod()) || path == null) {
+            return false;
+        }
+        return path.matches(MESSAGES_PATH) || path.matches(REPORTS_PATH);
     }
 
     /** 본문을 세면서 읽는 요청. 한도를 넘기면 그 자리에서 던진다. */

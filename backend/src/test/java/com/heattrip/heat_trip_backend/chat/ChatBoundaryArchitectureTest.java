@@ -327,7 +327,7 @@ class ChatBoundaryArchitectureTest {
     // ─────────────────── D. 정본 DDL (빈 DB 에 실제로 적용) ───────────────────
 
     @Test
-    @DisplayName("정본 스키마를 빈 DB 에 적용하면 chat_* 의 FK 는 chat_room 을 가리키는 둘뿐이다")
+    @DisplayName("chat_* 의 FK 는 전부 chat 안쪽을 가리킨다 — 정본 스키마를 빈 DB 에 적용해서 본다")
     void committedSchema_hasNoForeignKeyOutOfChat() throws Exception {
         try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
             assertThat(db.queryStrings("""
@@ -342,12 +342,16 @@ class ChatBoundaryArchitectureTest {
                             파일 텍스트가 아니라 **적용한 결과**를 읽는 이유는 정규식이 \
                             ALTER TABLE ... ADD CONSTRAINT 를 못 봤기 때문이다 — 손으로 고치는 사람이 \
                             가장 자연스럽게 쓰는 문법이 그것이다.
-                            셋보다 적으면 경계 안쪽 FK 까지 끊어진 것이고, 다른 이름이 끼면 \
+                            넷보다 적으면 경계 안쪽 FK 까지 끊어진 것이고, 다른 이름이 끼면 \
                             users·family_group·dog 로 나간 것이다 (ADR-0011 결정 4).
                             chat_message → users 가 여기 끼는 것이 #78 완료 조건 6 이 막는 것이다 — \
-                            ON DELETE CASCADE 면 탈퇴 한 번에 그 사람이 방에 쓴 말이 전부 사라진다.""")
+                            ON DELETE CASCADE 면 탈퇴 한 번에 그 사람이 방에 쓴 말이 전부 사라진다.
+                            chat_reported_message 는 #82 가 더한 것이고 여전히 chat 안쪽이다.
+                            반대로 chat_report 가 이 목록에 없는 것도 의도다 — chat_room 으로
+                            FK 를 내면 방을 지우는 것으로 신고 기록을 지울 수 있게 된다.""")
                     .containsExactlyInAnyOrder(
                             "chat_message → chat_room",
+                            "chat_reported_message → chat_report",
                             "chat_room_invite → chat_room",
                             "chat_room_member → chat_room");
         }

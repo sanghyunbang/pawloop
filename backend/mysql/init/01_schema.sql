@@ -108,6 +108,37 @@ CREATE TABLE `chat_message` (
   CONSTRAINT `fk_chat_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `chat_report` (
+  `context_from_seq` bigint NOT NULL,
+  `context_to_seq` bigint NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `reported_user_id` bigint NOT NULL,
+  `reporter_user_id` bigint NOT NULL,
+  `room_id` bigint NOT NULL,
+  `reason` varchar(16) NOT NULL,
+  `memo` varchar(500) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_chat_report_reported` (`reported_user_id`),
+  KEY `idx_chat_report_reporter` (`reporter_user_id`),
+  KEY `idx_chat_report_room` (`room_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `chat_reported_message` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `message_id` bigint DEFAULT NULL,
+  `report_id` bigint NOT NULL,
+  `room_seq` bigint NOT NULL,
+  `sender_user_id` bigint NOT NULL,
+  `sent_at` datetime(6) NOT NULL,
+  `content_type` varchar(16) NOT NULL,
+  `sender_name` varchar(255) NOT NULL,
+  `body` text NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_chat_reported_msg` (`report_id`,`room_seq`),
+  CONSTRAINT `fk_chat_reported_msg_report` FOREIGN KEY (`report_id`) REFERENCES `chat_report` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `chat_room` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `id` bigint NOT NULL AUTO_INCREMENT,

@@ -3,7 +3,7 @@ package com.heattrip.heat_trip_backend.chat;
 import org.springframework.http.HttpStatus;
 
 /**
- * 한도 위반 네 가지의 응답 코드 — 이슈 #74, 근거 ADR-0011 결정 10.
+ * 앱이 코드로 갈라야 하는 채팅 오류들 — 이슈 #74(한도 넷) · #82(신고 다섯), 근거 ADR-0011 결정 10.
  *
  * <h2>왜 코드를 지금 정하나</h2>
  * <p>여기가 나중에 유료 유도 화면이 붙을 분기점이라, 앱이 <b>문구가 아니라 코드로</b>
@@ -41,7 +41,49 @@ public enum ChatErrorCode {
     INVITE_REVOKED(HttpStatus.GONE, "회수된 초대코드입니다."),
 
     /** 사용 횟수 상한을 다 썼다. 코드 자체는 아직 유효하므로 410 이 아니라 409 다. */
-    INVITE_USES_EXHAUSTED(HttpStatus.CONFLICT, "초대코드의 사용 횟수를 모두 썼습니다.");
+    INVITE_USES_EXHAUSTED(HttpStatus.CONFLICT, "초대코드의 사용 횟수를 모두 썼습니다."),
+
+    // ─────────────────────────── 신고 (이슈 #82) ───────────────────────────
+    //
+    // 아래 넷은 전부 400 이다. 상태가 같은데 코드를 나누는 이유는 위 javadoc 과 같다 —
+    // 앱이 보여줄 화면이 다르다. "3개까지" 는 고른 것을 줄이라는 말이고,
+    // "한 사람만" 은 선택을 나누라는 말이라 안내 문구도 다음 동작도 다르다.
+
+    /** 아무것도 안 골랐다. */
+    REPORT_EMPTY(HttpStatus.BAD_REQUEST, "신고할 메시지를 하나 이상 골라 주세요."),
+
+    /**
+     * 3개를 넘겼다. 카카오 일반채팅방과 같은 숫자다
+     * (https://cs.kakao.com/helps_html/1073199392).
+     */
+    REPORT_MESSAGE_LIMIT(HttpStatus.BAD_REQUEST, "신고는 메시지를 세 개까지 고를 수 있습니다."),
+
+    /**
+     * 고른 메시지의 발신자가 여럿이다.
+     *
+     * <p>신고는 <b>사람</b>에 대한 것이라 대상이 하나여야 한다. 섞인 채로 받으면
+     * {@code reported_user_id} 에 누구를 넣을지 서버가 임의로 고르게 된다.
+     */
+    REPORT_MIXED_SENDERS(HttpStatus.BAD_REQUEST, "한 번에 한 사람만 신고할 수 있습니다."),
+
+    /** 자기 메시지를 골랐다. */
+    REPORT_SELF(HttpStatus.BAD_REQUEST, "자기 메시지는 신고할 수 없습니다."),
+
+    /**
+     * 고른 번호가 그 방에 없다.
+     *
+     * <p>없는 방·남의 방은 여기 오기 전에 멤버십 검사에서 403 으로 끊긴다. 여기 오는 것은
+     * <b>내 방인데 그 번호가 없는</b> 경우뿐이라 방 존재 여부가 새지 않는다.
+     */
+    REPORT_MESSAGE_NOT_FOUND(HttpStatus.BAD_REQUEST, "그 방에 없는 메시지입니다."),
+
+    /**
+     * 사유 분류가 계약의 목록에 없다.
+     *
+     * <p>모르는 값을 {@code OTHER} 로 눕히지 않는 이유는 {@code ChatReportReason} javadoc 에
+     * 있다 — 앱의 오타가 조용히 통과하면 운영자가 세는 숫자가 소리 없이 틀어진다.
+     */
+    REPORT_REASON_UNKNOWN(HttpStatus.BAD_REQUEST, "신고 사유를 골라 주세요.");
 
     private final HttpStatus status;
     private final String message;
