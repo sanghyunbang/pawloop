@@ -157,6 +157,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             roomId: room.id,
             title: room.title,
             subtitle: '${room.memberCount}명',
+            isOwner: room.isOwner,
           ),
         ));
         // 방을 보고 나오면 미읽음이 달라진다. 서버가 다시 답하게 한다 —
@@ -231,10 +232,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   /// 마지막 메시지 한 줄. 아직 아무도 안 썼으면 그렇게 말한다 — **가짜 문장을 넣지 않는다.**
+  ///
+  /// 가린 사람이 마지막으로 말했으면 **여기서도 접는다.** 방 안에서 접어 놓고 목록에서
+  /// 그대로 보여 주면 가린 말이 거기로 샌다 (#82).
   static String _preview(ChatRoomSummary room) {
     final body = room.lastMessageBody;
     if (body == null || body.isEmpty) {
       return '아직 대화가 없어요';
+    }
+    if (room.lastMessageHidden) {
+      return '가린 사람의 메시지입니다';
     }
     final sender = room.lastMessageSender;
     return sender == null || sender.isEmpty ? body : '$sender · $body';

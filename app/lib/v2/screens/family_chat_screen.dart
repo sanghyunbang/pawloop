@@ -10,6 +10,7 @@ import '../data/chat_repository.dart';
 import '../domain/pet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../widgets/message_actions_sheet.dart';
 
 /// 채팅방 하나. **서버에 붙어 있다.** (이슈 #81)
 ///
@@ -36,11 +37,19 @@ class FamilyChatScreen extends StatefulWidget {
   final String title;
   final String subtitle;
 
+  /// 내가 이 방의 방장인가. **강퇴 버튼을 띄울지의 유일한 근거다.**
+  ///
+  /// 방 목록이 이미 `myRole` 을 들고 있어서 그것을 넘겨받는다 — 이 화면이 다시 물으면
+  /// 방을 열 때마다 쿼리가 하나 는다. 모르면 `false` 다: <b>못 하는 버튼을 보여 주고 403 을
+  /// 받게 하느니 감춘다.</b>
+  final bool isOwner;
+
   const FamilyChatScreen({
     super.key,
     required this.roomId,
     this.title = '우리 가족',
     this.subtitle = '',
+    this.isOwner = false,
     ChatRepository? repository,
   }) : _injected = repository;
 
@@ -71,6 +80,12 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   bool _inForeground = true;
   bool _loading = true;
   ChatFailure? _failure;
+
+  /// "보기" 를 눌러 펼쳐 둔 메시지들의 `roomSeq`.
+  ///
+  /// **서버에 안 남긴다.** 가려 둔 것을 영구히 푸는 것은 가리기 해제이고, 이건 한 번 들여다
+  /// 보는 것이다. 화면을 나가면 다시 접힌다 — 그게 사용자가 기대하는 동작이다.
+  final Set<int> _revealed = {};
 
   int? get _myUserId => AuthState.user?.id;
 
@@ -446,7 +461,11 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
             const SizedBox(height: 4),
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxW),
-              child: ClipRRect(
+              child: GestureDetector(
+                // 길게 눌러 신고·가리기. 탭이 아니라 롱프레스인 것은 스크롤 중에 실수로
+                // 열리면 안 되기 때문이다 — 카카오·라인·왓츠앱이 모두 같은 제스처다.
+                onLongPress: () => _openMessageActions(m),
+                child: ClipRRect(
                 borderRadius: br,
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
@@ -457,13 +476,23 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
                       borderRadius: br,
                       border: Border.all(color: const Color(0xCCFFFFFF)),
                     ),
-                    child: Text(_bodyOf(m),
-                        style: const TextStyle(
-                            fontSize: 13.5, height: 1.45, color: T.textPrimary)),
+                    child: _otherBody(m),
                   ),
                 ),
               ),
+              ),
             ),
+            if (_isFolded(m))
+              TextButton(
+                onPressed: () => setState(() => _revealed.add(m.roomSeq)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                  minimumSize: const Size(0, 28),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('보기',
+                    style: TextStyle(fontSize: 12, color: T.textSecondary)),
+              ),
             const SizedBox(height: 4),
             Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted)),
           ]),
@@ -474,7 +503,173 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
 
   /// 삭제된 메시지도 **자리를 지운다**. 목록에서 빼면 그 `roomSeq` 가 도달하지 않아
   /// 읽음 커서가 그 번호를 넘지 못하고 미읽음 뱃지가 영원히 남는다 (ADR-0011).
-  static String _bodyOf(ChatMessageItem m) => m.deleted ? '삭제된 메시지예요' : m.body;
+  /// 말풍선에 실제로 그릴 글.
+  ///
+  /// **삭제가 가리기보다 앞선다.** 지워진 말은 가렸든 안 가렸든 없는 말이다.
+  String _bodyOf(ChatMessageItem m) {
+    if (m.deleted) {
+      return '삭제된 메시지예요';
+    }
+    if (m.hiddenByBlock && !_revealed.contains(m.roomSeq)) {
+      return '가린 사람의 메시지입니다.';
+    }
+    return m.body;
+  }
+
+  /// 메시지를 길게 눌렀을 때. 신고 · 가리기 · (방장이면) 내보내기.
+  ///
+  /// **내 메시지에는 안 뜬다** — 자기 메시지는 신고도 가리기도 뜻이 없다.
+  Future<void> _openMessageActions(ChatMessageItem m) async {
+    if (_myUserId != null && m.senderUserId == _myUserId) {
+      return;
+    }
+
+    final action = await MessageActionsSheet.show(
+      context,
+      senderName: m.senderName,
+      hiddenByBlock: m.hiddenByBlock,
+      canRemoveMember: widget.isOwner,
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case MessageAction.report:
+        await _report(m);
+      case MessageAction.block:
+        await _block(m.senderUserId, m.senderName);
+      case MessageAction.unblock:
+        await _unblock(m.senderUserId, m.senderName);
+      case MessageAction.removeMember:
+        await _removeMember(m.senderUserId, m.senderName);
+    }
+  }
+
+  Future<void> _report(ChatMessageItem m) async {
+    final choice = await ReportSheet.show(
+      context,
+      senderName: m.senderName,
+      messageCount: 1,
+    );
+    if (!mounted || choice == null) {
+      return;
+    }
+
+    try {
+      await _repo.report(widget.roomId, [m.roomSeq], choice.reason, memo: choice.memo);
+      // 신고가 성공한 뒤에만 가린다. 순서가 반대면 신고가 실패했을 때 "가려졌는데 접수는
+      // 안 된" 상태가 되고, 사용자는 접수됐다고 믿는다.
+      if (choice.alsoBlock) {
+        await _repo.block(m.senderUserId);
+        await _refreshAfterBlockChange();
+      }
+      _toast('신고를 접수했어요. 상대에게는 알리지 않습니다');
+    } on ChatFailure catch (e) {
+      _toast(e.message);
+    }
+  }
+
+  /// 방에서 내보낸다. **되돌리기 어려운 동작이라 확인을 받는다.**
+  ///
+  /// 문구가 재입장 금지와 푸는 방법을 함께 말한다 — 이슈 #82 가 정한 그대로다. 라인이
+  /// 재입장 금지를 12.9.0 에서 나중에 따로 붙인 것은 실제로 생기는 문제라는 뜻이다.
+  Future<void> _removeMember(int userId, String name) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('$name 님을 내보냅니다'),
+        content: const Text(
+          '초대코드를 다시 받아도 들어올 수 없습니다.'
+          '\n방 설정에서 다시 풀 수 있습니다.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('내보내기', style: TextStyle(color: Color(0xFFD64545))),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || ok != true) {
+      return;
+    }
+
+    try {
+      await _repo.removeMember(widget.roomId, userId);
+      // 그 사람이 쓴 메시지는 방에 남는다 — 지우면 신고 근거가 사라진다. 그래서 목록을
+      // 다시 받지 않는다. 바뀐 것은 멤버십이지 대화가 아니다.
+      _toast('$name 님을 내보냈어요');
+    } on ChatFailure catch (e) {
+      _toast(e.message);
+    }
+  }
+
+  Future<void> _block(int userId, String name) async {
+    try {
+      await _repo.block(userId);
+      await _refreshAfterBlockChange();
+      _toast('$name 님의 메시지를 가렸어요');
+    } on ChatFailure catch (e) {
+      _toast(e.message);
+    }
+  }
+
+  Future<void> _unblock(int userId, String name) async {
+    try {
+      await _repo.unblock(userId);
+      await _refreshAfterBlockChange();
+      _toast('$name 님의 메시지를 다시 보여 줄게요');
+    } on ChatFailure catch (e) {
+      _toast(e.message);
+    }
+  }
+
+  /// 가리기가 바뀌면 **이미 받아 둔 메시지의 표시가 낡는다.**
+  ///
+  /// `hiddenByBlock` 은 서버가 읽는 사람 기준으로 계산해서 붙이는 값이라, 델타 폴링으로는
+  /// 새 메시지만 바뀌고 과거 메시지는 옛 값 그대로다. 그래서 처음부터 다시 받는다 —
+  /// 가리기는 자주 하는 일이 아니라 이 비용이 문제되지 않는다.
+  Future<void> _refreshAfterBlockChange() async {
+    _messages.clear();
+    _revealed.clear();
+    _lastSeq = 0;
+    _etag = null;
+    await _poll(initial: true);
+  }
+
+  void _toast(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// 남의 말풍선 본문. 접혀 있으면 흐린 기울임으로 그린다.
+  ///
+  /// **본문을 지워서 그리지 않는다.** 서버가 본문을 그대로 내려보내고("보기" 를 누를 때
+  /// 요청이 한 번 더 필요하지 않도록) 접는 것은 여기다.
+  Widget _otherBody(ChatMessageItem m) {
+    final folded = _isFolded(m);
+    return Text(
+      _bodyOf(m),
+      style: TextStyle(
+        fontSize: 13.5,
+        height: 1.45,
+        color: folded ? T.textMuted : T.textPrimary,
+        fontStyle: folded ? FontStyle.italic : FontStyle.normal,
+      ),
+    );
+  }
+
+  /// 이 말풍선이 지금 접혀 있는가.
+  bool _isFolded(ChatMessageItem m) =>
+      m.hiddenByBlock && !m.deleted && !_revealed.contains(m.roomSeq);
 
   static String _hhmm(DateTime? at) {
     if (at == null) {
