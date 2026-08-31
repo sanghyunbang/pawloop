@@ -200,7 +200,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     _walkNotesCard(),
                     const SizedBox(height: 16),
                   ],
-                  _chatBanner(),
+                  if (_group case final group?) _chatBanner(group.roomId),
                 ],
               ),
             ),
@@ -810,10 +810,14 @@ class _FamilyScreenState extends State<FamilyScreen> {
   }
 
   // ───────────── 가족 채팅 배너 ─────────────
-  Widget _chatBanner() {
+  /// 가족 채팅으로 가는 배너.
+  ///
+  /// [roomId] 는 서버가 그룹을 만들 때 함께 만든 방이다(ADR-0011). 그룹을 아직 못 읽었으면
+  /// 이 배너를 안 그린다 — 방 번호 없이 채팅 화면을 열 수 없다.
+  Widget _chatBanner(int roomId) {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const FamilyChatScreen()),
+        MaterialPageRoute(builder: (_) => FamilyChatScreen(roomId: roomId, title: '가족 채팅')),
       ),
       behavior: HitTestBehavior.opaque,
       child: Container(
@@ -846,11 +850,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
               const Text('가족 채팅',
                   style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: 3),
-              Text(
-                kChatMessages.last.text,
+              // 마지막 메시지를 여기 그리려면 요청이 하나 더 든다. 가짜 문장을 남기느니
+              // 무엇을 하는 곳인지만 적는다 (#81).
+              const Text(
+                '가족과 나눈 대화 보기',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: Color(0xE6FFFFFF)),
+                style: TextStyle(fontSize: 12, color: Color(0xE6FFFFFF)),
               ),
             ]),
           ),
