@@ -10,12 +10,12 @@
 
 | 소스 | 제공기관 | 채우는 레이어(카테고리 key) | 좌표계 | 현재 상태 |
 |---|---|---|---|---|
-| **KorPetTourService2** | 한국관광공사 | 여행지`12`·문화`14`·레포츠`28`·숙박`32`·쇼핑`38`·카페/식당`39` | WGS84 (경위도) | **실연동** (앱이 직접 호출, 서울 ~45곳) |
+| **KorPetTourService2** | 한국관광공사 | 여행지`12`·문화`14`·레포츠`28`·숙박`32`·쇼핑`38`·카페/식당`39` | WGS84 (경위도) | **실연동** (백엔드 프록시 경유, 서울 ~45곳) |
 | **LOCALDATA 인허가** | 행정안전부 | 병원`vet`·펫샵`shop` | **EPSG:5174** → WGS84 변환 필요 | 더미 (미연동) |
 | **두루누비 걷기여행길** | 한국관광공사 | 산책로`trail` | WGS84 (GPX/좌표) | 더미 폴리라인 (미연동) |
 
 - 카테고리 key는 `lib/v2/domain/pet.dart`의 `kPetCategories` SSOT를 그대로 사용한다. 숫자 key(`12`/`14`/`28`/`32`/`38`/`39`)는 KTO `contenttypeid`, 문자 key(`vet`/`shop`/`trail`)는 별도 공공데이터 레이어(`kLayerKeys`)다.
-- 현재 KTO는 **앱이 직접 호출**(`lib/v2/data/pet_places_repository.dart`). 나머지 두 소스는 아직 더미이며, 셋 다 **백엔드 프록시 + `place`/`trail` 캐싱**으로 옮기는 것을 목표로 한다(→ [6. 캐싱·동기화](#6-캐싱동기화-전략placetrail)).
+- KTO 는 **백엔드가 부른다**(#40). 앱은 `GET /api/places/nearby` 만 안다(`lib/v2/data/pet_places_repository.dart`). 나머지 두 소스(`vet`/`shop`/`trail`)는 아직 더미다(→ [6. 캐싱·동기화](#6-캐싱동기화-전략placetrail)).
 
 ---
 
@@ -31,7 +31,8 @@
 | 인증 | 쿼리 파라미터 `serviceKey` (data.go.kr 발급) |
 | 응답 포맷 | `_type=json` (기본 XML) |
 | 호출 한도 | 개발계정 기준 **1,000 calls/day** (운영계정 신청 시 상향) |
-| 앱 호출 위치 | `lib/v2/data/pet_places_repository.dart` → `PetPlacesRepository.fetchNearby()` |
+| **호출 위치** | **백엔드** `place/service/KtoApiClient.fetchNearby()`. 앱은 이 API 를 모른다(#40) |
+| 앱이 부르는 것 | `GET /api/places/nearby` (우리 백엔드) → `PetPlacesRepository.fetchNearby()` |
 
 ### 1.2 오퍼레이션
 
@@ -62,9 +63,9 @@
 | `arrange` | `E` | 정렬 — `E`=거리순(이미지 우선) |
 | `contentTypeId` | `39` | (선택) 카테고리 필터. 없으면 전체 |
 
-주의: KTO 파라미터는 `mapX`=경도, `mapY`=위도로 **경도가 먼저**다. 앱은 `mapX=$lng&mapY=$lat`로 넘긴다(뒤바꾸면 결과 0건).
+주의: KTO 파라미터는 `mapX`=경도, `mapY`=위도로 **경도가 먼저**다. 서버가 `mapX=경도&mapY=위도` 로 넘긴다(뒤바꾸면 결과 0건).
 
-### 1.4 호출 예시
+### 1.4 호출 예시 (서버가 보낸다)
 
 ```
 GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
@@ -75,24 +76,28 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   &contentTypeId=39
 ```
 
-앱 측 실코드(요약):
+서버 측 실코드(요약):
 
-```dart
-final uri = Uri.parse(
-  '$_base/locationBasedList2?serviceKey=$key'
-  '&MobileOS=ETC&MobileApp=heattrip&_type=json'
-  '&numOfRows=$numOfRows&pageNo=1'
-  '&mapX=$lng&mapY=$lat&radius=$radius&arrange=E'
-  '${contentTypeId != null ? "&contentTypeId=$contentTypeId" : ""}',
-);
-final res = await http.get(uri).timeout(const Duration(seconds: 12));
+```java
+// place/service/KtoApiClient — 서비스키가 사는 유일한 자리
+String query = "serviceKey=" + serviceKey
+        + "&MobileOS=ETC&MobileApp=heattrip&_type=json"
+        + "&numOfRows=" + numOfRows + "&pageNo=1"
+        + "&mapX=" + centerLng + "&mapY=" + centerLat
+        + "&radius=" + GridCell.FETCH_RADIUS_M + "&arrange=E";
 ```
+
+반경이 사용자 요청값이 아니라 **셀 중심에서 20km 고정**인 것에 주의. 사용자 반경을 그대로
+쓰면 같은 셀이 반경마다 따로 캐시돼야 하고 셀당 콜이 여러 배가 된다. 넓게 한 번 받아 두고
+서빙할 때 좁힌다.
 
 ### 1.5 응답 필드 매핑
 
-응답 구조는 `response.body.items.item[]`. 단건이면 `item`이 배열이 아니라 객체로 오므로 배열 정규화가 필요하다(앱 `_parse`가 처리). `items`가 빈 문자열/문자열이면 결과 0건으로 간주한다.
+응답 구조는 `response.body.items.item[]`. 단건이면 `item`이 배열이 아니라 객체로 오므로 배열 정규화가 필요하다(**서버** `KtoApiClient.items()` 가 처리). `items`가 빈 문자열/문자열이면 결과 0건으로 간주한다.
 
-| 응답 필드 | 앱 모델(`PetPlace`) | 비고 |
+아래 매핑도 **서버가** 한다. 앱은 오른쪽 열(계약의 `Place`)만 안다 — KTO 의 모양을 앱이 또 알면 해석이 두 곳에 살고 한쪽만 고치면 조용히 갈라진다(#40).
+
+| KTO 응답 필드 | 계약 `Place` / 앱 `PetPlace` | 비고 |
 |---|---|---|
 | `contentid` | `contentId` | 고유 ID |
 | `title` | `title` | 장소명 |
@@ -109,14 +114,16 @@ final res = await http.get(uri).timeout(const Duration(seconds: 12));
 
 ### 1.6 서비스키 취급 (중요)
 
-- 키는 컴파일 타임 `--dart-define=YOUR_DECODING_SERVICE_KEY`로 들어오고, `Env.tourServiceKey`로 읽는다(`lib/core/config/env.dart`). 예전에는 `.env`를 에셋으로 번들링했는데 APK를 풀면 그대로 보여서 걷어냈다(#29). dart-define도 완화일 뿐 문자열은 바이너리에 남는다 — 진짜 제거는 #40.
-- **명칭은 "Decoding"이지만 실제로는 인코딩(URL-encoded)된 키**가 들어있다. 그래서 앱은 `Uri.encodeQueryComponent` 없이 쿼리스트링에 **문자열 그대로** 붙인다. 재인코딩하면 `%2B`가 `%252B`로 이중 인코딩되어 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 난다.
-- 키가 비어있으면 `fetchNearby`는 빈 리스트를 반환(앱 크래시 없음).
-- 키는 앱 번들에 노출되므로(공개데이터 특성상 치명적이진 않으나) 남용/한도 방지를 위해 **백엔드 프록시로 이전 권장**(→ 6장).
+- **키는 서버에만 있다**(#40). 환경변수 `TOUR_API_SECRET` 이고, 앱 바이너리에는 없다.
+- 여기까지 온 경로: `.env` 를 에셋으로 번들링 → APK 를 풀면 그대로 보여서 `--dart-define` 으로 옮김(#29) → **그것도 완화일 뿐**(문자열이 바이너리에 남아 `strings` 한 번이면 나온다) → 호출 자체를 서버로 옮김(#40).
+- **명칭은 "Decoding"이지만 실제로는 인코딩(URL-encoded)된 키**다. 그래서 서버의 WebClient 는 `EncodingMode.NONE` 이다 — 재인코딩하면 `%2B` 가 `%252B` 가 되어 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR` 가 나고, **그 실패가 HTTP 200 이라** "이 주변에 장소가 없음" 으로 보인다.
+- 그래서 서버는 `response.header.resultCode` 를 먼저 본다. `0000` 이 아니면 **캐시하지 않는다** — 실패를 캐시하면 사용자가 있던 셀들이 빈 지도로 굳는다.
 
 ### 1.7 한계·주의
 
-- **호출 한도 1,000/day**: 사용자마다 지도 이동 시 직접 호출하면 금세 소진. 서울 45곳도 프리로드/캐시가 전제.
+- **호출 한도 1,000/day**: 앱이 직접 부르던 시절에는 지도를 움직일 때마다 호출이 나가 금세 소진됐다. 지금은 서버가 좌표를 **0.02° 격자**로 접어 셀 단위로 캐시하고, `kto_call_budget` 표가 하루 상한을 게이트로 지킨다(#40).
+  - 서울 전역이 **154셀**이라 하루에 다 데워도 `nearby` 상한 300 의 절반이다. **사용자가 몇 명이든 이 수는 안 변한다** - 상한을 만드는 것이 사람 수가 아니라 땅 넓이다.
+  - 일 총량을 1,000 이 아니라 **500** 으로 잡았다. 상대의 쿼터 리셋 시각을 몰라서, 경계가 어긋나면 상대의 24시간 창에 우리 두 날이 겹칠 수 있기 때문이다.
 - **응답 형태 불안정**: `items`가 빈 문자열, `item`이 객체/배열 혼재 → 방어적 파싱 필수(구현됨).
 - **이미지 결측** 잦음(`firstimage` 없음) → UI 플레이스홀더 필요.
 - 좌표는 WGS84라 별도 변환 불필요(LOCALDATA와 대비).
@@ -201,7 +208,7 @@ LOCALDATA 좌표(`x`, `y`)는 경위도가 아니라 **EPSG:5174 (중부원점 T
 
 ## 5. 데이터 흐름 (현재 vs 목표)
 
-**현재** — KTO만 앱이 직접 호출, 나머지 더미:
+**현재** - KTO 는 프록시 경유, 나머지 더미:
 
 ```mermaid
 flowchart LR
@@ -256,7 +263,7 @@ flowchart LR
 
 ### 6.4 이전 로드맵
 
-1. KTO 프록시 엔드포인트 신설(`GET /api/places?bbox=&category=`) → 앱을 직접 호출에서 프록시로 전환.
+1. ~~KTO 프록시 엔드포인트 신설~~ → **완료**(#40). 경로는 `GET /api/places/nearby?lat&lng&radius&category&limit` 다(`?bbox=` 가 아니다 - 앱이 갖고 있는 것이 중심 좌표와 반경이라 그쪽이 계약과 맞는다).
 2. LOCALDATA 배치(좌표변환 포함) → `place`(`vet`/`shop`) 적재 → 더미 제거.
 3. 두루누비 배치 → `trail` 적재 → 더미 폴리라인 제거.
 
@@ -266,8 +273,9 @@ flowchart LR
 
 | 파일 | 역할 |
 |---|---|
-| `app/lib/v2/data/pet_places_repository.dart` | KTO `locationBasedList2` 호출·파싱(`PetPlace`) |
+| `app/lib/v2/data/pet_places_repository.dart` | 백엔드 `GET /api/places/nearby` 호출·파싱(`PetPlace`). **KTO 를 직접 안 부른다** |
 | `app/lib/v2/domain/pet.dart` | 카테고리 SSOT(`kPetCategories`, `kLayerKeys`, `petCatByType`) |
-| `app/lib/core/config/env.dart` | `tourServiceKey`(`YOUR_DECODING_SERVICE_KEY`) 로드 |
-| `--dart-define` (템플릿 `app/dart-define.example.json`) | `YOUR_DECODING_SERVICE_KEY`(인코딩된 KTO 키), `NAVER_MAP_CLIENT_ID` |
-| `backend/.../tour/service/TourApiClient.java` | 레거시 `areaBasedList2` 프록시 패턴(반려 프록시 참고) |
+| `backend/.../place/` | 프록시 본체 - 격자 캐시(`GridCell`·`CellSnapshotStore`) · 호출 예산(`KtoCallBudget`) · KTO 호출(`KtoApiClient`) |
+| `--dart-define` (템플릿 `app/dart-define.example.json`) | `NAVER_MAP_CLIENT_ID` 뿐. **관광공사 키는 여기 없다**(#40) |
+| `backend/.../tour/service/TourApiClient.java` | `areaBasedList2` 배치 적재(감정추천용). **타임아웃이 없다** - 배치라 감수하는 것이고, 프록시는 `KtoWebClientConfig` 의 빈을 쓴다 |
+| `backend/mysql/post-start/10_place_cache.sql` | `kto_call_budget`·`place_cell`·`pet_place_detail` |

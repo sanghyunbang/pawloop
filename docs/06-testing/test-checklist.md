@@ -9,7 +9,7 @@
 ## 0. 사용법 · 전제
 
 - 대상: Flutter 앱(`app/`, 화면은 `lib/v2/` 하위). 현재는 자동화 테스트가 거의 없어 **수동 회귀**가 1차 방어선이다.
-- 실행: 안드로이드 에뮬레이터 권장(네이버맵 SDK · KTO API 실호출). 지도가 흰 화면이면 먼저 `--dart-define` 주입값(`NAVER_MAP_CLIENT_ID`, `YOUR_DECODING_SERVICE_KEY`)을 확인. 템플릿은 `app/dart-define.example.json`, 실행은 `flutter run --dart-define-from-file=dart-define.json`.
+- 실행: 안드로이드 에뮬레이터 권장(네이버맵 SDK · **백엔드** 실호출). 지도가 흰 화면이면 `--dart-define` 의 `NAVER_MAP_CLIENT_ID` 와 `API_BASE_URL` 을 확인. 장소가 안 뜨면 **서버 쪽**을 본다 — `kto_call_budget` 의 `used` 와 `place_cell` 행 수(#40). 템플릿은 `app/dart-define.example.json`, 실행은 `flutter run --dart-define-from-file=dart-define.json`.
 - 표기 규칙:
   - ✅ **정상 기대** — MVP에서 반드시 통과해야 하는 항목
   - 🟡 **더미/미구현 확인** — 지금은 하드코딩/더미가 "의도된" 동작(아래 [7. 알려진 더미](#7-알려진-더미미연동-오탐-방지)와 대조)
@@ -207,15 +207,15 @@
 
 ## 8. 지도 · GPS · 공공데이터 케이스
 
-### 8-1. 공공데이터 (KTO KorPetTourService2 — `pet_places_repository.dart`)
+### 8-1. 주변 장소 (백엔드 프록시 — `pet_places_repository.dart` → `GET /api/places/nearby`)
 
 | # | 케이스 | 기대 |
 |---|---|---|
-| D1 | `YOUR_DECODING_SERVICE_KEY` 정상 | ✅ 서울 중심 반경 8km 장소 로드(거리순 arrange=E) |
-| D2 | 키 비어있음 | ✅ 빈 리스트 반환 → 빈 상태 박스(크래시 없음) |
+| D1 | 서버 정상 | ✅ 서울 중심 반경 8km 장소 로드(거리순). **앱에 관광공사 키가 없어도 떠야 한다**(#40 완료 조건 4) |
+| D2 | 서버 호출 예산 소진 | ✅ 캐시가 있으면 **오래된 목록이라도** 표시, 없으면 빈 상태 박스(크래시 없음) |
 | D3 | HTTP 200 아님 / 타임아웃(12s) | ✅ 빈 리스트로 폴백, 스피너 종료 |
-| D4 | 응답 `items`가 빈 문자열/문자열 | ✅ 빈 리스트(파싱 예외 없음 — `_parse` 방어 로직) |
-| D5 | item이 단일 객체(Map) | ✅ 리스트로 정규화되어 1건 표시 |
+| D4 | 응답이 배열이 아님 | ✅ 빈 리스트(파싱 예외 없음 — `_parse` 방어 로직). KTO 의 `items` 빈 문자열 방어는 **서버**로 옮겼다 |
+| D5 | KTO 가 단건을 객체로 줌 | ✅ **서버**가 배열로 정규화한다(`KtoApiClient.items()`) |
 | D6 | 좌표 0/누락 항목 | ✅ 필터 제외(`lat!=0 && lng!=0`) |
 | D7 | firstimage 없음 | ✅ 카테고리색 아이콘 폴백(깨진 이미지 아님) |
 | D8 | 미지정 contenttypeid | ✅ "기타" 카테고리로 표시 |

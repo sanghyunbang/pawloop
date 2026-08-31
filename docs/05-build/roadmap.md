@@ -223,7 +223,7 @@
 
 **작업**
 
-- **백엔드 프록시(tour 패키지).** 앱 → 백엔드 → KTO. 응답을 `place` 테이블(POI 캐시, `geom POINT`, `raw_json`, `updated_at`)에 저장. 앱은 `PetPlacesRepository`가 백엔드 엔드포인트를 호출하도록 전환(현재 `apis.data.go.kr` 직접 호출 제거, `--dart-define`으로 주입하던 서비스키를 서버로 이동). → 이슈 #40
+- ~~**백엔드 프록시**~~ → **완료**(#40). 앱 → 백엔드 → KTO. 다만 캐시가 `place` 표의 공간 인덱스가 아니라 **`place_cell` 격자 스냅샷**이다 — 조회가 `(lat_idx, lng_idx)` PK 하나뿐이라 공간 인덱스가 할 일이 없고, 그러면 `hibernate-spatial` 의존성도 필요 없다.
 - **동물병원(LOCALDATA 인허가).** 전국 ~9,445건, 좌표 **EPSG:5174 → WGS84** 변환 후 `place(source=localdata_vet, category=vet, geom POINT)` 적재. 지도 `vet` 레이어 실데이터화.
 - **펫샵/미용/호텔(LOCALDATA).** `place(source=localdata_shop, category=shop)` 적재 → `shop` 레이어.
 - **산책로(두루누비 걷기여행길).** 코스 좌표/GPX → `trail(source, name, path LINESTRING, length_m)` 적재. 더미 폴리라인 → 실 코스로 교체.

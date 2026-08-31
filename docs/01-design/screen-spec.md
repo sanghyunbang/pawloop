@@ -89,7 +89,7 @@
 - 주소(`place_outlined`) / 전화(`call_outlined`, 있을 때) + `반려동물 동반 가능 (관광공사)` 배지.
 
 ### 데이터
-- `PetPlacesRepository.fetchNearby(lat, lng, radius:8000, numOfRows:80)` → KTO `locationBasedList2` **직접 호출**(향후 백엔드 프록시 권장). `Env.tourServiceKey` 사용, 응답 `mapx/mapy/contenttypeid/addr1/firstimage/tel/dist`.
+- `PetPlacesRepository.fetchNearby(lat, lng, radius:8000, numOfRows:80)` → **`GET /api/places/nearby`**(우리 백엔드). 응답은 계약의 `Place` 다 — `lat/lng/contentTypeId/addr/image/tel/distM`. **KTO 의 `mapx/addr1/firstimage` 가 아니다**: 그 모양을 해석하는 일은 서버가 한다(#40).
 - `_dummyVet`(3건) / `_dummyShop`(2건) / `_trailCoords` — **더미 레이어**(실제론 LOCALDATA 인허가 · 두루누비 걷기여행길).
 - 필터 로직: `_filtered`(trail→빈배열+폴리라인, vet/shop→더미, null→전체, 그 외→contentTypeId 일치).
 
