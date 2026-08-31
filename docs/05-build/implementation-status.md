@@ -24,7 +24,7 @@
 | 실위치 | ❌ 미구현 | 서울 시청 좌표 고정 |
 | 백엔드 반려 API | ❌ 미구현 | KTO 외 앱↔백엔드 연동 없음 |
 | 채팅 | 🟡 더미 | 방 목록·방별 대화·가족 화면 3개. 서버 없음. 도메인 상수 `kChatRooms`(방 2개) |
-| 채팅 서버 | ❌ 미구현 | `chat_room`·`chat_room_member`·`chat_message` 어느 것도 없음. `01_schema.sql` 27개 테이블에 채팅 없음 (ADR-0011 · #72) |
+| 채팅 서버 | 🟡 표까지 | `chat_room`·`chat_room_member`·`chat_room_invite`(#74) 와 `chat_message`(#78)가 `01_schema.sql` 에 있음. 방별 `room_seq` 발급도 있음. **엔드포인트 4종은 아직 없음**(#79) (ADR-0011 · #72) |
 
 ---
 

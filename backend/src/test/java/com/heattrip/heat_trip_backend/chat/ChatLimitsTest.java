@@ -57,10 +57,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 그래서 50 을 금지해도 오탐이 없다. 다만 한도가 아주 작은 수(1·2)로 바뀌면 이 축은 못 쓴다 —
  * 그 경우를 위해 {@link #TOO_COMMON_TO_BAN} 아래 값은 금지하지 않고, 그때는 2·3번이 받친다.
  *
- * <h2>지금 이 파일이 못 하는 것</h2>
- * <p>가장 강한 형태는 "정원·유효기간을 판정하는 코드가 {@code chatLimits.} 를 거친다" 를
- * 호출 그래프로 보는 것인데, <b>이 브랜치에는 chat 서비스가 0개라 호출부가 없다.</b>
- * 그 검사는 첫 호출부가 생기는 #78 에서 함께 넣는다.
+ * <h2>호출부 검사 — #74 가 #78 로 미뤄 뒀던 것</h2>
+ * <p>이 javadoc 은 원래 "가장 강한 형태는 호출 그래프로 보는 것인데 이 브랜치에는 chat
+ * 서비스가 0개라 호출부가 없다. 그 검사는 #78 에서 함께 넣는다" 로 끝났다. 호출부는 #75 의
+ * {@code ChatRoomService} 로 이미 생겼고, #78 이 그 약속을 지킨다 —
+ * {@link #everyLimit_isAskedThroughTheInterfaceAtItsCallSite()} 가 세 한도가 <b>전부</b>
+ * {@code limits.…(…)} 호출로 나타나는지 본다.
+ *
+ * <p><b>여전히 호출 그래프는 아니다.</b> 이 검사가 잡는 것은 "한도를 묻는 호출이 사라졌다"
+ * 이고, 잡지 못하는 것은 "호출은 해 두고 그 답을 판정에 안 쓴다" 이다. 후자는 값 검사(1번)와
+ * 어휘 검사(3번)가 받친다 — 판정에 쓸 숫자를 어딘가에는 적어야 하기 때문이다.
  *
  * <p>스프링을 띄우지 않는다. 구현체를 {@code new} 로 만들고 소스를 파일로 읽으면 되는 일이다(#21).
  */
@@ -125,6 +131,34 @@ class ChatLimitsTest {
         assertThat(offenders)
                 .as("인자를 없애면 호출부가 '누구의 한도인가' 를 물을 수 없게 되고, 플랜이 생기는 날 "
                         + "호출부를 전부 고쳐야 한다. 지금 인자를 무시하는 것과 인자가 없는 것은 다르다")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("세 한도가 전부 호출부에서 실제로 물어진다 — 호출이 사라지면 상수는 남고 판정만 조용히 없어진다")
+    void everyLimit_isAskedThroughTheInterfaceAtItsCallSite() throws IOException {
+        StringBuilder chatSources = new StringBuilder();
+        for (Path file : chatSourceFilesExceptImplementation()) {
+            chatSources.append(scannableSourceOf(file)).append('\n');
+        }
+        String sources = chatSources.toString();
+
+        List<String> missing = new ArrayList<>();
+        for (Method method : ChatLimits.class.getDeclaredMethods()) {
+            if (!sources.contains("." + method.getName() + "(")) {
+                missing.add(method.getName());
+            }
+        }
+
+        assertThat(missing)
+                .as("""
+                        #74 가 이 검사를 #78 로 미뤘다 — 그때는 chat 에 서비스가 0개라 호출부가 \
+                        없었다. 지금은 ChatRoomService 가 셋을 다 부른다.
+                        값 검사(리터럴 금지)만으로는 '한도를 아예 안 묻는' 회귀를 못 잡는다. \
+                        정원 검사를 통째로 지우면 리터럴도 어휘도 남지 않아 전부 초록불이고, \
+                        그때 방은 인원 제한 없이 커진다.
+                        한도가 늘면 그 호출부도 함께 생겨야 한다 — 인터페이스에만 더하고 아무도 \
+                        안 부르면 여기서 걸린다.""")
                 .isEmpty();
     }
 

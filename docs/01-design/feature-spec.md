@@ -234,8 +234,8 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 목적 | 가족 그룹 채팅 — 케어를 둘러싼 일상 대화로 일일 사용 이유를 만든다 |
 | 진입 | 가족 화면 → 채팅 |
 | 동작 | 메시지 목록(커서 페이지네이션) + 입력바 전송. **MVP는 폴링**, 실시간(WebSocket/STOMP)은 post-MVP |
-| 데이터 | `chat_message(id, group_id FK, user_id FK, body, created_at)`. 더미: `ChatMessage`/`kChatMessages` |
-| API | `GET/POST /api/groups/{groupId}/messages` |
+| 데이터 | `chat_message(id, room_id FK, room_seq, sender_user_id, sender_name, content_type, body, client_msg_id, created_at, deleted_at)`. **`group_id`·`user_id` FK 는 없다** — 방은 가족 그룹에 종속되지 않고([ADR-0011](../99-decisions/decision-log.md)), `users` 로 FK 를 내면 탈퇴 한 번에 그 사람이 쓴 말이 전부 사라진다. 더미: `ChatMessage`/`kChatMessages` |
+| API | `GET/POST /api/chat/rooms/{roomId}/messages` |
 | 상태 | **더미 예정** |
 
 ### 6.5 post-MVP
