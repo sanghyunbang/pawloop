@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import com.heattrip.heat_trip_backend.user.WithdrawnUsers;
+import com.heattrip.heat_trip_backend.user.entity.User;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -41,12 +43,23 @@ public class SocialService {
     private final CardReactionRepository reactionRepo;
     private final CardCommentRepository commentRepo;
 
+    /**
+     * 탈퇴자를 가려낸다. {@code user} 모듈의 공개 표면이다 (#82).
+     *
+     * <p>{@code UserRepository} 를 직접 부르지 않는 이유: 규약이 "리포지토리를 남이 직접
+     * 부르는 것은 공용 어휘가 아니라 그냥 새는 것" 이라고 적어 뒀다
+     * ({@code backend-implementation-guide.md} §2.3).
+     */
+    private final WithdrawnUsers withdrawnUsers;
+
     public SocialService(EmotionCardRepository cardRepo,
                          CardReactionRepository reactionRepo,
-                         CardCommentRepository commentRepo) {
+                         CardCommentRepository commentRepo,
+                         WithdrawnUsers withdrawnUsers) {
         this.cardRepo = cardRepo;
         this.reactionRepo = reactionRepo;
         this.commentRepo = commentRepo;
+        this.withdrawnUsers = withdrawnUsers;
     }
 
     /** 카드 공유. */
@@ -92,7 +105,8 @@ public class SocialService {
             }
         }
         int commentCount = (int) commentRepo.countByCardId(card.getId());
-        return mapCard(card, counts, mine, commentCount);
+        // 방금 쓴 사람이라 살아 있다. 묻지 않는다.
+        return mapCard(card, counts, mine, commentCount, Set.of());
     }
 
     /** 최신순 피드. 페이지 내 카드들의 리액션을 한 번에 로드(N+1 방지). */
@@ -129,12 +143,17 @@ public class SocialService {
             commentCountByCard.put(cardId, cnt);
         }
 
+        // 탈퇴자를 **한 번에** 묻는다. 카드마다 물으면 N+1 이고, 그건 위에서 리액션과 댓글
+        // 수가 이미 피해 둔 함정이다 (#82).
+        Set<Long> withdrawn = withdrawnUsers.among(
+                cards.stream().map(EmotionCard::getUserId).toList());
+
         List<CardDto> out = new ArrayList<>(cards.size());
         for (EmotionCard c : cards) {
             Map<String, Integer> counts = countsByCard.getOrDefault(c.getId(), emptyCounts());
             List<String> mine = myByCard.getOrDefault(c.getId(), List.of());
             int commentCount = commentCountByCard.getOrDefault(c.getId(), 0);
-            out.add(mapCard(c, counts, mine, commentCount));
+            out.add(mapCard(c, counts, mine, commentCount, withdrawn));
         }
         return out;
     }
@@ -202,16 +221,48 @@ public class SocialService {
                 .body(trimmed)
                 .build());
 
-        return mapComment(saved);
+        // 방금 쓴 사람이라 살아 있다. 묻지 않는다.
+        return mapComment(saved, Set.of());
     }
 
     /** 단일 카드의 댓글 목록(오래된 순). */
     public List<CommentDto> comments(Long cardId) {
-        List<CommentDto> out = new ArrayList<>();
-        for (CardComment c : commentRepo.findByCardIdOrderByIdAsc(cardId)) {
-            out.add(mapComment(c));
+        List<CardComment> rows = commentRepo.findByCardIdOrderByIdAsc(cardId);
+        Set<Long> withdrawn = withdrawnUsers.among(
+                rows.stream().map(CardComment::getUserId).toList());
+
+        List<CommentDto> out = new ArrayList<>(rows.size());
+        for (CardComment c : rows) {
+            out.add(mapComment(c, withdrawn));
         }
         return out;
+    }
+
+    /**
+     * 화면에 뜰 이름. (이슈 #82)
+     *
+     * <p>세 갈래다. <b>셋을 하나로 뭉치면 안 된다.</b>
+     * <ul>
+     *   <li>{@code null} — 처음부터 이름 없이 남긴 글. 앱이 "익명" 으로 그린다.
+     *       <b>이 규칙은 그대로 둔다.</b></li>
+     *   <li>탈퇴함 — {@code "알 수 없음"}. {@code null} 로 보내면 앱이 "익명" 으로 그리는데,
+     *       그건 <b>틀린 말이다</b> — 익명으로 남긴 것이 아니라 그 사람이 떠난 것이다.</li>
+     *   <li>그 밖 — 작성 시점의 스냅샷을 그대로.</li>
+     * </ul>
+     *
+     * <p>스냅샷을 지우지 않는 이유: 이름을 바꾸면 과거 글의 작성자가 소급해서 바뀐다.
+     * 여기서 고치는 것은 <b>탈퇴한 사람의 이름이 계속 뜨는 것</b> 하나다.
+     */
+    private static String displayHandle(Long userId, String handle, Set<Long> withdrawn) {
+        if (userId != null && withdrawn.contains(userId)) {
+            // 문구를 여기서 새로 만들지 않는다. care 와 chat 이 같은 자리에 이미 이것을 쓴다 —
+            // 세 곳이 각자 "알 수 없음" 을 적으면 하나를 고칠 때 나머지가 남는다.
+            //
+            // null 을 보내면 앱이 "익명" 으로 그리는데 그건 틀린 말이다. 익명으로 남긴 것이
+            // 아니라 그 사람이 떠난 것이고, 앱은 그 둘을 다르게 그려야 한다.
+            return User.UNKNOWN_DISPLAY_NAME;
+        }
+        return handle;
     }
 
     // ───────────────────────── helpers ─────────────────────────
@@ -224,10 +275,11 @@ public class SocialService {
         return m;
     }
 
-    private static CardDto mapCard(EmotionCard c, Map<String, Integer> counts, List<String> mine, int commentCount) {
+    private static CardDto mapCard(EmotionCard c, Map<String, Integer> counts, List<String> mine,
+                                   int commentCount, Set<Long> withdrawn) {
         return new CardDto(
                 c.getId(),
-                c.getHandle(),
+                displayHandle(c.getUserId(), c.getHandle(), withdrawn),
                 c.getMoodKey(),
                 c.getPlaceName(),
                 c.getBody(),
@@ -238,10 +290,10 @@ public class SocialService {
         );
     }
 
-    private static CommentDto mapComment(CardComment c) {
+    private static CommentDto mapComment(CardComment c, Set<Long> withdrawn) {
         return new CommentDto(
                 c.getId(),
-                c.getHandle(),
+                displayHandle(c.getUserId(), c.getHandle(), withdrawn),
                 c.getBody(),
                 c.getCreatedAt() == null ? null : c.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         );
