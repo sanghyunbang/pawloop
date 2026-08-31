@@ -205,6 +205,53 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
      * 적이 있다({@code ChatRoomService#reviveWithinCapacity} javadoc). 정원은 정원 검사가
      * 답하고, 이 0 은 멱등 200 이다.
      */
+    /**
+     * 강퇴 — 이슈 #82 완료 조건 4 · 10.
+     *
+     * <h2>행을 지우지 않는다</h2>
+     * <p>{@code DELETE} 로 하면 두 가지가 한꺼번에 사라진다. 하나는 {@code last_read_seq} —
+     * 되돌리면 미읽음이 처음부터 다시 쌓인다({@link ChatRoomMember} javadoc). 다른 하나는
+     * <b>재입장 금지를 걸 자리</b> 다. 행이 없으면 {@code rejoin_blocked} 를 어디에도 못 적고,
+     * 그 사람은 유효한 초대코드 하나로 그냥 돌아온다.
+     *
+     * <p>{@code joinByInviteCode} 의 판정({@code isRejoinBlocked})은 <b>이미 서 있었다.</b>
+     * 없던 것은 그 상태로 만드는 쪽이다 — 이 문장이 그것이다.
+     *
+     * <h2>{@code where ... removed_at is null} 이 조건부 UPDATE 다</h2>
+     * <p>두 번 눌러도 두 번째는 0 을 받는다. 부르는 쪽이 그 0 을 오류로 만들지 말아야 한다 —
+     * 결과가 "나가 있다" 로 같다({@link #reviveIfRemoved} 가 같은 모양이고, 거기서 0 을
+     * 정원 초과로 옮겼다가 고친 적이 있다).
+     *
+     * @return 이번에 실제로 내보낸 행 수. 이미 나가 있었으면 0
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update ChatRoomMember m
+               set m.removedAt = :now, m.removedBy = :actorUserId, m.rejoinBlocked = true
+             where m.room.id = :roomId and m.userId = :targetUserId and m.removedAt is null
+            """)
+    int kick(@Param("roomId") Long roomId,
+             @Param("targetUserId") Long targetUserId,
+             @Param("actorUserId") Long actorUserId,
+             @Param("now") LocalDateTime now);
+
+    /**
+     * 재입장 금지를 푼다 — 방장이 나중에 푸는 자리(#82).
+     *
+     * <p><b>되돌리는 것은 금지뿐이고 멤버십은 아니다.</b> 풀어도 방에 자동으로 돌아오지
+     * 않는다 — 그 사람이 초대코드로 다시 들어와야 한다. 자동으로 넣으면 방장이 "금지만
+     * 풀려고" 누른 버튼이 사람을 방에 다시 넣는 버튼이 된다.
+     *
+     * @return 이번에 실제로 푼 행 수. 금지 상태가 아니었으면 0
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update ChatRoomMember m
+               set m.rejoinBlocked = false
+             where m.room.id = :roomId and m.userId = :targetUserId and m.rejoinBlocked = true
+            """)
+    int allowRejoin(@Param("roomId") Long roomId, @Param("targetUserId") Long targetUserId);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update ChatRoomMember m

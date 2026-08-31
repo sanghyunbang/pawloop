@@ -90,7 +90,10 @@ public class ChatInviteController {
      */
     @PostMapping("/invites/{code}/join")
     public ChatRoomResponse join(@CurrentUser User user, @PathVariable String code) {
-        ChatJoinResult joined = chatRooms.joinByInviteCode(code, user.getId());
+        // 만 14세 미만은 가족 방에만 들어갈 수 있다(#82 완료 조건 5). 나이대를 방 종류
+        // 목록으로 바꾸는 것이 이 패키지의 일이고, 그 목록을 대조하는 것은 chat 이다.
+        ChatJoinResult joined = chatRooms.joinByInviteCode(
+                code, user.getId(), MinorRoomPolicy.allowedOriginKindsFor(user));
         // 멤버 목록은 memberCount 때문에 어차피 읽는다. #79 가 더한 myRole·lastReadSeq·unread
         // 도 그 목록에서 꺼내므로 추가 쿼리가 0이다.
         return ChatRoomResponse.of(

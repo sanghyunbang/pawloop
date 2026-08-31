@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * chat 모듈이 밖으로 내놓는 <b>문</b> — 이슈 #75, 근거 ADR-0011.
@@ -409,6 +410,30 @@ public class ChatRoomService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ChatJoinResult joinByInviteCode(String code, long userId) {
+        return joinByInviteCode(code, userId, null);
+    }
+
+    /**
+     * 초대코드로 들어오되 <b>부르는 쪽이 허용한 종류의 방에만</b> — 이슈 #82 완료 조건 5.
+     *
+     * <h2>chat 은 {@code originKind} 를 해석하지 않는다</h2>
+     * <p>{@code originKind.equals("FAMILY")} 로 갈라지는 코드가 여기 생기는 순간 ADR-0011 이
+     * 사라진다({@code FamilyGroupService.ORIGIN_KIND} javadoc 이 그렇게 못 박아 뒀다).
+     *
+     * <p>그래서 여기가 하는 일은 <b>대조 하나</b>다 — 부르는 쪽이 문자열 목록을 주고, 이
+     * 메서드는 방의 {@code origin_kind} 가 그 안에 있는지만 본다. "만 14세 미만" 도
+     * "가족방" 도 여기서는 뜻이 없다. 뜻은 {@code chatweb} 이 안다.
+     *
+     * <h2>왜 부르는 쪽이 먼저 방을 들여다보지 않는가</h2>
+     * <p>"코드로 방을 읽어서 종류를 보고, 괜찮으면 참여" 로 하면 그 사이가 열린다. 그리고
+     * 방을 미리 읽어 주는 경로가 하나 생기는데, 그건 <b>코드만 있으면 방 정보를 볼 수 있는</b>
+     * 새 표면이다. 판정을 <b>잠금 안</b>에 두는 편이 좁다.
+     *
+     * @param allowedOriginKinds 허용할 {@code origin_kind} 들. {@code null} 이면 제한 없음
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ChatJoinResult joinByInviteCode(String code, long userId,
+                                           Set<String> allowedOriginKinds) {
         LocalDateTime now = LocalDateTime.now(clock);
 
         // ① 없음 — 404. 여기서 코드 값을 메시지에 싣지 않는다(#6).
@@ -420,6 +445,12 @@ public class ChatRoomService {
         ChatRoom lockedRoom = rooms.lockForMemberChange(roomId)
                 .orElseThrow(() -> new NoSuchElementException("초대코드를 찾을 수 없습니다."));
         ChatRoomView room = viewOf(lockedRoom);
+
+        // 부르는 쪽이 준 목록과의 대조. 뜻은 해석하지 않는다 — 위 javadoc 참조.
+        if (allowedOriginKinds != null && !allowedOriginKinds.contains(room.originKind())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "이 방에는 참여할 수 없습니다.");
+        }
 
         ChatRoomInvite invite = invites.findByCode(code)
                 .orElseThrow(() -> new NoSuchElementException("초대코드를 찾을 수 없습니다."));
@@ -457,6 +488,66 @@ public class ChatRoomService {
         }
 
         return new ChatJoinResult(room, false);
+    }
+
+    /**
+     * 멤버를 내보낸다. <b>{@code OWNER} 만.</b> 이슈 #82 완료 조건 4 · 10.
+     *
+     * <h2>지우지 않고 표시한다</h2>
+     * <p>{@code DELETE FROM chat_room_member} 로 하면 <b>재입장 금지를 걸 자리가 사라진다.</b>
+     * 행이 없으면 {@code rejoin_blocked} 를 어디에도 못 적고, 그 사람은 유효한 초대코드 하나로
+     * 그냥 돌아온다. {@code last_read_seq} 도 함께 사라져 미읽음이 처음부터 다시 쌓인다.
+     *
+     * <p>{@link #joinByInviteCode} 의 재입장 판정은 <b>이미 있었다.</b> 없던 것은 그 상태로
+     * 만드는 쪽이고, 그래서 이 메서드가 생기기 전까지 {@code rejoin_blocked} 는 한 번도
+     * {@code true} 가 된 적이 없다.
+     *
+     * <h2>그 사람이 쓴 메시지는 남는다</h2>
+     * <p>지우면 <b>신고 근거가 사라진다.</b> 디스코드도 메시지 삭제 옵션은 kick 이 아니라
+     * ban 에만 붙였다. 여기서 {@code chat_message} 를 건드리지 않는 것이 그 결정이다.
+     *
+     * <h2>방장은 자기를 못 내보낸다</h2>
+     * <p>허용하면 <b>방장이 없는 방</b>이 생기고, 그 방은 초대코드도 못 내고 강퇴도 못 한다.
+     * 방을 떠나는 것은 {@code DELETE .../members/me} 이고 그건 다른 동작이다.
+     *
+     * @return 이번에 실제로 내보냈으면 {@code true}, 이미 나가 있었으면 {@code false}
+     * @throws ResponseStatusException 방장이 아니거나(403) 그 방에 없는 사람일 때(404)
+     */
+    @Transactional
+    public boolean removeMember(long roomId, long actorUserId, long targetUserId) {
+        requireOwner(roomId, actorUserId);
+
+        if (actorUserId == targetUserId) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "방장은 자기를 내보낼 수 없습니다.");
+        }
+
+        // 없는 사람과 이미 나간 사람을 여기서 가른다. 방장이 부르는 것이라 방 존재 여부가
+        // 새지 않고, 계약도 이 경로에 404 를 선언했다.
+        if (members.findByRoomIdAndUserId(roomId, targetUserId).isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "이 방의 멤버가 아닙니다.");
+        }
+
+        // 0 은 오류가 아니라 "이미 나가 있다" 다. 두 번 눌러도 결과가 같다.
+        return members.kick(roomId, targetUserId, actorUserId, LocalDateTime.now(clock)) == 1;
+    }
+
+    /**
+     * 재입장 금지를 푼다. <b>{@code OWNER} 만.</b> (#82)
+     *
+     * <p>강퇴 확인 문구가 "방 설정에서 다시 풀 수 있습니다" 라고 <b>약속한다.</b> 그 약속을
+     * 지킬 자리가 여기다 — 없으면 화면이 지키지 못할 말을 하게 된다.
+     *
+     * <p><b>푸는 것은 금지뿐이고 멤버십은 아니다.</b> 풀어도 방에 자동으로 돌아오지 않는다.
+     * 자동으로 넣으면 방장이 "금지만 풀려고" 누른 버튼이 사람을 방에 다시 넣는 버튼이 된다.
+     *
+     * @return 이번에 실제로 풀었으면 {@code true}, 금지 상태가 아니었으면 {@code false}
+     */
+    @Transactional
+    public boolean allowRejoin(long roomId, long actorUserId, long targetUserId) {
+        requireOwner(roomId, actorUserId);
+        return members.allowRejoin(roomId, targetUserId) == 1;
     }
 
     // ─────────────────────────── 메시지 ───────────────────────────
@@ -778,7 +869,7 @@ public class ChatRoomService {
 
         if (me.getRole() != ChatRoomMemberRole.OWNER) {
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "방장만 초대코드를 발급하거나 회수할 수 있습니다.");
+                    HttpStatus.FORBIDDEN, "방장만 할 수 있습니다.");
         }
     }
 

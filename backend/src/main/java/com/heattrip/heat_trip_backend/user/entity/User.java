@@ -221,6 +221,27 @@ public class User {
     }
 
     /**
+     * 만 14세 미만이라고 <b>선언한</b> 계정인가. (이슈 #82)
+     *
+     * <h2>왜 {@code getAgeGroup() == UNDER14} 를 밖에서 안 쓰게 하는가</h2>
+     * <p>{@link AgeGroup} 은 <b>중첩 타입</b>이라 {@code User} 가 공개 표면이어도 그 표면을
+     * 물려받지 않는다 — 밖에서 그것을 부르면 모듈 경계 위반이다({@code ModularityBaselineTest}
+     * 가 {@code User$Gender}·{@code User$UserBuilder} 를 여전히 위반으로 세고 있는 것과 같다).
+     * 판정을 여기 두면 밖으로 나가는 것이 {@code boolean} 하나다.
+     *
+     * <p>어휘가 여기 있어야 하는 이유이기도 하다. "만 14세 미만" 이 무엇인지는 {@code user}
+     * 가 정한다 — 등급이 셋이 되는 날 고칠 자리가 한 곳이어야 한다.
+     *
+     * <h2>{@code null} 은 미성년이 아니다</h2>
+     * <p>{@code age_group} 은 {@code DEFAULT NULL} 이고 소셜 로그인으로 들어온 예전 계정들이
+     * 비어 있다. 모르는 것을 미성년으로 다루면 <b>그 계정들이 오늘부터 기능을 잃는다.</b>
+     * 나이대를 채우게 하는 것은 가입·프로필 쪽 일이다. <b>판단이지 누락이 아니다.</b>
+     */
+    public boolean isUnder14() {
+        return ageGroup == AgeGroup.UNDER14;
+    }
+
+    /**
      * 화면에 쓸 이름 — 닉네임 · 이름 · {@link #UNKNOWN_DISPLAY_NAME} 순서다.
      *
      * <p>이 규칙이 <b>여기 한 곳</b>에 있는 이유: 가족 멤버 목록({@code GroupMemberResponse.nickname})

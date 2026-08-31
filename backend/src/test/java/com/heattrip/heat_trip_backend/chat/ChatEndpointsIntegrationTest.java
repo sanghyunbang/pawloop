@@ -390,6 +390,60 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(roomInList(owner, room.id()).path("lastReadSeq").asLong()).isEqualTo(1);
     }
 
+    // ─────────────────── 강퇴 (이슈 #82) ───────────────────
+
+    @Test
+    @DisplayName("방장이 내보내면 204 고, 그 사람은 유효한 초대코드로도 못 돌아온다")
+    void kickingBlocksRejoin() throws Exception {
+        Account owner = account("방장");
+        Account troll = account("내보내질 사람");
+        Room room = roomWith(owner, troll);
+
+        mockMvc.perform(delete("/api/chat/rooms/{roomId}/members/{userId}",
+                        room.id(), troll.id())
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNoContent());
+
+        String code = issueInvite(owner, room.id());
+        mockMvc.perform(post("/api/chat/invites/{code}/join", code)
+                        .header("Authorization", "Bearer " + troll.token()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("방장이 아니면 못 내보낸다")
+    void onlyTheOwnerCanKickOverHttp() throws Exception {
+        Account owner = account("방장");
+        Account mate = account("그냥 멤버");
+        Account other = account("또 다른 멤버");
+        Room room = roomWith(owner, mate, other);
+
+        mockMvc.perform(delete("/api/chat/rooms/{roomId}/members/{userId}",
+                        room.id(), other.id())
+                        .header("Authorization", "Bearer " + mate.token()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("방장이 금지를 풀면 다시 들어올 수 있다 — 강퇴 문구가 약속한 그것이다")
+    void theOwnerCanLiftTheBanOverHttp() throws Exception {
+        Account owner = account("방장");
+        Account troll = account("돌아올 사람");
+        Room room = roomWith(owner, troll);
+
+        mockMvc.perform(delete("/api/chat/rooms/{roomId}/members/{userId}",
+                        room.id(), troll.id())
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(delete("/api/chat/rooms/{roomId}/bans/{userId}", room.id(), troll.id())
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/chat/invites/{code}/join", issueInvite(owner, room.id()))
+                        .header("Authorization", "Bearer " + troll.token()))
+                .andExpect(status().isOk());
+    }
+
     // ─────────────────── 가리기 (이슈 #82) ───────────────────
 
     @Test
@@ -849,6 +903,11 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
             chatRooms.joinByInviteCode(code, other.id());
         }
         return new Room(room.id(), title);
+    }
+
+    /** 초대코드 하나. 사용 횟수를 서로 잡아먹지 않게 매번 새로 뽑는다. */
+    private String issueInvite(Account owner, long roomId) {
+        return chatRooms.issueInvite(roomId, owner.id()).code();
     }
 
     private ResultActions send(Account account, long roomId, String text, String clientMsgId)
