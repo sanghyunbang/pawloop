@@ -250,6 +250,41 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("같은 방의 다른 멤버가 같은 clientMsgId 를 써도 둘 다 남는다 — 멱등의 범위는 보낸 사람까지다")
+    void twoMembersUsingTheSameKeyDoNotEraseEachOther() throws Exception {
+        Account first = account("첫째");
+        Account second = account("둘째");
+        Room room = roomWith(first, second);
+
+        JsonNode mine = body(send(first, room.id(), "A 의 비밀 메모", "shared")
+                .andExpect(status().isCreated()));
+        JsonNode theirs = body(send(second, room.id(), "B 가 하려던 말", "shared")
+                .andExpect(status().isCreated()));
+
+        assertThat(theirs.path("body").asText())
+                .as("""
+                        범위가 (room_id, client_msg_id) 이던 판에서 이 요청은 200 과 함께 \
+                        A 의 본문을 돌려줬다. B 의 앱은 200 을 성공으로 읽으므로 재시도하지 \
+                        않고, B 가 하려던 말은 영영 사라진다.""")
+                .isEqualTo("B 가 하려던 말");
+        assertThat(theirs.path("senderUserId").asLong()).isEqualTo(second.id());
+        assertThat(theirs.path("senderName").asText())
+                .as("""
+                        senderUserId 와 senderName 이 다른 사람을 가리키는 응답이 나가던 자리다 — \
+                        컨트롤러가 언제나 부르는 사람의 이름을 찍는데 메시지는 남의 것이었다.""")
+                .isEqualTo(nicknameOf(second));
+        assertThat(theirs.path("roomSeq").asLong()).isNotEqualTo(mine.path("roomSeq").asLong());
+        assertThat(bodies(messages(first, room.id(), 0L, null)))
+                .as("두 줄 다 방에 남아야 한다")
+                .containsExactly("A 의 비밀 메모", "B 가 하려던 말");
+
+        assertThat(body(send(second, room.id(), "B 가 하려던 말", "shared")
+                .andExpect(status().isOk())).path("roomSeq").asLong())
+                .as("좁혔다고 해서 자기 자신의 재전송까지 풀리면 안 된다 — 완료 조건 3 은 그대로다")
+                .isEqualTo(theirs.path("roomSeq").asLong());
+    }
+
+    @Test
     @DisplayName("같은 clientMsgId 가 동시에 두 번 와도 둘 다 200 대다 — 진 쪽이 500 이면 안 된다")
     void twoSendsWithTheSameKeyAtTheSameMomentBothSucceed() throws Exception {
         Account owner = account("두 번 동시에 누른 사람");
@@ -385,7 +420,8 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                 .doesNotContain("우리끼리 하는 말")
                 .doesNotContain(String.valueOf(theirs.id()));
 
-        assertThat(chatMessageRepository.findByRoomIdAndClientMsgId(theirs.id(), "intrude-1"))
+        assertThat(chatMessageRepository.findByRoomIdAndSenderUserIdAndClientMsgId(
+                        theirs.id(), outsider.id(), "intrude-1"))
                 .as("403 이 난 전송이 행을 남기면 인가가 아니라 필터일 뿐이다")
                 .isEmpty();
     }
@@ -512,6 +548,144 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                         .header("If-None-Match", "\"%d:1\"".formatted(theirs.id()))
                         .header("Authorization", "Bearer " + outsider.token()))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("한 장을 못 채운 첫 장의 ETag 를 들고 이어서 폴링해도 다음 장이 온다 — 완료 조건 2")
+    void catchingUpAcrossTwoPagesLosesNothing() throws Exception {
+        Account owner = account("쌓는 사람");
+        Account poller = account("30초 끊겼던 사람");
+        Room room = roomWith(owner, poller);
+        for (int i = 1; i <= 60; i++) {
+            send(owner, room.id(), i + "번", "catchup-" + i).andExpect(status().isCreated());
+        }
+
+        MockHttpServletResponse firstPage = mockMvc.perform(
+                get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .param("afterSeq", "0")
+                        .header("Authorization", "Bearer " + poller.token()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse();
+        JsonNode page = MAPPER.readTree(firstPage.getContentAsString(StandardCharsets.UTF_8));
+        assertThat(page.path("items").size()).isEqualTo(50);
+        assertThat(page.path("hasMore").asBoolean()).isTrue();
+        assertThat(firstPage.getHeader("ETag"))
+                .as("""
+                        이 응답은 60번까지 준 적이 없다. 그런데 "이 응답은 lastSeq=60 상태다" 라고 \
+                        표시하면 그건 거짓말이고, 스프링 MVC 가 다음 요청에서 그 값을 대조해 \
+                        200 을 빈 304 로 갈아치운다 — 51~60 열 줄이 사라진다.""")
+                .isNull();
+
+        // 계약이 시키는 대로 이어서 부른다 — 직전 응답이 준 ETag 를 되보내고, 커서는
+        // 마지막으로 받은 번호로. 여기서 손으로 값을 지어내지 않는 것이 요점이다:
+        // 옛 판은 이 자리에서 "1:60" 을 돌려줬고, 그것을 그대로 되보내면 304 가 됐다.
+        MockHttpServletRequestBuilder resume = get("/api/chat/rooms/{roomId}/messages", room.id())
+                .param("afterSeq", "50")
+                .header("Authorization", "Bearer " + poller.token());
+        if (firstPage.getHeader("ETag") != null) {
+            resume = resume.header("If-None-Match", firstPage.getHeader("ETag"));
+        }
+        MockHttpServletResponse secondPage = mockMvc.perform(resume).andReturn().getResponse();
+
+        assertThat(secondPage.getStatus())
+                .as("""
+                        여기가 304 면 방 목록의 미읽음 뱃지는 60 을 가리키는데 방을 열면 아무것도 \
+                        새로 안 뜬다. 다음 새 메시지가 lastSeq 를 바꾸기 전까지 복구되지 않는다.""")
+                .isEqualTo(200);
+        assertThat(seqs(MAPPER.readTree(secondPage.getContentAsString(StandardCharsets.UTF_8))))
+                .containsExactly(51L, 52L, 53L, 54L, 55L, 56L, 57L, 58L, 59L, 60L);
+    }
+
+    @Test
+    @DisplayName("옛 ETag 를 들고 첫 진입하거나 과거를 스크롤해도 304 가 아니다 — 304 는 폴링에만 나간다")
+    void anOldEtagDoesNotBlockTheFirstScreenOrScrollback() throws Exception {
+        Account owner = account("쌓는 사람");
+        Account reader = account("다시 들어온 사람");
+        Room room = roomWith(owner, reader);
+        for (int i = 1; i <= 3; i++) {
+            send(owner, room.id(), i + "번", "entry-" + i).andExpect(status().isCreated());
+        }
+        // 폴링으로 따라잡아 ETag 를 손에 넣는다. 지어낸 값이 아니라 서버가 준 값이다.
+        String currentEtag = mockMvc.perform(
+                get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .param("afterSeq", "0")
+                        .header("Authorization", "Bearer " + reader.token()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getHeader("ETag");
+        assertThat(currentEtag)
+                .as("한 장에 다 담긴 폴링 응답은 '이제 lastSeq 까지 전부 받았다' 라 ETag 가 붙는다")
+                .isEqualTo("\"%d:3\"".formatted(room.id()));
+
+        MockHttpServletResponse firstScreen = mockMvc.perform(
+                get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .header("If-None-Match", currentEtag)
+                        .header("Authorization", "Bearer " + reader.token()))
+                .andReturn().getResponse();
+        MockHttpServletResponse scrollback = mockMvc.perform(
+                get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .param("beforeSeq", "3")
+                        .header("If-None-Match", currentEtag)
+                        .header("Authorization", "Bearer " + reader.token()))
+                .andReturn().getResponse();
+
+        assertThat(firstScreen.getStatus())
+                .as("""
+                        계약은 "304 는 afterSeq 를 보낸 폴링 요청에만 나갑니다" 라고 적었는데 \
+                        옛 판에서는 둘 다 빈 304 였다 — 앱은 대화를 한 줄도 못 그린다.""")
+                .isEqualTo(200);
+        assertThat(scrollback.getStatus()).isEqualTo(200);
+        assertThat(bodies(MAPPER.readTree(
+                firstScreen.getContentAsString(StandardCharsets.UTF_8))))
+                .containsExactly("1번", "2번", "3번");
+    }
+
+    // ─────────────────── 계약에 없는 500 을 내지 않는다 ───────────────────
+
+    @Test
+    @DisplayName("숫자가 아닌 roomId·afterSeq·limit 은 500 이 아니라 400 이다 — 폴링이 재시도 루프를 돌면 안 된다")
+    void malformedCursorsAre400NotInternalError() throws Exception {
+        Account owner = account("커서가 깨진 사람");
+        Room room = roomWith(owner);
+        String auth = "Bearer " + owner.token();
+
+        record Case(String label, MockHttpServletRequestBuilder request) { }
+        List<Case> cases = List.of(
+                new Case("afterSeq=abc", get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .param("afterSeq", "abc")),
+                new Case("limit=abc", get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .param("limit", "abc")),
+                new Case("limit=1.5", get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .param("limit", "1.5")),
+                new Case("afterSeq 가 long 범위를 넘음",
+                        get("/api/chat/rooms/{roomId}/messages", room.id())
+                                .param("afterSeq", "99999999999999999999")),
+                new Case("roomId=abc", get("/api/chat/rooms/abc/messages")),
+                new Case("read 의 roomId=abc", post("/api/chat/rooms/abc/read")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastReadSeq\":1}")));
+
+        for (Case testCase : cases) {
+            MockHttpServletResponse response = mockMvc
+                    .perform(testCase.request().header("Authorization", auth))
+                    .andReturn().getResponse();
+            String payload = response.getContentAsString(StandardCharsets.UTF_8);
+
+            assertThat(response.getStatus())
+                    .as("""
+                            %s — 계약은 이 경로에 400·401·403 만 선언한다. 500 은 앱에게 \
+                            "서버 고장이니 재시도하라" 는 뜻이고, 이 넷은 rate limit 표 밖이라 \
+                            한도가 무한이다. 커서가 한 번 오염되면 그대로 무한 재시도다.""",
+                            testCase.label())
+                    .isEqualTo(400);
+            assertThat(MAPPER.readTree(payload).path("error").path("code").asText())
+                    .isEqualTo("VALIDATION");
+            // traceId 는 16진수 UUID 라 "abc" 를 우연히 품을 수 있다. 그 자리를 지우고 본다.
+            assertThat(scrub(payload))
+                    .as("예외 메시지에는 들어온 값이 그대로 섞여 있다 — For input string: \"abc\" (#6)")
+                    .doesNotContain("abc")
+                    .doesNotContain("1.5")
+                    .doesNotContain("99999999999999999999");
+        }
     }
 
     // ─────────────────────────── 지그 ───────────────────────────

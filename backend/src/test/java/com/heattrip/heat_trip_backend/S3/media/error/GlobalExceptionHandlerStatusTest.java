@@ -20,6 +20,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -78,6 +80,23 @@ class GlobalExceptionHandlerStatusTest extends AbstractMySqlIntegrationTest {
         @GetMapping(BASE + "/illegal-argument")
         void illegalArgument() {
             throw new IllegalArgumentException("probe-validation-failed");
+        }
+
+        /**
+         * 경로 변수와 질의 파라미터의 <b>타입</b> — 숫자를 선언한 자리에 글자가 오는 경우.
+         *
+         * <p>메서드 본문에 아무것도 없는 것이 요점이다. 여기까지 오지도 못하고 스프링의
+         * 바인딩이 {@code MethodArgumentTypeMismatchException} 을 던진다(#79).
+         */
+        @GetMapping(BASE + "/typed/{id}")
+        void typed(@PathVariable long id, @RequestParam(required = false) Long cursor) {
+            // 바인딩만 본다.
+        }
+
+        /** 없으면 안 되는 파라미터 — {@code MissingServletRequestParameterException} 자리다. */
+        @GetMapping(BASE + "/required-param")
+        void requiredParam(@RequestParam long cursor) {
+            // 바인딩만 본다.
         }
     }
 
@@ -215,6 +234,40 @@ class GlobalExceptionHandlerStatusTest extends AbstractMySqlIntegrationTest {
         assertThat(errorBody(response).path("traceId").asText())
                 .as("원인을 찾을 수단은 남겨야 한다 — 로그에서 이 요청을 집을 수 있는 ID")
                 .isNotBlank();
+    }
+
+    @Test
+    @DisplayName("숫자 자리에 글자가 오면 500 이 아니라 400 VALIDATION 이고, 그 값이 응답에 되실리지 않는다")
+    void aTypeMismatchIs400NotInternalError() throws Exception {
+        // 저장소 전체의 성질이었다 — /api/chat/rooms/abc/messages 도 ?afterSeq=abc 도
+        // /api/groups/abc/care-logs 도 전부 500 이었다(#79 에서 실측). 계약(openapi.yaml)은
+        // 그 경로들에 500 을 선언하지 않고, 앱은 500 을 "서버 고장이니 재시도하라" 로 읽는다.
+        String token = bearer();
+        record Case(String label, String uri) { }
+
+        for (Case probe : new Case[] {
+                new Case("경로 변수", Probe.BASE + "/typed/abc"),
+                new Case("질의 파라미터", Probe.BASE + "/typed/1?cursor=abc"),
+                new Case("long 범위를 넘는 수", Probe.BASE + "/typed/1?cursor=99999999999999999999"),
+                new Case("필수 파라미터 누락", Probe.BASE + "/required-param")}) {
+
+            var response = mockMvc.perform(get(probe.uri()).header("Authorization", token))
+                    .andReturn().getResponse();
+
+            assertThat(response.getStatus())
+                    .as("%s 가 %d 로 나갔다 — handleMalformedRequest 의 타입 목록에서 "
+                            + "MethodArgumentTypeMismatchException 을 빼면 다시 500 이 된다",
+                            probe.label(), response.getStatus())
+                    .isEqualTo(400);
+            assertThat(errorBody(response).path("code").asText()).isEqualTo("VALIDATION");
+            assertThat(errorBody(response).path("message").asText())
+                    .as("""
+                            예외 메시지에는 들어온 값이 그대로 섞여 있다 — 실제로 \
+                            'For input string: "abc"' 가 들어 있었다 (#6). 고정 문구여야 한다.""")
+                    .doesNotContain("abc")
+                    .doesNotContain("cursor")
+                    .doesNotContain("99999999999999999999");
+        }
     }
 
     // ─────────────────────────── 지그 ───────────────────────────

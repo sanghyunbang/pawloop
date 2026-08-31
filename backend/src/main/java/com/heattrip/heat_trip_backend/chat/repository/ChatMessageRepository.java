@@ -81,11 +81,17 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     List<ChatMessage> findLastMessagesOfRooms(@Param("roomIds") Collection<Long> roomIds);
 
     /**
-     * 같은 방에 같은 멱등키로 이미 들어온 메시지.
+     * <b>같은 사람이</b> 같은 방에 같은 멱등키로 이미 넣어 둔 메시지.
      *
      * <p>이 조회는 <b>판정이 아니다.</b> 중복을 막는 것은 {@code UNIQUE (room_id,
-     * client_msg_id)} 이고(📌 #86 원칙 5), 이것은 진 쪽이 "그래서 이미 있는 그 메시지가
-     * 무엇인가" 를 답하기 위한 조회다. 재전송을 200 으로 돌려주는 경로는 #79 다.
+     * sender_user_id, client_msg_id)} 이고(📌 #86 원칙 5), 이것은 진 쪽이 "그래서 이미
+     * 있는 그 메시지가 무엇인가" 를 답하기 위한 조회다. 재전송을 200 으로 돌려주는 경로는
+     * {@code ChatMessageSender} 다.
+     *
+     * <p><b>{@code senderUserId} 가 조건에 있는 것이 요점이다.</b> 빼면 같은 방의 다른
+     * 멤버가 같은 키를 썼을 때 <b>남의 메시지</b>를 "당신이 아까 보낸 그것" 이라며
+     * 돌려주게 된다 — #79 이전 판이 실제로 그랬다. 제약과 이 조회의 범위는 같아야 한다.
      */
-    Optional<ChatMessage> findByRoomIdAndClientMsgId(Long roomId, String clientMsgId);
+    Optional<ChatMessage> findByRoomIdAndSenderUserIdAndClientMsgId(
+            Long roomId, Long senderUserId, String clientMsgId);
 }

@@ -377,9 +377,13 @@ class ChatBoundaryArchitectureTest {
                             (room_id, room_seq) 는 순서·델타·미읽음 셋의 유일한 근거다. 같은 방에 \
                             같은 seq 가 둘이면 afterSeq 폴링이 어느 쪽을 줬는지 알 수 없고, 클라이언트는 \
                             받지 못한 쪽을 영영 못 받는다 (#78 완료 조건 5 · ADR-0011 결정 2).
-                            (room_id, client_msg_id) 는 재전송 멱등의 근거다 — 없으면 지하철에서 \
-                            타임아웃된 전송이 같은 말을 두 줄로 남긴다 (#79 완료 조건 3·8).""")
-                    .contains("room_id,room_seq", "room_id,client_msg_id");
+                            (room_id, sender_user_id, client_msg_id) 는 재전송 멱등의 근거다 — \
+                            없으면 지하철에서 타임아웃된 전송이 같은 말을 두 줄로 남긴다 \
+                            (#79 완료 조건 3·8). 범위에서 sender_user_id 를 빼면 같은 방의 다른 \
+                            멤버가 같은 키를 썼을 때 그 사람의 메시지가 조용히 사라진다 — 서버가 \
+                            200 과 함께 남의 메시지를 돌려주므로 앱은 성공으로 읽고 재시도조차 \
+                            하지 않는다 (#79).""")
+                    .contains("room_id,room_seq", "room_id,sender_user_id,client_msg_id");
         }
     }
 

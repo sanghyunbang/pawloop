@@ -132,6 +132,14 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         // doFilterInternal 이 카운터를 건드리지 않고 그대로 통과시킨다(:46). 미룬 것이지
         // 안전한 것이 아니다. 지금 이 넷은 한 계정으로 몇 번을 불러도 429 가 나오지 않고,
         // 전송에 걸려 있는 것은 본문 길이 검사와 방 행 잠금(방 단위 직렬화)뿐이다.
+        //
+        // **요청 본문 크기 상한도 아직 없다 — 같이 #80 으로 넘긴다.** #78 이 넘긴 항목인데
+        // 이번에도 넣지 않았다. `ChatRoomService.validBody` 는 본문을 **다 읽은 뒤** 컬럼 폭
+        // (65,535바이트)으로 거절한다 — 20MB 본문을 던지면 그것을 전부 String 으로 올린 뒤
+        // 400 을 낸다(실측 404ms). 지금 앞에서 막는 것은 운영 nginx 의
+        // `client_max_body_size 20m` 하나뿐이고(docs/operations/.../nginx-production-template.conf),
+        // 그건 이 저장소의 애플리케이션 설정이 아니다. 한도 표와 같은 이유로 #80 이 함께
+        // 정한다 — 폴링 주기와 본문 상한이 같은 계산의 두 변수다.
         if ("POST".equals(method) && "/api/groups".equals(path)) {
             return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
         }

@@ -481,7 +481,8 @@ public class ChatRoomService {
      *       {@link #joinByInviteCode} 와 같다: 잠금을 기다리는 동안 방장이 강퇴했을 수
      *       있고, 판정에 쓰는 값을 직렬화 지점보다 먼저 읽으면 낡은 값으로 통과한다.</li>
      *   <li><b>INSERT</b> — {@code UNIQUE (room_id, room_seq)} 와
-     *       {@code UNIQUE (room_id, client_msg_id)} 가 마지막 방어선이다(📌 #86 원칙 5).</li>
+     *       {@code UNIQUE (room_id, sender_user_id, client_msg_id)} 가 마지막 방어선이다
+     *       (📌 #86 원칙 5).</li>
      * </ol>
      *
      * <h2>왜 인가가 두 번인가 — 하나만 두면 둘 중 하나가 틀린다</h2>
@@ -527,8 +528,11 @@ public class ChatRoomService {
      *
      * @param contentType {@code null}·공백이면 {@code text}. 16자를 넘으면 400
      * @param clientMsgId 재전송 멱등키. {@code null} 이면 멱등을 요구하지 않는 전송이다.
-     *                    같은 키로 두 번 오면 두 번째는 {@code UNIQUE (room_id, client_msg_id)}
-     *                    가 거부한다 — 그것을 200 으로 번역하는 것은 #79 다. 64자를 넘으면 400
+     *                    <b>같은 사람이</b> 같은 키로 두 번 보내면 두 번째는
+     *                    {@code UNIQUE (room_id, sender_user_id, client_msg_id)} 가 거부한다 —
+     *                    그것을 200 으로 번역하는 것은 {@link ChatMessageSender} 다. 범위에
+     *                    보낸 사람이 들어 있으므로 <b>같은 방의 다른 멤버가 같은 키를 써도
+     *                    서로의 말을 지우지 않는다</b>(#79). 64자를 넘으면 400
      * @throws ResponseStatusException  403 — 이 방의 살아 있는 멤버가 아니면(없는 방도 여기다)
      * @throws NoSuchElementException   404 — 값싼 인가를 통과한 뒤 발급 전에 방이 사라졌으면
      * @throws IllegalArgumentException 400 — 본문이 비었거나, 이름이 없거나, 넷 중 어느 하나가
@@ -649,16 +653,20 @@ public class ChatRoomService {
     }
 
     /**
-     * 같은 방에 같은 멱등키로 이미 들어와 있는 메시지 — 이슈 #79 완료 조건 3.
+     * <b>이 사람이</b> 같은 방에 같은 멱등키로 이미 넣어 둔 메시지 — 이슈 #79 완료 조건 3.
      *
      * <p>부르는 곳은 {@link ChatMessageSender} 하나다. <b>이 조회는 판정이 아니다</b> —
-     * 중복을 막는 것은 {@code UNIQUE (room_id, client_msg_id)} 이고, 이것은 진 쪽이
-     * "그래서 이미 있는 그 메시지가 무엇인가" 를 답하기 위한 조회다. INSERT 앞에 두어
-     * 확인-후-쓰기로 쓰면 안 되는 이유는 그 클래스의 javadoc 에 있다.
+     * 중복을 막는 것은 {@code UNIQUE (room_id, sender_user_id, client_msg_id)} 이고,
+     * 이것은 진 쪽이 "그래서 이미 있는 그 메시지가 무엇인가" 를 답하기 위한 조회다.
+     * INSERT 앞에 두어 확인-후-쓰기로 쓰면 안 되는 이유는 그 클래스의 javadoc 에 있다.
+     *
+     * <p>범위가 제약과 같아야 한다({@code senderUserId} 포함). 넓게 찾으면 남의 메시지를
+     * "당신이 아까 보낸 그것" 이라며 돌려주고, 그 순간 부르는 사람의 말은 사라진다.
      */
     @Transactional(readOnly = true)
-    public Optional<ChatMessageView> findMessageByClientMsgId(long roomId, String clientMsgId) {
-        return messages.findByRoomIdAndClientMsgId(roomId, clientMsgId)
+    public Optional<ChatMessageView> findMessageByClientMsgId(long roomId, long senderUserId,
+                                                             String clientMsgId) {
+        return messages.findByRoomIdAndSenderUserIdAndClientMsgId(roomId, senderUserId, clientMsgId)
                 .map(ChatRoomService::viewOf);
     }
 
@@ -919,8 +927,8 @@ public class ChatRoomService {
      * 멱등키 검증. {@code null}·공백이면 <b>{@code null}</b> — 멱등을 요구하지 않는 전송이다.
      *
      * <p>공백을 지우지 않는다. 키를 다듬으면 클라이언트가 보낸 것과 서버가 저장한 것이
-     * 달라지고, 그러면 {@code UNIQUE (room_id, client_msg_id)} 가 무엇을 같다고 보는지가
-     * 조용히 바뀐다. 여기서 하는 것은 폭 검사 하나다.
+     * 달라지고, 그러면 {@code UNIQUE (room_id, sender_user_id, client_msg_id)} 가 무엇을
+     * 같다고 보는지가 조용히 바뀐다. 여기서 하는 것은 폭 검사 하나다.
      */
     private static String validClientMsgId(String requested) {
         if (requested == null || requested.isBlank()) {

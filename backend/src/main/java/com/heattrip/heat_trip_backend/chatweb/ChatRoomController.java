@@ -103,11 +103,38 @@ public class ChatRoomController {
      *   <li>인가를 통과했다 — 이 조건이 먼저다(위 javadoc).</li>
      *   <li>{@code afterSeq} 를 보냈다 — 즉 <b>폴링</b>이다. 첫 진입·과거 스크롤은 창이
      *       달라지므로 방의 {@code lastSeq} 가 그대로여도 응답이 같지 않다.</li>
-     *   <li>{@code afterSeq >= lastSeq} 다 — 즉 실제로 줄 것이 없다. ETag 는 URL 하나에
-     *       매이는 값이라, 클라이언트가 다른 {@code afterSeq} 로 옛 ETag 를 되보내면
-     *       이 조건이 없을 때 <b>안 받은 메시지를 놓친다.</b> 값이 이미 손에 있으니 공짜로
-     *       닫는다.</li>
+     *   <li>{@code afterSeq >= lastSeq} 다 — 즉 실제로 줄 것이 없다.</li>
      * </ol>
+     *
+     * <h2>⚠️ 그 세 조건만으로는 부족하다 — 프레임워크가 뒤에서 한 번 더 판정한다</h2>
+     * <p>위 판단을 통과해 <b>200 과 본문</b>을 돌려줘도, {@code HttpEntityMethodProcessor}
+     * 가 응답의 {@code ETag} 헤더와 요청의 {@code If-None-Match} 를 <b>스스로</b> 대조해
+     * 200 을 304 로 갈아치우고 본문을 버린다({@code isResourceNotModified}). 그래서 예전
+     * 판은 이렇게 깨졌다(60줄 방에서 실측):
+     * <pre>
+     *   ① afterSeq=0            → 200, 50건, hasMore=true, ETag "1:60"
+     *   ② afterSeq=50 + 그 ETag → <b>304, 본문 없음</b>   (51~60 열 줄이 사라진다)
+     *   ③ ② 에서 ETag 만 빼면   → 200, 10건 [51..60]
+     * </pre>
+     * <p>①의 ETag 가 <b>거짓말</b>이었던 것이 원인이다. 그 응답은 60번까지 준 적이 없는데
+     * "이 응답은 lastSeq=60 상태다" 라고 표시했다. 그래서 <b>부분 페이지에는 ETag 를 아예
+     * 붙이지 않는다</b> — {@code afterSeq} 를 보냈고({@code = 폴링}) {@code hasMore} 가
+     * 거짓일 때만 붙인다. 그 응답만이 "{@code lastSeq} 까지 전부 손에 넣었다" 를 뜻한다.
+     *
+     * <p>이 규칙 하나로 성질이 둘 따라온다.
+     * <ul>
+     *   <li><b>ETag 의 뜻이 하나가 된다</b> — {@code "{roomId}:{lastSeq}"} 를 들고 있는
+     *       클라이언트는 그 {@code lastSeq} 까지 실제로 다 받은 클라이언트다. 그러니 그
+     *       ETag 로 되물었을 때의 304 는 언제나 옳다.</li>
+     *   <li><b>첫 진입·과거 스크롤이 304 로 막히지 않는다</b> — 그 응답에는 ETag 가 없어
+     *       프레임워크가 대조할 것이 없다. 예전 판은 옛 ETag 만 있으면 두 경우 다 빈 304 를
+     *       돌려줬다(실측). 계약이 "304 는 {@code afterSeq} 를 보낸 폴링에만 나갑니다" 라고
+     *       적은 문장이 그때는 거짓이었다.</li>
+     * </ul>
+     *
+     * <p>이슈 #79 가 정한 ETag 모양({@code "{roomId}:{lastSeq}"})은 그대로 지킨다. 창을
+     * ETag 에 담는 길({@code "{roomId}:{afterSeq}:{lastSeq}"})도 같은 증상을 없애지만 그건
+     * 계약이 정한 모양을 바꾸는 것이라 고르지 않았다.
      *
      * <p>200 응답의 ETag 는 <b>본문과 함께 읽은</b> {@code lastSeq} 로 만든다. 인가 때 읽은
      * 값으로 만들면 그 사이에 들어온 메시지가 다음 폴링에서 304 로 가려질 수 있다.
@@ -132,6 +159,23 @@ public class ChatRoomController {
 
         ChatMessagePageResponse page =
                 chatMessages.page(roomId, user.getId(), afterSeq, beforeSeq, pageSize(limit));
+        return respondWithPage(roomId, afterSeq, page);
+    }
+
+    /**
+     * 200 + 본문. <b>ETag 는 이 응답이 "{@code lastSeq} 까지 전부" 일 때만 붙인다.</b>
+     *
+     * <p>붙이지 않는 편이 안전한 쪽이다 — ETag 가 없으면 다음 폴링이 조건 없는 200 을 받아
+     * 한 번 더 조회할 뿐이지만, 틀린 ETag 를 붙이면 프레임워크가 그 다음 응답을 빈 304 로
+     * 바꿔 <b>메시지를 잃는다</b>(위 javadoc). 첫 장·첫 진입·과거 스크롤이 그 자리다.
+     */
+    private static ResponseEntity<ChatMessagePageResponse> respondWithPage(
+            long roomId, Long afterSeq, ChatMessagePageResponse page) {
+
+        boolean coversEverythingUpToLastSeq = afterSeq != null && !page.hasMore();
+        if (!coversEverythingUpToLastSeq) {
+            return ResponseEntity.ok(page);
+        }
         return ResponseEntity.ok().eTag(etagOf(roomId, page.lastSeq())).body(page);
     }
 
@@ -145,6 +189,13 @@ public class ChatRoomController {
      * 스냅샷</b>이고 응답에 실리는 것은 <b>지금</b>의 이름인데, 보낸 사람 자신에 대해서는
      * 두 값이 같다 — 그래서 여기서는 {@code users} 를 한 번 더 읽지 않는다
      * ({@code ChatSenderNames} 가 필요한 곳은 남의 이름을 붙이는 목록 경로다).
+     *
+     * <p><b>그 말이 성립하려면 돌아온 메시지가 반드시 부르는 사람의 것이어야 한다.</b>
+     * 멱등키의 범위가 {@code (room_id, client_msg_id)} 였을 때는 아니었다 — 같은 방의 다른
+     * 멤버가 같은 키를 쓰면 남의 메시지가 200 으로 돌아왔고, 여기서 거기에 <b>부르는 사람의
+     * 이름</b>을 찍어 {@code senderUserId} 와 {@code senderName} 이 다른 사람을 가리키는
+     * 응답이 나갔다(실측). 지금은 제약과 조회의 범위에 {@code sender_user_id} 가 들어 있어
+     * 그 경우가 없다({@link ChatMessageSender#send}).
      */
     @PostMapping("/rooms/{roomId}/messages")
     public ResponseEntity<ChatMessageResponse> send(@CurrentUser User user,

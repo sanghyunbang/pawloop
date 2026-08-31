@@ -206,7 +206,8 @@ class DocDriftTest {
                 .as("""
                         재전송 멱등의 근거다. 없으면 타임아웃된 전송을 앱이 재시도할 때 같은 말이 \
                         두 줄 남는다 (#79 완료 조건 3·8).""")
-                .containsIgnoringCase("UNIQUE KEY uq_chat_msg_client (room_id, client_msg_id)");
+                .containsIgnoringCase(
+                        "UNIQUE KEY uq_chat_msg_client (room_id, sender_user_id, client_msg_id)");
         assertThat(message)
                 .as("""
                         sender_user_id 에 FK 를 그리면 문서가 ADR-0011 결정 4 와 반대말을 하고, \
