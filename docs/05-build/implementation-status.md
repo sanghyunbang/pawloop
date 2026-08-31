@@ -16,15 +16,15 @@
 | 감정 → 반려 피벗 | ✅ 완료 | 도메인 `v2/domain/pet.dart`(강아지/산책/장소/커뮤니티)로 전면 교체. 감정 요소 없음 |
 | 홈(오늘) | ✅ 구현완료 (더미 데이터) | 강아지 히어로 + 오늘 산책 요약 + CTA + 날씨 |
 | 지도(탐색) | 🟡 **KTO 실연동** + 더미 레이어 | 관광공사 반려동반 실데이터(서울) + 병원/펫샵/산책로 더미 |
-| 산책 트래킹 | 🟡 시뮬레이션 | 경로 폴리라인 + 라이브 스탯. GPS는 더미(geolocator 미도입) |
+| 산책 트래킹 | 🟡 실 GPS · 저장 없음 | 실 위치 스트림(5m)으로 폴리라인·거리·페이스. **끝내면 사라진다** — `walk.path` 영속화가 아직 없다 |
 | 산책 통계 | ✅ 구현완료 (더미 데이터) | fl_chart 주간 막대 + 요약 + 자주 가는 곳 |
 | 커뮤니티 | 🟡 더미 | 목록/상세/댓글/반응 UI 동작. 백엔드 미연동 |
 | 강아지 프로필 | ✅ 구현완료 (로컬 상태) | 프로필/편집. `ValueNotifier`로 전역 반영, 영속화 없음 |
 | 로그인 | ✅ 구현완료 (카카오·구글) | 소셜 로그인 화면 · 1회용 코드 교환 · 토큰 보관 · 401 자동 갱신 · 서버 로그아웃 |
-| 실위치 | ❌ 미구현 | 서울 시청 좌표 고정 |
-| 백엔드 반려 API | ❌ 미구현 | KTO 외 앱↔백엔드 연동 없음 |
-| 채팅 | 🟡 더미 | 방 목록·방별 대화·가족 화면 3개. 서버 없음. 도메인 상수 `kChatRooms`(방 2개) |
-| 채팅 서버 | 🟡 표까지 | `chat_room`·`chat_room_member`·`chat_room_invite`(#74) 와 `chat_message`(#78)가 `01_schema.sql` 에 있음. 방별 `room_seq` 발급도 있음. **엔드포인트 4종은 아직 없음**(#79) (ADR-0011 · #72) |
+| 실위치 | ✅ 구현완료 | `location_service.dart` — 단발 조회 + 5m distanceFilter 스트림. 실패했을 때만 서울시청으로 떨어진다 |
+| 백엔드 반려 API | ✅ 상당 부분 | 인증·프로필·가족·케어·주의사항·채팅·장소 프록시가 서버 연동. 남은 더미는 산책 기록·커뮤니티·통계다 |
+| 채팅 | ✅ 서버 연동 | 방 목록·방 안·가족 화면 셋 다 서버에서 받는다. 적응형 폴링 · 낙관적 전송 · 멱등 재전송 · 미읽음 뱃지(#81) |
+| 채팅 서버 | ✅ 엔드포인트 + 운영 API | 표 넷(#74·#78) 위에 조회·전송·읽음·방목록 4종(#79), 초대·강퇴·차단·신고(#75·#82). **메시지 삭제만 아직 없다** (ADR-0011 · #72) |
 
 ---
 
@@ -34,7 +34,7 @@
 | --- | --- | --- | --- | --- |
 | **홈 (오늘)** | `today_screen.dart` `TodayScreen` | ✅ 구현완료 | 날짜 헤더, 강아지 히어로(아바타+견종·나이·크기), 오늘 산책 요약(회/km/분), CTA(산책 시작·코스 찾기), 날씨 카드 | 오늘 요약 항상 `WalkToday()` = 0·0·0(실기록 미연동), 날씨 카드 하드코딩(맑음·24°C) |
 | **지도 (탐색)** | `explore_screen.dart` `ExploreScreen` | 🟡 KTO 실연동 + 더미 | 리스트/지도 토글, 카테고리 필터 칩, 네이버맵 마커·바텀시트, 카테고리 색핀, 범례 | 병원·펫샵 `_dummyVet`/`_dummyShop` 하드코딩, 산책로 폴리라인 `_trailCoords` 더미, 검색창 비동작(플레이스홀더), 중심 좌표 서울 고정 |
-| **산책 트래킹** | `walk_tracking_screen.dart` `WalkTrackingScreen` | 🟡 시뮬레이션 | 네이버맵 위 경로 폴리라인 실시간 그리기, 라이브 스탯(km·시간·페이스), 일시정지/재개/종료, 종료 시트 → 기록 저장 화면 | `_makeRoute()` 수학식 더미 경로를 타이머로 1점씩 재생. 실제 GPS(geolocator) 미도입. 저장은 `create_screen`으로 이동만 |
+| **산책 트래킹** | `walk_tracking_screen.dart` `WalkTrackingScreen` | 🟡 실 GPS · 저장 없음 | 실 위치 스트림으로 경로 폴리라인 실시간 그리기, 라이브 스탯(km·시간·페이스), 일시정지/재개/종료 | **종료해도 어디에도 안 남는다** — `walk.path` 영속화가 M1 잔여다 |
 | **산책 통계** | `insight_screen.dart` `InsightScreen` | ✅ 구현완료 | fl_chart 주간 거리 막대(오늘 강조·툴팁), 요약(총거리·횟수·평균), 자주 가는 곳 Top3 | 소스 데이터 `kWeekKm`/`kWalks` 하드코딩(도메인 상수) |
 | **커뮤니티 (피드)** | `feed_screen.dart` `FeedScreen` | 🟡 더미 | 카드/리스트 토글, 게시판 필터 시트, 반응 칩, 글 카드/행 | `kPetPosts` 하드코딩. 글쓰기 진입 없음(작성 버튼 미연결) |
 | **글 상세** | `post_detail_screen.dart` `PostDetailScreen` | 🟡 더미(로컬 동작) | 본문, 반응 토글(+1/-1), 댓글 스레드, 댓글 입력·추가 | 로컬 state에만 반영(새로고침 시 초기화). 백엔드 미연동 |
@@ -43,9 +43,9 @@
 | **산책 기록 작성** | `create_screen.dart` `CreateScreen` | 🟡 UI만 | 장소·날짜·거리/시간 스텝퍼·메모 입력, 저장 버튼 | 저장 = 스낵바 + pop만(리스트/백엔드에 미반영), 사진 첨부 "곧 지원", 날짜 선택 비동작 |
 | **내 산책 기록** | `myrecords_screen.dart` `MyRecordsScreen` | ✅ 구현완료 (더미) | 이번 달 요약, 기록하기 버튼, 전체 산책 카드 리스트 | `kWalks` 하드코딩 |
 | **위치 찍기** | `pin_picker_screen.dart` `PinPickerScreen` | 🟡 더미 | 스타일라이즈드 지도 탭 → 좌표 기록, pop 반환 | 실지도 아님(장식용 배경). 현재 플로우에서 호출부 없음 |
-| **채팅 (방 목록)** | `chat_list_screen.dart` `ChatListScreen` | 🟡 더미 | 방 카드 리스트(이름·태그·마지막 메시지·시각·미읽음 뱃지·멤버 수), 기본방 표식 | `kChatRooms` 하드코딩(방 2개: `우리 가족`·`서울숲 산책 크루`). 방 생성·검색 없음 |
-| **채팅 (방 안)** | `family_chat_screen.dart` `FamilyChatScreen` | 🟡 더미(로컬 동작) | 말풍선 목록(내 것/남의 것), 입력·전송이 로컬 리스트에 추가됨 | 화면을 나갔다 오면 초기화. 서버 미연동. 읽음 처리·재전송·페이지네이션 없음 |
-| **가족** | `family_screen.dart` `FamilyScreen` | 🟡 더미 | 멤버 목록, 초대코드, 오늘의 케어 현황, 산책 주의사항, 채팅 진입 | `kFamilyMembers`/`kFamilyInviteCode`/`kCareToday`/`kWalkNotes` 전부 하드코딩 |
+| **채팅 (방 목록)** | `chat_list_screen.dart` `ChatListScreen` | ✅ 서버 연동 | 방 카드 리스트(이름·태그·마지막 메시지·미읽음 뱃지·멤버 수) — `GET /api/chat/rooms` | 방 만들기는 가족 그룹 생성 경로에 묶여 있고, 그 경로가 앱에 아직 없다 |
+| **채팅 (방 안)** | `family_chat_screen.dart` `FamilyChatScreen` | ✅ 서버 연동 | 적응형 폴링(`afterSeq` 델타·ETag), 낙관적 전송 + 같은 멱등키 재전송, 읽음 보고, 신고·가리기·강퇴, 첫 진입 약관 동의 | 메시지 삭제 UI 없음(서버 API 도 없다) |
+| **가족** | `family_screen.dart` `FamilyScreen` | ✅ 서버 연동 | 멤버 목록, 초대코드, 오늘의 케어 현황, 산책 주의사항, 채팅 진입 — `FamilyRepository`(#76) | 그룹이 없을 때 **만드는 버튼이 없다**(`POST /api/groups` 호출처 0곳) |
 
 ---
 
@@ -68,7 +68,7 @@
 | 산책로 | 🟡 더미 | 두루누비(걷기여행길) 예정. 현재 폴리라인/카드 하드코딩 |
 | 지도 SDK | ✅ | `flutter_naver_map`. Client ID(`--dart-define=NAVER_MAP_CLIENT_ID`) 없으면 지도 비활성 |
 | 장소 검색 | ❌ 미구현 | 검색창은 플레이스홀더(비동작) |
-| 현재 위치 기반 | ❌ 미구현 | 중심 서울 시청(37.5665, 126.9816) 고정 |
+| 현재 위치 기반 | ✅ 구현완료 | 현위치로 카메라·검색 중심을 잡고, 실패했을 때만 서울시청(37.5665, 126.9816)으로 떨어진다 |
 
 > KTO 서비스키는 **서버 환경변수** `TOUR_API_SECRET` 으로만 존재한다([#40](https://github.com/sanghyunbang/heattrip/issues/40)). 앱은 `GET /api/places/nearby` 만 부르고, 서버가 좌표를 0.02° 격자로 접어 캐시하며 일 1,000콜 한도를 `kto_call_budget` 표가 게이트로 지킨다.
 >
@@ -120,7 +120,7 @@
 | 라우팅 | 탭 전환은 `RootTab.index`(전역 `ValueNotifier`), 상세는 `Navigator.push`(MaterialPageRoute) |
 | 지도 | `flutter_naver_map`(pubspec `^1.3.1`) |
 | 차트 | `fl_chart ^1.2.0` |
-| 네트워크 | `http`. 외부 호출은 KTO 1종 |
+| 네트워크 | `http` + `AuthedClient`(401 자동 갱신·단일 비행). 외부 직접 호출 **0종** — 관광공사는 백엔드 프록시 경유(#40) |
 | 설정 | 컴파일 타임 `--dart-define` 단독(`flutter_dotenv`·`.env` 는 #29 에서 제거). 단일 진입점 `core/config/env.dart` 의 `Env`. 키: `API_BASE`(override) · `API_BASE_URL` · `NAVER_MAP_CLIENT_ID`. **관광공사 키는 #40 에서 제거됐다.** 값 묶음 템플릿은 `app/dart-define.example.json` |
 | 디자인 | 파스텔 오라 그라데이션 배경, 글래스 카드(BackdropFilter blur), 따뜻한 그라데이션(#FFA96B→#FF7E8A), 플로팅 글래스 알약 네비 + 가운데 솟은 산책 FAB |
 

@@ -43,7 +43,7 @@
 | `searchKeyword2` | 키워드 검색 | 미사용 |
 | `detailPetTour2` | 반려동반 상세정보(동반조건 등) | 미사용 (장소 상세 확장 시 후보) |
 
-> 참고: 백엔드에는 감정여행 레거시의 일반 관광 `TourApiClient`가 남아 `areaBasedList2`를 호출한다(`backend/.../tour/service/TourApiClient.java`). 반려 전용 프록시는 이 패턴(`WebClient` + `serviceKey`)을 재사용해 `KorPetTourService2`로 붙이면 된다.
+> 참고: 백엔드에는 감정여행 레거시의 일반 관광 `TourApiClient`가 남아 `areaBasedList2`를 호출한다(`backend/.../tour/service/TourApiClient.java`). 반려 전용 프록시는 **이미 붙었다**(#40). 다만 그 `WebClient` 를 재사용하지 **않았다** — 타임아웃이 하나도 없어서 공개 경로 뒤에 두면 위험하다. `KtoWebClientConfig` 가 타임아웃 네 겹을 건 빈을 따로 만든다. 예전 서술: 이 패턴을 재사용해 `KorPetTourService2`로 붙이면 된다.
 
 ### 1.3 요청 파라미터 (`locationBasedList2`)
 
