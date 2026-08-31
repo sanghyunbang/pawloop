@@ -72,8 +72,25 @@ class ModularityBaselineTest {
      * 반면 열지 않은 {@code OAuth.jwt}(14) · {@code handler}(6) · {@code state}(5) ·
      * {@code code}(4) · {@code service}(3)는 <b>그대로 위반으로 남아 있다.</b> 이게
      * {@code ::} 가 "지정한 표면만 열고 나머지는 닫는다" 는 증거다.
+     *
+     * <p><b>534 에서 245 로 내렸다. 한 타입 때문이다.</b> (#105)
+     * {@code user.entity.User} 에 {@code @NamedInterface("entity")} 를 붙였다. {@code user} 밖의
+     * 파일 34개가 이 타입을 부른다 — 사실상 이 애플리케이션의 공용 어휘다. 289건이 사라졌다.
+     *
+     * <p><b>같은 패키지의 {@code RefreshToken} 은 열지 않았다.</b> 밖에서의 참조가 0건이고
+     * 리프레시 토큰 원장이라, 패키지째 열었다면 그게 공개 API 가 됐을 것이다.
+     *
+     * <p><b>중첩 타입은 부모의 표면을 물려받지 않는다.</b> {@code User$Gender} 와
+     * {@code User$UserBuilder}(Lombok 생성)는 여전히 위반이다. 둘을 쓰는 곳은
+     * {@code OAuth/service/CustomOAuth2UserService} 하나뿐이고 그건 #107 이 손댈 자리라 열지 않았다.
+     *
+     * <p><b>{@code chatweb} 에 {@code "user :: entity"} 를 더해도 이 수는 안 움직인다.</b>
+     * 실제로 두 상태를 각각 재 봤고 둘 다 245 였다. 이유는 이렇다 — {@code User} 3건이 합법이
+     * 되는 동시에, 남은 {@code UserRepository} 위반이 "모듈 단위 1줄" 에서 "참조별 4줄" 로
+     * 되돌아간다. {@code -3 + 3 = 0}. <b>총계만 보면 아무 일도 안 일어난 것처럼 보이지만
+     * 실제로는 바뀌었다</b> — 이 수 하나만 믿지 말고 위반 목록을 봐야 하는 이유다.
      */
-    private static final int BASELINE_VIOLATIONS = 534;
+    private static final int BASELINE_VIOLATIONS = 245;
 
     /** 순환 경로 개수. 쌍이 아니라 <b>경로</b>다 — 같은 두 모듈이 여러 경로에 걸쳐 나타난다. */
     private static final int BASELINE_CYCLES = 5;

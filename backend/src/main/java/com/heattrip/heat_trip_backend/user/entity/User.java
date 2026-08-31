@@ -1,11 +1,55 @@
 package com.heattrip.heat_trip_backend.user.entity;
 
+import org.springframework.modulith.NamedInterface;
+
 import jakarta.persistence.*; // JPA 어노테이션 제공 (Entity, Id, Table 등)
 import lombok.*;              // 롬복(Lombok) 어노테이션 제공 (자동 코드 생성)
 import java.time.LocalDateTime; // 시간 정보 (생성일, 수정일)를 다루는 클래스
 
 // 이 클래스는 DB 테이블과 연결되는 엔티티 클래스
 
+/**
+ * 이 모듈의 <b>유일한 공개 표면</b> — {@code user :: entity} (#105 · ADR-0012).
+ *
+ * <h2>왜 이걸 열었나</h2>
+ * <p>{@code user} 는 루트 타입이 0개라 들어오는 참조가 예외 없이 전부 위반이었고, 그중 이 한
+ * 타입이 압도적이었다. 실측으로 {@code user} 밖의 파일 34개가 이 타입을 부른다 —
+ * {@code bookmark} · {@code care} · {@code schedules} · {@code feedback} · {@code group} ·
+ * {@code social} · {@code S3} · {@code chatweb} · {@code OAuth}. 사실상 이 애플리케이션의
+ * 공용 어휘다.
+ *
+ * <h2>{@code RefreshToken} 은 열지 않는다</h2>
+ * <p>{@code user.entity} 에는 타입이 둘인데 패키지째 열지 않고 이 타입 하나에만 붙였다.
+ * {@code RefreshToken} 은 <b>리프레시 토큰 원장</b>이고 밖에서의 참조가 <b>0건</b>이다.
+ * 패키지째 열면 그게 공개 API 가 된다 — 인증 모듈에서 열어 줄 이유가 없다.
+ *
+ * <h2>이건 빚이다</h2>
+ * <p>여는 것과 갚는 것은 다르다. 여기서 여는 것은 <b>"지금 이 참조들은 합법이다"</b> 이지
+ * <b>"이대로가 옳다"</b> 가 아니다. 진짜 문제는 <b>경계를 넘는 JPA 연관</b> 이다 — 다른 모듈의
+ * 엔티티가 {@code @ManyToOne User} 로 이 타입을 직접 물고 있으면, {@code user} 를 별도
+ * 서비스로 떼는 순간 그 연관이 전부 깨진다. 그때는 조회 경로를 다시 짜야 한다.
+ *
+ * <p><b>갚는 조건.</b> {@code user} 를 실제로 분리하기로 결정하는 날, 또는 그 전에라도 아래
+ * 엔티티들이 {@code @ManyToOne User} 를 {@code Long userId} 로 바꿀 때. 그 작업은 이 타입을
+ * 여는 것과 별개로 이슈가 잡혀 있다 — 여덟 엔티티를 모듈별로 넷으로 묶었다.
+ *
+ * <table>
+ *   <caption>경계를 넘는 JPA 연관</caption>
+ *   <tr><th>이슈</th><th>엔티티</th></tr>
+ *   <tr><td>#120</td><td>{@code bookmark/entity/Bookmark.java:26} ·
+ *       {@code Collection.java:26} · {@code CollectionItem.java:26}</td></tr>
+ *   <tr><td>#121</td><td>{@code care/entity/CareLog.java:146}({@code doneBy}) ·
+ *       {@code WalkNote.java:123}({@code updatedBy}) — 둘 다 {@code ON DELETE SET NULL}(#76)</td></tr>
+ *   <tr><td>#122</td><td>{@code schedules/entity/Journey.java:29} · {@code Schedule.java:33}</td></tr>
+ *   <tr><td>#123</td><td>{@code feedback/entity/Feedback.java:31} — 가장 작다. 방법을 먼저
+ *       확인하는 자리로 쓰는 것이 좋다</td></tr>
+ * </table>
+ *
+ * <p>{@code user.repository} · {@code user.dto} · {@code user.service} 는 <b>열지 않았다.</b>
+ * 리포지토리를 남이 직접 부르는 것은 공용 어휘가 아니라 그냥 새는 것이고, 건수가 적어 갚을
+ * 만하다. 그것들은 위반으로 남아 있다.
+ */
+@NamedInterface("entity")
 @Entity // JPA가 이 클래스를 엔티티로 인식하도록 하는 어노테이션 => DB 테이블과 매핑됨
 // 소셜 계정의 식별 키는 (provider, social_id) 쌍이다. 이메일이 아니다. (이슈 #7)
 // 카카오는 account_email 이 '선택 동의'라서 이메일을 주지 않을 수 있고, 그러면 이메일로는

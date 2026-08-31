@@ -35,14 +35,17 @@
  * {@code OAuth.handler} 를 부르면 그대로 위반이다. 이 패키지가 {@code OAuth} 에서 쓰는 것은
  * {@code CurrentUser} 하나뿐이라 그 이상 열 이유가 없다.
  *
- * <p>{@code user} 는 아직 여기 없다. 이 패키지가 {@code user.entity.User} 와
- * {@code user.repository.UserRepository} 를 부르는 것은 맞지만, 그건 <b>그 모듈이 공개 표면을
- * 안 갖고 있어서</b> 생기는 위반이라 여기서 허용으로 덮으면 원인이 가려진다. 표면을 정하는
- * 것은 #105 다.
+ * <p>{@code "user :: entity"} 도 같은 모양이다(#105). {@code user} 모듈이 공개한 표면은
+ * {@code User} 한 타입뿐이고 그것만 연다.
+ *
+ * <p><b>{@code user.repository.UserRepository} 는 아직 위반으로 남아 있다.</b>
+ * {@code ChatSenderNames} 가 그걸 직접 부른다. 리포지토리를 남이 직접 부르는 것은 공용 어휘가
+ * 아니라 그냥 새는 것이라 허용으로 덮지 않았다. 이 패키지가 필요한 것은 "userId 로 닉네임을
+ * 얻는 것" 이므로, {@code user} 쪽이 그 일을 하는 표면을 내주는 것이 맞다.
  */
 @ApplicationModule(
         displayName = "Chat Web Adapter",
-        allowedDependencies = { "chat", "OAuth :: principal" })
+        allowedDependencies = { "chat", "OAuth :: principal", "user :: entity" })
 package com.heattrip.heat_trip_backend.chatweb;
 
 import org.springframework.modulith.ApplicationModule;
