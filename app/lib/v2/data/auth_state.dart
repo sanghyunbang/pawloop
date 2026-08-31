@@ -172,6 +172,18 @@ class AuthState {
     _repository = repository;
   }
 
+  /// 로그인한 것처럼 만든다. **테스트 전용.**
+  ///
+  /// 서버 왕복 없이 "이 사람으로 로그인해 있다" 를 만들 방법이 없어서 둔다. 채팅 첫 진입
+  /// 동의(#82)처럼 <b>누구의 동의인가</b>가 화면 흐름을 가르는 자리를 테스트하려면 필요하다.
+  ///
+  /// 끝나면 [resetForTest] 로 지워라 — 정적 상태라 다음 테스트로 샌다.
+  @visibleForTesting
+  static void signInForTest(AuthUser user) {
+    _user = user;
+    status.value = AuthStatus.authenticated;
+  }
+
   /// 테스트 간 상태 누수를 막는다. 정적 상태를 쓰는 대가다.
   @visibleForTesting
   static void resetForTest() {

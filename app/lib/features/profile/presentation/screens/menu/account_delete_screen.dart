@@ -63,7 +63,20 @@ class AccountDeleteScreen extends StatelessWidget {
           children: [
             const Text('주의', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('탈퇴 시 모든 데이터가 삭제되며 복구할 수 없습니다.'),
+            // 예전 문구: "탈퇴 시 모든 데이터가 삭제되며 복구할 수 없습니다."
+            //
+            // 그건 틀린 말이 됐다 (이슈 #82). 채팅 메시지는 users 로 CASCADE 하지 않아서
+            // 탈퇴해도 받은 사람들의 대화방에 남는다 — 지우면 대답만 있고 질문이 없는
+            // 대화가 되고, 신고 근거도 함께 사라진다.
+            //
+            // 지키지 못할 약속을 화면에 띄우는 것이 정책 위반보다 더 위험하다.
+            const Text(
+              '탈퇴하면 계정·프로필·반려동물 정보와 내가 남긴 기록이 삭제되며 '
+              '복구할 수 없습니다.\n\n'
+              '이미 보낸 채팅 메시지는 받은 분들의 대화방에 남고, '
+              '보낸 사람은 \'알 수 없음\'으로 표시됩니다.',
+              style: TextStyle(height: 1.5),
+            ),
             const Spacer(),
             SizedBox(
               width: double.infinity,
@@ -118,8 +131,12 @@ class _DeleteConfirmDialog extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
+            // 위 화면과 같은 취지여야 한다 (#82). 확인 창에서만 "모든 데이터" 라고 하면
+            // 마지막으로 읽는 문장이 틀린 말이 된다.
             const Text(
-              '탈퇴 후에는 계정과 모든 데이터가 삭제되며\n복구할 수 없습니다.',
+              '탈퇴하면 계정·프로필·반려동물 정보와 내가 남긴 기록이\n'
+              '삭제되며 복구할 수 없습니다.\n'
+              '이미 보낸 채팅 메시지는 대화방에 남습니다.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.4),
             ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 // 각 메뉴 클릭 시 이동할 화면들
 import 'package:heat_trip_flutter/features/profile/presentation/screens/menu/feedback_screen.dart';
@@ -153,6 +154,60 @@ class RightSideMenuPanel extends StatelessWidget {
                   ],
                 ),
               ),
+
+              // 운영자 연락처. **하단에 고정한다** — Apple App Store Review Guideline 1.2 가
+              // UGC 앱에 요구하는 네 가지 중 하나이고(필터링 · 신고 · 차단 · **공개 연락처**),
+              // 없으면 심사에서 막힌다. 메뉴 안쪽에 접어 두면 "공개" 로 보기 어렵다.
+              //
+              // 문구를 privacy_ko.md 11항과 같은 주소로 맞춘다. 두 곳이 갈리면 어느 쪽으로
+              // 문의해야 하는지 사용자가 판단하게 된다.
+              const _OperatorContact(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 설정 하단에 고정으로 뜨는 운영자 연락처 — 이슈 #82 완료 조건 6.
+///
+/// 누르면 복사된다. `mailto:` 로 메일 앱을 여는 것이 더 친절해 보이지만, 메일 앱이 없는
+/// 기기에서는 아무 일도 안 일어나고 사용자는 주소조차 못 얻는다. **주소를 보여 주는 것**이
+/// 이 요건의 본질이라 그쪽을 택했다.
+class _OperatorContact extends StatelessWidget {
+  const _OperatorContact();
+
+  /// `assets/terms/privacy_ko.md` 11항과 같은 주소여야 한다.
+  static const String email = 'mn2068@naver.com';
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () async {
+          await Clipboard.setData(const ClipboardData(text: email));
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('문의 주소를 복사했어요')),
+            );
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(Icons.mail_outline, size: 16, color: Colors.black45),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '문의: $email',
+                  style: const TextStyle(fontSize: 12.5, color: Colors.black54),
+                ),
+              ),
+              const Icon(Icons.copy_rounded, size: 14, color: Colors.black26),
             ],
           ),
         ),
