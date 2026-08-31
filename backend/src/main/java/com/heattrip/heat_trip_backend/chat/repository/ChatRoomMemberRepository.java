@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,6 +48,103 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
             """)
     List<ChatRoomMember> findLiveMembershipsByOriginKind(
             @Param("userId") Long userId, @Param("originKind") String originKind);
+
+    /**
+     * 이 사람이 살아 있는 멤버로 있는 <b>모든</b> 방 — 참여 순서대로(이슈 #79).
+     *
+     * <p>{@link #findLiveMembershipsByOriginKind} 와 갈리는 지점은 {@code originKind} 필터
+     * 하나다. {@code GET /api/groups/me} 는 "가족 방" 을 묻지만
+     * {@code GET /api/chat/rooms} 는 <b>방 종류를 가리지 않는다</b> — 채팅은 가족 그룹
+     * 종속이 아니라 범용 다중 방이고(ADR-0011), 앱의 방 목록 화면은 이미 종류가 다른 방
+     * 둘을 나란히 그린다.
+     *
+     * <p>{@code join fetch} 가 방을 함께 읽는다. 없으면 방마다 지연 로딩이 한 번씩 나가
+     * 방 20개에 쿼리가 21개다.
+     */
+    @Query("""
+            select m from ChatRoomMember m
+              join fetch m.room r
+             where m.userId = :userId
+               and m.removedAt is null
+             order by m.joinedAt asc, m.id asc
+            """)
+    List<ChatRoomMember> findLiveMembershipsOf(@Param("userId") Long userId);
+
+    /**
+     * 이 방에서의 <b>살아 있는</b> 내 멤버십과 그 방 — 인가 한 번에 방 한 행까지(이슈 #79).
+     *
+     * <p>네 엔드포인트의 인가가 전부 이 조회 하나로 답한다. {@code removed_at} 조건이 여기
+     * 있는 것이 요점이다 — 강퇴된 사람의 행은 남아 있으므로(행을 지우지 않는다) "행이 있는가"
+     * 로 묻는 검사는 강퇴된 사람을 통과시킨다.
+     *
+     * <p>방을 함께 읽는 이유는 {@code last_seq} 다. ETag({@code "{roomId}:{lastSeq}"})와
+     * 미읽음 뺄셈이 둘 다 그 값을 쓰는데, 인가와 따로 읽으면 쿼리가 하나 더 나간다.
+     * 폴링 경로라 그 하나가 그대로 초당 부하가 된다.
+     */
+    @Query("""
+            select m from ChatRoomMember m
+              join fetch m.room r
+             where r.id = :roomId
+               and m.userId = :userId
+               and m.removedAt is null
+            """)
+    Optional<ChatRoomMember> findLiveMembershipWithRoom(
+            @Param("roomId") Long roomId, @Param("userId") Long userId);
+
+    /**
+     * 여러 방의 살아 있는 멤버 수를 한 문장으로 — 방 목록의 {@code memberCount}(이슈 #79).
+     *
+     * <p>{@link #countByRoomIdAndRemovedAtIsNull} 를 방마다 부르면 방 20개에 쿼리가 20개다.
+     *
+     * @return {@code [roomId, count]} 쌍. <b>멤버가 0인 방은 줄이 없다</b> — 부르는 쪽이
+     *         기본값을 채운다
+     */
+    @Query("""
+            select m.room.id, count(m) from ChatRoomMember m
+             where m.room.id in :roomIds
+               and m.removedAt is null
+             group by m.room.id
+            """)
+    List<Object[]> countLiveMembersOfRooms(@Param("roomIds") Collection<Long> roomIds);
+
+    /**
+     * 읽음 워터마크를 올린다. <b>뒤로 가지 않고, 방의 끝을 넘지 않는다</b> — 이슈 #79
+     * 완료 조건 4·7, 근거 ADR-0011 결정 3.
+     *
+     * <h2>왜 자바에서 비교하고 대입하지 않는가</h2>
+     * <p>읽어서 비교하고 쓰면 두 문장 사이가 열린다 — 같은 사람의 두 기기가 동시에 읽음을
+     * 보내면 둘 다 "지금 값은 5" 를 읽고 뒤에 쓴 쪽이 이긴다. 그게 하필 작은 값이면
+     * 워터마크가 뒤로 간다(📌 #86 원칙 5 — 확인-후-쓰기는 DB 로 받친다).
+     * {@code GREATEST} 를 <b>같은 문장 안</b>에 두면 계산 시점과 쓰기 시점이 갈라지지 않는다.
+     *
+     * <h2>{@code LEAST(:seq, r.last_seq)} 가 없으면 미읽음이 음수가 된다</h2>
+     * <p>앱은 낙관적으로 커서를 올린다 — 방금 보낸 메시지의 번호를 미리 쓰거나, 재시도로
+     * 예전 값을 다시 보낸다. 상한이 없으면 {@code last_read_seq} 가 {@code last_seq} 를 넘고,
+     * 미읽음이 뺄셈이므로 뱃지에 음수가 뜬다. 그래서 <b>조인</b>이 필요하다: 상한은 이 방의
+     * 현재 마지막 번호이고 그 값은 {@code chat_room} 에 있다.
+     *
+     * <p>네이티브 SQL 인 이유는 두 표를 함께 UPDATE 하기 때문이다(JPQL 의 {@code update} 는
+     * 조인을 못 쓴다). 조인 대상은 {@code chat_room_member}·{@code chat_room} 둘뿐이라
+     * 경계 안이다.
+     *
+     * <p>{@code removed_at is null} 이 여기에도 있다. 인가는 부르는 쪽이 이미 했지만, 이
+     * 문장 하나만 봐도 강퇴된 사람의 커서가 움직이지 않아야 한다 — 조건이 한쪽에만 있으면
+     * 다음 사람이 인가를 옮길 때 조용히 새는 자리가 된다.
+     *
+     * @return 1 이면 갱신을 시도했고(값이 그대로일 수도 있다), 0 이면 그런 살아 있는 멤버가 없다
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update chat_room_member m
+              join chat_room r on r.id = m.room_id
+               set m.last_read_seq = GREATEST(m.last_read_seq, LEAST(:seq, r.last_seq))
+             where m.room_id = :roomId
+               and m.user_id = :userId
+               and m.removed_at is null
+            """, nativeQuery = true)
+    int raiseReadWatermark(@Param("roomId") Long roomId,
+                           @Param("userId") Long userId,
+                           @Param("seq") long seq);
 
     /**
      * 방에 자리가 남아 있을 때만 멤버 한 줄을 넣는다. <b>영향 행 수가 곧 정원 판정이다.</b>

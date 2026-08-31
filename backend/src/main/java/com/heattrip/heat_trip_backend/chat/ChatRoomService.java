@@ -23,12 +23,22 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
 /**
- * chat 모듈이 밖으로 내놓는 <b>유일한 문</b> — 이슈 #75, 근거 ADR-0011.
+ * chat 모듈이 밖으로 내놓는 <b>문</b> — 이슈 #75, 근거 ADR-0011.
+ *
+ * <p><b>2026-08(#79) 에 문이 하나 늘었다: {@link ChatMessageSender}.</b> 예외가 아니라
+ * 트랜잭션 경계 때문이다 — 재전송을 200 으로 번역하려면 {@code UNIQUE} 위반으로 롤백 표식이
+ * 찍힌 트랜잭션 <b>밖</b>에서 잡아야 하는데, 같은 빈 안의 메서드를 부르면 스프링 프록시를
+ * 지나가지 않아 트랜잭션이 아예 안 열린다. 자세한 이유와 고르지 않은 길들은 그 클래스의
+ * javadoc 에 있다. 그 빈이 아는 것은 이 클래스뿐이고 방향은 여전히 한쪽이다.
  *
  * <h2>방향 — 밖이 chat 을 부른다. chat 은 밖을 모른다</h2>
  * <p>이 클래스가 그 방향을 성립시키는 자리다. 시그니처에 나오는 것은 {@code long userId} 와
@@ -167,6 +177,57 @@ public class ChatRoomService {
         return members.findLiveMembershipsByOriginKind(userId, originKind).stream()
                 .map(member -> viewOf(member.getRoom()))
                 .toList();
+    }
+
+    /**
+     * 내가 살아 있는 멤버로 있는 <b>모든</b> 방 — 참여 순서대로. 이슈 #79 완료 조건 1.
+     *
+     * <h2>미읽음은 뺄셈이다. COUNT 를 돌리지 않는다</h2>
+     * <p>{@code room.last_seq − member.last_read_seq}. 두 값 모두 이 조회가 이미 읽어 오는
+     * 컬럼이라 <b>추가 쿼리가 0</b>이다. 미읽은 메시지를 세는 판은 방마다 COUNT 가 하나씩
+     * 나가 방 20개면 쿼리가 21개이고, 그 값을 캐시하기 시작하면 읽음 표가 하나 더 생긴다
+     * (ADR-0011 결정 3).
+     *
+     * <h2>인가가 없는 것이 맞다</h2>
+     * <p>이 메서드는 방 id 를 받지 않는다 — 답의 범위 자체가 "내 멤버십" 이라 남의 방이
+     * 섞여 들어올 문이 없다. 완료 조건 5 가 이 경로에서 요구하는 것은 403 이 아니라
+     * <b>남의 방이 목록에 없다</b> 이고, 그것은 {@code where m.user_id = :userId and
+     * m.removed_at is null} 이 지킨다.
+     *
+     * <h2>쿼리는 방 개수와 무관하게 셋이다</h2>
+     * <p>멤버십+방(join fetch) · 방별 멤버 수(한 문장) · 방별 마지막 메시지(한 문장).
+     * 마지막 메시지를 방마다 따로 찾으면 그것만으로 N+1 이라, 그 조회는 <b>{@code room_seq =
+     * room.last_seq}</b> 로 한 번에 모은다({@code ChatMessageRepository#findLastMessagesOfRooms}).
+     * 발신자 이름은 chat 이 모른다 — 붙이는 것은 {@code chatweb.ChatRooms} 다(ADR-0011 결정 4).
+     */
+    @Transactional(readOnly = true)
+    public List<ChatRoomSummaryView> myRooms(long userId) {
+        List<ChatRoomMember> memberships = members.findLiveMembershipsOf(userId);
+        if (memberships.isEmpty()) {
+            return List.of();
+        }
+        List<Long> roomIds = memberships.stream().map(m -> m.getRoom().getId()).toList();
+
+        Map<Long, Integer> memberCounts = new HashMap<>();
+        for (Object[] row : members.countLiveMembersOfRooms(roomIds)) {
+            memberCounts.put((Long) row[0], ((Number) row[1]).intValue());
+        }
+        Map<Long, ChatMessageView> lastMessages = new HashMap<>();
+        for (ChatMessage message : messages.findLastMessagesOfRooms(roomIds)) {
+            lastMessages.put(message.getRoom().getId(), viewOf(message));
+        }
+
+        return memberships.stream().map(member -> {
+            ChatRoom room = member.getRoom();
+            return new ChatRoomSummaryView(
+                    viewOf(room),
+                    member.getRole().name(),
+                    member.getLastReadSeq(),
+                    // 자르지 않는다 — 이유는 ChatRoomSummaryView javadoc.
+                    room.getLastSeq() - member.getLastReadSeq(),
+                    memberCounts.getOrDefault(room.getId(), 0),
+                    lastMessages.get(room.getId()));
+        }).toList();
     }
 
     /** 방의 살아 있는 멤버. 강퇴된 행은 빠진다. */
@@ -531,7 +592,142 @@ public class ChatRoomService {
                 .toList();
     }
 
+    /**
+     * 메시지 한 장 — 이슈 #79. <b>인가를 여기서 한다.</b>
+     *
+     * <h2>{@code afterSeq} 와 {@code beforeSeq} 는 둘 중 하나다</h2>
+     * <p>앞의 것은 폴링 델타(이 번호 뒤), 뒤의 것은 과거 스크롤(이 번호 앞), 둘 다 없으면
+     * <b>최신 한 장</b>이다. 둘을 함께 주면 400 이다 — 계약이 그렇게 선언했고, 조용히 한쪽을
+     * 무시하면 앱은 자기가 보낸 값이 먹혔다고 믿는다.
+     *
+     * <p><b>응답의 순서는 어느 경우에도 {@code room_seq} 오름차순이다.</b> 방향에 따라 순서가
+     * 갈리면 클라이언트가 어느 파라미터를 보냈는지에 따라 정렬을 달리해야 하고, 그 분기를
+     * 한 번 빠뜨리면 대화가 거꾸로 그려진다. 뒤에서 읽는 것은 인덱스 때문이고
+     * ({@code ChatMessageRepository#findByRoomIdAndRoomSeqLessThanOrderByRoomSeqDesc}),
+     * 뒤집는 것은 여기서 한 번이다.
+     *
+     * <h2>{@code limit + 1} 을 읽는다</h2>
+     * <p>{@code hasMore} 를 정확히 내기 위해서다. 이유는 {@link ChatMessagePageView} javadoc.
+     * {@code limit} 자체의 상한은 여기가 아니라 HTTP 어댑터가 정한다 — 그 값은 계약의
+     * 질의 파라미터 기본값·최댓값이지 플랜 한도가 아니다({@link ChatLimits} 와 다른 종류의 수다).
+     *
+     * @throws ResponseStatusException  403 — 이 방의 살아 있는 멤버가 아니면(없는 방도 여기다)
+     * @throws IllegalArgumentException 400 — 두 커서를 함께 주면
+     */
+    @Transactional(readOnly = true)
+    public ChatMessagePageView messagePage(long roomId, long userId,
+                                           Long afterSeq, Long beforeSeq, int limit) {
+        if (afterSeq != null && beforeSeq != null) {
+            throw new IllegalArgumentException("afterSeq 와 beforeSeq 는 함께 줄 수 없습니다.");
+        }
+        ChatRoom room = requireLiveMembership(roomId, userId).getRoom();
+        Limit probe = Limit.of(limit + 1);
+
+        List<ChatMessage> rows;
+        boolean readFromTheFront = afterSeq != null;
+        if (readFromTheFront) {
+            rows = new ArrayList<>(messages.findByRoomIdAndRoomSeqGreaterThanOrderByRoomSeqAsc(
+                    roomId, afterSeq, probe));
+        } else {
+            long ceiling = beforeSeq == null ? Long.MAX_VALUE : beforeSeq;
+            rows = new ArrayList<>(messages.findByRoomIdAndRoomSeqLessThanOrderByRoomSeqDesc(
+                    roomId, ceiling, probe));
+            Collections.reverse(rows);
+        }
+
+        boolean hasMore = rows.size() > limit;
+        if (hasMore) {
+            // 넘치는 한 줄은 읽은 방향의 반대쪽 끝에 있다. 앞에서부터 읽었으면 맨 뒤,
+            // 뒤에서부터 읽고 뒤집었으면 맨 앞이다.
+            rows = readFromTheFront
+                    ? rows.subList(0, limit)
+                    : rows.subList(rows.size() - limit, rows.size());
+        }
+
+        return new ChatMessagePageView(
+                rows.stream().map(ChatRoomService::viewOf).toList(), room.getLastSeq(), hasMore);
+    }
+
+    /**
+     * 같은 방에 같은 멱등키로 이미 들어와 있는 메시지 — 이슈 #79 완료 조건 3.
+     *
+     * <p>부르는 곳은 {@link ChatMessageSender} 하나다. <b>이 조회는 판정이 아니다</b> —
+     * 중복을 막는 것은 {@code UNIQUE (room_id, client_msg_id)} 이고, 이것은 진 쪽이
+     * "그래서 이미 있는 그 메시지가 무엇인가" 를 답하기 위한 조회다. INSERT 앞에 두어
+     * 확인-후-쓰기로 쓰면 안 되는 이유는 그 클래스의 javadoc 에 있다.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ChatMessageView> findMessageByClientMsgId(long roomId, String clientMsgId) {
+        return messages.findByRoomIdAndClientMsgId(roomId, clientMsgId)
+                .map(ChatRoomService::viewOf);
+    }
+
+    // ─────────────────────────── 읽음 ───────────────────────────
+
+    /**
+     * 읽음 워터마크를 올린다 — 이슈 #79 완료 조건 4·7, 근거 ADR-0011 결정 3.
+     *
+     * <p>계산은 전부 한 문장 안에 있다
+     * ({@link ChatRoomMemberRepository#raiseReadWatermark}) — {@code GREATEST} 가 뒤로 가는
+     * 것을, {@code LEAST(:seq, room.last_seq)} 가 방의 끝을 넘는 것을 막는다. 자바에서
+     * 읽고 비교해서 쓰면 같은 사람의 두 기기가 동시에 보낼 때 뒤에 쓴 쪽이 이긴다.
+     *
+     * <p>갱신 뒤에 <b>다시 읽어서</b> 돌려준다. 요청한 값을 그대로 돌려주면 잘렸는지 무시됐는지
+     * 앱이 알 수 없고, 앱은 그 값으로 뱃지를 되맞춘다({@link ChatReadView}).
+     *
+     * @throws ResponseStatusException  403 — 이 방의 살아 있는 멤버가 아니면(없는 방도 여기다)
+     * @throws IllegalArgumentException 400 — 음수를 주면
+     */
+    @Transactional
+    public ChatReadView markRead(long roomId, long userId, long lastReadSeq) {
+        if (lastReadSeq < 0) {
+            throw new IllegalArgumentException("읽음 위치가 올바르지 않습니다.");
+        }
+        // 인가가 먼저다. 이게 없으면 남의 방에 대한 UPDATE 가 0행을 고치고 200 이 나간다 —
+        // 아무것도 안 바뀌지만 "그 방이 있다/없다" 가 응답 시간과 형태로 새는 자리다.
+        requireLiveMembership(roomId, userId);
+        members.raiseReadWatermark(roomId, userId, lastReadSeq);
+
+        ChatRoomMember me = requireLiveMembership(roomId, userId);
+        return new ChatReadView(me.getLastReadSeq(),
+                me.getRoom().getLastSeq() - me.getLastReadSeq());
+    }
+
     // ─────────────────────────── 인가 ───────────────────────────
+
+    /**
+     * 이 방에서의 <b>내 살아 있는 멤버십</b>. 아니면 403 — 이슈 #79 완료 조건 5·6·9.
+     *
+     * <p>{@link #requireOwner} 와 같은 판단을 역할 없이 한다. <b>없는 방도 403 이다</b> —
+     * 404 로 답하면 방 id 를 훑어 "있는 방/없는 방" 을 가려낼 수 있고, 방 존재 여부는 그 방
+     * 멤버에게만 의미가 있는 정보다. 문구도 하나다: 세 경우(방 없음 · 멤버 아님 · 강퇴됨)를
+     * 다른 문구로 답하면 그 차이가 곧 열거 수단이 된다(#6).
+     *
+     * <p><b>{@code removed_at is null} 이 조회 조건에 있다.</b> 강퇴된 사람의 행은 남아 있으므로
+     * (행을 지우지 않는다 — {@link ChatRoomMember} javadoc) "행이 있는가" 로 묻는 검사는
+     * 강퇴된 사람을 통과시킨다. 그 줄을 빼면
+     * {@code ChatEndpointsIntegrationTest.aRemovedMemberIsForbiddenEverywhere} 가 빨간불이다.
+     */
+    private ChatRoomMember requireLiveMembership(long roomId, long userId) {
+        return members.findLiveMembershipWithRoom(roomId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.FORBIDDEN, "이 방의 멤버가 아닙니다."));
+    }
+
+    /**
+     * 이 방의 값 — 단, <b>내가 살아 있는 멤버일 때만</b>. 이슈 #79.
+     *
+     * <p>ETag({@code "{roomId}:{lastSeq}"})를 계산하려면 방 한 행이 필요하고, 그 한 행을 주기
+     * 전에 인가가 끝나 있어야 한다. <b>순서가 뒤집히면 남의 방 {@code lastSeq} 를 304/200
+     * 차이로 알아낼 수 있다</b> — 타이밍이 아니라 응답 자체가 오라클이 된다.
+     * 그래서 인가와 방 읽기가 <b>한 조회</b>다({@code findLiveMembershipWithRoom}).
+     *
+     * @throws ResponseStatusException 403 — 이 방의 살아 있는 멤버가 아니면(없는 방도 여기다)
+     */
+    @Transactional(readOnly = true)
+    public ChatRoomView roomForMember(long roomId, long userId) {
+        return viewOf(requireLiveMembership(roomId, userId).getRoom());
+    }
 
     /**
      * 발급·회수는 방장만 한다 — 완료 조건 4.
