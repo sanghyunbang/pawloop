@@ -69,13 +69,21 @@ void main() {
     final json = file.readAsStringSync();
 
     // 값이 채워져 있으면 안 되는 키들. 템플릿은 빈 문자열이어야 한다.
-    for (final key in const ['YOUR_DECODING_SERVICE_KEY', 'NAVER_MAP_CLIENT_ID']) {
+    for (final key in const ['NAVER_MAP_CLIENT_ID']) {
       expect(
         json,
         contains('"$key": ""'),
         reason: '$key 는 템플릿에서 빈 값이어야 한다 — 진짜 키를 여기 넣지 말 것',
       );
     }
+
+    // 관광공사 서비스키는 **빈 값으로도** 있으면 안 된다 (이슈 #40). 템플릿에 자리가
+    // 남아 있으면 다음 사람이 거기에 키를 채워 넣고, 그러면 다시 앱 바이너리로 들어간다.
+    expect(
+      json,
+      isNot(contains('YOUR_DECODING_SERVICE_KEY')),
+      reason: '이 키는 서버 환경변수로만 존재한다. 앱 빌드 설정에 자리를 만들지 말 것',
+    );
   });
 
   group('.github/workflows/ci.yml', () {

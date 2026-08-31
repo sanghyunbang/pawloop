@@ -9,6 +9,8 @@
 // 이 테스트는 "아무 것도 주입하지 않은 상태"(= CI 가 도는 상태)의 기본값을 못박는다.
 // dart-define 을 붙여서 돌리면(예: flutter test --dart-define=API_BASE=...)
 // 당연히 그 값이 나오므로 이 파일은 정의값 없이 실행하는 것을 전제한다.
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 
@@ -18,9 +20,6 @@ void main() {
       expect(() => Env.apiBase, returnsNormally);
       expect(() => Env.isLocal, returnsNormally);
       expect(() => Env.naverMapClientId, returnsNormally);
-      expect(() => Env.tourServiceKey, returnsNormally);
-      expect(() => Env.mobileOs, returnsNormally);
-      expect(() => Env.mobileApp, returnsNormally);
     });
   });
 
@@ -36,12 +35,21 @@ void main() {
 
     test('비밀값은 빈 문자열이다 — 소스에 하드코딩된 기본 키가 없다', () {
       expect(Env.naverMapClientId, isEmpty);
-      expect(Env.tourServiceKey, isEmpty);
     });
 
-    test('KTO 호출자 표기는 비밀이 아니므로 기본값을 갖는다', () {
-      expect(Env.mobileOs, 'ETC');
-      expect(Env.mobileApp, 'HeatTrip');
+    test('관광공사 서비스키를 읽는 게터가 아예 없다 — 앱에 그 키가 없다 (이슈 #40)', () {
+      final source = File('lib/core/config/env.dart').readAsStringSync();
+
+      expect(
+        source,
+        isNot(contains('YOUR_DECODING_SERVICE_KEY')),
+        reason: """
+--dart-define 으로 넣어도 문자열은 바이너리에 남아서 strings 한 번이면 나온다.
+그 키는 쿼터·과금이 걸린 자격증명이고, 폐기하려면 앱을 새로 배포해야 해서 즉시
+대응이 불가능하다. 지금은 서버가 대신 부른다.
+""",
+      );
+      expect(source, isNot(contains('tourServiceKey')));
     });
   });
 }

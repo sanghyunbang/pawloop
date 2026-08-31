@@ -14,7 +14,7 @@
 ///
 /// > **주의.** dart-define 은 *완화*이지 해결이 아니다. 컴파일 타임에 코드로
 /// > 박힐 뿐, 문자열은 여전히 바이너리 안에 있고 `strings` 한 번이면 나온다.
-/// > 쿼터·과금이 걸린 [tourServiceKey] 는 M3 에서 호출 자체를 백엔드 프록시로
+/// > 쿼터·과금이 걸린 관광공사 키는 #40 에서 호출 자체를 백엔드 프록시로
 /// > 옮겨야 앱에서 진짜로 사라진다. → 이슈 #29 (B)
 class Env {
   const Env._();
@@ -55,22 +55,12 @@ class Env {
   static const naverMapClientId =
       String.fromEnvironment('NAVER_MAP_CLIENT_ID', defaultValue: '');
 
-  /// 공공데이터포털(관광공사) 서비스키. 이미 인코딩된 형태라 그대로 쿼리에 붙인다.
-  /// (키 이름과 달리 *인코딩키* 가 들어간다.)
-  ///
-  /// ⚠️ 클라이언트에 남아 있는 유일한 과금성 자격증명이다. M3 에서 백엔드
-  /// 프록시로 옮기고 기존 키는 폐기·재발급해야 한다. → 이슈 #29 (B)
-  static const tourServiceKey =
-      String.fromEnvironment('YOUR_DECODING_SERVICE_KEY', defaultValue: '');
-
-  /// 관광공사 API 가 요구하는 호출자 표기. 비밀이 아니다.
-  /// 빈 문자열로 주입되면 기본값으로 되돌린다(빈 값을 그대로 보내면 KTO 가 400).
-  static const _mobileOs = String.fromEnvironment('MOBILE_OS');
-  static const _mobileApp = String.fromEnvironment('MOBILE_APP');
-
-  static String get mobileOs =>
-      _mobileOs.trim().isNotEmpty ? _mobileOs.trim() : 'ETC';
-
-  static String get mobileApp =>
-      _mobileApp.trim().isNotEmpty ? _mobileApp.trim() : 'HeatTrip';
+  // 관광공사 서비스키와 호출자 표기가 여기 있었다. **이제 앱에 없다** (이슈 #40).
+  //
+  // --dart-define 으로 넣어도 문자열은 바이너리에 남아서 strings 한 번이면 나온다.
+  // 그 키는 쿼터·과금이 걸린 자격증명이고, 폐기하려면 앱을 새로 배포해야 해서 즉시
+  // 대응이 불가능했다. 지금은 서버가 대신 부르고 키는 서버 환경변수로만 존재한다.
+  //
+  // **여기에 다시 넣지 말 것.** 넣는 순간 완료 조건 1("릴리스 APK 를 훑어도 키가
+  // 검색되지 않는다")이 깨지고, 그 사실은 아무 테스트도 알려 주지 않는다.
 }

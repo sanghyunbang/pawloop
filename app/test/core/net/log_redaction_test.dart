@@ -11,8 +11,8 @@ import 'package:heat_trip_flutter/core/net/log_redaction.dart';
 
 void main() {
   group('URL 마스킹', () {
-    test('KTO 서비스키는 값이 남지 않는다 — 실제로 새고 있던 경로다', () {
-      final url = Uri.https('apis.data.go.kr', '/B551011/KorService2/detailCommon2', {
+    test('외부 API 키는 값이 남지 않는다 — 실제로 새고 있던 경로다', () {
+      final url = Uri.https('third-party.example.com', '/some/external/api', {
         'serviceKey': 'REAL-KTO-KEY-abcdef123456',
         'MobileOS': 'ETC',
         'contentId': '126508',
@@ -21,19 +21,19 @@ void main() {
       final logged = redactUrl(url);
 
       expect(logged, isNot(contains('REAL-KTO-KEY-abcdef123456')),
-          reason: '이 키는 쿼리스트링으로 흐른다. URL 을 찍는 순간 로그로 샌다');
+          reason: '이런 키는 쿼리스트링으로 흐른다. URL 을 찍는 순간 로그로 샌다');
       expect(logged, contains(redactedMark));
     });
 
     test('비밀이 아닌 파라미터와 경로는 그대로 남는다 — 디버깅이 가능해야 한다', () {
-      final url = Uri.https('apis.data.go.kr', '/B551011/KorService2/detailCommon2', {
+      final url = Uri.https('third-party.example.com', '/some/external/api', {
         'serviceKey': 'secret',
         'contentId': '126508',
       });
 
       final logged = redactUrl(url);
 
-      expect(logged, contains('detailCommon2'));
+      expect(logged, contains('/some/external/api'));
       expect(logged, contains('126508'));
     });
 
