@@ -3,7 +3,5 @@
 
   "API_BASE_URL": "https://api.heattrip.link",
 
-  "YOUR_DECODING_SERVICE_KEY": "",
-
   "NAVER_MAP_CLIENT_ID": ""
 }

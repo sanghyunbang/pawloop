@@ -1,195 +1,130 @@
 /// place_detail_api.dart
-/// 실제 HTTP 호출 담당. 각 프로젝트의 API 스펙에 맞게 Uri 생성만 교체하세요.
-/// ─────────────────────────────────────────────────────────────────────────────
-/// 이 클래스는 "이미 화면/라우터/VM에서 전달받은" contentId, contentTypeId를
-/// 최종 URI에 쿼리로 붙여서 KTO API(detailCommon/detailIntro)를 호출합니다.
-/// 여기서 contentId/contentTypeId를 '새로' 만드는 게 아니라,
-/// 상위 계층(PlaceCard → Router → ExploreDetailScreen → DetailVM → Repository)에서
-/// 흘러 내려온 값을 '그대로' 사용합니다.
-/// ─────────────────────────────────────────────────────────────────────────────
+///
+/// 장소 상세를 **우리 백엔드에서** 받아 온다 — 이슈 #40.
+///
+/// ## 예전에는 관광공사를 직접 불렀다
+///
+/// 공공데이터포털로 `detailCommon2` 와 `detailIntro2` 를 각각 호출했고, 그러려면
+/// 서비스키가 앱 바이너리 안에 있어야 했다. `--dart-define` 으로 옮겨도 문자열은 남아서
+/// `strings` 한 번이면 나온다. 키는 쿼터·과금이 걸린 자격증명이고 폐기하려면 **앱을 새로
+/// 배포**해야 하므로 즉시 대응이 불가능하다.
+///
+/// 지금은 서버가 대신 부르고 30일 캐시한다. 앱에는 키가 없다.
+///
+/// ## 호출이 하나로 줄었다
+///
+/// 계약(`GET /api/places/{contentId}`)이 개요와 반려동반 정보를 한 응답에 담는다.
+/// 이 클래스는 그 응답을 **기존 DTO 두 개가 읽던 모양**으로 나눠 돌려준다 — 그래야
+/// `DetailCommonDto`/`DetailIntroDto` 와 `mergeDetail` 을 안 건드린다.
+///
+/// ## `detailIntro2` 는 서버가 안 부른다
+///
+/// 앱의 상세 매퍼가 그 응답에서 쓰던 것은 **추가 이미지**뿐이었다(`useTime`·`parking` 은
+/// DTO 로 파싱만 되고 화면에 안 갔다). 넣으면 상세 1건이 3콜이 되어 서버의 하루 상세
+/// 예산이 75건에서 50건으로 준다. **갤러리 이미지가 두 장으로 줄어드는 것을 받아들인
+/// 결정**이고, 되돌리려면 계약과 예산을 함께 고쳐야 한다.
 library;
 
+import 'dart:async' as dart_async;
 import 'dart:convert';
-import 'dart:async' as dart_async; // [①] TimeoutException 이름 충돌 방지 별칭
 import 'dart:io' show SocketException, HandshakeException;
 
 import 'package:http/http.dart' as http;
+import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/errors/app_exception.dart';
 
 class PlaceDetailApi {
   /// http 클라이언트 (테스트 용이성을 위해 외부 주입)
   final http.Client client;
 
-  /// 공통 상세(overview/mapx/mapy/주소 등)를 주는 베이스 URI
-  /// 예) https://apis.data.go.kr/B551011/KorService2/detailCommon2?serviceKey=...&_type=json
-  final Uri commonBaseUri;
+  /// 백엔드 베이스 URL. 기본값은 [Env.apiBase] 다.
+  ///
+  /// **호스트 허용목록을 두지 않는다.** 예전에는 공공데이터포털 호스트 하나만 허용했는데,
+  /// 그건 외부 API 를 직접 부르던 시절의 방어였다. 지금 부르는 곳은 우리 서버이고 그 주소는
+  /// 빌드 설정이 정한다 — 여기서 다시 검사하면 로컬 백엔드(`http://10.0.2.2:8080`)에서
+  /// 상세가 통째로 막힌다.
+  final String baseUrl;
 
-  /// 타입별 상세(인트로: usetime/parking/infocenter 등)를 주는 베이스 URI
-  /// 예) https://apis.data.go.kr/B551011/KorService2/detailIntro2?serviceKey=...&_type=json
-  final Uri introBaseUri;
+  PlaceDetailApi({required this.client, String? baseUrl})
+      : baseUrl = baseUrl ?? Env.apiBase;
 
-  PlaceDetailApi({
-    required this.client,
-    required this.commonBaseUri,
-    required this.introBaseUri,
-  });
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // 공통 URI 빌더
-  // [②] baseParams(queryParameters) + extraParams를 머지하여 최종 Uri 생성.
-  //      _type=json은 baseUri 쪽에서 이미 넣는 걸 권장하므로 여기서 강제하지 않습니다.
-  // ────────────────────────────────────────────────────────────────────────────
-  Uri _buildUri({
-    required String epPath, // 예: "/B551011/KorService2/detailCommon2"
-    required Map<String, String> baseParams,
-    Map<String, String>? extraParams,
-  }) {
-    final merged = <String, String>{
-      ...baseParams,
-      if (extraParams != null) ...extraParams,
+  /// 개요·주소·좌표. `DetailCommonDto` 가 읽는 키로 돌려준다.
+  Future<Map<String, dynamic>> fetchDetailCommonItem({required int contentId}) async {
+    final detail = await _fetch(contentId);
+    return <String, dynamic>{
+      'contentid': detail['contentId'],
+      'title': detail['title'],
+      'overview': detail['overview'],
+      // 서버는 주소를 한 필드로 준다. addr2 는 없다 — 나눌 근거가 응답에 없으므로
+      // 지어내지 않는다(mergeDetail 이 둘을 합쳐 쓰므로 결과는 같다).
+      'addr1': detail['addr'],
+      'firstimage': detail['image'],
+      'mapx': detail['lng'],
+      'mapy': detail['lat'],
+      'tel': detail['tel'],
     };
-    return Uri.https('apis.data.go.kr', epPath, merged);
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // KTO 응답에서 '첫 번째 아이템'을 꺼내는 공통 유틸
-  // [③] ep 라벨로 COMMON/INTRO 호출을 로그에서 명확히 구분.
-  // [④] 원문 본문(rawBody) 스니펫을 항상 출력(디버깅 가시성 확보).
-  // [⑤] 방어적 파싱 강화를 통해 예기치 않은 구조 → AppFormatException으로 통일.
-  // ────────────────────────────────────────────────────────────────────────────
-  Future<Map<String, dynamic>> _getFirstItem(
-    Uri uri, {
-    required String ep,
+  /// 반려동반 정보. `DetailIntroDto` 가 읽는 키로 돌려준다.
+  ///
+  /// **`contentTypeId` 를 안 쓴다.** 계약이 그것 없이 상세를 준다 — 서버가 이미 아는
+  /// 값을 앱이 다시 보낼 이유가 없다. 시그니처를 남겨 둔 것은 호출부
+  /// (`PlaceDetailRepository`)를 안 건드리기 위해서다.
+  Future<Map<String, dynamic>?> fetchDetailIntroItem({
+    required int contentId,
+    required int contentTypeId,
   }) async {
-    print('[PlaceDetailApi][$ep] GET $uri');
+    final detail = await _fetch(contentId);
+    final petInfo = detail['petInfo'];
+    if (petInfo is! Map) return null;
 
-    // [⑥] 보안/호스트 가드
-    if (uri.scheme != 'https') {
-      throw const AppMessageException('보안 연결(HTTPS)만 허용됩니다.');
-    }
-    const allowedHosts = {'apis.data.go.kr'};
-    if (!allowedHosts.contains(uri.host)) {
-      throw AppMessageException('잘못된 호스트로 요청되었습니다: ${uri.host}');
-    }
+    return <String, dynamic>{
+      'contentid': detail['contentId'],
+      // 반려동반 정보를 화면이 읽을 수 있는 자리에 싣는다. KTO 의 usetime/parking 계열은
+      // 서버가 안 받아 오므로 여기 없다 — 위 라이브러리 주석 참조.
+      'acmpyPsblCpam': petInfo['acmpyPsblCpam'],
+      'acmpyNeedMtr': petInfo['acmpyNeedMtr'],
+      'etcAcmpyInfo': petInfo['etcAcmpyInfo'],
+    };
+  }
+
+  // ─────────────────────────── 내부 ───────────────────────────
+
+  /// 상세 한 건. 두 공개 메서드가 같은 응답을 나눠 쓴다.
+  ///
+  /// **캐싱을 여기서 하지 않는다.** 한 화면에서 두 번 부르는 것은 서버 캐시가 흡수하고,
+  /// 앱에 캐시를 두면 그것이 언제 낡는지를 또 정해야 한다.
+  Future<Map<String, dynamic>> _fetch(int contentId) async {
+    final uri = Uri.parse('$baseUrl/api/places/$contentId');
 
     try {
       final res = await client.get(uri).timeout(const Duration(seconds: 12));
 
-      print(
-        '[PlaceDetailApi][$ep] status=${res.statusCode} len=${res.body.length}',
-      );
-      print(
-        '[PlaceDetailApi][$ep] content-type=${res.headers['content-type']}',
-      );
-
-      // [④] 원문 바디 스니펫
-      final rawBody = res.body;
-      final rawSnippet = rawBody.length > 800
-          ? '${rawBody.substring(0, 800)}…'
-          : rawBody;
-      print('[PlaceDetailApi][$ep] body: ${rawSnippet.replaceAll('\n', ' ')}');
-
-      // HTTP 코드 체크
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw HttpFailureException(res.statusCode, '공공데이터 포털 응답 오류');
+      if (res.statusCode == 404) {
+        throw const AppMessageException('장소를 찾을 수 없습니다.');
+      }
+      if (res.statusCode != 200) {
+        throw const AppMessageException('장소 정보를 불러오지 못했습니다.');
       }
 
-      // [⑤] 방어적 파싱(노드별 타입 확인)
-      final decoded = jsonDecode(rawBody);
-      if (decoded is! Map) throw const AppFormatException();
-
-      final response = decoded['response'];
-      if (response is! Map) throw const AppFormatException();
-
-      final header = response['header'];
-      if (header is! Map) throw const AppFormatException();
-
-      final resultCode = header['resultCode'];
-      final resultMsg = header['resultMsg'];
-      print(
-        '[PlaceDetailApi][$ep] resultCode=$resultCode resultMsg=$resultMsg',
-      );
-
-      // 공공데이터포털 에러코드(문자열/숫자 혼재 가능성 고려)
-      if (resultCode != null && resultCode.toString() != '0000') {
-        // [⑦] 서버 메시지를 그대로 사용자 친화 에러로 포장
-        throw AppMessageException('API 응답 오류: $resultMsg($resultCode)');
-      }
-
-      final bodyNode = response['body'];
-      if (bodyNode is! Map) throw const AppFormatException();
-
-      final itemsNode = bodyNode['items'];
-      if (itemsNode is! Map) throw const AppFormatException();
-
-      final itemNode = itemsNode['item'];
-
-      if (itemNode is List && itemNode.isNotEmpty) {
-        final first = itemNode.first;
-        if (first is Map) return Map<String, dynamic>.from(first);
+      // bodyBytes 에서 직접 디코딩한다. res.body 는 charset 이 없으면 latin-1 로 읽어
+      // 한글이 깨진다(#81 에서 겪었다).
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! Map) {
         throw const AppFormatException();
       }
-      if (itemNode is Map) {
-        return Map<String, dynamic>.from(itemNode);
-      }
-
-      // [⑤] item이 없거나 타입이 다르면 포맷 에러
-      throw const AppFormatException();
-    }
-    // 네트워크 계층 → AppException 계열로 변환
-    on SocketException {
-      throw const NetworkException('네트워크 연결을 확인해 주세요.');
-    } on HandshakeException {
-      throw const ServerException('보안 연결에 실패했습니다(인증서/호스트 불일치).');
-    } on dart_async.TimeoutException {
-      throw const AppTimeoutException();
-    } on FormatException {
-      throw const AppFormatException();
+      return decoded.cast<String, dynamic>();
     } on AppException {
-      // [⑧] 이미 AppException이면 그대로 상위로
       rethrow;
+    } on dart_async.TimeoutException {
+      throw const AppMessageException('응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.');
+    } on SocketException {
+      throw const AppMessageException('네트워크에 연결할 수 없습니다.');
+    } on HandshakeException {
+      throw const AppMessageException('보안 연결에 실패했습니다.');
     } catch (_) {
-      // [⑨] 알 수 없는 예외 → UnknownException 통일
-      throw const UnknownException();
+      // 예외 메시지에 URL 조각이 섞일 수 있어 옮기지 않는다.
+      throw const AppMessageException('장소 정보를 불러오지 못했습니다.');
     }
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // detailCommon2 호출
-  // [중요] 문서에 있는 파라미터만 사용:
-  //   필수: MobileOS, MobileApp, serviceKey, contentId
-  //   옵션: numOfRows, pageNo, _type
-  // ────────────────────────────────────────────────────────────────────────────
-  Future<Map<String, dynamic>> fetchDetailCommonItem({required int contentId}) {
-    final uri = _buildUri(
-      epPath: '/B551011/KorService2/detailCommon2',
-      baseParams: commonBaseUri
-          .queryParameters, // MobileOS, MobileApp, serviceKey, (_type)
-      extraParams: {
-        'contentId': contentId.toString(), // 문서상 이 엔드포인트에서 우리가 추가해야 할 유일한 값
-        // ⚠ 문서에 없는 파라미터는 절대 추가하지 않음(예: addrinfoYN, mapinfoYN, defaultYN, firstImageYN, overviewYN 등)
-      },
-    );
-    return _getFirstItem(uri, ep: 'COMMON'); // [③] ep 라벨은 로그 구분 전용
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // detailIntro2 호출
-  //   필수: MobileOS, MobileApp, serviceKey, contentId, contentTypeId
-  //   옵션: numOfRows, pageNo, _type
-  // ────────────────────────────────────────────────────────────────────────────
-  Future<Map<String, dynamic>?> fetchDetailIntroItem({
-    required int contentId,
-    required int contentTypeId,
-  }) {
-    final uri = _buildUri(
-      epPath: '/B551011/KorService2/detailIntro2',
-      baseParams: introBaseUri.queryParameters,
-      extraParams: {
-        'contentId': contentId.toString(),
-        'contentTypeId': contentTypeId.toString(),
-      },
-    );
-    return _getFirstItem(uri, ep: 'INTRO');
   }
 }
