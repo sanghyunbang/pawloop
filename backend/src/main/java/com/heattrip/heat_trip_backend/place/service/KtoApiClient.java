@@ -46,10 +46,22 @@ public class KtoApiClient {
     /** KTO 가 "정상" 이라고 말하는 값. 그 밖은 전부 실패다. */
     private static final String RESULT_OK = "0000";
 
-    /** 한도 초과. 이걸 보면 그 풀을 오늘치 닫는다. */
+    /**
+     * 한도 초과. 이걸 보면 그 풀을 오늘치 닫는다.
+     *
+     * <p>HTTP 200 의 {@code resultCode} 로도, 4xx 의 {@code returnReasonCode} 로도 온다.
+     * 두 봉투를 다 읽는 이유가 그것이다.
+     */
     static final String RESULT_QUOTA_EXCEEDED = "22";
 
-    /** 서비스키 미등록. 키가 폐기됐거나 잘못 들어갔다는 뜻이라 계속 두드리면 안 된다. */
+    /**
+     * 서비스키 미등록. 키가 폐기됐거나 잘못 들어갔다는 뜻이라 계속 두드리면 안 된다.
+     *
+     * <p><b>실측(2026-09-01)</b>: 죽은 키로 부르면 HTTP <b>403</b> 과 함께
+     * {@code {"OpenAPI_ServiceResponse":{"cmmMsgHeader":{"returnReasonCode":"30", ...}}}} 가
+     * 온다 — {@code response.header.resultCode} 가 아니다. 처음에 그쪽만 읽어서 이 판정이
+     * 안 걸렸고, 그 상태로는 <b>죽은 키가 하루 예산을 전부 태운다.</b>
+     */
     static final String RESULT_KEY_NOT_REGISTERED = "30";
 
     /** 호출 전체의 상한. 소켓 타임아웃(5s)보다 길어야 그쪽이 먼저 걸린다. */
@@ -160,8 +172,13 @@ public class KtoApiClient {
                     // 문자열 그대로 나간다 — 빈이 EncodingMode.NONE 이다. 키를 다시
                     // 인코딩하면 인증이 조용히 실패한다(KtoWebClientConfig javadoc).
                     .uri(pathAndQuery)
-                    .retrieve()
-                    .bodyToMono(String.class)
+                    // exchangeToMono 인 이유: retrieve() 는 4xx/5xx 에서 예외를 던지며
+                    // **본문을 버린다.** 그런데 KTO 는 키가 죽었을 때 그 사실을 403 **본문**에만
+                    // 담아 준다(OpenAPI_ServiceResponse.cmmMsgHeader.returnReasonCode=30).
+                    // 본문을 못 읽으면 "그냥 실패" 로만 보이고, 그러면 아래의 "풀을 즉시 닫는다"
+                    // 가 영영 안 걸려 죽은 키로 하루 예산을 전부 태운다. (실측으로 찾았다)
+                    .exchangeToMono(response -> response.bodyToMono(String.class)
+                            .defaultIfEmpty(""))
                     .timeout(CALL_TIMEOUT)
                     .block();
         } catch (RuntimeException e) {
@@ -182,6 +199,19 @@ public class KtoApiClient {
             // KTO 는 오류를 XML 로 주는 경우가 있다. 그것도 실패다 — 캐시하지 않는다.
             log.warn("KTO 응답을 읽지 못했다 — op={} (JSON 이 아니다)", label);
             return new Result.Failed<>(null, "not-json");
+        }
+
+        // KTO 의 오류 봉투는 **두 가지**다.
+        //  ① 정상 경로의 실패 — HTTP 200 + response.header.resultCode
+        //  ② 게이트웨이 단계의 실패 — HTTP 4xx + OpenAPI_ServiceResponse.cmmMsgHeader
+        //     (키 미등록·트래픽 초과가 여기로 온다. 실측: 죽은 키 → 403 + returnReasonCode=30)
+        // ②를 안 읽으면 "그냥 실패" 로만 보이고 풀을 닫는 판정이 영영 안 걸린다.
+        JsonNode gatewayError = body.path("OpenAPI_ServiceResponse").path("cmmMsgHeader");
+        if (!gatewayError.isMissingNode()) {
+            String code = gatewayError.path("returnReasonCode").asText(null);
+            String message = gatewayError.path("returnAuthMsg").asText("");
+            log.warn("KTO 게이트웨이가 거절했다 — op={} returnReasonCode={} msg={}", label, code, message);
+            return new Result.Failed<>(code, message);
         }
 
         String resultCode = body.path("response").path("header").path("resultCode").asText(null);
