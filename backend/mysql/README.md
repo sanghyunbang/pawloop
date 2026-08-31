@@ -33,6 +33,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\06_chat_rooms.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\07_family_group.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\08_care_log.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\09_chat_message.sql
 ```
 
 | 파일 | 무엇을 |
@@ -45,6 +46,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `06_chat_rooms.sql` | 방·멤버십·초대 — `chat_room`·`chat_room_member`·`chat_room_invite` 생성, `UNIQUE(origin_kind, origin_ref)`·`UNIQUE(room_id, user_id)`·`UNIQUE(code)`, `chat_room` 으로의 FK 둘 (이슈 #74 · [ADR-0011](../../docs/99-decisions/decision-log.md)) |
 | `07_family_group.sql` | 가족 케어 그룹 — `family_group(id, name, created_at)` 생성. **초대코드도 멤버십도 여기 없다** (이슈 #75 · [ADR-0011](../../docs/99-decisions/decision-log.md)) |
 | `08_care_log.sql` | 오늘의 케어와 산책 주의사항 — `care_log`·`walk_note` 생성, `family_group`·`users`로의 FK 4개, `walk_note`의 `UNIQUE(group_id)`(그룹당 한 장), `care_log.type` CHECK 다섯 값 (이슈 #76) |
+| `09_chat_message.sql` | 채팅 메시지 — `chat_message` 생성, `UNIQUE(room_id, room_seq)`(커서가 `id` 가 아닌 근거)·`UNIQUE(room_id, client_msg_id)`(재전송 멱등)·`idx_chat_sender`, `chat_room`으로의 FK 하나. **`06` 이 먼저입니다** (이슈 #78 · [ADR-0011](../../docs/99-decisions/decision-log.md)) |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
@@ -100,3 +102,15 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 `care_log.dog_id`에 FK가 없는 것을 **#9의 "일부러 FK를 안 걸었다"와 같은 것으로 읽으면 안 됩니다.** #9(`refresh_token.user_id`)는 `users` 표가 있는데도 걸지 않은 판단이고, 여기는 참조할 표가 아직 없는 것입니다. `dog` 표가 생기는 날 여기는 FK를 걸고 #9는 안 겁니다.
 
 되돌리는 SQL(DOWN)은 `08_care_log.sql` 헤더 주석에 있습니다. 되돌려도 **그룹·방·대화는 남습니다** — 화살표가 이쪽에서 저쪽으로만 가기 때문입니다.
+
+### 09는 `06` 다음입니다 — `chat_room`으로 FK를 겁니다
+
+`09_chat_message.sql`이 만드는 `chat_message`는 `chat_room(id)`으로 `ON DELETE CASCADE` FK를 겁니다. **경계 안**이라 정상입니다 — 방이 지워지면 그 방의 대화도 갈 곳이 없습니다. 반대로 `sender_user_id`에는 FK를 걸지 않습니다: `ON DELETE CASCADE`면 **탈퇴 한 번에 그 사람이 방에 쓴 말이 전부 사라지고**, 남는 것은 대답만 있고 질문이 없는 대화입니다([ADR-0011](../../docs/99-decisions/decision-log.md) 결정 4).
+
+- **사전 점검**: `chat_room`이 없으면 "06을 먼저 실행하라"고 말하고 멈춥니다. FK를 빼고 만들어 두는 선택지는 없습니다 — 방이 지워졌는데 메시지가 남으면 아무도 볼 수 없는 행이 영원히 쌓입니다. 그리고 dev는 `ddl-auto=update`라 앱이 먼저 뜨면 Hibernate가 표를 이미 만들어 두는데, 그 표에 중복 `(room_id, room_seq)`나 중복 `(room_id, client_msg_id)`가 있으면 `UNIQUE`를 걸 수 없으므로 목록을 출력한 뒤 중단합니다.
+- **사후 검증**: 표·컬럼 10개와 함께 **`UNIQUE` 둘을 컬럼 수로** 봅니다. `uq_chat_room_seq`가 `(room_id)` 한 컬럼에만 걸리면 한 방에 메시지가 한 줄만 들어가고, 그 사실은 스크립트가 성공한 것처럼 끝난 뒤에야 드러납니다.
+- **경계 검증**: 06과 같습니다 — `chat_*`에서 `chat_*` 밖으로 나가는 FK가 **0개**인지 봅니다.
+
+**왜 `UNIQUE(room_id, room_seq)`가 이 표의 핵심인가**: 커서가 `id`가 아니라 `room_seq`이기 때문입니다. `id AUTO_INCREMENT`는 INSERT 시점에 배정되고 남에게 보이는 것은 커밋 시점이라, 늦게 커밋된 작은 `id`를 `afterId` 폴링이 **영구히** 건너뜁니다. `ddl-auto=validate`도 `SchemaDdlDriftTest`도 `UNIQUE`를 보지 않으므로, 이 제약이 빠진 채 배포해도 앱은 멀쩡히 뜨고 발급이 틀린 날 조용히 메시지 하나가 사라집니다.
+
+되돌리는 SQL(DOWN)은 `09_chat_message.sql` 헤더 주석에 있습니다. **되돌리면 모든 대화 내용이 사라집니다** — 방·멤버십은 남지만 그 방의 말은 복구할 수 없습니다.
