@@ -109,4 +109,48 @@ public class RateLimitProperties {
      * 가 그 역할의 대부분을 한다.
      */
     private int groupWriteMaxRequests = 30;
+
+    /**
+     * 채팅 폴링 버킷 — {@code GET /api/chat/rooms} · {@code GET /rooms/{id}/messages} ·
+     * {@code POST /rooms/{id}/read}. (이슈 #80)
+     *
+     * <p><b>이 셋만 사용자 단위로 센다.</b> {@link ChatRateLimitFilter} 가 인증 뒤에 있어서
+     * 가능하다. 나머지 버킷은 IP 로 세는데, 채팅은 가족 넷이 한 공유기에서 동시에 폴링하는 것이
+     * 정상 사용이라 IP 로 세면 넷이 한 카운터로 합쳐진다.
+     *
+     * <p>120 인 이유: #81 의 폴링 정책이 방을 보는 중 3초다. 스트림 하나당 분당 20회,
+     * 방 목록과 메시지를 함께 보면 40회, 화면 전환과 포그라운드 복귀를 더해도 60회를 넘기
+     * 어렵다. 정상 사용자의 두 배를 준다.
+     *
+     * <p>낮추기 전에 {@code chat.poll} 메트릭의 {@code result=empty} 비율을 보라. 빈 응답이
+     * 대부분이면 한도를 낮출 것이 아니라 <b>간격을 늘려야</b> 한다 — 비용은 DB 를 읽는 것이
+     * 아니라 아무것도 없는데 왕복하는 것이다.
+     */
+    private int chatPollMaxRequests = 120;
+
+    /**
+     * 채팅 전송 버킷 — {@code POST /api/chat/rooms/{id}/messages}. (이슈 #80)
+     *
+     * <p>60 인 이유: 사람이 1초에 한 번씩 1분 내내 보내는 것이 상한이고 실제로는 훨씬 적다.
+     * 이 숫자가 막는 것은 사람이 아니라 <b>스크립트</b>다.
+     *
+     * <p>전송은 행을 만들고 방 단위 직렬화 지점({@code room_seq})을 지난다. 그래서 폴링과
+     * 버킷을 나눈다 — 한쪽을 조일 때 다른 쪽이 함께 조여지면 안 된다.
+     */
+    private int chatSendMaxRequests = 60;
+
+    /**
+     * 초대코드 참여 버킷 — {@code POST /api/chat/invites/{code}/join}. (이슈 #80 · #75)
+     *
+     * <p>이 경로는 #75 가 "코드 추측 공격을 견디는지는 M2.6 의 rate limit 이슈에서 다룬다" 로
+     * 미뤄 둔 자리다. 그동안 <b>무제한이었다</b> — 표에 없는 경로는 한도가 0 이 아니라 무한이다.
+     *
+     * <p>10 인 이유: 사람이 방에 들어가는 것은 한 번이면 된다. 코드가 잘못됐을 때 다시 치는
+     * 것을 감안해도 분당 10회면 충분하다.
+     *
+     * <p>초대코드는 50비트라({@code InviteCodeGenerator}) 추측이 현실적이지 않다. 그래도
+     * <b>그 하나에만 기대지 않는다</b> — 길이가 줄어드는 변경이 언젠가 올 수 있고, 그때 이
+     * 한도가 두 번째 벽이 된다.
+     */
+    private int chatJoinMaxRequests = 10;
 }

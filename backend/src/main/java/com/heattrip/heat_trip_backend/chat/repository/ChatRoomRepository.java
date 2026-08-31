@@ -127,4 +127,19 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
      */
     @Query(value = "SELECT CAST(LAST_INSERT_ID() AS SIGNED)", nativeQuery = true)
     long lastAssignedSeq();
+
+    /**
+     * 방의 {@code origin_kind} 만. <b>메트릭 태그 하나를 위한 것이다.</b> (이슈 #80)
+     *
+     * <p>엔티티를 읽지 않는 이유가 있다. {@code postMessage} 는 방을 프록시로만 든다 —
+     * 엔티티를 읽어 오면 그 스냅샷의 낡은 {@code last_seq} 가 플러시 순서에 따라
+     * {@link #assignNextSeq} 를 덮어쓸 여지가 생긴다. 그 판단을 메트릭 때문에 뒤집지 않는다.
+     *
+     * <p><b>비용을 정직하게 적는다.</b> 이건 전송 경로에 붙는 <b>추가 왕복 한 번</b>이다.
+     * PK 조회라 싸지만 0은 아니다. 잠금을 잡기 <b>전에</b> 부르므로 직렬화 구간을 늘리지는
+     * 않는다. 값이 필요한 이유는 방 종류가 둘이기 때문이다(가족 · 산책 크루, ADR-0011) —
+     * 태그가 없으면 "산책 크루 채팅이 죽었는데 가족 채팅이 멀쩡한 상태" 를 구분할 수 없다.
+     */
+    @Query("select r.originKind from ChatRoom r where r.id = :id")
+    Optional<String> findOriginKindById(@Param("id") long id);
 }

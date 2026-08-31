@@ -89,6 +89,30 @@ http://app:8080/actuator/prometheus
 | JVM memory used | heap/non-heap 메모리 사용량 |
 | process CPU | 앱 프로세스 CPU 사용량 |
 
+### 채팅 커스텀 지표 (이슈 #80)
+
+**이 저장소의 첫 커스텀 메트릭이다.** 이름 규약은 `chat/metrics/ChatMetrics.java` 의 javadoc 에 있고, 다음 도메인이 이 모양을 따라온다 — 도메인 접두 · 점 표기 · 카디널리티 낮은 태그만.
+
+| 지표 (Prometheus 이름) | 의미 |
+| --- | --- |
+| `chat_message_sent_total{room_kind}` | 저장된 메시지. **없으면 "조용한 것" 과 "고장 난 것" 을 구분하지 못한다** — 둘 다 그래프가 평평하다 |
+| `chat_poll_total{result="empty"\|"hit"}` | 폴링 응답. `http_server_requests` 로는 안 나온다 — 빈 응답도 새 메시지도 둘 다 200 이다 |
+| `chat_seq_assign_seconds` | 방 단위 `room_seq` 발급. **경합이 보이는 유일한 자리** |
+
+`room_kind` 는 방 종류다(`family` · `walk_crew`, ADR-0011). 태그가 없으면 "산책 크루 채팅이 죽었는데 가족 채팅은 멀쩡한 상태" 를 구분할 수 없다.
+
+### 임계와 그때 할 행동
+
+**경보가 아니라 사람이 보는 기준이다.** Prometheus 알림 규칙과 alertmanager 는 만들지 않았다 — 그건 M5 의 일이고, 여기서 같이 하면 채팅 변경이 운영 인프라 변경을 겸하게 되어 어느 쪽도 제대로 리뷰되지 않는다.
+
+| 무엇 | 기준 | 그때 할 것 |
+| --- | --- | --- |
+| HTTP p95 | > 500ms 가 5분 지속 | `chat_seq_assign_seconds` 부터 본다. 거기가 벌어져 있으면 방 경합이다 |
+| `hikaricp_connections_pending` | **> 0 이 1분 지속** | **롤백 조건이다. 채팅 배포를 되돌린다.** 커넥션을 기다리는 요청이 있다는 것은 풀이 이미 포화됐다는 뜻이고, 그 상태는 스스로 회복되지 않는다 |
+| `chat_poll_total{result="empty"}` 비율 | > 0.95 | 한도를 낮추는 것이 아니라 **폴링 간격을 늘린다.** 비용은 DB 를 읽는 것이 아니라 아무것도 없는데 왕복하는 것이고, 간격은 클라이언트가 정한다 (#81) |
+
+**롤백 조건을 문장으로 적으면 이렇다.** `hikaricp_connections_pending` 이 0보다 큰 상태로 1분을 넘기면 채팅 배포를 되돌린다. 지표를 더 보거나 원인을 찾은 뒤에 되돌리는 것이 아니라, 그 조건 하나로 되돌린다 — 커넥션 풀이 마르면 채팅과 무관한 경로까지 함께 죽기 때문이다.
+
 ## k6 결과와 같이 보는 방법
 
 k6 결과에서 `http_req_duration p(95)`, `p(99)`, `http_req_failed`가 나빠졌다면 Grafana에서 같은 시간대를 본다.

@@ -29,6 +29,7 @@ import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
 import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.security.ApiRateLimitFilter;
+import com.heattrip.heat_trip_backend.security.ChatRateLimitFilter;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,6 +43,9 @@ public class SecurityConfig {
     private final OAuth2FailureHandler oAuth2FailureHandler;
     private final PublicSecurityProperties publicSecurityProperties;
     private final ApiRateLimitFilter apiRateLimitFilter;
+
+    /** 채팅 버킷. 사용자 단위로 세야 해서 인증 <b>뒤</b>에 붙는다 (#80). */
+    private final ChatRateLimitFilter chatRateLimitFilter;
 
     /** 앱이 만든 state 를 소셜 왕복 동안 세션에 붙들어 둔다. (이슈 #14) */
     private final OAuthAppStateFilter oAuthAppStateFilter;
@@ -154,6 +158,20 @@ public class SecurityConfig {
         // 않는다(그 필터는 state 를 담으려고 request.getSession(true) 를 부른다).
         // 이 순서를 되돌리면 ApiRateLimitFilterChainOrderIntegrationTest 가 빨간불이다.
         http.addFilterBefore(apiRateLimitFilter, OAuthAppStateFilter.class);
+
+        // ⚠️ 채팅 rate limit 은 **JWT 필터 뒤**여야 한다. (이슈 #80)
+        //
+        // 위의 apiRateLimitFilter 는 체인 맨 앞이라 세는 시점에 사용자가 누구인지 모른다.
+        // 그래서 열쇠가 IP 이고, 가족 넷이 한 공유기에서 동시에 폴링하면 넷이 한 카운터로
+        // 합쳐진다 — 가족 단위 서비스에서 실제로 일어난다.
+        //
+        // 앞 필터를 뒤로 옮기는 것은 답이 아니다. 그 자리는 #14 가 정한 것이고 되돌리면
+        // 소셜 진입점이 다시 무제한이 된다(리다이렉트 필터가 302 를 쓰고 체인을 끊는다).
+        // 그래서 채팅 버킷만 별도 필터로 인증 뒤에 둔다.
+        //
+        // 이 순서를 되돌리면 SecurityContext 가 비어 있어 사용자 열쇠 대신 IP 로 떨어진다 —
+        // 조용히 잘못 세는 것이라 ChatRateLimitFilterChainOrderIntegrationTest 가 지킨다.
+        http.addFilterAfter(chatRateLimitFilter, JWTAuthenticationFilter.class);
         return http.build();
     }
 
