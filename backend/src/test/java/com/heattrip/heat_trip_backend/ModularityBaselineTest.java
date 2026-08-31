@@ -42,8 +42,26 @@ class ModularityBaselineTest {
      * <p>소스의 {@code import} 를 세면 100건 남짓인데 여기가 훨씬 큰 이유는, 도구가 바이트코드의
      * <b>타입 참조</b>를 세기 때문이다 — 필드 타입 · 파라미터 · 반환형 · 애노테이션 값 · 생성자
      * 시그니처가 각각 한 건이다. 같은 {@code User} 한 타입을 네 곳에서 쓰면 4건이다.
+     *
+     * <p><b>620 에서 588 로 내렸다. 빚을 갚아서가 아니라 집계 방식이 바뀌어서다.</b> (#103)
+     * {@code chatweb} 에 {@code allowedDependencies = { "chat" }} 를 선언하자 그 패키지의
+     * 위반이 다른 종류로 바뀌었다.
+     *
+     * <ul>
+     *   <li>선언 전 — "non-exposed type" 위반. <b>바이트코드 참조마다 1건.</b>
+     *       {@code chatweb -> user} 31건 + {@code chatweb -> OAuth} 7건 = 38건</li>
+     *   <li>선언 후 — "depends on module ... Allowed targets: chat" 위반.
+     *       <b>(부르는 클래스 → 불리는 타입) 쌍마다 1건.</b> 6건</li>
+     * </ul>
+     *
+     * <p>{@code 620 - 38 + 6 = 588}. <b>같은 문제가 더 적은 줄로 보고될 뿐 하나도 안 고쳐졌다.</b>
+     * 남은 6건은 {@code chatweb} 의 잘못이 아니라 {@code OAuth} 와 {@code user} 가 공개 표면을
+     * 안 갖고 있어서 생기는 것이고, 표면을 정하는 것은 #104 · #105 다.
+     *
+     * <p>그러니 다른 모듈에 {@code allowedDependencies} 를 붙일 때마다 이 수가 또 내려간다.
+     * <b>내려갔다고 좋아질 일이 아니다</b> — 어느 쪽 이유로 내려갔는지 매번 확인해라.
      */
-    private static final int BASELINE_VIOLATIONS = 620;
+    private static final int BASELINE_VIOLATIONS = 588;
 
     /** 순환 경로 개수. 쌍이 아니라 <b>경로</b>다 — 같은 두 모듈이 여러 경로에 걸쳐 나타난다. */
     private static final int BASELINE_CYCLES = 5;

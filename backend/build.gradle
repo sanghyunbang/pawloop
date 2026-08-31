@@ -85,6 +85,12 @@ dependencies {
 	// 새로 띄워 컨텍스트 캐시 항목을 늘린다. 이번에 필요한 것은 정적 분석뿐이다.
 	testImplementation 'org.springframework.modulith:spring-modulith-core'
 
+	// package-info.java 의 @ApplicationModule / @NamedInterface (#103 · ADR-0012).
+	// **런타임 동작이 없다** — 스프링이 이 애노테이션을 읽고 무언가를 하지는 않는다.
+	// 구조 검사(테스트 스코프)가 읽는 메타데이터일 뿐이다. 다만 애노테이션이
+	// main 소스의 package-info.java 에 붙으므로 컴파일 클래스패스에 있어야 한다.
+	implementation 'org.springframework.modulith:spring-modulith-api'
+
 	// JWT 관련 의존성
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
