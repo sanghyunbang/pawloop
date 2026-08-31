@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * 그런데 앱 팀이 Swagger UI 의 "Try it out" 으로 만지고 클라이언트를 뽑는 대상은 <b>생성본</b>이다.
  * 두 문서가 갈라지면 정본 쪽 테스트는 전부 초록불인 채로 앱만 깨진다.
  *
- * <p>실제로 그런 일이 있었다. {@link com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser} 는
+ * <p>실제로 그런 일이 있었다. {@link com.heattrip.heat_trip_backend.user.CurrentUser} 는
  * springdoc 이 모르는 커스텀 리졸버 파라미터라, 알려 주지 않으면 {@code @ModelAttribute} 처럼 보고
  * <b>required=true 인 query 파라미터</b>(이름 {@code me}/{@code user}, 스키마는 {@code User} 전체)로
  * 문서화한다 — 오퍼레이션 33개가 그렇게 오염됐고(main 에서는 0개였다) 잡는 테스트가 하나도 없었다.

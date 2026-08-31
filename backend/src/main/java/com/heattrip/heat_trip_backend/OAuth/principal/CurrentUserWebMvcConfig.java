@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.OAuth.principal;
 
+import com.heattrip.heat_trip_backend.user.CurrentUser;
+
 import java.util.List;
 
 import org.springframework.context.annotation.Configuration;

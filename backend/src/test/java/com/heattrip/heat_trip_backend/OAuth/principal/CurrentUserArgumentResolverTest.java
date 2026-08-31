@@ -1,5 +1,9 @@
 package com.heattrip.heat_trip_backend.OAuth.principal;
 
+import com.heattrip.heat_trip_backend.user.CurrentUser;
+
+import com.heattrip.heat_trip_backend.user.UnauthenticatedException;
+
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 

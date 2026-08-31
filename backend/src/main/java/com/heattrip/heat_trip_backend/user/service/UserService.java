@@ -8,8 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
-import com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException;
+import com.heattrip.heat_trip_backend.user.UnauthenticatedException;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
@@ -26,7 +25,7 @@ public class UserService {
     
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder; // 이건 뭐지?
-    private final JWTProvider jwtProvider;
+    private final AccessTokenIssuer accessTokenIssuer;
 
     /**
      * refresh 토큰을 만지는 유일한 통로. 이 서비스는 리포지토리를 직접 보지 않는다. (이슈 #9)
@@ -135,9 +134,9 @@ public class UserService {
         // 같은 토큰 형식이 두 가지 규약을 갖고 있었다. (이슈 #5)
         // 권한은 DB 의 role 컬럼을 쓴다. 예전에는 여기서 "ROLE_USER" 를 하드코딩했다. (이슈 #7)
         return new AuthTokensResponse(
-                jwtProvider.createAccessToken(user.getId(), roleOf(user)),
+                accessTokenIssuer.createAccessToken(user.getId(), roleOf(user)),
                 refreshToken,
-                jwtProvider.getExpiresInSeconds(),
+                accessTokenIssuer.getExpiresInSeconds(),
                 false,
                 UserResponse.from(user));
     }
@@ -206,7 +205,7 @@ public class UserService {
     // (완료 조건 5 는 그 헬퍼 이름이 backend/src/main 에서 grep 0건이기를 요구한다 —
     //  주석에도 쓰지 않는 이유가 그것이다. AuthSubjectContractSpecTest 가 주석까지 포함해 확인한다.)
     //
-    // 남겨 두면 되돌리는 사람이 jwtProvider.getUserIdFromToken + findByEmail 로 옛 모양을
+    // 남겨 두면 되돌리는 사람이 accessTokenIssuer.getUserIdFromToken + findByEmail 로 옛 모양을
     // 이어 붙일 수 있다 — 소비처 8곳이 실제로 그 모양이었다. 지우면 어디를 되돌려도
     // 컴파일이 죽는다. 인증 주체 해석은 CurrentUserArgumentResolver 한 곳뿐이다.
     //

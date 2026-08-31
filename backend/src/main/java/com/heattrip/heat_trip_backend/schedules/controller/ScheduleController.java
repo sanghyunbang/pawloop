@@ -1,6 +1,6 @@
 package com.heattrip.heat_trip_backend.schedules.controller;
 
-import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
+import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.schedules.entity.Schedule;
 import com.heattrip.heat_trip_backend.schedules.DTO.ScheduleResponseDto;
 import com.heattrip.heat_trip_backend.schedules.Service.ScheduleService;

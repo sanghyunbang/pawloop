@@ -135,7 +135,7 @@ public class GlobalExceptionHandler {
      * <p>메시지를 본문에 싣지 않는 이유는 위 {@code handleBadRequest} 를 보면 된다 —
      * {@code ex.getMessage()} 가 그대로 응답이 된다. 인증 실패 경로에서 그건 유출이다. (이슈 #6)
      */
-    @ExceptionHandler(com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException.class)
+    @ExceptionHandler(com.heattrip.heat_trip_backend.user.UnauthenticatedException.class)
     public ResponseEntity<Void> handleUnauthenticated() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }

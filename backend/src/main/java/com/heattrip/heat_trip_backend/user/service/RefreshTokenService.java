@@ -1,7 +1,6 @@
 package com.heattrip.heat_trip_backend.user.service;
 
-import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
-import com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException;
+import com.heattrip.heat_trip_backend.user.UnauthenticatedException;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.entity.RefreshToken;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -78,7 +77,7 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
-    private final JWTProvider jwtProvider;
+    private final AccessTokenIssuer accessTokenIssuer;
     private final Clock clock;
     private final long refreshExpirationMillis;
 
@@ -87,7 +86,7 @@ public class RefreshTokenService {
 
     public RefreshTokenService(RefreshTokenRepository refreshTokenRepository,
                                UserRepository userRepository,
-                               JWTProvider jwtProvider,
+                               AccessTokenIssuer accessTokenIssuer,
                                Clock clock,
                                @Value("${jwt.refresh-expiration}") long refreshExpirationMillis) {
         if (refreshExpirationMillis <= 0) {
@@ -95,7 +94,7 @@ public class RefreshTokenService {
         }
         this.refreshTokenRepository = refreshTokenRepository;
         this.userRepository = userRepository;
-        this.jwtProvider = jwtProvider;
+        this.accessTokenIssuer = accessTokenIssuer;
         this.clock = clock;
         this.refreshExpirationMillis = refreshExpirationMillis;
     }
@@ -172,9 +171,9 @@ public class RefreshTokenService {
                 .orElseThrow(UnauthenticatedException::new);
 
         return new AuthTokensResponse(
-                jwtProvider.createAccessToken(user.getId(), roleOf(user)),
+                accessTokenIssuer.createAccessToken(user.getId(), roleOf(user)),
                 issueFor(user.getId()),
-                jwtProvider.getExpiresInSeconds());
+                accessTokenIssuer.getExpiresInSeconds());
     }
 
     /**

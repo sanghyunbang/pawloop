@@ -1,6 +1,6 @@
 package com.heattrip.heat_trip_backend.care.controller;
 
-import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
+import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.care.dto.CareLogRequest;
 import com.heattrip.heat_trip_backend.care.dto.CareLogResponse;
 import com.heattrip.heat_trip_backend.care.dto.WalkNoteRequest;

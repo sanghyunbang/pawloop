@@ -67,8 +67,7 @@ class ModuleCycleTest {
      * <p>순서까지 포함해 문자열로 박는다. {@code A -> B -> A} 와 {@code B -> A -> B} 는 도구가
      * 하나만 내므로 도구가 낸 형태를 그대로 적는다.
      */
-    private static final Set<String> KNOWN_CYCLES = new LinkedHashSet<>(List.of(
-            "OAuth -> user -> OAuth"));
+    private static final Set<String> KNOWN_CYCLES = Set.of();
 
     private static final String CYCLE_MARK = "- Cycle detected:";
     private static final String SLICE = "Slice ";
@@ -149,7 +148,7 @@ class ModuleCycleTest {
     /**
      * 서로를 부르는 모듈 쌍. 2026-08-31 실측. {@link #KNOWN_CYCLES} 와 같은 사실의 다른 표현이다.
      */
-    private static final Set<String> KNOWN_MUTUAL_PAIRS = new LinkedHashSet<>(List.of("OAuth <-> user"));
+    private static final Set<String> KNOWN_MUTUAL_PAIRS = Set.of();
 
     /**
      * 의존 그래프에서 <b>서로를 부르는 쌍</b>을 직접 찾는다. 위반 메시지를 파싱하지 않는다.
@@ -209,12 +208,33 @@ class ModuleCycleTest {
                 .isEmpty();
     }
 
+    /**
+     * <b>간선을 실제로 뽑고 있는지</b> 확인한다.
+     *
+     * <p>원래 이 자리에는 "순환을 하나라도 뽑는가" 가 있었다. #107 에서 마지막 순환이 끊겨
+     * 순환이 0개가 되면서 그 단언이 의미를 잃었다 — 자기 javadoc 이 "정말 다 끊었다면 이
+     * 단언을 지워라" 라고 적어 두고 있었다.
+     *
+     * <p>대신 간선을 센다. 위의 두 단언은 전부 <b>빈 집합이어야 통과</b>하는 모양이라, 추출이
+     * 깨져서 아무것도 못 뽑아도 조용히 통과한다. 그걸 막는 것이 이 검사다.
+     */
     @Test
-    @DisplayName("순환 추출이 실제로 동작한다 — 하나도 못 뽑으면 위 두 단언은 빈 집합끼리 비교한다")
-    void theExtractionActuallyFindsCycles() {
-        assertThat(detectedCycles())
-                .as("순환을 하나도 못 뽑았다면 파싱이 깨진 것이지 순환이 없어진 것이 아닐 수 있다. "
-                        + "정말 다 끊었다면 이 단언과 KNOWN_CYCLES 를 함께 지워라")
-                .isNotEmpty();
+    @DisplayName("모듈 간 간선을 실제로 뽑고 있다 — 못 뽑으면 위 단언들이 빈 집합끼리 비교한다")
+    void theEdgeScanActuallySeesDependencies() {
+        ApplicationModules modules = ApplicationModules.of(HeatTripBackendApplication.class);
+
+        Set<String> edges = new LinkedHashSet<>();
+        for (ApplicationModule module : modules) {
+            String from = module.getIdentifier().toString();
+            module.getDirectDependencies(modules).uniqueModules()
+                    .forEach(target -> edges.add(from + " -> " + target.getIdentifier()));
+        }
+
+        assertThat(edges)
+                .as("""
+                        모듈 간 간선을 하나도 못 뽑았다. 순환이 없어진 것이 아니라 추출이 깨진 것일 수
+                        있다. 2026-08-31 실측으로 이 저장소의 모듈 간 간선은 서른 개 남짓이다.
+                        """)
+                .hasSizeGreaterThan(10);
     }
 }

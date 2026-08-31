@@ -90,10 +90,10 @@ class ModularityBaselineTest {
      * 되돌아간다. {@code -3 + 3 = 0}. <b>총계만 보면 아무 일도 안 일어난 것처럼 보이지만
      * 실제로는 바뀌었다</b> — 이 수 하나만 믿지 말고 위반 목록을 봐야 하는 이유다.
      */
-    private static final int BASELINE_VIOLATIONS = 241;
+    private static final int BASELINE_VIOLATIONS = 231;
 
     /** 순환 경로 개수. 쌍이 아니라 <b>경로</b>다 — 같은 두 모듈이 여러 경로에 걸쳐 나타난다. */
-    private static final int BASELINE_CYCLES = 1;
+    private static final int BASELINE_CYCLES = 0;
 
     private static final char NL = (char) 10;
 
@@ -135,13 +135,12 @@ class ModularityBaselineTest {
                 .as("""
                         모듈 간 순환 경로 수가 기준선(%d)과 다르다. 실측 %d.
 
-                        2026-08-31 기준 다섯은 전부 인증 언저리다.
-                          OAuth -> config -> OAuth
-                          OAuth -> config -> security -> S3 -> OAuth
-                          OAuth -> config -> security -> S3 -> user -> OAuth
-                          OAuth -> user -> OAuth
-                          config -> security -> config
-                        끊는 작업은 #106 · #107 이다. 여기서 늘리지만 마라.
+                        2026-08-31 현재 순환은 **0개**다. #106 과 #107 이 다섯을 전부 끊었다.
+                        여기가 0 이 아니게 되는 순간은 누군가 새 순환을 만든 순간이다.
+
+                        순환은 type = OPEN 으로도 @NamedInterface 로도 안 꺼진다. 코드를 옮겨야만
+                        없어진다. 그러니 이 수는 되도록 0 으로 두고, 늘려야 할 이유가 생기면
+                        그 이유를 여기 적어라.
                         """.formatted(BASELINE_CYCLES, actual))
                 .isEqualTo(BASELINE_CYCLES);
     }

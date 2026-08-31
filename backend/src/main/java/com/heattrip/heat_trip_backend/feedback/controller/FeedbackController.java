@@ -1,7 +1,7 @@
 // src/main/java/com/heattrip/heat_trip_backend/feedback/controller/FeedbackController.java
 package com.heattrip.heat_trip_backend.feedback.controller;
 
-import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
+import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.feedback.dto.FeedbackRequest;
 import com.heattrip.heat_trip_backend.feedback.service.FeedbackService;
 import com.heattrip.heat_trip_backend.user.entity.User;

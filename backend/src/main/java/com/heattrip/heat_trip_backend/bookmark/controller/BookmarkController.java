@@ -4,7 +4,7 @@ package com.heattrip.heat_trip_backend.bookmark.controller;
 import com.heattrip.heat_trip_backend.bookmark.dto.BookmarkRequest;
 import com.heattrip.heat_trip_backend.bookmark.dto.BookmarkResponse;
 import com.heattrip.heat_trip_backend.bookmark.entity.Bookmark;
-import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
+import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.bookmark.service.BookmarkService;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import lombok.RequiredArgsConstructor;
