@@ -13,7 +13,7 @@ import java.util.Map;
  * - DB에는 JSON 문자열로 저장, 애플리케이션에서는 {@code Map<String, Double>}로 사용.
  *   예) {"평온":0.4,"설렘":0.3}
  *
- * <p>{@link com.heattrip.heat_trip_backend.tour.domain.StringListJsonConverter}의 패턴을 따른다.
+ * <p>{@link com.heattrip.heat_trip_backend.tour.support.StringListJsonConverter}의 패턴을 따른다.
  */
 @Converter(autoApply = false)
 public class EmotionWeightMapJsonConverter implements AttributeConverter<Map<String, Double>, String> {
