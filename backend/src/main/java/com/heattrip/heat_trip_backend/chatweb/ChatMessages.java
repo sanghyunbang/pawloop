@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
+import com.heattrip.heat_trip_backend.chat.ChatBlocks;
 import com.heattrip.heat_trip_backend.chat.ChatMessagePageView;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
@@ -40,6 +41,7 @@ public class ChatMessages {
 
     private final ChatRoomService chatRooms;
     private final ChatSenderNames senderNames;
+    private final ChatBlocks blocks;
 
     /**
      * {@code afterSeq} 다음 메시지들 — {@code room_seq} 오름차순, 이름은 <b>지금</b> 값이다.
@@ -70,6 +72,8 @@ public class ChatMessages {
         ChatMessagePageView page = chatRooms.messagePage(roomId, userId, afterSeq, beforeSeq, limit);
         Map<Long, String> names = senderNames.of(
                 page.items().stream().map(ChatMessageView::senderUserId).toList());
-        return ChatMessagePageResponse.of(page, names);
+        // 한 장에 한 번 묻는다. 메시지마다 "가렸나" 를 물으면 100건 조회에 쿼리가 101개다 —
+        // 바로 위 이름 해석이 이미 피해 둔 함정이다.
+        return ChatMessagePageResponse.of(page, names, blocks.blockedBy(userId));
     }
 }

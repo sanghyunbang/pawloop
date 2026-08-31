@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
+import com.heattrip.heat_trip_backend.chat.ChatBlocks;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.chat.ChatRoomSummaryView;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 방 목록을 <b>계약의 모양</b>으로 만든다 — 이슈 #79. {@link ChatMessages} 와 같은 자리다.
@@ -34,6 +36,7 @@ public class ChatRooms {
 
     private final ChatRoomService chatRooms;
     private final ChatSenderNames senderNames;
+    private final ChatBlocks blocks;
 
     /** 내가 살아 있는 멤버로 있는 방들 — 참여 순서대로. 남의 방은 애초에 들어오지 않는다. */
     public List<ChatRoomResponse> of(long userId) {
@@ -43,6 +46,8 @@ public class ChatRooms {
                 .filter(Objects::nonNull)
                 .map(ChatMessageView::senderUserId)
                 .toList());
-        return rooms.stream().map(room -> ChatRoomResponse.of(room, names)).toList();
+        // 미리보기도 가린다. 방 안에서 접어 놓고 목록에서 그대로 보여 주면 거기로 샌다.
+        Set<Long> blockedIds = blocks.blockedBy(userId);
+        return rooms.stream().map(room -> ChatRoomResponse.of(room, names, blockedIds)).toList();
     }
 }

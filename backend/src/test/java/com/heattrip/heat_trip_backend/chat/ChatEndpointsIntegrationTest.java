@@ -30,6 +30,7 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -387,6 +388,67 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(jsonPath("$.error.code").value("VALIDATION"));
 
         assertThat(roomInList(owner, room.id()).path("lastReadSeq").asLong()).isEqualTo(1);
+    }
+
+    // ─────────────────── 가리기 (이슈 #82) ───────────────────
+
+    @Test
+    @DisplayName("가리면 그 사람의 메시지에 hiddenByBlock 이 붙는다 — 목록에서 빠지지는 않는다")
+    void blockingFoldsWithoutRemoving() throws Exception {
+        Account reader = account("가리는 사람");
+        Account noisy = account("가려질 사람");
+        Room room = roomWith(reader, noisy);
+        send(noisy, room.id(), "접힐 말", "blk-1").andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/chat/blocks")
+                        .header("Authorization", "Bearer " + reader.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":" + noisy.id() + "}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .header("Authorization", "Bearer " + reader.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].hiddenByBlock").value(true))
+                .andExpect(jsonPath("$.items[0].body").value("접힐 말"));
+
+        mockMvc.perform(get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .header("Authorization", "Bearer " + noisy.token()))
+                .andExpect(jsonPath("$.items[0].hiddenByBlock")
+                        .value(false));
+    }
+
+    @Test
+    @DisplayName("가리기를 풀면 204 고, 가린 적 없어도 204 다")
+    void unblockingIsAlwaysNoContent() throws Exception {
+        Account reader = account("푸는 사람");
+        Account other = account("가린 적 없는 사람");
+
+        mockMvc.perform(delete("/api/chat/blocks/{userId}", other.id())
+                        .header("Authorization", "Bearer " + reader.token()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/chat/blocks")
+                        .header("Authorization", "Bearer " + reader.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":" + other.id() + "}"))
+                .andExpect(status().isCreated());
+        mockMvc.perform(delete("/api/chat/blocks/{userId}", other.id())
+                        .header("Authorization", "Bearer " + reader.token()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("userId 를 안 보내면 400 이다 — 빠뜨린 값이 0 으로 저장되면 안 된다")
+    void blockingWithoutAUserIdIsRejected() throws Exception {
+        Account reader = account("본문을 빠뜨린 사람");
+
+        mockMvc.perform(post("/api/chat/blocks")
+                        .header("Authorization", "Bearer " + reader.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     // ─────────────────── 신고 (이슈 #82) ───────────────────
