@@ -10,10 +10,13 @@ import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 import com.heattrip.heat_trip_backend.user.service.UserService;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,8 +34,19 @@ import org.springframework.transaction.annotation.Transactional;
  * 지운다. 그게 앱의 탈퇴 버튼이 실제로 부르는 경로({@code DELETE /auth/me})이고, 만약 나중에
  * 탈퇴가 소프트 삭제로 바뀌면 <b>이 테스트가 그때 빨개져야</b> 하기 때문이다. 행을 직접 지우면
  * 그 변화를 못 잡는다.
+ *
+ * <h2>애너테이션 조합이 남과 같아야 한다</h2>
+ * <p>스프링 테스트 컨텍스트는 <b>애너테이션 집합이 캐시 키</b>라, 조합이 하나만 달라도
+ * 컨텍스트가 한 번 더 뜬다(#21). 여기는 MockMvc 를 안 쓰지만 {@code @AutoConfigureMockMvc}
+ * 를 붙였다 — {@code AuthMeIntegrationTest} 등 넷이 이미 이 조합이라 그쪽 캐시에 얹힌다.
+ * 처음에는 {@code @SpringBootTest @Transactional} 둘만 붙였는데 <b>그 조합을 쓰는 테스트가
+ * 이것 하나뿐이라</b> 컨텍스트가 하나 더 떴다.
+ *
+ * <p>{@code @Transactional} 은 뺄 수 없다. 이 테스트는 커뮤니티 피드 <b>전체</b>를 읽어
+ * 이름을 보는데, 롤백이 없으면 다른 테스트가 남긴 카드가 섞인다.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @Transactional
 class SocialWithdrawnHandleIntegrationTest extends AbstractMySqlIntegrationTest {
 
@@ -109,16 +123,21 @@ class SocialWithdrawnHandleIntegrationTest extends AbstractMySqlIntegrationTest 
     @DisplayName("한 사람이 카드를 여럿 써도 이름이 그대로다")
     void manyCardsFromOnePersonStayIntact() {
         User author = signUp("여러장쓴사람");
+        Set<Long> mine = new HashSet<>();
         for (int i = 0; i < 30; i++) {
-            shareCard(author);
+            mine.add(shareCard(author).getId());
         }
 
         // 여기서 재는 것은 시간이 아니라 구조다. 쿼리 수를 세는 장치가 이 저장소에 없어서
         // "id 마다 묻지 않는다" 는 WithdrawnUsersTest 가 목으로 직접 증명한다.
         List<CardDto> feed = socialService.feed(author.getId(), 50);
 
-        assertThat(feed).hasSizeGreaterThanOrEqualTo(30);
-        assertThat(feed).extracting(CardDto::handle)
+        // 피드는 저장소 전체에서 최신순이라 남이 남긴 카드가 섞일 수 있다.
+        // 여기서 보는 것은 "내가 만든 30장" 이므로 그것만 골라 본다.
+        List<CardDto> ours = feed.stream().filter(c -> mine.contains(c.id())).toList();
+
+        assertThat(ours).hasSize(30);
+        assertThat(ours).extracting(CardDto::handle)
                 .as("살아 있는 사람이 쓴 카드는 몇 장이든 이름이 그대로다")
                 .containsOnly("여러장쓴사람");
     }

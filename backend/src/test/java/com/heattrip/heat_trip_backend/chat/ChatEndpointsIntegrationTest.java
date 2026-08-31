@@ -389,6 +389,69 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(roomInList(owner, room.id()).path("lastReadSeq").asLong()).isEqualTo(1);
     }
 
+    // ─────────────────── 신고 (이슈 #82) ───────────────────
+
+    @Test
+    @DisplayName("신고가 201 이고 응답에는 접수 번호와 시각뿐이다 — 피신고자 id 도 안 준다")
+    void reportingReturnsNothingButAReceipt() throws Exception {
+        Account reporter = account("신고하는 사람");
+        Account troll = account("신고당하는 사람");
+        Room room = roomWith(reporter, troll);
+        send(troll, room.id(), "여기서 하면 안 되는 말", "bad-1").andExpect(status().isCreated());
+
+        String body = mockMvc.perform(post("/api/chat/rooms/{roomId}/reports", room.id())
+                        .header("Authorization", "Bearer " + reporter.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roomSeqs\":[1],\"reason\":\"abuse\",\"memo\":\"욕설입니다\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.reportId").isNumber())
+                .andExpect(jsonPath("$.createdAt").isString())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body)
+                .as("""
+                        신고에 성공한 쪽은 이미 누구를 왜 신고했는지 안다. 서버가 그것을 되돌려
+                        줄 이유가 없고, 되돌려 주면 응답이 그 자체로 유출 경로가 된다.
+                        """)
+                .doesNotContain(String.valueOf(troll.id()))
+                .doesNotContain("reporter")
+                .doesNotContain("body")
+                .doesNotContain("senderName");
+    }
+
+    @Test
+    @DisplayName("사유가 계약의 목록에 없으면 400 이고 코드가 갈린다")
+    void anUnknownReasonIsFourHundred() throws Exception {
+        Account reporter = account("사유를 틀린 사람");
+        Account troll = account("신고당할 사람");
+        Room room = roomWith(reporter, troll);
+        send(troll, room.id(), "말", "bad-2").andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/chat/rooms/{roomId}/reports", room.id())
+                        .header("Authorization", "Bearer " + reporter.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roomSeqs\":[1],\"reason\":\"harrassment\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("REPORT_REASON_UNKNOWN"))
+                .andExpect(jsonPath("$.error.traceId").exists());
+    }
+
+    @Test
+    @DisplayName("남의 방은 신고도 못 한다 — 방 존재 여부가 여기로 새면 안 된다")
+    void reportingSomeoneElsesRoomIsForbidden() throws Exception {
+        Account owner = account("남의 방장");
+        Account mate = account("남의 멤버");
+        Account outsider = account("바깥사람");
+        Room theirs = roomWith(owner, mate);
+        send(mate, theirs.id(), "우리끼리 하는 말", "bad-3").andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/chat/rooms/{roomId}/reports", theirs.id())
+                        .header("Authorization", "Bearer " + outsider.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roomSeqs\":[1],\"reason\":\"abuse\"}"))
+                .andExpect(status().isForbidden());
+    }
+
     // ─────────────────── 완료 조건 5·6·9 — 인가 ───────────────────
 
     @Test

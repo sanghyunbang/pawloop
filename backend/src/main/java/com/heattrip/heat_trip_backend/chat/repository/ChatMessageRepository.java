@@ -92,6 +92,20 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
      * 멤버가 같은 키를 썼을 때 <b>남의 메시지</b>를 "당신이 아까 보낸 그것" 이라며
      * 돌려주게 된다 — #79 이전 판이 실제로 그랬다. 제약과 이 조회의 범위는 같아야 한다.
      */
+    /**
+     * 신고가 고른 메시지들을 한 번에 읽는다 — 이슈 #82.
+     *
+     * <p><b>{@code room_seq} 로 찾는 이유</b>: 앱이 들고 있는 좌표가 그것이다. {@code id} 는
+     * 방을 넘나드는 전역 번호라 "이 방의 3번" 을 표현하지 못하고, 커서가 {@code room_seq} 인
+     * 이 도메인에서 신고만 다른 좌표를 쓰면 앱이 두 가지를 들고 다녀야 한다
+     * ({@code ChatMessage} javadoc).
+     *
+     * <p>{@code UNIQUE (room_id, room_seq)} 가 선두 컬럼 인덱스라 이 조회가 그것을 쓴다.
+     *
+     * <p>못 찾은 seq 는 그냥 빠져서 온다 — 개수가 맞는지는 부르는 쪽이 본다.
+     */
+    List<ChatMessage> findByRoomIdAndRoomSeqIn(Long roomId, Collection<Long> roomSeqs);
+
     Optional<ChatMessage> findByRoomIdAndSenderUserIdAndClientMsgId(
             Long roomId, Long senderUserId, String clientMsgId);
 }

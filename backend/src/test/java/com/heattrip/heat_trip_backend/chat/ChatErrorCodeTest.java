@@ -26,16 +26,27 @@ class ChatErrorCodeTest {
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
     @Test
-    @DisplayName("네 코드의 HTTP 상태가 계약대로다 — 409 둘 · 410 둘")
+    @DisplayName("코드마다 HTTP 상태가 계약대로다 — 한도 넷(409 둘 · 410 둘) · 신고 여섯(전부 400)")
     void everyCodeCarriesTheAgreedStatus() {
         assertThat(ChatErrorCode.ROOM_MEMBER_LIMIT.status()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ChatErrorCode.INVITE_EXPIRED.status()).isEqualTo(HttpStatus.GONE);
         assertThat(ChatErrorCode.INVITE_REVOKED.status()).isEqualTo(HttpStatus.GONE);
         assertThat(ChatErrorCode.INVITE_USES_EXHAUSTED.status()).isEqualTo(HttpStatus.CONFLICT);
 
+        assertThat(ChatErrorCode.REPORT_EMPTY.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(ChatErrorCode.REPORT_MESSAGE_LIMIT.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(ChatErrorCode.REPORT_MIXED_SENDERS.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(ChatErrorCode.REPORT_SELF.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(ChatErrorCode.REPORT_MESSAGE_NOT_FOUND.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(ChatErrorCode.REPORT_REASON_UNKNOWN.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+
         assertThat(ChatErrorCode.values())
-                .as("넷이다. 늘리려면 앱의 분기도 함께 는다 — 조용히 추가하지 마라")
-                .hasSize(4);
+                .as("""
+                        열이다. 늘리려면 앱의 분기도 함께 는다 — 조용히 추가하지 마라.
+                        계약(openapi.yaml)의 code 어휘도 함께 늘어야 한다 — AuthContractSpecTest 가
+                        그 둘이 갈라지는 것을 잡는다.
+                        넷에서 열이 된 것은 #82 의 신고 여섯이다.""")
+                .hasSize(10);
     }
 
     @Test

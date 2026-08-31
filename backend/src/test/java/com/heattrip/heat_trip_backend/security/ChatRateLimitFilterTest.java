@@ -31,12 +31,17 @@ class ChatRateLimitFilterTest {
     }
 
     private static RateLimitProperties props(int poll, int send, int join) {
+        return props(poll, send, join, 10);
+    }
+
+    private static RateLimitProperties props(int poll, int send, int join, int report) {
         RateLimitProperties p = new RateLimitProperties();
         p.setEnabled(true);
         p.setWindowSeconds(3600);
         p.setChatPollMaxRequests(poll);
         p.setChatSendMaxRequests(send);
         p.setChatJoinMaxRequests(join);
+        p.setChatReportMaxRequests(report);
         return p;
     }
 
@@ -148,6 +153,35 @@ class ChatRateLimitFilterTest {
         assertThat(statusAfter(filter, post("/api/chat/invites/DEF456/join", "10.1.1.1")))
                 .as("코드가 달라도 같은 사람이면 같은 카운터다 — 추측을 막는 것이 목적이다")
                 .isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("신고에 한도가 있다 — 표에 없으면 한도가 0 이 아니라 무한이다")
+    void reportingIsMetered() throws Exception {
+        ChatRateLimitFilter filter = filter(props(60, 60, 10, 1));
+        authenticateAs(1);
+
+        assertThat(statusAfter(filter, post("/api/chat/rooms/5/reports", "10.1.1.1"))).isEqualTo(200);
+        assertThat(statusAfter(filter, post("/api/chat/rooms/5/reports", "10.1.1.1")))
+                .as("""
+                        신고는 쓰기다. 한 사람이 같은 방을 계속 신고하면 운영자가 봐야 할 표가
+                        그만큼 늘고, 그건 진짜 신고를 묻는 방식의 공격이 된다.
+                        """)
+                .isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("신고와 전송은 다른 버킷이다 — 신고를 쏟아부어 말을 막을 수 없다")
+    void reportingAndSendingAreSeparateBuckets() throws Exception {
+        ChatRateLimitFilter filter = filter(props(60, 60, 10, 1));
+        authenticateAs(1);
+
+        assertThat(statusAfter(filter, post("/api/chat/rooms/5/reports", "10.1.1.1"))).isEqualTo(200);
+        assertThat(statusAfter(filter, post("/api/chat/rooms/5/reports", "10.1.1.1"))).isEqualTo(429);
+
+        assertThat(statusAfter(filter, post("/api/chat/rooms/5/messages", "10.1.1.1")))
+                .as("신고 버킷이 찼다고 전송이 막히면 안 된다")
+                .isEqualTo(200);
     }
 
     @Test

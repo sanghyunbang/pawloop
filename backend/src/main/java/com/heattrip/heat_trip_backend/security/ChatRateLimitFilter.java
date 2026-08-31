@@ -142,6 +142,9 @@ public class ChatRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.matches("^/api/chat/rooms/\\d+/messages$")) {
             return new Rule("chat-send", rateLimitProperties.getChatSendMaxRequests());
         }
+        if ("POST".equals(method) && path.matches("^/api/chat/rooms/[0-9]+/reports$")) {
+            return new Rule("chat-report", rateLimitProperties.getChatReportMaxRequests());
+        }
         if ("POST".equals(method) && path.matches("^/api/chat/invites/[^/]+/join$")) {
             return new Rule("chat-join", rateLimitProperties.getChatJoinMaxRequests());
         }

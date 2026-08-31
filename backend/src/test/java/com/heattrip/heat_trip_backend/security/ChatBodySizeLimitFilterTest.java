@@ -165,6 +165,29 @@ class ChatBodySizeLimitFilterTest {
     }
 
     @Test
+    @DisplayName("신고도 같은 상한을 받는다 — 사유를 자르는 것은 파싱이 끝난 뒤다")
+    void reportingIsLimitedToo() throws Exception {
+        MockHttpServletRequest request =
+                new MockHttpServletRequest("POST", "/api/chat/rooms/5/reports");
+        request.setRequestURI("/api/chat/rooms/5/reports");
+        request.setContentType("application/json");
+        request.setContent(bytes(20 * 1024 * 1024));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        RecordingChain chain = new RecordingChain();
+
+        filter().doFilter(request, response, chain);
+
+        assertThat(chain.called)
+                .as("""
+                        ChatReportService 가 사유를 500자에서 자르지만 그건 파싱이 끝난 뒤다.
+                        20MB 사유를 보내면 그것을 전부 힙에 올린 뒤에 자른다 —
+                        validBody 가 그랬던 것과 같은 구멍이다.
+                        """)
+                .isFalse();
+        assertThat(response.getStatus()).isEqualTo(400);
+    }
+
+    @Test
     @DisplayName("미디어 업로드는 건드리지 않는다 — 원래 큰 파일을 받는 경로다")
     void mediaUploadIsUntouched() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/media/presigned");
