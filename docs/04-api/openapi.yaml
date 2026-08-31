@@ -1346,7 +1346,14 @@ paths:
       tags: [Chat]
       summary: 초대코드로 입장
       description: |
-        재입장 금지 대상(`rejoinBlocked`)이면 **403** 입니다. 한도·상태 위반은 봉투를 새로
+        재입장 금지 대상(`rejoinBlocked`)이면 **403** 입니다 — 강퇴가 그것을 찍습니다.
+
+        **만 14세 미만**(`users.age_group = 'UNDER14'`)은 **가족 방에만** 참여할 수 있습니다.
+        다른 종류의 방이면 403 입니다. 신청 창구는 없습니다. 나이대가 비어 있는 계정
+        (소셜 로그인으로 들어온 예전 계정)은 **막지 않습니다** — 여기서 미성년으로 다루면
+        그 계정들이 아무 예고 없이 방에 못 들어가게 됩니다.
+
+        한도·상태 위반은 봉투를 새로
         만들지 않고 공통 `Error` 의 `error.code` 로 갈립니다 — `ROOM_MEMBER_LIMIT`(409) ·
         `INVITE_EXPIRED`(410) · `INVITE_REVOKED`(410) · `INVITE_USES_EXHAUSTED`(409).
 
@@ -1399,16 +1406,55 @@ paths:
         schema: { type: integer, format: int64 }
     delete:
       tags: [Chat]
-      summary: 강퇴 (M2.7)
+      summary: 강퇴
       description: |
-        방장만 합니다. 멤버 행을 **지우지 않고** `removedAt` + `rejoinBlocked` 를 찍습니다 —
-        미읽음이 그 행의 `lastReadSeq` 뺄셈이라 지우면 되돌릴 수 없습니다. 강퇴당한 사람의
-        **메시지는 남깁니다**(지우면 신고 근거가 사라집니다). 강퇴 = 재입장 금지이고,
-        방장이 나중에 풀 수 있습니다.
+        방장만 합니다. 멤버 행을 **지우지 않고** `removedAt` · `removedBy` · `rejoinBlocked` 를
+        찍습니다 — 미읽음이 그 행의 `lastReadSeq` 뺄셈이라 지우면 되돌릴 수 없고, 무엇보다
+        **재입장 금지를 걸 자리가 사라집니다.**
+
+        강퇴당한 사람의 **메시지는 남깁니다**(지우면 신고 근거가 사라집니다).
+
+        강퇴 = **재입장 금지**입니다. 유효한 초대코드로도 못 들어옵니다(403). 방장이
+        `DELETE /api/chat/rooms/{roomId}/bans/{userId}` 로 풉니다.
+
+        **이미 나가 있어도 204** 입니다. 있고 없고를 상태 코드로 나누면 앱이 두 갈래를
+        다뤄야 하는데 방장에게는 결과가 같습니다.
+
+        **방장은 자기를 못 내보냅니다**(400). 허용하면 방장이 없는 방이 생기고, 그 방은
+        초대코드도 못 내고 강퇴도 못 합니다. 떠나는 것은 `DELETE .../members/me` 입니다.
       responses:
-        '204': { description: 강퇴됨 }
+        '204': { description: 강퇴됨. 이미 나가 있었어도 같습니다 }
+        '400':
+          description: 방장이 자기를 지목했습니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/rooms/{roomId}/bans/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+      - name: userId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      tags: [Chat]
+      summary: 재입장 금지 해제
+      description: |
+        방장만 합니다. 강퇴 확인 문구가 "방 설정에서 다시 풀 수 있습니다" 라고 **약속하고**,
+        이 경로가 그 약속을 지키는 자리입니다.
+
+        **푸는 것은 금지뿐이고 멤버십은 아닙니다.** 풀어도 방에 자동으로 돌아오지 않고,
+        그 사람이 초대코드로 다시 들어와야 합니다 — 자동으로 넣으면 방장이 "금지만 풀려고"
+        누른 버튼이 사람을 방에 다시 넣는 버튼이 됩니다.
+
+        금지 상태가 아니었어도 **204** 입니다.
+      responses:
+        '204': { description: 풀렸음 }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /api/chat/messages/{messageId}:
