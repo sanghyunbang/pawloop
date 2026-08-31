@@ -117,6 +117,21 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         // 버킷을 새로 만든 것은 한도를 따로 움직일 수 있게 하려는 것이다 — 이 둘은 피드백
         // 전송과 성격이 달라서(행을 만들고 열쇠를 만든다) 같은 숫자에 묶어 두면 한쪽을
         // 조일 때 다른 쪽이 함께 조여진다.
+        //
+        // **채팅 네 경로(#79)는 여기에 없다 — 즉 무제한이다.**
+        //   GET  /api/chat/rooms
+        //   GET  /api/chat/rooms/{roomId}/messages
+        //   POST /api/chat/rooms/{roomId}/messages
+        //   POST /api/chat/rooms/{roomId}/read
+        // 📌 #86 원칙 4 는 새 엔드포인트를 이 표에 등재하라고 한다. 넷을 지금 넣지 않은 것은
+        // 이슈 **#80** 이 채팅 버킷을 소유하고, 숫자가 앱의 폴링 주기와 함께 정해져야 근거가
+        // 생기기 때문이다. 전송과 읽음은 성격이 초대 발급에 가깝고(행을 만든다) 조회 둘은
+        // 폴링이라 초당 호출 수 자체가 다르므로, group-write 에 묶는 것은 답이 아니다.
+        //
+        // **표에 없는 경로는 한도가 0 이 아니라 무한이다** — resolveRule 이 null 을 돌려주면
+        // doFilterInternal 이 카운터를 건드리지 않고 그대로 통과시킨다(:46). 미룬 것이지
+        // 안전한 것이 아니다. 지금 이 넷은 한 계정으로 몇 번을 불러도 429 가 나오지 않고,
+        // 전송에 걸려 있는 것은 본문 길이 검사와 방 행 잠금(방 단위 직렬화)뿐이다.
         if ("POST".equals(method) && "/api/groups".equals(path)) {
             return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
         }
