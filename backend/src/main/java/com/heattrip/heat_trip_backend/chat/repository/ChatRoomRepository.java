@@ -78,7 +78,7 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
      *
      * <h2>왜 읽고 더해서 쓰지 않는가 — 실측</h2>
      * <p>가장 자연스러운 판은 방을 읽어 {@code lastSeq + 1} 을 쓰는 것이다. 그렇게 짜고
-     * 스레드 20개를 같은 방에 붙였더니 <b>대부분이 죽었다</b> —
+     * 스레드 20개를 같은 방에 붙였더니 <b>20개 중 17개가 죽었다</b>(성공 3건) —
      * {@code Duplicate entry '1-1' for key 'chat_message.uq_chat_room_seq'} 와
      * {@code '1-2'}. 두 트랜잭션이 같은 값을 읽고 같은 번호를 쓰기 때문이고,
      * {@code READ_COMMITTED} 에서도 <b>평범한 SELECT 는 잠그지 않는다.</b>

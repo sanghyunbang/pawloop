@@ -31,8 +31,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 두 트랜잭션이 같은 값을 읽어 같은 번호를 쓴다. 둘 다 "코드를 보면 맞아 보인다".
  *
  * <p>실제로 그렇게 짜고 이 테스트를 돌려 봤다 — 순진한 판(읽고 더해서 쓰기)에서
- * {@code Duplicate entry '…' for key 'chat_message.uq_chat_room_seq'} 가 났고 최종 메시지는
- * 20건이 아니었다. 지금 판은 {@code LAST_INSERT_ID(last_seq + 1)} 한 문장이다.
+ * <b>20개 중 17개가</b> {@code Duplicate entry '1-1' for key 'chat_message.uq_chat_room_seq'}
+ * 로 죽었다(성공 3건). 지금 판은 {@code LAST_INSERT_ID(last_seq + 1)} 한 문장이다.
+ *
+ * <p><b>다만 이 테스트가 지키는 것은 UNIQUE 제약이 아니다 — 발급이다.</b> 되돌려서 확인했다:
+ * {@code UNIQUE (room_id, room_seq)} 를 지우고 이 테스트를 돌리면 <b>여전히 초록불</b>이고
+ * ({@code ChatMessageRepositoryTest.aRoomSeqCannotBeUsedTwiceInTheSameRoom} 만 빨간불이다),
+ * 발급을 순진한 판으로 되돌리면 UNIQUE 가 그대로여도 빨간불이다. 발급이 원자적인 한
+ * 제약은 <b>메커니즘이 아니라 마지막 방어선</b>이라 그렇다(📌 #86 원칙 5).
  *
  * <h2>애너테이션이 {@code @SpringBootTest} 한 줄뿐인 것은 의도다</h2>
  * <p>{@code SchemaDdlDriftTest} 와 <b>글자 그대로</b> 같아야 스프링 컨텍스트 캐시를

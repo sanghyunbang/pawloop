@@ -31,6 +31,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code ChatMessageIntegrationTest} 다. 이 파일이 보는 것은 그 발급이 틀렸을 때
  * <b>마지막으로 막아 서는 것</b>이 무엇인가다(📌 #86 원칙 5).
  *
+ * <p>그래서 <b>{@code UNIQUE (room_id, room_seq)} 를 지우면 빨간불이 되는 것은 이 파일이지
+ * 20스레드 테스트가 아니다</b> — 되돌려서 확인했다. 이슈 #78 의 완료 조건 5 는 그 순서를
+ * 반대로 적었는데, 발급이 원자적인 한 20스레드 테스트는 제약 없이도 1..20 을 낸다.
+ * 제약이 없어도 되는 것이 아니라 <b>제약이 지키는 것이 다른 회귀</b>라는 뜻이다:
+ * 발급을 손대는 다음 사람이 틀렸을 때 조용히 메시지를 잃는 대신 여기서 터진다.
+ *
  * <p>{@code replace = NONE} 인 이유는 {@code ChatRoomRepositoryTest} 와 같다 — 없으면
  * {@code @DataJpaTest} 가 데이터소스를 임베디드 DB 로 갈아치운다(#49).
  */
