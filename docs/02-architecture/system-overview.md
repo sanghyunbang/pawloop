@@ -11,7 +11,7 @@
 | 계층 | 구성요소 | 스택 | 현재 상태 |
 | --- | --- | --- | --- |
 | 클라이언트 | Pawloop 앱 (`lib/v2/`) | Flutter 3.44.4 / Dart 3.12.2, go_router, ValueNotifier | 됨 (일부 더미) |
-| 지도 SDK | 네이버 Dynamic Map | `flutter_naver_map ^1.4.x` | 됨 (Client ID `--dart-define` 주입) |
+| 지도 SDK | 네이버 Dynamic Map | `flutter_naver_map ^1.3.1` | 됨 (Client ID `--dart-define` 주입) |
 | 백엔드 | Pawloop API | Spring Boot 3.5.4 / Java 21 (+Kotlin), Spring Security·OAuth2·JWT | 레거시(heattrip 패키지) 재사용 |
 | DB | 관계형 | MySQL 8 (공간형 POINT/LINESTRING, SPATIAL INDEX) | 스키마 재정의 중 |
 | 저장소 | 이미지 | AWS S3 | 됨 (레거시) |

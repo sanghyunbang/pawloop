@@ -450,7 +450,7 @@ CREATE TABLE chat_room (
 | `last_seq` | `BIGINT` | NOT NULL, 기본 0 | 발급기. `UPDATE ... SET last_seq = LAST_INSERT_ID(last_seq + 1)` 로 올린다 |
 | `created_at` | `DATETIME` | NOT NULL, 기본 now | 생성 시각 |
 
-> **각주 — 왜 `title` 이 아니라 `name` 이고, 왜 `tag` 가 붙었나.** 이 절의 예전 초안은 이름 컬럼을 `title` 로 적고 `tag` 를 빼먹었다. 이미 커밋돼 있는 앱의 `ChatRoom`(`app/lib/v2/domain/pet.dart:437`)이 `name:` 과 `tag:` 를 요구하고, `chat_list_screen.dart` 는 두 방을 같은 화면으로 넘기면서 **종류를 `tag` 로만 가른다.** [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)의 출발점이 "화면이 먼저 커밋돼 있고 그 화면이 데이터 모양을 정해 놨다" 인 이상, 이름이 갈리면 API 계층이 매번 두 이름을 옮겨 적어야 한다. 그래서 화면 쪽으로 맞췄다.
+> **각주 — 왜 `title` 이 아니라 `name` 이고, 왜 `tag` 가 붙었나.** 이 절의 예전 초안은 이름 컬럼을 `title` 로 적고 `tag` 를 빼먹었다. 이미 커밋돼 있는 당시 앱에 있던 `ChatRoom`(`pet.dart` — **#81 에서 제거됐다**)이 `name:` 과 `tag:` 를 요구하고, `chat_list_screen.dart` 는 두 방을 같은 화면으로 넘기면서 **종류를 `tag` 로만 가른다.** [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)의 출발점이 "화면이 먼저 커밋돼 있고 그 화면이 데이터 모양을 정해 놨다" 인 이상, 이름이 갈리면 API 계층이 매번 두 이름을 옮겨 적어야 한다. 그래서 화면 쪽으로 맞췄다.
 
 > 발급과 메시지 INSERT 는 **하나의 트랜잭션**이다. 발급만 별도 트랜잭션으로 떼면 `id` 커서와 똑같은 구멍(§15 참조)이 생긴다. 락 순서는 **`chat_room` → `chat_room_invite` → `chat_room_member` → `chat_message`** 하나이고, 이 넷 중 둘 이상을 잡는 경로는 전부 이 순서를 따른다 — 전송은 첫째와 넷째, 참여는 앞의 셋을 잡으므로 둘 다 같은 방향의 부분열이라 순환이 없다(`ChatRoomRepository#lockForMemberChange` javadoc 이 정본이다). **락을 쥔 트랜잭션 안에서 외부 호출(푸시·S3)을 하지 않는다** — `innodb_lock_wait_timeout` 이 기본 50초라 느린 호출 하나가 그 방의 전송을 전부 막는다.
 

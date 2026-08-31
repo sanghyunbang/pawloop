@@ -128,7 +128,7 @@ web/Controller → service(도메인 유스케이스) → port(인터페이스) 
 - `controller/CurationController` `@RequestMapping("api/curation")`: `/rank`, `/categories`, `/recommend`, `/places/emotion-map`, `/places/search`.
 - Java 스코어링(`ScoringService`, `EmotionMapService`, `PlaceSearchService`) + Kotlin LLM 어댑터(`OpenAiRecommendationAdapter`, `RecommendationPort`).
 - PAD 감정 모델(`mood/MoodPadPreset`, `dto/PadDTO`), 시드/UGC 감정 집계(`seed/`, `ugc/UgcEmotionAggregationService`).
-- **피벗 방침**: 감정 요소 전면 제거 → Pawloop MVP에서 미사용. `/api/curation/**`는 현재 `authenticated()` 필수.
+- **피벗 방침**: 감정 요소 전면 제거 → Pawloop MVP에서 미사용. `/api/curation/**` 는 `authenticated()` 필수이고, **`/api/curation/admin/**` 만 `hasRole("ADMIN")`** 이다(더 앞에 등록된다).
 
 ### 4.6 `bookmark` · `feedback` · `schedules` · `S3`
 
@@ -153,17 +153,29 @@ web/Controller → service(도메인 유스케이스) → port(인터페이스) 
 
 ### 5.2 접근 정책 (실제 매처)
 
+> 이 표는 **요약**이다. 인가 경계의 정본은 계약([openapi.yaml](../04-api/openapi.yaml))의
+> Auth 태그 설명이고(`SecurityConfig.java:69` 가 그렇게 선언한다), 서술형 정본은
+> [auth.md](./backend/auth.md) 다. 셋이 갈라지면 **계약을 따른다.**
+
 | 매처 | 정책 |
 | --- | --- |
-| `/`, `/oauth2/**`, `/login/**`, `/auth/**`, `/error` | `permitAll` |
+| `/`, `/oauth2/**`, `/login/**`, `/error` | `permitAll` |
+| `/auth/signup`, `/auth/login`, `/auth/oauth/**`, `/auth/token/refresh` | `permitAll` — **이 네 경로뿐이다.** `/auth/**` 통짜 permitAll 은 #23-D 에서 없앴다 |
+| 그 밖의 `/auth/*` (`GET`·`PUT`·`DELETE /auth/me`, `POST /auth/logout`) | `authenticated` — `anyRequest()` 로 떨어진다 |
 | `/actuator/health/**`, `/actuator/info`, `/actuator/prometheus` | `permitAll` |
 | `/api/explore/**` | `permitAll`(공개 조회) |
-| `/v3/api-docs/**`, `/swagger-ui/**` | `docsPublic` 플래그가 true일 때만 공개 |
-| `/api/curation/**`, `/public/**` | `authenticated` |
+| `/api/places/nearby`, `/api/places/*` | `permitAll` — 관광공사 프록시(#40). 지도는 로그인 전에도 보여야 한다. **`/api/places/**` 와일드카드는 일부러 피했다** — 그렇게 열면 `ApiRateLimitFilter` 의 경로 분기가 못 덮는 자리(`/api/places/a/b`)가 인증 없음 + 한도 무한이 된다 |
+| `/v3/api-docs/**`, `/swagger-ui.html`, `/swagger-ui/**` | `docsPublic` 플래그가 true일 때만 공개 (셋 다) |
+| `/api/curation/admin/**` | `hasRole("ADMIN")` — **`/api/curation/**` 보다 먼저** 등록된다. 먼저 일치하는 규칙이 이기므로 순서를 뒤집으면 이 줄이 죽는다 |
+| `/api/curation/**`, `/public/**` | `authenticated` (위 admin 경로 제외) |
 | 그 외 (`anyRequest`) | `authenticated` |
 
+미인증 요청에는 302 로그인 리다이렉트가 아니라 **401** 이 나간다 — `oauth2Login()` 의 기본
+진입점을 `HttpStatusEntryPoint(UNAUTHORIZED)` 로 덮어썼다. 앱의 `AuthedClient` 는 401 에서만
+refresh 를 타므로 이 차이가 클라이언트 분기를 바꾼다.
+
 - CORS 허용 오리진은 `PublicSecurityProperties.allowedOrigins`(쉼표 구분) 주입. 메서드 `GET/POST/PUT/DELETE/OPTIONS`, 자격증명 허용.
-- **Pawloop 방침**: MVP는 로그인 미도입(더미)이므로, 반려 도메인 API(`/api/walk`, `/api/dog`, 커뮤니티 조회 등)는 초기 `permitAll` 화이트리스트로 노출하고 이후 소셜 로그인 재활성화 시 `authenticated`로 좁힌다.
+- **Pawloop 방침**: 소셜 로그인이 들어온 뒤(#11 · #12 · #14) 반려 도메인 API 는 `anyRequest().authenticated()` 로 떨어진다. 공개로 남는 것은 위 표의 목록뿐이고, 새로 열 때는 **경로를 하나씩** 등재한다 — 와일드카드로 열면 rate limit 표가 못 덮는 자리가 함께 열린다.
 
 ---
 
