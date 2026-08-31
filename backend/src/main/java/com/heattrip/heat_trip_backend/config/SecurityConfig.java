@@ -87,7 +87,15 @@ public class SecurityConfig {
                 "/actuator/health/**",
                 "/actuator/info",
                 "/actuator/prometheus",
-                "/api/explore/**"
+                "/api/explore/**",
+                // 관광공사 프록시(#40). 계약이 security: [] 로 선언했다 — 지도는 로그인
+                // 전에도 보여야 한다.
+                //
+                // "/api/places/**" 로 안 쓴 것은 의도다. 와일드카드로 열면 rate limit 의
+                // 경로 분기가 못 덮는 자리(/api/places/a/b 같은)가 **인증 없음 + 한도 무한**
+                // 이 된다. 여는 것은 실제로 있는 두 경로뿐이다.
+                "/api/places/nearby",
+                "/api/places/*"
         ));
 
         if (publicSecurityProperties.isDocsPublic()) {

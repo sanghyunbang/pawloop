@@ -169,4 +169,26 @@ public class RateLimitProperties {
      * 때문이다. 신고를 쏟아부어 방 참여를 막을 수 있으면 안 된다.
      */
     private int chatReportMaxRequests = 10;
+
+    /**
+     * 주변 장소 버킷 — {@code GET /api/places/nearby}. (이슈 #40)
+     *
+     * <p>지도 화면이 부르는 경로다. 앱의 산책 화면은 위치가 5m 움직일 때마다 다시 묻고,
+     * 격자 캐시가 그 대부분을 흡수하지만 <b>요청 자체는 그대로 온다.</b>
+     *
+     * <p>60 인 이유: 산책 중 분당 13~27회가 실측 범위이고 거기에 여유를 뒀다. 앱이 그
+     * 재호출을 고치면 30 으로 내릴 수 있다.
+     *
+     * <p><b>이 한도가 KTO 쿼터를 지키는 것이 아니다.</b> 그건 {@code KtoCallBudget} 의 일이고,
+     * 여기는 우리 서버가 한 IP 에 잡아먹히는 것을 막는다. 둘은 다른 것을 지킨다.
+     */
+    private int placesMaxRequests = 60;
+
+    /**
+     * 장소 상세 버킷 — {@code GET /api/places/&#123;contentId&#125;}. (이슈 #40)
+     *
+     * <p>버킷을 <b>따로</b> 두는 이유: 상세를 쏟아부어 지도를 막을 수 없어야 한다.
+     * 사람이 상세를 여는 빈도는 지도를 보는 빈도보다 훨씬 낮으므로 30 이면 넉넉하다.
+     */
+    private int placesDetailMaxRequests = 30;
 }

@@ -434,6 +434,40 @@ class ApiRateLimitFilterTest {
                 .isEqualTo("3600");
     }
 
+    // ─────────────────── C-2. 관광공사 프록시 (이슈 #40) ───────────────────
+
+    @Test
+    @DisplayName("주변 장소 경로에 한도가 있다 — 인증 없는 공개 경로라 특히 중요하다")
+    void placesNearby_isMetered() throws Exception {
+        RateLimitProperties p = props(100);
+        p.setPlacesMaxRequests(1);
+        ApiRateLimitFilter filter = new ApiRateLimitFilter(p, MAPPER);
+
+        assertThat(call(filter, "GET", "/api/places/nearby", "203.0.113.40").getStatus()).isEqualTo(200);
+        assertThat(call(filter, "GET", "/api/places/nearby", "203.0.113.40").getStatus())
+                .as("""
+                        표에 없는 경로는 한도가 0 이 아니라 무한이다 (📌 #86 원칙 4).
+                        이 경로는 security: [] 라 토큰조차 필요 없다.
+                        """)
+                .isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("상세와 목록이 다른 버킷이다 — 상세를 쏟아부어 지도를 막을 수 없어야 한다")
+    void placesDetail_hasItsOwnBucket() throws Exception {
+        RateLimitProperties p = props(100);
+        p.setPlacesMaxRequests(5);
+        p.setPlacesDetailMaxRequests(1);
+        ApiRateLimitFilter filter = new ApiRateLimitFilter(p, MAPPER);
+
+        assertThat(call(filter, "GET", "/api/places/123", "203.0.113.41").getStatus()).isEqualTo(200);
+        assertThat(call(filter, "GET", "/api/places/123", "203.0.113.41").getStatus()).isEqualTo(429);
+
+        assertThat(call(filter, "GET", "/api/places/nearby", "203.0.113.41").getStatus())
+                .as("상세 버킷이 찼다고 지도가 함께 막히면 안 된다")
+                .isEqualTo(200);
+    }
+
     // ─────────────────── D. 스위치가 실제로 끈다 ───────────────────
 
     @Test
