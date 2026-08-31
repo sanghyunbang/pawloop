@@ -117,14 +117,17 @@ CREATE TABLE refresh_token (
 
 ## 3. `dog` — 반려견 프로필
 
-사용자의 강아지 프로필. `users` 1:N `dog`. 앱 도메인(`DogProfile`)의 `size`(small/medium/large)·`neutered`·`avatar`와 매핑. 나이는 앱에서 개월 수로 표시하나 DB는 `birth`(생일)로 저장하는 것이 정규.
+사용자의 반려동물 프로필. `users` 1:N `dog`. 앱 도메인(`DogProfile`)의 `size`(small/medium/large)·`neutered`·`avatar`와 매핑. 나이는 앱에서 개월 수로 표시하나 DB는 `birth`(생일)로 저장하는 것이 정규.
+
+> **표 이름이 `dog` 인데 고양이도 들어온다.** `species` 열이 종을 구분한다(#24 · #145). 표와 경로 이름을 `pet` 으로 옮기지 않은 이유는 `walk.dog_id`·`care_log.dog_id`·`/api/dogs`·`WalkInput.dogId` 가 이미 여러 곳에 박혀 있어서, 이름을 바꾸면 그 전부를 같은 변경에서 함께 옮겨야 하기 때문이다.
 
 ```sql
 CREATE TABLE dog (
   id       BIGINT      NOT NULL AUTO_INCREMENT,
   user_id  BIGINT      NOT NULL,
   name     VARCHAR(50) NOT NULL,
-  breed    VARCHAR(50) NULL COMMENT '견종 (예: 믹스견)',
+  species  VARCHAR(10) NOT NULL DEFAULT 'dog' COMMENT 'dog|cat|other',
+  breed    VARCHAR(50) NULL COMMENT '품종 (예: 믹스견)',
   size     VARCHAR(10) NOT NULL DEFAULT 'small' COMMENT 'small|medium|large',
   birth    DATE        NULL,
   neutered BOOLEAN     NOT NULL DEFAULT FALSE,
@@ -134,7 +137,8 @@ CREATE TABLE dog (
   KEY idx_dog_user (user_id),
   CONSTRAINT fk_dog_user FOREIGN KEY (user_id)
     REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT ck_dog_size CHECK (size IN ('small','medium','large'))
+  CONSTRAINT ck_dog_size CHECK (size IN ('small','medium','large')),
+  CONSTRAINT ck_dog_species CHECK (species IN ('dog','cat','other'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
@@ -143,7 +147,8 @@ CREATE TABLE dog (
 | `id` | `BIGINT` | PK | |
 | `user_id` | `BIGINT` | FK→`users.id`, NOT NULL, INDEX | 소유 사용자 |
 | `name` | `VARCHAR(50)` | NOT NULL | 이름 |
-| `breed` | `VARCHAR(50)` | NULL | 견종 |
+| `species` | `VARCHAR(10)` | NOT NULL 기본 `'dog'`, CHECK | 종. 없으면 고양이를 등록할 경로가 없다 |
+| `breed` | `VARCHAR(50)` | NULL | 품종 |
 | `size` | `VARCHAR(10)` | NOT NULL, CHECK | 소/중/대형견 |
 | `birth` | `DATE` | NULL | 생일(나이 산출) |
 | `neutered` | `BOOLEAN` | NOT NULL 기본 FALSE | 중성화 여부 |
@@ -155,6 +160,8 @@ CREATE TABLE dog (
 
 산책 1건. GPS 경로를 `LINESTRING`으로 저장하고 거리(`distance_m`)·시간(`duration_s`)·메모·날씨를 함께 보관. `dog` 1:N `walk`. 페이스는 `distance_m`/`duration_s`로 파생(비저장).
 
+> **[ADR-0015](../99-decisions/decision-log.md#adr-0015--산책-경로는-linestring-으로-저장하되-spatial-index-는-만들지-않는다) 로 두 줄이 바뀌었다.** 원래 이 절은 `path` 를 `NOT NULL` 로 두고 `SPATIAL INDEX spx_walk_path` 를 걸었다. 인덱스를 뺀 이유는 저장소에 **`walk` 를 공간으로 묻는 질의가 하나도 없어서**이고, `NOT NULL` 을 푼 이유는 MySQL 이 `SPATIAL INDEX` 에 `NOT NULL` 을 요구하는데 **경로 없는 산책이 실제로 있기 때문**이다 — 손으로 입력한 기록과 위치 권한을 거부한 기록이 그렇다. 없는 경로를 만들어 넣으면 화면이 거짓말을 한다.
+
 ```sql
 CREATE TABLE walk (
   id          BIGINT     NOT NULL AUTO_INCREMENT,
@@ -163,13 +170,15 @@ CREATE TABLE walk (
   ended_at    DATETIME   NULL,
   distance_m  INT        NOT NULL DEFAULT 0 COMMENT '총 거리(m)',
   duration_s  INT        NOT NULL DEFAULT 0 COMMENT '총 소요(초)',
-  path        LINESTRING SRID 4326 NOT NULL COMMENT 'GPS 경로(폴리라인)',
+  path        LINESTRING SRID 4326 NULL COMMENT 'GPS 경로(폴리라인). 손입력·권한거부 기록은 NULL',
   memo        VARCHAR(500) NULL,
   weather     VARCHAR(30)  NULL,
+  client_walk_id VARCHAR(64) NOT NULL COMMENT '앱이 만드는 멱등키(UUID v4)',
   created_at  DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_walk_dog (dog_id, started_at),
-  SPATIAL INDEX spx_walk_path (path),
+  KEY idx_walk_dog_created (dog_id, created_at, id) COMMENT '목록 커서. started_at 이 아닌 이유는 아래 참조',
+  UNIQUE KEY uq_walk_client (dog_id, client_walk_id),
   CONSTRAINT fk_walk_dog FOREIGN KEY (dog_id)
     REFERENCES dog (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -183,11 +192,16 @@ CREATE TABLE walk (
 | `ended_at` | `DATETIME` | NULL | 종료 시각(진행 중이면 NULL) |
 | `distance_m` | `INT` | NOT NULL 기본 0 | 거리(m) |
 | `duration_s` | `INT` | NOT NULL 기본 0 | 소요(초) |
-| `path` | `LINESTRING` | **SRID 4326, NOT NULL, SPATIAL INDEX** | GPS 경로 폴리라인 |
+| `path` | `LINESTRING` | **SRID 4326**, NULL | GPS 경로 폴리라인. 경로 없는 산책이 있다 |
 | `memo` | `VARCHAR(500)` | NULL | 메모 |
 | `weather` | `VARCHAR(30)` | NULL | 날씨 |
+| `client_walk_id` | `VARCHAR(64)` | NOT NULL, UNIQUE(dog_id, ·) | 멱등키. 재전송이 두 줄이 되지 않게 한다 |
 
-> `path`는 `SPATIAL INDEX` 요건상 `NOT NULL`. 산책 시작 직후 최소 1점 이상으로 초기화하거나, 종료 시점에 확정 저장하는 정책을 택한다.
+> **`client_walk_id` 가 없으면 전송이 타임아웃 났을 때 앱이 두 경우를 구분할 수 없다** — 서버에 안 닿은 것인지, 저장은 됐는데 응답만 못 받은 것인지. 다시 보내면 두 줄이 되고 안 보내면 사라진다. `chat_message.client_msg_id` + `uq_chat_msg_client`(§15)와 같은 장치다.
+>
+> **목록 커서는 `created_at` 기준이다(`started_at` 이 아니다).** `started_at` 은 앱이 보낸 값이라, 오프라인에 쌓아 둔 산책이 며칠 뒤 과거 시각으로 들어온다. 그걸 커서로 쓰면 **이미 발급된 커서보다 아래 날짜의 행이 영원히 건너뛰어진다.** `idx_walk_dog(dog_id, started_at)` 은 주간 통계 집계가 쓴다.
+>
+> **`SRID` 는 `SchemaDdlDriftTest` 가 못 잡는다.** `information_schema.columns.column_type` 이 `linestring` 뿐이라 SRID 가 들어 있지 않다(ADR-0015 실측). 마이그레이션 사후검증에서 `st_geometry_columns.srs_id` 로 따로 본다.
 
 ---
 

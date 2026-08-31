@@ -15,6 +15,7 @@
 | --- | --- |
 | 리소스 책임 | 로그인 사용자의 반려견 프로필 CRUD. 목록/상세/등록/부분수정/삭제 + 아바타 이미지 업로드. |
 | 소유권 규칙 | 모든 쓰기(등록 제외)·상세는 `dog.user_id == 현재 userId` 여야 한다. 타인 dog 수정/삭제 시 **403 Forbidden**. |
+| 종(species) | `dog|cat|other`. **표와 경로 이름이 `dog` 지만 고양이도 들어온다**(#24 · #145 · `schema.md §3`). 없으면 고양이를 키우는 사람이 반려동물을 서버에 못 올리고, 그 사람의 산책은 붙일 곳이 없다. |
 | 관련 테이블 | `dog`(주), `users`(FK 소유자). 삭제 시 `walk`가 `dog` FK를 `ON DELETE CASCADE` 하므로 산책 기록도 함께 삭제됨(구현 노트 참고). |
 | 재사용 가능한 기존 자산 | ① JWT→User 추출: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (#5 이전 서술이던 `requireUser(HttpServletRequest)` 패턴은 삭제됐다.) ② 아바타 업로드: `S3/media/MediaController`(`POST /media`, `multipart`, `UploadCategory`) + `MediaService.uploadMany/publicUrl`. ③ 에러 응답: social의 `Map.of("error", msg)` + `ResponseStatusException` 패턴. ④ 엔티티/DTO/레포 스타일: `social` 패키지(Lombok `@Getter/@Builder`, record DTO, Spring Data). |
 | SSOT 주의 | `size` enum은 `small/medium/large` 3종(openapi `DogSize` = schema `ck_dog_size` CHECK 와 일치). 임의 값 금지. |
@@ -23,7 +24,9 @@
 
 ## 2. Controller — `DogController`
 
-`@RestController @RequestMapping("/api/dogs")`. 메서드는 모두 `ResponseEntity<?>` 반환. 인증 사용자는 `requireUser(HttpServletRequest)`(social 패턴)로 추출. openapi paths와 1:1.
+`@RestController @RequestMapping("/api/dogs")`. openapi paths와 1:1.
+
+> **아래 표의 `HttpServletRequest request` 시그니처는 #5 이전 서술이라 더는 맞지 않는다.** 인증 사용자는 `@CurrentUser User me` 파라미터 하나로 받는다 — `HttpServletRequest` 에서 직접 꺼내는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다(§6.1).
 
 | HTTP · 경로 | 메서드 시그니처 | 반환 DTO | 인증 | openapi |
 | --- | --- | --- | --- | --- |
@@ -139,6 +142,10 @@ schema.md §3 `dog` 테이블 기준. 엔티티 필드 ↔ 컬럼:
 6. **PATCH 부분수정 null 규약**: `DogInputRequest`의 래퍼 타입(`Boolean neutered` 등)으로 "미전송(null)=미변경" vs "false로 변경"을 구분. primitive로 두면 이 구분이 불가능하니 주의.
 7. **좌표/공간 없음**: Dogs는 EPSG:5174→WGS84, `ST_Distance_Sphere`, SPATIAL INDEX 모두 **해당 없음**(그건 `place`/`walk`/`trail` 리소스 사항). 여기선 신경 쓸 필요 없음.
 8. **트랜잭션**: `DogService`에 `@Transactional(readOnly=true)` 기본 + 쓰기 메서드(`create/update/delete/updateAvatar`)에 `@Transactional`(social `SocialService` 패턴 동일).
-9. **삭제 연쇄 영향**: `walk.fk_walk_dog ON DELETE CASCADE`, (post-MVP `care_log`도 CASCADE). dog 삭제 시 산책 기록이 함께 사라진다 — 하드삭제 정책이 맞는지 확인. 소프트삭제가 필요하면 스키마 변경(현재 스키마엔 `deleted_at` 없음) → MVP는 하드삭제로 진행.
+9. **삭제 연쇄 영향 — `DELETE /api/dogs` 를 구현하는 날 반드시 소프트 삭제여야 한다.** `walk.fk_walk_dog ON DELETE CASCADE` 라, 물리 삭제하면 **그 반려동물의 산책 이력 전부가 조용히 함께 사라진다.** 되돌릴 수 없고, 사용자는 "프로필만 지웠다" 고 생각한다.
+
+   FK 를 `RESTRICT` 로 바꾸는 것은 답이 아니다 — `UserService.deleteMe` 가 `users` 행을 물리 삭제하므로, 산책을 한 번이라도 저장한 사람은 **영구히 탈퇴 불가**가 된다(MySQL 1451). 개 삭제의 안전은 FK 가 아니라 `dog.deleted_at` 으로 산다.
+
+   #145 범위에서는 `DELETE` 를 **구현하지 않는다.**
 10. **아바타 교체/고아 파일**: 아바타를 새로 올리면 기존 objectKey는 `MediaObject`로 남아 고아가 될 수 있음. `MediaService.replace(mediaId,...)` 또는 업로드 후 구 키 삭제 정책을 선택(교체 API를 쓰려면 media id를 dog가 참조해야 함 — 단순화하려면 dog는 objectKey만 들고, 교체 시 이전 키 삭제는 후속 정리 작업으로 둠).
 11. **응답 코드**: 등록 201, 삭제 204, 수정/상세/아바타 200. social이 200 위주였던 것과 달리 openapi Dogs 스펙(201/204)을 우선 준수.
