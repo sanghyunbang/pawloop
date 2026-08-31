@@ -195,6 +195,7 @@ jobs:
           --tests '*DecisionLogTest*'
           --tests '*DocDriftTest*'
           --tests '*OpenApiAuthContractTest*'
+          --tests '*PackageConventionDocTest*'
 
       - name: 실패한 테스트 리포트 업로드
         if: failure()
