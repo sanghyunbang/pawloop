@@ -29,6 +29,7 @@ import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
 import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.security.ApiRateLimitFilter;
+import com.heattrip.heat_trip_backend.security.ChatBodySizeLimitFilter;
 import com.heattrip.heat_trip_backend.security.ChatRateLimitFilter;
 
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,9 @@ public class SecurityConfig {
 
     /** 채팅 버킷. 사용자 단위로 세야 해서 인증 <b>뒤</b>에 붙는다 (#80). */
     private final ChatRateLimitFilter chatRateLimitFilter;
+
+    /** 채팅 본문 크기. 읽기 전에 막아야 해서 체인 <b>맨 앞</b>이다 (#129). */
+    private final ChatBodySizeLimitFilter chatBodySizeLimitFilter;
 
     /** 앱이 만든 state 를 소셜 왕복 동안 세션에 붙들어 둔다. (이슈 #14) */
     private final OAuthAppStateFilter oAuthAppStateFilter;
@@ -158,6 +162,17 @@ public class SecurityConfig {
         // 않는다(그 필터는 state 를 담으려고 request.getSession(true) 를 부른다).
         // 이 순서를 되돌리면 ApiRateLimitFilterChainOrderIntegrationTest 가 빨간불이다.
         http.addFilterBefore(apiRateLimitFilter, OAuthAppStateFilter.class);
+        // ⚠️ 본문 크기 검사는 **rate limit 보다도 앞**이어야 한다. (이슈 #129)
+        //
+        // 20MB 본문을 읽어 String 으로 올린 뒤 400 을 내던 것이 이 필터가 고치는 것이다
+        // (실측 317ms -> 15ms). 뒤에 두면 그 비용을 이미 치른 뒤에 막는 것이라 의미가 없다.
+        // 인증보다도 앞인 것도 의도다 — 누가 보냈든 20MB 를 힙으로 올릴 이유가 없다.
+        //
+        // **이 줄이 apiRateLimitFilter 등록 아래에 있는 것은 필수다.** addFilterBefore 의 기준
+        // 필터는 체인에 **이미 등록된** 것이어야 한다 — 위로 올리면 HttpSecurity 가
+        // IllegalArgumentException 을 던지고 스프링 컨텍스트가 아예 안 뜬다(실측: 통합 테스트
+        // 162건이 한꺼번에 죽었다). 체인에서의 위치는 여전히 rate limit 앞이다.
+        http.addFilterBefore(chatBodySizeLimitFilter, ApiRateLimitFilter.class);
 
         // ⚠️ 채팅 rate limit 은 **JWT 필터 뒤**여야 한다. (이슈 #80)
         //

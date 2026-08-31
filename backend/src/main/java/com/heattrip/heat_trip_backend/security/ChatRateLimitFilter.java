@@ -64,13 +64,13 @@ public class ChatRateLimitFilter extends OncePerRequestFilter {
     private record Rule(String bucket, int limit) {}
 
     private final RateLimitProperties rateLimitProperties;
-    private final TooManyRequestsWriter tooManyRequests;
+    private final ErrorBodyWriter errors;
     private final ClientIpResolver clientIp;
     private final RateLimitWindow window = new RateLimitWindow();
 
     public ChatRateLimitFilter(RateLimitProperties rateLimitProperties, ObjectMapper objectMapper) {
         this.rateLimitProperties = rateLimitProperties;
-        this.tooManyRequests = new TooManyRequestsWriter(objectMapper);
+        this.errors = new ErrorBodyWriter(objectMapper);
         this.clientIp = new ClientIpResolver(rateLimitProperties);
     }
 
@@ -87,7 +87,7 @@ public class ChatRateLimitFilter extends OncePerRequestFilter {
         long currentWindow = Instant.now().getEpochSecond() / windowSeconds;
 
         if (!window.tryAcquire(subjectKey(request) + "|" + rule.bucket(), rule.limit(), currentWindow)) {
-            tooManyRequests.write(response, windowSeconds);
+            errors.tooManyRequests(response, windowSeconds);
             return;
         }
 
