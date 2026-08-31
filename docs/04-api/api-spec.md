@@ -327,10 +327,10 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## 4. 장소 (Places)
 
-**현재 상태:** 앱이 관광공사 KTO(`KorPetTourService2`)를 **직접 호출**한다.
-구현 위치: `app/lib/v2/data/pet_places_repository.dart` → `PetPlacesRepository.fetchNearby()`.
+**현재 상태:** **백엔드가** 관광공사 KTO(`KorPetTourService2`)를 부른다([#40](https://github.com/sanghyunbang/heattrip/issues/40)).
+앱은 `GET /api/places/nearby` 만 안다 — `app/lib/v2/data/pet_places_repository.dart`.
 
-### 4.1 (현행) KTO 직접 호출 — 🔵 프록시 계획
+### 4.1 (참고) 백엔드가 보내는 KTO 요청
 
 ```http
 GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
@@ -341,12 +341,12 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   &contentTypeId={optional}
 ```
 
-- `serviceKey`: `--dart-define=YOUR_DECODING_SERVICE_KEY` 로 들어오는 값(`Env.tourServiceKey`). 명칭과 달리 이미 **인코딩된** 키라 프론트에서 그대로 붙인다. 예전에는 `.env` 를 에셋으로 번들해 읽었는데, 그러면 APK 안에 원본이 그대로 실려 나간다 — #29 가 걷어냈다. dart-define 도 완화일 뿐이라 이 키를 앱에서 진짜로 없애려면 백엔드 프록시로 옮겨야 한다(#29 (B)).
-- `arrange=E`: 거리순. `radius` 기본 8000m.
-- 응답 파싱(프론트): `response.body.items.item[]` → `contentid, title, contenttypeid, addr1, firstimage, tel, mapx(경도), mapy(위도), dist(m)`.
+- `serviceKey`: **서버 환경변수** `TOUR_API_SECRET`. 앱 바이너리에 없다. 명칭과 달리 이미 **인코딩된** 키라 서버의 WebClient 가 `EncodingMode.NONE` 으로 재인코딩을 막는다 — 다시 인코딩하면 인증이 실패하고, 그 실패가 HTTP 200 이라 "장소 없음" 으로 보인다.
+- `arrange=E`: 거리순. `radius` 는 **셀 중심에서 20,000m 고정**이다(사용자 반경이 아니다 — 반경마다 따로 캐시하면 셀당 콜이 여러 배가 된다).
+- 응답 파싱(**서버**): `response.body.items.item[]` → 계약의 `Place`(`contentId, title, contentTypeId, addr, image, tel, lng, lat`)로 정규화. 거리(`distM`)는 캐시에 안 넣고 **서빙 시점에 요청 좌표로 다시 잰다** — 스냅샷이 셀 중심 기준이라 그대로 실으면 최대 1.4km 틀린다.
 - `contenttypeid`: `12`관광지 `14`문화 `28`레포츠 `32`숙박 `38`쇼핑 `39`음식점.
 
-**한계:** KTO 1000콜/일 제한, 키 노출, 캐싱 부재 → 아래 백엔드 프록시로 이전.
+**한계:** KTO 1,000콜/일 제한은 그대로다. 지금은 `kto_call_budget` 표가 하루 상한을 게이트로 지키고, 좌표를 0.02° 격자로 접어 셀 단위로 캐시한다. 키 노출은 해소됐다.
 
 ### 4.2 주변 장소 조회 (백엔드 프록시) — 🔵 프록시 계획
 

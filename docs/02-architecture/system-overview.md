@@ -66,7 +66,7 @@ flowchart TB
     ENV -. "API_BASE_URL" .-> REPO
 
     MAP -->|"SDK init(clientId)"| NSDK
-    REPO -.->|"KTO 직접 호출 (현재)"| KTO
+    REPO -.->|"백엔드 프록시 경유 (#40)"| KTO
 
     BACKENDGW --> AUTH
     BACKENDGW --> TOUR
@@ -115,7 +115,7 @@ flowchart TB
 | 3 | 하드코딩 폴백 | `http://10.0.2.2:8080` (에뮬레이터→호스트 로컬) |
 
 - `NAVER_MAP_CLIENT_ID` — 네이버맵 SDK Client ID(모바일은 시크릿 불필요, 패키지명 허용목록으로 보호).
-- `YOUR_DECODING_SERVICE_KEY` — 관광공사 서비스키(이미 인코딩된 키를 그대로 쿼리에 사용).
+- ~~`YOUR_DECODING_SERVICE_KEY`~~ — **앱에서 제거됐다**(#40). 관광공사 서비스키는 서버 환경변수(`TOUR_API_SECRET`)로만 존재한다.
 
 ### 3.2 지도 SDK — 네이버 Dynamic Map
 
@@ -246,7 +246,7 @@ sequenceDiagram
 
 | 영역 | 상태 |
 | --- | --- |
-| 지도 KTO 실연동(서울 반려동반 장소) | ✅ 됨 (앱 직접 호출) |
+| 지도 KTO 실연동(서울 반려동반 장소) | ✅ 됨 (백엔드 프록시 경유, #40) |
 | 네이버맵 SDK 렌더링 | ✅ 됨 |
 | 실시간 산책 트래킹 | ⚠️ 시뮬(실 GPS 미도입) |
 | 산책 통계(fl_chart) | ✅ 됨 (샘플 데이터) |

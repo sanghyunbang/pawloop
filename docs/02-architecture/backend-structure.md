@@ -90,7 +90,7 @@ web/Controller → service(도메인 유스케이스) → port(인터페이스) 
 
 ### 4.1 `tour` — 공공데이터 장소 수집 (★ Pawloop `place` 캐시의 핵심)
 
-관광공사 KorService2 API에서 지역별 장소를 페이지네이션 수집해 DB에 배치 저장한다. Pawloop에서는 동일 파이프라인으로 **관광공사 반려동물 동반여행(KorPetTourService2)** POI를 캐싱한다(현재 프론트가 직접 호출 → 백엔드 프록시+캐싱으로 이전 권장, 1000콜/일 제한 대응).
+관광공사 KorService2 API에서 지역별 장소를 페이지네이션 수집해 DB에 배치 저장한다. 반려동반 장소는 **별개 경로**다 — `place` 모듈이 `KorPetTourService2` 를 온디맨드로 부르고 격자 셀로 캐시한다(#40). 두 경로 다 KTO 를 부르므로 일 1,000콜 한도를 함께 쓴다.
 
 | 클래스 | 계층 | 역할 |
 | --- | --- | --- |
@@ -191,7 +191,8 @@ web/Controller → service(도메인 유스케이스) → port(인터페이스) 
 
 | 설정 클래스 | 내용 |
 | --- | --- |
-| `config/WebClientConfig` | `tourApiWebClient`(base `https://apis.data.go.kr/B551011/KorService2`, in-memory 버퍼 10MB), `kakaoWebClient`(카카오 로컬, 인증 헤더) |
+| `config/WebClientConfig` | `tourApiWebClient`(관광공사 KorService2 배치 적재용, in-memory 버퍼 10MB), `kakaoWebClient`(카카오 로컬, 인증 헤더). **타임아웃이 없다** — 배치라 감수하는 것이고, 공개 경로 뒤의 프록시는 아래 빈을 쓴다 |
+| `config/KtoWebClientConfig` | `korPetTourWebClient`·`korServiceDetailWebClient`(#40). 연결·응답·읽기·쓰기 **타임아웃 네 겹** + 인코딩 끔(서비스키가 이미 URL 인코딩돼 있어 재인코딩하면 인증이 조용히 실패한다) |
 | `config/LlmWebClientConfig` | LLM(OpenAI) 호출용 WebClient — 감정 추천 레거시 |
 | `config/OpenApiConfig` | springdoc Swagger UI 메타 |
 | `config/SecurityConfig` / `PublicSecurityConfig` / `PublicSecurityProperties` | 보안 필터체인 + 공개 경로/오리진 프로퍼티 |

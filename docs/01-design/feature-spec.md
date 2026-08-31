@@ -92,7 +92,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 펫샵 | `shop` | 인허가(LOCALDATA) 예정 | **더미**(`_dummyShop` 2건) |
 | 산책로 | `trail` | 두루누비 걷기여행길 예정 | **더미** 폴리라인(`_trailCoords`) + 카드 2건 |
 
-- 호출: `PetPlacesRepository.fetchNearby(lat, lng, radius=8000, numOfRows=80)` — `mapX/mapY/radius/arrange=E`(거리순). serviceKey는 `--dart-define=YOUR_DECODING_SERVICE_KEY`(이미 인코딩된 키)를 `Env.tourServiceKey`로 읽어 그대로 사용. 이 키를 앱에서 완전히 걷어내는 것은 백엔드 프록시 작업(#40)이다.
+- 호출: `PetPlacesRepository.fetchNearby(lat, lng, radius=8000, numOfRows=80)` → **우리 백엔드**의 `GET /api/places/nearby`. 앱에 관광공사 서비스키가 없다 — 서버가 대신 부르고 셀 단위로 캐시한다(#40). `radius` 의 상한은 계약이 18,000m 로 정한다(서버가 셀 중심에서 20km 를 받아 두고 셀 반지름 약 1.4km 를 뺀 값).
 - 응답 파싱: `PetPlace.fromJson` — `mapx`(경도)/`mapy`(위도)/`contenttypeid`/`addr1`/`tel`/`firstimage`/`dist`. 좌표 0인 항목은 제외.
 - 카테고리 매핑: `petCatByType(contentTypeId)` (SSOT `kPetCategories`, `pet.dart`).
 

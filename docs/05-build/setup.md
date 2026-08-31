@@ -85,7 +85,6 @@ flutter run --dart-define-from-file=dart-define.json
 // app/dart-define.json  (추적되지 않음 / 추적되는 건 값이 빈 dart-define.example.json)
 {
   "API_BASE_URL": "https://api.heattrip.link",
-  "YOUR_DECODING_SERVICE_KEY": "<data.go.kr 서비스키(인코딩키)>",
   "NAVER_MAP_CLIENT_ID": "<네이버 클라우드 Client ID>"
 }
 ```
@@ -96,14 +95,16 @@ flutter run --dart-define-from-file=dart-define.json
 | --- | --- | --- | --- |
 | `API_BASE` | `Env.apiBase` | (없음) | 로컬/스테이징 전환용 override. `API_BASE_URL`보다 **우선**한다. |
 | `API_BASE_URL` | `Env.apiBase` | (없음) | 백엔드 베이스 URL. 운영은 `https://api.heattrip.link`. |
-| `YOUR_DECODING_SERVICE_KEY` | `Env.tourServiceKey` | `''` | 관광공사 KorPetTourService2 호출용. **명칭과 달리 "인코딩된 키"가 들어감** — 쿼리스트링에 그대로 붙인다(`pet_places_repository.dart`에서 재인코딩하지 않음). 일 1000콜 제한. |
 | `NAVER_MAP_CLIENT_ID` | `Env.naverMapClientId` | `''` | 네이버 지도 SDK 초기화(`FlutterNaverMap().init`). 비어 있으면 지도 탭이 비활성(안내문)만 표시된다. |
-| `MOBILE_OS` / `MOBILE_APP` | `Env.mobileOs` / `Env.mobileApp` | `ETC` / `HeatTrip` | 관광공사 API 가 요구하는 호출자 표기. 비밀 아님. 보통 안 건드린다. |
 
 > `Env.apiBase` 우선순위: **(1)** `--dart-define=API_BASE=...` → **(2)** `--dart-define=API_BASE_URL=...` → **(3)** `http://10.0.2.2:8080`.
 
 > [!WARNING]
-> **`--dart-define`은 완화이지 해결이 아니다.** 값은 컴파일 타임에 코드로 박힐 뿐, 문자열은 여전히 바이너리 안에 남는다(`strings`로 나온다). 쿼터·과금이 걸린 **관광공사 서비스키는 앱에서 완전히 사라진 게 아니다.** 진짜 제거는 호출 자체를 백엔드 프록시로 옮기는 M3 작업이다(이슈 #29 B). 그때 기존 키 폐기·재발급도 함께 해야 한다.
+> **관광공사 서비스키는 이제 앱에 없다**([#40](https://github.com/sanghyunbang/heattrip/issues/40)). 호출 자체를 백엔드로 옮겼고, 키는 서버 환경변수 `TOUR_API_SECRET` 으로만 존재한다.
+>
+> `--dart-define` 은 완화였을 뿐이다 — 값이 컴파일 타임에 코드로 박히고 문자열은 바이너리에 남아 `strings` 한 번이면 나온다. **여기에 그 키를 다시 넣지 말 것.**
+>
+> ⚠️ **아직 남은 일**: 이미 배포된 빌드에는 그 키가 들어 있으므로 **유출된 것으로 보고 폐기·재발급**해야 한다. 순서는 프록시 배포 → 앱 업데이트 배포 → 구 키 폐기다.
 
 ### 네이버 지도 콘솔 등록 (지도 인증 실패 방지)
 
@@ -290,7 +291,7 @@ dart run flutter_launcher_icons
 
 - [ ] `flutter --version` → 3.44.4 / Dart 3.12.2
 - [ ] `flutter pub get` 성공 (`.env` 없이 그냥 된다)
-- [ ] `cp app/dart-define.example.json app/dart-define.json` 후 3개 키(`API_BASE_URL`, `YOUR_DECODING_SERVICE_KEY`, `NAVER_MAP_CLIENT_ID`) 채움 — 이 파일은 커밋되지 않는다
+- [ ] `cp app/dart-define.example.json app/dart-define.json` 후 2개 키(`API_BASE_URL`, `NAVER_MAP_CLIENT_ID`) 채움 — 이 파일은 커밋되지 않는다. **관광공사 키는 여기 없다**(#40)
 - [ ] 네이버 콘솔에 패키지명 `com.cetacealab.heattrip` 등록
 - [ ] 에뮬레이터 부팅 후 `flutter run --dart-define-from-file=dart-define.json` — 지도 탭에 KTO 실데이터(서울) 표시되면 키 정상
 - [ ] (로컬 백엔드 쓸 때) MySQL `heat_trip_db` 생성 + `./gradlew bootRun` + 앱에 `--dart-define=API_BASE=http://10.0.2.2:8080` 추가

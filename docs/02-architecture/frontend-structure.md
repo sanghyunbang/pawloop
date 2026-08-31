@@ -69,8 +69,8 @@ lib/
 
 ### 2.3 `data/` — 레포지토리 (데이터 소스)
 
-- `pet_places_repository.dart`: 관광공사 **KorPetTourService2**(반려동물 동반여행) `locationBasedList2`를 `http`로 직접 호출. `PetPlace` 모델(좌표 `mapx`/`mapy`, `contenttypeid`, `addr1`/`tel`/`firstimage`, 거리 `dist`)로 파싱.
-  - 서비스 키는 `Env.tourServiceKey`(= `--dart-define=YOUR_DECODING_SERVICE_KEY`), 키 없으면 빈 리스트 반환(앱이 죽지 않음).
+- `pet_places_repository.dart`: **우리 백엔드**의 `GET /api/places/nearby` 를 `http` 로 호출(#40). `PetPlace` 모델은 계약의 `Place` 를 그대로 읽는다(`lat`/`lng`/`contentTypeId`/`addr`/`tel`/`image`/`distM`).
+  - **앱에 관광공사 서비스키가 없다.** 서버가 대신 부른다. 서버가 실패하면 빈 리스트다(앱이 죽지 않음).
   - ⚠️ 이 키는 앱 바이너리에 박히는 과금성 자격증명이다. [#40](https://github.com/sanghyunbang/heattrip/issues/40) 에서 호출을 백엔드 프록시로 옮기면 앱에서 완전히 사라진다 — 그때 이 레포는 KTO 대신 자체 백엔드를 호출한다.
   - 병원(vet)·펫샵(shop)·산책로(trail)는 **아직 레포가 없고** 화면(`explore_screen.dart`) 안 `_dummyVet`/`_dummyShop`/`_trailCoords` 상수로 대체 → 향후 LOCALDATA·두루누비 레포로 분리 예정.
 
@@ -144,8 +144,8 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  KTO[관광공사 KorPetTourService2\nlocationBasedList2] -->|http GET| Repo[PetPlacesRepository]
-  Env[Env.tourServiceKey\n--dart-define] --> Repo
+  KTO[관광공사 KorPetTourService2] -->|백엔드만 부른다| Backend[백엔드 GET /api/places/nearby]
+  Backend -->|http GET| Repo[PetPlacesRepository]
   Repo -->|List&lt;PetPlace&gt;| Explore[ExploreScreen\n리스트/지도/필터]
 
   Sample[domain/pet.dart\nkWalks · kWeekKm · kPetPosts] --> Insight[InsightScreen]

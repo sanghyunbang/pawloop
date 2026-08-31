@@ -85,7 +85,7 @@ flowchart TD
 ```
 
 **구현 메모**
-- `_load()` → `PetPlacesRepository.fetchNearby(lat, lng, radius 8000m, 거리순 arrange=E)`. `Env.tourServiceKey` 비어있으면 빈 목록.
+- `_load()` → `PetPlacesRepository.fetchNearby(lat, lng, radius 8000m)` → 백엔드 `GET /api/places/nearby`(거리순). 서버가 실패하거나 호출 예산이 소진되면 **빈 목록**이다 — 앱은 그것을 "이 주변에 장소가 없음" 과 구분하지 못한다(#40 의 알려진 한계).
 - 검색바("카페, 공원, 산책로...")는 현재 **플레이스홀더**(입력 미동작).
 - 리스트 카드/지도 마커 탭 모두 `_showPlaceSheet(p)` 호출 → 동일 바텀시트.
 - 상세 시트에는 아직 "여기서 산책 기록 쓰기"·북마크 액션 없음(향후 `bookmark` 연동 및 `CreateScreen` prefill 확장 지점).
