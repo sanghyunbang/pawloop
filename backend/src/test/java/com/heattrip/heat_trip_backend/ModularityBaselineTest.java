@@ -60,8 +60,20 @@ class ModularityBaselineTest {
      *
      * <p>그러니 다른 모듈에 {@code allowedDependencies} 를 붙일 때마다 이 수가 또 내려간다.
      * <b>내려갔다고 좋아질 일이 아니다</b> — 어느 쪽 이유로 내려갔는지 매번 확인해라.
+     *
+     * <p><b>588 에서 534 로 내렸다. 이번에는 진짜로 줄었다.</b> (#104)
+     * {@code OAuth.principal.CurrentUser} 와 {@code UnauthenticatedException} 두 타입에
+     * {@code @NamedInterface("principal")} 을 붙여 <b>공개 표면으로 선언</b>했다. 그 둘을 부르던
+     * 54건이 위반이 아니게 됐다 — 자리를 옮긴 것이 아니라 "밖에서 불러도 되는 것" 이라고
+     * 정한 것이다.
+     *
+     * <p>구분하는 법은 간단하다. <b>위반 종류가 사라졌으면 진짜, 종류가 바뀌었으면 집계다.</b>
+     * 이번에는 {@code OAuth.principal} 을 가리키는 줄이 목록에서 통째로 없어졌다.
+     * 반면 열지 않은 {@code OAuth.jwt}(14) · {@code handler}(6) · {@code state}(5) ·
+     * {@code code}(4) · {@code service}(3)는 <b>그대로 위반으로 남아 있다.</b> 이게
+     * {@code ::} 가 "지정한 표면만 열고 나머지는 닫는다" 는 증거다.
      */
-    private static final int BASELINE_VIOLATIONS = 588;
+    private static final int BASELINE_VIOLATIONS = 534;
 
     /** 순환 경로 개수. 쌍이 아니라 <b>경로</b>다 — 같은 두 모듈이 여러 경로에 걸쳐 나타난다. */
     private static final int BASELINE_CYCLES = 5;

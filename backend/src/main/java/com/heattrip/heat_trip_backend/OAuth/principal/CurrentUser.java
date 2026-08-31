@@ -22,6 +22,7 @@ import java.lang.annotation.Target;
  * 개념이 되살아난다. 그건 인가 경계(#23)가 {@code SecurityConfig.publicMatchers} 에서 결정할 일이고,
  * 컨트롤러 파라미터가 결정할 일이 아니다.
  */
+@org.springframework.modulith.NamedInterface("principal")
 @Documented
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
