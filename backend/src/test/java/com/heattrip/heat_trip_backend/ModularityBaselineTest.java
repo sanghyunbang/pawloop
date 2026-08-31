@@ -70,7 +70,16 @@ class ModularityBaselineTest {
      *
      * <p>구분하는 법은 간단하다. <b>위반 종류가 사라졌으면 진짜, 종류가 바뀌었으면 집계다.</b>
      * 이번에는 {@code OAuth.principal} 을 가리키는 줄이 목록에서 통째로 없어졌다.
-     * 반면 열지 않은 {@code OAuth.jwt}(14) · {@code handler}(6) · {@code state}(5) ·
+     * <p><b>231 에서 232 로 올렸다. 빚이 늘어서가 아니라 코드가 옮겨져서다.</b> (#80)
+     * 429 본문을 쓰는 코드를 {@code ApiRateLimitFilter} 에서 {@code TooManyRequestsWriter} 로
+     * 꺼냈다 — 채팅 필터가 같은 본문을 써야 하는데 복사하면 계약이 두 벌이 되기 때문이다.
+     * {@code security -> S3.media.error.GlobalExceptionHandler} 라는 <b>모듈 쌍은 그대로이고</b>
+     * 바이트코드 참조가 하나 늘었다. 위반 목록을 직접 확인했고 새 모듈 쌍은 없다.
+     *
+     * <p>이 참조 자체를 없애는 것은 #114 다 — 전 애플리케이션의 에러 계약이 외부 서비스 패키지
+     * 밑 3단계에 있는 것이 원인이고, 그것을 옮기면 이 두 줄이 함께 사라진다.
+     *
+     * <p>반면 열지 않은 {@code OAuth.jwt}(14) · {@code handler}(6) · {@code state}(5) ·
      * {@code code}(4) · {@code service}(3)는 <b>그대로 위반으로 남아 있다.</b> 이게
      * {@code ::} 가 "지정한 표면만 열고 나머지는 닫는다" 는 증거다.
      *
@@ -91,7 +100,7 @@ class ModularityBaselineTest {
      * 되돌아간다. {@code -3 + 3 = 0}. <b>총계만 보면 아무 일도 안 일어난 것처럼 보이지만
      * 실제로는 바뀌었다</b> — 이 수 하나만 믿지 말고 위반 목록을 봐야 하는 이유다.
      */
-    private static final int BASELINE_VIOLATIONS = 231;
+    private static final int BASELINE_VIOLATIONS = 232;
 
     private static final char NL = (char) 10;
 

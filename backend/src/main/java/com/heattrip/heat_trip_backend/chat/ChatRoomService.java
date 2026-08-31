@@ -10,6 +10,7 @@ import com.heattrip.heat_trip_backend.chat.repository.ChatRoomInviteRepository;
 import com.heattrip.heat_trip_backend.chat.repository.ChatRoomMemberRepository;
 import com.heattrip.heat_trip_backend.chat.repository.ChatRoomRepository;
 
+import com.heattrip.heat_trip_backend.chat.metrics.ChatMetrics;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.data.domain.Limit;
@@ -125,6 +126,9 @@ public class ChatRoomService {
 
     /** 만료 경계를 벽시계 없이 테스트로 고정하기 위한 주입점. {@code ClockConfig} 가 준다. */
     private final Clock clock;
+
+    /** 이 저장소의 첫 커스텀 메트릭 셋 (#80). 이름 규약은 그쪽 javadoc 에 있다. */
+    private final ChatMetrics metrics;
 
     // ─────────────────────────── 방 ───────────────────────────
 
@@ -552,8 +556,15 @@ public class ChatRoomService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이 방의 멤버가 아닙니다.");
         }
 
+        // 방 종류 — 메트릭 태그 하나를 위한 추가 왕복이다. **잠금을 잡기 전에** 부른다.
+        // 뒤에서 부르면 직렬화 구간이 그만큼 길어진다 (#80).
+        String roomKind = rooms.findOriginKindById(roomId).orElse("unknown");
+
         // ③ ★ 직렬화 지점. 발급 문장 하나가 방 행을 잠그고 카운터를 올린다.
-        if (rooms.assignNextSeq(roomId) == 0) {
+        long assignStartedAt = System.nanoTime();
+        int assigned = rooms.assignNextSeq(roomId);
+        metrics.recordSeqAssign(System.nanoTime() - assignStartedAt);
+        if (assigned == 0) {
             throw new NoSuchElementException("방을 찾을 수 없습니다.");
         }
         long seq = rooms.lastAssignedSeq();
@@ -575,6 +586,7 @@ public class ChatRoomService {
                 .clientMsgId(idempotencyKey)
                 .build());
 
+        metrics.messageSent(roomKind);
         return viewOf(saved);
     }
 
@@ -646,6 +658,16 @@ public class ChatRoomService {
             rows = readFromTheFront
                     ? rows.subList(0, limit)
                     : rows.subList(rows.size() - limit, rows.size());
+        }
+
+        // 폴링일 때만 센다 (#80). 뒤로 읽는 것은 과거 페이지 로드라 성격이 다르고, 그것까지
+        // 세면 empty 비율이 희석되어 "간격을 늘릴지" 의 근거가 사라진다.
+        if (readFromTheFront) {
+            if (rows.isEmpty()) {
+                metrics.pollEmpty();
+            } else {
+                metrics.pollHit();
+            }
         }
 
         return new ChatMessagePageView(
