@@ -21,6 +21,7 @@
 | [0009](#adr-0009--소셜-로그인에-pkce-를-도입하지-않는다) | 소셜 로그인에 PKCE 를 도입하지 않는다 — 백엔드가 공급자와 코드 교환을 수행하는 동안 | 채택 (Accepted) | 2026-08 |
 | [0010](#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) | 소셜 로그인 공급자(카카오·구글)와 앱 세션 토큰 전략 — 네이버·Redis 보류 | 채택 (Accepted) | 2026-08 |
 | [0011](#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다) | 채팅 아키텍처 — 범용 다중 방 · 방별 room_seq · 폴링 우선, STOMP·Redis 보류 | 채택 (Accepted) | 2026-08 |
+| [0012](#adr-0012--모듈-경계는-spring-modulith-의-구조-검사만-들인다) | 모듈 경계 검사에 Spring Modulith 도입 — 구조 검사만, 이벤트 절반은 보류 | 채택 (Accepted) | 2026-08 |
 
 > 상태 범례: **채택(Accepted)** = 현재 유효 · **임시(Accepted, 임시)** = 채택했으나 대체 계획 존재 · (필요 시) 폐기(Superseded)/거절(Rejected).
 
@@ -755,6 +756,536 @@ ADR-0010 은 Redis 를 **인증 맥락**(RT 검증 캐시 · AT 블록리스트)
 - **레퍼런스 조사에는 원문을 못 읽은 항목이 있습니다.** cs.kakao.com·faq.whatsapp.com·help.line.me 는 JS 렌더링이나 403 이라 2차 출처 또는 검색 스니펫에 의존한 것이 있습니다. 어느 것이 그런지는 각 이슈 본문의 "확인하지 못한 것" 목록이 소유합니다.
 
 > 인덱스 행의 앵커는 본문 제목이 `## ADR-0011 — 채팅 아키텍처` 일 때의 값입니다(GitHub 규칙: 소문자화 → 글자·숫자·`_`·공백·`-` 외 제거 → 공백을 `-` 로. em dash 가 지워지면서 양옆 공백 둘이 하이픈 둘로 남습니다). 제목을 다르게 쓰면 `DecisionLogTest.index_anchorsResolveToRealHeadings` 가 빨간불이 되니 앵커를 함께 고쳐야 합니다.
+
+---
+
+## ADR-0012 — 모듈 경계는 Spring Modulith 의 구조 검사만 들인다
+
+- **상태**: 채택 (Accepted)
+- **날짜**: 2026-08
+- **관련 이슈**: [#99 참조 이슈](https://github.com/sanghyunbang/heattrip/issues/99) · 개념 #97 · 우리 저장소 적용 #98 · 첫 작업 #100 · 패키지 규약 #95
+
+> 상태: 제안(Proposed) · 날짜: 2026-08-31 · 대상: `backend/`
+>
+> 이 글은 `@ApplicationModule` 이라는 애노테이션을 오늘 처음 보는 사람이 읽는다는 전제로 썼습니다. 그래서 결정문 앞에 용어부터 풀어 놓았습니다. 이미 아는 부분은 §1 부터 읽으시면 됩니다.
+> 확인하지 못한 것은 "확인 못 했습니다" 라고 그대로 적었습니다.
+
+---
+
+### 0. 먼저, 용어부터 — 모듈이 무엇이고 왜 패키지만으로는 안 되는가
+
+#### 0.1 "모듈" 은 폴더가 아닙니다
+
+코드 덩어리 하나가 **모듈(module)** 이 되려면 두 가지가 있어야 합니다.
+
+1. **경계** — 어디부터 어디까지가 이 덩어리인가.
+2. **공개 표면(API)** — 그중 바깥에 내주기로 한 것은 무엇이고, 안쪽에만 두기로 한 것은 무엇인가.
+
+2번이 없으면 그건 모듈이 아니라 그냥 폴더입니다. 폴더는 "여기 파일들이 모여 있다" 만 말하고 "이건 밖에서 써도 되고 저건 안 된다" 는 말하지 않습니다.
+
+Spring Modulith 공식 문서는 애플리케이션 모듈을 셋으로 쪼개 정의합니다 (<https://docs.spring.io/spring-modulith/reference/fundamentals.html>).
+
+| 조각 | 뜻 | 우리 저장소의 예 |
+|---|---|---|
+| 제공 인터페이스(provided interface) | 밖에서 불러도 되는 것 | `chat.ChatRoomService`, `chat.ChatRoomView` |
+| 내부 구현(internal implementation) | 밖에서 부르면 안 되는 것 | `chat.entity.ChatMessage`, `chat.repository.*` |
+| 필요 인터페이스(required interface) | 이 모듈이 남에게 요구하는 것 | `chat` 은 아무것도 요구하지 않습니다(의도적으로) |
+
+#### 0.2 자바 패키지로는 왜 이게 안 되는가
+
+자바의 접근 제어자는 넷입니다 — `private`, package-private(아무것도 안 붙인 것), `protected`, `public`. 이 중 **패키지 경계를 지키는 것은 package-private 하나뿐인데, 그것은 딱 한 겹만 막습니다.**
+
+핵심은 이겁니다. 자바에서 `com.acme.order` 와 `com.acme.order.entity` 는 이름이 이어져 있을 뿐 **접근 제어 관점에서는 완전히 남남인 두 패키지**입니다. 포함 관계가 아닙니다.
+
+그래서 이렇게 됩니다.
+
+- `order.entity.Order` 를 package-private 으로 두면 → 같은 도메인인 `order.OrderService` 조차 못 씁니다.
+- 그래서 `public` 을 붙입니다 → 그 순간 `bookmark` 도 `care` 도 그걸 `import` 할 수 있습니다.
+
+즉 자바에는 **"내 도메인 트리 안에서는 공개, 도메인 밖에서는 비공개"** 라는 중간 단계가 없습니다. 공식 문서도 같은 상황을 두고 "the Java compiler is not of much use to prevent these illegal references" 라고 적어 뒀습니다(같은 문서).
+
+```mermaid
+flowchart TB
+    subgraph J["자바가 줄 수 있는 것"]
+        direction TB
+        A1["private<br/>클래스 안에서만"]
+        A2["package-private<br/>정확히 그 패키지 한 겹"]
+        A3["public<br/><b>온 세상</b>"]
+        A1 --> A2 --> A3
+    end
+    subgraph W["우리가 원하는 것"]
+        direction TB
+        B1["도메인 안쪽<br/>user.entity · user.repository · user.service"]
+        B2["도메인 공개 표면<br/>user 패키지 바로 아래"]
+        B3["다른 도메인<br/>schedules · bookmark · care"]
+        B1 -->|"자유"| B2
+        B2 -->|"허용"| B3
+        B1 -.->|"<b>막고 싶다</b>"| B3
+    end
+    A2 -.->|"너무 좁다<br/>하위 패키지에서 못 씀"| B1
+    A3 -.->|"너무 넓다<br/>막을 방법이 사라짐"| B3
+    W ==>|"언어에 없으니<br/><b>테스트로 만든다</b>"| C["ArchUnit ·<br/>Spring Modulith ·<br/>ChatBoundaryArchitectureTest"]
+
+    style A3 fill:#7f1d1d,color:#fff
+    style B3 fill:#7f1d1d,color:#fff
+```
+
+#### 0.3 Spring Modulith 의 기본 규칙 — 딱 두 줄입니다
+
+공식 문서가 정한 자동 인식 규칙은 이렇습니다.
+
+> "The application's *main package* is the one that the main application class resides in. … By default, each direct sub-package of the main package is considered an *application module package*."
+
+우리 저장소로 번역하면, 메인 패키지는 `com.heattrip.heat_trip_backend` 이고(`backend/src/main/java/com/heattrip/heat_trip_backend/HeatTripBackendApplication.java`), **그 바로 아래 20개 폴더가 애노테이션 한 줄 없이도 각각 모듈 하나가 됩니다.** 실제로 세어 보면 `OAuth S3 bookmark care chat chatweb config curation explore feedback group kakao llm login observability schedules security social tour user` 20개입니다.
+
+그다음 규칙이 전부입니다.
+
+| | 다른 모듈이 부를 수 있나 |
+|---|---|
+| 모듈 패키지 **바로 아래**의 `public` 타입 | 된다 (= 공개 표면) |
+| 모듈의 **하위 패키지** 안에 있는 모든 것 | 안 된다 (= 내부) |
+
+**이 규칙은 우리가 이미 손으로 만들어 둔 것과 글자 그대로 같습니다.** `backend/src/test/java/com/heattrip/heat_trip_backend/chat/ChatBoundaryArchitectureTest.java:575-578` 이 그 자리입니다. 주석이 "chat 패키지 **바로 아래**의 타입 이름 — 밖에서 부를 수 있는 것은 이것뿐이다" 이고, 구현이 `Files.list(root)` 입니다. `Files.walk` 가 아니라 `Files.list` 라서 하위 패키지로 내려가지 않습니다. 그래서 저는 이 도구를 "새로운 개념" 이 아니라 **"우리가 chat 하나에 손으로 건 규칙을 20개 패키지에 자동으로 거는 것"** 으로 봅니다.
+
+#### 0.4 검사는 테스트 한 줄입니다
+
+```java
+// backend/src/test/java/com/heattrip/heat_trip_backend/ModularityTest.java
+class ModularityTest {
+    @Test
+    void 모듈_경계가_지켜진다() {
+        ApplicationModules.of(HeatTripBackendApplication.class).verify();
+    }
+}
+```
+
+`verify()` 가 검사하는 것은 셋뿐이라고 문서가 명시합니다 (<https://docs.spring.io/spring-modulith/reference/verification.html>).
+
+1. 모듈 그래프에 **순환이 없을 것** — "the dependencies between modules have to form a directed acyclic graph"
+2. **남의 내부 패키지를 부르지 말 것** — "all references to types that reside in application module internal packages are rejected"
+3. (선언했다면) **`allowedDependencies` 를 지킬 것**
+
+중요한 성질 하나 — `ApplicationModules` 는 `org.springframework.modulith.core` 아래에 있고, 하는 일은 **컴파일된 `.class` 를 ArchUnit 으로 읽는 정적 분석**입니다. 스프링 컨텍스트를 하나도 띄우지 않습니다. 이게 §4 에서 비용 계산의 핵심이 됩니다.
+
+```mermaid
+sequenceDiagram
+    participant T as ModularityTest (평범한 JUnit)
+    participant AM as ApplicationModules
+    participant AU as ArchUnit ClassFileImporter
+    participant CP as build/classes/java/main
+
+    T->>AM: of(HeatTripBackendApplication.class)
+    Note over AM: SpringBootApplication 이 붙은 클래스의<br/>패키지를 메인 패키지로 잡는다
+    AM->>AU: 그 아래 .class 를 전부 읽어라
+    AU->>CP: 바이트코드 스캔
+    CP-->>AU: JavaClasses
+    AU-->>AM: 타입·참조 그래프
+    Note over AM: 직속 하위 패키지 20개 = 모듈 20개<br/>package-info 의 애노테이션을 반영
+    T->>AM: verify()
+    AM->>AM: 1. 모듈 그래프에 순환이 있는가
+    AM->>AM: 2. 남의 내부 패키지를 찔렀는가
+    AM->>AM: 3. allowedDependencies 밖을 불렀는가
+    AM-->>T: 위반을 모아 한 번에 예외
+    Note over T,CP: 이 경로 어디에도 ApplicationContext 가 없습니다
+```
+
+#### 0.5 기본값을 비트는 두 개의 손잡이
+
+**`@ApplicationModule`** (`org.springframework.modulith.ApplicationModule`) — 패키지에 붙이는 애노테이션입니다. 자바에서 패키지에 애노테이션을 다는 유일한 방법이 `package-info.java` 라는 특수 파일이고, 우리 저장소에는 이미 그 파일이 하나 있습니다 — `backend/src/main/java/com/heattrip/heat_trip_backend/chatweb/package-info.java` (지금은 애노테이션 없이 Javadoc 만 있습니다).
+
+```java
+// chatweb/package-info.java — "이 모듈은 chat 만 부를 수 있다"
+@org.springframework.modulith.ApplicationModule(
+        displayName = "Chat Web Adapter",
+        allowedDependencies = { "chat" })
+package com.heattrip.heat_trip_backend.chatweb;
+```
+
+속성 넷입니다(Javadoc: <https://docs.spring.io/spring-modulith/docs/1.4.13/api/org/springframework/modulith/ApplicationModule.html>).
+
+| 속성 | 기본값 | 뜻 |
+|---|---|---|
+| `id` | `""` | 모듈 식별자. **`::` 를 포함하면 안 됩니다** — 이게 문서화된 유일한 이름 제약입니다 |
+| `displayName` | `""` | 사람이 읽는 이름. 검사에는 영향 없음 |
+| `allowedDependencies` | (설정 안 함 표식) | 의존해도 되는 모듈 목록. **안 쓰면 제한 없음, 빈 배열이면 아무 데도 못 부름** |
+| `type` | `CLOSED` | `OPEN` 으로 두면 그 모듈의 내부까지 전부 공개됩니다 |
+
+`type = OPEN` 은 문서가 용도를 못 박아 뒀습니다 — 레거시를 점진적으로 옮길 때 쓰는 탈출구입니다. **그리고 OPEN 은 내부 접근 검사만 끄고 순환 검사는 그대로 둡니다.**
+
+**`@NamedInterface`** (`org.springframework.modulith.NamedInterface`) — "이 하위 패키지도 공개 표면이다" 라고 이름을 붙여 여는 장치입니다. 기본 규칙("하위 패키지는 전부 내부")이 너무 뻣뻣할 때 씁니다.
+
+```java
+// OAuth/principal/package-info.java — 이 하위 패키지만 이름 붙여 연다
+@org.springframework.modulith.NamedInterface("principal")
+package com.heattrip.heat_trip_backend.OAuth.principal;
+```
+
+부르는 쪽은 **더블 콜론 `::`** 로 그 표면만 콕 집습니다.
+
+```java
+// chatweb/package-info.java
+@org.springframework.modulith.ApplicationModule(
+        allowedDependencies = { "chat", "OAuth :: principal" })
+package com.heattrip.heat_trip_backend.chatweb;
+```
+
+`"OAuth :: *"` 는 그 모듈의 모든 이름 붙은 표면을 뜻합니다. 공식 문서 예시는 항상 `::` 양옆에 공백을 넣습니다 — 공백 없이 써도 되는지는 문서에 명시가 없어 **확인 못 했습니다.** 문서 표기를 따르겠습니다.
+
+```mermaid
+flowchart LR
+    subgraph OA["모듈: OAuth"]
+        direction TB
+        ROOT["OAuth 루트<br/>지금 타입 0개<br/>= 공개 표면이 비어 있음"]
+        NI["OAuth.principal<br/>@NamedInterface(&quot;principal&quot;)<br/>= 이름 붙은 공개 표면"]
+        INT["OAuth.jwt · OAuth.handler ·<br/>OAuth.code · OAuth.state<br/>= 내부"]
+    end
+    CW["chatweb<br/>allowedDependencies =<br/>{ chat, OAuth :: principal }"]
+    OTH["다른 모듈<br/>허용 목록 없음"]
+
+    CW -->|"허용"| NI
+    CW -.->|"검사에서 실패"| INT
+    OTH -.->|"검사에서 실패"| INT
+
+    style NI fill:#1e40af,color:#fff
+    style INT fill:#7f1d1d,color:#fff
+    style ROOT fill:#4b5563,color:#fff
+```
+
+---
+
+### 1. 맥락 — 지금 우리 저장소의 실측값
+
+`backend/build.gradle:5` 가 Spring Boot 3.5.4, `:17` 이 Java 21 입니다. `dependencies` 블록에 `org.springframework.modulith` 도 `com.tngtech.archunit` 도 **한 줄도 없습니다.** 아직 도입 전입니다.
+
+#### 실측 (2026-08-31, #100 · PR #111)
+
+이 ADR 을 처음 쓸 때는 소스 텍스트로 세어 **104 / 106건, 순환 1~2덩어리**로 적었습니다. 그다음 도구를 실제로 붙여 돌렸고, **둘 다 틀렸습니다.**
+
+| 항목 | 소스로 센 추정 | **도구 실측** |
+|---|---:|---:|
+| 모듈 수 | 20 | **19** (#110 이 `login` 을 지운 뒤) |
+| 남의 내부 패키지 참조 = 위반 | 104 ~ 106 | **620** |
+| 순환 | 1 ~ 2 덩어리 | **5 경로** |
+
+**여섯 배 차이가 난 이유**를 확인했습니다. Spring Modulith 는 소스의 `import` 가 아니라 **바이트코드의 타입 참조**를 셉니다 — 필드 타입 · 파라미터 · 반환형 · 애노테이션 값 · 생성자 시그니처가 각각 한 건입니다. `MediaController` 하나가 `user.entity.User` 를 파라미터로 네 번, `getId()` 호출로 네 번 쓰면 그것만 8건입니다. 소스에서 `import` 한 줄로 보이는 것이 바이트코드에서는 수십 건이 됩니다.
+
+**어디서 나오는가** — 모듈 쌍 상위와 침범당한 하위 패키지 상위입니다.
+
+| 모듈 쌍 | 건수 | | 침범당한 하위 패키지 | 건수 |
+|---|---:|---|---|---:|
+| `bookmark → user` | 90 | | **`user.entity`** | **329** |
+| `schedules → user` | 84 | | `OAuth.principal` | 59 |
+| `OAuth → user` | 82 | | `tour.domain` | 50 |
+| `tour → curation` | 40 | | `user.repository` | 38 |
+| `care → user` | 36 | | `curation.entity` | 31 |
+| `chatweb → user` | 31 | | `group.entity` | 18 |
+
+**순환 5경로는 전부 인증 언저리입니다.**
+
+```
+OAuth  -> config -> OAuth
+OAuth  -> config -> security -> S3 -> OAuth
+OAuth  -> config -> security -> S3 -> user -> OAuth
+OAuth  -> user   -> OAuth
+config -> security -> config
+```
+
+쌍이 아니라 **경로**입니다. 소스로 셌을 때 양방향 쌍 3개(`OAuth↔config` · `OAuth↔user` · `config↔security`)로 보인 것을 도구는 경로로 펼쳐 5개로 셉니다. 같은 사실의 다른 표현입니다.
+
+그중 `security → S3` 가 낀 것은 예상 밖이었습니다. `security/ApiRateLimitFilter.java:281` 이 429 본문을 만들려고 `S3.media.error.GlobalExceptionHandler$ErrorResponse` 를 부릅니다. #95 §10 에 "전역 예외 처리기가 S3 밑 3단계에 있다" 를 **자리가 이상하다**는 정도로 적어 뒀는데, 실제로는 순환으로 얽혀 있었습니다.
+
+그리고 **메인 패키지 직속인 `BootstrapRunner.java` 도 검사 대상입니다.** 문서에 명시가 없어 몰랐는데 돌려 보니 `root:com.heattrip.heat_trip_backend → tour` 8건으로 잡힙니다.
+
+위반이 어디서 나오는지는 두 실측이 일치합니다. **20개 모듈 중 13개는 공개 표면이 아예 비어 있습니다.** 모듈 패키지 바로 아래에 `.java` 파일이 한 개도 없다는 뜻입니다.
+
+| 모듈 | 루트 타입 수 | 밖에서 받는 참조 | 위반 |
+|---|---|---|---|
+| `user` | **0** | 50 | 50 |
+| `OAuth` | **0** | 25 | 25 |
+| `tour` | **0** | 10 | 10 |
+| `curation` | **0** | 6 | 6 |
+| `group` | **0** | 5 | 5 |
+| `observability` | **0** | 3 | 3 |
+| `schedules` | **0** | 2 | 2 |
+| `chat` | 16 | 25 | **0** |
+| `config` | 9 | 4 | **0** |
+| `security` | 2 | 1 | **0** |
+
+한 문장으로 줄이면 이렇습니다. **`user.entity.User`(38건)와 `OAuth.principal.CurrentUser`(15건) 두 타입이 전체 위반의 절반을 만듭니다.** 이 둘은 사실상 이 애플리케이션의 공용 어휘인데, 위치가 하위 패키지라서 기본 규칙으로는 전부 불법입니다.
+
+그리고 순환입니다. 이게 우리가 이 조사에서 **새로 알게 된 유일한 사실**입니다.
+
+```mermaid
+graph LR
+    subgraph SCC["순환 덩어리 — 이 다섯은 서로 얽혀 있습니다"]
+        OAuth
+        config
+        security
+        S3
+        user
+    end
+    OAuth -->|"3"| config
+    config -->|"6"| OAuth
+    OAuth -->|"10"| user
+    user -->|"7"| OAuth
+    config -->|"1"| security
+    security -->|"1"| config
+    security -->|"1"| S3
+    S3 -->|"2"| OAuth
+    S3 -->|"1"| user
+
+    chatweb --> chat
+    chatweb --> OAuth
+    chatweb --> user
+    care --> chat
+    care --> group
+    group --> chat
+    bookmark --> tour
+    explore --> tour
+    tour --> curation
+    curation --> schedules
+    schedules --> user
+
+    style OAuth fill:#7f1d1d,color:#fff
+    style config fill:#7f1d1d,color:#fff
+    style security fill:#7f1d1d,color:#fff
+    style S3 fill:#7f1d1d,color:#fff
+    style user fill:#7f1d1d,color:#fff
+    style chat fill:#166534,color:#fff
+```
+
+`chat` 을 초록으로 뒀습니다. **나가는 화살표가 0개**입니다 — 20개 중 유일하게 다른 도메인을 하나도 모르는 도메인이고, `chat` 밖의 어떤 소스도 `chat.entity` / `chat.repository` 를 참조하지 않습니다(0건). 이건 `ChatBoundaryArchitectureTest` 의 §B 가 지켜 낸 결과이고, 동시에 **`chat` 은 이 도구를 켜도 새로 알게 되는 것이 0** 이라는 뜻이기도 합니다.
+
+기존 제약도 확인했습니다. `backend/build.gradle:208-213` 의 커버리지 게이트 대상은 `OAuth/**` 와 `user/**` 두 패키지고, 구조 검사 테스트는 그 패키지의 라인을 실행하지 않으므로(바이트코드를 파일로 읽을 뿐입니다) 하한 0.80 에 영향이 없습니다. `backend/build.gradle:123-185` 의 `test` 태스크 입력 선언도 손댈 게 없습니다 — 읽는 것이 `docs/` 가 아니라 `build/classes` 이기 때문입니다. 다만 **한 번 돌려서 확인하지는 않았습니다.**
+
+---
+
+### 2. 결정
+
+**Spring Modulith 의 구조 검사 절반만 들입니다. 이벤트 절반은 들이지 않습니다.**
+
+구체적으로 다섯입니다.
+
+1. **`org.springframework.modulith:spring-modulith-core` 를 `testImplementation` 으로만** 넣습니다. 버전은 `spring-modulith-bom:1.4.13` 으로 고정합니다(Spring Boot 3.5 라인에 대응하는 계열입니다).
+2. **첫 테스트는 게이트가 아니라 기준선 기록**입니다. `verify()` 로 바로 빨간불을 내지 않고, `detectViolations()` 로 위반을 세어 **"오늘의 개수"를 저장소에 적어 두고, 그 수보다 늘면 실패**시킵니다. 늘어나는 것만 막고, 이미 있는 빚은 그대로 보이게 둡니다.
+3. **순환은 별도 항목으로 즉시 고정**합니다. 순환은 `type = OPEN` 으로도 `@NamedInterface` 로도 꺼지지 않는 유일한 검사이고, 우리가 새로 알게 된 유일한 사실이기 때문입니다.
+4. **공개 표면을 여는 방법은 `@NamedInterface` 를 기본으로 하고, `type = OPEN` 은 쓰지 않습니다.** 애노테이션이 필요한 모듈이 생기는 시점에만 `spring-modulith-api` 를 `implementation` 으로 추가합니다.
+5. **다음 넷은 이 결정에서 명시적으로 제외합니다.** Event Publication Registry, 이벤트 외부화(`@Externalized`), `@ApplicationModuleTest`, `Documenter` 문서 생성, 그리고 jMolecules. 필요해지면 그때 **별도 ADR** 로 다시 판단합니다.
+
+그리고 **`ChatBoundaryArchitectureTest` 는 지우지 않습니다.** 이건 결정의 일부입니다. 이유는 §3-4 에 적습니다.
+
+```mermaid
+flowchart TD
+    S0["0단계<br/>도구 없음<br/><b>정확한 수를 모름</b>"]
+    S1["1단계<br/>testImplementation 한 줄 +<br/>detectViolations() 로 개수만 기록<br/><b>운영 코드 0줄 · 컨텍스트 0개</b>"]
+    S2["2단계<br/>순환을 실측값으로 고정<br/>늘면 빨간불"]
+    S3["3단계<br/>chat / chatweb 을 첫 CLOSED 쌍으로<br/>allowedDependencies 명시"]
+    S4["4단계<br/>OAuth.principal · user.entity 의<br/>공개 표면을 정한다<br/>@NamedInterface"]
+    S5["5단계<br/>순환을 실제로 끊는다<br/><b>코드를 옮기는 일</b>"]
+    S6["6단계<br/>verify() 를 CI 게이트로 승격"]
+    X["이번 결정에서 제외<br/>이벤트 레지스트리 · 외부화 ·<br/>모듈 단위 테스트 · 문서 생성 · jMolecules"]
+
+    S0 --> S1 --> S2 --> S3 --> S4 --> S5 --> S6
+    S1 -.->|"각 단계는 커밋 하나로 되돌아감"| S0
+    S6 -.-> X
+
+    style S1 fill:#166534,color:#fff
+    style S5 fill:#92400e,color:#fff
+    style X fill:#7f1d1d,color:#fff
+```
+
+---
+
+### 3. 근거
+
+#### 3-1. 우리가 새로 알게 되는 것은 "순환" 하나인데, 그게 큽니다
+
+내부 패키지 접근 규칙은 `chat` 에서 이미 손으로 달성했습니다. 하지만 **순환 탐지는 지금 우리 테스트에 아예 없습니다.** 그리고 실측 결과 `{OAuth, S3, config, security, user}` 다섯이 한 덩어리로 얽혀 있습니다 — 이건 인증·설정 계층 전체입니다. 이걸 모르고 있었다는 사실 자체가 이 도구를 들이는 이유로 충분하다고 봅니다.
+
+#### 3-2. 비용이 진짜로 테스트 스코프 한 줄입니다
+
+`spring-modulith-core` 는 `com.tngtech.archunit:archunit` 을 compile 스코프로 데려오고, `spring-boot-autoconfigure` 는 **optional** 의존이라 딸려 오지 않습니다. 그래서 이 테스트는 **`ApplicationContext` 를 하나도 만들지 않습니다.** 지금 우리 테스트가 만드는 스프링 컨텍스트는 애노테이션 조합 기준 6종(스프링을 띄우는 클래스 24개)인데, **그 수가 그대로 유지됩니다.** 이건 이 저장소가 의식적으로 관리하고 있는 예산이라 중요합니다 — 예를 들어 `backend/src/test/java/com/heattrip/heat_trip_backend/user/controller/AuthMeIntegrationTest.java:56-58` 이 "글자 그대로 같아야 캐시를 공유한다" 를 적어 두었고, `backend/src/test/java/com/heattrip/heat_trip_backend/config/OAuthClientRegistrationsTest.java:35-39` 는 아예 컨텍스트를 안 띄우려고 프로퍼티 파일을 직접 읽는 쪽을 골랐습니다.
+
+`backend/src/test/java/com/heattrip/heat_trip_backend/support/IntegrationTestsRunOnMySqlTest.java` 의 검사에도 안 걸립니다 — `@SpringBootTest` 도 `@DataJpaTest` 도 안 쓰므로 `AbstractMySqlIntegrationTest` 를 상속할 필요가 없고, **MySQL 컨테이너도 안 뜹니다.**
+
+#### 3-3. 규칙이 우리 규칙과 이미 같습니다
+
+`ChatBoundaryArchitectureTest.java:575-578` 의 `Files.list` 정의와 Spring Modulith 의 기본 규칙이 같습니다. 새 규칙을 배워서 코드를 그쪽에 맞추는 게 아니라, **이미 하고 있던 것을 나머지 19개 패키지로 넓히는 것**입니다. `chat` / `chatweb` 쌍은 켜자마자 위반 0건입니다 — `chatweb → chat` 참조 19건이 전부 `chat` 루트 타입입니다.
+
+#### 3-4. 그래도 `ChatBoundaryArchitectureTest` 는 지울 수 없습니다
+
+이건 이 도구의 한계를 정확히 알아야 하는 대목입니다. `verify()` 가 보는 것은 **바이트코드의 타입 참조**입니다. 그래서 우리 테스트가 잡는 것 중 둘은 원리적으로 못 잡습니다.
+
+- **§C — JPQL·네이티브 쿼리 문자열 안의 JOIN.** 문자열은 바이트코드의 타입 참조가 아닙니다.
+- **§D — 정본 `mysql/init/01_schema.sql` 의 FK·UNIQUE·인덱스.** SQL 파일은 바이트코드에 없습니다.
+
+이 판단은 이미 우리 테스트 안에 적혀 있습니다 — `ChatBoundaryArchitectureTest.java:91-102` 가 ArchUnit 을 넣지 않은 이유로 정확히 이걸 들고 있습니다. 그리고 §B("chat 소스에 다른 도메인 패키지 이름 금지")도 소스 텍스트 검사라서 성질이 다릅니다. 주석 안의 도메인 이름은 §B 가 걸고 `verify()` 는 안 겁니다. 반대 방향(제네릭 소거로 사라지는 참조 등)은 **확인 못 했습니다.**
+
+정리하면 **이 도구는 20개 모듈에 얇게 깔리는 그물이고, `ChatBoundaryArchitectureTest` 는 한 모듈에 두껍게 걸린 그물입니다.** 둘 다 있어야 합니다. 도구가 하나 줄지 않고 하나 늘어난다는 뜻이고, 이건 비용입니다.
+
+#### 3-5. 첫날부터 빨간불인 게이트를 만들지 않습니다
+
+이 저장소는 이미 이 실패 모드를 알고 있습니다. `backend/build.gradle:196-207` 이 그 기록입니다 — 커버리지 하한을 목표치 0.80 에 바로 걸지 않고 실측 0.17 에서 시작한 이유가 "실패하는 게이트는 며칠 안에 무시당하고, 그러면 없느니만 못하다" 입니다. 같은 논리를 그대로 적용합니다. **첫 테스트는 "오늘의 수를 적어 두고 늘어나면 실패" 입니다.**
+
+---
+
+### 4. 대안과 기각 이유
+
+여기에는 이 결정에 반대하는 조사 결과를 정직하게 싣습니다. 반대편 논거 중 제가 반박하지 못한 것도 그대로 남깁니다.
+
+#### 대안 A — 아무것도 하지 않는다
+
+**주장:** 1인 개발이다. 경계 도구가 막는 것은 "규칙을 모르는 사람이 무심코 `import` 하는 것" 인데, 그 사람이 없으면 막을 대상도 없다.
+
+**기각 이유:** 이 논거는 우리가 이미 반쯤 기각해 둔 것입니다. `ChatBoundaryArchitectureTest.java:41-44` 가 인용하는 문장이 "몇 달 뒤 누군가 `chat_message` 에서 `users` 를 조인하고, 설계가 조용히 사라진다" 입니다. 여기서 "누군가" 는 다른 사람이 아니라 3개월 뒤의 저입니다. 그리고 이번에는 **모르고 있던 사실(순환 다섯 덩어리)이 실제로 나왔습니다.** 아무것도 안 하면 그 사실이 다시 안 보이는 상태로 돌아갑니다.
+
+#### 대안 B — Spring Modulith 대신 ArchUnit 을 직접 쓴다
+
+**주장이 셉니다.** 우리가 새로 얻는 정보인 순환은 ArchUnit 한 줄이면 나옵니다.
+
+```java
+slices().matching("com.heattrip.heat_trip_backend.(*)..").should().beFreeOfCycles()
+```
+
+그리고 ArchUnit 은 **Spring Boot 버전 축에 묶이지 않습니다.** Spring Modulith 는 메이저 버전이 Boot 메이저 버전에 묶여 있어서(1.4 = Boot 3.5, 2.x = Boot 4.0 — <https://docs.spring.io/spring-modulith/reference/1.4/appendix.html>), Boot 4.0 으로 갈 때 이 도구도 같이 올려야 합니다. 1인 개발자에게 업그레이드 축이 하나 느는 것은 작은 비용이 아닙니다.
+
+**그래도 기각한 이유는 셋입니다.**
+
+1. **의존성 비용이 같습니다.** `spring-modulith-core` 가 ArchUnit 을 데려옵니다. 즉 ArchUnit 을 쓰든 이걸 쓰든 저장소에 들어오는 것은 어차피 ArchUnit 입니다.
+2. **"하위 패키지 = 내부" 규칙을 20개 모듈에 거는 코드를 직접 쓰지 않아도 됩니다.** ArchUnit 으로는 규칙을 손으로 씁니다. 여기서는 기본값입니다.
+3. **`allowedDependencies` 로 허용 목록을 패키지 옆에 적어 둘 수 있습니다.** 규칙이 테스트 파일 한 곳이 아니라 그 패키지의 `package-info.java` 에 남습니다 — 다음 사람이 그 패키지를 열었을 때 바로 보입니다.
+
+**다만 이 기각은 아슬아슬합니다.** 반대편이 옳을 수 있는 축(버전 결합)이 실재하고, 저는 그걸 "테스트 스코프에만 두면 업그레이드 부담이 작다" 로 눌렀을 뿐입니다. 이 판단이 틀리는 조건을 §7 에 적어 뒀습니다.
+
+#### 대안 C — 20개 모듈에 다 걸고, 안 되는 곳은 `type = OPEN` 으로 덮는다
+
+**기각 이유: 이게 가장 위험합니다.** `OPEN` 을 붙인 모듈은 내부 접근 검사가 통째로 꺼집니다. 위반 620건이 5분 만에 0이 되지만, 그 순간 **초록불이 거짓말을 시작합니다.** 이 저장소는 그 실패 모드를 이미 문장으로 갖고 있습니다 — `backend/build.gradle` 의 H2 관련 주석이 "넣는 순간 … 그 초록불은 거짓말이 된다" 입니다. 그리고 `chatweb/package-info.java` 가 예외를 열지 않은 이유로 "예외를 하나 열면 다음 사람은 그 예외가 어디까지인지를 판단해야 한다" 를 적어 뒀습니다. 같은 실수를 다른 도구로 반복하지 않습니다.
+
+덧붙여, **`OPEN` 은 순환 검사를 끄지 못합니다.** 우리가 가장 알고 싶은 것이 순환인데 그건 `OPEN` 으로 안 꺼지므로, `OPEN` 은 "알고 싶은 것은 안 꺼 주고 정보만 없애는" 선택입니다.
+
+#### 대안 D — 순환 덩어리 다섯 모듈을 검사에서 통째로 뺀다
+
+`ApplicationModules.of(App.class, resideInAnyPackage("...OAuth..", "...user..", ...))` 로 그래프에서 제거하면 나머지 15개 모듈에 대해 진짜 게이트가 생깁니다.
+
+**기각 이유:** 뺄 다섯이 인증 계층 전부입니다. `backend/build.gradle:208-213` 이 커버리지 게이트를 거는 유일한 구역이 `OAuth/**` 와 `user/**` 인데, 구조 검사에서는 그 둘을 빼는 것은 방향이 거꾸로입니다. 가장 지켜야 할 곳을 사각지대로 만듭니다.
+
+#### 대안 E — 이벤트 절반까지 함께 들인다
+
+**주장:** Event Publication Registry 는 정직한 아웃박스 구현이고, 나중에 서비스를 떼어낼 때 "DB 는 커밋됐는데 메시지는 안 나갔다" 를 원천 봉쇄해 줍니다. `@ApplicationModuleListener` 하나로 `@Async` + `@TransactionalEventListener(AFTER_COMMIT)` + `@Transactional(REQUIRES_NEW)` 세 줄이 한 줄이 됩니다.
+
+**기각 이유가 이 ADR 에서 가장 분명합니다.**
+
+1. **우리 도메인 이벤트는 0개입니다.** `backend/src/main/java` 전체에서 `@EventListener` 는 두 곳뿐이고(`llm/RecommenderHealthChecker.java:23`, `tour/bootstrap/TraitBootstrap.java:37`) 둘 다 `ApplicationReadyEvent` 기동 훅입니다. `@TransactionalEventListener` 는 0개입니다. **얻을 것이 0입니다.**
+2. **반대로 짊어질 것은 다섯입니다.** ① `EVENT_PUBLICATION` 테이블의 `INSERT` 가 원 트랜잭션 안에서, 리스너 수만큼 일어납니다 — 즉 그 테이블의 성능 문제가 곧바로 사용자 응답 시간입니다. ② 기본 `completion-mode` 가 `update` 라 완료된 행이 남고 **테이블이 무한히 자랍니다** — 정리 작업을 우리가 붙여야 합니다. ③ 자동 재시도가 없습니다. 재시도·멱등성·중복 실행 방지를 우리가 설계해야 합니다. ④ 호출 스택이 끊깁니다 — 지금 "가족 그룹을 만들면 같은 트랜잭션에서 채팅방과 방장이 생긴다"(`ChatBoundaryArchitectureTest.java:64-66`) 를 이벤트로 바꾸면 "그룹은 생겼는데 방은 없는 상태" 가 **정상 상태로 존재**하게 되고, 그 상태를 앱이 어떻게 보여 줄지를 새로 설계해야 합니다. 지금은 트랜잭션이 그걸 공짜로 해 주고 있습니다. ⑤ 스타터를 넣으면 Boot 메이저 업그레이드에 DB 스키마가 묶입니다.
+3. **운영 고통이 공식 이슈로 실재합니다.** 100만 행 근처에서 풀 테이블 스캔(<https://github.com/spring-projects/spring-modulith/issues/251>), 락 경합(<https://github.com/spring-projects/spring-modulith/issues/544>), 대량 발행 시 데드락(<https://github.com/spring-projects/spring-modulith/issues/486>), 진행 중 건수가 늘수록 느려지는 선형 탐색(<https://github.com/spring-projects/spring-modulith/issues/1146>).
+4. **클래스패스에 있는 것만으로 기존 동작이 바뀔 수 있습니다.** <https://github.com/spring-projects/spring-modulith/issues/1630> — 레지스트리가 `@ApplicationModuleListener` 뿐 아니라 `AFTER_COMMIT` 인 **모든** `@TransactionalEventListener` 를 등록해서, 직렬화 불가능한 이벤트가 있으면 기동이 실패했다는 보고입니다. 우리는 오늘 0개라 안 걸리지만, 이건 "지금은 안전하다" 지 "안전한 설계다" 가 아닙니다.
+5. **큰 팀도 절반만 가져갔습니다.** 카카오뱅크 기술블로그가 제목에 "체리픽" 을 달았고, 쓴 것은 경계 검사, 안 쓴 것은 이벤트 기능이라고 적혀 있습니다(<https://tech.kakaobank.com/posts/2507-legacy-to-modular-monolith-with-spring-modulith/>).
+
+#### 대안 F — jMolecules 를 같이 들인다
+
+**기각 이유:** 필요 없습니다. jMolecules 는 DDD 용어를 애노테이션으로 적어 두는 사전이고, 공식 문서가 이 연동을 "optionally" 라고 적습니다. 우리 #95 규약이 정한 것은 패키지 이름 규약이지 DDD 전술 패턴이 아니라서 `@AggregateRoot` 를 붙여 얻을 것이 없습니다. 그리고 jMolecules 의 `@Entity` 는 `jakarta.persistence.Entity` 와 이름이 같습니다 — 한 파일에 섞이면 완전수식명을 써야 합니다. 순수 마이너스입니다.
+
+#### 반박하지 못한 논거 하나
+
+**"나중에 넣기가 더 어렵다."** 파일 275개일 때 620건이면 500개일 때는 천 건을 넘습니다. 지금이 가장 싼 시점인 것은 맞습니다. 다만 이 논거는 **"경계를 지금 갚아라"** 를 지지하는 것이지 **"이 도구를 지금 넣어라"** 를 지지하지 않습니다. `bookmark/entity/Bookmark.java` 의 `@ManyToOne User` 를 `Long userId` 로 바꾸는 일은 사람이 하는 일이고, 도구를 넣는 것은 그 일을 시작한 것처럼 보이게 하지만 실제로는 시작하지 않은 상태입니다. **그래서 이 ADR 의 결정은 "도구를 넣는다" 가 아니라 "도구로 빚을 세고, 세어 둔 수보다 늘지 않게 막고, 그다음에 갚는다" 입니다.**
+
+---
+
+### 5. 결과
+
+#### 좋은 점
+
+1. **순환 다섯 덩어리가 측정값으로 고정됩니다.** 지금은 아무도 안 보고 있는 사실이 테스트가 지키는 수가 됩니다.
+2. **빚이 늘어나는 것만 막힙니다.** 이미 있는 620건은 그대로 보이지만, 새 참조 하나가 늘면 그날 빨간불이 뜹니다. 실제로 넣어 보니 620 → 621 로 떴습니다(#100).
+3. **테스트 컨텍스트 예산이 그대로입니다.** 이 검사는 스프링을 띄우지 않습니다. `backend/build.gradle:208-213` 의 커버리지 하한 0.80 도 움직이지 않습니다.
+4. **`chat` / `chatweb` 판단이 옳았다는 것이 도구로 확인됩니다.** `chatweb → chat` 19건 전부가 합법이고, 그 쌍은 켜자마자 위반 0건입니다.
+5. **`@NamedInterface` 가 #95 규약과 짝이 맞습니다.** #95 가 핵심 도메인에 `api/ application/ domain/ infrastructure/` 를 정했는데, 기본 규칙에서 저 넷은 전부 내부입니다. `api` 하위 패키지에 `@NamedInterface("api")` 를 붙이는 것이 자연스러운 짝이고, 그러면 "밖에서 부를 수 있는 것" 이 **파일 위치로 드러납니다.**
+
+#### 나쁜 점
+
+1. **도구가 하나 줄지 않고 하나 늡니다.** `ChatBoundaryArchitectureTest` 는 §C·§D 때문에 그대로 남습니다. 앞으로 경계를 볼 때 두 곳을 봐야 합니다.
+2. **Spring Boot 버전 축에 하나가 묶입니다.** Boot 4.0 으로 갈 때 이것도 2.x 로 같이 가야 합니다. 테스트 스코프뿐이라 부담은 작지만 0은 아닙니다.
+3. **`chat` 에는 아무 값도 안 줍니다.** 이미 통과하는 유일한 모듈입니다.
+4. **13개 모듈이 "공개 표면이 비어 있다" 는 사실이 눈에 보이게 됩니다.** 이건 좋은 점이자 나쁜 점입니다 — 보이면 고치고 싶어지고, 고치는 일은 `@ManyToOne` 을 ID 참조로 바꾸는 큰 일입니다. **경계 넘는 JPA 연관을 가진 엔티티가 8개 있습니다.** 그 일을 지금 시작하지 않기로 한 것이 §2 의 2번(기준선 기록)입니다.
+5. **`OAuth` / `S3` 는 모듈 이름이 대문자로 시작합니다.** 문서화된 이름 제약은 "`::` 를 포함하지 말 것" 하나뿐이라 문제는 아니지만, `allowedDependencies` 에 `"OAuth"` 처럼 대소문자를 그대로 적어야 합니다. 그리고 `OAuth` 안에 `OAuth/user/` 하위 패키지가 있어서 **리포트를 읽는 사람이 `user` 모듈과 헷갈릴 수 있습니다.**
+6. **`BootstrapRunner.java` 가 메인 패키지 직속에 있고, 검사 대상입니다.** 문서에 명시가 없어 처음에는 몰랐는데 돌려 보니 `root:` 라는 가상 모듈로 묶여 `tour` 8건이 잡힙니다. 메인 패키지에 클래스를 두면 그것도 경계를 넘습니다.
+
+---
+
+### 6. 되돌릴 때
+
+단계마다 되돌리는 방법이 다릅니다. 뒤 단계일수록 되돌리기 어렵다는 뜻이고, 그래서 순서를 이렇게 잡았습니다.
+
+| 단계 | 되돌리는 법 | 운영 영향 |
+|---|---|---|
+| 1단계 — `testImplementation` 한 줄 + 기준선 테스트 | 커밋 하나 `revert`. `build.gradle` 의 BOM 한 줄과 의존 한 줄, 테스트 파일 하나를 지우면 끝 | **없음.** 운영 클래스패스에 아무것도 안 올라갑니다 |
+| 2단계 — 순환 고정 테스트 | 테스트 파일 삭제 | 없음 |
+| 3~4단계 — `package-info.java` 애노테이션 | 애노테이션을 지우고, `implementation 'spring-modulith-api'` 도 함께 지웁니다. **순서가 중요합니다** — 의존을 먼저 지우면 main 소스가 컴파일되지 않습니다 | 없음. 이 애노테이션들은 런타임 동작이 없습니다 |
+| 5단계 — 순환을 끊는 코드 이동 | **일반 되돌리기가 아닙니다.** 코드를 실제로 옮긴 것이므로 되돌리려면 반대 방향 리팩터링이 필요합니다. 그래서 이 단계는 순환 하나당 PR 하나로 쪼갭니다 | 있습니다. 인증 계층이 대상이라 회귀 테스트가 필요합니다 |
+| 6단계 — 게이트 승격 | 기준선 방식으로 되돌립니다(한 줄) | 없음 |
+
+**전체를 버리는 경우:** `build.gradle` 에서 `spring-modulith-bom` 과 `spring-modulith-core` / `spring-modulith-api` 두 줄을 지우고, `ModularityBaselineTest` 계열 테스트 파일과 `package-info.java` 의 애노테이션을 지웁니다. `ChatBoundaryArchitectureTest` 는 그대로 남으므로 **`chat` 의 보호는 하나도 잃지 않습니다.** 이게 이 결정을 낮은 위험으로 만드는 핵심입니다.
+
+---
+
+### 7. 이 결정이 틀리게 되는 조건
+
+미리 적어 둡니다. 하나라도 참이 되면 다시 판단합니다.
+
+1. **1단계 실측에서 위반이 200건을 넘거나, 순환 덩어리가 3개 이상으로 나온다.** 그러면 "세어 두고 늘지 않게 막는다" 로는 부족하고, 갚는 계획을 먼저 세워야 합니다.
+2. **`verify()` 실행 시간이 CI 에서 눈에 띌 만큼 든다.** 지금은 스프링을 안 띄우니 무시할 만하다고 보지만, **실제로 재 보지 않았습니다.**
+3. **모듈 간 비동기 통신이 실제로 필요해진다.** 예를 들어 산책 종료 → 큐레이션 재계산처럼 "실패해도 원 작업은 살아야 하는" 흐름이 생기면, 그때는 아웃박스가 필요하고 §4 대안 E 를 다시 봅니다. **별도 ADR 로 씁니다.**
+4. **Spring Boot 4.0 으로 올린다.** 그때 이 도구도 2.x 로 가야 하므로, 그 시점에 "계속 쓸 것인가" 를 한 번 다시 묻습니다.
+5. **사람이 둘이 된다.** 경계 도구의 값어치는 규칙을 모르는 사람 수에 비례합니다. 0명에서 1명이 되는 순간 계산이 유리한 쪽으로 완전히 바뀝니다.
+
+---
+
+### 8. 아직 확인하지 못한 것
+
+정직하게 남깁니다. 아래는 전부 1단계에서 실행해 확인할 것들입니다.
+
+**#100 에서 확인이 끝난 것** — 취소선 대신 답을 적습니다.
+
+- ~~`verify()` 를 실제로 돌린 결과~~ → **위반 620건.** 추정 104/106 은 여섯 배 낮았습니다.
+- ~~순환이 1개인지 2개인지~~ → **5경로.** `{curation, tour}` 는 순환이 아니었습니다 — `tour → curation` 단방향 40건입니다.
+- ~~메인 패키지 직속 타입이 검사 대상인지~~ → **대상입니다.** `root:` 가상 모듈로 잡힙니다.
+- ~~`test` 태스크 입력 선언과의 상호작용~~ → **문제없습니다.** `./gradlew build` 가 그대로 통과했고 tests 591 / failures 0 입니다.
+
+**아직 확인하지 못한 것**
+
+- **`allowedDependencies` 에서 `"chat::spi"` 처럼 공백 없이 써도 되는지.** 문서 예시는 항상 `" :: "` 입니다. `@ApplicationModule` 을 실제로 붙이는 #103 에서 확인합니다.
+- **실제 스프링 컨텍스트 캐시 개수.** #100 에서 `-Dlogging.level.org.springframework.test.context.cache=DEBUG` 를 걸었지만 **그 시스템 프로퍼티가 테스트 JVM 까지 전달되지 않아** 로그가 안 잡혔습니다. 대신 `HikariPool-N` 최대 번호로 셌고 이 변경 전후 모두 7 이었습니다 — 컨텍스트가 늘지 않은 것은 맞지만 요구된 방법으로 센 것은 아닙니다. 제대로 세려면 `build.gradle` 의 `test` 블록에 `systemProperty` 를 넣어야 합니다.
+
+---
+
+### 참고
+
+**공식 문서 (1.4 라인 — 우리 Boot 3.5.4 에 맞는 계열)**
+- 모듈 기초(모듈 정의, simple/advanced, `@ApplicationModule`, `@NamedInterface`, OPEN/CLOSED) — <https://docs.spring.io/spring-modulith/reference/1.4/fundamentals.html>
+- 구조 검증(`verify()`, `detectViolations()`) — <https://docs.spring.io/spring-modulith/reference/1.4/verification.html>
+- 이벤트(레지스트리, `completion-mode`, staleness, 외부화) — <https://docs.spring.io/spring-modulith/reference/events.html>
+- 통합 테스트(`@ApplicationModuleTest`, `Scenario`) — <https://docs.spring.io/spring-modulith/reference/testing.html>
+- 부록(Boot 호환표, 아티팩트 목록, 프로퍼티 기본값) — <https://docs.spring.io/spring-modulith/reference/1.4/appendix.html>
+- Javadoc `@ApplicationModule` — <https://docs.spring.io/spring-modulith/docs/1.4.13/api/org/springframework/modulith/ApplicationModule.html>
+- Javadoc `@NamedInterface` — <https://docs.spring.io/spring-modulith/docs/1.4.13/api/org/springframework/modulith/NamedInterface.html>
+- 1.4 GA(Boot 3.5 기준선 선언) — <https://spring.io/blog/2025/05/28/spring-modulith-1-4-1-3-6-and-1-2-13-released/>
+
+**반대편 근거**
+- 운영 이슈 — <https://github.com/spring-projects/spring-modulith/issues/251> · <https://github.com/spring-projects/spring-modulith/issues/486> · <https://github.com/spring-projects/spring-modulith/issues/544> · <https://github.com/spring-projects/spring-modulith/issues/1146> · <https://github.com/spring-projects/spring-modulith/issues/1630>
+- 카카오뱅크 도입 후기(절반만 가져간 기록) — <https://tech.kakaobank.com/posts/2507-legacy-to-modular-monolith-with-spring-modulith/>
+- ArchUnit User Guide — <https://www.archunit.org/userguide/html/000_Index.html>
+- jMolecules — <https://github.com/xmolecules/jmolecules>
+
+**우리 저장소**
+- `backend/build.gradle:5` — Spring Boot 3.5.4 / `:17` — Java 21 / `:30-42` — 기존 BOM import 블록(여기에 한 줄 추가) / `:123-185` — `test` 태스크 설정 / `:196-213` — 커버리지 하한 이력과 게이트 대상
+- `backend/src/main/java/com/heattrip/heat_trip_backend/HeatTripBackendApplication.java` — 메인 패키지를 정하는 클래스
+- `backend/src/main/java/com/heattrip/heat_trip_backend/chatweb/package-info.java` — 예외를 열지 않으려고 층을 얹은 기록
+- `backend/src/test/java/com/heattrip/heat_trip_backend/chat/ChatBoundaryArchitectureTest.java:41-44` — 설계가 조용히 사라지는 방식 / `:64-66` — 그룹 생성과 방 생성이 한 트랜잭션이라는 사실 / `:91-102` — ArchUnit 을 넣지 않은 이유 / `:575-578` — `Files.list` 로 정의한 공개 표면
+- `backend/src/test/java/com/heattrip/heat_trip_backend/support/IntegrationTestsRunOnMySqlTest.java` — 스프링 띄우는 테스트가 MySQL 베이스를 상속하는지 보는 검사
+- `backend/src/test/java/com/heattrip/heat_trip_backend/user/controller/AuthMeIntegrationTest.java:56-58`, `backend/src/test/java/com/heattrip/heat_trip_backend/config/OAuthClientRegistrationsTest.java:35-39` — 컨텍스트 예산을 의식적으로 관리한 기록
+- `backend/src/main/java/com/heattrip/heat_trip_backend/llm/RecommenderHealthChecker.java:23`, `backend/src/main/java/com/heattrip/heat_trip_backend/tour/bootstrap/TraitBootstrap.java:37` — 저장소에 존재하는 이벤트 수신부 전부(둘 다 기동 훅)
+
+**관련 이슈:** #95(패키지 구조 규약) · #93(작업 루틴) · #86(아키텍처 원칙) · #46(테스트 컨텍스트 개수) · #21(커버리지 정책) · #75(chatweb 분리)
 
 ---
 
