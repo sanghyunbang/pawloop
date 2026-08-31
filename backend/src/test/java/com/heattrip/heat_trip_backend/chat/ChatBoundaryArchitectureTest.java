@@ -342,9 +342,12 @@ class ChatBoundaryArchitectureTest {
                             파일 텍스트가 아니라 **적용한 결과**를 읽는 이유는 정규식이 \
                             ALTER TABLE ... ADD CONSTRAINT 를 못 봤기 때문이다 — 손으로 고치는 사람이 \
                             가장 자연스럽게 쓰는 문법이 그것이다.
-                            둘보다 적으면 경계 안쪽 FK 까지 끊어진 것이고, 다른 이름이 끼면 \
-                            users·family_group·dog 로 나간 것이다 (ADR-0011 결정 4).""")
+                            셋보다 적으면 경계 안쪽 FK 까지 끊어진 것이고, 다른 이름이 끼면 \
+                            users·family_group·dog 로 나간 것이다 (ADR-0011 결정 4).
+                            chat_message → users 가 여기 끼는 것이 #78 완료 조건 6 이 막는 것이다 — \
+                            ON DELETE CASCADE 면 탈퇴 한 번에 그 사람이 방에 쓴 말이 전부 사라진다.""")
                     .containsExactlyInAnyOrder(
+                            "chat_message → chat_room",
                             "chat_room_invite → chat_room",
                             "chat_room_member → chat_room");
         }
@@ -369,6 +372,33 @@ class ChatBoundaryArchitectureTest {
                     .as("코드 1개 = 행 1개가 깨지면 어느 행을 줄지 미정이 된다 "
                             + "(refresh_token.token_hash 와 같은 계열)")
                     .contains("code");
+            assertThat(uniqueColumnSets(db, "chat_message"))
+                    .as("""
+                            (room_id, room_seq) 는 순서·델타·미읽음 셋의 유일한 근거다. 같은 방에 \
+                            같은 seq 가 둘이면 afterSeq 폴링이 어느 쪽을 줬는지 알 수 없고, 클라이언트는 \
+                            받지 못한 쪽을 영영 못 받는다 (#78 완료 조건 5 · ADR-0011 결정 2).
+                            (room_id, client_msg_id) 는 재전송 멱등의 근거다 — 없으면 지하철에서 \
+                            타임아웃된 전송이 같은 말을 두 줄로 남긴다 (#79 완료 조건 3·8).""")
+                    .contains("room_id,room_seq", "room_id,client_msg_id");
+        }
+    }
+
+    @Test
+    @DisplayName("정본 스키마의 chat_message 가 (room_id, room_seq) 로 정렬·범위 조회할 인덱스를 갖는다")
+    void committedSchema_keepsTheIndexThatMakesSeqTheCursor() throws Exception {
+        try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
+            assertThat(db.queryStrings("""
+                    SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index)
+                    FROM information_schema.statistics
+                    WHERE table_schema = DATABASE() AND table_name = 'chat_message'
+                    GROUP BY index_name
+                    """))
+                    .as("""
+                            #79 의 델타 폴링은 (room_id, room_seq) 범위 스캔이다. 그 인덱스가 없으면 \
+                            방 하나를 폴링할 때마다 chat_message 전체를 훑고, 그래도 답은 맞아서 \
+                            아무도 모른다 — 느려질 뿐이다 (#78 완료 조건 7).
+                            id 를 커서로 되돌리려는 사람이 가장 먼저 지우는 것이 이 인덱스다.""")
+                    .contains("room_id,room_seq");
         }
     }
 

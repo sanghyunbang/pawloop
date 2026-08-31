@@ -90,6 +90,24 @@ CREATE TABLE `cat3_category_mapping` (
   PRIMARY KEY (`mapping_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `chat_message` (
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `deleted_at` datetime(6) DEFAULT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `room_id` bigint NOT NULL,
+  `room_seq` bigint NOT NULL,
+  `sender_user_id` bigint NOT NULL,
+  `content_type` varchar(16) NOT NULL DEFAULT 'text',
+  `client_msg_id` varchar(64) DEFAULT NULL,
+  `body` text NOT NULL,
+  `sender_name` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_chat_room_seq` (`room_id`,`room_seq`),
+  UNIQUE KEY `uq_chat_msg_client` (`room_id`,`client_msg_id`),
+  KEY `idx_chat_sender` (`sender_user_id`),
+  CONSTRAINT `fk_chat_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `chat_room` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `id` bigint NOT NULL AUTO_INCREMENT,
