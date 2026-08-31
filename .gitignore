@@ -42,9 +42,8 @@ desktop.ini
 tmp/
 *.tmp
 
-# 저장소가 담는 문서는 기술 문서(설계·아키텍처·DB·API·빌드·테스트·결정).
-# 제품 기획 문서는 저장소 범위 밖에서 관리한다. → ADR-0008
-/docs/00-product/
+# docs/ 는 전부 추적한다. 제품 기획 문서(00-product)를 빼 뒀던 것은 ADR-0008 인데,
+# 그 결정이 실제로는 "아무도 못 고치는 낡은 문서" 를 만들어서 ADR-0014 가 뒤집었다.
 
 # OpenAPI 제너레이터 산출물 — 생성물은 추적하지 않는다
 /backend/generated-reference/
