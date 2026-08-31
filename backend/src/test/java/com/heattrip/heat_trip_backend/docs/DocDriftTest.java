@@ -189,6 +189,46 @@ class DocDriftTest {
     }
 
     @Test
+    @DisplayName("스키마 문서의 chat_message 가 커서·멱등·경계 셋을 정본과 같게 적는다")
+    void schema_documentsTheMessageTableTheWayItWasActuallyBuilt() {
+        // 이슈 #78. 이 절은 표가 생기기 **전에** 쓰여 있어서 실제와 갈릴 여지가 컸다 —
+        // 실제로 client_msg_id 가 통째로 빠져 있었다(#79 가 그 UNIQUE 를 요구한다).
+        assertThat(schema).contains("CREATE TABLE chat_message (");
+
+        String message = createTable(schema, "chat_message");
+        assertThat(message)
+                .as("""
+                        커서가 id 가 아니라 room_seq 인 것이 이 표의 요점이다. 이 UNIQUE 가 문서에서 \
+                        빠지면, 문서를 보고 만든 DB 는 발급이 틀린 날 조용히 메시지 하나를 잃는다 \
+                        (ADR-0011 결정 2).""")
+                .containsIgnoringCase("UNIQUE KEY uq_chat_room_seq (room_id, room_seq)");
+        assertThat(message)
+                .as("""
+                        재전송 멱등의 근거다. 없으면 타임아웃된 전송을 앱이 재시도할 때 같은 말이 \
+                        두 줄 남는다 (#79 완료 조건 3·8).""")
+                .containsIgnoringCase("UNIQUE KEY uq_chat_msg_client (room_id, client_msg_id)");
+        assertThat(message)
+                .as("""
+                        sender_user_id 에 FK 를 그리면 문서가 ADR-0011 결정 4 와 반대말을 하고, \
+                        ON DELETE CASCADE 면 탈퇴 한 번에 그 사람이 방에 쓴 말이 전부 사라진다.""")
+                .doesNotContain("REFERENCES users");
+
+        String section = section(schema, "## 15. `chat_message`");
+        assertThat(section)
+                .as("""
+                        예전 초안은 '닉네임이 바뀌어도 과거 대화의 화자는 바뀌지 않는다' 와 \
+                        '응답은 현재 닉네임' 을 나란히 적었다 — 같은 값을 두고 반대말이다.
+                        구현은 응답의 이름을 users 에서 현재 값으로 읽고(#78 완료 조건 4), \
+                        스냅샷은 '그때 방 안의 사람들이 본 이름' 으로만 남는다. 문서가 그렇게 \
+                        말해야 다음 사람이 스냅샷을 응답에 실지 않는다.""")
+                .contains("응답의 `senderName` 은 그 값이 아니다");
+        assertThat(section)
+                .as("톰스톤의 뜻이 문서에 없으면 다음 사람이 조회에서 deleted_at 을 거른다 — "
+                        + "그러면 그 seq 가 클라이언트에 도달하지 않아 미읽음 뱃지가 영원히 남는다")
+                .contains("톰스톤");
+    }
+
+    @Test
     @DisplayName("스키마 문서의 family_group 이 초대코드도 방 참조도 들지 않는다 — 그게 이 표의 요점이다")
     void schema_documentsFamilyGroupWithoutAnInviteCodeOrARoomReference() {
         // 이슈 #75. 이 표를 만들 때 가장 자연스럽게 되살아나는 것이 옛 모양 둘이다 —

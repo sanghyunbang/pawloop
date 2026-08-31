@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§16 walk_note` · `§17 care_log` 여덟이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§3 dog`·`§15 chat_message` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
+> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` 아홉이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§3 dog` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -452,7 +452,7 @@ CREATE TABLE chat_room (
 
 > **각주 — 왜 `title` 이 아니라 `name` 이고, 왜 `tag` 가 붙었나.** 이 절의 예전 초안은 이름 컬럼을 `title` 로 적고 `tag` 를 빼먹었다. 이미 커밋돼 있는 앱의 `ChatRoom`(`app/lib/v2/domain/pet.dart:437`)이 `name:` 과 `tag:` 를 요구하고, `chat_list_screen.dart` 는 두 방을 같은 화면으로 넘기면서 **종류를 `tag` 로만 가른다.** [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)의 출발점이 "화면이 먼저 커밋돼 있고 그 화면이 데이터 모양을 정해 놨다" 인 이상, 이름이 갈리면 API 계층이 매번 두 이름을 옮겨 적어야 한다. 그래서 화면 쪽으로 맞췄다.
 
-> 발급과 메시지 INSERT 는 **하나의 트랜잭션**이다. 발급만 별도 트랜잭션으로 떼면 `id` 커서와 똑같은 구멍(§15 참조)이 생긴다. 락 순서는 항상 `chat_room` → `chat_room_member` 이고, **락을 쥔 트랜잭션 안에서 외부 호출(푸시·S3)을 하지 않는다.**
+> 발급과 메시지 INSERT 는 **하나의 트랜잭션**이다. 발급만 별도 트랜잭션으로 떼면 `id` 커서와 똑같은 구멍(§15 참조)이 생긴다. 락 순서는 **`chat_room` → `chat_room_invite` → `chat_room_member` → `chat_message`** 하나이고, 이 넷 중 둘 이상을 잡는 경로는 전부 이 순서를 따른다 — 전송은 첫째와 넷째, 참여는 앞의 셋을 잡으므로 둘 다 같은 방향의 부분열이라 순환이 없다(`ChatRoomRepository#lockForMemberChange` javadoc 이 정본이다). **락을 쥔 트랜잭션 안에서 외부 호출(푸시·S3)을 하지 않는다** — `innodb_lock_wait_timeout` 이 기본 50초라 느린 호출 하나가 그 방의 전송을 전부 막는다.
 
 ---
 
@@ -537,7 +537,7 @@ CREATE TABLE chat_room_invite (
 
 ---
 
-## 15. `chat_message` — 채팅 메시지
+## 15. `chat_message` — 채팅 메시지 (**실재**)
 
 방 안의 메시지. 조회는 `afterSeq`(델타·오름차순) 또는 `beforeSeq`(과거·내림차순)이고 MVP 는 폴링이다. 소켓은 실측 트리거가 걸릴 때만 연다(M2.9).
 
@@ -545,7 +545,13 @@ CREATE TABLE chat_room_invite (
 
 **`sender_user_id` 에 FK 를 걸지 않는다.** chat 경계 밖으로 FK 를 내지 않는 것이 이 도메인의 규칙이고, `refresh_token`(#9)이 이미 같은 방식이다. 탈퇴한 사용자의 메시지가 남아야 대화가 읽히므로 `ON DELETE CASCADE` 는 특히 안 된다 — 예전 정의의 `fk_chat_user ... ON DELETE CASCADE` 는 탈퇴 한 번에 남의 대화 흐름을 지운다.
 
-**`sender_name` 은 스냅샷이다.** `users.nickname varchar(255)` 와 폭을 맞춘다. 닉네임이 바뀌어도 과거 대화의 화자는 바뀌지 않는다. 응답의 `senderName` 은 `users` 에 있으면 현재 닉네임, 없으면(탈퇴) "알 수 없음" 이다.
+**`sender_name` 은 스냅샷이고, 응답의 `senderName` 은 그 값이 아니다.** 폭은 `users.nickname varchar(255)` 와 같다. 응답의 이름은 `users` 에 있으면 **현재 닉네임**(닉네임을 바꾸면 과거 메시지도 따라 바뀐다 — 카카오·라인이 그렇다), 없으면(탈퇴) **"알 수 없음"** 이다.
+
+> **각주 — 그러면 스냅샷은 무엇을 하나 (이슈 [#78](https://github.com/sanghyunbang/heattrip/issues/78)).** 이 절의 예전 초안은 "닉네임이 바뀌어도 과거 대화의 화자는 바뀌지 않는다" 와 "응답은 현재 닉네임" 을 나란히 적었는데, 그 둘은 같은 값을 두고 반대말을 한다. 응답의 이름은 **현재 닉네임**이고, 그 해석은 chat 밖에서 한다(`chatweb.ChatSenderNames`, 조립은 `chatweb.ChatMessages`) — chat 은 `users` 를 이름으로 부를 수도 조인할 수도 없기 때문이다(결정 4, `ChatBoundaryArchitectureTest`). **즉 응답 경로는 `sender_name` 을 읽지 않는다.** 그런데도 컬럼을 두는 이유는 그 값이 답하는 질문이 따로 있어서다: **"그때 방 안의 사람들이 무슨 이름으로 그 말을 봤는가."** 닉네임은 언제든 바뀌므로, 신고를 받아 `idx_chat_sender` 로 발신자의 메시지를 훑는 시점에는 그 이름이 이미 사라져 있다. `emotion_card.handle`·`card_comment.handle` 이 같은 자리다.
+
+**컬럼 폭은 `ChatRoomService#postMessage` 가 먼저 본다 — 컬럼은 마지막 방어선이다.** `sender_name`(255) 만 검사가 있던 판을 실제로 돌려 보니, 클라이언트가 실제로 보내는 셋(`body`·`content_type`·`client_msg_id`)은 전부 INSERT 까지 내려가 `Data too long for column …` → **500** 이 났다. `GlobalExceptionHandler` 에 `DataIntegrityViolationException` 핸들러가 없어 캐치올이 잡기 때문이고, `openapi.yaml` 의 전송 오퍼레이션은 500 을 선언하지 않는다. 지금은 넷 다 400 이다. **`body` 는 문자가 아니라 바이트로 센다** — `TEXT` 가 65,535바이트라 UTF-8 3바이트인 한글은 22,000자면 이미 넘는다. `varchar(n)` 셋은 코드포인트로 센다 — 자바 `length()` 로 세면 이모지 닉네임(보조평면 문자)이 컬럼에 들어가는데도 400 으로 거절당한다.
+
+**`client_msg_id` 에 `UNIQUE (room_id, client_msg_id)` 를 건다.** 재전송 멱등의 근거다 — 없으면 지하철에서 타임아웃된 전송을 앱이 재시도할 때 같은 말이 두 줄 남고, 그 둘은 서로 다른 `room_seq` 를 가져 어느 쪽도 지울 근거가 없다. MySQL 의 UNIQUE 인덱스는 `NULL` 을 여러 번 허용하므로 멱등키 없는 전송은 막지 않는다.
 
 ```sql
 CREATE TABLE chat_message (
@@ -553,13 +559,15 @@ CREATE TABLE chat_message (
   room_id        BIGINT       NOT NULL,
   room_seq       BIGINT       NOT NULL COMMENT '방 안에서 빈틈 없이 1씩 증가',
   sender_user_id BIGINT       NOT NULL COMMENT 'users.id — FK 없음(경계)',
-  sender_name    VARCHAR(255) NOT NULL COMMENT '발신 시점 닉네임 스냅샷',
+  sender_name    VARCHAR(255) NOT NULL COMMENT '발신 시점 표시 이름 스냅샷 — 응답의 이름은 아니다',
   content_type   VARCHAR(16)  NOT NULL DEFAULT 'text',
   body           TEXT         NOT NULL,
-  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  deleted_at     DATETIME     NULL COMMENT '삭제는 소프트 — 뺀 자리가 seq 빈틈이 되면 안 된다',
+  client_msg_id  VARCHAR(64)  NULL COMMENT '재전송 멱등키. NULL 은 여러 번 허용된다',
+  created_at     DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  deleted_at     DATETIME(6)  NULL COMMENT '삭제는 소프트 — 뺀 자리가 seq 빈틈이 되면 안 된다',
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_room_seq (room_id, room_seq),
+  UNIQUE KEY uq_chat_msg_client (room_id, client_msg_id),
   KEY idx_chat_sender (sender_user_id),
   CONSTRAINT fk_chat_room FOREIGN KEY (room_id)
     REFERENCES chat_room (id) ON DELETE CASCADE
@@ -572,11 +580,16 @@ CREATE TABLE chat_message (
 | `room_id` | `BIGINT` | FK→`chat_room.id`, NOT NULL, UNIQUE(room,seq) | 소속 방 |
 | `room_seq` | `BIGINT` | NOT NULL, UNIQUE(room,seq) | 방별 순서. 델타·미읽음의 유일한 근거 |
 | `sender_user_id` | `BIGINT` | NOT NULL, INDEX, **FK 없음** | 발신자(`users.id` 값만) |
-| `sender_name` | `VARCHAR(255)` | NOT NULL | 발신 시점 닉네임 스냅샷 |
+| `sender_name` | `VARCHAR(255)` | NOT NULL | 발신 시점 표시 이름 스냅샷 — 위 각주 |
 | `content_type` | `VARCHAR(16)` | NOT NULL, 기본 `text` | 본문 종류 |
-| `body` | `TEXT` | NOT NULL | 메시지 본문 |
-| `created_at` | `DATETIME` | NOT NULL, 기본 now | 전송 시각 |
-| `deleted_at` | `DATETIME` | NULL | 소프트 삭제 |
+| `body` | `TEXT` | NOT NULL | 메시지 본문. `LONGTEXT` 가 아니다 |
+| `client_msg_id` | `VARCHAR(64)` | NULL, UNIQUE(room,client) | 재전송 멱등키 |
+| `created_at` | `DATETIME(6)` | NOT NULL, 기본 now | 전송 시각 |
+| `deleted_at` | `DATETIME(6)` | NULL | 소프트 삭제 |
+
+**`room_seq` 발급은 한 문장이다.** `UPDATE chat_room SET last_seq = LAST_INSERT_ID(last_seq + 1) WHERE id = ?` 로 올리고 같은 트랜잭션에서 `SELECT LAST_INSERT_ID()` 로 내 번호를 읽는다. 방을 읽어 `+1` 해서 쓰는 판은 두 트랜잭션이 같은 값을 읽어 같은 번호를 쓴다 — 스레드 20개로 재현했고 `Duplicate entry '1-1' for key 'uq_chat_room_seq'` 가 났다(#78). **발급과 INSERT 가 한 트랜잭션이라 롤백이 번호를 되돌린다** — `AUTO_INCREMENT` 와 달리 실패한 요청이 번호를 태우지 않는 이유가 그것이다.
+
+**`deleted_at` 은 톰스톤이다 — 조회에서 거르지 않는다.** 빼면 그 `room_seq` 가 클라이언트에 도달하지 않는다. 미읽음이 `room.last_seq − member.last_read_seq` 뺄셈이라 읽음 커서가 그 번호를 넘지 못하고 **뱃지가 영원히 안 지워진다**. 본문을 가리는 것은 응답을 만드는 쪽의 일이지 조회에서 빼는 것이 아니다.
 
 ---
 
@@ -706,7 +719,8 @@ CREATE TABLE care_log (
 | `chat_room_member` | `idx_chat_member_user(user_id)` | 보조 | 내 방 목록 조회 |
 | `chat_room_invite` | `uq_chat_invite_code(code)` | UNIQUE | 초대코드 중복 방지. 폐기한 코드는 재사용하지 않는다 |
 | `chat_room_invite` | `idx_chat_invite_room(room_id, created_at)` | 보조 | 방별 초대코드 이력 |
-| `chat_message` | `uq_chat_room_seq(room_id, room_seq)` | UNIQUE | 방별 순서·델타·미읽음의 유일한 근거 |
+| `chat_message` | `uq_chat_room_seq(room_id, room_seq)` | UNIQUE | 방별 순서·델타·미읽음의 유일한 근거. `afterSeq` 범위 스캔도 이 인덱스다 |
+| `chat_message` | `uq_chat_msg_client(room_id, client_msg_id)` | UNIQUE | 재전송 멱등. `NULL` 은 여러 번 허용된다 |
 | `chat_message` | `idx_chat_sender(sender_user_id)` | 보조 | 발신자별 조회(신고 처리) |
 | `walk_note` | `uq_walknote_group(group_id)` | UNIQUE | 그룹당 주의사항 한 장 |
 | `care_log` | `idx_carelog_group(group_id, occurred_at)` | 보조 | 그룹별 "오늘의 케어" 조회 |

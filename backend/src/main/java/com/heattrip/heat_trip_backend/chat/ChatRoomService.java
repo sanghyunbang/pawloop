@@ -1,21 +1,25 @@
 package com.heattrip.heat_trip_backend.chat;
 
+import com.heattrip.heat_trip_backend.chat.entity.ChatMessage;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoom;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoomInvite;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoomMember;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoomMemberRole;
+import com.heattrip.heat_trip_backend.chat.repository.ChatMessageRepository;
 import com.heattrip.heat_trip_backend.chat.repository.ChatRoomInviteRepository;
 import com.heattrip.heat_trip_backend.chat.repository.ChatRoomMemberRepository;
 import com.heattrip.heat_trip_backend.chat.repository.ChatRoomRepository;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.data.domain.Limit;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -63,9 +67,49 @@ public class ChatRoomService {
     /** 코드가 겹치면 다시 뽑는 횟수. 최종 방어선은 {@code UNIQUE (code)} 다. */
     private static final int CODE_ATTEMPTS = 5;
 
+    /** 본문 종류의 기본값. 이미지·시스템 메시지가 오면 값이 는다(M2.7 이후). */
+    private static final String DEFAULT_CONTENT_TYPE = "text";
+
+    /**
+     * {@code chat_message.sender_name} 의 컬럼 폭. <b>한도가 아니라 스키마다</b> —
+     * {@code users.nickname varchar(255)} 와 같은 값이고, 넘으면 500 대신 400 을 내려고 둔다.
+     *
+     * <h2>이 아래 셋이 같은 이유로 함께 있다 — 그게 원래 빠져 있었다</h2>
+     * <p>이 상수만 있던 판을 실제로 돌려 봤다. {@code sender_name} 은 400 이 나오는데
+     * <b>클라이언트가 실제로 보내는 셋</b>({@code body}·{@code content_type}·
+     * {@code client_msg_id})은 전부 INSERT 까지 내려가
+     * {@code DataIntegrityViolationException: Data too long for column …} 으로 죽었다.
+     * {@code GlobalExceptionHandler} 에 그 타입의 핸들러가 없으니
+     * {@code @ExceptionHandler(Exception.class)} 가 잡아 <b>500</b> 이 된다 — 계약
+     * ({@code openapi.yaml} 의 {@code POST /api/chat/rooms/&#123;roomId&#125;/messages})이
+     * 선언하지 않은 코드다. 앱은 "내 요청이 틀렸다" 와 "서버가 고장났다" 를 구분하지 못해
+     * 재시도 루프를 돈다.
+     *
+     * <p>정작 방어가 걸려 있던 {@code sender_name} 은 클라이언트가 못 주는 값이다(#79 가
+     * {@code User.displayName()} 으로 채운다). 방어의 방향이 반대였다.
+     *
+     * <p><b>{@link ChatLimits} 로 옮기지 않는다.</b> 이 넷은 한도가 아니라 컬럼 폭이고,
+     * 바꾸려면 마이그레이션이 따라와야 한다 — 플랜에 따라 달라질 수 있는 값이 아니다.
+     */
+    private static final int SENDER_NAME_COLUMN_WIDTH = 255;
+
+    /** {@code chat_message.content_type varchar(16)} 의 폭. */
+    private static final int CONTENT_TYPE_COLUMN_WIDTH = 16;
+
+    /** {@code chat_message.client_msg_id varchar(64)} 의 폭. */
+    private static final int CLIENT_MSG_ID_COLUMN_WIDTH = 64;
+
+    /**
+     * {@code chat_message.body} 의 폭. <b>문자가 아니라 바이트다</b> — {@code TEXT} 는
+     * 65,535<b>바이트</b>라 UTF-8 3바이트인 한글은 22,000자도 못 들어간다(실측으로
+     * {@code Data too long for column 'body'} 를 봤다).
+     */
+    private static final int BODY_COLUMN_BYTES = 65_535;
+
     private final ChatRoomRepository rooms;
     private final ChatRoomMemberRepository members;
     private final ChatRoomInviteRepository invites;
+    private final ChatMessageRepository messages;
     private final ChatLimits limits;
     private final InviteCodeGenerator inviteCodes;
 
@@ -350,6 +394,143 @@ public class ChatRoomService {
         return new ChatJoinResult(room, false);
     }
 
+    // ─────────────────────────── 메시지 ───────────────────────────
+
+    /**
+     * 메시지 한 줄을 넣고 그 방의 {@code room_seq} 를 발급한다 — 이슈 #78.
+     *
+     * <h2>발급과 INSERT 는 하나의 트랜잭션이다</h2>
+     * <p>번호를 미리 따로 받아 두고 나중에 넣으면 {@code id} 커서와 <b>똑같은 구멍</b>이
+     * 생긴다 — 5번을 받은 요청이 4번을 받은 요청보다 먼저 커밋되면, 그 사이에 폴링한
+     * 클라이언트가 5까지 읽고 4를 영영 못 받는다. 그래서 두 문장이 같은 트랜잭션이고,
+     * 발급이 실패하거나 <b>뒤이은 검사에 걸려 롤백되면 번호도 함께 되돌아간다.</b>
+     * {@code AUTO_INCREMENT} 와 갈리는 지점이 그것이고, 그래서 빈틈이 생기지 않는다
+     * ({@code ChatMessageIntegrationTest.aRejectedSendBurnsNoNumber} 가 잠근다).
+     *
+     * <h2>검사 순서 — 발급이 곧 직렬화 지점이다</h2>
+     * <ol>
+     *   <li><b>입력 검증</b> — DB 를 건드리기 전에 끝낸다. 컬럼 폭도 여기서 본다
+     *       ({@link #validBody} · {@link #validContentType} · {@link #validClientMsgId}).</li>
+     *   <li><b>값싼 인가</b> — 살아 있는 멤버가 아니면 403. <b>낡은 값일 수 있고, 그래도
+     *       된다</b> — 최종 판정은 4번이다.</li>
+     *   <li><b>발급</b>({@link ChatRoomRepository#assignNextSeq}) — 이 한 문장이 방 행에
+     *       배타 잠금을 걸고 커밋까지 쥔다. <b>이 줄 아래의 읽기는 전부 "내 차례의 최신"
+     *       이다.</b></li>
+     *   <li><b>인가(최종)</b> — 같은 검사를 잠금 <b>뒤</b>에 한 번 더. 이유는
+     *       {@link #joinByInviteCode} 와 같다: 잠금을 기다리는 동안 방장이 강퇴했을 수
+     *       있고, 판정에 쓰는 값을 직렬화 지점보다 먼저 읽으면 낡은 값으로 통과한다.</li>
+     *   <li><b>INSERT</b> — {@code UNIQUE (room_id, room_seq)} 와
+     *       {@code UNIQUE (room_id, client_msg_id)} 가 마지막 방어선이다(📌 #86 원칙 5).</li>
+     * </ol>
+     *
+     * <h2>왜 인가가 두 번인가 — 하나만 두면 둘 중 하나가 틀린다</h2>
+     * <p>4번만 두면(예전 판) <b>멤버가 아닌 사람도 방 행 배타 잠금을 잡는다.</b> 그 방의
+     * 정상 전송과 {@link #joinByInviteCode} 가 전부 그 뒤에 줄을 서고, 비용은 요청 한 번이다.
+     * 인증만 통과하면 {@code roomId} 하나로 남의 방을 반복해서 직렬화할 수 있다는 뜻이라
+     * 그대로 두지 않았다.
+     *
+     * <p>2번만 두면 <b>잠금 없이 읽은 값으로 판정</b>하게 된다 — #75 에서 실제로 겪은
+     * 실패다(낡은 "멤버 아님" 스냅샷을 들고 잠금을 기다렸다가 그대로 INSERT 로 내려갔다).
+     *
+     * <p>그래서 둘 다 둔다. 2번은 <b>값싼 fail-fast</b> 라 낡은 값으로 통과시킬 수 있지만,
+     * 그때는 4번이 잡고 롤백이 번호를 되돌린다 — 정확성은 4번이 지키고 2번은 비용만
+     * 줄인다. 대가는 정상 전송에서 멤버십 조회가 한 번 더 나가는 것이고,
+     * {@code (room_id, user_id)} UNIQUE 인덱스의 점 조회라 그 값을 지불했다.
+     *
+     * <p><b>없는 방은 이제 비멤버와 같은 답(403)을 받는다.</b> 2번이 먼저 걸리기 때문이다.
+     * {@link #isLiveMember}·{@link #requireOwner} 가 이미 "방 존재 여부는 그 방 멤버에게만
+     * 의미가 있다" 로 다루고, 계약({@code openapi.yaml})의 전송 오퍼레이션도 404 를 선언하지
+     * 않는다. 아래 {@code NoSuchElementException} 은 <b>2번과 3번 사이에 방이 사라진</b>
+     * 경합에만 남는 자리다.
+     *
+     * <h2>락 순서 — {@link ChatRoomRepository#lockForMemberChange} 의 javadoc 과 같은 표다</h2>
+     * <pre>
+     *   chat_room  →  chat_room_invite  →  chat_room_member  →  chat_message
+     * </pre>
+     * <p>이 메서드가 잡는 것은 <b>첫째와 넷째</b>다(멤버십은 잠그지 않고 읽기만 한다).
+     * 참여 경로가 잡는 것은 앞의 셋이다. 둘 다 같은 방향의 <b>부분열</b>이라 순환이 없다 —
+     * 그것이 {@code chat_message} 를 맨 뒤에 둔 이유다. 메시지 행은 언제나 <b>덧붙이기만</b>
+     * 하고 방보다 먼저 잠글 일이 없다. 반대로 "메시지를 먼저 잠그고 방을 잠그는" 경로를
+     * 하나라도 만들면 데드락이 가능해진다(#75 에서 실제로 겪었다 — 빈 방에서도 4명 중
+     * 3명이 졌다).
+     *
+     * <p><b>이 트랜잭션 안에서 밖으로 나가는 호출을 하지 않는다.</b> 푸시 알림도 S3 도
+     * 커밋 뒤다 — {@code innodb_lock_wait_timeout} 이 기본 50초라 느린 호출 하나가 그 방의
+     * 전송을 전부 막는다(📌 #86 원칙 5 · schema.md §12).
+     *
+     * <h2>{@code senderName} 은 스냅샷이고 응답의 이름이 아니다</h2>
+     * <p>chat 은 {@code users} 를 모르므로 이름을 <b>받아서</b> 저장한다. 응답에 실을 이름은
+     * 부르는 쪽이 지금 {@code users} 에서 읽는다({@code chatweb.ChatMessages} 가 그 조립을
+     * 하고, 해석은 {@code chatweb.ChatSenderNames} 다 · #78 완료 조건 3·4).
+     * 이 값은 "그때 방 안의 사람들이 본 이름" 으로 남는다({@link ChatMessageView} javadoc).
+     *
+     * @param contentType {@code null}·공백이면 {@code text}. 16자를 넘으면 400
+     * @param clientMsgId 재전송 멱등키. {@code null} 이면 멱등을 요구하지 않는 전송이다.
+     *                    같은 키로 두 번 오면 두 번째는 {@code UNIQUE (room_id, client_msg_id)}
+     *                    가 거부한다 — 그것을 200 으로 번역하는 것은 #79 다. 64자를 넘으면 400
+     * @throws ResponseStatusException  403 — 이 방의 살아 있는 멤버가 아니면(없는 방도 여기다)
+     * @throws NoSuchElementException   404 — 값싼 인가를 통과한 뒤 발급 전에 방이 사라졌으면
+     * @throws IllegalArgumentException 400 — 본문이 비었거나, 이름이 없거나, 넷 중 어느 하나가
+     *                                  자기 컬럼 폭을 넘으면
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ChatMessageView postMessage(long roomId, long senderUserId, String senderName,
+                                       String body, String contentType, String clientMsgId) {
+        // ① 입력 검증 — 잠금을 잡기 전에 끝낸다.
+        String name = validSenderName(senderName);
+        String text = validBody(body);
+        String type = validContentType(contentType);
+        String idempotencyKey = validClientMsgId(clientMsgId);
+
+        // ② 값싼 인가 — 잠금을 잡기 전에 명백한 비멤버를 돌려보낸다. 최종 판정은 ④다.
+        if (!isLiveMember(roomId, senderUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이 방의 멤버가 아닙니다.");
+        }
+
+        // ③ ★ 직렬화 지점. 발급 문장 하나가 방 행을 잠그고 카운터를 올린다.
+        if (rooms.assignNextSeq(roomId) == 0) {
+            throw new NoSuchElementException("방을 찾을 수 없습니다.");
+        }
+        long seq = rooms.lastAssignedSeq();
+
+        // ④ 인가 — 다시 읽는다. 이것이 최종 판정이다. 이유는 위 javadoc.
+        if (!isLiveMember(roomId, senderUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "이 방의 멤버가 아닙니다.");
+        }
+
+        // ⑤ INSERT. 방은 프록시로 든다 — 엔티티를 읽어 오면 그 스냅샷의 낡은 last_seq 가
+        //    플러시 순서에 따라 ③을 덮어쓸 여지가 생긴다.
+        ChatMessage saved = messages.saveAndFlush(ChatMessage.builder()
+                .room(rooms.getReferenceById(roomId))
+                .roomSeq(seq)
+                .senderUserId(senderUserId)
+                .senderName(name)
+                .body(text)
+                .contentType(type)
+                .clientMsgId(idempotencyKey)
+                .build());
+
+        return viewOf(saved);
+    }
+
+    /**
+     * {@code afterSeq} 다음 메시지들 — {@code room_seq} 오름차순.
+     *
+     * <p>이 이슈에서는 완료 조건 3·4 를 확인하는 데 쓰고, HTTP 로 나가는 것은 #79 다.
+     * 인가를 여기서 하지 않는 것도 그래서다 — 부르는 쪽이 {@link #isLiveMember} 로 묻는다.
+     *
+     * <p><b>삭제된 메시지를 거르지 않는다.</b> 거르면 그 {@code roomSeq} 가 클라이언트에
+     * 도달하지 않아 읽음 커서가 그 번호를 넘지 못하고 미읽음 뱃지가 영원히 남는다
+     * (ADR-0011 · {@link ChatMessageView} javadoc).
+     */
+    @Transactional(readOnly = true)
+    public List<ChatMessageView> messagesAfter(long roomId, long afterSeq, int limit) {
+        return messages.findByRoomIdAndRoomSeqGreaterThanOrderByRoomSeqAsc(
+                        roomId, afterSeq, Limit.of(limit)).stream()
+                .map(ChatRoomService::viewOf)
+                .toList();
+    }
+
     // ─────────────────────────── 인가 ───────────────────────────
 
     /**
@@ -469,6 +650,103 @@ public class ChatRoomService {
         return new ChatJoinResult(room, alreadyBack);
     }
 
+    /**
+     * 이름 검증. <b>스냅샷이라 비어 있으면 안 된다</b> — 그 자리는 나중에 채울 수 없다.
+     *
+     * <p>길이를 잘라서 저장하지 않고 거절하는 것은 {@code FamilyGroupService.validName} 과
+     * 같은 이유다. 다만 여기서 상한은 <b>한도가 아니라 컬럼 폭</b>이다
+     * ({@code chat_message.sender_name varchar(255)} = {@code users.nickname} 과 같은 폭).
+     *
+     * <p><b>정상 경로가 이 길이를 넘을 수 없다는 말은 틀렸다</b> — 예전 판이 그렇게 적었다.
+     * {@code users.nickname} 도 같은 {@code varchar(255)} 라 보조평면 문자(이모지) 128자짜리
+     * 닉네임이 DB 에 실제로 들어갈 수 있고, 그 사람의 {@code User.displayName()} 은
+     * 자바 {@code length()} 로 256 이 넘는다. 그래서 세는 단위가
+     * {@link #widerThanColumn} 이다 — 그렇게 안 세면 그 사람은 채팅을 한 줄도 못 보낸다
+     * (이모지 200개짜리 이름으로 400 이 나오는 것을 실측했다).
+     *
+     * <p><b>메시지에 입력값을 되싣지 않는다</b> — 이 문구는 그대로 응답 본문이 된다(#6).
+     */
+    private static String validSenderName(String requested) {
+        String name = requested == null ? "" : requested.strip();
+        if (name.isEmpty() || widerThanColumn(name, SENDER_NAME_COLUMN_WIDTH)) {
+            throw new IllegalArgumentException("보낸 사람 이름이 올바르지 않습니다.");
+        }
+        return name;
+    }
+
+    /**
+     * 본문 검증 — <b>비어 있지 않은가</b>와 <b>컬럼에 들어가는가</b> 둘이다.
+     *
+     * <p>예전 판은 길이를 안 봤고, 그 자리에 "마지막 방어선은 {@code TEXT}(64KB) 컬럼이고
+     * 요청 크기로 거절하는 자리는 엔드포인트다" 라고 적혀 있었다. <b>그 판단을 되돌린다.</b>
+     * 실제로 70,000자(그리고 한글 22,000자)를 넣어 보니 컬럼은 방어선이 아니라
+     * {@code Data too long for column 'body'} → <b>500</b> 이었다. 400 이어야 할 요청이
+     * 500 으로 나가는 것은 앱에게 "재시도하라" 는 뜻이 된다.
+     *
+     * <p>엔드포인트의 요청 크기 제한(#79)은 여전히 필요하다 — 그건 <b>더 앞</b>에서 큰
+     * 요청을 아예 안 읽는 장치이고, 이건 컬럼 폭에 맞추는 마지막 번역이다. 둘은 대체재가
+     * 아니다.
+     *
+     * <p>세는 단위가 문자가 아니라 <b>UTF-8 바이트</b>인 이유는 {@code TEXT} 가 바이트로
+     * 세기 때문이다. 한글은 3바이트라 22,000자면 이미 넘는다.
+     */
+    private static String validBody(String requested) {
+        String text = requested == null ? "" : requested.strip();
+        if (text.isEmpty()) {
+            throw new IllegalArgumentException("메시지 본문이 비어 있습니다.");
+        }
+        if (text.getBytes(StandardCharsets.UTF_8).length > BODY_COLUMN_BYTES) {
+            throw new IllegalArgumentException("메시지 본문이 너무 깁니다.");
+        }
+        return text;
+    }
+
+    /**
+     * 본문 종류 검증. {@code null}·공백이면 {@link #DEFAULT_CONTENT_TYPE} 이다.
+     *
+     * <p>허용값 화이트리스트를 두지 않는다 — 값이 늘 때마다 chat 을 고치고 배포해야 하는
+     * 것이 {@code enum} 을 안 쓴 이유와 같다({@code ChatMessage#contentType} javadoc).
+     * 여기서 막는 것은 <b>컬럼에 안 들어가는 값</b> 하나다.
+     */
+    private static String validContentType(String requested) {
+        if (requested == null || requested.isBlank()) {
+            return DEFAULT_CONTENT_TYPE;
+        }
+        String type = requested.strip();
+        if (widerThanColumn(type, CONTENT_TYPE_COLUMN_WIDTH)) {
+            throw new IllegalArgumentException("메시지 종류가 올바르지 않습니다.");
+        }
+        return type;
+    }
+
+    /**
+     * 멱등키 검증. {@code null}·공백이면 <b>{@code null}</b> — 멱등을 요구하지 않는 전송이다.
+     *
+     * <p>공백을 지우지 않는다. 키를 다듬으면 클라이언트가 보낸 것과 서버가 저장한 것이
+     * 달라지고, 그러면 {@code UNIQUE (room_id, client_msg_id)} 가 무엇을 같다고 보는지가
+     * 조용히 바뀐다. 여기서 하는 것은 폭 검사 하나다.
+     */
+    private static String validClientMsgId(String requested) {
+        if (requested == null || requested.isBlank()) {
+            return null;
+        }
+        if (widerThanColumn(requested, CLIENT_MSG_ID_COLUMN_WIDTH)) {
+            throw new IllegalArgumentException("메시지 멱등키가 올바르지 않습니다.");
+        }
+        return requested;
+    }
+
+    /**
+     * MySQL {@code varchar(n)} 이 받는 것은 <b>문자(코드포인트) n 개</b>다.
+     *
+     * <p>자바 {@code String.length()} 는 UTF-16 코드유닛을 센다 — 이모지 하나가 2 다.
+     * 그 차이를 무시하면 컬럼에 들어가는 값을 400 으로 거절한다(반대 방향의 틀림이라
+     * 500 은 안 나지만, 그 사람은 아무것도 못 보낸다).
+     */
+    private static boolean widerThanColumn(String value, int columnWidth) {
+        return value.codePointCount(0, value.length()) > columnWidth;
+    }
+
     /** 겹치지 않는 코드 하나. 최종 방어선은 {@code UNIQUE (code)} 다. */
     private String unusedCode() {
         for (int attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {
@@ -488,6 +766,13 @@ public class ChatRoomService {
     private static ChatMemberView viewOf(ChatRoomMember member) {
         return new ChatMemberView(member.getUserId(), member.getRole().name(),
                 member.getLastReadSeq(), member.getJoinedAt());
+    }
+
+    private static ChatMessageView viewOf(ChatMessage message) {
+        return new ChatMessageView(message.getId(), message.getRoom().getId(),
+                message.getRoomSeq(), message.getSenderUserId(), message.getSenderName(),
+                message.getBody(), message.getContentType(), message.getClientMsgId(),
+                message.getCreatedAt(), message.getDeletedAt());
     }
 
     private static ChatInviteView viewOf(ChatRoomInvite invite, long roomId) {

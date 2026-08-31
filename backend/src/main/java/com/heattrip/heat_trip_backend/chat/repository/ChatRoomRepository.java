@@ -6,6 +6,7 @@ import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -45,11 +46,19 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
      * <h2>락 순서 — 바꾸면 데드락이 돌아온다</h2>
      * <p>원칙 5 가 요구하는 대로 못 박는다. 참여 트랜잭션은 <b>언제나</b> 이 순서로 잠근다.
      * <pre>
-     *   chat_room (이 메서드)  →  chat_room_invite (consumeOneUse)  →  chat_room_member (INSERT/UPDATE)
+     *   chat_room  →  chat_room_invite  →  chat_room_member  →  chat_message
+     *   (이 메서드)     (consumeOneUse)     (INSERT/UPDATE)      (전송 INSERT)
      * </pre>
      * <p>발급({@code issueInvite})과 회수({@code revokeInvite})는 {@code chat_room_invite}
-     * 하나만 잡으므로 순환이 생기지 않는다. <b>새 경로가 이 셋 중 둘 이상을 잡게 되면
-     * 반드시 같은 순서로 잡아라.</b> {@code chat_room.last_seq} 발급(#78)이 그 첫 후보다.
+     * 하나만 잡으므로 순환이 생기지 않는다. <b>새 경로가 이 넷 중 둘 이상을 잡게 되면
+     * 반드시 같은 순서로 잡아라.</b>
+     *
+     * <p><b>{@code chat_message} 를 맨 뒤에 둔 것이 #78 의 판단이다.</b> 전송 경로
+     * ({@code ChatRoomService#postMessage})는 {@link #assignNextSeq} 로 <b>첫 칸</b>을 잡고
+     * 메시지를 넣으므로 넷 중 첫째와 넷째만 쓴다 — 참여 경로가 쓰는 앞의 셋과 같은
+     * 방향의 부분열이라 순환이 없다. 메시지 행은 언제나 덧붙이기만 하고 방보다 먼저
+     * 잠길 일이 없어서 맨 뒤가 자연스러운 자리다. 반대로 <b>메시지를 먼저 잠그고 방을
+     * 잠그는 경로를 하나라도 만들면</b> 그 순간 데드락이 가능해진다.
      *
      * <p>락 범위는 참여 트랜잭션 하나이고 그 안에서 <b>밖으로 나가는 호출을 하지 않는다</b> —
      * {@code innodb_lock_wait_timeout} 기본 50초 때문에 느린 호출 하나가 그 방의 참여를
@@ -63,4 +72,59 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from ChatRoom r where r.id = :id")
     Optional<ChatRoom> lockForMemberChange(@Param("id") Long id);
+
+    /**
+     * 이 방의 다음 {@code room_seq} 를 발급한다 — 이슈 #78. <b>한 문장이 잠금이자 증가다.</b>
+     *
+     * <h2>왜 읽고 더해서 쓰지 않는가 — 실측</h2>
+     * <p>가장 자연스러운 판은 방을 읽어 {@code lastSeq + 1} 을 쓰는 것이다. 그렇게 짜고
+     * 스레드 20개를 같은 방에 붙였더니 <b>20개 중 17개가 죽었다</b>(성공 3건) —
+     * {@code Duplicate entry '1-1' for key 'chat_message.uq_chat_room_seq'} 와
+     * {@code '1-2'}. 두 트랜잭션이 같은 값을 읽고 같은 번호를 쓰기 때문이고,
+     * {@code READ_COMMITTED} 에서도 <b>평범한 SELECT 는 잠그지 않는다.</b>
+     * ({@code ChatMessageIntegrationTest} 의 20스레드 테스트가 그 자리다.)
+     *
+     * <p>{@code UPDATE … SET last_seq = last_seq + 1} 로 고쳐도 <b>절반만</b> 낫는다.
+     * 증가 자체는 원자적이지만 <b>내가 받은 번호가 몇인지</b>를 다시 SELECT 로 읽어야 하고,
+     * 그 사이에 남이 또 올렸으면 남의 번호를 읽는다. 두 문장 사이를 닫는 것은 이 문장이
+     * 잡는 행 잠금인데, 그러면 잠금에 기대는 이유를 주석에 적어야 유지된다.
+     *
+     * <p>그래서 MySQL 이 문서로 제시한 방식을 그대로 쓴다 —
+     * {@code LAST_INSERT_ID(expr)} 는 값을 <b>세션에 기억시키면서</b> 그대로 돌려준다.
+     * 증가와 "내 번호" 가 한 문장에 있고, 세션 값이라 다른 커넥션이 끼어들 수 없다.
+     * https://dev.mysql.com/doc/refman/8.0/en/information-functions.html#function_last-insert-id
+     *
+     * <h2>락 순서</h2>
+     * <p>이 문장이 잡는 것은 {@code chat_room} 행의 배타 잠금이고 커밋까지 쥔다.
+     * {@link #lockForMemberChange} 가 못 박은 순서의 <b>첫 칸</b>이 그것이라, 전송 경로와
+     * 참여 경로가 같은 방향으로 줄을 선다:
+     * {@code chat_room → chat_room_invite → chat_room_member → chat_message}.
+     *
+     * <h2>계측 자리</h2>
+     * <p>방 단위 직렬화라 방이 시끄러우면 여기서 기다린다. 그 대기를 볼 이름은
+     * <b>{@code chat.seq.assign}</b> Timer 다 — 이름만 여기 잡아 두고, 실제 계측은 rate
+     * limit 이슈에서 함께 붙인다(#78 "무엇을" 마지막 항목). 그때 볼 것은 평균이 아니라
+     * p99 와 {@code innodb_lock_wait_timeout}(기본 50초) 근처의 꼬리다.
+     *
+     * @return 1 이면 발급했고, 0 이면 그런 방이 없다. 발급한 값은
+     *         {@link #lastAssignedSeq()} 로 <b>같은 트랜잭션 안에서</b> 읽는다
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "UPDATE chat_room SET last_seq = LAST_INSERT_ID(last_seq + 1) WHERE id = ?1",
+            nativeQuery = true)
+    int assignNextSeq(long roomId);
+
+    /**
+     * 바로 앞 {@link #assignNextSeq} 가 이 세션에 남긴 번호.
+     *
+     * <p><b>{@code assignNextSeq} 직후에, 같은 트랜잭션에서, AUTO_INCREMENT INSERT 보다
+     * 먼저 불러야 한다.</b> {@code LAST_INSERT_ID()} 는 세션 하나에 값 하나이고,
+     * {@code chat_message} INSERT 가 그 값을 자기 {@code id} 로 덮어쓴다.
+     *
+     * <p>{@code CAST(... AS SIGNED)} 를 씌우는 이유는 타입이다 — {@code LAST_INSERT_ID()} 는
+     * {@code BIGINT UNSIGNED} 라 드라이버가 {@code BigInteger} 를 줄 수 있고, 그러면
+     * {@code Long} 으로 받는 이 시그니처가 실행 시점에 깨진다.
+     */
+    @Query(value = "SELECT CAST(LAST_INSERT_ID() AS SIGNED)", nativeQuery = true)
+    long lastAssignedSeq();
 }

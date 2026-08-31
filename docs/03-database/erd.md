@@ -2,7 +2,7 @@
 
 > Pawloop(포루프) MySQL 공간형 데이터 모델의 개체-관계도. GPS 산책 경로(`LINESTRING`)와 장소 좌표(`POINT`)를 공간 컬럼으로 저장하고, `SPATIAL INDEX` + `ST_Distance_Sphere`/`MBRContains`로 주변 검색을 수행한다. **가족 케어 공유**와 **채팅** 기능으로 `family_group`·`chat_room`·`chat_room_member`·`chat_room_invite`·`chat_message`·`walk_note` 엔티티가 추가되고, `care_log`는 `group_id`/`done_by`를 더해 "누가·언제 했는지"를 가족과 공유하는 케어 기록으로 확장된다. 방·멤버십·초대는 가족 그룹에 종속되지 않는 범용 3엔티티이고, `family_group` 은 `origin_kind`/`origin_ref` 쌍으로 방에 **불투명하게** 닿는다 — 그 방향의 FK 는 없다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-> **어디까지가 실재인가.** `users` 와 `refresh_token` 만 지금 DB 에 있다 — 정본은 `backend/mysql/init/01_schema.sql` 이다. 나머지 엔티티는 아직 **계획**이다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
+> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `users` · `refresh_token` · `family_group` · `chat_room` · `chat_room_member` · `chat_room_invite` · `chat_message` · `walk_note` · `care_log` 아홉이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고, 절별 표기는 [테이블 스키마](./schema.md)의 **실재** 표시가 정본이다. 나머지 엔티티(`dog`·`walk`·`place` 등)는 아직 **계획**이다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
 
 ## ER 다이어그램
 
@@ -136,9 +136,10 @@ erDiagram
         BIGINT   room_id FK
         BIGINT   room_seq       "방별 순서. room+seq UNIQUE"
         BIGINT   sender_user_id "users.id (DB FK 제약은 없음)"
-        VARCHAR  sender_name    "발신 시점 닉네임 스냅샷"
+        VARCHAR  sender_name    "발신 시점 스냅샷 - 응답의 이름은 users 의 현재 값이다"
         VARCHAR  content_type
         TEXT     body
+        VARCHAR  client_msg_id  "재전송 멱등키. room+client UNIQUE, NULL 은 여러 번 허용"
         DATETIME created_at
         DATETIME deleted_at    "소프트 삭제 - seq 에 빈틈을 내지 않는다"
     }

@@ -665,7 +665,7 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때만 연다(M2.9).
 
-데이터 모델: `chat_room(origin_kind, origin_ref, title, last_seq)` · `chat_room_member(room_id, user_id, role, last_read_seq, removed_at, rejoin_blocked)` · `chat_room_invite(room_id, code, expires_at, max_uses, used_count, revoked_at)` · `chat_message(room_id, room_seq, sender_user_id, sender_name, content_type, body, deleted_at)`. **chat 경계 밖으로 나가는 FK 는 0개다.**
+데이터 모델: `chat_room(origin_kind, origin_ref, title, last_seq)` · `chat_room_member(room_id, user_id, role, last_read_seq, removed_at, rejoin_blocked)` · `chat_room_invite(room_id, code, expires_at, max_uses, used_count, revoked_at)` · `chat_message(room_id, room_seq, sender_user_id, sender_name, content_type, body, client_msg_id, deleted_at)`. **chat 경계 밖으로 나가는 FK 는 0개다.** `client_msg_id` 에는 `UNIQUE (room_id, client_msg_id)` 가 걸려 있어 같은 키로 두 번 보낸 재전송이 두 줄이 되지 않는다(#78).
 
 | 메서드 | 경로 | 설명 | 마일스톤 |
 |---|---|---|---|
