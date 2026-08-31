@@ -162,6 +162,14 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/curation/")) {
             return new Rule("curation", rateLimitProperties.getCurationMaxRequests());
         }
+        // 관광공사 프록시(#40). 인증 없는 공개 경로라 등재가 특히 중요하다 —
+        // 표에 없으면 한도가 0 이 아니라 무한이다.
+        if ("GET".equals(method) && "/api/places/nearby".equals(path)) {
+            return new Rule("places", rateLimitProperties.getPlacesMaxRequests());
+        }
+        if ("GET".equals(method) && path.matches("^/api/places/[^/]+$")) {
+            return new Rule("places-detail", rateLimitProperties.getPlacesDetailMaxRequests());
+        }
         if ("GET".equals(method) && "/api/explore/places/search".equals(path)) {
             return new Rule("search", rateLimitProperties.getSearchMaxRequests());
         }

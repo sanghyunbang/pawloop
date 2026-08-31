@@ -34,6 +34,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\07_family_group.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\08_care_log.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\09_chat_message.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\10_place_cache.sql
 ```
 
 | 파일 | 무엇을 |
@@ -47,6 +48,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `07_family_group.sql` | 가족 케어 그룹 — `family_group(id, name, created_at)` 생성. **초대코드도 멤버십도 여기 없다** (이슈 #75 · [ADR-0011](../../docs/99-decisions/decision-log.md)) |
 | `08_care_log.sql` | 오늘의 케어와 산책 주의사항 — `care_log`·`walk_note` 생성, `family_group`·`users`로의 FK 4개, `walk_note`의 `UNIQUE(group_id)`(그룹당 한 장), `care_log.type` CHECK 다섯 값 (이슈 #76) |
 | `09_chat_message.sql` | 채팅 메시지 — `chat_message` 생성, `UNIQUE(room_id, room_seq)`(커서가 `id` 가 아닌 근거)·`UNIQUE(room_id, client_msg_id)`(재전송 멱등)·`idx_chat_sender`, `chat_room`으로의 FK 하나. **`06` 이 먼저입니다** (이슈 #78 · [ADR-0011](../../docs/99-decisions/decision-log.md)) |
+| `10_place_cache.sql` | 관광공사(KTO) 프록시의 캐시와 호출 예산 — `kto_call_budget`·`place_cell`·`pet_place_detail` 생성. **FK 가 하나도 없습니다.** `kto_call_budget` 의 `PRIMARY KEY (day, pool)` 이 KTO 일 1,000콜 한도를 지키는 유일한 장치이고, 그 판정이 조건부 UPDATE 한 문장입니다 (이슈 #40) |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 

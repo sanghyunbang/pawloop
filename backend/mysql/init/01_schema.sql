@@ -117,6 +117,45 @@ CREATE TABLE `chat_message` (
   CONSTRAINT `fk_chat_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `kto_call_budget` (
+  `used` int NOT NULL DEFAULT '0',
+  `day` date NOT NULL,
+  `pool` varchar(16) NOT NULL,
+  PRIMARY KEY (`day`,`pool`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `pet_place_detail` (
+  `lat` double DEFAULT NULL,
+  `lng` double DEFAULT NULL,
+  `common_fetched_at` datetime(6) DEFAULT NULL,
+  `not_found_at` datetime(6) DEFAULT NULL,
+  `pet_fetched_at` datetime(6) DEFAULT NULL,
+  `content_id` varchar(64) NOT NULL,
+  `content_type_id` varchar(16) DEFAULT NULL,
+  `tel` varchar(64) DEFAULT NULL,
+  `addr` varchar(255) DEFAULT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `image` varchar(512) DEFAULT NULL,
+  `acmpy_need_mtr` text,
+  `acmpy_psbl_cpam` text,
+  `etc_acmpy_info` text,
+  `overview` longtext,
+  PRIMARY KEY (`content_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `place_cell` (
+  `fail_streak` int NOT NULL DEFAULT '0',
+  `item_count` int NOT NULL,
+  `lat_idx` int NOT NULL,
+  `lng_idx` int NOT NULL,
+  `total_count` int NOT NULL DEFAULT '0',
+  `failed_at` datetime(6) DEFAULT NULL,
+  `fetched_at` datetime(6) NOT NULL,
+  `payload` longtext NOT NULL,
+  PRIMARY KEY (`lat_idx`,`lng_idx`),
+  KEY `idx_place_cell_fetched` (`fetched_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `chat_report` (
   `context_from_seq` bigint NOT NULL,
   `context_to_seq` bigint NOT NULL,
