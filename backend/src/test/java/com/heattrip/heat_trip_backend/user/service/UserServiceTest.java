@@ -1,7 +1,7 @@
 package com.heattrip.heat_trip_backend.user.service;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
-import com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException;
+import com.heattrip.heat_trip_backend.user.UnauthenticatedException;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;

@@ -1,4 +1,4 @@
-package com.heattrip.heat_trip_backend.OAuth.principal;
+package com.heattrip.heat_trip_backend.user;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -22,7 +22,18 @@ import java.lang.annotation.Target;
  * 개념이 되살아난다. 그건 인가 경계(#23)가 {@code SecurityConfig.publicMatchers} 에서 결정할 일이고,
  * 컨트롤러 파라미터가 결정할 일이 아니다.
  */
-@org.springframework.modulith.NamedInterface("principal")
+/*
+ * 이 애노테이션은 원래 {@code OAuth.principal} 에 있었다. 옮긴 이유는 #107 이다.
+ *
+ * 이것이 붙은 파라미터의 타입은 {@code user.entity.User} 다 — 즉 이 애노테이션이 뜻하는 것은
+ * "지금 로그인한 <b>우리 사용자</b>" 이지 "소셜 로그인" 이 아니다. {@code user} 의 어휘다.
+ *
+ * 그리고 {@code user.controller.AuthController} 가 이것을 쓰느라 {@code user -> OAuth} 화살표를
+ * 만들고 있었다. 애노테이션은 인터페이스로 뒤집을 수 없어서, 옮기는 것 말고 방법이 없었다.
+ *
+ * 값을 채우는 것은 여전히 {@code OAuth.principal.CurrentUserArgumentResolver} 다. 그쪽이
+ * {@code user} 를 부르는 것은 남겨 둔 방향이라 문제가 없다.
+ */
 @Documented
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)

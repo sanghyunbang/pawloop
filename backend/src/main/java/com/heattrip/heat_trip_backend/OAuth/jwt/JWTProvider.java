@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.OAuth.jwt;
 
+import com.heattrip.heat_trip_backend.user.service.AccessTokenIssuer;
+
 import io.jsonwebtoken.*; // JWT 토큰 생성을 위한 JJWT 라이브러리의 핵심 클래스들
 import io.jsonwebtoken.security.Keys; // 안전한 서명 키 생성을 위한 도구
 
@@ -14,7 +16,7 @@ import java.security.Key;
 import java.util.Date;
 
 @Component
-public class JWTProvider {
+public class JWTProvider implements AccessTokenIssuer {
 
     private static final Logger log = LoggerFactory.getLogger(JWTProvider.class);
 

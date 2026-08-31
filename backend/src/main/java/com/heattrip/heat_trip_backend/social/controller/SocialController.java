@@ -6,7 +6,7 @@ import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
+import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.social.dto.CardDto;
 import com.heattrip.heat_trip_backend.social.dto.CommentDto;
 import com.heattrip.heat_trip_backend.social.dto.CommentRequest;

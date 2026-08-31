@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.BeanDescription;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.heattrip.heat_trip_backend.user.controller.AuthController;
+import com.heattrip.heat_trip_backend.OAuth.controller.OAuthLoginController;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <h2>ADR-0010 을 계약 파일에 잠근다</h2>
  * <p>"네이버 보류" 는 ADR 산문으로만 두면 되돌아온다. {@code parameters.Provider} 와
  * {@code User.provider} 의 enum 에 {@code naver} 를 다시 넣으면 여기서 빨간불이 난다
- * (완료 조건 8). 코드 쪽 화이트리스트({@code AuthController.SUPPORTED_PROVIDERS})도 같은
+ * (완료 조건 8). 코드 쪽 화이트리스트({@code OAuthLoginController.SUPPORTED_PROVIDERS})도 같은
  * 집합이어야 한다 — 한쪽만 넓히면 계약에 없는 값이 302 로 통과한다.
  *
  * <p>스프링 컨텍스트를 띄우지 않는다. 문서를 읽고 클래스를 리플렉션으로 볼 뿐이다.
@@ -84,7 +84,7 @@ class OpenApiAuthContractTest {
         // docs/02-architecture/backend/auth.md 가 이 불변식을 글로 적어 두었다. 글은 지켜지지 않는다.
         // 여기서만 넓히면 계약에 없는 값이 302 로 통과하고, 여기서만 좁히면 계약이 거짓을 광고한다.
         assertThat(supportedProvidersFromCode())
-                .as("계약 enum 과 AuthController.SUPPORTED_PROVIDERS 가 갈라졌다")
+                .as("계약 enum 과 OAuthLoginController.SUPPORTED_PROVIDERS 가 갈라졌다")
                 .containsExactlyInAnyOrderElementsOf(providerParameterEnum());
     }
 
@@ -183,16 +183,16 @@ class OpenApiAuthContractTest {
         return names;
     }
 
-    /** {@code AuthController.SUPPORTED_PROVIDERS} — private static 이라 리플렉션으로 읽는다. */
+    /** {@code OAuthLoginController.SUPPORTED_PROVIDERS} — private static 이라 리플렉션으로 읽는다. */
     @SuppressWarnings("unchecked")
     private static List<String> supportedProvidersFromCode() {
         try {
-            Field field = AuthController.class.getDeclaredField("SUPPORTED_PROVIDERS");
+            Field field = OAuthLoginController.class.getDeclaredField("SUPPORTED_PROVIDERS");
             field.setAccessible(true);
             return (List<String>) field.get(null);
         } catch (ReflectiveOperationException e) {
             throw new AssertionError(
-                    "AuthController.SUPPORTED_PROVIDERS 를 읽지 못했다 — 이름이 바뀌었다면 "
+                    "OAuthLoginController.SUPPORTED_PROVIDERS 를 읽지 못했다 — 이름이 바뀌었다면 "
                             + "계약 enum 과의 대조가 사라진다. 이 테스트도 함께 고쳐라.", e);
         }
     }

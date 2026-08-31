@@ -30,13 +30,14 @@
  * {@code chat.entity} / {@code chat.repository} 를 부르는 것은 0건이다 — 위 문단이 적어 둔
  * "방향은 여전히 한쪽" 이 도구로도 확인된다.
  *
- * <p>{@code "OAuth :: principal"} 은 <b>OAuth 모듈의 principal 표면만</b> 연다는 뜻이다(#104).
- * {@code ::} 로 표면을 지정하면 <b>나머지는 닫힌다</b> — {@code OAuth.jwt} 나
- * {@code OAuth.handler} 를 부르면 그대로 위반이다. 이 패키지가 {@code OAuth} 에서 쓰는 것은
- * {@code CurrentUser} 하나뿐이라 그 이상 열 이유가 없다.
+ * <p><b>{@code OAuth} 는 이제 여기 없다.</b> #107 이 {@code CurrentUser} 를 {@code user} 로
+ * 옮기면서 이 패키지의 {@code OAuth} 의존이 <b>통째로 사라졌다.</b> 원래 이 패키지가
+ * {@code OAuth} 에서 쓰던 것은 그 애노테이션 하나뿐이었다.
  *
- * <p>{@code "user :: entity"} 도 같은 모양이다(#105). {@code user} 모듈이 공개한 표면은
- * {@code User} 한 타입뿐이고 그것만 연다.
+ * <p>{@code "user"} 는 {@code user} 패키지 <b>루트</b>의 타입을 연다 — {@code CurrentUser} 와
+ * {@code UnauthenticatedException} 이 거기 있다. {@code "user :: entity"} 는 그와 별개로
+ * 이름 붙은 표면 하나를 더 여는 것이다({@code User}). <b>루트와 이름 붙은 표면은 따로 열어야
+ * 한다</b> — {@code "user"} 만 적으면 {@code User} 를 못 부른다.
  *
  * <p><b>{@code user.repository.UserRepository} 는 아직 위반으로 남아 있다.</b>
  * {@code ChatSenderNames} 가 그걸 직접 부른다. 리포지토리를 남이 직접 부르는 것은 공용 어휘가
@@ -45,7 +46,7 @@
  */
 @ApplicationModule(
         displayName = "Chat Web Adapter",
-        allowedDependencies = { "chat", "OAuth :: principal", "user :: entity" })
+        allowedDependencies = { "chat", "user", "user :: entity" })
 package com.heattrip.heat_trip_backend.chatweb;
 
 import org.springframework.modulith.ApplicationModule;

@@ -10,8 +10,10 @@
  *
  * <h2>공개 표면</h2>
  * <p>이 모듈의 공개 표면은 <b>{@code principal} 하나뿐</b>이고, 그것도 패키지째가 아니라
- * 타입 둘이다 — {@code CurrentUser} 와 {@code UnauthenticatedException}. 각 타입에
- * {@code @NamedInterface("principal")} 이 붙어 있다.
+ * 타입 하나다 — {@code CurrentUser} 에 {@code @NamedInterface("principal")} 이 붙어 있다.
+ *
+ * <p>{@code UnauthenticatedException} 은 <b>여기 없다.</b> #107 에서 {@code user} 로 옮겼다 —
+ * {@code user} 의 서비스 둘이 그것을 던지느라 {@code user -> OAuth} 순환을 만들고 있었다.
  *
  * <p>패키지째 열지 않은 이유: {@code OAuth.principal} 에는 파일이 다섯인데 밖에서 쓰는 것은
  * 둘뿐이다. 나머지 셋({@code AuthenticatedUser} · {@code CurrentUserArgumentResolver} ·

@@ -1,6 +1,6 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
-import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
+import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.chat.ChatMessageSendResult;
 import com.heattrip.heat_trip_backend.chat.ChatMessageSender;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;

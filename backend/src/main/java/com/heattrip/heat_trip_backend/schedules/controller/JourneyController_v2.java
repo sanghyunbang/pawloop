@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.heattrip.heat_trip_backend.OAuth.principal.CurrentUser;
+import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.S3.UploadCategory;
 import com.heattrip.heat_trip_backend.S3.media.MediaObject;
 import com.heattrip.heat_trip_backend.S3.media.MediaService;

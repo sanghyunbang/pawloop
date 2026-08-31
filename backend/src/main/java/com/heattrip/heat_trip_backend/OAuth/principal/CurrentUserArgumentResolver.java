@@ -1,5 +1,9 @@
 package com.heattrip.heat_trip_backend.OAuth.principal;
 
+import com.heattrip.heat_trip_backend.user.CurrentUser;
+
+import com.heattrip.heat_trip_backend.user.UnauthenticatedException;
+
 import org.springframework.core.MethodParameter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
