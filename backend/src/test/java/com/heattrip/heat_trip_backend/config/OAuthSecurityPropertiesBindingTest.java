@@ -1,5 +1,8 @@
 package com.heattrip.heat_trip_backend.config;
 
+import com.heattrip.heat_trip_backend.OAuth.OAuthSecurityProperties;
+import com.heattrip.heat_trip_backend.security.RateLimitProperties;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -62,7 +65,7 @@ class OAuthSecurityPropertiesBindingTest {
                         "app.security.rate-limit.auth-max-requests=3",
                         "app.security.rate-limit.trusted-proxies=10.9.0.0/16,127.0.0.1/32")
                 .run(context -> {
-                    var rateLimit = context.getBean(PublicSecurityProperties.class).getRateLimit();
+                    var rateLimit = context.getBean(RateLimitProperties.class);
 
                     assertThat(rateLimit.getIpHeader()).isEqualTo("X-Probe-Ip");
                     assertThat(rateLimit.getAuthMaxRequests()).isEqualTo(3);

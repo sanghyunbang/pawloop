@@ -1,6 +1,6 @@
 package com.heattrip.heat_trip_backend.OAuth.code;
 
-import com.heattrip.heat_trip_backend.config.OAuthSecurityProperties;
+import com.heattrip.heat_trip_backend.OAuth.OAuthSecurityProperties;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

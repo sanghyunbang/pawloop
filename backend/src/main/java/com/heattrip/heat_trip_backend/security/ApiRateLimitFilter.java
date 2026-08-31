@@ -2,7 +2,6 @@ package com.heattrip.heat_trip_backend.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.S3.media.error.GlobalExceptionHandler;
-import com.heattrip.heat_trip_backend.config.PublicSecurityProperties;
 import com.heattrip.heat_trip_backend.observability.logging.CorrelationIdFilter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -29,7 +28,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
     private record CounterWindow(long startedAtEpochSecond, int count) {}
     private record Rule(String bucket, int limit) {}
 
-    private final PublicSecurityProperties props;
+    private final RateLimitProperties rateLimitProperties;
     private final ObjectMapper objectMapper;
     private final Map<String, CounterWindow> counters = new ConcurrentHashMap<>();
 
@@ -43,13 +42,13 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         var rule = resolveRule(request);
-        if (!props.getRateLimit().isEnabled() || rule == null || rule.limit() <= 0) {
+        if (!rateLimitProperties.isEnabled() || rule == null || rule.limit() <= 0) {
             filterChain.doFilter(request, response);
             return;
         }
 
         long now = Instant.now().getEpochSecond();
-        long windowSeconds = Math.max(1, props.getRateLimit().getWindowSeconds());
+        long windowSeconds = Math.max(1, rateLimitProperties.getWindowSeconds());
         long currentWindow = now / windowSeconds;
         String key = resolveClientIp(request) + "|" + rule.bucket();
 
@@ -72,17 +71,16 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
     private Rule resolveRule(HttpServletRequest request) {
         String method = request.getMethod();
         String path = request.getRequestURI();
-        var rateLimit = props.getRateLimit();
 
         if ("POST".equals(method) && "/auth/login".equals(path)) {
-            return new Rule("login", rateLimit.getLoginMaxRequests());
+            return new Rule("login", rateLimitProperties.getLoginMaxRequests());
         }
         // 회원가입도 login 버킷을 쓴다. 이 줄이 없던 동안 `POST /auth/signup` 은 **무제한**
         // 이었다 — `resolveRule` 이 null 을 돌려주면 필터가 그대로 통과시키기 때문이다.
         // 계정 대량 생성은 이메일 열거·스팸 계정의 입구이고, 비용은 로그인 시도와 같은 급이라
         // 버킷을 나누지 않고 함께 쓴다.
         if ("POST".equals(method) && "/auth/signup".equals(path)) {
-            return new Rule("login", rateLimit.getLoginMaxRequests());
+            return new Rule("login", rateLimitProperties.getLoginMaxRequests());
         }
         // ── 인증 버킷 (이슈 #14) ────────────────────────────────────────────────
         // 세 분기를 하나의 || 로 합치지 않는다. 합치면 "어느 경로가 언제 목록에서
@@ -92,16 +90,16 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         // ⚠️ #9 는 refresh 경로가 rate limit 없이 열려 있다는 사실을 여기로 넘겼다.
         //    이 분기를 지우면 ApiRateLimitFilterTest.refreshEndpoint_isRateLimited 가 죽는다.
         if ("POST".equals(method) && "/auth/token/refresh".equals(path)) {
-            return new Rule("auth", rateLimit.getAuthMaxRequests());
+            return new Rule("auth", rateLimitProperties.getAuthMaxRequests());
         }
         // 1회용 코드 교환. 자격증명을 만들어 내는 경로라 무제한이면 코드 추측이 공짜다.
         if ("POST".equals(method) && path.matches("^/auth/oauth/[^/]+/callback$")) {
-            return new Rule("auth", rateLimit.getAuthMaxRequests());
+            return new Rule("auth", rateLimitProperties.getAuthMaxRequests());
         }
         // 소셜 진입. 여기는 토큰을 주지 않지만, 공급자로 나가는 302 를 무한히 뽑아낼 수 있으면
         // 우리 서버가 공급자에 대한 트래픽 증폭기가 된다.
         if (path.startsWith("/oauth2/authorization/")) {
-            return new Rule("auth", rateLimit.getAuthMaxRequests());
+            return new Rule("auth", rateLimitProperties.getAuthMaxRequests());
         }
         // ── 가족·채팅 쓰기 버킷 (이슈 #75 · 📌 #86 원칙 4) ─────────────────────
         //
@@ -141,10 +139,10 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         // 그건 이 저장소의 애플리케이션 설정이 아니다. 한도 표와 같은 이유로 #80 이 함께
         // 정한다 — 폴링 주기와 본문 상한이 같은 계산의 두 변수다.
         if ("POST".equals(method) && "/api/groups".equals(path)) {
-            return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
         if ("POST".equals(method) && path.matches("^/api/chat/rooms/\\d+/invites$")) {
-            return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
         // 회수(DELETE .../invites/{code})는 넣지 않는다. 자기 방의 코드를 죽이는 것뿐이라
         // 반복해도 새로 생기는 것이 없고, 유출 대응을 한도로 막으면 그게 더 나쁘다.
@@ -167,31 +165,31 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         // 없는 경로는 한도가 무한이다. 이 둘은 홈 화면이 진입할 때마다 부르는 경로라
         // 숫자를 정하려면 앱의 폴링 주기부터 정해야 하고, 그건 M2.6 이다.
         if ("POST".equals(method) && path.matches("^/api/groups/\\d+/care-logs$")) {
-            return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
         if ("PUT".equals(method) && path.matches("^/api/groups/\\d+/walk-notes$")) {
-            return new Rule("group-write", rateLimit.getGroupWriteMaxRequests());
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
         if (path.startsWith("/api/curation/")) {
-            return new Rule("curation", rateLimit.getCurationMaxRequests());
+            return new Rule("curation", rateLimitProperties.getCurationMaxRequests());
         }
         if ("GET".equals(method) && "/api/explore/places/search".equals(path)) {
-            return new Rule("search", rateLimit.getSearchMaxRequests());
+            return new Rule("search", rateLimitProperties.getSearchMaxRequests());
         }
         if ("POST".equals(method) && "/feedback".equals(path)) {
-            return new Rule("feedback", rateLimit.getFeedbackMaxRequests());
+            return new Rule("feedback", rateLimitProperties.getFeedbackMaxRequests());
         }
         if ("POST".equals(method) && path.matches("^/api/explore/places/\\d+/feedback$")) {
-            return new Rule("feedback", rateLimit.getFeedbackMaxRequests());
+            return new Rule("feedback", rateLimitProperties.getFeedbackMaxRequests());
         }
         if (path.startsWith("/media")) {
-            return new Rule("upload", rateLimit.getUploadMaxRequests());
+            return new Rule("upload", rateLimitProperties.getUploadMaxRequests());
         }
         if (path.startsWith("/journeys/v2/entries/") && path.endsWith("/images")) {
-            return new Rule("upload", rateLimit.getUploadMaxRequests());
+            return new Rule("upload", rateLimitProperties.getUploadMaxRequests());
         }
         if ("POST".equals(method) && "/journeys/v2/entries/with-images".equals(path)) {
-            return new Rule("upload", rateLimit.getUploadMaxRequests());
+            return new Rule("upload", rateLimitProperties.getUploadMaxRequests());
         }
         return null;
     }
@@ -229,7 +227,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
             return connectionPeer;
         }
 
-        String headerName = props.getRateLimit().getIpHeader();
+        String headerName = rateLimitProperties.getIpHeader();
         String forwarded = headerName == null ? null : request.getHeader(headerName);
         if (forwarded == null || forwarded.isBlank()) {
             return connectionPeer;
@@ -247,7 +245,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
     private TrustedProxies trustedProxies() {
         TrustedProxies cached = this.trustedProxies;
         if (cached == null) {
-            cached = TrustedProxies.parse(props.getRateLimit().getTrustedProxies());
+            cached = TrustedProxies.parse(rateLimitProperties.getTrustedProxies());
             this.trustedProxies = cached;
         }
         return cached;

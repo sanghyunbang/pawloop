@@ -1,4 +1,4 @@
-package com.heattrip.heat_trip_backend.config;
+package com.heattrip.heat_trip_backend.OAuth;
 
 import lombok.Getter;
 import lombok.Setter;

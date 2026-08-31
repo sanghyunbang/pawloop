@@ -1,7 +1,6 @@
 package com.heattrip.heat_trip_backend.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.heattrip.heat_trip_backend.config.PublicSecurityProperties;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,11 +41,11 @@ class ApiRateLimitFilterTest {
     private static final String DIRECT_PUBLIC = "203.0.113.9";
 
     /** 창을 넉넉히 잡는다 — 이 테스트가 재는 것은 시간 경과가 아니라 한도 초과다. */
-    private static PublicSecurityProperties props(int authLimit) {
-        PublicSecurityProperties p = new PublicSecurityProperties();
-        p.getRateLimit().setEnabled(true);
-        p.getRateLimit().setWindowSeconds(3600);
-        p.getRateLimit().setAuthMaxRequests(authLimit);
+    private static RateLimitProperties props(int authLimit) {
+        RateLimitProperties p = new RateLimitProperties();
+        p.setEnabled(true);
+        p.setWindowSeconds(3600);
+        p.setAuthMaxRequests(authLimit);
         return p;
     }
 
@@ -56,15 +55,15 @@ class ApiRateLimitFilterTest {
 
     /** login 버킷(이메일 로그인·회원가입)의 한도를 지정한 필터. */
     private static ApiRateLimitFilter filterWithLoginLimit(int loginLimit) {
-        PublicSecurityProperties p = props(100);
-        p.getRateLimit().setLoginMaxRequests(loginLimit);
+        RateLimitProperties p = props(100);
+        p.setLoginMaxRequests(loginLimit);
         return new ApiRateLimitFilter(p, MAPPER);
     }
 
     /** 가족·채팅 쓰기 버킷({@code POST /api/groups}·초대 발급)의 한도를 지정한 필터. */
     private static ApiRateLimitFilter filterWithGroupWriteLimit(int groupWriteLimit) {
-        PublicSecurityProperties p = props(100);
-        p.getRateLimit().setGroupWriteMaxRequests(groupWriteLimit);
+        RateLimitProperties p = props(100);
+        p.setGroupWriteMaxRequests(groupWriteLimit);
         return new ApiRateLimitFilter(p, MAPPER);
     }
 
@@ -312,8 +311,8 @@ class ApiRateLimitFilterTest {
     @Test
     @DisplayName("ip-header 를 X-Forwarded-For 로 두면 첫 원소가 아니라 마지막 홉을 쓴다")
     void forwardedForHeader_usesTheLastHopNotTheFirst() throws Exception {
-        PublicSecurityProperties p = props(2);
-        p.getRateLimit().setIpHeader("X-Forwarded-For");
+        RateLimitProperties p = props(2);
+        p.setIpHeader("X-Forwarded-For");
         ApiRateLimitFilter filter = new ApiRateLimitFilter(p, MAPPER);
 
         // 신뢰 프록시가 1단일 때, 그 프록시가 실제로 본 주소는 **마지막** 원소다.
@@ -352,8 +351,8 @@ class ApiRateLimitFilterTest {
     @Test
     @DisplayName("신뢰 프록시 목록이 비면 헤더를 아무도 못 쓴다 — 열어 두는 쪽으로 실패하지 않는다")
     void emptyTrustedProxyList_meansNoHeaderIsTrusted() throws Exception {
-        PublicSecurityProperties p = props(1);
-        p.getRateLimit().setTrustedProxies(List.of());
+        RateLimitProperties p = props(1);
+        p.setTrustedProxies(List.of());
         ApiRateLimitFilter filter = new ApiRateLimitFilter(p, MAPPER);
 
         assertThat(call(filter, "POST", "/auth/token/refresh",
@@ -440,8 +439,8 @@ class ApiRateLimitFilterTest {
     @Test
     @DisplayName("rate-limit.enabled=false 면 한도를 넘겨도 통과한다")
     void disabledSwitch_turnsTheLimiterOff() throws Exception {
-        PublicSecurityProperties p = props(1);
-        p.getRateLimit().setEnabled(false);
+        RateLimitProperties p = props(1);
+        p.setEnabled(false);
         ApiRateLimitFilter filter = new ApiRateLimitFilter(p, MAPPER);
 
         assertThat(call(filter, "POST", "/auth/token/refresh", "198.51.100.7").getStatus()).isEqualTo(200);

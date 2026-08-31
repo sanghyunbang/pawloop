@@ -2,7 +2,7 @@ package com.heattrip.heat_trip_backend.OAuth.code;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.principal.UnauthenticatedException;
-import com.heattrip.heat_trip_backend.config.OAuthSecurityProperties;
+import com.heattrip.heat_trip_backend.OAuth.OAuthSecurityProperties;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.entity.RefreshToken;
 import com.heattrip.heat_trip_backend.user.entity.User;
