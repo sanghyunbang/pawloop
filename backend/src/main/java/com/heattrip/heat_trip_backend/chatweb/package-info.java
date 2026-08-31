@@ -23,5 +23,18 @@
  *
  * <p>방향은 여전히 한쪽이다. 이 패키지는 chat 을 알고, chat 은 이 패키지를 모른다 —
  * {@code chatweb} 은 {@code chat} 이 아니므로 §B 의 금지 목록에 그대로 걸린다.
+ *
+ * <h2>모듈 선언 (#103 · ADR-0012)</h2>
+ * <p>{@code allowedDependencies = { "chat" }} 는 <b>이 패키지가 chat 만 부른다</b>는 선언이다.
+ * 실측으로 {@code chatweb -> chat} 참조는 전부 {@code chat} 패키지 바로 아래 타입이고
+ * {@code chat.entity} / {@code chat.repository} 를 부르는 것은 0건이다 — 위 문단이 적어 둔
+ * "방향은 여전히 한쪽" 이 도구로도 확인된다.
+ *
+ * <p>{@code OAuth} 와 {@code user} 는 아직 여기 없다. 이 패키지가 그 둘을 부르는 것은 맞지만,
+ * 그건 <b>그 두 모듈이 공개 표면을 안 갖고 있어서</b> 생기는 위반이라 여기서 허용으로 덮으면
+ * 원인이 가려진다. 표면을 정하는 것은 #104 · #105 다.
  */
+@ApplicationModule(displayName = "Chat Web Adapter", allowedDependencies = { "chat" })
 package com.heattrip.heat_trip_backend.chatweb;
+
+import org.springframework.modulith.ApplicationModule;
