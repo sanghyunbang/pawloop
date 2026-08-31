@@ -7,9 +7,11 @@ import '../data/auth_state.dart';
 import '../data/chat_outbox.dart';
 import '../data/chat_polling_policy.dart';
 import '../data/chat_repository.dart';
+import '../data/chat_terms_gate.dart';
 import '../domain/pet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../widgets/chat_terms_dialog.dart';
 import '../widgets/message_actions_sheet.dart';
 
 /// 채팅방 하나. **서버에 붙어 있다.** (이슈 #81)
@@ -51,9 +53,12 @@ class FamilyChatScreen extends StatefulWidget {
     this.subtitle = '',
     this.isOwner = false,
     ChatRepository? repository,
-  }) : _injected = repository;
+    ChatTermsGate? termsGate,
+  })  : _injected = repository,
+        _injectedGate = termsGate;
 
   final ChatRepository? _injected;
+  final ChatTermsGate? _injectedGate;
 
   @override
   State<FamilyChatScreen> createState() => _FamilyChatScreenState();
@@ -67,6 +72,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   );
 
   late final ChatRepository _repo = widget._injected ?? ChatRepository();
+  late final ChatTermsGate _terms = widget._injectedGate ?? const ChatTermsGate();
   final TextEditingController _ctrl = TextEditingController();
   final ScrollController _scroll = ScrollController();
 
@@ -89,11 +95,54 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
 
   int? get _myUserId => AuthState.user?.id;
 
+  /// 동의를 아직 안 받았다. 이 동안에는 **폴링도 안 한다** — 동의 전에 대화를 받아
+  /// 두면 창을 닫는 순간 남의 말이 화면에 그려진다.
+  bool _awaitingTerms = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _poll(initial: true);
+    _startAfterTerms();
+  }
+
+  /// 채팅 첫 진입에 약관 동의를 받는다 — Google Play UGC 정책(#82 완료 조건 6).
+  ///
+  /// 동의하지 않으면 **방을 열지 않고 되돌아간다.** 강제로 동의시키면 그건 동의가 아니라
+  /// 통보다. 로그인 전이면 묻지 않는다 — 누구의 동의인지 정할 수 없고, 어차피 서버가 401 이다.
+  Future<void> _startAfterTerms() async {
+    final userId = _myUserId;
+    if (userId == null || await _terms.hasAgreed(userId)) {
+      await _poll(initial: true);
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _awaitingTerms = true;
+      _loading = false;
+    });
+
+    final agreed = await ChatTermsDialog.show(context);
+    if (!mounted) {
+      return;
+    }
+    if (!agreed) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+
+    await _terms.markAgreed(userId);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _awaitingTerms = false;
+      _loading = true;
+    });
+    await _poll(initial: true);
   }
 
   @override
@@ -123,6 +172,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
 
   void _scheduleNext({bool justResumed = false}) {
     _timer?.cancel();
+    if (_awaitingTerms) {
+      // 동의 전에는 폴링하지 않는다. 받아 두면 창을 닫는 순간 남의 말이 화면에 그려진다.
+      return;
+    }
     final delay = ChatPollingPolicy.nextInterval(
       inForeground: _inForeground,
       consecutiveEmptyPolls: _consecutiveEmptyPolls,
