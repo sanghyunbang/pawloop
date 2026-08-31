@@ -63,6 +63,68 @@ com.heattrip.heat_trip_backend
 ```
 각 리소스 패키지 하위: `controller/ · service/ · repository/ · entity/ · dto/` (social 패키지가 표준 예시).
 
+### 2.1 도메인 성숙도로 두 단 (2026-08-31, 이슈 #95)
+
+5종을 편집증적으로 전부에 강제하지 않는다. **도메인 성숙도로 두 단을 둔다.** 다만 한 폴더에 다 넣는 것은 어느 단에서도 안 된다.
+
+| 단 | 대상 | 하위 구조 |
+|:---|:---|:---|
+| **1단 — 단순 CRUD** | `bookmark` · `feedback` · `social` · `user` · `group` | `controller/ service/ repository/ entity/ dto/` |
+| **2단 — 핵심 도메인** | `chat` · `care` · `curation` · `explore` | `api/ application/ domain/ infrastructure/` |
+
+단을 올릴 때는 **이슈를 하나 파고 근거를 적는다.** 조용히 올리지 않는다.
+
+### 2.2 `api` 하위 패키지에는 이름을 붙인다 (이슈 #108 · ADR-0012)
+
+**2단 구조를 쓰는 순간 구조 검사와 정면으로 부딪힌다.** Spring Modulith 의 기본 규칙은 "모듈 패키지 **바로 아래** 타입만 공개, 하위 패키지는 전부 내부" 다. 그러니 `care/api/CareController` 를 밖에서 부르면 그대로 위반이다.
+
+**규칙: 2단 도메인의 `api` 하위 패키지에는 `@NamedInterface("api")` 를 붙인다. 그것이 그 도메인의 공개 표면이다.**
+
+```java
+// care/api/package-info.java
+@org.springframework.modulith.NamedInterface("api")
+package com.heattrip.heat_trip_backend.care.api;
+```
+
+부르는 쪽은 더블 콜론으로 그 표면만 집는다.
+
+```java
+@ApplicationModule(allowedDependencies = { "care :: api" })
+```
+
+**동작하는 예가 저장소 안에 있다** — [`chatweb/package-info.java`](../../backend/src/main/java/com/heattrip/heat_trip_backend/chatweb/package-info.java). `@ApplicationModule` 로 허용 목록을 선언하고 `"user :: entity"` 로 이름 붙은 표면을 집는다.
+
+**`::` 로 표면을 지정하면 나머지는 닫힌다.** 그리고 **루트와 이름 붙은 표면은 따로 열어야 한다** — `"user"` 만 적으면 `user.entity.User` 를 못 부른다. 없는 표면 이름을 적으면 검사가 통과하는 게 아니라 `IllegalArgumentException` 으로 **던진다**.
+
+### 2.3 1단(단순 CRUD)에서는 무엇을 여는가
+
+**결론: 아무것도 안 연다. 그것이 기본값이다.**
+
+- `controller/` — HTTP 진입점이다. 다른 모듈이 부를 일이 없다. 열지 않는다.
+- `repository/` — 남이 직접 부르는 것은 공용 어휘가 아니라 **그냥 새는 것**이다. 열지 않는다.
+- `service/` · `dto/` — 남이 부르고 있다면 **그게 정상인지부터 묻는다.** 대개는 경계가 잘못 그어진 신호다.
+- `entity/` — 여기만 예외가 생길 수 있다. 실제로 `user.entity.User` 는 밖의 파일 34개가 부르는 공용 어휘라 `@NamedInterface("entity")` 를 붙였다(이슈 #105). **다만 그건 빚을 합법으로 만든 것이지 옳다고 정한 것이 아니다** — 경계를 넘는 JPA 연관을 걷어내는 작업이 이슈 #120~#123 으로 따로 잡혀 있다.
+
+밖에서 부를 것이 생기면 **루트로 올린다.** 패키지 루트는 그 자체로 공개 표면이라 별도 선언이 필요 없다.
+
+### 2.4 `chat` 에 2단을 적용할 때의 조건
+
+`chat` 은 지금 2단 구조가 **아니다** — 루트에 16개 + `entity/` + `repository/` 다. 그런데 **그 모양이 구조 검사의 기본형과 정확히 일치해서** 켜자마자 위반 0건이다.
+
+2단으로 옮기면 그 0건이 깨질 수 있다. 옮길 때 `api` 에 이름을 붙여야 하고, **무엇을 `api` 에 넣을지는 이미 정해져 있다.** 2026-08-31 실측으로 루트 16개가 이렇게 갈린다.
+
+| 밖에서 실제로 부름 → `api/` 로 (12) | 아무도 안 부름 → 내부로 (4) |
+|:---|:---|
+| `ChatRoomService` · `ChatRoomView` · `ChatMessageView` · `ChatRoomSummaryView` · `ChatMessagePageView` · `ChatMemberView` · `ChatLimitViolationException` · `ChatReadView` · `ChatMessageSender` · `ChatMessageSendResult` · `ChatJoinResult` · `ChatInviteView` | `ChatErrorCode` · `ChatLimits` · `FixedChatLimits` · `InviteCodeGenerator` |
+
+### 2.5 이 검사가 잡아 주지 않는 것
+
+**"공개인데 아무도 안 쓰는 표면" 은 `verify()` 가 안 잡는다.** 위 표의 오른쪽 넷이 그것이다 — 루트에 있어서 공개인데 밖에서 부르는 곳이 0건이다. 구조 검사는 "밖에서 내부를 불렀는가" 만 본다.
+
+그걸 잡는 것은 [`ChatBoundaryArchitectureTest`](../../backend/src/test/java/com/heattrip/heat_trip_backend/chat/ChatBoundaryArchitectureTest.java) 다. 그 테스트는 쿼리 문자열과 정본 SQL 도 본다 — **바이트코드에 안 남는 것들이라 구조 검사로는 절대 못 잡는다.**
+
+**도구를 넣었다고 그 테스트를 지우면 안 되는 이유가 이것이다.** 둘은 겹치지 않는다.
+
 ---
 
 ## 3. 공통 building blocks (리소스마다 반복되는 것)
