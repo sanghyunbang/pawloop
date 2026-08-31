@@ -18,8 +18,8 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimitProperties rateLimitProperties;
 
-    /** 429 본문 하나. 계약이 두 벌이 되지 않게 채팅 필터와 같은 것을 쓴다 (#80). */
-    private final TooManyRequestsWriter tooManyRequests;
+    /** 오류 본문을 만드는 곳. 계약이 여러 벌이 되지 않게 필터들이 같은 것을 쓴다 (#80 · #129). */
+    private final ErrorBodyWriter errors;
     /** 세는 일은 여기가 한다. 채팅 필터도 같은 것을 쓴다 (#80). */
     private final RateLimitWindow window = new RateLimitWindow();
 
@@ -28,7 +28,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
 
     public ApiRateLimitFilter(RateLimitProperties rateLimitProperties, ObjectMapper objectMapper) {
         this.rateLimitProperties = rateLimitProperties;
-        this.tooManyRequests = new TooManyRequestsWriter(objectMapper);
+        this.errors = new ErrorBodyWriter(objectMapper);
         this.clientIp = new ClientIpResolver(rateLimitProperties);
     }
 
@@ -50,7 +50,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         String key = clientIp.resolve(request) + "|" + rule.bucket();
 
         if (!window.tryAcquire(key, rule.limit(), currentWindow)) {
-            tooManyRequests.write(response, windowSeconds);
+            errors.tooManyRequests(response, windowSeconds);
             return;
         }
 
