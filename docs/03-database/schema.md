@@ -551,7 +551,9 @@ CREATE TABLE chat_room_invite (
 
 **컬럼 폭은 `ChatRoomService#postMessage` 가 먼저 본다 — 컬럼은 마지막 방어선이다.** `sender_name`(255) 만 검사가 있던 판을 실제로 돌려 보니, 클라이언트가 실제로 보내는 셋(`body`·`content_type`·`client_msg_id`)은 전부 INSERT 까지 내려가 `Data too long for column …` → **500** 이 났다. `GlobalExceptionHandler` 에 `DataIntegrityViolationException` 핸들러가 없어 캐치올이 잡기 때문이고, `openapi.yaml` 의 전송 오퍼레이션은 500 을 선언하지 않는다. 지금은 넷 다 400 이다. **`body` 는 문자가 아니라 바이트로 센다** — `TEXT` 가 65,535바이트라 UTF-8 3바이트인 한글은 22,000자면 이미 넘는다. `varchar(n)` 셋은 코드포인트로 센다 — 자바 `length()` 로 세면 이모지 닉네임(보조평면 문자)이 컬럼에 들어가는데도 400 으로 거절당한다.
 
-**`client_msg_id` 에 `UNIQUE (room_id, client_msg_id)` 를 건다.** 재전송 멱등의 근거다 — 없으면 지하철에서 타임아웃된 전송을 앱이 재시도할 때 같은 말이 두 줄 남고, 그 둘은 서로 다른 `room_seq` 를 가져 어느 쪽도 지울 근거가 없다. MySQL 의 UNIQUE 인덱스는 `NULL` 을 여러 번 허용하므로 멱등키 없는 전송은 막지 않는다.
+**`client_msg_id` 에 `UNIQUE (room_id, sender_user_id, client_msg_id)` 를 건다.** 재전송 멱등의 근거다 — 없으면 지하철에서 타임아웃된 전송을 앱이 재시도할 때 같은 말이 두 줄 남고, 그 둘은 서로 다른 `room_seq` 를 가져 어느 쪽도 지울 근거가 없다. MySQL 의 UNIQUE 인덱스는 `NULL` 을 여러 번 허용하므로 멱등키 없는 전송은 막지 않는다.
+
+**범위에 `sender_user_id` 가 들어 있는 것이 요점이다(#79).** #78 은 `(room_id, client_msg_id)` 로 세웠는데, 그 범위에서는 같은 방의 멤버 A·B 가 같은 키를 쓰면 B 의 요청이 **200 과 함께 A 의 메시지**를 받고 B 가 하려던 말은 어디에도 남지 않는다(실측). B 의 앱은 200 을 성공으로 읽으므로 재시도조차 하지 않는다. 멱등키가 막아야 하는 것은 "같은 사람의 같은 요청이 두 번 도착하는 것" 이고, 재시도는 언제나 보낸 사람 자신이 한다. 좁히는 방향이라 이미 쌓인 데이터가 새 제약을 어길 수 없다.
 
 ```sql
 CREATE TABLE chat_message (
@@ -567,7 +569,7 @@ CREATE TABLE chat_message (
   deleted_at     DATETIME(6)  NULL COMMENT '삭제는 소프트 — 뺀 자리가 seq 빈틈이 되면 안 된다',
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_room_seq (room_id, room_seq),
-  UNIQUE KEY uq_chat_msg_client (room_id, client_msg_id),
+  UNIQUE KEY uq_chat_msg_client (room_id, sender_user_id, client_msg_id),
   KEY idx_chat_sender (sender_user_id),
   CONSTRAINT fk_chat_room FOREIGN KEY (room_id)
     REFERENCES chat_room (id) ON DELETE CASCADE
@@ -583,7 +585,7 @@ CREATE TABLE chat_message (
 | `sender_name` | `VARCHAR(255)` | NOT NULL | 발신 시점 표시 이름 스냅샷 — 위 각주 |
 | `content_type` | `VARCHAR(16)` | NOT NULL, 기본 `text` | 본문 종류 |
 | `body` | `TEXT` | NOT NULL | 메시지 본문. `LONGTEXT` 가 아니다 |
-| `client_msg_id` | `VARCHAR(64)` | NULL, UNIQUE(room,client) | 재전송 멱등키 |
+| `client_msg_id` | `VARCHAR(64)` | NULL, UNIQUE(room,sender,client) | 재전송 멱등키 |
 | `created_at` | `DATETIME(6)` | NOT NULL, 기본 now | 전송 시각 |
 | `deleted_at` | `DATETIME(6)` | NULL | 소프트 삭제 |
 
@@ -720,7 +722,7 @@ CREATE TABLE care_log (
 | `chat_room_invite` | `uq_chat_invite_code(code)` | UNIQUE | 초대코드 중복 방지. 폐기한 코드는 재사용하지 않는다 |
 | `chat_room_invite` | `idx_chat_invite_room(room_id, created_at)` | 보조 | 방별 초대코드 이력 |
 | `chat_message` | `uq_chat_room_seq(room_id, room_seq)` | UNIQUE | 방별 순서·델타·미읽음의 유일한 근거. `afterSeq` 범위 스캔도 이 인덱스다 |
-| `chat_message` | `uq_chat_msg_client(room_id, client_msg_id)` | UNIQUE | 재전송 멱등. `NULL` 은 여러 번 허용된다 |
+| `chat_message` | `uq_chat_msg_client(room_id, sender_user_id, client_msg_id)` | UNIQUE | 재전송 멱등. `NULL` 은 여러 번 허용된다. **범위에 보낸 사람이 들어 있다** — 방 전체로 두면 같은 방의 다른 멤버가 같은 키를 썼을 때 그 사람의 메시지가 사라진다(#79) |
 | `chat_message` | `idx_chat_sender(sender_user_id)` | 보조 | 발신자별 조회(신고 처리) |
 | `walk_note` | `uq_walknote_group(group_id)` | UNIQUE | 그룹당 주의사항 한 장 |
 | `care_log` | `idx_carelog_group(group_id, occurred_at)` | 보조 | 그룹별 "오늘의 케어" 조회 |

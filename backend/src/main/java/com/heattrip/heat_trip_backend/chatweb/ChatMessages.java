@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
+import com.heattrip.heat_trip_backend.chat.ChatMessagePageView;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 
@@ -53,5 +54,22 @@ public class ChatMessages {
         return messages.stream()
                 .map(message -> ChatMessageResponse.of(message, names.get(message.senderUserId())))
                 .toList();
+    }
+
+    /**
+     * 메시지 한 장 — 계약의 {@code ChatMessagePage} 모양. 이슈 #79.
+     *
+     * <p><b>인가는 {@link ChatRoomService#messagePage} 안에 있다.</b> 여기서 한 번 더 묻지
+     * 않는 것이 의도다 — 판정이 두 곳에 있으면 한쪽이 낡는다.
+     *
+     * <p>{@code limit} 은 이미 정규화된 값이다({@link ChatRoomController} 가 계약의 기본값·
+     * 최댓값으로 자른다).
+     */
+    public ChatMessagePageResponse page(long roomId, long userId,
+                                        Long afterSeq, Long beforeSeq, int limit) {
+        ChatMessagePageView page = chatRooms.messagePage(roomId, userId, afterSeq, beforeSeq, limit);
+        Map<Long, String> names = senderNames.of(
+                page.items().stream().map(ChatMessageView::senderUserId).toList());
+        return ChatMessagePageResponse.of(page, names);
     }
 }

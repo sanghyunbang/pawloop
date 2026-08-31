@@ -84,8 +84,11 @@ class ChatMessageSchemaMigrationExecutionTest {
                             둘 다 이 스크립트가 성공한 것처럼 끝난 뒤에야 드러난다.""")
                     .containsExactly("room_id", "room_seq");
             assertThat(db.uniqueIndexColumns("chat_message", "uq_chat_msg_client"))
-                    .as("재전송 멱등의 근거다 (#79 완료 조건 3·8)")
-                    .containsExactly("room_id", "client_msg_id");
+                    .as("""
+                            재전송 멱등의 근거다 (#79 완료 조건 3·8). 범위에 sender_user_id 가 \
+                            들어 있어야 한다 — 방 전체로 두면 같은 방의 다른 멤버가 같은 키를 \
+                            썼을 때 그 사람의 메시지가 조용히 사라진다 (#79).""")
+                    .containsExactly("room_id", "sender_user_id", "client_msg_id");
             assertThat(db.indexColumns("chat_message", "idx_chat_sender"))
                     .as("신고 처리에서 '이 사람이 무엇을 썼나' 를 물을 때 쓰는 인덱스다")
                     .containsExactly("sender_user_id");
@@ -110,8 +113,71 @@ class ChatMessageSchemaMigrationExecutionTest {
 
             assertThatThrownBy(() -> db.exec(insertMessage(3, "same-key")
                     + "; " + insertMessage(4, "same-key")))
-                    .as("키가 있으면 같은 방에 두 번 들어가지 못한다")
+                    .as("키가 있으면 같은 사람이 같은 방에 두 번 넣지 못한다")
                     .isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("같은 방의 다른 사람이 같은 멱등키를 써도 둘 다 들어간다 — 멱등의 범위는 보낸 사람까지다")
+    void theClientIdUnique_isScopedToTheSender() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParent();
+            db.runMigration();
+            db.exec("INSERT INTO chat_room (origin_kind, origin_ref, name, tag) "
+                    + "VALUES ('FAMILY', '1', '우리 가족', '가족')");
+
+            db.exec(insertMessage(1, 7, "shared"));
+            db.exec(insertMessage(2, 8, "shared"));
+
+            assertThat(db.query("SELECT COUNT(*) FROM chat_message"))
+                    .as("""
+                            범위가 (room_id, client_msg_id) 이던 판에서는 두 번째 INSERT 가 거부되고, \
+                            앱 쪽에서는 그것이 '남의 메시지를 200 으로 돌려받음' 으로 나타났다 — \
+                            보낸 사람의 말은 어디에도 남지 않는다 (#79).""")
+                    .containsExactly("2");
+        }
+    }
+
+    @Test
+    @DisplayName("이미 (room_id, client_msg_id) 로 걸려 있던 DB 도 다시 돌리면 범위가 보낸 사람까지 넓어진다")
+    void migration_widensTheIdempotencyIndexOfAnAlreadyMigratedDatabase() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParent();
+            // #78 이 배포한 모양 그대로 만들어 둔다. 운영 DB 가 지금 이 상태다.
+            db.exec("""
+                    CREATE TABLE chat_message (
+                        id             BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                        room_id        BIGINT       NOT NULL,
+                        room_seq       BIGINT       NOT NULL,
+                        sender_user_id BIGINT       NOT NULL,
+                        sender_name    VARCHAR(255) NOT NULL,
+                        content_type   VARCHAR(16)  NOT NULL DEFAULT 'text',
+                        body           TEXT         NOT NULL,
+                        client_msg_id  VARCHAR(64)  NULL,
+                        created_at     DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                        deleted_at     DATETIME(6)  NULL,
+                        UNIQUE KEY uq_chat_room_seq (room_id, room_seq),
+                        UNIQUE KEY uq_chat_msg_client (room_id, client_msg_id),
+                        KEY idx_chat_sender (sender_user_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """);
+            db.exec("INSERT INTO chat_room (origin_kind, origin_ref, name, tag) "
+                    + "VALUES ('FAMILY', '1', '우리 가족', '가족')");
+            db.exec(insertMessage(1, 7, "shared"));
+
+            db.runMigration();
+
+            assertThat(db.uniqueIndexColumns("chat_message", "uq_chat_msg_client"))
+                    .as("""
+                            이름이 같으므로 '없으면 만든다' 가드만으로는 안 고쳐진다. 컬럼 수를 세서 \
+                            먼저 떨어뜨리는 §B 블록이 없으면 운영 DB 는 옛 범위 그대로 남는다.""")
+                    .containsExactly("room_id", "sender_user_id", "client_msg_id");
+
+            db.exec(insertMessage(2, 8, "shared"));
+            assertThat(db.query("SELECT COUNT(*) FROM chat_message"))
+                    .as("넓어진 뒤에는 다른 사람의 같은 키가 들어간다 — 이미 있던 행은 그대로다")
+                    .containsExactly("2");
         }
     }
 
@@ -227,12 +293,17 @@ class ChatMessageSchemaMigrationExecutionTest {
 
     // ─────────────────────────── 지그 ───────────────────────────
 
-    /** 방 1번에 메시지 한 줄. 번호와 멱등키만 바꾼다. */
+    /** 방 1번에 메시지 한 줄. 번호와 멱등키만 바꾼다. 보낸 사람은 7번 한 사람이다. */
     private static String insertMessage(long seq, String clientMsgId) {
+        return insertMessage(seq, 7, clientMsgId);
+    }
+
+    /** 보낸 사람까지 고르는 판. 멱등키의 범위가 (room_id, sender_user_id, client_msg_id) 라서 필요하다. */
+    private static String insertMessage(long seq, long senderUserId, String clientMsgId) {
         return ("INSERT INTO chat_message "
                 + "(room_id, room_seq, sender_user_id, sender_name, body, client_msg_id) "
-                + "VALUES (1, %d, 7, '보호자', '안녕하세요', %s)")
-                .formatted(seq, clientMsgId == null ? "NULL" : "'" + clientMsgId + "'");
+                + "VALUES (1, %d, %d, '보호자', '안녕하세요', %s)")
+                .formatted(seq, senderUserId, clientMsgId == null ? "NULL" : "'" + clientMsgId + "'");
     }
 
     private static Fixture fixture() throws SQLException {

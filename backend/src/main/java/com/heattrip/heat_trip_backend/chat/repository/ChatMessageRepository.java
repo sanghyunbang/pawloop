@@ -4,7 +4,10 @@ import com.heattrip.heat_trip_backend.chat.entity.ChatMessage;
 
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,11 +42,56 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
             Long roomId, long afterSeq, Limit limit);
 
     /**
-     * 같은 방에 같은 멱등키로 이미 들어온 메시지.
+     * 이 방에서 {@code beforeSeq} <b>앞의</b> 메시지들 — {@code room_seq} 내림차순.
+     *
+     * <p>과거 스크롤과 <b>첫 진입</b>이 같은 문장을 쓴다. 첫 진입은 "최신 N 건" 인데, 그것은
+     * {@code beforeSeq} 를 방의 끝보다 큰 값으로 두는 것과 같다 — 두 경로를 하나로 두면
+     * 페이지 계산이 한 벌이다.
+     *
+     * <p>내림차순인 것은 <b>인덱스 때문</b>이다. {@code UNIQUE (room_id, room_seq)} 를 뒤에서부터
+     * 훑어 {@code limit} 개만 읽는다. 오름차순으로 읽고 자바에서 마지막 N 개를 고르면 방
+     * 전체를 읽는다. 부르는 쪽이 뒤집어 오름차순으로 내보낸다 —
+     * 응답의 순서는 어느 방향으로 넘겼든 하나여야 한다({@code ChatMessagePageView}).
+     */
+    List<ChatMessage> findByRoomIdAndRoomSeqLessThanOrderByRoomSeqDesc(
+            Long roomId, long beforeSeq, Limit limit);
+
+    /**
+     * 여러 방의 <b>마지막 메시지</b>를 한 문장으로 — 방 목록의 미리보기(이슈 #79).
+     *
+     * <p>방마다 따로 조회하면 방 20개에 쿼리가 21개다. 폴링이 아니라 목록 진입이지만 홈
+     * 화면이 열릴 때마다 도는 경로라 그 곱셈을 두지 않는다.
+     *
+     * <p><b>{@code room_seq = room.last_seq} 로 찾는 것이 핵심이다.</b> {@code max(room_seq)}
+     * 를 방마다 구하는 서브쿼리 대신, 이미 방 행에 있는 발급 카운터를 그대로 쓴다. 그 값이
+     * 곧 마지막 메시지의 번호인 이유는 발급과 INSERT 가 한 트랜잭션이고 실패하면 번호가
+     * 함께 되돌아가기 때문이다({@code ChatRoomRepository#assignNextSeq}). 아직 아무 말도
+     * 없는 방은 {@code last_seq = 0} 이라 이 조회에 걸리지 않는다.
+     *
+     * <p>삭제된 메시지를 거르지 않는다. 마지막 말이 지워진 방의 미리보기를 어떻게 그릴지는
+     * 화면의 일이고({@code deletedAt} 이 실린다), 여기서 거르면 그 방만 미리보기가 통째로
+     * 사라져 "말이 없는 방" 처럼 보인다.
+     */
+    @Query("""
+            select m from ChatMessage m
+              join m.room r
+             where r.id in :roomIds
+               and m.roomSeq = r.lastSeq
+            """)
+    List<ChatMessage> findLastMessagesOfRooms(@Param("roomIds") Collection<Long> roomIds);
+
+    /**
+     * <b>같은 사람이</b> 같은 방에 같은 멱등키로 이미 넣어 둔 메시지.
      *
      * <p>이 조회는 <b>판정이 아니다.</b> 중복을 막는 것은 {@code UNIQUE (room_id,
-     * client_msg_id)} 이고(📌 #86 원칙 5), 이것은 진 쪽이 "그래서 이미 있는 그 메시지가
-     * 무엇인가" 를 답하기 위한 조회다. 재전송을 200 으로 돌려주는 경로는 #79 다.
+     * sender_user_id, client_msg_id)} 이고(📌 #86 원칙 5), 이것은 진 쪽이 "그래서 이미
+     * 있는 그 메시지가 무엇인가" 를 답하기 위한 조회다. 재전송을 200 으로 돌려주는 경로는
+     * {@code ChatMessageSender} 다.
+     *
+     * <p><b>{@code senderUserId} 가 조건에 있는 것이 요점이다.</b> 빼면 같은 방의 다른
+     * 멤버가 같은 키를 썼을 때 <b>남의 메시지</b>를 "당신이 아까 보낸 그것" 이라며
+     * 돌려주게 된다 — #79 이전 판이 실제로 그랬다. 제약과 이 조회의 범위는 같아야 한다.
      */
-    Optional<ChatMessage> findByRoomIdAndClientMsgId(Long roomId, String clientMsgId);
+    Optional<ChatMessage> findByRoomIdAndSenderUserIdAndClientMsgId(
+            Long roomId, Long senderUserId, String clientMsgId);
 }

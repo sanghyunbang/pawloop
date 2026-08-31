@@ -66,6 +66,13 @@ public class CareController {
      * {@code MethodArgumentTypeMismatchException} 을 던지고 전역 처리기가 옮긴다).
      * {@code type} 도 다섯 중 하나가 아니면 400 이다.
      *
+     * <p><b>이 문장은 #76 을 쓸 때는 사실이 아니었다 — 2026-08(#79)에 사실이 됐다.</b>
+     * {@code GlobalExceptionHandler} 에 그 예외의 핸들러가 없어서
+     * {@code ?date=abc} 도 {@code /api/groups/abc/care-logs} 도 실제로는 500 이 나가고
+     * 있었다(실측). 지금은 {@code handleMalformedRequest} 가 400 {@code VALIDATION} 으로
+     * 옮기고 {@code GlobalExceptionHandlerStatusTest} 가 그것을 잠근다. 그 목록에서
+     * {@code MethodArgumentTypeMismatchException} 을 빼면 이 문장이 다시 거짓이 된다.
+     *
      * <p><b>{@code type} 을 {@code CareType} 으로 직접 받지 않는 것은 의도다.</b> 스프링의
      * 기본 enum 변환은 {@code Enum.valueOf} 라 <b>자바 상수 이름</b>({@code MEAL})을 찾는다 —
      * 계약이 정한 값은 소문자 {@code meal} 이므로 그대로 두면 정상 요청이 400 이 된다.

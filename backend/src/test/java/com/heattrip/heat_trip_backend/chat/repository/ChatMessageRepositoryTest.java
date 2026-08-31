@@ -22,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code chat_message} 의 <b>제약</b>을 실제 MySQL 8 로 확인한다 — 이슈 #78 완료 조건 5·7.
  *
  * <h2>여기서만 확인되는 것들이다</h2>
- * <p>{@code UNIQUE (room_id, room_seq)} 도 {@code UNIQUE (room_id, client_msg_id)} 도
+ * <p>{@code UNIQUE (room_id, room_seq)} 도
+ * {@code UNIQUE (room_id, sender_user_id, client_msg_id)} 도
  * 자바 코드가 아니라 <b>DB 의 성질</b>이다. {@code SchemaDdlDriftTest} 의 {@code describe()}
  * 는 컬럼 이름·타입·널 허용 넷만 읽고, {@code ddl-auto=validate} 도 UNIQUE 를 보지 않는다 —
  * 둘 다 제약이 빠진 스키마를 초록불로 통과시킨다.
@@ -80,10 +81,10 @@ class ChatMessageRepositoryTest extends AbstractMySqlIntegrationTest {
         assertThat(chatMessageRepository.count()).isGreaterThanOrEqualTo(2);
     }
 
-    // ─────────────── UNIQUE (room_id, client_msg_id) — 재전송 멱등 ───────────────
+    // ────── UNIQUE (room_id, sender_user_id, client_msg_id) — 재전송 멱등 ──────
 
     @Test
-    @DisplayName("같은 방에 같은 client_msg_id 로 두 번 넣으면 두 번째가 실패한다 — 재전송이 두 줄이 되지 않는다")
+    @DisplayName("같은 사람이 같은 방에 같은 client_msg_id 로 두 번 넣으면 두 번째가 실패한다 — 재전송이 두 줄이 되지 않는다")
     void theSameClientMessageIdCannotLandTwiceInOneRoom() {
         ChatRoom room = room("uq-client");
         ChatMessage first = message(room, 1L, "지하철에서 보냄");
@@ -99,6 +100,33 @@ class ChatMessageRepositoryTest extends AbstractMySqlIntegrationTest {
                         같은 말이 두 줄 남고, 둘은 서로 다른 room_seq 를 가져 어느 쪽도 지울 \
                         근거가 없다 (#79 완료 조건 3·8).""")
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("같은 방의 다른 사람이 같은 client_msg_id 를 써도 둘 다 들어간다 — 멱등의 범위는 보낸 사람까지다")
+    void twoMembersOfOneRoomCanUseTheSameKey() {
+        ChatRoom room = room("uq-client-scope");
+        ChatMessage mine = message(room, 1L, "A 의 메모");
+        mine.setClientMsgId("shared");
+        chatMessageRepository.saveAndFlush(mine);
+
+        ChatMessage theirs = message(room, 2L, "B 가 하려던 말");
+        theirs.setSenderUserId(SENDER + 1);
+        theirs.setClientMsgId("shared");
+
+        chatMessageRepository.saveAndFlush(theirs);
+
+        assertThat(chatMessageRepository
+                .findByRoomIdAndRoomSeqGreaterThanOrderByRoomSeqAsc(room.getId(), 0, Limit.of(10)))
+                .as("""
+                        범위가 (room_id, client_msg_id) 이던 판에서는 두 번째 INSERT 가 거부됐고,                         HTTP 위에서는 그것이 'B 가 200 과 함께 A 의 메시지를 돌려받는다' 로                         나타났다 — B 가 하려던 말은 어디에도 남지 않는다 (#79).""")
+                .hasSize(2);
+        assertThat(chatMessageRepository
+                .findByRoomIdAndSenderUserIdAndClientMsgId(room.getId(), SENDER, "shared"))
+                .as("멱등 조회도 같은 범위여야 남의 메시지를 '당신이 아까 보낸 그것' 이라며 돌려주지 않는다")
+                .get()
+                .extracting(ChatMessage::getBody)
+                .isEqualTo("A 의 메모");
     }
 
     @Test

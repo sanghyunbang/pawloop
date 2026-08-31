@@ -231,11 +231,32 @@ public class GlobalExceptionHandler {
      *
      * <p><b>이 핸들러도 반드시 이 클래스 안에 있어야 한다.</b> 별도 advice 로 빼면 예외
      * 구체성이 아니라 advice 빈 순서로 승자가 정해져 catch-all 이 먼저 잡는다(#44 에서 실측).
+     *
+     * <h2>2026-08 — 경로 변수·질의 파라미터의 타입 불일치도 여기로 왔다 (이슈 #79)</h2>
+     * <p>본문이 깨진 경우만 잡고 <b>파라미터</b>가 깨진 경우를 빠뜨리고 있었다. 실측한 것:
+     * {@code GET /api/chat/rooms/{roomId}/messages?afterSeq=abc} · {@code ?limit=abc} ·
+     * {@code ?limit=1.5} · {@code ?afterSeq=99999999999999999999} ·
+     * {@code GET /api/chat/rooms/abc/messages} · {@code POST /api/chat/rooms/abc/read} —
+     * 전부 500 이었다. 채팅만의 문제가 아니었다: {@code GET /api/groups/abc/care-logs} 와
+     * {@code ?date=abc} 도 같은 500 이었다(#76 의 javadoc 은 그것이 400 이 된다고 적고
+     * 있었는데 사실이 아니었다).
+     *
+     * <p>스프링이 던지는 {@code MethodArgumentTypeMismatchException} 에 핸들러가 없어
+     * catch-all 로 떨어진 것이다. 계약({@code openapi.yaml})은 이 경로들에 400·401·403 만
+     * 선언하고 500 은 어디에도 없다. 특히 채팅 조회는 <b>폴링</b>이고 그 넷은 rate limit 표
+     * 밖이라(한도가 0 이 아니라 무한이다 · #80), 앱이 커서 하나를 잘못 만들면 "서버 고장이니
+     * 재시도하라" 로 읽고 한도 없이 재시도 루프를 돈다.
+     *
+     * <p><b>여기서도 {@code ex.getMessage()} 를 싣지 않는다.</b> 그 메시지에는 들어온 값이
+     * 그대로 섞여 있다(실제로 {@code For input string: "abc"} 가 들어 있었다 · #6).
+     * 고정 문구 하나로 답하고, 어느 파라미터인지도 말하지 않는다.
      */
     @ExceptionHandler({
         org.springframework.http.converter.HttpMessageNotReadableException.class,
         org.springframework.web.HttpMediaTypeNotSupportedException.class,
-        org.springframework.web.HttpRequestMethodNotSupportedException.class
+        org.springframework.web.HttpRequestMethodNotSupportedException.class,
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+        org.springframework.web.bind.MissingServletRequestParameterException.class
     })
     public ResponseEntity<ErrorResponse> handleMalformedRequest(Exception ex) {
         final HttpStatus status;
@@ -246,6 +267,10 @@ public class GlobalExceptionHandler {
         } else if (ex instanceof org.springframework.web.HttpRequestMethodNotSupportedException) {
             status = HttpStatus.METHOD_NOT_ALLOWED;
             message = "이 경로가 지원하지 않는 HTTP 메서드입니다.";
+        } else if (ex instanceof org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+                || ex instanceof org.springframework.web.bind.MissingServletRequestParameterException) {
+            status = HttpStatus.BAD_REQUEST;
+            message = "요청 파라미터가 올바르지 않습니다.";
         } else {
             status = HttpStatus.BAD_REQUEST;
             message = "요청 본문을 읽을 수 없습니다.";
@@ -299,6 +324,7 @@ public class GlobalExceptionHandler {
 [⑩] 401: 인증 실패. 본문 없이 상태 코드만 — 메시지를 실으면 그게 유출 경로가 된다(#5·#6).
 [⑪] ResponseStatusException: 컨트롤러가 스스로 정한 상태 코드. catch-all 보다 먼저 잡아야 한다(#44).
 [⑫] 400/415/405: 형식이 깨진 요청. 핸들러가 없으면 전부 500 이었다(#9 에서 실측). 본문에 예외 메시지 금지 — 요청 본문 조각이 섞인다(#6).
+    경로 변수·질의 파라미터의 타입 불일치도 여기다(#79 에서 실측) — roomId=abc · afterSeq=abc · limit=1.5 가 전부 500 이었다.
 [⑬] code 어휘: 400 VALIDATION · 403 FORBIDDEN · 404 NOT_FOUND · 405 METHOD_NOT_ALLOWED ·
     409 CONFLICT · 415 UNSUPPORTED_MEDIA_TYPE · 429 RATE_LIMITED · 그 밖 INTERNAL. 401 은 본문 없음(#10).
 [⑭] 채팅 한도 4종: ROOM_MEMBER_LIMIT(409) · INVITE_EXPIRED(410) · INVITE_REVOKED(410) ·

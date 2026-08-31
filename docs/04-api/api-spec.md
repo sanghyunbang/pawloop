@@ -665,15 +665,15 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때만 연다(M2.9).
 
-데이터 모델: `chat_room(origin_kind, origin_ref, title, last_seq)` · `chat_room_member(room_id, user_id, role, last_read_seq, removed_at, rejoin_blocked)` · `chat_room_invite(room_id, code, expires_at, max_uses, used_count, revoked_at)` · `chat_message(room_id, room_seq, sender_user_id, sender_name, content_type, body, client_msg_id, deleted_at)`. **chat 경계 밖으로 나가는 FK 는 0개다.** `client_msg_id` 에는 `UNIQUE (room_id, client_msg_id)` 가 걸려 있어 같은 키로 두 번 보낸 재전송이 두 줄이 되지 않는다(#78).
+데이터 모델: `chat_room(origin_kind, origin_ref, title, last_seq)` · `chat_room_member(room_id, user_id, role, last_read_seq, removed_at, rejoin_blocked)` · `chat_room_invite(room_id, code, expires_at, max_uses, used_count, revoked_at)` · `chat_message(room_id, room_seq, sender_user_id, sender_name, content_type, body, client_msg_id, deleted_at)`. **chat 경계 밖으로 나가는 FK 는 0개다.** `client_msg_id` 에는 `UNIQUE (room_id, sender_user_id, client_msg_id)` 가 걸려 있어 같은 사람이 같은 키로 두 번 보낸 재전송이 두 줄이 되지 않는다(#78·#79). 범위에 보낸 사람이 들어 있어야 같은 방의 다른 멤버가 같은 키를 써도 서로의 말을 지우지 않는다.
 
 | 메서드 | 경로 | 설명 | 마일스톤 |
 |---|---|---|---|
-| `GET` | `/api/chat/rooms` | 내 방 목록. 방마다 `unread`·`lastMessage`·`memberCount`·`tag`·`isDefault` | M2.6 |
+| `GET` | `/api/chat/rooms` | 내 방 목록. 방마다 `unread`(뺄셈)·`lastReadSeq`·`myRole`·`lastMessage`·`memberCount`·`tag`. **`roomId` 를 안 받으므로 403 이 없다** — 답의 범위 자체가 내 멤버십이다 | M2.6 ✅ |
 | `GET` | `/api/chat/rooms/{roomId}` | 방 상세(멤버 목록·내 `lastReadSeq`·역할) | M2.6 |
-| `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq\|beforeSeq&limit` | 폴링/스크롤 겸용. 응답은 `{ items, lastSeq, hasMore }` | M2.6 |
-| `POST` | `/api/chat/rooms/{roomId}/messages` | 전송 `{ "body": "...", "clientMsgId": "..." }`. 멱등키로 재시도 중복을 막고 201 에 배정된 `roomSeq` 를 싣는다 | M2.6 |
-| `POST` | `/api/chat/rooms/{roomId}/read` | `lastReadSeq` 올리기. **단조 증가만** | M2.6 |
+| `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq\|beforeSeq&limit` | 폴링/스크롤 겸용. 응답은 `{ items, lastSeq, hasMore }` 이고 `items` 는 **어느 방향이든 `roomSeq` 오름차순**이다. `ETag: "{roomId}:{lastSeq}"` 를 직접 계산해 붙이고, `If-None-Match` 가 같으면 `304`(인가가 **먼저**다) | M2.6 ✅ |
+| `POST` | `/api/chat/rooms/{roomId}/messages` | 전송 `{ "body": "...", "clientMsgId": "..." }`. 처음이면 `201`, 같은 키의 재전송이면 **`200`**(409 가 아니다) 이고 두 응답의 `roomSeq` 가 같다 | M2.6 ✅ |
+| `POST` | `/api/chat/rooms/{roomId}/read` | `lastReadSeq` 올리기. `GREATEST` 로 **뒤로 안 가고** `LEAST(:seq, room.last_seq)` 로 방의 끝을 넘지 않는다. 응답은 서버가 실제로 쓴 값 | M2.6 ✅ |
 | `POST` | `/api/chat/rooms/{roomId}/invites` | 초대코드 발급(방장만. 7일·무제한 고정 — **본문을 받지 않는다**) | M2.5 ✅ |
 | `DELETE` | `/api/chat/rooms/{roomId}/invites/{code}` | 초대코드 폐기. **행을 지우지 않는다**(회수된 코드와 없던 코드를 구별해야 한다). 기존 멤버는 남는다 | M2.5 ✅ |
 | `POST` | `/api/chat/invites/{code}/join` | 코드로 입장. 없음 `404` → 만료 `410` → 회수 `410` → **이미 멤버면 `200`** → 소진 `409` → 정원 `409`. 재입장 금지 대상이면 `403` | M2.5 ✅ |
@@ -683,9 +683,9 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `POST` | `/api/chat/messages/{messageId}/reports` | 신고(사유 코드 + 메모). 서버가 본문 스냅샷을 남긴다 | M2.7 |
 | `POST`·`DELETE` | `/api/chat/blocks` · `/api/chat/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다 | M2.7 |
 
-- **✅ 표시는 구현됐다는 뜻이다**(이슈 #75). 나머지는 아직 계획이다.
-- 방 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 확인은 서비스 경계 한 곳이다 — 지금 발급·회수는 `ChatRoomService.requireOwner(roomId, userId)` 다. **404 가 아니라 403 인 것은 의도다**: 404 로 답하면 남의 방 id 를 훑어 있는 방과 없는 방을 가려낼 수 있다.
-- **초대·참여 경로에 rate limit 이 아직 없다.** `ApiRateLimitFilter.resolveRule` 의 표에 없는 경로는 한도가 0 이 아니라 **무한**이다. 이슈 #75 의 NOTE 가 참여 경로 버킷을 M2.6 으로 미뤘고, 지금 코드 추측을 견디는 것은 초대코드의 길이(50비트)뿐이다.
+- **✅ 표시는 구현됐다는 뜻이다**(이슈 #75 · #79). 나머지는 아직 계획이다.
+- 방 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 확인은 서비스 경계 한 곳이다 — 발급·회수는 `ChatRoomService.requireOwner(roomId, userId)`, 나머지는 `requireLiveMembership(roomId, userId)` 다. **`removed_at` 이 찍힌 사람도 403**이다(행을 지우지 않으므로 '행이 있는가' 로 묻는 검사는 강퇴된 사람을 통과시킨다). **404 가 아니라 403 인 것은 의도다**: 404 로 답하면 남의 방 id 를 훑어 있는 방과 없는 방을 가려낼 수 있다.
+- **참여 경로와 #79 의 네 경로에 rate limit 이 아직 없다.** `ApiRateLimitFilter.resolveRule` 의 표에 없는 경로는 한도가 0 이 아니라 **무한**이다(`resolveRule` 이 `null` 을 돌려주면 필터가 그대로 통과시킨다). 참여 경로는 이슈 #75 의 NOTE 가, 채팅 네 경로는 #79 가 **#80** 으로 넘겼다 — 폴링 주기와 함께 정해야 숫자에 근거가 생긴다. 미룬 것이지 안전한 것이 아니다.
 - 한도·상태 위반은 봉투를 새로 만들지 않고 공통 `Error` 의 `error.code` 로 갈린다 — `ROOM_MEMBER_LIMIT`(409) · `INVITE_EXPIRED`(410) · `INVITE_REVOKED`(410) · `INVITE_USES_EXHAUSTED`(409).
 - 만 14세 미만(`users.age_group = 'UNDER14'`)은 방 생성과 초대코드로 새 방 참여를 막고 **가족방만 예외로 허용**한다(M2.7).
 

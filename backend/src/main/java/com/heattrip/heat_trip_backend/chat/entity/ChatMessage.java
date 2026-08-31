@@ -75,7 +75,7 @@ import java.time.LocalDateTime;
                         columnNames = {"room_id", "room_seq"}),
                 @UniqueConstraint(
                         name = "uq_chat_msg_client",
-                        columnNames = {"room_id", "client_msg_id"})
+                        columnNames = {"room_id", "sender_user_id", "client_msg_id"})
         },
         indexes = {
                 @Index(name = "idx_chat_sender", columnList = "sender_user_id")
@@ -164,12 +164,28 @@ public class ChatMessage {
     /**
      * 클라이언트가 만든 재전송 멱등키. {@code NULL} 이면 멱등을 요구하지 않는 전송이다.
      *
-     * <p><b>{@code UNIQUE (room_id, client_msg_id)} 를 건다.</b> 이슈 본문의 컬럼 목록에는
-     * 이 컬럼이 있는데 UNIQUE 는 안 적혀 있어서 판단이 필요했다. 걸지 않으면 지하철에서
-     * 타임아웃된 전송을 앱이 재시도할 때 같은 말이 두 줄 남고, 그 둘은 <b>서로 다른
-     * {@code room_seq}</b> 를 가져 어느 쪽도 지울 근거가 없다. #79 완료 조건 3·8 이 이
-     * 제약을 이름으로 요구하므로, 표를 세우는 지금 함께 건다 — 나중에 걸려면 이미 쌓인
-     * 중복을 먼저 정리해야 한다.
+     * <p><b>{@code UNIQUE (room_id, sender_user_id, client_msg_id)} 를 건다.</b> 이슈
+     * 본문의 컬럼 목록에는 이 컬럼이 있는데 UNIQUE 는 안 적혀 있어서 판단이 필요했다.
+     * 걸지 않으면 지하철에서 타임아웃된 전송을 앱이 재시도할 때 같은 말이 두 줄 남고,
+     * 그 둘은 <b>서로 다른 {@code room_seq}</b> 를 가져 어느 쪽도 지울 근거가 없다.
+     * #79 완료 조건 3·8 이 이 제약을 이름으로 요구한다.
+     *
+     * <h2>범위에 {@code sender_user_id} 가 들어 있는 것이 요점이다 (#79)</h2>
+     * <p>#78 은 이 제약을 {@code (room_id, client_msg_id)} 로 세웠다. 그 판이 무엇을
+     * 만드는지 실제로 돌려 봤다 — 같은 방의 멤버 A·B 가 같은 키를 쓰면:
+     * <pre>
+     *   A: POST {"body":"A 의 메모","clientMsgId":"shared"}   → 201 roomSeq=1
+     *   B: POST {"body":"B 가 하려던 말","clientMsgId":"shared"} → <b>200</b> — A 의 메시지가 돌아온다
+     * </pre>
+     * <p>방의 메시지는 한 줄 그대로고 <b>B 가 하려던 말은 어디에도 없다.</b> B 는 200 을
+     * 받았으므로 앱 입장에서 그건 성공이고 재시도하지 않는다 — 그 줄은 영영 사라진다.
+     *
+     * <p>멱등키가 막아야 하는 것은 <b>같은 사람의 같은 요청이 두 번 도착하는 것</b>이다.
+     * 재시도는 언제나 보낸 사람 자신이 하므로 범위는 보낸 사람까지가 맞다. 키를 만드는
+     * 것은 클라이언트인데(ADR-0011 이 {@code Random.secure()} 16바이트로 정했다) 범위를
+     * 방 전체로 두면 앱이 키를 결정적으로 만드는 실수 하나 —— 기기별 카운터·본문 해시·
+     * 재시도용 고정 문자열 —— 로 <b>멤버끼리 서로의 말을 지운다.</b> 좁히는 방향이라
+     * 이미 쌓인 데이터가 새 제약을 어길 수는 없다.
      *
      * <p>MySQL 의 UNIQUE 인덱스는 {@code NULL} 을 여러 번 허용한다. 그래서 멱등키 없이
      * 보낸 메시지들은 서로 충돌하지 않는다 — 그것이 이 컬럼을 {@code NOT NULL} 로 두지

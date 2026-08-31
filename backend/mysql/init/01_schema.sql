@@ -103,7 +103,7 @@ CREATE TABLE `chat_message` (
   `sender_name` varchar(255) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_chat_room_seq` (`room_id`,`room_seq`),
-  UNIQUE KEY `uq_chat_msg_client` (`room_id`,`client_msg_id`),
+  UNIQUE KEY `uq_chat_msg_client` (`room_id`,`sender_user_id`,`client_msg_id`),
   KEY `idx_chat_sender` (`sender_user_id`),
   CONSTRAINT `fk_chat_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

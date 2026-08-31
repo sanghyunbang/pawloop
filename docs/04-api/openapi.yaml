@@ -1057,6 +1057,15 @@ paths:
       description: |
         내가 속한 방을 돌려줍니다. 방마다 미읽음은 `lastSeq − lastReadSeq` **뺄셈**입니다 —
         두 값 모두 이 조회가 이미 읽어 오는 컬럼이라 추가 쿼리가 0입니다.
+
+        방 종류를 가리지 않습니다 — 채팅은 가족 그룹 종속이 아니라 범용 다중 방입니다
+        ([ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72)).
+        **`roomId` 를 받지 않으므로 403 이 없습니다.** 답의 범위 자체가 내 멤버십이라
+        남의 방이 섞여 들어올 문이 없고, 강퇴된(`removed_at`) 방도 빠집니다.
+
+        `lastMessage` 는 아직 아무 말도 없는 방에서 `null` 입니다. `isDefault` 와 `members`
+        는 이 응답에 **없습니다** — 앞의 것은 "가족방이 기본" 이라는 판단이라 chat 이 답할 수
+        없고, 뒤의 것은 방 상세 조회에만 실립니다.
       responses:
         '200':
           description: 방 목록
@@ -1090,41 +1099,99 @@ paths:
       tags: [Chat]
       summary: 메시지 목록(폴링 · 과거 스크롤 겸용)
       description: |
-        `afterSeq`(델타·오름차순)와 `beforeSeq`(과거·내림차순) **둘 중 하나**에 `limit` 을
-        붙입니다. 둘 다 주면 400 입니다. 응답은 공용 `Page` 가 아니라
+        `afterSeq`(델타)와 `beforeSeq`(과거) **둘 중 하나**에 `limit` 을 붙입니다.
+        둘 다 주면 400, 둘 다 없으면 **최신 `limit` 건**입니다. 응답은 공용 `Page` 가 아니라
         `{ items, lastSeq, hasMore }` 입니다 — 커서가 `roomSeq` 이고, 미읽음 계산이
         `lastSeq` 를 필요로 하기 때문입니다.
+
+        **`items` 는 어느 방향으로 넘겼든 `roomSeq` 오름차순입니다.** 방향에 따라 순서가
+        갈리면 클라이언트가 어느 파라미터를 보냈는지에 따라 정렬을 달리해야 하고, 그 분기를
+        한 번 빠뜨리면 대화가 거꾸로 그려집니다.
+
+        **삭제된 메시지도 톰스톤으로 들어 있습니다**(`deletedAt` 이 `null` 이 아닌 항목).
+        거르면 그 `roomSeq` 가 클라이언트에 도달하지 않아 읽음 커서가 넘지 못하고 미읽음
+        뱃지가 영원히 남습니다([ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72)).
+
+        ### ETag — 서버가 직접 계산합니다
+
+        `ETag: "{roomId}:{lastSeq}"` 는 **`afterSeq` 를 보냈고 `hasMore` 가 `false` 인 응답에만**
+        붙습니다. 그 응답만이 "이제 `lastSeq` 까지 전부 손에 넣었다" 를 뜻하기 때문입니다.
+        첫 장(`hasMore: true`)·첫 진입(커서 없음)·과거 스크롤(`beforeSeq`) 응답에는 **ETag 가
+        없습니다** — 그 응답들은 방의 끝까지 준 것이 아닌데 방의 끝을 가리키는 표를 달면
+        그건 거짓말이고, 실제로 그 다음 폴링이 빈 `304` 로 막혀 **그 사이 메시지를 통째로
+        잃습니다**(60줄 방에서 실측했습니다). `ShallowEtagHeaderFilter` 가 아니라 `chat_room`
+        한 행만 읽어 만드는 값이라, 304 로 끝나는 폴링은 메시지 조회 자체를 하지 않습니다.
+
+        `If-None-Match` 로 되보내면 **세 가지가 모두 참일 때만** `304` 입니다 —
+        ① 인가를 통과했다(먼저 확인합니다. 순서가 뒤집히면 남의 방 `lastSeq` 를 304/200 차이로
+        알아낼 수 있습니다), ② `afterSeq` 를 함께 보냈다(폴링이다), ③ `afterSeq >= lastSeq`
+        다(실제로 줄 것이 없다).
+
+        ⚠️ 서버 구현 메모: 응답에 ETag 가 붙어 있으면 **스프링 MVC 가 위 판단과 무관하게
+        `If-None-Match` 를 스스로 대조해 200 을 304 로 갈아치웁니다**. 그래서 ③ 을 코드에
+        적어 두는 것만으로는 부족하고, 위처럼 **부분 페이지에 ETag 를 붙이지 않는 것**이
+        실제 방어입니다.
       parameters:
         - $ref: '#/components/parameters/AfterSeq'
         - $ref: '#/components/parameters/BeforeSeq'
-        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/ChatLimit'
+        - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: 메시지 목록
+          headers:
+            ETag:
+              description: |
+                `"{roomId}:{lastSeq}"`. 다음 폴링에 `If-None-Match` 로 그대로 되보냅니다.
+                **`afterSeq` 를 보냈고 `hasMore` 가 `false` 인 응답에만 붙습니다** — 그
+                응답만이 "`lastSeq` 까지 전부 받았다" 를 뜻합니다.
+              schema: { type: string }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ChatMessagePage' }
+        '304':
+          description: |
+            새 메시지가 없습니다. **본문이 없습니다** — 그게 이 최적화의 전부입니다.
+            `afterSeq` 를 보낸 폴링 요청에만 나갑니다. 첫 진입(커서 없음)과 과거
+            스크롤(`beforeSeq`)은 옛 ETag 를 들고 와도 `200` 입니다 — 그 응답들에는 애초에
+            ETag 가 붙지 않으므로 대조할 것이 없습니다.
+          headers:
+            ETag:
+              description: 되보낸 값과 같습니다
+              schema: { type: string }
         '400': { $ref: '#/components/responses/ValidationError' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '429': { $ref: '#/components/responses/RateLimited' }
         '401': { $ref: '#/components/responses/Unauthorized' }
     post:
       tags: [Chat]
       summary: 메시지 전송
       description: |
         `clientMsgId` 는 **멱등키**입니다. 전송은 재시도 가능한 POST 인데 사용자가 답답해
-        다시 누르면 같은 메시지가 두 번 들어갑니다 — 서버가 `UNIQUE (room_id, client_msg_id)`
-        로 받치고, 같은 키가 다시 오면 처음 배정한 `roomSeq` 를 그대로 돌려줍니다.
+        다시 누르면 같은 메시지가 두 번 들어갑니다 — 서버가
+        `UNIQUE (room_id, sender_user_id, client_msg_id)` 로 받치고, **같은 사람이** 같은
+        키로 다시 보내면 처음 배정한 `roomSeq` 를 그대로 돌려줍니다.
+
+        **범위는 방이 아니라 "이 방에서의 나" 입니다.** 같은 방의 다른 멤버가 우연히 같은
+        키를 써도 서로의 메시지를 지우지 않습니다 — 범위가 방 전체이던 판에서는 뒤에 보낸
+        사람이 200 과 함께 **남의 메시지**를 돌려받고 자기가 하려던 말은 어디에도 남지
+        않았습니다.
+
+        **처음이면 `201`, 재전송이면 `200`입니다. `409` 가 아닙니다** — 재시도한 클라이언트
+        입장에서 그 요청은 성공했고, 실제로 그 말은 방에 들어가 있습니다. 409 를 주면 앱은
+        실패 화면을 띄우면서 정작 메시지는 보이는 상태가 됩니다. 두 응답의 본문은 같습니다.
+
+        `clientMsgId` 를 **생략하면 멱등을 요구하지 않는 전송**입니다 — 같은 본문이라도 두
+        줄이 됩니다(`UNIQUE` 는 `NULL` 을 겹침으로 보지 않습니다).
 
         201 응답에 배정된 `roomSeq` 가 실립니다. 발급(`chat_room.last_seq` 증가)과 INSERT 는
-        **하나의 트랜잭션**입니다.
+        **하나의 트랜잭션**이라, 거절된 전송은 번호를 태우지 않습니다.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [body, clientMsgId]
+              required: [body]
               properties:
                 body:
                   type: string
@@ -1153,9 +1220,15 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ChatMessage' }
+        '200':
+          description: |
+            같은 `clientMsgId` 의 **재전송**입니다. 새로 만들지 않고 처음 만들어진 메시지를
+            그대로 돌려줍니다 — `roomSeq` 도 처음 배정된 값입니다.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatMessage' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '429': { $ref: '#/components/responses/RateLimited' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /api/chat/rooms/{roomId}/read:
@@ -1169,6 +1242,11 @@ paths:
         `GREATEST(last_read_seq, :seq)` 로 쓰고 `LEAST(:seq, room.last_seq)` 로 상한을 겁니다.
         읽음 보고는 재시도·백그라운드 복귀로 순서가 뒤집혀 도착하고, 뒤늦게 온 작은 값이 큰
         값을 덮으면 이미 읽은 메시지가 다시 미읽음으로 뜹니다. 상한이 없으면 뺄셈이 음수가 됩니다.
+
+        **응답은 보낸 값이 아니라 서버가 실제로 쓴 값입니다.** 무시됐는지(뒤로 가는 값)
+        잘렸는지(방의 끝을 넘는 값) 앱이 알아야 낙관적으로 그린 뱃지를 되맞출 수 있습니다.
+        `lastReadSeq` 가 없으면 400 입니다 — 빠진 필드를 0 으로 채우면 `{}` 라는 본문이
+        "0 까지 읽었다" 라는 정상 요청이 됩니다. 음수도 400 입니다.
       requestBody:
         required: true
         content:
@@ -1499,16 +1577,41 @@ components:
       name: afterSeq
       in: query
       description: |
-        이 `roomSeq` **뒤에** 생긴 메시지를 오름차순으로. 폴링 델타용이며
-        `beforeSeq` 와 동시에 줄 수 없습니다.
+        이 `roomSeq` **뒤에** 생긴 메시지. 폴링 델타용이며 `beforeSeq` 와 동시에 줄 수 없습니다.
+        `0` 은 "아직 아무것도 못 받았다" 이고, 방의 `lastSeq` 보다 큰 값도 400 이 아니라
+        **빈 델타**입니다 — 앱의 커서가 앞서 있는 것은 오류가 아니고, 그때도 응답의 `lastSeq`
+        로 커서를 되맞출 수 있어야 합니다.
       schema: { type: integer, format: int64 }
     BeforeSeq:
       name: beforeSeq
       in: query
       description: |
-        이 `roomSeq` **앞의** 메시지를 내림차순으로. 과거 스크롤용이며
-        `afterSeq` 와 동시에 줄 수 없습니다.
+        이 `roomSeq` **앞의** 메시지. 과거 스크롤용이며 `afterSeq` 와 동시에 줄 수 없습니다.
+
+        **응답의 `items` 는 이때도 `roomSeq` 오름차순입니다.** 2026-08 이전에는 이 절이
+        "내림차순으로" 라고 적었는데, 방향에 따라 순서가 갈리면 클라이언트가 어느 파라미터를
+        보냈는지에 따라 정렬을 달리해야 합니다. 서버가 인덱스를 뒤에서부터 읽는 것은 그대로고,
+        뒤집는 것은 서버가 한 번 합니다.
       schema: { type: integer, format: int64 }
+    ChatLimit:
+      name: limit
+      in: query
+      description: |
+        한 장의 크기. 공용 `Limit`(기본 20)과 **다른 기본값**입니다 — 채팅 첫 진입은 최신
+        50건이고, 그 값은 화면이 한 번에 그리는 양에서 왔습니다.
+
+        상한을 넘겨 보내도 **400 이 아니라 잘립니다.** 페이지 크기는 사람이 적은 값이 아니라
+        앱이 정한 값이라 잘라도 사용자가 보는 것이 달라지지 않고, 반대로 거절하면 앱의 한 줄
+        실수가 채팅 전체를 멈춥니다. `1` 미만도 `1` 로 올립니다.
+      schema: { type: integer, default: 50, maximum: 100, minimum: 1 }
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      description: |
+        직전 응답의 `ETag`(`"{roomId}:{lastSeq}"`). 새 메시지가 없으면 `304` 입니다.
+        **`afterSeq` 와 함께 보낼 때만** 의미가 있습니다 — 첫 진입·과거 스크롤은 창이
+        달라지므로 방의 `lastSeq` 가 그대로여도 응답이 같지 않습니다.
+      schema: { type: string }
 
   responses:
     Unauthorized:
@@ -2036,7 +2139,10 @@ components:
           example: "12"
         isDefault:
           type: boolean
-          description: 기본방(가족방) 표식
+          description: |
+            기본방(가족방) 표식. **서버가 아직 내려주지 않습니다** — "가족방이 기본" 이라는
+            판단은 `originKind` 를 해석하는 것이라 chat 이 답할 수 없습니다(ADR-0011).
+            앱은 `originKind` 로 직접 가릅니다.
         lastSeq:
           type: integer
           format: int64
@@ -2048,7 +2154,13 @@ components:
             `lastSeq − lastReadSeq`. 서버가 뺄셈으로 냅니다 — 읽음 표를 두지 않습니다.
         memberCount: { type: integer, example: 3 }
         myRole: { type: string, enum: [OWNER, MEMBER] }
-        lastMessage: { $ref: '#/components/schemas/ChatMessage' }
+        lastMessage:
+          description: |
+            마지막 메시지 미리보기. 아직 아무 말도 없는 방과 **입장 응답**
+            (`POST /api/chat/invites/{code}/join`)에서는 `null` 입니다 — 뒤의 것은 방금 들어온
+            사람에게 조회를 하나 더 붙일 이유가 없어서입니다(앱은 곧바로 방 화면으로 갑니다).
+          allOf:
+            - $ref: '#/components/schemas/ChatMessage'
         members:
           type: array
           description: 방 상세 조회(`GET /api/chat/rooms/{roomId}`)에만 실립니다
