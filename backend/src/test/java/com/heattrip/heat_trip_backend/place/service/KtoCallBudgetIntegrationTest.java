@@ -106,8 +106,8 @@ class KtoCallBudgetIntegrationTest extends AbstractMySqlIntegrationTest {
     void concurrentReservationsCannotExceedTheCap() throws Exception {
         int cap = 20;
         int threads = 40;
-        jdbc.update("insert into kto_call_budget (`day`, pool, used) values (curdate(), 'nearby', 0) "
-                + "on duplicate key update used = 0");
+        jdbc.update("insert into kto_call_budget (`day`, pool, used) values (?, 'nearby', 0) "
+                + "on duplicate key update used = 0", kstToday());
 
         CyclicBarrier start = new CyclicBarrier(threads);
         AtomicInteger granted = new AtomicInteger();
@@ -146,8 +146,8 @@ class KtoCallBudgetIntegrationTest extends AbstractMySqlIntegrationTest {
     @Test
     @DisplayName("조건이 WHERE 에 있어야 소진 상태에서 거절된다 — CLIENT_FOUND_ROWS 의 함정")
     void aFullBudgetRejectsEvenThoughMySqlCountsMatchedRows() {
-        jdbc.update("insert into kto_call_budget (`day`, pool, used) values (curdate(), 'nearby', 5) "
-                + "on duplicate key update used = 5");
+        jdbc.update("insert into kto_call_budget (`day`, pool, used) values (?, 'nearby', 5) "
+                + "on duplicate key update used = 5", kstToday());
 
         Integer affected = newTransaction().execute(status -> budgets.reserve(
                 java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")), "nearby", 1, 5));
@@ -223,10 +223,23 @@ class KtoCallBudgetIntegrationTest extends AbstractMySqlIntegrationTest {
                 .isEqualTo(2);
     }
 
+    /**
+     * 오늘(KST) 이 풀이 쓴 수.
+     *
+     * <p><b>{@code curdate()} 를 쓰면 안 된다.</b> 그건 DB 세션 타임존의 오늘이고, 코드가
+     * 세는 것은 <b>KST 의 오늘</b>이다. 컨테이너가 UTC 면 둘이 갈리는 구간이 하루에
+     * 9시간 있고, 그 시간대에만 테스트가 빨개진다 — 실제로 06시에 겪었다.
+     */
     private int usedOf(String pool) {
-        Integer used = jdbc.queryForObject(
-                "select used from kto_call_budget where `day` = curdate() and pool = ?",
-                Integer.class, pool);
-        return used == null ? 0 : used;
+        List<Integer> used = jdbc.queryForList(
+                "select used from kto_call_budget where `day` = ? and pool = ?",
+                Integer.class, kstToday(), pool);
+        return used.isEmpty() ? 0 : used.get(0);
+    }
+
+    /** 코드가 세는 것과 같은 날짜. {@code KtoCallBudget} 이 쓰는 것과 같아야 한다. */
+    private static java.sql.Date kstToday() {
+        return java.sql.Date.valueOf(
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")));
     }
 }

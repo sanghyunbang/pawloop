@@ -222,6 +222,25 @@ class PlaceProxyIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("키가 죽으면 그 풀이 닫힌다 — 게이트웨이는 403 과 다른 봉투로 답한다")
+    void aDeadKeyClosesThePool() throws Exception {
+        // 실측(2026-09-01): 죽은 키로 부르면 HTTP 403 과 함께
+        //   {"OpenAPI_ServiceResponse":{"cmmMsgHeader":{"returnReasonCode":"30", ...}}}
+        // 가 온다. response.header.resultCode 만 읽던 동안에는 이 판정이 안 걸렸고,
+        // 그러면 죽은 키가 셀마다 1콜씩 하루 예산을 전부 태운다.
+        kto.nearbyResult.set(new KtoApiClient.Result.Failed<>("30", "등록되지 않은 서비스키"));
+
+        callNearby(LAT, LNG);
+
+        Integer used = jdbc.queryForObject(
+                "select used from kto_call_budget where pool = 'nearby'", Integer.class);
+        assertThat(used)
+                .as("풀이 닫혀야 더 이상 안 두드린다. 계속 두드리면 차단당한다")
+                .isNotNull()
+                .isGreaterThanOrEqualTo(300);
+    }
+
+    @Test
     @DisplayName("KTO 가 한도 초과라고 하면 그 풀이 닫힌다 — 계속 두드리면 차단당한다")
     void quotaExceededClosesThePool() throws Exception {
         callNearby(LAT, LNG);
