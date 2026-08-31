@@ -39,6 +39,12 @@ dependencyManagement {
 		// Docker 29 는 API 버전 1.44 미만을 거부하는데 1.21.3 은 더 낮은 버전으로 붙는다.
 		// 그래서 Boot 의 관리 버전을 덮어쓴다. 되돌리려면 Docker 29 에서 먼저 확인할 것.
 		mavenBom 'org.testcontainers:testcontainers-bom:1.21.4'
+
+		// 모듈 경계 검사(#100 · ADR-0012). 1.4 계열인 이유는 부록 호환표가 1.4 를 Boot 3.5
+		// 기준으로 적고 있고 이 빌드가 3.5.4 이기 때문이다(위 plugins 블록). 2.x 는 Boot 4.0 을
+		// 겨냥한 줄기라 지금 올리면 안 된다.
+		// https://docs.spring.io/spring-modulith/reference/1.4/appendix.html
+		mavenBom 'org.springframework.modulith:spring-modulith-bom:1.4.13'
 	}
 }
 
@@ -70,6 +76,14 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+	// 모듈 경계 검사(#100 · ADR-0012). **테스트 스코프만이다** — 운영 클래스패스에 아무것도
+	// 올라가지 않고 애플리케이션 동작이 바뀌지 않는다.
+	//
+	// starter-test 가 아니라 core 인 이유: starter-test 는 문서 생성(spring-modulith-docs)과
+	// 모듈 단위 테스트(spring-modulith-test)를 같이 끌고 오는데, 뒤엣것은 스프링 컨텍스트를
+	// 새로 띄워 컨텍스트 캐시 항목을 늘린다. 이번에 필요한 것은 정적 분석뿐이다.
+	testImplementation 'org.springframework.modulith:spring-modulith-core'
 
 	// JWT 관련 의존성
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
