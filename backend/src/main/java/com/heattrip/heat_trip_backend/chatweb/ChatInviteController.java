@@ -91,6 +91,9 @@ public class ChatInviteController {
     @PostMapping("/invites/{code}/join")
     public ChatRoomResponse join(@CurrentUser User user, @PathVariable String code) {
         ChatJoinResult joined = chatRooms.joinByInviteCode(code, user.getId());
-        return ChatRoomResponse.of(joined.room(), chatRooms.liveMembers(joined.room().id()).size());
+        // 멤버 목록은 memberCount 때문에 어차피 읽는다. #79 가 더한 myRole·lastReadSeq·unread
+        // 도 그 목록에서 꺼내므로 추가 쿼리가 0이다.
+        return ChatRoomResponse.of(
+                joined.room(), chatRooms.liveMembers(joined.room().id()), user.getId());
     }
 }
