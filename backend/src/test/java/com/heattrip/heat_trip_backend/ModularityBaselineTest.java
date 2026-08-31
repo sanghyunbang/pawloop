@@ -3,6 +3,7 @@ package com.heattrip.heat_trip_backend;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.modulith.core.ApplicationModules;
@@ -92,9 +93,6 @@ class ModularityBaselineTest {
      */
     private static final int BASELINE_VIOLATIONS = 231;
 
-    /** 순환 경로 개수. 쌍이 아니라 <b>경로</b>다 — 같은 두 모듈이 여러 경로에 걸쳐 나타난다. */
-    private static final int BASELINE_CYCLES = 0;
-
     private static final char NL = (char) 10;
 
     private static Violations detect() {
@@ -123,26 +121,42 @@ class ModularityBaselineTest {
                 .isEqualTo(BASELINE_VIOLATIONS);
     }
 
+    /**
+     * <b>순환은 기준선이 아니라 게이트다.</b> (#109)
+     *
+     * <p>다른 검사와 달리 여기에는 숫자가 없다. #106 과 #107 이 다섯을 전부 끊어 0이 됐고,
+     * 0을 숫자로 들고 있으면 <b>그 숫자를 올리고 싶은 유혹</b>이 생긴다. 숫자를 없애면 올릴
+     * 자리가 없다.
+     *
+     * <p>순환은 다른 방법으로 끌 수 없는 유일한 검사다 — {@code type = OPEN} 으로도
+     * {@code @NamedInterface} 로도 안 꺼지고, 코드를 옮겨야만 없어진다. 그래서 게이트로 올릴
+     * 값이 가장 크다.
+     *
+     * <p><b>이 단언만으로는 부족하다.</b> 도구의 순환 보고는 순환 기저라 큰 덩어리가 쪼개지면
+     * 작은 쌍을 빠뜨린다 — #106 에서 실제로 겪었다. 그래서 {@code ModuleCycleTest} 가 메시지가
+     * 아니라 <b>간선</b>을 직접 훑는 검사를 따로 갖고 있다. 둘 다 있어야 한다.
+     */
     @Test
-    @DisplayName("모듈 간 순환이 기준선보다 늘지 않았다")
-    void cycleCountMatchesTheRecordedBaseline() {
+    @DisplayName("모듈 간 순환이 하나도 없다 — 여기에는 기준선 숫자가 없다")
+    void thereAreNoCyclesAtAll() {
         String message = detect().getMessage();
-        long actual = Arrays.stream(message.split(String.valueOf(NL)))
-                .filter(line -> line.trim().startsWith("- Cycle detected:"))
-                .count();
+        List<String> cycles = Arrays.stream(message.split(String.valueOf(NL)))
+                .map(String::trim)
+                .filter(line -> line.startsWith("- Cycle detected:"))
+                .toList();
 
-        assertThat(actual)
+        assertThat(cycles)
                 .as("""
-                        모듈 간 순환 경로 수가 기준선(%d)과 다르다. 실측 %d.
+                        모듈 간 순환이 생겼다. 이 저장소는 2026-08-31 이후 순환이 0개다.
 
-                        2026-08-31 현재 순환은 **0개**다. #106 과 #107 이 다섯을 전부 끊었다.
-                        여기가 0 이 아니게 되는 순간은 누군가 새 순환을 만든 순간이다.
+                        순환이 있으면 그 덩어리는 하나로만 떼어낼 수 있다. 그리고 읽기도 어려워진다 —
+                        A 를 이해하려면 B 를 읽어야 하고 B 를 이해하려면 다시 A 를 읽어야 한다.
 
-                        순환은 type = OPEN 으로도 @NamedInterface 로도 안 꺼진다. 코드를 옮겨야만
-                        없어진다. 그러니 이 수는 되도록 0 으로 두고, 늘려야 할 이유가 생기면
-                        그 이유를 여기 적어라.
-                        """.formatted(BASELINE_CYCLES, actual))
-                .isEqualTo(BASELINE_CYCLES);
+                        모듈 사이는 한 방향으로만 부른다. 양쪽이 서로 필요하면 공통 타입을 제3의
+                        자리로 빼거나, 부르는 쪽이 인터페이스를 정의하고 상대가 구현하게 한다.
+                        실제로 그렇게 끊은 기록이 #106 · #107 이다.
+                        """)
+                .isEmpty();
     }
 
     @Test
