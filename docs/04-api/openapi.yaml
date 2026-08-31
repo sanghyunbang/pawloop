@@ -1128,16 +1128,25 @@ paths:
               properties:
                 body:
                   type: string
+                  minLength: 1
+                  description: |
+                    비어 있으면 400 입니다. 길이 상한은 **문자가 아니라 UTF-8 바이트 65,535**
+                    입니다 — 컬럼이 `TEXT` 라서 그렇고, 한글은 3바이트라 22,000자면 이미 넘습니다.
+                    넘으면 400 입니다(예전에는 500 이 나갔습니다).
                   example: "보리 저녁밥 방금 줬어요! 또 주지 마세요 🐶"
                 clientMsgId:
                   type: string
+                  maxLength: 64
                   description: |
                     클라이언트가 만드는 멱등키. `Random.secure()` 16바이트 → base64url 이며
                     `uuid` 패키지를 쓰지 않습니다(신규 의존성 0).
+                    `chat_message.client_msg_id varchar(64)` 와 같은 폭이고, 넘으면 400 입니다.
                   example: "Zm9vYmFyLWlkZW1wb3RlbmN5"
                 contentType:
                   type: string
                   default: text
+                  maxLength: 16
+                  description: 생략하면 `text`. `chat_message.content_type varchar(16)` 폭을 넘으면 400 입니다
       responses:
         '201':
           description: 전송됨(배정된 roomSeq 포함)

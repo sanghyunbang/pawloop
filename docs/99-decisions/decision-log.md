@@ -467,7 +467,7 @@ MySQL 이 문서화한 시퀀스 에뮬레이션 패턴입니다(https://dev.mys
 받침 셋을 같이 겁니다.
 
 - `UNIQUE (room_id, room_seq)` — 이 저장소는 확인-후-쓰기를 늘 DB 유니크 제약으로 받쳐 왔습니다(`users(provider, social_id)`·`bookmarks(user_id, content_id)`·`card_reaction(card_id, user_id, reaction_type)`). 그리고 `FOR UPDATE|@Lock|LockModeType|@Version|PESSIMISTIC` 전수 grep 이 **0건**이라 `room_seq` 가 이 저장소의 **첫 비관적 락**입니다. 처음 쓰는 도구는 제약으로 받쳐 둡니다 — 발급이 틀렸을 때 조용한 중복 대신 즉시 오류가 납니다.
-- **락 순서는 항상 `chat_room` → `chat_room_member`.** 전송은 `chat_room`(발급) → `chat_message`(INSERT), 읽음 처리는 `chat_room_member` 만 건드립니다. 반대 순서로 잡는 경로를 하나라도 만들면 그 순간 데드락이 가능해집니다(https://dev.mysql.com/doc/refman/8.0/en/innodb-deadlocks.html). 그리고 **락을 쥔 트랜잭션 안에서 외부 호출(푸시·S3·LLM)을 하지 않습니다** — `innodb_lock_wait_timeout` 기본값이 50초라, 느린 외부 호출 하나가 그 방의 모든 전송을 최대 50초 막습니다.
+- **락 순서는 항상 `chat_room` → `chat_room_invite` → `chat_room_member` → `chat_message`.** (이 문장은 처음에 `chat_room` → `chat_room_member` 두 표만 적었습니다. #75 가 초대 잠금을, #78 이 `chat_message` 를 들여오면서 넓어졌습니다 — **정본은 `ChatRoomRepository#lockForMemberChange` javadoc** 이고 `schema.md` §12 가 같은 표를 적습니다.) 전송은 `chat_room`(발급) → `chat_message`(INSERT), 참여는 앞의 셋, 읽음 처리는 `chat_room_member` 만 건드립니다. 넷 중 둘 이상을 잡는 경로는 전부 이 순서를 따르므로 서로 같은 방향의 부분열이고 순환이 없습니다. 반대 순서로 잡는 경로를 하나라도 만들면 그 순간 데드락이 가능해집니다(https://dev.mysql.com/doc/refman/8.0/en/innodb-deadlocks.html). 그리고 **락을 쥔 트랜잭션 안에서 외부 호출(푸시·S3·LLM)을 하지 않습니다** — `innodb_lock_wait_timeout` 기본값이 50초라, 느린 외부 호출 하나가 그 방의 모든 전송을 최대 50초 막습니다.
 - `client_msg_id` + `UNIQUE (room_id, client_msg_id)`. 전송은 재시도 가능한 HTTP POST 인데(→ 결정 5) 앱의 `AuthedClient` 경유 호출에 타임아웃이 없어서(`app/lib/core/net/authed_client.dart:290`), 사용자가 답답해 다시 누르면 같은 메시지가 두 번 들어갑니다. 채팅은 중복이 눈에 바로 보이는 도메인입니다. 키는 순수 Dart 로 만듭니다(`Random.secure()` 16바이트 → base64url) — `uuid` 패키지를 넣지 않는 이유는 결정 5 에 적었습니다.
 
 **3. 미읽음은 세지 않고 뺍니다 — `room.last_seq − member.last_read_seq`.**
@@ -734,7 +734,7 @@ ADR-0010 은 Redis 를 **인증 맥락**(RT 검증 캐시 · AT 블록리스트)
 
 위 넷이 **채팅 때문에 생긴 것이 아니라는 점**이 중요합니다. 이번 설계는 인메모리 상태를 하나도 만들지 않습니다.
 
-- **`room_seq` 는 DB 락입니다.** 락을 잡는 것은 MySQL 이므로 인스턴스가 몇 대든 같은 방의 발급은 직렬화됩니다. 애플리케이션 메모리에 아무것도 안 둡니다. 이 저장소에는 명시적 락이 지금 **0건**이라 이게 첫 비관적 락이고, 그래서 `UNIQUE (room_id, room_seq)` 를 backstop 으로 겁니다 — 발급 로직이 틀렸을 때 조용한 중복 대신 즉시 오류가 납니다. 데드락 순서도 지금 못 박습니다: **락 순서는 항상 `chat_room` → `chat_room_member`**, 그리고 락을 잡은 트랜잭션 안에서 외부 호출(푸시·S3)을 하지 않습니다(`innodb_lock_wait_timeout` 기본 50초).
+- **`room_seq` 는 DB 락입니다.** 락을 잡는 것은 MySQL 이므로 인스턴스가 몇 대든 같은 방의 발급은 직렬화됩니다. 애플리케이션 메모리에 아무것도 안 둡니다. 이 저장소에는 명시적 락이 지금 **0건**이라 이게 첫 비관적 락이고, 그래서 `UNIQUE (room_id, room_seq)` 를 backstop 으로 겁니다 — 발급 로직이 틀렸을 때 조용한 중복 대신 즉시 오류가 납니다. 데드락 순서도 지금 못 박습니다: **락 순서는 항상 `chat_room` → `chat_room_invite` → `chat_room_member` → `chat_message`** (위 결정에 적은 대로 #75·#78 로 넓어진 표입니다. 정본은 `ChatRoomRepository#lockForMemberChange` javadoc), 그리고 락을 잡은 트랜잭션 안에서 외부 호출(푸시·S3)을 하지 않습니다(`innodb_lock_wait_timeout` 기본 50초).
 - **폴링은 무상태입니다.** 상태가 전부 DB 에 있어서 어느 인스턴스가 요청을 받아도 같은 답이 나옵니다.
 
 **그래서 처음부터 빼 두는 것이 셋 있습니다: 타이핑 표시 · 온라인 표시 · 인메모리 미읽음 캐시.** 셋 다 화면에 있으면 예쁜데 **서버에 지역 상태를 만듭니다.** 한 번 들어가면 위 목록에 줄이 늘어납니다. 소켓 단계는 다릅니다 — WebSocket 세션 자체가 인스턴스 지역 상태입니다. 그래서 팬아웃이 위 목록의 4번으로 들어가 있습니다.

@@ -135,6 +135,9 @@ public class ChatMessage {
      *
      * <p>enum 으로 두지 않는 이유는 {@code origin_kind} 와 같다 — 값이 늘 때마다 chat 을
      * 고치고 배포해야 한다. 대신 폭을 16 으로 좁혀 둔다.
+     *
+     * <p>이 폭을 넘는 값은 {@code ChatRoomService#validContentType} 이 400 으로 거절한다.
+     * 없던 시절에는 그대로 INSERT 로 내려가 500 이 났다(실측).
      */
     @Builder.Default
     @ColumnDefault("'text'")
@@ -147,6 +150,13 @@ public class ChatMessage {
      * <p>한 줄 채팅에 4GB 를 열어 둘 이유가 없고, 폭을 좁히면 실수로 파일을 통째로 밀어
      * 넣는 경로가 DB 에서 막힌다. 길이 상한 자체는 {@code ChatRoomService#postMessage} 가
      * 먼저 거절한다 — 컬럼은 마지막 방어선이다.
+     *
+     * <p><b>이 문장이 한동안 거짓이었다.</b> {@code postMessage} 에 길이 검사가 없어서
+     * 70,000자 본문이 INSERT 까지 내려가 {@code Data too long for column 'body'} → 500 이
+     * 났다(실측). 검사를 넣어 맞췄다 — {@code ChatRoomService#validBody} 가 그 자리다.
+     *
+     * <p>{@code TEXT} 가 세는 것은 문자가 아니라 <b>바이트</b> 65,535 다. 한글은 UTF-8
+     * 3바이트라 22,000자만 붙여 넣어도 넘어간다 — 검사도 같은 단위로 센다.
      */
     @Column(name = "body", nullable = false, columnDefinition = "TEXT")
     private String body;
@@ -164,6 +174,9 @@ public class ChatMessage {
      * <p>MySQL 의 UNIQUE 인덱스는 {@code NULL} 을 여러 번 허용한다. 그래서 멱등키 없이
      * 보낸 메시지들은 서로 충돌하지 않는다 — 그것이 이 컬럼을 {@code NOT NULL} 로 두지
      * 않은 이유다.
+     *
+     * <p>64자를 넘는 키는 {@code ChatRoomService#validClientMsgId} 가 400 으로 거절한다.
+     * 없던 시절에는 65자짜리 키 하나로 계약에 없는 500 이 나갔다(실측).
      */
     @Column(name = "client_msg_id", length = 64)
     private String clientMsgId;

@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.chat;
 
-import com.heattrip.heat_trip_backend.chatweb.ChatSenderNames;
+import com.heattrip.heat_trip_backend.chatweb.ChatMessageResponse;
+import com.heattrip.heat_trip_backend.chatweb.ChatMessages;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
@@ -12,17 +13,38 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+
+import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 방별 {@code room_seq} 발급과 발신자 이름 해석 — 이슈 #78 완료 조건 1·2·3·4.
+ *
+ * <h2>여기서 재는 것 셋</h2>
+ * <p>발급(스레드 20개) · 이름 해석(완료 조건 3·4) · 그리고 <b>전송이 거절되는 자리들</b> —
+ * 컬럼 폭과 인가다. 뒤의 둘은 나중에 붙은 것이고 이유가 각각 있다.
+ * <ul>
+ *   <li><b>컬럼 폭</b> — {@code sender_name} 만 검사가 있고 클라이언트가 실제로 보내는 셋
+ *       ({@code body}·{@code content_type}·{@code client_msg_id})에는 없어서, 넘기면 400 이
+ *       아니라 <b>500</b> 이 났다(실측). 방어의 방향이 반대였다.</li>
+ *   <li><b>인가</b> — 인가가 발급(=방 행 배타 잠금) 뒤에만 있어서, 멤버가 아닌 요청도 그
+ *       방을 잠그고 지나갔다. 아래 {@code aNonMemberIsTurnedAwayBeforeItEverQueuesOnTheRoomRow}
+ *       가 밖에서 그 행을 잠근 채 재는 자리다.</li>
+ * </ul>
  *
  * <h2>스레드를 실제로 띄운다</h2>
  * <p>완료 조건 1("스레드 20개가 동시에 넣으면 1..20 이 빠짐없이 한 번씩")은 코드를 읽어서
@@ -60,14 +82,26 @@ class ChatMessageIntegrationTest extends AbstractMySqlIntegrationTest {
     @Autowired
     private ChatRoomService chatRooms;
 
+    /**
+     * 완료 조건 3·4 가 실제로 지나가는 자리 — 조회 + 이름 해석의 조립.
+     *
+     * <p>{@code ChatSenderNames} 를 여기서 직접 부르지 않는다. 그렇게 하면 "테스트만
+     * 해석기를 부른다" 가 되어 응답 경로에는 아무것도 안 붙는다 — 그 상태가 #74 의
+     * {@code AuthCode.role} 과 같은 모양이고, #79 를 짜는 사람이 조립을 처음부터 다시
+     * 판단하게 된다.
+     */
     @Autowired
-    private ChatSenderNames senderNames;
+    private ChatMessages chatMessages;
 
     @Autowired
     private UserRepository userRepository;
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    /** 방 행을 <b>밖에서</b> 잠가 보려고 든다 — 잠금 순서를 실제로 재는 유일한 방법이다. */
+    @Autowired
+    private DataSource dataSource;
 
     // ─────────────────── 완료 조건 1 — 20 스레드, 1..20 이 빠짐없이 한 번씩 ───────────────────
 
@@ -151,21 +185,23 @@ class ChatMessageIntegrationTest extends AbstractMySqlIntegrationTest {
                 "먼저 갈게요", null, null);
         userRepository.deleteById(leaver.getId());
 
-        List<ChatMessageView> after = chatRooms.messagesAfter(room.id(), 0, 50);
+        List<ChatMessageResponse> shown = chatMessages.after(room.id(), 0, 50);
 
-        assertThat(after)
+        assertThat(shown)
                 .as("""
                         sender_user_id 에 users FK 를 걸고 ON DELETE CASCADE 를 주면 이 행이 \
                         사라진다. 그러면 남는 것은 대답만 있고 질문이 없는 대화다 (ADR-0011 결정 4).""")
                 .hasSize(1);
-        assertThat(senderNames.of(after.get(0).senderUserId()))
+        assertThat(shown.get(0).senderName())
                 .as("""
                         '익명' 은 앱에서 이미 '본인이 이름을 안 붙인 것' 을 뜻하고 \
                         (feed_screen.dart '표시 이름 (비우면 익명)'), '탈퇴한 사용자' 는 방 안 모두에게 \
-                        '이 사람이 나갔다' 를 알리는 것이라 본인이 동의한 적 없는 공개다 (#78).""")
+                        '이 사람이 나갔다' 를 알리는 것이라 본인이 동의한 적 없는 공개다 (#78).
+                        이 단언이 응답을 만드는 경로(ChatMessages)를 지나가는 것이 요점이다 — \
+                        해석기를 테스트만 부르면 #79 가 스냅샷을 그대로 실어도 여기는 초록불이다.""")
                 .isEqualTo("알 수 없음")
                 .isEqualTo(User.UNKNOWN_DISPLAY_NAME);
-        assertThat(after.get(0).senderNameAtSendTime())
+        assertThat(chatRooms.messagesAfter(room.id(), 0, 50).get(0).senderNameAtSendTime())
                 .as("스냅샷은 '그때 방 안의 사람들이 본 이름' 이라 남는다 — 응답의 이름이 아니다")
                 .isEqualTo("떠나는사람");
     }
@@ -184,9 +220,10 @@ class ChatMessageIntegrationTest extends AbstractMySqlIntegrationTest {
         user.setNickname("보리집사");
         userRepository.saveAndFlush(user);
 
+        ChatMessageResponse shown = chatMessages.after(room.id(), 0, 50).get(0);
         ChatMessageView past = chatRooms.messagesAfter(room.id(), 0, 50).get(0);
 
-        assertThat(senderNames.of(past.senderUserId()))
+        assertThat(shown.senderName())
                 .as("""
                         스냅샷을 그대로 응답에 실으면 이름을 바꾼 사람이 자기 과거 대화에서만 옛 \
                         이름으로 남는다 — 같은 화면 안에서 한 사람이 두 이름으로 보인다 (#78 완료 조건 4).""")
@@ -238,6 +275,146 @@ class ChatMessageIntegrationTest extends AbstractMySqlIntegrationTest {
                 chatRooms.postMessage(room.id(), member, "보호자", "나가고 나서", null, null))
                 .as("존재 여부가 아니라 removed_at 을 봐야 한다 — 강퇴된 사람의 행은 남아 있다")
                 .isInstanceOf(ResponseStatusException.class);
+    }
+
+    // ─────────────────── 컬럼 폭 — 넘으면 400 이다. 500 이 아니다 ───────────────────
+
+    @Test
+    @DisplayName("본문이 TEXT(65,535바이트)를 넘으면 400 이다 — 딱 맞으면 들어가고 한 바이트 넘으면 거절이다")
+    void aBodyWiderThanItsColumnIsTurnedAwayInsteadOfBlowingUpAtInsert() {
+        Room room = room("본문 폭");
+        long member = memberOf(room);
+
+        assertThat(chatRooms.postMessage(
+                room.id(), member, "보호자", "a".repeat(65_535), null, null).roomSeq())
+                .as("컬럼에 들어가는 값을 거절하면 반대 방향으로 틀린 것이다 — 그 사람은 아무것도 못 보낸다")
+                .isEqualTo(1L);
+
+        assertThatThrownBy(() -> chatRooms.postMessage(
+                room.id(), member, "보호자", "a".repeat(65_536), null, null))
+                .as("""
+                        검사가 없던 판을 실제로 돌렸다 — DataIntegrityViolationException \
+                        (Data too long for column 'body') 이 났고, GlobalExceptionHandler 에 그 \
+                        타입의 핸들러가 없어 @ExceptionHandler(Exception.class) 가 잡아 500 이 된다.
+                        400 이어야 할 요청이 500 으로 나가면 앱은 '내 요청이 틀렸다' 와 '서버가 \
+                        고장났다' 를 구분하지 못해 재시도 루프를 돈다.""")
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> chatRooms.postMessage(
+                room.id(), member, "보호자", "가".repeat(22_000), null, null))
+                .as("""
+                        TEXT 가 세는 것은 문자가 아니라 바이트다. 한글은 UTF-8 3바이트라 22,000자는 \
+                        66,000바이트다 — 문자로 세는 검사를 넣으면 여기서 그대로 500 이 난다.""")
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(lastSeqOf(room))
+                .as("입력 검증은 발급 앞이다 — 거절이 번호를 태우지 않는다")
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("본문 종류가 varchar(16) 을 넘으면 400 이다 — 16자는 들어가고 17자는 거절이다")
+    void aContentTypeWiderThanItsColumnIsTurnedAway() {
+        Room room = room("종류 폭");
+        long member = memberOf(room);
+
+        assertThat(chatRooms.postMessage(
+                room.id(), member, "보호자", "본문", "x".repeat(16), null).contentType())
+                .isEqualTo("x".repeat(16));
+
+        assertThatThrownBy(() -> chatRooms.postMessage(
+                room.id(), member, "보호자", "본문", "x".repeat(17), null))
+                .as("검사 없이 돌리면 Data too long for column 'content_type' → 500 이다(실측)")
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(lastSeqOf(room)).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("멱등키가 varchar(64) 를 넘으면 400 이다 — 64자는 들어가고 65자는 거절이다")
+    void aClientMessageIdWiderThanItsColumnIsTurnedAway() {
+        Room room = room("멱등키 폭");
+        long member = memberOf(room);
+
+        assertThat(chatRooms.postMessage(
+                room.id(), member, "보호자", "본문", null, "k".repeat(64)).clientMsgId())
+                .isEqualTo("k".repeat(64));
+
+        assertThatThrownBy(() -> chatRooms.postMessage(
+                room.id(), member, "보호자", "본문", null, "k".repeat(65)))
+                .as("""
+                        계약(openapi.yaml)의 전송 오퍼레이션은 201·400·401·403·429 만 선언한다. \
+                        클라이언트가 65자짜리 멱등키 하나를 보냈다고 계약에 없는 500 이 나가면 안 된다.""")
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(lastSeqOf(room)).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("이모지 닉네임도 varchar(255) 에 들어가는 만큼은 보낼 수 있다 — 자바 length 로 세면 절반에서 막힌다")
+    void anEmojiNicknameThatFitsTheColumnCanStillSpeak() {
+        Room room = room("이모지 이름");
+        long member = memberOf(room);
+        String dogs = "🐶".repeat(255);   // 코드포인트 255개, 자바 length 는 510
+
+        assertThat(chatRooms.postMessage(room.id(), member, dogs, "본문", null, null)
+                .senderNameAtSendTime())
+                .as("""
+                        users.nickname 도 varchar(255) 라 이런 닉네임이 DB 에 실제로 존재할 수 있다. \
+                        자바 length 로 세면 이 사람은 채팅을 한 줄도 못 보낸다 — 항상 400 이다(실측).""")
+                .isEqualTo(dogs);
+
+        assertThatThrownBy(() -> chatRooms.postMessage(
+                room.id(), member, "🐶".repeat(256), "본문", null, null))
+                .as("코드포인트로 세도 컬럼을 넘으면 거절이다 — 세는 단위만 바꾼 것이지 방어선을 넓힌 게 아니다")
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ─────────────────── 인가는 방 행을 잠그기 전에도 본다 ───────────────────
+
+    @Test
+    @DisplayName("멤버가 아닌 사람의 전송은 방 행 잠금을 기다리지 않는다 — roomId 하나로 남의 방을 줄 세울 수 없다")
+    void aNonMemberIsTurnedAwayBeforeItEverQueuesOnTheRoomRow() throws Exception {
+        Room room = room("잠금 앞 인가");
+        long member = memberOf(room);
+        long outsider = 900_000L + SEQUENCE.incrementAndGet();
+        chatRooms.postMessage(room.id(), member, "보호자", "첫 줄", null, null);
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try (Connection holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            try (PreparedStatement lock = holder.prepareStatement(
+                    "SELECT last_seq FROM chat_room WHERE id = ? FOR UPDATE")) {
+                lock.setLong(1, room.id());
+                lock.executeQuery();
+            }
+
+            // 이 순간부터 그 방 행에는 밖에서 건 배타 잠금이 걸려 있다. 인가가 발급(=잠금)
+            // 뒤에만 있으면 아래 호출은 innodb_lock_wait_timeout(기본 50초)까지 줄을 선다.
+            Callable<Throwable> attempt = () -> thrownBy(() -> chatRooms.postMessage(
+                    room.id(), outsider, "남", "여기 껴도 되나요", null, null));
+            Future<Throwable> rejected = pool.submit(attempt);
+
+            assertThat(rejected.get(10, TimeUnit.SECONDS))
+                    .as("""
+                            여기서 TimeoutException 이 나면 비멤버가 방 행 잠금 뒤에 줄을 섰다는 뜻이다.
+                            그러면 인증만 통과한 아무 사용자나 roomId 하나로 그 방의 정상 전송과 \
+                            참여(joinByInviteCode 도 chat_room 을 첫 칸에서 잡는다)를 반복해서 \
+                            뒤로 미룰 수 있다. 비용은 요청 한 번이고 방어선은 아직 없는 rate limit \
+                            뿐이다.
+                            잠금 뒤 재검사는 그대로 남아 있다 — 최종 판정은 여전히 그쪽이고, \
+                            이 검사는 값싼 fail-fast 다.""")
+                    .isInstanceOf(ResponseStatusException.class)
+                    .hasMessageContaining("403");
+
+            holder.rollback();
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(lastSeqOf(room))
+                .as("잠금을 건드리지 않았으니 번호도 그대로다")
+                .isEqualTo(1L);
     }
 
     // ─────────────────────────── 지그 ───────────────────────────
@@ -299,6 +476,16 @@ class ChatMessageIntegrationTest extends AbstractMySqlIntegrationTest {
 
     private interface ThrowingSupplier {
         Object get() throws Exception;
+    }
+
+    /** 던져진 것을 결과 자리에 담는다. 안 던지면 {@code null} 이라 그 자체가 빨간불이 된다. */
+    private static Throwable thrownBy(Runnable call) {
+        try {
+            call.run();
+            return null;
+        } catch (Throwable thrown) {
+            return thrown;
+        }
     }
 
     /**
