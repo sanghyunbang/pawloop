@@ -358,11 +358,16 @@ class MeScreen extends StatelessWidget {
             ]),
           ),
           GestureDetector(
-            onTap: () {
-              LocationService.paused.value = !paused;
-              ScaffoldMessenger.of(context).showSnackBar(
+            // setPaused 는 디스크에 남긴다. 예전처럼 `paused.value` 에 직접 대입하면
+            // 앱을 껐다 켤 때 중단이 풀렸다 — 사용자는 껐다고 믿는데 다시 켜진다.
+            onTap: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final ok = await LocationService.setPaused(!paused);
+              messenger.showSnackBar(
                 SnackBar(
-                  content: Text(!paused ? '위치 정보 이용을 일시 중단했어요' : '위치 정보 이용을 다시 시작했어요'),
+                  content: Text(!ok
+                      ? '설정을 저장하지 못했어요'
+                      : (!paused ? '위치 정보 이용을 일시 중단했어요' : '위치 정보 이용을 다시 시작했어요')),
                   duration: const Duration(milliseconds: 1600),
                 ),
               );

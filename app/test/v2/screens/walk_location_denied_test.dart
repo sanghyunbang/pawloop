@@ -8,6 +8,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:heat_trip_flutter/v2/data/location_service.dart';
 import 'package:heat_trip_flutter/v2/screens/walk_tracking_screen.dart';
 
@@ -29,6 +30,12 @@ Set<String> _texts(WidgetTester t) => t
     .toSet();
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  // '위치 수집 다시 켜기' 가 `setPaused` 로 **디스크에 남긴다**. 목이 없으면
+  // MissingPluginException 이다 — 이 줄이 그 버튼이 실제로 저장한다는 증거이기도 하다.
+  setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
   tearDown(() => LocationService.paused.value = false);
 
   group('이유마다 다른 것을 말한다', () {

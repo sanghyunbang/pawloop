@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 위치를 쓸 수 없는 이유.
 ///
@@ -41,8 +42,48 @@ class LocationFix {
 /// 위치 권한/현위치/위치 스트림을 단순화한 서비스.
 class LocationService {
   /// 위치 정보 수집 일시 중단(사용자 설정).
-  /// 위치정보법상 필수 기능 — 켜져 있으면 앱은 현위치를 조회/전송하지 않는다.
+  ///
+  /// 위치정보법 제24조의 이용중지 요구권을 화면으로 만든 것이다(프로필의 토글).
+  ///
+  /// **읽기 전용으로 쓴다.** 값을 바꿀 때는 [setPaused] 를 부른다 — 여기에 직접
+  /// 대입하면 디스크에 안 남고, 앱을 껐다 켜면 중단이 풀린다. 실제로 그랬다:
+  /// 이 값은 메모리 `ValueNotifier` 뿐이었고 저장하는 코드가 한 줄도 없었다.
+  /// 사용자는 위치 수집을 껐다고 믿는 채로 다음 실행부터 다시 켜진 앱을 썼다.
   static final ValueNotifier<bool> paused = ValueNotifier<bool>(false);
+
+  /// 중단 여부가 남는 자리. `_v1` 인 것은 이 앱의 다른 키들과 같은 규약이다.
+  static const String pausedKey = 'location_paused_v1';
+
+  /// 저장된 중단 여부를 되살린다. **`runApp` 전에 한 번** 부른다.
+  ///
+  /// 실패하면 중단이 아닌 상태로 시작한다 — 여기서 던지면 앱이 안 뜬다. 다만
+  /// 조용히 넘기지는 않는다: 사용자가 끈 것을 못 살렸다는 사실은 로그에 남긴다.
+  static Future<void> restorePaused() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      paused.value = prefs.getBool(pausedKey) ?? false;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[LocationService] 중단 설정을 못 읽었다: $e');
+    }
+  }
+
+  /// 중단 여부를 바꾸고 **디스크에 남긴다.**
+  ///
+  /// 화면은 이것만 부른다. 저장에 실패하면 `false` 를 돌려주고 **메모리 값도 안
+  /// 바꾼다** — 껐다고 표시해 놓고 다음 실행에 켜져 있으면, 화면이 거짓말한 것이
+  /// 된다. 실패를 화면이 알아야 사용자에게 말할 수 있다.
+  static Future<bool> setPaused(bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final wrote = await prefs.setBool(pausedKey, value);
+      if (!wrote) return false;
+      paused.value = value;
+      return true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[LocationService] 중단 설정을 못 남겼다: $e');
+      return false;
+    }
+  }
 
   /// 권한을 확보하고 현재 좌표를 얻는다. 못 얻으면 **이유를 함께** 준다.
   static Future<LocationFix> locate() async {
