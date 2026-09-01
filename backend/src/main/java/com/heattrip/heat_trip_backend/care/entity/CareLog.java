@@ -39,20 +39,30 @@ import java.time.LocalDateTime;
  * <b>지우지 않는 사건 기록</b>이다 — 같은 종류를 하루에 두 번 찍어도 두 행이 남는다.
  * 두 번째를 막지 않는 이유는 {@code CareService.record} 에 있다.
  *
- * <h2>⚠️ {@code dog_id} 에는 FK 가 없다 — #9 의 "일부러 안 걸었다" 와 <b>다른 이유</b>다</h2>
- * <p>이슈 본문은 {@code dog_id FK} 라고 적었지만 <b>{@code dog} 표가 정본 스키마에 없다.</b>
- * {@code backend/mysql/init/01_schema.sql} 에 {@code CREATE TABLE dog} 가 0건이고
- * ({@code docs/03-database/schema.md §3} 은 계획으로만 적혀 있다), 앱의 {@code DogProfile}·
- * {@code kMyPets} 는 전부 클라이언트 더미라 <b>서버 쪽 강아지 id 자체가 존재하지 않는다.</b>
- * 없는 표에는 FK 를 걸 수 없다.
+ * <h2>⚠️ {@code dog_id} 에는 FK 가 없고, 값도 <b>항상 {@code null}</b> 이다</h2>
  *
- * <p>그래서 컬럼은 {@code NULL} 허용으로 지금 넣고 값은 <b>항상 {@code null}</b> 이다.
- * 지금 넣는 이유는 나중에 넣으면 운영 데이터 위의 {@code ALTER} 가 되기 때문이고,
- * {@code dog} 표가 생기는 날 그 자리에 FK 를 건다.
+ * <p><b>2026-09-01 에 이 절의 전제가 바뀌었다.</b> 예전에는 "{@code dog} 표가 정본 스키마에
+ * 없다" 가 이유였는데, #145 가 그 표를 만들었다({@code 01_schema.sql} 의
+ * {@code CREATE TABLE dog}, {@code docs/03-database/schema.md §3} 은 이제 <b>실재</b>다).
+ * 앱도 {@code POST /api/dogs} 로 서버에 반려동물을 등록한다.
  *
- * <p><b>#9 와 헷갈리지 말 것.</b> #9({@code refresh_token})는 표가 <b>있는데도</b> FK 를 걸지
- * 않았다 — 탈퇴 경로가 DB 삭제 순서에 묶이는 것을 피한 판단이다. 여기는 <b>참조할 표가 아직
- * 없는 것</b>이고 판단이 아니라 사실이다. 그날이 오면 여기는 FK 를 걸고 #9 는 안 건다.
+ * <p>그래서 <b>"없는 표에는 FK 를 걸 수 없다" 는 더 이상 이유가 아니다.</b> 지금 안 거는
+ * 이유는 다른 것이다.
+ *
+ * <p>{@code mysql/init/01_schema.sql} 은 살아 있는 DB 에서 {@code SHOW CREATE TABLE} 로
+ * <b>뽑은</b> 파일이고, 그 DB 는 Hibernate 가 엔티티로 만든 것이다. 이 클래스가
+ * {@code dogId} 를 스칼라 {@code Long} 으로 들고 있어서 <b>Hibernate 가 그 FK 를 만들지
+ * 않는다.</b> 마이그레이션에서 {@code ALTER} 로 더하면 운영 DB 에는 있고 커밋된 스키마에는
+ * 없는 제약이 생기고, 다음 재생성 때 조용히 사라진다.
+ *
+ * <p>제대로 걸려면 이 클래스가 {@code @ManyToOne Dog} 를 들어야 하고, 그건 {@code care} 가
+ * {@code dog} 모듈을 참조한다는 뜻이라 별도 판단이다. <b>지금 {@code dog_id} 가 항상
+ * {@code null} 이라 무결성 위험은 없다</b> — 미룬 것이 안전한 드문 경우다.
+ * <b>그 판단은 이슈 #154 가 소유한다.</b>
+ *
+ * <p><b>#9 와 헷갈리지 말 것.</b> #9({@code refresh_token})는 탈퇴 경로가 DB 삭제 순서에
+ * 묶이는 것을 피하려고 <b>일부러</b> 안 걸었다. 여기는 "매핑을 안 바꿔서 못 거는" 것이라
+ * 성격이 다르다 — 그날이 오면 여기는 FK 를 걸고 #9 는 안 건다.
  *
  * <h2>여기는 chat 경계 밖이라 나머지 FK 는 정상적으로 건다</h2>
  * <p>"chat 밖으로 나가는 FK 0개"(ADR-0011 결정 4)는 {@code chat_*} 세 표에만 걸리는 규칙이다.

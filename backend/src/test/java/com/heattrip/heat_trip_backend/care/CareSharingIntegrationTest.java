@@ -101,7 +101,9 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                 .as("수행자는 토큰의 사용자다 — 본문으로 받으면 남의 이름으로 기록을 남길 수 있다")
                 .isEqualTo(dad.id());
         assertThat(created.path("dogId").isNull())
-                .as("dog 표가 아직 없다 — 검증할 수 없는 외래 id 를 저장하지 않는다(CareLog javadoc)")
+                .as("""
+                        dog 표는 #145 에서 생겼지만 care_log 를 아직 안 이었다 — 이 컬럼은 \
+                        여전히 항상 null 이다. 잇는 것은 #154 다(CareLog javadoc).""")
                 .isTrue();
 
         JsonNode seenByMom = careLogs(mom, family.groupId(), null);
