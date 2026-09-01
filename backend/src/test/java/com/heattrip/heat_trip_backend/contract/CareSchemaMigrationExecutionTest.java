@@ -95,8 +95,8 @@ class CareSchemaMigrationExecutionTest {
                     """))
                     .as("""
                             NOT NULL 로 두면 이 앱은 이 표에 한 행도 못 넣는다 — 채울 값이 없기 \
-                            때문이다. dog 표가 정본 스키마에 없다는 것이 판단이 아니라 사실이라 \
-                            이 컬럼은 오늘 항상 NULL 이다 (#76).""")
+                            때문이다. dog 표는 #145 에서 생겼지만 care_log 를 아직 안 이어서 \
+                            이 컬럼은 여전히 항상 NULL 이다 (#76 · 잇는 것은 #154).""")
                     .containsExactly("YES");
 
             assertThat(db.query("""
