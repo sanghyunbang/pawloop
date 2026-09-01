@@ -4,8 +4,10 @@ import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/today_care_card.dart';
+import '../widgets/walk_feed_builder.dart';
+import '../data/walk_feed.dart';
 import 'main_shell.dart';
-import 'walk_tracking_screen.dart';
+import 'start_walk.dart';
 import 'family_screen.dart';
 import 'insight_screen.dart';
 
@@ -77,7 +79,10 @@ class TodayScreen extends StatelessWidget {
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen())),
                     behavior: HitTestBehavior.opaque,
-                    child: _walkSummary(const WalkToday()),
+                    // 예전에는 `const WalkToday()` 였다 — 무엇을 걷든 영원히 0회 0.0km 0분.
+                    child: WalkFeedBuilder(
+                      builder: (_, data) => _walkSummary(data),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TodayCareCard(
@@ -147,7 +152,9 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
-  Widget _walkSummary(WalkToday w) {
+  Widget _walkSummary(WalkFeedData data) {
+    final today = data.today;
+    final pendingToday = data.pending.length;
     Widget cell(String v, String label) => Expanded(
           child: Column(children: [
             Text(v, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: T.textPrimary)),
@@ -158,12 +165,28 @@ class TodayScreen extends StatelessWidget {
     Widget div() => Container(width: 1, height: 30, color: const Color(0x1F8C7BFF));
     return GlassCard(
       padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
-      child: Row(children: [
-        cell('${w.count}회', '오늘 산책'),
-        div(),
-        cell('${w.km.toStringAsFixed(1)}km', '거리'),
-        div(),
-        cell('${w.minutes}분', '시간'),
+      child: Column(children: [
+        Row(children: [
+          cell('${today.count}회', '오늘 산책'),
+          div(),
+          cell('${today.km.toStringAsFixed(1)}km', '거리'),
+          div(),
+          cell('${today.minutes}분', '시간'),
+        ]),
+        // 대기 중인 것이 있으면 말한다. 감추면 "저장됐는데 안 보인다" 가 된다.
+        if (pendingToday > 0) ...[
+          const SizedBox(height: 8),
+          Text(
+            '전송 대기 $pendingToday건 · 연결되면 올릴게요',
+            style: const TextStyle(fontSize: 11.5, color: Color(0xFFE07A4E)),
+          ),
+        ] else if (data.offline && !data.hasAnything) ...[
+          const SizedBox(height: 8),
+          const Text(
+            '기록을 불러오지 못했어요',
+            style: TextStyle(fontSize: 11.5, color: Color(0x9E463C64)),
+          ),
+        ],
       ]),
     );
   }
@@ -176,7 +199,8 @@ class TodayScreen extends StatelessWidget {
           icon: Icons.pets,
           label: '산책 시작',
           gradient: _warm,
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalkTrackingScreen())),
+          // 미로그인이면 로그인부터 — 30분 걷고 나서 벽을 만나지 않게 한다.
+          onTap: () => startWalk(context),
         ),
       ),
       const SizedBox(width: 11),

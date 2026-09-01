@@ -151,72 +151,27 @@ void addPet(DogProfile p) {
   selectPet(kMyPets.value.length - 1);
 }
 
-/// 오늘 산책 요약(0부터 시작 — 실제 기록 연동 전). 거리 km, 횟수.
-class WalkToday {
-  final int count;
-  final double km;
-  final int minutes;
-  const WalkToday({this.count = 0, this.km = 0, this.minutes = 0});
-}
-
 // ─────────────────────── 산책 기록 ───────────────────────
+//
+// **여기 있던 더미를 전부 지웠다 (이슈 #145).**
+//
+//   WalkToday · WalkLog · kWalks · kWeekKm · kWalkTodayIdx
+//
+// 산책은 이제 서버에 저장된다. 읽는 곳은 `data/walk_feed.dart` 하나이고, 화면들은
+// `widgets/walk_feed_builder.dart` 를 지난다.
+//
+// kWalkTodayIdx 는 상수 6 이었다 — 무슨 요일이든 통계의 "오늘" 막대 강조가 **영원히
+// 일요일**에 찍혔다. 지금은 `WalkFeedData.todayIndex` 가 실제 요일을 준다.
+//
+// 이 더미를 다시 넣지 마라. 화면이 서버를 못 불렀을 때 그릴 것은 **0 이 아니라
+// "불러오지 못했어요"** 다 — 0 은 "산책을 한 번도 안 했다" 로 읽힌다.
 
-/// 산책 로그 1건. (추후 GPS 경로/사진 연동)
-class WalkLog {
-  final String date; // 표시용 '6월 30일 (월)'
-  final String place;
-  final double km;
-  final int minutes;
-  final String memo;
-  const WalkLog({
-    required this.date,
-    required this.place,
-    required this.km,
-    required this.minutes,
-    this.memo = '',
-  });
-
-  String get pace =>
-      minutes == 0 ? '-' : '${(minutes / (km == 0 ? 1 : km)).round()}분/km';
-}
-
-/// 샘플 산책 기록.
-const List<WalkLog> kWalks = [
-  WalkLog(
-    date: '6월 30일 (월)',
-    place: '서울숲',
-    km: 2.4,
-    minutes: 38,
-    memo: '아침 공기가 좋아 한 바퀴 더 돌았다. 보리도 신났음.',
-  ),
-  WalkLog(
-    date: '6월 28일 (토)',
-    place: '남산 둘레길',
-    km: 3.1,
-    minutes: 52,
-    memo: '사람이 많아 리드줄은 짧게. 그래도 잘 걸었다.',
-  ),
-  WalkLog(
-    date: '6월 27일 (금)',
-    place: '한강공원(뚝섬)',
-    km: 1.8,
-    minutes: 29,
-    memo: '저녁 산책. 물냄새 맡느라 바빴다.',
-  ),
-  WalkLog(date: '6월 25일 (수)', place: '동네 한 바퀴', km: 1.2, minutes: 20, memo: ''),
-  WalkLog(
-    date: '6월 24일 (화)',
-    place: '올림픽공원',
-    km: 2.9,
-    minutes: 46,
-    memo: '잔디밭에서 한참 뛰어놀았다.',
-  ),
-];
-
-/// 주간 산책 거리(월~일, km). 통계 차트용.
-const List<double> kWeekKm = [2.1, 2.9, 1.2, 0, 1.8, 3.1, 2.4];
+/// 요일 이름. 통계 차트의 가로축이 쓴다.
+///
+/// 이것만 남긴 이유: **더미가 아니다.** 위에서 지운 것들은 지어낸 "기록" 이었고, 이건
+/// 달력의 사실이다. 월요일이 0 이라는 것도 계약의 `WalkStats.weekKm` 과 같은 약속이다.
 const List<String> kWeekDayLabels = ['월', '화', '수', '목', '금', '토', '일'];
-const int kWalkTodayIdx = 6; // 오늘 = 일
+
 
 // ─────────────────────── 반려 커뮤니티 ───────────────────────
 

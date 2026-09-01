@@ -7,6 +7,7 @@ import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
 import '../data/location_service.dart';
 import '../data/pet_places_repository.dart';
+import '../data/walk_outbox.dart';
 import 'create_screen.dart';
 
 /// 실시간 산책 트래킹 — "기록계"가 아니라 걷는 동안 주변을 탐색하는 지도.
@@ -32,11 +33,29 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   StreamSubscription<Position>? _posSub;
   bool _paused = false;
   bool _real = false; // true = 실제 GPS, false = 시뮬(위치 불가 시 폴백)
+
+  /// 위치를 쓸 수 있는지 **판정이 끝났는가.**
+  ///
+  /// 이게 없으면 타이머가 첫 위치를 기다리는 동안 시뮬 경로를 그려 버린다. 그러고 나서
+  /// 실제 위치가 도착하면 `_real` 이 참이 되는데, **경로 앞머리에는 이미 가짜 점이
+  /// 들어가 있다.**
+  ///
+  /// 실측한 것: 서울 광화문에서 산책을 시작했더니 저장된 경로가
+  /// `LINESTRING(37.5448 127.0397, … 37.5665 126.978, …)` 이었다 — 앞 4점이 서울숲
+  /// 근처의 시뮬 루프이고 그 다음이 5.5km 떨어진 진짜 위치다. 앱이 잰 거리는 555m 인데
+  /// DB 의 `ST_Length` 는 6,421m 였다. **경로와 거리가 서로 다른 말을 한다.**
+  bool _locationDecided = false;
   bool _follow = true; // 카메라 자동 따라가기(제스처 시 해제)
   bool _statsExpanded = false; // 스탯 패널 펼침 여부(기본 접힘)
   bool _poisLoaded = false;
   int _seconds = 0;
   double _km = 0;
+
+  /// 산책이 실제로 시작된 시각. **서버가 요구하는 값이고, 없으면 저장 자체가 안 된다.**
+  ///
+  /// `_seconds` 로 역산하지 않는다 — 일시정지 동안 그 값이 멈추므로 뺄셈이 실제 시작
+  /// 시각보다 늦게 나온다. 시작한 순간을 그냥 적어 둔다.
+  DateTime? _startedAt;
 
   /// 주변 반려 장소(검색 시트/핀 공용).
   List<PetPlace> _places = const [];
@@ -66,13 +85,16 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
 
   // ───────────── 트래킹 ─────────────
   Future<void> _start() async {
+    _startedAt = DateTime.now();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_paused || !mounted) return;
       setState(() => _seconds++);
-      if (!_real) _advanceSim();
+      // 판정이 끝나기 전에는 아무것도 그리지 않는다 — 위 _locationDecided javadoc 참조.
+      if (_locationDecided && !_real) _advanceSim();
     });
     final pos = await LocationService.current();
     if (!mounted) return;
+    _locationDecided = true;
     if (pos != null) {
       _real = true;
       _path.add(NLatLng(pos.latitude, pos.longitude));
@@ -538,6 +560,37 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
     }
   }
 
+  /// 방금 끝낸 산책을 초안으로 만든다. **여기서 만들지 못하면 기록이 사라진다.**
+  ///
+  /// ## 시뮬레이션 경로는 담지 않는다
+  ///
+  /// 위치를 못 잡으면 이 화면은 서울숲 근처의 **가짜 루프**를 그린다(`_route`). 그것을
+  /// 저장하면 부산에서 위치 권한을 끈 사람의 산책이 **서울숲에 기록된다.** 거리도
+  /// 마찬가지로 지어낸 값이다.
+  ///
+  /// 그래서 `_real` 이 아니면 `null` 을 준다 — 저장 화면이 손입력으로 열리고, 사용자가
+  /// 실제로 걸은 거리를 직접 적는다. 지어낸 값을 조용히 올리는 것보다 낫다.
+  ///
+  /// ## 좌표를 뒤집어 담는다
+  ///
+  /// `NLatLng` 는 (위도, 경도)인데 계약과 서버는 **`[경도, 위도]`** 다. 이 한 줄을
+  /// 빠뜨리면 지도에 엉뚱한 곳이 찍히고, 서버가 400 으로 거절한다(위도 자리에 127 이
+  /// 오기 때문이다).
+  WalkDraft? _draft() {
+    final startedAt = _startedAt;
+    if (!_real || startedAt == null) return null;
+
+    return WalkDraft.fresh(
+      startedAt: startedAt,
+      endedAt: DateTime.now(),
+      distanceM: (_km * 1000).round(),
+      durationS: _seconds,
+      path: [
+        for (final p in _path) [p.longitude, p.latitude],
+      ],
+    );
+  }
+
   void _finish() {
     _timer?.cancel();
     _posSub?.cancel();
@@ -582,7 +635,10 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const CreateScreen(prefillPlace: '오늘 산책'),
+                    builder: (_) => CreateScreen(
+                      prefillPlace: '오늘 산책',
+                      draft: _draft(),
+                    ),
                   ),
                 );
               },

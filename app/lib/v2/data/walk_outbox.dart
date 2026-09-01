@@ -1,0 +1,289 @@
+// lib/v2/data/walk_outbox.dart
+//
+// 아직 서버에 닿지 않은 산책들 — 이슈 #145.
+//
+// ## 왜 필요한가
+//
+// 산책이 끝나는 순간 사용자는 이미 걸었다. 그 기록이 사라지는 경우가 넷이다.
+//
+//   1. 반려동물이 서버에 없다 (등록 전)
+//   2. 로그인이 안 돼 있다
+//   3. 연결이 없다 (지하 주차장·지하철)
+//   4. 저장 화면에서 앱이 강제 종료된다
+//
+// 넷 다 **같은 자리**를 지난다 — 트래킹이 끝나는 순간이다. 그래서 초안을 "실패했을
+// 때" 가 아니라 **끝나는 즉시 무조건** 저장한다. 실패를 기다렸다가 저장하면 4번은
+// 영원히 못 잡는다.
+//
+// ## 두 큐를 나눈다
+//
+// 재시도할 수 있는 실패(연결 없음·미로그인·429)와 영구 거절(400·404)은 **다른 곳에**
+// 둔다. 한 큐에 섞으면 영구 거절 요청이 자리를 차지한 채 영원히 재시도되고, 자리가
+// 차면 **정상 기록이 밀려난다.**
+//
+// ## 새 의존성을 넣지 않는다
+//
+// `shared_preferences` 는 이미 있고 `uuid` 는 없다. 멱등키는 `chat_outbox.dart` 와
+// 같은 방식으로 `Random.secure()` 16바이트를 base64url 로 적는다 — 서버는 이 값을
+// **불투명 문자열**로만 쓴다(형식을 검사하지 않는다).
+library;
+
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// 아직 서버에 없는 산책 하나.
+class WalkDraft {
+  /// 멱등키. **한 번 만들고 재전송에도 그대로 쓴다.**
+  ///
+  /// 재전송할 때 키를 새로 만들면 멱등이 무의미해진다 — 첫 전송이 서버에 닿았는데
+  /// 응답만 못 받은 경우, 새 키로 보내면 같은 산책이 두 줄이 된다. 서버는
+  /// `(dog_id, client_walk_id)` UNIQUE 로 두 번째를 거르는데 키가 다르면 그냥 통과한다.
+  final String clientWalkId;
+
+  final DateTime startedAt;
+  final DateTime endedAt;
+  final int distanceM;
+  final int durationS;
+
+  /// `[경도, 위도]` 순서. **비어 있을 수 있다** — 손입력 기록과 위치 권한 거부다.
+  final List<List<double>> path;
+
+  final String? memo;
+  final String? weather;
+
+  /// 어느 반려동물의 산책인가. **기록할 때는 모를 수 있다** — 서버에 등록된 반려동물이
+  /// 아직 없으면 `null` 이고, 등록한 뒤 전송할 때 채워진다.
+  final int? dogId;
+
+  /// 마지막 실패의 사유. 화면이 "왜 아직 안 올라갔는지" 를 말해 준다.
+  final String? lastError;
+
+  const WalkDraft({
+    required this.clientWalkId,
+    required this.startedAt,
+    required this.endedAt,
+    required this.distanceM,
+    required this.durationS,
+    required this.path,
+    this.memo,
+    this.weather,
+    this.dogId,
+    this.lastError,
+  });
+
+  double get km => distanceM / 1000.0;
+
+  int get minutes => durationS ~/ 60;
+
+  /// 트래킹이 끝난 직후. **여기서만 키를 만든다.**
+  factory WalkDraft.fresh({
+    required DateTime startedAt,
+    required DateTime endedAt,
+    required int distanceM,
+    required int durationS,
+    required List<List<double>> path,
+    int? dogId,
+  }) =>
+      WalkDraft(
+        clientWalkId: _newKey(),
+        startedAt: startedAt,
+        endedAt: endedAt,
+        distanceM: distanceM,
+        durationS: durationS,
+        path: path,
+        dogId: dogId,
+      );
+
+  WalkDraft copyWith({
+    int? dogId,
+    int? distanceM,
+    int? durationS,
+    String? memo,
+    String? weather,
+    String? lastError,
+  }) =>
+      WalkDraft(
+        clientWalkId: clientWalkId,
+        startedAt: startedAt,
+        endedAt: endedAt,
+        distanceM: distanceM ?? this.distanceM,
+        durationS: durationS ?? this.durationS,
+        path: path,
+        memo: memo ?? this.memo,
+        weather: weather ?? this.weather,
+        dogId: dogId ?? this.dogId,
+        lastError: lastError ?? this.lastError,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'clientWalkId': clientWalkId,
+        'startedAt': startedAt.toUtc().toIso8601String(),
+        'endedAt': endedAt.toUtc().toIso8601String(),
+        'distanceM': distanceM,
+        'durationS': durationS,
+        'path': path,
+        if (memo != null) 'memo': memo,
+        if (weather != null) 'weather': weather,
+        if (dogId != null) 'dogId': dogId,
+        if (lastError != null) 'lastError': lastError,
+      };
+
+  /// 모양이 다르면 `null`. **저장 형식이 바뀌어도 앱이 죽지 않아야 한다** — 옛 초안
+  /// 하나 때문에 전체 큐를 못 읽으면 그 사람의 기록이 전부 사라진다.
+  static WalkDraft? tryParse(Map<String, dynamic> json) {
+    final key = json['clientWalkId'];
+    final startedAt = DateTime.tryParse(json['startedAt'] as String? ?? '');
+    final endedAt = DateTime.tryParse(json['endedAt'] as String? ?? '');
+    if (key is! String || key.isEmpty || startedAt == null || endedAt == null) {
+      return null;
+    }
+
+    final rawPath = json['path'];
+    final path = rawPath is List
+        ? rawPath
+            .whereType<List>()
+            .map((point) => point.whereType<num>().map((n) => n.toDouble()).toList())
+            .where((point) => point.length == 2)
+            .toList()
+        : <List<double>>[];
+
+    return WalkDraft(
+      clientWalkId: key,
+      startedAt: startedAt.toLocal(),
+      endedAt: endedAt.toLocal(),
+      distanceM: (json['distanceM'] as num?)?.toInt() ?? 0,
+      durationS: (json['durationS'] as num?)?.toInt() ?? 0,
+      path: path,
+      memo: json['memo'] as String?,
+      weather: json['weather'] as String?,
+      dogId: (json['dogId'] as num?)?.toInt(),
+      lastError: json['lastError'] as String?,
+    );
+  }
+
+  /// 16바이트 난수. `chat_outbox.dart` 와 같은 방식이다 — `uuid` 의존성을 넣지 않는다.
+  static String _newKey() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    return base64UrlEncode(bytes).replaceAll('=', '');
+  }
+}
+
+/// 전송 대기 산책들의 보관소. 앱을 껐다 켜도 남는다.
+///
+/// `chat_outbox` 는 메모리에만 산다(대화는 다시 칠 수 있다). 산책은 **다시 걸을 수
+/// 없으므로** 디스크에 둔다.
+class WalkOutbox {
+  /// 재시도할 수 있는 초안들. 연결이 돌아오면 이 큐가 나간다.
+  static const String pendingKey = 'walk_outbox_pending_v1';
+
+  /// 서버가 영구히 거절한 초안들. **재시도하지 않는다.**
+  ///
+  /// 지우지 않고 남기는 이유: 사용자가 실제로 걸은 기록이고, 왜 못 올라갔는지 보고
+  /// 스스로 지울 기회를 줘야 한다. 조용히 버리면 그건 사라진 것과 같다.
+  static const String rejectedKey = 'walk_outbox_rejected_v1';
+
+  /// 대기 큐의 상한.
+  ///
+  /// 20 은 **관측이 아니다.** `SharedPreferences` 가 안드로이드에서 XML 하나를 통째로
+  /// 메모리에 올린다는 사실에서 보수적으로 고른 값이고(초안 하나가 경로 포함 약 11KB
+  /// 이면 20건은 220KB), 플랫폼의 문서화된 하드 리밋을 확인하지는 않았다. 실사용에서
+  /// 초과가 잦으면 별도 파일 저장으로 옮겨야 한다.
+  static const int maxPending = 20;
+
+  final SharedPreferences _prefs;
+
+  WalkOutbox(this._prefs);
+
+  static Future<WalkOutbox> open() async =>
+      WalkOutbox(await SharedPreferences.getInstance());
+
+  /// 대기 중인 초안들. **호출할 때마다 새 리스트다** — [put] 이 그것을 제자리에서 고친다.
+  List<WalkDraft> get pending => _read(pendingKey);
+
+  List<WalkDraft> get rejected => _read(rejectedKey);
+
+  /// 초안 하나를 대기 큐에 넣는다.
+  ///
+  /// 같은 키가 이미 있으면 **그 자리에서** 덮어쓴다(재시도 상태 갱신). 지우고 뒤에 다시
+  /// 붙이면 실패한 초안이 맨 뒤로 가는데, 그러면 큐가 가득 찼을 때 **계속 실패하는 것이
+  /// 살아남고 오래된 정상 기록이 밀려난다.** 순서는 걸은 순서로 둔다.
+  ///
+  /// 큐가 가득 차면 **가장 오래된 것을 밀어낸다.** 새 것을 버리지 않는 이유는 방금 걸은
+  /// 산책이 사용자에게 가장 생생하기 때문이다.
+  Future<void> put(WalkDraft draft) async {
+    final list = pending;
+    final at = list.indexWhere((d) => d.clientWalkId == draft.clientWalkId);
+    if (at >= 0) {
+      list[at] = draft;
+    } else {
+      list.add(draft);
+    }
+    while (list.length > maxPending) {
+      list.removeAt(0);
+    }
+    await _write(pendingKey, list);
+  }
+
+  /// 전송에 성공했다. 대기 큐에서 뺀다.
+  Future<void> remove(String clientWalkId) async {
+    await _write(
+      pendingKey,
+      pending.where((d) => d.clientWalkId != clientWalkId).toList(),
+    );
+  }
+
+  /// 서버가 영구히 거절했다. **대기 큐에서 빼고 거절 큐로 옮긴다.**
+  ///
+  /// 대기 큐에 그대로 두면 나갈 때마다 같은 400 을 받고, 그 자리가 채워져 있는 동안
+  /// 정상 기록이 밀려난다.
+  Future<void> reject(WalkDraft draft, String reason) async {
+    await remove(draft.clientWalkId);
+    final list = rejected
+        .where((d) => d.clientWalkId != draft.clientWalkId)
+        .toList()
+      ..add(draft.copyWith(lastError: reason));
+    while (list.length > maxPending) {
+      list.removeAt(0);
+    }
+    await _write(rejectedKey, list);
+  }
+
+  /// 거절 큐에서 하나를 지운다. 사용자가 "지우기" 를 눌렀을 때다.
+  Future<void> discardRejected(String clientWalkId) async {
+    await _write(
+      rejectedKey,
+      rejected.where((d) => d.clientWalkId != clientWalkId).toList(),
+    );
+  }
+
+  List<WalkDraft> _read(String key) {
+    final out = <WalkDraft>[];
+    final raw = _prefs.getStringList(key);
+    // **항상 늘릴 수 있는 리스트를 준다.** const [] 를 돌려주면 put 이 그 위에서
+    // add 를 부르다 터진다(실측).
+    if (raw == null) return out;
+    for (final line in raw) {
+      try {
+        final json = jsonDecode(line);
+        if (json is Map<String, dynamic>) {
+          final draft = WalkDraft.tryParse(json);
+          // 못 읽는 줄 하나가 나머지를 못 읽게 만들지 않는다.
+          if (draft != null) out.add(draft);
+        }
+      } catch (_) {
+        // 같은 이유로 넘어간다.
+      }
+    }
+    return out;
+  }
+
+  Future<void> _write(String key, List<WalkDraft> drafts) async {
+    await _prefs.setStringList(
+      key,
+      drafts.map((d) => jsonEncode(d.toJson())).toList(),
+    );
+  }
+}
