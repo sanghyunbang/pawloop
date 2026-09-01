@@ -256,12 +256,17 @@ public class GlobalExceptionHandler {
         org.springframework.web.HttpMediaTypeNotSupportedException.class,
         org.springframework.web.HttpRequestMethodNotSupportedException.class,
         org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
-        org.springframework.web.bind.MissingServletRequestParameterException.class
+        org.springframework.web.bind.MissingServletRequestParameterException.class,
+        org.springframework.web.bind.MethodArgumentNotValidException.class
     })
     public ResponseEntity<ErrorResponse> handleMalformedRequest(Exception ex) {
         final HttpStatus status;
         final String message;
-        if (ex instanceof org.springframework.web.HttpMediaTypeNotSupportedException) {
+        if (ex instanceof org.springframework.web.bind.MethodArgumentNotValidException) {
+            status = HttpStatus.BAD_REQUEST;
+            message = firstValidationMessage(
+                    (org.springframework.web.bind.MethodArgumentNotValidException) ex);
+        } else if (ex instanceof org.springframework.web.HttpMediaTypeNotSupportedException) {
             status = HttpStatus.UNSUPPORTED_MEDIA_TYPE;
             message = "지원하지 않는 Content-Type 입니다.";
         } else if (ex instanceof org.springframework.web.HttpRequestMethodNotSupportedException) {
@@ -277,6 +282,35 @@ public class GlobalExceptionHandler {
         }
 
         return ResponseEntity.status(status).body(ErrorResponse.of(codeOf(status), message));
+    }
+
+    /**
+     * {@code @Valid @RequestBody} 위반 하나를 사람이 읽을 문구로 옮긴다 — 이슈 #145.
+     *
+     * <p><b>우리가 쓴 메시지만 내보낸다.</b> 제약 애너테이션에 {@code message} 를 적어 두지
+     * 않으면 Bean Validation 의 기본 문구가 오는데, 그건 영어이고({@code must not be blank})
+     * 무엇보다 {@code @Size} 같은 것은 <b>들어온 값의 길이</b>를 문구에 섞는 구현이 있다.
+     * 이 클래스의 다른 핸들러들이 {@code ex.getMessage()} 를 싣지 않는 것과 같은 이유다(#6).
+     *
+     * <p>그래서 <b>기본 문구로 보이면 고정 문구로 바꾼다.</b> 판별은 "우리가 쓴 것은 전부
+     * 한글" 이라는 사실 하나로 한다 — 이 저장소의 제약 메시지는 예외 없이 한국어다.
+     *
+     * <p>위반이 여럿이어도 <b>하나만</b> 말한다. 전부 실으면 응답이 요청 본문의 구조를 그대로
+     * 되비추는 셈이고, 사용자가 고칠 것은 어차피 한 번에 하나다.
+     */
+    private static String firstValidationMessage(
+            org.springframework.web.bind.MethodArgumentNotValidException ex) {
+        return ex.getBindingResult().getFieldErrors().stream()
+                .map(org.springframework.validation.FieldError::getDefaultMessage)
+                .filter(GlobalExceptionHandler::isOurs)
+                .findFirst()
+                .orElse("요청 값이 올바르지 않습니다.");
+    }
+
+    /** 한글 음절 영역(가–힣). 우리가 쓴 메시지에는 이 글자가 들어 있다. */
+    private static boolean isOurs(String message) {
+        return message != null
+                && message.codePoints().anyMatch(cp -> cp >= 0xAC00 && cp <= 0xD7A3);
     }
 
     /**

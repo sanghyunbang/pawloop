@@ -117,45 +117,6 @@ CREATE TABLE `chat_message` (
   CONSTRAINT `fk_chat_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE `kto_call_budget` (
-  `used` int NOT NULL DEFAULT '0',
-  `day` date NOT NULL,
-  `pool` varchar(16) NOT NULL,
-  PRIMARY KEY (`day`,`pool`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `pet_place_detail` (
-  `lat` double DEFAULT NULL,
-  `lng` double DEFAULT NULL,
-  `common_fetched_at` datetime(6) DEFAULT NULL,
-  `not_found_at` datetime(6) DEFAULT NULL,
-  `pet_fetched_at` datetime(6) DEFAULT NULL,
-  `content_id` varchar(64) NOT NULL,
-  `content_type_id` varchar(16) DEFAULT NULL,
-  `tel` varchar(64) DEFAULT NULL,
-  `addr` varchar(255) DEFAULT NULL,
-  `title` varchar(255) DEFAULT NULL,
-  `image` varchar(512) DEFAULT NULL,
-  `acmpy_need_mtr` text,
-  `acmpy_psbl_cpam` text,
-  `etc_acmpy_info` text,
-  `overview` longtext,
-  PRIMARY KEY (`content_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `place_cell` (
-  `fail_streak` int NOT NULL DEFAULT '0',
-  `item_count` int NOT NULL,
-  `lat_idx` int NOT NULL,
-  `lng_idx` int NOT NULL,
-  `total_count` int NOT NULL DEFAULT '0',
-  `failed_at` datetime(6) DEFAULT NULL,
-  `fetched_at` datetime(6) NOT NULL,
-  `payload` longtext NOT NULL,
-  PRIMARY KEY (`lat_idx`,`lng_idx`),
-  KEY `idx_place_cell_fetched` (`fetched_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
 CREATE TABLE `chat_report` (
   `context_from_seq` bigint NOT NULL,
   `context_to_seq` bigint NOT NULL,
@@ -180,8 +141,8 @@ CREATE TABLE `chat_reported_message` (
   `sender_user_id` bigint NOT NULL,
   `sent_at` datetime(6) NOT NULL,
   `content_type` varchar(16) NOT NULL,
-  `sender_name` varchar(255) NOT NULL,
   `body` text NOT NULL,
+  `sender_name` varchar(255) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_chat_reported_msg` (`report_id`,`room_seq`),
   CONSTRAINT `fk_chat_reported_msg_report` FOREIGN KEY (`report_id`) REFERENCES `chat_report` (`id`) ON DELETE CASCADE
@@ -254,6 +215,24 @@ CREATE TABLE `collections` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `UK9jlux1cwd4hfslei7lc96f29d` (`user_id`,`name`),
   CONSTRAINT `FKn7pdedyqaiddr0uxdj603my7d` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `dog` (
+  `birth` date DEFAULT NULL,
+  `neutered` bit(1) NOT NULL DEFAULT b'0',
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `size` varchar(10) NOT NULL DEFAULT 'small',
+  `species` varchar(10) NOT NULL DEFAULT 'dog',
+  `breed` varchar(50) DEFAULT NULL,
+  `name` varchar(50) NOT NULL,
+  `avatar` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_dog_user` (`user_id`),
+  CONSTRAINT `fk_dog_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `ck_dog_size` CHECK ((`size` in (_utf8mb4'small',_utf8mb4'medium',_utf8mb4'large'))),
+  CONSTRAINT `ck_dog_species` CHECK ((`species` in (_utf8mb4'dog',_utf8mb4'cat',_utf8mb4'other')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `emotion_card` (
@@ -355,6 +334,13 @@ CREATE TABLE `journey_photos` (
   CONSTRAINT `FKqanwlnup01qpasii1iggj7s9x` FOREIGN KEY (`journey_id`) REFERENCES `journey` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `kto_call_budget` (
+  `day` date NOT NULL,
+  `used` int NOT NULL,
+  `pool` varchar(16) NOT NULL,
+  PRIMARY KEY (`day`,`pool`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `media_objects` (
   `created_at` datetime(6) NOT NULL,
   `deleted_at` datetime(6) DEFAULT NULL,
@@ -372,6 +358,37 @@ CREATE TABLE `media_objects` (
   UNIQUE KEY `UK3pkjswl54cvrded30nci3u45t` (`media_key`),
   KEY `idx_media_owner` (`owner_id`),
   KEY `idx_media_ref` (`ref_type`,`ref_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `pet_place_detail` (
+  `lat` double DEFAULT NULL,
+  `lng` double DEFAULT NULL,
+  `common_fetched_at` datetime(6) DEFAULT NULL,
+  `not_found_at` datetime(6) DEFAULT NULL,
+  `pet_fetched_at` datetime(6) DEFAULT NULL,
+  `content_type_id` varchar(16) DEFAULT NULL,
+  `content_id` varchar(64) NOT NULL,
+  `tel` varchar(64) DEFAULT NULL,
+  `image` varchar(512) DEFAULT NULL,
+  `acmpy_need_mtr` text,
+  `acmpy_psbl_cpam` text,
+  `addr` varchar(255) DEFAULT NULL,
+  `etc_acmpy_info` text,
+  `title` varchar(255) DEFAULT NULL,
+  `overview` longtext,
+  PRIMARY KEY (`content_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `place_cell` (
+  `fail_streak` int NOT NULL,
+  `item_count` int NOT NULL,
+  `lat_idx` int NOT NULL,
+  `lng_idx` int NOT NULL,
+  `total_count` int NOT NULL,
+  `failed_at` datetime(6) DEFAULT NULL,
+  `fetched_at` datetime(6) NOT NULL,
+  `payload` longtext NOT NULL,
+  PRIMARY KEY (`lat_idx`,`lng_idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `place_descriptions` (
@@ -409,7 +426,7 @@ CREATE TABLE `place_hashtags` (
   PRIMARY KEY (`id`),
   KEY `idx_ph_place` (`place_id`),
   KEY `idx_ph_hashtag` (`hashtag`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=286 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `place_kakao_links` (
   `kakao_mapx` double DEFAULT NULL,
@@ -429,7 +446,7 @@ CREATE TABLE `place_simple_tags` (
   PRIMARY KEY (`id`),
   KEY `idx_pst_place` (`place_id`),
   KEY `idx_pst_tag` (`tag`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=286 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `place_star_ratings` (
   `rating` double DEFAULT NULL,
