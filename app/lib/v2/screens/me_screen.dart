@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
+import '../data/walk_feed.dart';
+import '../widgets/walk_feed_builder.dart';
 import '../data/auth_state.dart';
 import '../data/location_service.dart';
 import 'edit_screen.dart';
@@ -233,9 +235,16 @@ class MeScreen extends StatelessWidget {
   }
 
   // ───────────── 산책 활동 요약 ─────────────
-  Widget _statsCard(BuildContext context) {
-    final totalKm = kWalks.fold<double>(0, (s, w) => s + w.km);
-    final weekKm = kWeekKm.fold<double>(0, (s, v) => s + v);
+  Widget _statsCard(BuildContext context) => WalkFeedBuilder(
+        builder: (context, data) => _statsCardOf(context, data),
+      );
+
+  /// 총 산책 · 총 거리 · 이번주. **셋 다 한 번의 호출로 온다** — 계약의 `WalkStats` 가
+  /// `allTime*` 과 `week*` 를 함께 싣는 이유가 이 카드다.
+  Widget _statsCardOf(BuildContext context, WalkFeedData data) {
+    final totalKm = data.stats.allTimeKm;
+    final weekKm = data.stats.totalKm;
+    final totalCount = data.stats.allTimeCount;
 
     Widget cell(String value, String label) => Expanded(
           child: Column(children: [
@@ -253,7 +262,7 @@ class MeScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
         child: Column(children: [
           Row(children: [
-            cell('${kWalks.length}회', '총 산책'),
+            cell('$totalCount회', '총 산책'),
             div(),
             cell('${totalKm.toStringAsFixed(1)}km', '총 거리'),
             div(),

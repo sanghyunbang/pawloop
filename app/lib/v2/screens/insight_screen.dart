@@ -3,6 +3,8 @@ import 'package:fl_chart/fl_chart.dart';
 import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
+import '../widgets/walk_feed_builder.dart';
+import '../data/walk_feed.dart';
 import '../widgets/profile_avatar.dart';
 
 /// 산책 통계 (insight) — 이번 주 요약 + 주간 거리 막대그래프 + 자주 가는 곳.
@@ -19,22 +21,67 @@ class _InsightScreenState extends State<InsightScreen> {
     colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
   );
 
-  // 이번 주 파생 지표.
-  double get _totalKm => kWeekKm.fold(0.0, (a, b) => a + b);
-  int get _walkCount => kWeekKm.where((v) => v > 0).length;
-  double get _avgKm => _walkCount == 0 ? 0 : _totalKm / _walkCount;
-  double get _maxKm => kWeekKm.fold(0.0, (a, b) => b > a ? b : a);
+  /// 화면이 그리는 자료. [WalkFeedBuilder] 가 채운다.
+  WalkFeedData _data = WalkFeedData.empty;
 
-  /// kWalks의 place 빈도 상위 3.
-  List<MapEntry<String, int>> get _topPlaces {
-    final counts = <String, int>{};
-    for (final w in kWalks) {
-      counts[w.place] = (counts[w.place] ?? 0) + 1;
+  /// 이번 주 요일별 거리. **전송 대기 중인 것도 얹는다** — 방금 걸었는데 막대가 안 오르면
+  /// 사용자는 기록이 안 됐다고 읽는다.
+  List<double> get _weekKm => _data.weekKmWithPending;
+
+  double get _totalKm => _weekKm.fold(0.0, (a, b) => a + b);
+
+  /// **산책 건수**다. 예전에는 `kWeekKm.where((v) => v > 0).length` 로 **산책한 날 수**를
+  /// 세면서 "산책 횟수" 라고 적고 있었다 — 하루에 두 번 걸으면 1 로 나왔다.
+  int get _walkCount => _data.stats.walkCount + _data.pending.length;
+
+  double get _avgKm => _walkCount == 0 ? 0 : _totalKm / _walkCount;
+
+  double get _maxKm => _weekKm.fold(0.0, (a, b) => b > a ? b : a);
+
+  /// 주간 요약 문구.
+  ///
+  /// **하드코딩된 주장을 지웠다.** 예전 문구는 "주말에 가장 활발했고 … 서울숲 평지 코스
+  /// 위주를 추천해요" 였는데, 둘 다 근거가 없었다. 실제로 화요일에만 걸은 주에도
+  /// "주말에 가장 활발" 이라고 말했다(실측). 옆의 숫자가 실데이터가 되면서 그 문장이
+  /// **분석처럼 읽히기 시작했다** — 더미였을 때보다 나쁘다.
+  ///
+  /// 지금 말하는 것은 **자료에서 나오는 것뿐**이다: 횟수·거리·평균, 그리고 가장 많이
+  /// 걸은 요일. 코스 추천은 `Walk` 에 장소 축이 생기는 날 다시 본다.
+  String get _weeklyReport {
+    if (_walkCount == 0) {
+      return '이번 주는 아직 기록이 없어요. 오늘 한 바퀴 어때요 🐾';
     }
-    final list = counts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return list.take(3).toList();
+
+    final buffer = StringBuffer(
+      '이번 주는 $_walkCount회 · ${_totalKm.toStringAsFixed(1)}km 걸었어요. ',
+    );
+
+    // 가장 많이 걸은 요일. 같은 값이 여럿이면 앞선 요일을 고른다 — 순위를 지어내지 않는다.
+    var best = 0;
+    for (var i = 1; i < _weekKm.length; i++) {
+      if (_weekKm[i] > _weekKm[best]) best = i;
+    }
+    if (_weekKm[best] > 0) {
+      buffer.write('${kWeekDayLabels[best]}요일에 가장 많이 걸었고, ');
+    }
+
+    buffer.write('평균 ${_avgKm.toStringAsFixed(1)}km 예요 🐾');
+    return buffer.toString();
   }
+
+  /// 오늘이 몇 번째 막대인가. **월요일이 0 이다.**
+  ///
+  /// 예전에는 `kWalkTodayIdx = 6` 이라는 상수였다 — 무슨 요일이든 강조가 일요일에 찍혔다.
+  int get _todayIndex => WalkFeedData.todayIndex;
+
+  /// 자주 간 곳 상위.
+  ///
+  /// **항상 비어 있다.** 계약의 `WalkStats.topPlaces` 도 그렇고, 이유가 같다 — `Walk` 에
+  /// 장소 축이 없어서 셀 근거가 없다. 예전에는 더미 `kWalks` 의 `place` 문자열을 세고
+  /// 있었고, 그건 사용자가 실제로 간 곳이 아니었다.
+  ///
+  /// 그럴듯한 값을 만들어 넣는 대신 화면이 "아직 없다" 를 말한다.
+  List<MapEntry<String, int>> get _topPlaces => const [];
 
   Widget _gradNum(String v, {double size = 21}) => ShaderMask(
     shaderCallback: (r) => _warm.createShader(r),
@@ -49,7 +96,14 @@ class _InsightScreenState extends State<InsightScreen> {
   );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => WalkFeedBuilder(
+        builder: (context, data) {
+          _data = data;
+          return _build(context);
+        },
+      );
+
+  Widget _build(BuildContext context) {
     return Scaffold(
       backgroundColor: T.lilacTop,
       body: AuroraBackground(
@@ -202,9 +256,7 @@ class _InsightScreenState extends State<InsightScreen> {
           ),
           const SizedBox(height: 9),
           Text(
-            '이번 주는 $_walkCount회 · ${_totalKm.toStringAsFixed(1)}km 걸었어요. 주말에 가장 활발했고, '
-            '평균 ${_avgKm.toStringAsFixed(1)}km로 꾸준한 편이에요. 슬개골 관리 중이라면 계단이 없는 '
-            '서울숲 평지 코스 위주를 추천해요. 물 마시기 기록도 잊지 마세요 🐾',
+            _weeklyReport,
             style: const TextStyle(
               fontSize: 13,
               height: 1.55,
@@ -363,7 +415,7 @@ class _InsightScreenState extends State<InsightScreen> {
                 final i = value.toInt();
                 if (i < 0 || i >= kWeekDayLabels.length)
                   return const SizedBox.shrink();
-                final today = i == kWalkTodayIdx;
+                final today = i == _todayIndex;
                 return Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
@@ -381,18 +433,18 @@ class _InsightScreenState extends State<InsightScreen> {
         ),
         borderData: FlBorderData(show: false),
         barGroups: [
-          for (int i = 0; i < kWeekKm.length; i++)
+          for (int i = 0; i < _weekKm.length; i++)
             BarChartGroupData(
               x: i,
               barRods: [
                 BarChartRodData(
-                  toY: kWeekKm[i],
+                  toY: _weekKm[i],
                   width: 18,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(7),
                   ),
-                  color: i == kWalkTodayIdx ? null : otherColor,
-                  gradient: i == kWalkTodayIdx
+                  color: i == _todayIndex ? null : otherColor,
+                  gradient: i == _todayIndex
                       ? const LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,

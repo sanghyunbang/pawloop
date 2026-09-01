@@ -122,8 +122,24 @@ public class Walk {
     private int durationS;
 
     /**
-     * GPS 경로. <b>{@code (x, y) = (경도, 위도)}</b> 다 — JTS 의 규약이고 계약의
-     * {@code [경도, 위도]} 와 같다. 뒤집으면 조용히 틀린다.
+     * GPS 경로. 자바에서는 <b>{@code (x, y) = (경도, 위도)}</b> 다 — JTS 의 규약이고
+     * 계약의 {@code [경도, 위도]} 와 같다.
+     *
+     * <h3>⚠️ DB 안에는 순서가 <b>반대</b>로 들어간다</h3>
+     * <p>MySQL 은 SRID 4326 의 축 순서를 <b>(위도, 경도)</b> 로 본다(EPSG 정의 그대로다).
+     * 그래서 hibernate-spatial 이 쓸 때 뒤집고 읽을 때 되돌린다. <b>실측한 것</b>:
+     * {@code [[126.978, 37.5665], ...]} 로 보낸 경로가 DB 에서는
+     * {@code LINESTRING(37.5665 126.978, ...)} 이고, API 로 다시 꺼내면
+     * {@code [126.978, 37.5665]} 로 정확히 돌아온다.
+     *
+     * <p><b>그래서 네이티브 SQL 을 쓸 때 계약의 순서를 그대로 쓰면 안 된다.</b>
+     * 예를 들어 "이 지점에서 가까운 산책" 을 물으려면
+     * {@code ST_GeomFromText('POINT(위도 경도)', 4326)} 이지 {@code POINT(경도 위도)} 가
+     * 아니다. 뒤집으면 오류가 나지 않고 <b>조용히 엉뚱한 거리</b>가 나온다.
+     *
+     * <p>저장된 값이 의미상 맞다는 것도 확인했다 — 위 3점에 대해
+     * {@code ST_Length(path, 'metre')} 가 393.9m 를 주고, 그것은 그 좌표들의 실제 거리다
+     * (구간 185m + 209m).
      */
     @Column(name = "path", columnDefinition = "linestring srid 4326")
     private LineString path;

@@ -1,11 +1,32 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../data/walk_outbox.dart';
+import '../data/walk_sync.dart';
 
-/// 산책 기록 작성 (create) — 장소·거리·시간·메모·사진. (감정 도메인 제거, 강아지 산책 중심)
+/// 산책 기록 작성 (create) — 장소·거리·시간·메모·사진.
+///
+/// ## 초안은 **선택**이다
+///
+/// 이 화면에 오는 길이 둘이다.
+///
+///  1. 트래킹을 끝내고 온다 — [draft] 에 실제 경로·거리·시간이 들어 있다.
+///  2. `myrecords_screen` 의 "산책 기록하기" 로 바로 온다 — 초안이 없고 손으로 적는다.
+///
+/// 그래서 [draft] 를 필수로 만들 수 없다. 필수로 두면 두 번째 경로가 컴파일 단계에서
+/// 깨진다.
+///
+/// ## 예전에는 거리가 하드코딩 2.0 이었다
+///
+/// 트래킹 화면이 실제 거리를 쌓아 놓고도 이 화면으로 넘기지 않아서, 3km 를 걸어도
+/// 저장 화면은 2.0km 부터 시작했다. 그리고 저장 버튼은 스낵바만 띄웠다.
 class CreateScreen extends StatefulWidget {
   final String? prefillPlace; // 장소 상세 "여기서 산책 기록 쓰기"에서 prefill
-  const CreateScreen({super.key, this.prefillPlace});
+
+  /// 트래킹이 만든 초안. **없으면 손입력이다.**
+  final WalkDraft? draft;
+
+  const CreateScreen({super.key, this.prefillPlace, this.draft});
   @override
   State<CreateScreen> createState() => _CreateScreenState();
 }
@@ -14,8 +35,19 @@ class _CreateScreenState extends State<CreateScreen> {
   final _place = TextEditingController();
   final _memo = TextEditingController();
 
-  double km = 2.0;
-  int minutes = 30;
+  /// 초안이 있으면 그 값에서 시작한다. 없을 때만 손입력 기본값이다.
+  late double km = widget.draft?.km ?? 2.0;
+  late int minutes = widget.draft?.minutes ?? 30;
+
+  /// 사용자가 거리·시간을 **직접 만졌는가.**
+  ///
+  /// 안 만졌으면 초안의 실측값을 그대로 보낸다. 이게 없으면 화면의 값으로 되돌려
+  /// 보내게 되는데, 그 값은 분 단위라 **1분 미만이 통째로 사라진다** — 74초를 걷고
+  /// 저장했더니 서버에 `duration_s = 0` 이 들어갔다(실측).
+  bool _distanceEdited = false;
+  bool _minutesEdited = false;
+
+  bool _saving = false;
 
   static const _warm = LinearGradient(
     begin: Alignment(-0.7, -1), end: Alignment(0.7, 1),
@@ -41,10 +73,62 @@ class _CreateScreenState extends State<CreateScreen> {
     return '${n.month}월 ${n.day}일 (${w[n.weekday - 1]})';
   }
 
-  void _save() {
+  /// 저장. **여기서 처음으로 기록이 서버로 나간다.**
+  ///
+  /// 화면은 결과를 있는 그대로 말한다 — 큐에 남았으면 "저장됐어요" 라고 하지 않는다.
+  /// 그게 "저장은 됐는데 아무 데도 안 보인다" 를 만드는 자리다.
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+
+    final memo = _memo.text.trim();
+    final base = widget.draft ??
+        // 손입력이다. 경로가 없고 시각은 지금 기준으로 만든다 — 지어낸 좌표를 넣지
+        // 않는 것이 요점이다.
+        WalkDraft.fresh(
+          startedAt: DateTime.now().subtract(Duration(minutes: minutes)),
+          endedAt: DateTime.now(),
+          distanceM: (km * 1000).round(),
+          durationS: minutes * 60,
+          path: const [],
+        );
+
+    final draft = base.copyWith(
+      // **만진 것만 이긴다.** 사용자가 손으로 정한 값은 실측값을 이기지만, 안 만졌으면
+      // 초안의 초 단위 값을 그대로 둔다 — 화면의 분 단위로 되돌리면 1분 미만이 사라진다.
+      distanceM: _distanceEdited || widget.draft == null ? (km * 1000).round() : null,
+      durationS: _minutesEdited || widget.draft == null ? minutes * 60 : null,
+      memo: memo.isEmpty ? null : memo,
+    );
+
+    final WalkSyncResult result;
+    try {
+      final sync = await WalkSync.open();
+      result = await sync.push(draft);
+    } catch (_) {
+      // 저장소를 열지 못했다(디스크 문제 등). 기록을 잃지 않았다고 말할 수 없다.
+      if (!mounted) return;
+      setState(() => _saving = false);
+      _toast('기록을 저장하지 못했어요');
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _saving = false);
+
+    _toast(switch (result.outcome) {
+      WalkSyncOutcome.saved => '산책 기록이 저장됐어요 🐾',
+      // 사라지지 않았다는 것과, 아직 서버에 없다는 것을 둘 다 말한다.
+      WalkSyncOutcome.queued =>
+        result.reason ?? '기록을 보관했어요 · 연결되면 올릴게요',
+      WalkSyncOutcome.rejected => result.reason ?? '기록을 저장할 수 없어요',
+    });
     Navigator.of(context).maybePop();
+  }
+
+  void _toast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('산책 기록이 저장됐어요 🐾'), duration: Duration(milliseconds: 1500)),
+      SnackBar(content: Text(message), duration: const Duration(milliseconds: 1800)),
     );
   }
 
@@ -167,16 +251,28 @@ class _CreateScreenState extends State<CreateScreen> {
           icon: Icons.straighten,
           label: '거리',
           value: '${km.toStringAsFixed(1)} km',
-          onMinus: () => setState(() => km = (km - 0.1).clamp(0.0, 99.0)),
-          onPlus: () => setState(() => km = (km + 0.1).clamp(0.0, 99.0)),
+          onMinus: () => setState(() {
+            km = (km - 0.1).clamp(0.0, 99.0);
+            _distanceEdited = true;
+          }),
+          onPlus: () => setState(() {
+            km = (km + 0.1).clamp(0.0, 99.0);
+            _distanceEdited = true;
+          }),
         ),
         const SizedBox(height: 12),
         _stepperRow(
           icon: Icons.schedule,
           label: '시간',
           value: '$minutes 분',
-          onMinus: () => setState(() => minutes = (minutes - 5).clamp(0, 600)),
-          onPlus: () => setState(() => minutes = (minutes + 5).clamp(0, 600)),
+          onMinus: () => setState(() {
+            minutes = (minutes - 5).clamp(0, 600);
+            _minutesEdited = true;
+          }),
+          onPlus: () => setState(() {
+            minutes = (minutes + 5).clamp(0, 600);
+            _minutesEdited = true;
+          }),
         ),
       ]),
     );

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
-import '../domain/pet.dart';
 import '../widgets/aurora.dart';
+import '../data/walk_feed.dart';
+import '../data/walk_outbox.dart';
+import '../data/walk_repository.dart';
+import '../widgets/walk_feed_builder.dart';
 import 'create_screen.dart';
 
-/// 내 기록 (myRecords) — 산책 기록. 이번 달 요약 + 전체 산책 리스트.
+/// 내 기록 (myRecords) — 산책 기록. 전체 기간 요약 + 산책 목록.
 class MyRecordsScreen extends StatelessWidget {
   const MyRecordsScreen({super.key});
 
@@ -15,11 +18,16 @@ class MyRecordsScreen extends StatelessWidget {
   );
 
   @override
-  Widget build(BuildContext context) {
-    // 이번 달 요약 집계
-    final totalKm = kWalks.fold<double>(0, (s, w) => s + w.km);
-    final totalCount = kWalks.length;
-    final totalMinutes = kWalks.fold<int>(0, (s, w) => s + w.minutes);
+  Widget build(BuildContext context) => WalkFeedBuilder(
+        builder: (context, data) => _build(context, data),
+      );
+
+  Widget _build(BuildContext context, WalkFeedData data) {
+    // **전체 기간이다.** 예전 주석은 "이번 달 요약 집계" 라고 적혀 있었지만 코드는
+    // `kWalks` 전체를 접고 있었다 — 라벨을 코드가 실제로 하는 일에 맞춘다.
+    final totalKm = data.stats.allTimeKm;
+    final totalCount = data.stats.allTimeCount;
+    final totalMinutes = data.stats.allTimeMinutes;
 
     return Scaffold(
       backgroundColor: T.lilacTop,
@@ -47,7 +55,25 @@ class MyRecordsScreen extends StatelessWidget {
                   const Text('전체 산책',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
                   const SizedBox(height: 12),
-                  for (final w in kWalks) ...[_walkCard(w), const SizedBox(height: 12)],
+                  // 전송 대기 중인 것을 **위에** 놓는다. 방금 걸은 것이고, 사용자가
+                  // "안 올라갔나?" 를 먼저 확인할 자리다.
+                  for (final d in data.pending.reversed) ...[
+                    _walkCard(_RecordView.ofDraft(d)),
+                    const SizedBox(height: 12),
+                  ],
+                  for (final w in data.walks) ...[
+                    _walkCard(_RecordView.ofWalk(w)),
+                    const SizedBox(height: 12),
+                  ],
+                  if (!data.hasAnything) ...[
+                    Center(
+                      child: Text(
+                        data.offline ? '기록을 불러오지 못했어요' : '아직 산책 기록이 없어요',
+                        style: const TextStyle(fontSize: 13, color: T.textMuted),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   // P1: 히스토리 보존 정책 사전 고지(추후 유료 경계 — 처음부터 알리고 시작).
                   const SizedBox(height: 6),
                   const Center(
@@ -106,7 +132,7 @@ class MyRecordsScreen extends StatelessWidget {
             child: const Icon(Icons.pets, size: 18, color: Colors.white),
           ),
           const SizedBox(width: 10),
-          const Text('이번 달 산책',
+          const Text('전체 산책 요약',
               style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
         ]),
         const SizedBox(height: 16),
@@ -144,7 +170,7 @@ class MyRecordsScreen extends StatelessWidget {
   }
 
   // ── 산책 기록 카드 ───────────────────────────
-  Widget _walkCard(WalkLog w) {
+  Widget _walkCard(_RecordView w) {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -162,8 +188,26 @@ class MyRecordsScreen extends StatelessWidget {
           const SizedBox(width: 11),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(w.place,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
+              Row(children: [
+                Expanded(
+                  child: Text(w.title,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                ),
+                // 아직 서버에 없다는 것을 **감추지 않는다.** 감추면 나중에 사라진 것처럼
+                // 보이고, 저장된 것처럼 그리면 그건 거짓말이다.
+                if (w.pending)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0x1AE07A4E),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Text('전송 대기',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                            color: Color(0xFFE07A4E))),
+                  ),
+              ]),
               const SizedBox(height: 3),
               Row(children: [
                 const Icon(Icons.calendar_today, size: 12.5, color: Color(0xA8463C64)),
@@ -189,6 +233,28 @@ class MyRecordsScreen extends StatelessWidget {
     );
   }
 
+  /// 카드 하나가 그릴 것. 서버 산책과 전송 대기 초안을 **같은 모양**으로 만든다 —
+  /// 화면이 둘을 다르게 다루면 "대기 중인 것은 목록에 없다" 같은 규칙이 조용히 생긴다.
+  ///
+  /// `place` 축이 없다. 계약의 `Walk` 에 장소가 없어서다 — 통계의 `topPlaces` 가
+  /// 빈 배열인 것과 같은 이유다. 대신 **시작 시각**을 제목으로 쓴다(실제 정보다).
+  static String _titleOf(DateTime startedAt) {
+    final hour = startedAt.hour;
+    final part = hour < 6
+        ? '새벽'
+        : hour < 12
+            ? '아침'
+            : hour < 18
+                ? '오후'
+                : '저녁';
+    return '$part 산책';
+  }
+
+  static String _dateOf(DateTime t) {
+    const w = ['월', '화', '수', '목', '금', '토', '일'];
+    return '${t.month}월 ${t.day}일 (${w[t.weekday - 1]})';
+  }
+
   Widget _stat(IconData icon, String label) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -201,5 +267,47 @@ class MyRecordsScreen extends StatelessWidget {
           Text(label,
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
         ]),
+      );
+}
+
+/// 목록 카드 하나의 값. 서버 산책과 초안이 여기로 모인다.
+class _RecordView {
+  final String title;
+  final String date;
+  final double km;
+  final int minutes;
+  final String memo;
+
+  /// 아직 서버에 없다. 카드에 "전송 대기" 뱃지가 붙는다.
+  final bool pending;
+
+  const _RecordView({
+    required this.title,
+    required this.date,
+    required this.km,
+    required this.minutes,
+    required this.memo,
+    required this.pending,
+  });
+
+  String get pace =>
+      minutes == 0 ? '-' : '${(minutes / (km == 0 ? 1 : km)).round()}분/km';
+
+  factory _RecordView.ofWalk(ServerWalk w) => _RecordView(
+        title: MyRecordsScreen._titleOf(w.startedAt),
+        date: MyRecordsScreen._dateOf(w.startedAt),
+        km: w.km,
+        minutes: w.minutes,
+        memo: w.memo ?? '',
+        pending: false,
+      );
+
+  factory _RecordView.ofDraft(WalkDraft d) => _RecordView(
+        title: MyRecordsScreen._titleOf(d.startedAt),
+        date: MyRecordsScreen._dateOf(d.startedAt),
+        km: d.km,
+        minutes: d.minutes,
+        memo: d.lastError ?? d.memo ?? '',
+        pending: true,
       );
 }
