@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -434,6 +435,139 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
 
     private static String withoutTraceId(String body) {
         return body.replaceAll("\"traceId\":\"[^\"]*\"", "\"traceId\":\"·\"");
+    }
+
+    // ─────────────── 회고 글 (#187) ───────────────
+    //
+    // 산책이 끝난 직후에 쓰는 글과 나중에 돌아보며 쓰는 글은 다르다. 예전에는 저장
+    // 시점의 한 번이 전부였고, 잘못 쓰면 지우고 다시 만드는 수밖에 없었다.
+
+    @Test
+    @DisplayName("회고 글을 나중에 고칠 수 있다")
+    void rewritesMemo() throws Exception {
+        Account me = account("회고쓰는이");
+        long dogId = dog(me, "콩이");
+        long walkId = savedWalk(me, dogId, "\"처음 쓴 글\"");
+
+        JsonNode after = body(memo(me, walkId, "{\"memo\":\"다시 쓴 글\"}")
+                .andExpect(status().isOk()));
+
+        assertThat(after.path("memo").asText()).isEqualTo("다시 쓴 글");
+
+        JsonNode reread = body(mockMvc.perform(get("/api/walks/" + walkId)
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk()));
+        assertThat(reread.path("memo").asText())
+                .as("응답만 바뀌고 저장이 안 되면 다시 열었을 때 옛 글이 나온다")
+                .isEqualTo("다시 쓴 글");
+    }
+
+    @Test
+    @DisplayName("빈 글은 \"다 지웠다\" 는 정상 요청이다 — 400 이 아니고 null 로 눕는다")
+    void blankMemoClearsIt() throws Exception {
+        Account me = account("글지우는이");
+        long dogId = dog(me, "보리");
+        long walkId = savedWalk(me, dogId, "\"지울 글\"");
+
+        JsonNode after = body(memo(me, walkId, "{\"memo\":\"\"}")
+                .andExpect(status().isOk()));
+
+        assertThat(after.path("memo").isNull())
+                .as("빈 문자열로 두면 \"안 썼다\" 가 두 모양이 되어 화면이 한쪽을 빠뜨린다")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("null 도 같은 뜻이다")
+    void nullMemoClearsIt() throws Exception {
+        Account me = account("널로지우는이");
+        long dogId = dog(me, "탄이");
+        long walkId = savedWalk(me, dogId, "\"지울 글\"");
+
+        JsonNode after = body(memo(me, walkId, "{\"memo\":null}")
+                .andExpect(status().isOk()));
+
+        assertThat(after.path("memo").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("501자는 400 이다")
+    void rejectsTooLongMemo() throws Exception {
+        Account me = account("장문가");
+        long dogId = dog(me, "구름");
+        long walkId = savedWalk(me, dogId, "null");
+
+        memo(me, walkId, "{\"memo\":\"" + "가".repeat(501) + "\"}")
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("500자는 통과한다 — 경계에서 한 글자 차이로 막지 않는다")
+    void acceptsExactlyFiveHundred() throws Exception {
+        Account me = account("딱맞는이");
+        long dogId = dog(me, "나무");
+        long walkId = savedWalk(me, dogId, "null");
+
+        memo(me, walkId, "{\"memo\":\"" + "가".repeat(500) + "\"}")
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("남의 산책 글은 404 다 — 403 을 주면 그 id 가 있다는 것을 알려 준다")
+    void othersWalkIsNotFound() throws Exception {
+        Account owner = account("주인");
+        Account stranger = account("남");
+        long dogId = dog(owner, "복이");
+        long walkId = savedWalk(owner, dogId, "\"내 글\"");
+
+        memo(stranger, walkId, "{\"memo\":\"내가 고친다\"}")
+                .andExpect(status().isNotFound());
+
+        JsonNode still = body(mockMvc.perform(get("/api/walks/" + walkId)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isOk()));
+        assertThat(still.path("memo").asText())
+                .as("404 를 주고도 실제로 고쳐 놓으면 그게 더 나쁘다")
+                .isEqualTo("내 글");
+    }
+
+    @Test
+    @DisplayName("없는 산책도 404 다")
+    void missingWalkIsNotFound() throws Exception {
+        Account me = account("없는것");
+        memo(me, 999_999_999L, "{\"memo\":\"글\"}")
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("거리·시간은 글을 고쳐도 그대로다 — 회고가 기록 수정으로 번지지 않는다")
+    void doesNotTouchMeasurements() throws Exception {
+        Account me = account("숫자지키는이");
+        long dogId = dog(me, "달이");
+        long walkId = savedWalk(me, dogId, "null");
+
+        JsonNode after = body(memo(me, walkId, "{\"memo\":\"글만 바꾼다\"}")
+                .andExpect(status().isOk()));
+
+        assertThat(after.path("distanceM").asInt()).isEqualTo(1200);
+        assertThat(after.path("durationS").asInt()).isEqualTo(900);
+    }
+
+    /** 글을 고치는 요청 하나. */
+    private ResultActions memo(Account account, long walkId, String json) throws Exception {
+        return mockMvc.perform(put("/api/walks/" + walkId + "/memo")
+                .header("Authorization", "Bearer " + account.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json));
+    }
+
+    /** 글이 든 산책 하나를 저장하고 id 를 돌려준다. */
+    private long savedWalk(Account account, long dogId, String memoJson) throws Exception {
+        return body(save(account, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":1200,"durationS":900,"memo":%s}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(900), memoJson))
+                .andExpect(status().isCreated()))
+                .path("id").asLong();
     }
 
     private Account account(String nickname) {

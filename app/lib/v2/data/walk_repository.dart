@@ -436,6 +436,24 @@ class WalkRepository {
     await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/walks/$walkId')));
   }
 
+  /// 회고 글을 통째로 바꾼다 — 이슈 #187.
+  ///
+  /// **하위 리소스 PUT 이라 뜻이 하나다** — "메모를 이 값으로 바꾼다". `PATCH` 로 두면
+  /// "필드를 안 보냈다" 와 "null 로 지워라" 를 구분해야 하는데 바꿀 필드가 하나뿐이라
+  /// 그 복잡도가 값을 못 한다.
+  ///
+  /// 빈 문자열은 **"다 지웠다" 는 정상 요청**이다. 서버가 그것을 `null` 로 눕혀 저장하고,
+  /// 바뀐 뒤의 산책을 돌려준다 — 화면이 다시 조회하지 않아도 갱신할 수 있다.
+  Future<ServerWalk> rewriteMemo(int walkId, String memo) async {
+    final json = await _send(() => _authed.putJson(
+          Uri.parse('$baseUrl/api/walks/$walkId/memo'),
+          body: {'memo': memo},
+        ));
+    final walk = ServerWalk.tryParse(json as Map<String, dynamic>);
+    if (walk == null) throw const WalkFailure(WalkFailureKind.network);
+    return walk;
+  }
+
   /// 이번 주 + 전체 기간. **한 번에 온다** — 화면이 두 번 부르지 않는다.
   Future<ServerWalkStats> stats({int? dogId}) async {
     final uri = Uri.parse('$baseUrl/api/walks/stats/weekly').replace(

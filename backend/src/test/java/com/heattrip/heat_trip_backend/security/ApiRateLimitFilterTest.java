@@ -67,6 +67,13 @@ class ApiRateLimitFilterTest {
         return new ApiRateLimitFilter(p, MAPPER);
     }
 
+    /** 산책 쓰기 버킷({@code POST /api/walks} · 삭제 · 회고 글)의 한도를 지정한 필터. */
+    private static ApiRateLimitFilter filterWithWalkWriteLimit(int walkWriteLimit) {
+        RateLimitProperties p = props(100);
+        p.setWalkWriteMaxRequests(walkWriteLimit);
+        return new ApiRateLimitFilter(p, MAPPER);
+    }
+
     /** 신뢰 프록시 뒤에서 {@code X-Real-IP} 하나만 실어 보내는, 운영과 같은 모양의 요청. */
     private static MockHttpServletResponse call(ApiRateLimitFilter filter,
                                                 String method, String path, String realIp) throws Exception {
@@ -213,6 +220,40 @@ class ApiRateLimitFilterTest {
                 filterWithGroupWriteLimit(2), "PUT", "/api/groups/12/walk-notes", 2);
 
         assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("산책 쓰기 셋이 모두 walk-write 버킷이다 — 저장·삭제·회고 글")
+    void walkWrites_shareTheSameBucket() throws Exception {
+        // 표에 없으면 한도가 0 이 아니라 무한이다. resolveRule 에서 이 분기 중 하나를
+        // 지우면 여기가 빨간불이다.
+        assertThat(exhaust(filterWithWalkWriteLimit(2), "POST", "/api/walks", 2).getStatus())
+                .isEqualTo(429);
+        assertThat(exhaust(filterWithWalkWriteLimit(2), "DELETE", "/api/walks/7", 2).getStatus())
+                .isEqualTo(429);
+        // 회고 글 교체(#187). 삭제와 같은 버킷이다 — 글을 고치는 일이 산책을 저장하는
+        // 일보다 잦을 이유가 없다.
+        assertThat(exhaust(filterWithWalkWriteLimit(2), "PUT", "/api/walks/7/memo", 2).getStatus())
+                .isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("산책 읽기 셋은 walk-write 버킷이 아니다 — 화면 진입마다 부르는 경로다")
+    void walkReads_areNotInTheWalkWriteBucket() throws Exception {
+        ApiRateLimitFilter f = filterWithWalkWriteLimit(1);
+
+        // 홈·기록·통계 세 화면이 진입할 때마다 부른다. 여기까지 묶으면 화면 전환마다 429 다.
+        // **미룬 것이지 안전한 것이 아니다** — 이 단언이 그 사실을 눈에 보이게 남겨 둔다.
+        for (String path : new String[]{"/api/walks", "/api/walks/7", "/api/walks/stats/weekly"}) {
+            assertThat(call(f, "GET", path, "198.51.100.9").getStatus()).isEqualTo(200);
+            assertThat(call(f, "GET", path, "198.51.100.9").getStatus()).isEqualTo(200);
+        }
+
+        // 상세 조회 경로가 회고 글 경로와 접두사를 공유한다. 정규식이 느슨하면
+        // GET /api/walks/7 이 쓰기 버킷에 걸린다.
+        assertThat(call(f, "GET", "/api/walks/7/memo", "198.51.100.9").getStatus())
+                .as("GET 은 메서드가 달라 쓰기 버킷이 아니다")
+                .isEqualTo(200);
     }
 
     @Test

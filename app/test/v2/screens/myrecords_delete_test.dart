@@ -103,7 +103,7 @@ void main() {
       final repo = _Repo(items: [walkOf()]);
       await _pump(t, repo);
 
-      await t.longPress(find.text('길게 눌러 지우기'));
+      await t.longPress(find.textContaining('길게 눌러 지우기'));
       await t.pumpAndSettle();
 
       expect(find.text('이 기록을 지울까요?'), findsOneWidget);
@@ -114,7 +114,7 @@ void main() {
       final repo = _Repo(items: [walkOf()]);
       await _pump(t, repo);
 
-      await t.longPress(find.text('길게 눌러 지우기'));
+      await t.longPress(find.textContaining('길게 눌러 지우기'));
       await t.pumpAndSettle();
       await t.tap(find.text('취소'));
       await t.pumpAndSettle();
@@ -126,7 +126,7 @@ void main() {
       final repo = _Repo(items: [walkOf(id: 42)]);
       await _pump(t, repo);
 
-      await t.longPress(find.text('길게 눌러 지우기'));
+      await t.longPress(find.textContaining('길게 눌러 지우기'));
       await t.pumpAndSettle();
       await t.tap(find.text('지우기'));
       await t.pumpAndSettle();
@@ -139,7 +139,7 @@ void main() {
       await _pump(t, repo);
       final before = walkFeedRevision.value;
 
-      await t.longPress(find.text('길게 눌러 지우기'));
+      await t.longPress(find.textContaining('길게 눌러 지우기'));
       await t.pumpAndSettle();
       await t.tap(find.text('지우기'));
       await t.pumpAndSettle();
@@ -155,7 +155,7 @@ void main() {
       );
       await _pump(t, repo);
 
-      await t.longPress(find.text('길게 눌러 지우기'));
+      await t.longPress(find.textContaining('길게 눌러 지우기'));
       await t.pumpAndSettle();
       await t.tap(find.text('지우기'));
       await t.pumpAndSettle();
@@ -193,7 +193,7 @@ void main() {
       final repo = _Repo();
       await _pump(t, repo);
 
-      await t.longPress(find.text('길게 눌러 지우기'));
+      await t.longPress(find.textContaining('길게 눌러 지우기'));
       await t.pumpAndSettle();
       await t.tap(find.text('지우기'));
       await t.pumpAndSettle();
@@ -214,6 +214,35 @@ void main() {
     });
   });
 
+  group('회고 진입 (#187)', () {
+    testWidgets('서버에 있는 산책을 누르면 회고 화면이 열린다', (t) async {
+      await _pump(t, _Repo(items: [walkOf()]));
+
+      await t.tap(find.text('아침 산책'));
+      await t.pumpAndSettle();
+
+      expect(find.text('산책 회고'), findsOneWidget);
+    });
+
+    testWidgets('카드가 두 가지를 할 수 있다고 말한다', (t) async {
+      await _pump(t, _Repo(items: [walkOf()]));
+      expect(find.text('눌러서 회고 쓰기 · 길게 눌러 지우기'), findsOneWidget);
+    });
+
+    testWidgets('거절된 것은 누를 곳이 없다 — 서버에 행이 없어 고칠 대상이 없다', (t) async {
+      final outbox = await WalkOutbox.open();
+      await outbox.reject(draftOf(), '메모가 너무 길어요');
+      await _pump(t, _Repo());
+
+      await t.tap(find.text('아침 산책'));
+      await t.pumpAndSettle();
+
+      expect(find.text('산책 회고'), findsNothing);
+      // 지우기만 할 수 있다고 말한다.
+      expect(find.text('길게 눌러 지우기'), findsOneWidget);
+    });
+  });
+
   group('전송 대기 중인 것', () {
     testWidgets('지울 수 없다 — 올라가는 중에 지우면 서버에만 남는다', (t) async {
       final outbox = await WalkOutbox.open();
@@ -222,7 +251,7 @@ void main() {
       await _pump(t, _Repo());
 
       expect(find.text('전송 대기'), findsOneWidget);
-      expect(find.text('길게 눌러 지우기'), findsNothing);
+      expect(find.textContaining('길게 눌러 지우기'), findsNothing);
     });
   });
 

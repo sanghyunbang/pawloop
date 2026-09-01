@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.walk.controller;
 
 import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.user.entity.User;
+import com.heattrip.heat_trip_backend.walk.dto.WalkMemoRequest;
 import com.heattrip.heat_trip_backend.walk.dto.WalkPageResponse;
 import com.heattrip.heat_trip_backend.walk.dto.WalkRequest;
 import com.heattrip.heat_trip_backend.walk.dto.WalkResponse;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -95,6 +97,23 @@ public class WalkController {
     @GetMapping("/{walkId}")
     public WalkResponse detail(@CurrentUser User user, @PathVariable long walkId) {
         return walks.detail(user.getId(), walkId);
+    }
+
+    /**
+     * 회고 글 교체 — 이슈 #187.
+     *
+     * <p>하위 리소스 PUT 이다. {@code PATCH /api/walks/{walkId}} 로 두면 "필드를 안 보냈다"
+     * 와 "null 로 지워라" 를 구분해야 하는데, 바꿀 필드가 하나뿐이라 그 복잡도가 값을 못
+     * 한다. {@code PUT /api/groups/{groupId}/walk-notes} 가 같은 모양이다.
+     *
+     * <p><b>{@code walk-write} 버킷에 등록돼 있다</b>({@code ApiRateLimitFilter}).
+     * 표에 없는 경로는 한도가 0 이 아니라 무한이다.
+     */
+    @PutMapping("/{walkId}/memo")
+    public WalkResponse rewriteMemo(@CurrentUser User user,
+                                    @PathVariable long walkId,
+                                    @Valid @RequestBody WalkMemoRequest request) {
+        return walks.rewriteMemo(user.getId(), walkId, request.memo());
     }
 
     /**
