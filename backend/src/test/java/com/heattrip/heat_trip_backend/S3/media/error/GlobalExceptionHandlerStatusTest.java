@@ -8,6 +8,9 @@ import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,17 +19,21 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
  * 컨트롤러가 정한 상태 코드가 응답까지 살아서 도착하는지 본다 — 이슈 #44.
@@ -98,6 +105,25 @@ class GlobalExceptionHandlerStatusTest extends AbstractMySqlIntegrationTest {
         void requiredParam(@RequestParam long cursor) {
             // 바인딩만 본다.
         }
+
+        /**
+         * {@code @Valid @RequestBody} 위반 — {@code MethodArgumentNotValidException} 자리다.
+         *
+         * <p>이 핸들러가 없던 동안 <b>500</b> 이 나갔다(#145 에서 실측). 저장소에 이미
+         * {@code POST /api/explore/feedback} 이 같은 조합을 쓰고 있어서
+         * ({@code ExploreController} · {@code FeedbackRequestDto} 의 {@code @NotBlank}),
+         * 그 경로가 잘못된 본문에 500 을 답하고 있었다.
+         */
+        @PostMapping(BASE + "/valid-body")
+        void validBody(@Valid @RequestBody ProbeBody body) {
+            // 바인딩만 본다.
+        }
+    }
+
+    /** 우리가 쓴 한글 메시지와 Bean Validation 기본 문구를 한 번에 본다. */
+    record ProbeBody(
+            @NotBlank(message = "이름을 입력해 주세요.") String named,
+            @NotBlank String unnamed) {
     }
 
     @TestConfiguration
@@ -268,6 +294,50 @@ class GlobalExceptionHandlerStatusTest extends AbstractMySqlIntegrationTest {
                     .doesNotContain("cursor")
                     .doesNotContain("99999999999999999999");
         }
+    }
+
+    @Test
+    @DisplayName("@Valid @RequestBody 위반이 500 이 아니라 400 VALIDATION 이고, 우리가 쓴 문구로 나간다")
+    void invalidBody_isBadRequestNotServerError() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(
+                        post(Probe.BASE + "/valid-body")
+                                .header("Authorization", bearer())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"named\":\"  \",\"unnamed\":\"  \"}"))
+                .andReturn().getResponse();
+
+        assertThat(response.getStatus())
+                .as("""
+                        MethodArgumentNotValidException 에 핸들러가 없던 동안 catch-all 이 잡아 \
+                        500 이 나갔다(#145 실측). 저장소의 POST /api/explore/feedback 이 이미 \
+                        같은 조합을 쓰고 있어서 그 경로가 잘못된 본문에 500 을 답하고 있었다.""")
+                .isEqualTo(400);
+        assertThat(errorBody(response).path("code").asText()).isEqualTo("VALIDATION");
+
+        String message = errorBody(response).path("message").asText();
+        assertThat(message)
+                .as("우리가 message 를 적어 둔 제약이 있으면 그것을 쓴다")
+                .isEqualTo("이름을 입력해 주세요.");
+        assertThat(message)
+                .as("""
+                        Bean Validation 기본 문구는 영어이고, @Size 같은 것은 들어온 값의 \
+                        길이를 문구에 섞는 구현이 있다 — 내보내지 않는다 (#6).""")
+                .doesNotContain("must not be blank");
+    }
+
+    @Test
+    @DisplayName("우리가 쓴 문구가 하나도 없으면 고정 문구로 답한다 — 영어 기본 문구가 새지 않는다")
+    void invalidBody_withoutOurMessage_fallsBackToAFixedPhrase() throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(
+                        post(Probe.BASE + "/valid-body")
+                                .header("Authorization", bearer())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"named\":\"보리\",\"unnamed\":\"  \"}"))
+                .andReturn().getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(400);
+        assertThat(errorBody(response).path("message").asText())
+                .isEqualTo("요청 값이 올바르지 않습니다.");
     }
 
     // ─────────────────────────── 지그 ───────────────────────────

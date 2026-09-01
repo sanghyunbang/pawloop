@@ -524,15 +524,20 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(jsonPath("$.createdAt").isString())
                 .andReturn().getResponse().getContentAsString();
 
-        assertThat(body)
+        // 필드 **집합**으로 본다. 예전에는 본문 문자열에 doesNotContain(troll.id()) 를 걸었는데,
+        // 그건 플레이키였다 — 신고당한 사람의 id 가 "90" 이면 createdAt 의
+        // "2026-09-01T09:06:09.803089900" 안의 숫자에 걸려서 신고 id 가 어떤 값이냐에 따라
+        // 빨간불이 났다(#145 에서 다른 테스트가 계정을 더 만들자 실제로 터졌다).
+        //
+        // 집합으로 보면 그 우연이 없고, 무엇보다 이 테스트가 말하려는 것("접수 번호와 시각
+        // 뿐이다")을 글자 그대로 잠근다 — 새 필드가 하나라도 붙으면 무슨 이름이든 걸린다.
+        assertThat(MAPPER.readTree(body).properties())
                 .as("""
                         신고에 성공한 쪽은 이미 누구를 왜 신고했는지 안다. 서버가 그것을 되돌려
                         줄 이유가 없고, 되돌려 주면 응답이 그 자체로 유출 경로가 된다.
                         """)
-                .doesNotContain(String.valueOf(troll.id()))
-                .doesNotContain("reporter")
-                .doesNotContain("body")
-                .doesNotContain("senderName");
+                .extracting(java.util.Map.Entry::getKey)
+                .containsExactlyInAnyOrder("reportId", "createdAt");
     }
 
     @Test

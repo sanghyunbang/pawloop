@@ -159,6 +159,20 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("PUT".equals(method) && path.matches("^/api/groups/\\d+/walk-notes$")) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
+        // ── 반려동물 등록 (이슈 #145) ─────────────────────────
+        //
+        // 요청 한 건이 행을 만든다. `POST /api/groups` 와 성격이 같아 버킷을 새로 만들지
+        // 않고 group-write 를 함께 쓴다 — 한도를 따로 움직일 이유가 아직 없다.
+        //
+        // **읽기 둘(GET /api/dogs · GET /api/dogs/{dogId})은 넣지 않았다.** 표에 없는 경로는
+        // 한도가 0 이 아니라 **무한**이다. 미룬 것이지 안전한 것이 아니고, 숫자를 정하려면
+        // 앱이 이 목록을 언제 얼마나 부르는지부터 정해져야 한다.
+        //
+        // rate limit 은 **속도**를 잴 뿐 **총량**을 재지 않는다 — 하루에 조금씩 넣으면
+        // 한도에 안 걸린다. 그래서 계정당 총 마리 수는 `DogService.MAX_PETS` 가 막는다.
+        if ("POST".equals(method) && "/api/dogs".equals(path)) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         if (path.startsWith("/api/curation/")) {
             return new Rule("curation", rateLimitProperties.getCurationMaxRequests());
         }
