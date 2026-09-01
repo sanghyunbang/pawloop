@@ -37,6 +37,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
+import 'package:heat_trip_flutter/v2/data/consent_gate.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 
 /// 인증 상태 머신의 상태값.
@@ -318,6 +319,12 @@ class AuthState {
   /// > 이 함정을 구조적으로 막기 위해 `TokenStorage.clearToken()` 은
   /// > **삭제했다**(#12). 지우는 경로는 이 파일 하나다.
   static Future<void> clearLocalSession() async {
+    // 이 계정의 약관 동의도 함께 지운다 — 안 지우면 같은 기기에서 탈퇴했다가 같은
+    // id 로 다시 만든 사람에게 앞사람의 동의가 적용된다. 그 사람은 약관을 본 적이
+    // 없는데 동의한 것이 된다. (#180)
+    final leaving = _user;
+    if (leaving != null) await const ConsentGate().clear(leaving.id);
+
     await _store.clear();
     _user = null;
     _sessionEnded = true;

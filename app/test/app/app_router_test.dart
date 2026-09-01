@@ -286,4 +286,101 @@ void main() {
       expect(isProtectedRoute('/home'), isFalse);
     });
   });
+
+  // ─────────────── 약관 동의 게이트 (#180) ───────────────
+  //
+  // v2 에는 동의를 받는 자리가 하나도 없었다. 로그인은 소셜뿐이고 그 흐름에 약관을
+  // 보여 주는 화면이 없다. 즉 이 앱은 아무 동의 없이 위치를 수집하고 있었다.
+
+  group('동의 전에는 앱을 못 쓴다', () {
+    test('로그인했는데 동의를 안 했으면 어디로 가든 동의 화면이다', () {
+      for (final where in [homeRoute, onboardingRoute, '/explore', '/bookmarks']) {
+        expect(
+          authRedirect(
+            status: AuthStatus.authenticated,
+            location: where,
+            consented: false,
+          ),
+          consentRoute,
+          reason: '$where 에서 새면 동의 없이 위치가 수집된다',
+        );
+      }
+    });
+
+    test('온보딩보다 앞이다 — 반려동물 등록도 개인정보 처리다', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.onboarding,
+          location: onboardingRoute,
+          consented: false,
+        ),
+        consentRoute,
+      );
+    });
+
+    test('동의 화면에서는 안 튕긴다 — 튕기면 무한 반복이다', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.authenticated,
+          location: consentRoute,
+          consented: false,
+        ),
+        isNull,
+      );
+    });
+
+    test('동의를 마치면 동의 화면에서 나간다 — 안 나가면 갇힌다', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.authenticated,
+          location: consentRoute,
+          consented: true,
+        ),
+        homeRoute,
+      );
+    });
+
+    test('아직 모를 때(null)는 아무 데로도 안 보낸다', () {
+      // 저장소를 읽는 중이다. false 로 치면 화면이 깜빡이고, true 로 치면 그 사이에
+      // 동의 없이 앱이 열린다. 둘 다 틀리다.
+      expect(
+        authRedirect(
+          status: AuthStatus.authenticated,
+          location: homeRoute,
+          consented: null,
+        ),
+        isNull,
+      );
+    });
+
+    test('로그인 안 한 사람은 동의 화면으로 안 간다 — 누구의 동의인지 정할 수 없다', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.unauthenticated,
+          location: '/explore',
+          consented: false,
+        ),
+        isNull,
+      );
+    });
+
+    test('동의를 마쳤으면 예전 규칙이 그대로 돈다', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.onboarding,
+          location: homeRoute,
+          consented: true,
+        ),
+        onboardingRoute,
+      );
+      expect(
+        authRedirect(
+          status: AuthStatus.authenticated,
+          location: loginRoute,
+          consented: true,
+        ),
+        homeRoute,
+      );
+    });
+  });
 }

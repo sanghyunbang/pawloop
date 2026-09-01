@@ -103,6 +103,7 @@ flutter:
     - assets/lottie/
     # `.env` 는 여기에 두지 않는다 — 에셋은 APK 에 원본 그대로 들어간다. → 이슈 #29
     - assets/terms/terms_ko.md
+    - assets/terms/location_ko.md
     - assets/terms/privacy_ko.md
     - assets/terms/marketing_ko.md
 

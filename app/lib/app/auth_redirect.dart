@@ -17,6 +17,12 @@ const String loginRoute = '/auth/login';
 /// 신규 가입자가 반려동물 프로필을 등록하는 곳.
 const String onboardingRoute = '/onboarding';
 
+/// 약관 동의를 받는 곳 — 이슈 #180.
+///
+/// **온보딩보다 앞이다.** 반려동물을 등록하는 것도 개인정보 처리이고, 위치는 그보다
+/// 먼저 쓰일 수 있다(둘러보기의 '내 주변'). 동의를 뒤에 두면 그 사이가 비어 버린다.
+const String consentRoute = '/consent';
+
 /// 로그인 후 돌아갈 기본 자리.
 const String homeRoute = '/home';
 
@@ -65,6 +71,8 @@ bool isProtectedRoute(String location) {
 /// | unknown | 아무 데나 | 스플래시 |
 /// | unknown | 스플래시 | null |
 /// | authenticating | 아무 데나 | null (로그인 화면에 머문다) |
+/// | **로그인했고 동의 안 함** | **동의** | **null** |
+/// | **로그인했고 동의 안 함** | **그 밖** | **동의** |
 /// | onboarding | 온보딩 | null |
 /// | onboarding | 그 밖 | 온보딩 |
 /// | authenticated | 로그인·가입 | 홈 |
@@ -73,13 +81,29 @@ bool isProtectedRoute(String location) {
 /// | unauthenticated + sessionEnded | 아무 데나 | 로그인 |
 /// | unauthenticated | 보호 라우트 | 로그인 |
 /// | unauthenticated | 공개 라우트 | null |
+///
+/// [consented] 는 **아직 모를 때 `null`** 이다. 저장소를 읽는 동안이라는 뜻이고, 그때는
+/// 아무 데로도 보내지 않는다 — `false` 로 치면 읽는 사이에 동의 화면이 한 번 깜빡이고,
+/// `true` 로 치면 그 사이에 동의 없이 앱이 열린다. 둘 다 틀리다.
 String? authRedirect({
   required AuthStatus status,
   required String location,
   String? pendingLocation,
   bool sessionEnded = false,
+  bool? consented,
 }) {
   final path = _pathOf(location);
+
+  // 로그인한 사람이 아직 동의하지 않았으면 **다른 어떤 규칙보다 먼저** 붙잡는다.
+  // 온보딩보다 앞인 이유는 반려동물 등록도 개인정보 처리이고, 위치는 그보다 먼저
+  // 쓰일 수 있기 때문이다.
+  final signedIn =
+      status == AuthStatus.authenticated || status == AuthStatus.onboarding;
+  if (signedIn && consented == false) {
+    return path == consentRoute ? null : consentRoute;
+  }
+  // 동의를 마쳤는데 동의 화면에 있으면 나간다 — 안 그러면 갇힌다.
+  if (signedIn && consented == true && path == consentRoute) return homeRoute;
 
   switch (status) {
     case AuthStatus.unknown:
