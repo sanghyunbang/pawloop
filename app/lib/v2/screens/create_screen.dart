@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../data/walk_outbox.dart';
+import '../data/walk_repository.dart';
 import '../data/walk_sync.dart';
 import '../widgets/pet_registration_sheet.dart';
 
@@ -423,6 +424,13 @@ class _CreateScreenState extends State<CreateScreen> {
           child: TextField(
             controller: _memo,
             maxLines: 4,
+            // 서버가 @Size(max=500) 이다. 여기서 막지 않으면 501자를 쓴 사람이
+            // '저장' 을 누른 뒤에야 400 을 받고, 그 기록은 거절 큐로 간다 —
+            // 되돌릴 수 없는 실패를 입력 단계에서 막는다. (#161)
+            //
+            // 숫자를 여기 적지 않는다. 저장소가 계약·컬럼 폭과 함께 들고 있는
+            // 상수를 쓴다 — 두 곳에 적으면 한쪽만 바뀌는 날이 온다.
+            maxLength: WalkRepository.maxMemoLength,
             style: const TextStyle(fontSize: 14, height: 1.6, color: T.textPrimary),
             decoration: const InputDecoration(
               hintText: '오늘 산책은 어땠나요? 우리 아이의 컨디션, 만난 친구, 특별했던 순간을 적어보세요...',

@@ -28,6 +28,16 @@ class WalkFeedData {
   /// 아직 서버에 없는 초안들. 화면은 이것을 **"전송 대기"** 로 그린다.
   final List<WalkDraft> pending;
 
+  /// 서버가 **다시 보내도 소용없다고 거절한** 초안들(400 등).
+  ///
+  /// `WalkOutbox.reject` 가 이것을 지우지 않고 남기는 이유를 화면까지 이어야 한다 —
+  /// 사용자가 실제로 걸은 기록이고, 왜 못 올라갔는지 보고 스스로 지울 기회를 줘야
+  /// 한다. **조용히 버리면 그건 사라진 것과 같다.**
+  ///
+  /// 이 목록을 나르지 않던 동안 큐에는 남아 있는데 화면 어디에서도 읽지 않아,
+  /// `create_screen` 의 1.8초 스낵바를 놓치면 산책이 통째로 사라진 줄 알았다 (#161).
+  final List<WalkDraft> rejected;
+
   /// 서버가 낸 통계. **대기 중인 것은 여기 안 들어 있다** — 서버가 모르는 값이다.
   final ServerWalkStats stats;
 
@@ -48,6 +58,7 @@ class WalkFeedData {
     required this.pending,
     required this.stats,
     required this.offline,
+    this.rejected = const [],
     this.nextCursor,
     this.hasMore = false,
   });
@@ -63,13 +74,17 @@ class WalkFeedData {
   WalkFeedData appending(ServerWalkPage page) => WalkFeedData(
         walks: [...walks, ...page.items],
         pending: pending,
+        rejected: rejected,
         stats: stats,
         offline: false,
         nextCursor: page.nextCursor,
         hasMore: page.hasMore,
       );
 
-  bool get hasAnything => walks.isNotEmpty || pending.isNotEmpty;
+  /// 화면에 그릴 것이 하나라도 있나. **거절된 것도 센다** — 그것마저 없는 것으로
+  /// 치면 "아직 산책 기록이 없어요" 아래에 거절 카드가 놓이는 모순이 생긴다.
+  bool get hasAnything =>
+      walks.isNotEmpty || pending.isNotEmpty || rejected.isNotEmpty;
 
   /// 오늘 걸은 것. **대기 중인 것도 센다** — 사용자는 이미 걸었다.
   ///
@@ -163,10 +178,12 @@ class WalkFeed {
     // 큐를 비우는 것이 실패해도 읽기는 계속한다 — 연결이 없으면 아래도 실패하지만,
     // 여기서 던지면 대기 목록조차 못 보여 준다.
     List<WalkDraft> pending = const [];
+    List<WalkDraft> rejected = const [];
     try {
       final sync = await WalkSync.open(repository: _repo);
       await sync.flush();
       pending = sync.pending;
+      rejected = sync.rejected;
     } catch (_) {
       // 저장소를 못 열었다. 대기 목록 없이 서버 것만 보여 준다.
     }
@@ -180,6 +197,7 @@ class WalkFeed {
       return WalkFeedData(
         walks: page.items,
         pending: pending,
+        rejected: rejected,
         stats: results[1] as ServerWalkStats,
         offline: false,
         nextCursor: page.nextCursor,
@@ -191,6 +209,7 @@ class WalkFeed {
       return WalkFeedData(
         walks: const [],
         pending: pending,
+        rejected: rejected,
         stats: ServerWalkStats.empty,
         offline: true,
       );

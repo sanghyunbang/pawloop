@@ -30,7 +30,19 @@ class WalkFeedBuilder extends StatefulWidget {
   /// 특정 반려동물만. 생략하면 내 전체를 섞는다.
   final int? dogId;
 
-  const WalkFeedBuilder({super.key, required this.builder, this.dogId});
+  /// 자료를 어디서 읽는가. **테스트만 넘긴다.**
+  ///
+  /// 이게 없던 동안 이 껍데기를 쓰는 화면 넷은 위젯 테스트가 불가능했다 — 안에서
+  /// `WalkFeed()` 를 직접 만들어 진짜 네트워크를 탔기 때문이다. 그래서 "큐에는
+  /// 있는데 화면이 안 읽는다" 같은 결함(#161)을 테스트로 잡을 수 없었다.
+  final WalkFeed? feed;
+
+  const WalkFeedBuilder({
+    super.key,
+    required this.builder,
+    this.dogId,
+    this.feed,
+  });
 
   @override
   State<WalkFeedBuilder> createState() => _WalkFeedBuilderState();
@@ -38,6 +50,8 @@ class WalkFeedBuilder extends StatefulWidget {
 
 class _WalkFeedBuilderState extends State<WalkFeedBuilder> {
   WalkFeedData _data = WalkFeedData.empty;
+
+  late final WalkFeed _feed = widget.feed ?? WalkFeed();
 
   /// 겹쳐 들어온 응답이 순서를 거슬러 덮어쓰는 것을 막는다. 늦게 시작한 요청이 먼저
   /// 끝나면 오래된 값이 화면에 남는다.
@@ -61,7 +75,7 @@ class _WalkFeedBuilderState extends State<WalkFeedBuilder> {
 
   Future<void> _reload() async {
     final mine = ++_generation;
-    final data = await WalkFeed().load(dogId: widget.dogId);
+    final data = await _feed.load(dogId: widget.dogId);
     if (!mounted || mine != _generation) return;
     setState(() => _data = data);
   }
@@ -76,7 +90,7 @@ class _WalkFeedBuilderState extends State<WalkFeedBuilder> {
     final mine = _generation;
     setState(() => _loadingMore = true);
 
-    final page = await WalkFeed().more(cursor, dogId: widget.dogId);
+    final page = await _feed.more(cursor, dogId: widget.dogId);
     if (!mounted || mine != _generation) return;
     setState(() {
       _loadingMore = false;

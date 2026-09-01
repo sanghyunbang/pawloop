@@ -9,7 +9,11 @@ import 'create_screen.dart';
 
 /// 내 기록 (myRecords) — 산책 기록. 전체 기간 요약 + 산책 목록.
 class MyRecordsScreen extends StatelessWidget {
-  const MyRecordsScreen({super.key});
+  /// 자료를 어디서 읽고 무엇으로 지우는가. **테스트만 넘긴다.**
+  final WalkFeed? feed;
+  final WalkRepository? repository;
+
+  const MyRecordsScreen({super.key, this.feed, this.repository});
 
   static const _warm = LinearGradient(
     begin: Alignment(-0.7, -1),
@@ -19,6 +23,7 @@ class MyRecordsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => WalkFeedBuilder(
+        feed: feed,
         builder: (context, data, loadMore) => _build(context, data, loadMore),
       );
 
@@ -59,14 +64,34 @@ class MyRecordsScreen extends StatelessWidget {
                   const Text('전체 산책',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
                   const SizedBox(height: 12),
+                  // 올리지 못한 것을 **맨 위**에 놓는다. 사용자가 조치해야 하는
+                  // 유일한 항목이고, 아래에 묻으면 큐에만 남고 화면에서는 사라진
+                  // 것과 같아진다 (#161).
+                  if (data.rejected.isNotEmpty) ...[
+                    Row(children: const [
+                      Icon(Icons.error_outline, size: 15, color: Color(0xFFD9534F)),
+                      SizedBox(width: 6),
+                      Text('올리지 못한 기록',
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFD9534F))),
+                    ]),
+                    const SizedBox(height: 10),
+                    for (final d in data.rejected.reversed) ...[
+                      _walkCard(context, _RecordView.ofRejected(d)),
+                      const SizedBox(height: 12),
+                    ],
+                    const SizedBox(height: 10),
+                  ],
                   // 전송 대기 중인 것을 **위에** 놓는다. 방금 걸은 것이고, 사용자가
                   // "안 올라갔나?" 를 먼저 확인할 자리다.
                   for (final d in data.pending.reversed) ...[
-                    _walkCard(_RecordView.ofDraft(d)),
+                    _walkCard(context, _RecordView.ofDraft(d)),
                     const SizedBox(height: 12),
                   ],
                   for (final w in data.walks) ...[
-                    _walkCard(_RecordView.ofWalk(w)),
+                    _walkCard(context, _RecordView.ofWalk(w)),
                     const SizedBox(height: 12),
                   ],
                   // 다음 장이 있는데 안 그리면, 요약은 "40회" 인데 목록은 30개가 된다.
@@ -185,7 +210,86 @@ class MyRecordsScreen extends StatelessWidget {
   }
 
   // ── 산책 기록 카드 ───────────────────────────
-  Widget _walkCard(_RecordView w) {
+
+  /// 길게 눌러 지운다.
+  ///
+  /// **스와이프가 아니라 롱프레스**인 이유는 이 카드가 세로 `ListView` 안에 있어
+  /// 가로 스와이프가 목록 스크롤과 붙어 오작동하기 쉽고, 실수로 지우면 되돌릴 수
+  /// 없기 때문이다(계약과 서버가 하드 삭제다). 확인 다이얼로그는 필수다.
+  ///
+  /// 지울 수 있는 것은 **서버에 있는 것**과 **거절된 것** 둘뿐이다. 전송 대기 중인
+  /// 것은 곧 올라가므로 손대지 않는다 — 올라가는 중에 지우면 서버에 남고 화면에서만
+  /// 사라진다.
+  Widget _walkCard(BuildContext context, _RecordView w) {
+    final card = _cardBody(w);
+    if (!w.deletable) return card;
+    return GestureDetector(
+      onLongPress: () => _confirmDelete(context, w),
+      behavior: HitTestBehavior.opaque,
+      child: card,
+    );
+  }
+
+  /// 지우기 전에 반드시 묻는다. 하드 삭제라 되돌릴 수 없다.
+  Future<void> _confirmDelete(BuildContext context, _RecordView w) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('이 기록을 지울까요?'),
+        content: Text(
+          w.rejected
+              ? '올리지 못한 기록을 지웁니다. 되돌릴 수 없어요.'
+              : '${w.date} · ${w.km.toStringAsFixed(1)}km\n서버에서 지워지고 되돌릴 수 없어요.',
+          style: const TextStyle(fontSize: 13.5, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('지우기',
+                style: TextStyle(color: Color(0xFFD9534F), fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final failed = await _delete(w);
+    // await 뒤의 context 는 죽어 있을 수 있다 — 미리 잡아 둔 messenger 를 쓴다 (#63).
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(failed ?? '기록을 지웠어요'),
+        duration: const Duration(milliseconds: 1600),
+      ),
+    );
+  }
+
+  /// 실제로 지운다. 성공이면 `null`, 실패면 사용자에게 보일 문구.
+  ///
+  /// 거절 큐는 **기기 안에만** 있으므로 서버를 부르지 않는다.
+  Future<String?> _delete(_RecordView w) async {
+    if (w.rejected) {
+      final outbox = await WalkOutbox.open();
+      await outbox.discardRejected(w.clientWalkId!);
+      notifyWalksChanged();
+      return null;
+    }
+    try {
+      await (repository ?? WalkRepository()).deleteWalk(w.walkId!);
+      // 목록에서 빼는 것으로 끝내지 않는다 — 요약 숫자는 서버 집계라 다시 받아야
+      // 줄어든다. 완료 조건 1 이 "요약 숫자가 즉시 줄어든다" 인 이유다.
+      notifyWalksChanged();
+      return null;
+    } on WalkFailure catch (e) {
+      return e.message;
+    }
+  }
+
+  Widget _cardBody(_RecordView w) {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -211,7 +315,18 @@ class MyRecordsScreen extends StatelessWidget {
                 ),
                 // 아직 서버에 없다는 것을 **감추지 않는다.** 감추면 나중에 사라진 것처럼
                 // 보이고, 저장된 것처럼 그리면 그건 거짓말이다.
-                if (w.pending)
+                if (w.rejected)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0x1AD9534F),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Text('못 올림',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                            color: Color(0xFFD9534F))),
+                  )
+                else if (w.pending)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -243,6 +358,27 @@ class MyRecordsScreen extends StatelessWidget {
         if (w.memo.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(w.memo, style: const TextStyle(fontSize: 13.5, height: 1.55, color: Color(0xD13C345A))),
+        ],
+        // 왜 못 올라갔는지 말한다. 사유 없이 "못 올림" 만 보여 주면 사용자는 지울지
+        // 다시 시도할지 판단할 근거가 없다.
+        if (w.reason != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            decoration: BoxDecoration(
+              color: const Color(0x12D9534F),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Text(w.reason!,
+                style: const TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFFB5453F))),
+          ),
+        ],
+        // 지울 수 있다는 것을 화면이 말해야 한다 — 롱프레스는 눌러 보기 전에는
+        // 있는지조차 알 수 없다.
+        if (w.deletable) ...[
+          const SizedBox(height: 9),
+          const Text('길게 눌러 지우기',
+              style: TextStyle(fontSize: 11.5, color: T.textMuted)),
         ],
       ]),
     );
@@ -296,6 +432,24 @@ class _RecordView {
   /// 아직 서버에 없다. 카드에 "전송 대기" 뱃지가 붙는다.
   final bool pending;
 
+  /// 서버가 거절했다(다시 보내도 소용없다). 카드에 "못 올림" 과 사유가 붙는다.
+  final bool rejected;
+
+  /// 왜 못 올라갔는가. [rejected] 일 때만 있다.
+  final String? reason;
+
+  /// 서버 산책의 id. 서버에 있는 것만 값이 있다.
+  final int? walkId;
+
+  /// 기기 큐 안의 식별자. 초안(대기·거절)만 값이 있다.
+  final String? clientWalkId;
+
+  /// 지울 수 있는가.
+  ///
+  /// 전송 대기 중인 것은 **제외한다.** 곧 올라가는 중이라, 지우는 순간 서버에는
+  /// 남고 화면에서만 사라질 수 있다.
+  bool get deletable => walkId != null || rejected;
+
   const _RecordView({
     required this.title,
     required this.date,
@@ -303,6 +457,10 @@ class _RecordView {
     required this.minutes,
     required this.memo,
     required this.pending,
+    this.rejected = false,
+    this.reason,
+    this.walkId,
+    this.clientWalkId,
   });
 
   String get pace =>
@@ -315,6 +473,7 @@ class _RecordView {
         minutes: w.minutes,
         memo: w.memo ?? '',
         pending: false,
+        walkId: w.id,
       );
 
   factory _RecordView.ofDraft(WalkDraft d) => _RecordView(
@@ -324,5 +483,21 @@ class _RecordView {
         minutes: d.minutes,
         memo: d.lastError ?? d.memo ?? '',
         pending: true,
+        clientWalkId: d.clientWalkId,
+      );
+
+  /// 서버가 거절한 초안. **메모는 사용자가 쓴 것을 그대로** 두고, 사유는 따로
+  /// 나른다 — 예전에는 `lastError` 를 메모 자리에 넣어 사용자가 쓴 글이 오류
+  /// 문자열로 덮여 보였다.
+  factory _RecordView.ofRejected(WalkDraft d) => _RecordView(
+        title: MyRecordsScreen._titleOf(d.startedAt),
+        date: MyRecordsScreen._dateOf(d.startedAt),
+        km: d.km,
+        minutes: d.minutes,
+        memo: d.memo ?? '',
+        pending: false,
+        rejected: true,
+        reason: d.lastError ?? '서버가 이 기록을 받지 않았어요',
+        clientWalkId: d.clientWalkId,
       );
 }
