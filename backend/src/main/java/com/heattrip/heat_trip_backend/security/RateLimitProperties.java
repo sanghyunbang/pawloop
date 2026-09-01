@@ -111,6 +111,25 @@ public class RateLimitProperties {
     private int groupWriteMaxRequests = 30;
 
     /**
+     * 산책 쓰기 버킷 — {@code POST /api/walks} · {@code DELETE /api/walks/{walkId}}. (이슈 #145)
+     *
+     * <p><b>{@code group-write} 에 얹지 않았다.</b> 성격이 다르다 — 산책 저장은
+     * <b>오프라인 큐가 한 번에 여러 건을 밀어 넣는다.</b> 지하철에서 걸어 하루 못 보낸 것이
+     * 쌓였다가 신호가 잡히는 순간 한꺼번에 나가는 것이 <b>정상 동작</b>이다. 가족 만들기와
+     * 같은 숫자로 묶으면 그 순간 정상 사용자가 <b>자기 기록을 못 올린다.</b>
+     *
+     * <p>60 인 이유: 하루에 산책을 60번 하는 사람은 없으므로 이 숫자가 막는 것은 사람이
+     * 아니라 <b>스크립트가 행을 무한히 만드는 것</b>이다. 동시에 밀린 큐 하나(며칠치라도
+     * 수십 건)는 한 창 안에 다 나간다. 낮추면 "며칠 만에 켰더니 기록이 일부만 올라갔어요"
+     * 가 되고, 그건 이 이슈가 없애려던 바로 그 경험이다.
+     *
+     * <p><b>계정 기준 상한이 아니다.</b> 카운터의 열쇠는 IP 다. 계정 하나가 만들 수 있는
+     * 산책의 총 개수는 여기서 정해지지 않는다 — 지금 그것을 막는 것은
+     * {@code uq_walk_client}(같은 산책이 두 줄이 되지 않는다)뿐이다.
+     */
+    private int walkWriteMaxRequests = 60;
+
+    /**
      * 채팅 폴링 버킷 — {@code GET /api/chat/rooms} · {@code GET /rooms/{id}/messages} ·
      * {@code POST /rooms/{id}/read}. (이슈 #80)
      *

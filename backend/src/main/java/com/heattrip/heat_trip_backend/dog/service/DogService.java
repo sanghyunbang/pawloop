@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.dog.service;
 
+import com.heattrip.heat_trip_backend.dog.DogOwnership;
 import com.heattrip.heat_trip_backend.dog.dto.DogRequest;
 import com.heattrip.heat_trip_backend.dog.dto.DogResponse;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
@@ -38,7 +39,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class DogService {
+public class DogService implements DogOwnership {
 
     /**
      * 한 계정의 반려동물 수 상한.
@@ -92,10 +93,29 @@ public class DogService {
      * <p>{@code walk} 모듈이 {@code DogRepository} 를 직접 부르지 않고 여기를 지나게 하는
      * 이유는, 소유권 판정이 두 곳에 생기면 <b>한쪽만 고쳐지는 날이 오기 때문</b>이다.
      */
+    @Override
     public void requireMine(Long userId, long dogId) {
         if (!dogs.isMine(dogId, userId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
+    }
+
+    /**
+     * 내 반려동물을 꺼낸다. 산책 저장이 {@code dogId} 를 받을 때 쓴다.
+     *
+     * <p>{@link #requireMine} 과 달리 <b>행을 돌려준다</b> — 산책 엔티티가
+     * {@code @ManyToOne Dog} 를 들어야 {@code fk_walk_dog} 가 생기기 때문이다.
+     *
+     * <p>{@code walk} 모듈이 {@code DogRepository} 를 직접 부르지 않고 여기를 지나게 하는
+     * 이유는 {@link #requireMine} 과 같다 — 소유권 판정이 두 곳에 생기면 <b>한쪽만 고쳐지는
+     * 날이 온다.</b>
+     */
+    @Override
+    public Dog requireMineEntity(Long userId, Long dogId) {
+        if (dogId == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        return require(userId, dogId);
     }
 
     private Dog require(Long userId, long dogId) {

@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§3 dog` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` 열이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§4 walk` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
+> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` 열하나다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§5 place` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -156,7 +156,7 @@ CREATE TABLE dog (
 
 ---
 
-## 4. `walk` — 산책 기록 (GPS 경로)
+## 4. `walk` — 산책 기록 (GPS 경로) (**실재**)
 
 산책 1건. GPS 경로를 `LINESTRING`으로 저장하고 거리(`distance_m`)·시간(`duration_s`)·메모·날씨를 함께 보관. `dog` 1:N `walk`. 페이스는 `distance_m`/`duration_s`로 파생(비저장).
 
@@ -166,15 +166,15 @@ CREATE TABLE dog (
 CREATE TABLE walk (
   id          BIGINT     NOT NULL AUTO_INCREMENT,
   dog_id      BIGINT     NOT NULL,
-  started_at  DATETIME   NOT NULL,
-  ended_at    DATETIME   NULL,
+  started_at  DATETIME(6) NOT NULL COMMENT 'UTC. 앱이 보낸 값 — 커서로 쓰지 않는다',
+  ended_at    DATETIME(6) NULL COMMENT 'UTC',
   distance_m  INT        NOT NULL DEFAULT 0 COMMENT '총 거리(m)',
   duration_s  INT        NOT NULL DEFAULT 0 COMMENT '총 소요(초)',
   path        LINESTRING SRID 4326 NULL COMMENT 'GPS 경로(폴리라인). 손입력·권한거부 기록은 NULL',
   memo        VARCHAR(500) NULL,
   weather     VARCHAR(30)  NULL,
   client_walk_id VARCHAR(64) NOT NULL COMMENT '앱이 만드는 멱등키(UUID v4)',
-  created_at  DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at  DATETIME(6) NOT NULL COMMENT 'UTC, 서버 시각 — 목록 커서의 기준',
   PRIMARY KEY (id),
   KEY idx_walk_dog (dog_id, started_at),
   KEY idx_walk_dog_created (dog_id, created_at, id) COMMENT '목록 커서. started_at 이 아닌 이유는 아래 참조',
@@ -197,6 +197,8 @@ CREATE TABLE walk (
 | `weather` | `VARCHAR(30)` | NULL | 날씨 |
 | `client_walk_id` | `VARCHAR(64)` | NOT NULL, UNIQUE(dog_id, ·) | 멱등키. 재전송이 두 줄이 되지 않게 한다 |
 
+> **시각은 전부 UTC 로 저장한다.** 애플리케이션이 `Instant` 를 UTC 벽시계로 눕혀 넣는다 — `LocalDateTime` 은 드라이버가 시간대 변환을 하지 않는 유일한 타입이라, JDBC URL 의 `serverTimezone` 이나 컨테이너 시계가 무엇이든 넣은 값이 그대로 나온다. **이 저장소의 JDBC URL 은 `Asia/Seoul` 인데 컨테이너 시계는 UTC 다**(실측). 주 경계 계산도 Java 가 한다 — `WEEKDAY()`·`CURDATE()` 는 세션 시간대를 읽고, #40 에서 그 함정이 00:00–09:00 KST 에만 터졌다.
+>
 > **`client_walk_id` 가 없으면 전송이 타임아웃 났을 때 앱이 두 경우를 구분할 수 없다** — 서버에 안 닿은 것인지, 저장은 됐는데 응답만 못 받은 것인지. 다시 보내면 두 줄이 되고 안 보내면 사라진다. `chat_message.client_msg_id` + `uq_chat_msg_client`(§15)와 같은 장치다.
 >
 > **목록 커서는 `created_at` 기준이다(`started_at` 이 아니다).** `started_at` 은 앱이 보낸 값이라, 오프라인에 쌓아 둔 산책이 며칠 뒤 과거 시각으로 들어온다. 그걸 커서로 쓰면 **이미 발급된 커서보다 아래 날짜의 행이 영원히 건너뛰어진다.** `idx_walk_dog(dog_id, started_at)` 은 주간 통계 집계가 쓴다.

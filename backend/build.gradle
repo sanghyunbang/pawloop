@@ -91,6 +91,17 @@ dependencies {
 	// main 소스의 package-info.java 에 붙으므로 컴파일 클래스패스에 있어야 한다.
 	implementation 'org.springframework.modulith:spring-modulith-api'
 
+	// 산책 경로를 LINESTRING 으로 다룬다 (#145 · ADR-0015). 버전은 Boot BOM 이 관리한다.
+	//
+	// ADR-0013 이 이 의존성을 기각했던 근거 둘 중 하나("SchemaDdlDriftTest 의 geometry 대조
+	// 문제")는 성립하지 않는 것으로 실측됐다 — @Column(columnDefinition = "linestring srid 4326")
+	// 을 **명시하면** SHOW CREATE TABLE 이 그대로 뽑고 빈 DB 에 재적용된다. 명시를 빼면
+	// geometry 가 되고 그때는 그 문제가 실제로 생긴다.
+	//
+	// 다른 하나("공간 인덱스가 할 일이 없다")는 walk 에도 유효하다 — SPATIAL INDEX 는
+	// 만들지 않는다. place 를 공간 컬럼으로 바꾸는 것은 여전히 별도 판단이다.
+	implementation 'org.hibernate.orm:hibernate-spatial'
+
 	// JWT 관련 의존성
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'

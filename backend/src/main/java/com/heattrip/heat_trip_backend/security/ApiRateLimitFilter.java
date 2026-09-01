@@ -173,6 +173,24 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && "/api/dogs".equals(path)) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
+        // ── 산책 쓰기 (이슈 #145) ──────────────────────────────
+        //
+        // group-write 에 얹지 않고 버킷을 새로 만든다. 산책 저장은 **오프라인 큐가 한 번에
+        // 여러 건을 밀어 넣는** 경로라, 가족 만들기와 같은 숫자로 묶으면 밀린 기록을 올리는
+        // 정상 사용자가 429 를 맞는다. 그건 이 이슈가 없애려던 바로 그 경험이다.
+        //
+        // 삭제도 같은 버킷이다 — 잘못 저장한 것을 지우는 일은 저장과 같은 빈도로 일어난다.
+        //
+        // **읽기 셋(GET /api/walks · /{walkId} · /stats/weekly)은 넣지 않았다.** 표에 없는
+        // 경로는 한도가 0 이 아니라 무한이다. 미룬 것이지 안전한 것이 아니고, 숫자를 정하려면
+        // 앱이 이 셋을 언제 얼마나 부르는지부터 정해져야 한다 — 홈·기록·통계 세 화면이
+        // 진입할 때마다 부른다.
+        if ("POST".equals(method) && "/api/walks".equals(path)) {
+            return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
+        }
+        if ("DELETE".equals(method) && path.matches("^/api/walks/\\d+$")) {
+            return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
+        }
         if (path.startsWith("/api/curation/")) {
             return new Rule("curation", rateLimitProperties.getCurationMaxRequests());
         }
