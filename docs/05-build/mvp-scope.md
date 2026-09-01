@@ -52,12 +52,12 @@ MVP 범위별로 실제 코드가 어디까지 왔는지. 소스 기준 경로 [
 | 홈(프로필 히어로·오늘 산책 요약) | `screens/today_screen.dart` | ✅ 됨 |
 | 지도(KTO 45곳 + 더미 레이어·필터·시트) | `screens/explore_screen.dart` · `data/pet_places_repository.dart` | ✅ KTO 실연동 / ⚠️ 병원·펫샵·산책로 더미 |
 | 실시간 산책 트래킹 | `screens/walk_tracking_screen.dart` | ✅ 실 GPS 트래킹(권한 거부·서비스 off 시 시뮬 폴백) / ⚠️ 경로 영속화 없음 |
-| 산책 통계(주간 막대·요약·자주 가는 곳) | `screens/insight_screen.dart` | ✅ 됨(더미 `kWeekKm`) |
+| 산책 통계(주간 막대·요약) | `screens/insight_screen.dart` | ✅ 됨(서버 연동, #145). **자주 가는 곳은 빈 상태** — `Walk` 에 장소 축이 없다 |
 | 커뮤니티(게시판·상세·작성·반응·댓글) | `screens/feed_screen.dart` · `post_detail_screen.dart` · `create_screen.dart` | ⚠️ 더미 데이터(`kPetPosts`) |
 | 반려 프로필/편집(멀티펫·종 선택) | `screens/me_screen.dart` · `edit_screen.dart` | ✅ 됨(로컬) |
 | 네비게이션 4탭 + 산책 FAB | `screens/main_shell.dart` | ✅ 됨 (홈/지도/[산책 FAB]/커뮤니티/채팅) — 통계는 탭이 아니라 홈 요약·마이 화면에서 push |
 
-> 도메인·샘플 데이터 SSOT: [`app/lib/v2/domain/pet.dart`](../../app/lib/v2/domain/pet.dart) (`DogProfile`, `WalkLog`, `PetPost`, `kPetCategories` 등)
+> 도메인·샘플 데이터 SSOT: [`app/lib/v2/domain/pet.dart`](../../app/lib/v2/domain/pet.dart) (`DogProfile`, `PetPost`, `kPetCategories` 등). 산책은 `app/lib/v2/data/walk_*.dart` 다(#145).
 
 범례: ✅ 동작 · ⚠️ 동작하나 더미/시뮬 · ❌ 미착수
 

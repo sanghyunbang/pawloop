@@ -38,7 +38,7 @@
 ### 구성요소 (위→아래)
 1. **헤더**: 날짜 라벨(`YYYY. MM. DD 요일`, `DateTime.now()` 파생) + `"{강아지 이름}랑\n산책 갈까요?"` 대형 타이틀 + 우측 상단 `ProfileAvatar`.
 2. **반려견 히어로**(가운데): 원형 그라데이션(peach) 배경 + 강아지 아바타(`dog.avatarAsset`, 96px) → 이름(23pt) → `{견종} · {나이} · {크기}` 서브텍스트.
-3. **오늘 산책 요약 카드**(GlassCard): 3분할 셀 — `{count}회 오늘 산책` / `{km}km 거리` / `{minutes}분 시간`. **현재 0부터 시작**(`WalkToday()` 기본값, 실제 기록 미연동).
+3. **오늘 산책 요약 카드**(GlassCard): 3분할 셀 — `{count}회 오늘 산책` / `{km}km 거리` / `{minutes}분 시간`. **서버 목록 + 전송 대기 초안**을 합쳐 오늘 것만 접는다(#145). 대기 중인 것이 있으면 아래에 `전송 대기 N건`, 서버를 못 불렀으면 `기록을 불러오지 못했어요` — **0 을 그냥 보여 주지 않는다**(0 은 "한 번도 안 걸었다" 로 읽힌다).
 4. **CTA 2버튼**: `산책 시작`(flex 3, warm 채움) / `코스 찾기`(flex 2, 흰색 아웃라인).
 5. **날씨 카드**(GlassCard): 해 아이콘 + `산책하기 좋은 날씨예요` / `맑음 · 24°C · 미세먼지 보통`. **하드코딩 더미**.
 
@@ -51,7 +51,7 @@
 
 ### 데이터
 - `kMyDog`(ValueNotifier<DogProfile>) → 이름·견종·나이·크기·아바타. 편집 화면과 실시간 연동.
-- `WalkToday`(count/km/minutes) — 현재 상수 0. 날씨는 하드코딩.
+- `WalkFeedData.today`(count/km/minutes) — `GET /api/walks` + 초안 큐. 날씨는 하드코딩.
 
 ---
 
@@ -138,17 +138,17 @@
 2. **이번 주 요약 카드**(GlassCard): 3분할 — `{총거리}km 총 거리` / `{횟수}회 산책 횟수` / `{평균}km 평균 거리`. 숫자는 warm 그라데이션 텍스트(`ShaderMask`).
 3. **주간 거리 막대그래프 카드**(`fl_chart` BarChart):
    - 범례: `오늘`(핑크 점) / `평일`(연보라 사각).
-   - 월~일 7개 막대. 오늘(`kWalkTodayIdx=6`, 일)은 warm 그라데이션 + 라벨 강조, 나머지는 연보라(`#8C9E8FE8`).
+   - 월~일 7개 막대. 오늘(`WalkFeedData.todayIndex` = **실제 요일**)은 warm 그라데이션 + 라벨 강조, 나머지는 연보라(`#8C9E8FE8`). 예전에는 `kWalkTodayIdx = 6` 상수라 **영원히 일요일**이었다(#145).
    - 터치 툴팁: `{요일}요일\n{값} km`. Y축 눈금 4분할, 배경 rod 표시.
-4. **자주 가는 곳 카드**(`_topPlacesCard`): `kWalks`의 장소 빈도 상위 3. 순위 뱃지(warm) + 장소명 + `{count}회` 뱃지.
+4. **자주 가는 곳 카드**(`_topPlacesCard`): **항상 빈 상태다**(#145). `Walk` 에 장소 축이 없어 셀 근거가 없고, 계약의 `WalkStats.topPlaces` 도 같은 이유로 빈 배열이다. 예전에는 더미 `kWalks` 의 `place` 문자열을 셌는데 그건 사용자가 실제로 간 곳이 아니었다.
 
 ### 상호작용
 - 막대 터치 → 툴팁 표시(요일·거리). 그 외 정적 리스트.
 
 ### 데이터 (모두 파생/상수)
-- `kWeekKm = [2.1, 2.9, 1.2, 0, 1.8, 3.1, 2.4]`(월~일), `kWeekDayLabels`.
+- `GET /api/walks/stats/weekly` 의 `weekKm`(월~일, 주 경계는 **KST**) + 전송 대기 초안, `kWeekDayLabels`.
 - 파생: `_totalKm`(합), `_walkCount`(>0 개수), `_avgKm`, `_maxKm`(축 스케일).
-- `_topPlaces` — `kWalks` place 빈도 집계 상위 3.
+- `_topPlaces` — 항상 빈 목록(위 4번 참조).
 
 ---
 
@@ -214,7 +214,7 @@
 ### 구성요소
 1. **헤더**: 뒤로가기 + `내 프로필`.
 2. **프로필 헤더**(`_dogHeader`): 원형 peach 그라데이션 + 강아지 아바타(62px) → 이름(21pt) → `{견종} · {나이} · {크기}` → 중성화 시 `중성화 완료` 배지(초록).
-3. **산책 활동 요약 카드**(`_statsCard`, 탭 가능): 3분할 — `{kWalks.length}회 총 산책` / `{총거리}km 총 거리` / `{이번주}km 이번주` + 하단 `산책 기록 보기 ›`.
+3. **산책 활동 요약 카드**(`_statsCard`, 탭 가능): 3분할 — `{allTimeCount}회 총 산책` / `{allTimeKm}km 총 거리` / `{totalKm}km 이번주` + 하단 `산책 기록 보기 ›`. **한 번의 호출로 셋이 다 온다** — 계약의 `WalkStats` 가 `allTime*` 과 `week*` 를 함께 싣는 이유가 이 카드다.
 4. **메뉴 카드**(`_menuCard`):
    - 상단 **배너**(`우리 아이 정보 관리` / `견종·나이·크기 수정`, warm) → 편집.
    - 행: `프로필 편집` / `내 산책 기록` / `북마크`(스낵바) / `로그아웃`(빨강, 스낵바).
@@ -229,9 +229,11 @@
 
 ### 데이터
 - `kMyDog`(ValueListenableBuilder) → 프로필 전 항목.
-- 파생 집계: `kWalks` 총 거리/횟수, `kWeekKm` 이번주 합.
+- 파생 집계 없음 — 서버가 낸 값을 그대로 그린다.
 
-> 관련 화면 **내 산책 기록**(`myrecords_screen.dart` · `MyRecordsScreen`): 이번 달 요약(총거리/횟수/총시간) + `산책 기록하기` 버튼(→ CreateScreen) + `kWalks` 전체 산책 카드 목록(장소/날짜/거리·시간·페이스/메모).
+> 관련 화면 **내 산책 기록**(`myrecords_screen.dart` · `MyRecordsScreen`): **전체 기간** 요약(총거리/횟수/총시간) + `산책 기록하기` 버튼(→ CreateScreen, 초안 없이 손입력) + 산책 카드 목록. 예전 주석은 "이번 달 요약" 이었지만 코드는 전체를 접고 있었고, 라벨을 코드가 하는 일에 맞췄다(#145).
+>
+> 카드 목록은 **서버 산책 + 전송 대기 초안**이고, 대기 중인 것은 위에 놓이고 `전송 대기` 뱃지가 붙는다. 장소 축이 없어 제목은 시작 시각대(새벽/아침/오후/저녁)다.
 
 ---
 
@@ -286,11 +288,12 @@
 | --- | --- |
 | 스텝퍼 ± | `km` / `minutes` 증감(clamp) |
 | 사진 추가 | 스낵바(미지원 안내) |
-| 저장 / 저장하기 | `_save()` — pop + 스낵바 "산책 기록이 저장됐어요 🐾" |
+| 저장 / 저장하기 | `_save()` — `POST /api/walks`. 결과를 있는 그대로 말한다: 저장됨 / **"기록을 보관했어요 · 연결되면 올릴게요"** / 거절 사유 |
 
 ### 데이터
-- 로컬 상태: `_place`(prefill 가능, `prefillPlace`), `_memo`, `km`(기본 2.0), `minutes`(기본 30), 날짜 = `DateTime.now()` 파생.
-- **영속화 없음** — `_save()`는 스낵바만 표시(백엔드/로컬 저장 미연동). `kWalks`에 추가되지 않음.
+- 로컬 상태: `_place`(prefill 가능), `_memo`, `km`·`minutes`. **초안이 있으면 그 실측값에서 시작**하고, 없을 때만 손입력 기본값(2.0km / 30분)이다.
+- 스텝퍼를 **만졌을 때만** 실측값을 덮는다. 안 만졌으면 초안의 초 단위 값을 그대로 보낸다 — 화면의 분 단위로 되돌리면 **1분 미만이 통째로 사라진다**(#145 에서 74초 산책이 `duration_s = 0` 으로 저장됐다).
+- 초안은 전송을 **시도하기 전에** 먼저 큐에 들어간다 — 그 다음에 앱이 죽어도 남는다(#145).
 
 ---
 
@@ -298,15 +301,15 @@
 
 | 화면 | 파일 | 진입 경로 | 데이터 소스 |
 | --- | --- | --- | --- |
-| 홈 | `today_screen.dart` | 탭 0 | `kMyDog`, `WalkToday`(0/더미) |
+| 홈 | `today_screen.dart` | 탭 0 | `kMyDog`, `WalkFeedData.today`(서버 + 전송 대기) |
 | 지도(리스트·지도) | `explore_screen.dart` | 탭 1 | KTO API(실연동) + vet/shop/trail 더미 |
-| 산책 트래킹 | `walk_tracking_screen.dart` | 홈 CTA / 중앙 FAB | 시뮬 더미 경로 |
-| 산책 통계 | `insight_screen.dart` | 탭 3 | `kWeekKm`, `kWalks`(상수) |
+| 산책 트래킹 | `walk_tracking_screen.dart` | 홈 CTA / 중앙 FAB (**둘 다 `startWalk()` 를 지난다**) | 실 GPS. 위치를 못 잡으면 시뮬을 그리되 저장하지 않는다 |
+| 산책 통계 | `insight_screen.dart` | `me_screen` 에서 진입 | `GET /api/walks/stats/weekly` |
 | 커뮤니티 | `feed_screen.dart` | 탭 2 | `kPetPosts`(더미) |
 | 글 상세 | `post_detail_screen.dart` | 커뮤니티 카드 탭 | `PetPost` + 로컬 댓글/반응 |
-| 강아지 프로필 | `me_screen.dart` | (push, 프로필 진입) | `kMyDog`, `kWalks` |
+| 강아지 프로필 | `me_screen.dart` | (push, 프로필 진입) | `kMyDog`, `WalkStats`(전체 기간 + 이번 주) |
 | 프로필 편집 | `edit_screen.dart` | 프로필 → 편집 | `kMyDog`(갱신) |
 | 산책 기록 작성 | `create_screen.dart` | 트래킹 완료 / 내 기록 | 로컬 상태(미영속) |
-| (내 산책 기록) | `myrecords_screen.dart` | 프로필 → 내 산책 기록 | `kWalks`(상수) |
+| (내 산책 기록) | `myrecords_screen.dart` | 프로필 → 내 산책 기록 | `GET /api/walks` + 전송 대기 초안 |
 
 > **미연동/더미 요약**: 로그인·실제 위치(서울 고정)·병원/펫샵/산책로 실데이터·날씨·산책 기록 영속화·커뮤니티 백엔드는 모두 더미 또는 미구현. KTO 반려동반 장소만 실연동.

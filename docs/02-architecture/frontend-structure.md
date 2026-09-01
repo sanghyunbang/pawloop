@@ -45,9 +45,9 @@ lib/
 | `today_screen.dart` | 홈(오늘) — 강아지 히어로 · 오늘 산책 요약 · 근처 동반장소 | 탭 0 |
 | `explore_screen.dart` | 지도 — KTO 반려동반 장소 + 병원/펫샵/산책로 레이어 + 필터 (리스트/지도 토글) | 탭 1 |
 | `feed_screen.dart` | 커뮤니티 — 게시글 카드/리스트 (더미) | 탭 2 |
-| `insight_screen.dart` | 통계 — 이번 주 요약 + 주간 거리 막대(fl_chart) + 자주 가는 곳 | 탭 3 |
-| `walk_tracking_screen.dart` | 실시간 산책 트래킹 (더미 시뮬 이동, 경로 폴리라인 + 라이브 스탯) | FAB → push |
-| `create_screen.dart` | 산책 기록 작성 (장소·거리·시간·메모·사진) | 트래킹 종료 후 push |
+| `insight_screen.dart` | 통계 — 이번 주 요약 + 주간 거리 막대(fl_chart). 자주 가는 곳은 빈 상태 | `me_screen` → push |
+| `walk_tracking_screen.dart` | 실시간 산책 트래킹 (실 GPS, 경로 폴리라인 + 라이브 스탯) | FAB·홈 CTA → `startWalk()` |
+| `create_screen.dart` | 산책 기록 작성 → `POST /api/walks` | 트래킹 종료 후 push (초안 동반) · 기록 목록에서 손입력 |
 | `post_detail_screen.dart` | 커뮤니티 글 상세 | feed → push |
 | `me_screen.dart` | 프로필 — 강아지 프로필 + 활동 요약 + 메뉴 | 메뉴 → push |
 | `edit_screen.dart` | 강아지 프로필 편집 + 프로필 테두리색 선택 | me → push |
@@ -60,9 +60,9 @@ lib/
 
 한 파일에 세 가지가 모여 있다.
 
-- **도메인 모델**: `DogProfile`(견종·크기·나이·중성화·아바타, `copyWith` 지원), `DogSize`(소형/중형/대형), `PetCategory`(지도/필터 카테고리 SSOT), `WalkLog`·`WalkToday`, `PetPost`.
+- **도메인 모델**: `DogProfile`(견종·크기·나이·중성화·아바타, `copyWith` 지원), `DogSize`(소형/중형/대형), `PetCategory`(지도/필터 카테고리 SSOT), `PetPost`. 산책은 도메인 상수가 아니라 `data/walk_*.dart` 다(#145).
 - **상수 SSOT**: `kPetCategories`(9종: KTO contenttypeid + vet/shop/trail 레이어), `kLayerKeys`, `kPetBoards`(커뮤니티 게시판), `kPetReactions`(도움돼요/귀여워요/공감).
-- **샘플/더미 데이터**: `kWalks`, `kWeekKm`, `kWeekDayLabels`, `kPetPosts` — 백엔드 연동 전 화면을 채우는 상수.
+- **샘플/더미 데이터**: `kPetPosts` — 백엔드 연동 전 화면을 채우는 상수. 산책 더미(`kWalks`·`kWeekKm`·`kWalkTodayIdx`·`WalkToday`·`WalkLog`)는 **지웠다**(#145). `kWeekDayLabels` 만 남았는데 그건 지어낸 기록이 아니라 달력의 사실이다.
 - **전역 상태**: `kMyDog`(현재 반려견) — 아래 3장 참조.
 
 `petCatByType(contentTypeId)`로 KTO 응답의 `contenttypeid` → 카테고리를 매핑한다.
@@ -140,7 +140,7 @@ flowchart TD
 
 ## 5. 데이터 흐름 — 레포 → 화면
 
-현재 실제 원격 데이터를 쓰는 경로는 **지도(KTO 장소)** 하나이고, 나머지는 `domain/pet.dart` 상수 또는 화면 내부 더미다.
+실제 원격 데이터를 쓰는 경로는 **지도(장소 프록시)** 와 **산책**(#145) 둘이다. 나머지(커뮤니티·병원·펫샵·산책로)는 `domain/pet.dart` 상수 또는 화면 내부 더미다.
 
 ```mermaid
 flowchart LR
@@ -148,16 +148,23 @@ flowchart LR
   Backend -->|http GET| Repo[PetPlacesRepository]
   Repo -->|List&lt;PetPlace&gt;| Explore[ExploreScreen\n리스트/지도/필터]
 
-  Sample[domain/pet.dart\nkWalks · kWeekKm · kPetPosts] --> Insight[InsightScreen]
-  Sample --> Feed[FeedScreen]
-  Global[(kMyDog\nValueNotifier)] --> Today[TodayScreen]
-  Global --> Me[MeScreen]
+  WalkApi[백엔드 GET /api/walks · /stats/weekly] --> WFeed[WalkFeed\n서버 + 전송 대기 초안]
+  Outbox[(WalkOutbox\nshared_preferences)] --> WFeed
+  WFeed --> Insight[InsightScreen]
+  WFeed --> Today[TodayScreen]
+  WFeed --> Records[MyRecordsScreen]
+  WFeed --> Me[MeScreen]
+
+  Sample[domain/pet.dart\nkPetPosts] --> Feed[FeedScreen]
+  Global[(kMyDog\nValueNotifier)] --> Today
+  Global --> Me
   Edit[EditScreen] -->|copyWith| Global
 ```
 
 - **지도 (실연동)**: `ExploreScreen.initState` → `PetPlacesRepository.fetchNearby(lat,lng)` → `List<PetPlace>` → `setState`로 리스트/지도 마커 렌더. 병원·펫샵·산책로는 화면 내부 더미 레이어.
 - **홈·프로필 (전역 상태)**: `kMyDog`를 구독. 편집 화면이 `copyWith`로 갱신하면 즉시 반영.
-- **통계·커뮤니티 (샘플 상수)**: `domain/pet.dart`의 `kWalks`/`kWeekKm`/`kPetPosts`를 그대로 사용 — 백엔드 반려 API 연동 전 단계.
+- **산책·통계 (실연동)**: `WalkFeed.load()` → `GET /api/walks` + `GET /api/walks/stats/weekly` + 전송 대기 초안을 합쳐 홈·통계·기록·프로필 넷이 함께 쓴다(#145). 자료가 바뀌면 `walkFeedRevision` 신호로 화면이 스스로 다시 부른다.
+- **커뮤니티 (샘플 상수)**: `domain/pet.dart` 의 `kPetPosts` — 백엔드 연동 전 단계.
 
 ### 미구현/더미 (문서 기준 명시)
 
