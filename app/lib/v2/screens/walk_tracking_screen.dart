@@ -1144,7 +1144,8 @@ class WalkLocationDeniedScreen extends StatelessWidget {
     LocationDenial.pausedByUser => (
       '위치 수집 다시 켜기',
       () async {
-        LocationService.paused.value = false;
+        // 디스크에도 남긴다 — 여기서만 메모리를 바꾸면 다음 실행에 다시 중단된다.
+        await LocationService.setPaused(false);
         await onRetry();
       },
     ),
