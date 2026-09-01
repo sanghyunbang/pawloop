@@ -269,6 +269,20 @@ class _CreateScreenState extends State<CreateScreen> {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('얼마나 걸었나요?', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
+        // 초안이 없으면 아래 2.0km/30분은 **측정값이 아니라 출발점**이다. 그 말을 안
+        // 하면 사용자가 앱이 재어 준 값인 줄 알고 그대로 저장한다. 걷지 않은 2km 가
+        // 통계에 계속 세지고, 지금은 삭제 UI 도 없어 지울 수도 없다. (이슈 #160)
+        if (widget.draft == null) ...[
+          const SizedBox(height: 5),
+          const Row(children: [
+            Icon(Icons.edit_outlined, size: 13, color: T.textMuted),
+            SizedBox(width: 5),
+            Expanded(
+              child: Text('직접 입력하는 값이에요 · 아래 숫자는 기본값입니다',
+                  style: TextStyle(fontSize: 12, color: T.textMuted)),
+            ),
+          ]),
+        ],
         const SizedBox(height: 14),
         _stepperRow(
           icon: Icons.straighten,

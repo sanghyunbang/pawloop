@@ -32,19 +32,19 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   Timer? _timer;
   StreamSubscription<Position>? _posSub;
   bool _paused = false;
-  bool _real = false; // true = 실제 GPS, false = 시뮬(위치 불가 시 폴백)
 
-  /// 위치를 쓸 수 있는지 **판정이 끝났는가.**
+  /// 위치 판정 결과. **`null` 이면 아직 판정 전이고, 그동안 지도를 만들지 않는다.**
   ///
-  /// 이게 없으면 타이머가 첫 위치를 기다리는 동안 시뮬 경로를 그려 버린다. 그러고 나서
-  /// 실제 위치가 도착하면 `_real` 이 참이 되는데, **경로 앞머리에는 이미 가짜 점이
-  /// 들어가 있다.**
+  /// 예전에는 위치를 못 잡으면 이 화면이 서울숲 근처 가짜 루프를 그리고 거리를 올렸다
+  /// (`_makeRoute`/`_advanceSim`). M0 시절 UX 확인용이었는데 실 GPS 가 붙은 뒤로는
+  /// **지어낸 숫자가 저장 화면까지 흘러가는 통로**였다. 이슈 #160 에서 통째로 지웠다.
   ///
-  /// 실측한 것: 서울 광화문에서 산책을 시작했더니 저장된 경로가
-  /// `LINESTRING(37.5448 127.0397, … 37.5665 126.978, …)` 이었다 — 앞 4점이 서울숲
-  /// 근처의 시뮬 루프이고 그 다음이 5.5km 떨어진 진짜 위치다. 앱이 잰 거리는 555m 인데
-  /// DB 의 `ST_Length` 는 6,421m 였다. **경로와 거리가 서로 다른 말을 한다.**
-  bool _locationDecided = false;
+  /// 판정 전에 지도를 만들지 않는 이유는 따로 있다. 타이머가 첫 위치를 기다리는 동안
+  /// 그린 점이 경로 앞머리에 남기 때문이다. 실측한 것: 광화문에서 시작했더니 저장된
+  /// 경로가 `LINESTRING(37.5448 127.0397, … 37.5665 126.978, …)` 이었다 — 앞 4점이
+  /// 서울숲이고 그 다음이 5.5km 떨어진 진짜 위치였다. 앱이 잰 거리는 555m 인데 DB 의
+  /// `ST_Length` 는 6,421m 였다. **경로와 거리가 서로 다른 말을 했다.** (#145)
+  LocationFix? _fix;
   bool _follow = true; // 카메라 자동 따라가기(제스처 시 해제)
   bool _statsExpanded = false; // 스탯 패널 펼침 여부(기본 접힘)
   bool _poisLoaded = false;
@@ -60,20 +60,15 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   /// 주변 반려 장소(검색 시트/핀 공용).
   List<PetPlace> _places = const [];
 
-  // 더미 경로(서울숲 근처 루프) — 위치 불가 시 시뮬레이션.
-  late final List<NLatLng> _route = _makeRoute();
+  /// 실제로 걸은 좌표만 들어간다. 지어낸 점은 한 개도 넣지 않는다.
   final List<NLatLng> _path = [];
-  int _idx = 0;
 
-  static List<NLatLng> _makeRoute() {
-    const lat0 = 37.5445, lng0 = 127.0374;
-    final pts = <NLatLng>[];
-    for (int i = 0; i < 40; i++) {
-      final t = i / 40 * 2 * math.pi;
-      final r = 0.0016 + 0.0006 * math.sin(t * 3);
-      pts.add(NLatLng(lat0 + r * math.sin(t), lng0 + r * math.cos(t) * 1.25));
-    }
-    return pts;
+  @override
+  void initState() {
+    super.initState();
+    // 지도가 준비되기를 기다리지 않는다 — 위치 판정이 먼저다. 판정이 끝나야 지도를
+    // 만들지 말지가 정해진다.
+    _start();
   }
 
   @override
@@ -84,51 +79,42 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   }
 
   // ───────────── 트래킹 ─────────────
+
+  /// 위치를 판정하고, 쓸 수 있을 때에만 트래킹을 시작한다.
+  ///
+  /// 못 쓰면 **아무것도 시작하지 않는다** — 타이머도 안 돌린다. 걷지 않은 시간이
+  /// 올라가면 저장 화면이 그 값을 물려받는다.
   Future<void> _start() async {
+    final fix = await LocationService.locate();
+    if (!mounted) return;
+    setState(() => _fix = fix);
+    final pos = fix.position;
+    if (pos == null) return;
+
     _startedAt = DateTime.now();
+    _path.add(NLatLng(pos.latitude, pos.longitude));
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_paused || !mounted) return;
       setState(() => _seconds++);
-      // 판정이 끝나기 전에는 아무것도 그리지 않는다 — 위 _locationDecided javadoc 참조.
-      if (_locationDecided && !_real) _advanceSim();
     });
-    final pos = await LocationService.current();
-    if (!mounted) return;
-    _locationDecided = true;
-    if (pos != null) {
-      _real = true;
-      _path.add(NLatLng(pos.latitude, pos.longitude));
-      await _ctrl?.updateCamera(
-        NCameraUpdate.withParams(target: _path.last, zoom: 16),
-      );
-      await _drawPath();
-      _posSub = LocationService.stream().listen((p) {
-        if (_paused || !mounted) return;
-        final cur = NLatLng(p.latitude, p.longitude);
-        setState(() {
-          if (_path.isNotEmpty) _km += _dist(_path.last, cur);
-          _path.add(cur);
-        });
-        _drawPath();
-        if (_follow) _ctrl?.updateCamera(NCameraUpdate.withParams(target: cur));
-        if (!_poisLoaded) _loadNearbyPlaces(cur);
+    _posSub = LocationService.stream().listen((p) {
+      if (_paused || !mounted) return;
+      final cur = NLatLng(p.latitude, p.longitude);
+      setState(() {
+        if (_path.isNotEmpty) _km += _dist(_path.last, cur);
+        _path.add(cur);
       });
-    } else {
-      _path.add(_route[0]);
-    }
-    _loadNearbyPlaces(_path.last);
+      _drawPath();
+      if (_follow) _ctrl?.updateCamera(NCameraUpdate.withParams(target: cur));
+      if (!_poisLoaded) _loadNearbyPlaces(cur);
+    });
+    _loadNearbyPlaces(_path.first);
   }
 
-  void _advanceSim() {
-    if (_idx >= _route.length - 1) return;
-    setState(() {
-      _idx++;
-      _km += _dist(_route[_idx - 1], _route[_idx]);
-      _path.add(_route[_idx]);
-    });
-    _drawPath();
-    if (_follow)
-      _ctrl?.updateCamera(NCameraUpdate.withParams(target: _path.last));
+  /// 거절 화면에서 다시 시도. 판정을 처음 상태로 되돌리고 [_start] 를 다시 탄다.
+  Future<void> _retry() async {
+    setState(() => _fix = null);
+    await _start();
   }
 
   double _dist(NLatLng a, NLatLng b) {
@@ -175,7 +161,9 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
       numOfRows: 40,
     );
     if (!mounted || _ctrl == null || places.isEmpty) return;
-    _places = places;
+    // setState 없이 필드만 바꾸면 검색바가 계속 '주변 반려 장소 찾기' 로 남는다 —
+    // 찾아 놓고 못 찾은 척한다.
+    setState(() => _places = places);
     final markers = <NAddableOverlay>{};
     for (final p in places) {
       final m = NMarker(
@@ -562,23 +550,18 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
 
   /// 방금 끝낸 산책을 초안으로 만든다. **여기서 만들지 못하면 기록이 사라진다.**
   ///
-  /// ## 시뮬레이션 경로는 담지 않는다
-  ///
-  /// 위치를 못 잡으면 이 화면은 서울숲 근처의 **가짜 루프**를 그린다(`_route`). 그것을
-  /// 저장하면 부산에서 위치 권한을 끈 사람의 산책이 **서울숲에 기록된다.** 거리도
-  /// 마찬가지로 지어낸 값이다.
-  ///
-  /// 그래서 `_real` 이 아니면 `null` 을 준다 — 저장 화면이 손입력으로 열리고, 사용자가
-  /// 실제로 걸은 거리를 직접 적는다. 지어낸 값을 조용히 올리는 것보다 낫다.
-  ///
   /// ## 좌표를 뒤집어 담는다
   ///
   /// `NLatLng` 는 (위도, 경도)인데 계약과 서버는 **`[경도, 위도]`** 다. 이 한 줄을
   /// 빠뜨리면 지도에 엉뚱한 곳이 찍히고, 서버가 400 으로 거절한다(위도 자리에 127 이
   /// 오기 때문이다).
+  ///
+  /// `_startedAt` 이 없으면 `null` 이다. 트래킹이 시작되지 않았다는 뜻이고
+  /// (`_start` 가 위치 없이는 아무것도 시작하지 않는다), 그러면 저장 화면이 손입력으로
+  /// 열린다. 지어낸 값을 조용히 올리는 것보다 낫다.
   WalkDraft? _draft() {
     final startedAt = _startedAt;
-    if (!_real || startedAt == null) return null;
+    if (startedAt == null) return null;
 
     return WalkDraft.fresh(
       startedAt: startedAt,
@@ -694,6 +677,13 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   // ───────────── UI ─────────────
   @override
   Widget build(BuildContext context) {
+    // 판정 전에는 지도를 만들지 않는다. 만들면 초기 카메라를 어딘가로 잡아야 하는데,
+    // 그 '어딘가' 가 예전의 서울숲이었다.
+    final fix = _fix;
+    if (fix == null) return const _LocatingScreen();
+    final denial = fix.denial;
+    if (denial != null) return WalkLocationDeniedScreen(denial: denial, onRetry: _retry);
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -705,8 +695,9 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
             Positioned.fill(
               child: NaverMap(
                 options: NaverMapViewOptions(
+                  // 판정을 통과했으므로 _path 에 실제 첫 좌표가 이미 들어 있다.
                   initialCameraPosition: NCameraPosition(
-                    target: _route[0],
+                    target: _path.first,
                     zoom: 16,
                   ),
                   locale: const Locale('ko'),
@@ -714,7 +705,17 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
                 ),
                 onMapReady: (c) {
                   _ctrl = c;
-                  _start();
+                  // 지도가 늦게 준비되는 동안 이미 걸었을 수 있다 — 지금까지의
+                  // 경로를 바로 그리고 카메라를 마지막 점으로 옮긴다.
+                  c.updateCamera(
+                    NCameraUpdate.withParams(target: _path.last, zoom: 16),
+                  );
+                  _drawPath();
+                  // _start 가 지도보다 먼저 끝나면 그때의 POI 적재는 `_ctrl == null`
+                  // 로 버려진다. 가만히 서 있는 사용자는 위치 스트림 갱신
+                  // (distanceFilter 5m)이 안 와서 재시도 기회도 없다. 여기서 한 번
+                  // 더 건다.
+                  if (!_poisLoaded) _loadNearbyPlaces(_path.last);
                 },
                 // 사용자가 지도를 움직이면 자동 따라가기 해제(자유 탐색).
                 onCameraChange: (reason, animated) {
@@ -962,9 +963,11 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
                   ),
                 ),
                 const Spacer(),
-                Text(
-                  _real ? '실시간 GPS' : '데모',
-                  style: const TextStyle(fontSize: 11, color: T.textMuted),
+                // 이 패널은 실 GPS 로 트래킹 중일 때만 뜬다 — 위치가 없으면 지도
+                // 자체가 만들어지지 않는다(`build` 의 판정 게이트).
+                const Text(
+                  '실시간 GPS',
+                  style: TextStyle(fontSize: 11, color: T.textMuted),
                 ),
                 const SizedBox(width: 4),
                 const Icon(
@@ -1073,5 +1076,195 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
         style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64)),
       ),
     ],
+  );
+}
+
+/// 위치를 판정하는 동안. 아주 짧게 스쳐 가지만, 이 순간에 지도를 만들지 않는 것이
+/// 이 화면의 요점이다 — 판정 전에 만든 지도는 카메라를 어딘가 잡아야 하고, 그
+/// '어딘가' 가 예전의 서울숲 가짜 좌표였다.
+class _LocatingScreen extends StatelessWidget {
+  const _LocatingScreen();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+    backgroundColor: T.lilacTop,
+    body: Center(child: CircularProgressIndicator()),
+  );
+}
+
+/// 위치를 쓸 수 없을 때. **가짜 경로 대신 이 화면이 나온다.**
+///
+/// `private` 이 아닌 이유는 테스트가 이유별 문구를 직접 확인하기 때문이다 — 완료
+/// 조건이 "권한 거부와 사용자 중단이 다른 문구를 낸다" 이고, 그건 화면을 펌프해
+/// 봐야 알 수 있다.
+///
+/// 이유마다 사용자가 할 일이 다르다. 예전에는 이유를 구분하지 않았고, 애초에 이
+/// 화면이 없었다 — 위치가 없으면 서울숲 근처를 대신 걸어 주고 거리가 올라갔다.
+/// 부산에서 권한을 끈 사람의 산책이 서울숲에 기록될 수 있었다. (이슈 #160)
+class WalkLocationDeniedScreen extends StatelessWidget {
+  final LocationDenial denial;
+  final Future<void> Function() onRetry;
+
+  const WalkLocationDeniedScreen({
+    super.key,
+    required this.denial,
+    required this.onRetry,
+  });
+
+  /// 무엇이 막혔는지. 사용자가 화면에서 읽는 문장이다.
+  String get _title => switch (denial) {
+    LocationDenial.pausedByUser => '위치 수집을 중단해 두셨어요',
+    LocationDenial.serviceOff => '기기의 위치 서비스가 꺼져 있어요',
+    LocationDenial.denied => '위치 권한이 필요해요',
+    LocationDenial.deniedForever => '위치 권한이 꺼져 있어요',
+    LocationDenial.unavailable => '현재 위치를 확인할 수 없어요',
+  };
+
+  /// 무엇을 하면 되는지. 사용자가 고칠 수 없는 경우(실내·터널)에는 고치라고 하지
+  /// 않는다.
+  String get _body => switch (denial) {
+    LocationDenial.pausedByUser =>
+      '프로필에서 켜면 산책 경로가 다시 기록돼요.',
+    LocationDenial.serviceOff =>
+      '설정에서 위치 서비스를 켜 주세요. 앱 권한과는 별개예요.',
+    LocationDenial.denied =>
+      '경로를 그리려면 위치가 필요해요. 다시 시도하면 한 번 더 여쭤볼게요.',
+    LocationDenial.deniedForever =>
+      '앱에서는 다시 여쭤볼 수 없어요. 설정 > 앱 > 위치에서 허용해 주세요.',
+    LocationDenial.unavailable =>
+      '실내나 터널에서는 신호가 약할 수 있어요. 잠시 뒤 다시 시도해 주세요.',
+  };
+
+  /// 첫 번째 버튼이 하는 일 — 이유마다 다르다.
+  ///
+  /// `deniedForever` 는 앱이 권한을 다시 물을 수 없으므로 OS 설정으로 보낸다.
+  /// `serviceOff` 는 앱 권한이 아니라 기기 설정이라 위치 설정 화면으로 보낸다.
+  /// `pausedByUser` 는 **앱 안에서 끝난다** — 토글을 끄고 바로 다시 시도한다.
+  (String, Future<void> Function()) get _primary => switch (denial) {
+    LocationDenial.pausedByUser => (
+      '위치 수집 다시 켜기',
+      () async {
+        LocationService.paused.value = false;
+        await onRetry();
+      },
+    ),
+    LocationDenial.serviceOff => (
+      '위치 설정 열기',
+      () async {
+        await Geolocator.openLocationSettings();
+      },
+    ),
+    LocationDenial.deniedForever => (
+      '앱 설정 열기',
+      () async {
+        await Geolocator.openAppSettings();
+      },
+    ),
+    LocationDenial.denied || LocationDenial.unavailable => (
+      '다시 시도',
+      onRetry,
+    ),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final (primaryLabel, primaryAction) = _primary;
+    return Scaffold(
+      backgroundColor: T.lilacTop,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: T.textPrimary,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: Column(
+            children: [
+              const Spacer(),
+              Container(
+                width: 84,
+                height: 84,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0x22FF8F63),
+                ),
+                child: const Icon(
+                  Icons.location_off_rounded,
+                  size: 38,
+                  color: Color(0xFFE07A4E),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                _title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: T.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _body,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  height: 1.55,
+                  color: Color(0xBD463C64),
+                ),
+              ),
+              const Spacer(),
+              _filled(primaryLabel, primaryAction),
+              const SizedBox(height: 10),
+              // 위치 없이도 기록은 남길 수 있다 — 다만 사용자가 직접 적는다.
+              // 앱이 대신 지어내지 않는다.
+              TextButton(
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CreateScreen(prefillPlace: '오늘 산책'),
+                  ),
+                ),
+                child: const Text(
+                  '직접 입력해서 기록하기',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: T.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _filled(String label, Future<void> Function() onTap) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      height: 52,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment(-0.8, -1),
+          end: Alignment(0.8, 1),
+          colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+        ),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
+      ),
+    ),
   );
 }
