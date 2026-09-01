@@ -97,7 +97,7 @@ class _InsightScreenState extends State<InsightScreen> {
 
   @override
   Widget build(BuildContext context) => WalkFeedBuilder(
-        builder: (context, data) {
+        builder: (context, data, _) {
           _data = data;
           return _build(context);
         },
@@ -194,13 +194,26 @@ class _InsightScreenState extends State<InsightScreen> {
         Container(width: 1, height: 38, color: const Color(0x248C7BFF));
     return GlassCard(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-      child: Row(
+      child: Column(
         children: [
-          cell('${_totalKm.toStringAsFixed(1)}km', '총 거리'),
-          div(),
-          cell('$_walkCount회', '산책 횟수'),
-          div(),
-          cell('${_avgKm.toStringAsFixed(1)}km', '평균 거리'),
+          Row(
+            children: [
+              cell('${_totalKm.toStringAsFixed(1)}km', '총 거리'),
+              div(),
+              cell('$_walkCount회', '산책 횟수'),
+              div(),
+              cell('${_avgKm.toStringAsFixed(1)}km', '평균 거리'),
+            ],
+          ),
+          // 서버를 못 불렀는데 0 을 그냥 보여 주면 "한 번도 안 걸었다" 로 읽힌다.
+          // today_screen 에는 이 규칙을 넣어 놓고 여기는 빠뜨렸었다 (#161).
+          if (_data.offline && !_data.hasAnything) ...[
+            const SizedBox(height: 10),
+            const Text(
+              '기록을 불러오지 못했어요',
+              style: TextStyle(fontSize: 11.5, color: Color(0x9E463C64)),
+            ),
+          ],
         ],
       ),
     );

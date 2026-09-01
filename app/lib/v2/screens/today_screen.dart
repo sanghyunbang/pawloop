@@ -98,7 +98,7 @@ class TodayScreen extends StatelessWidget {
                     behavior: HitTestBehavior.opaque,
                     // 예전에는 `const WalkToday()` 였다 — 무엇을 걷든 영원히 0회 0.0km 0분.
                     child: WalkFeedBuilder(
-                      builder: (_, data) => _walkSummary(data),
+                      builder: (_, data, __) => _walkSummary(data),
                     ),
                   ),
                   const SizedBox(height: 12),

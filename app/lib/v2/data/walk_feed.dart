@@ -35,11 +35,21 @@ class WalkFeedData {
   /// 말해야 한다. 0 을 그냥 보여 주면 "산책을 한 번도 안 했다" 로 읽힌다.
   final bool offline;
 
+  /// 다음 장의 커서. **`null` 이면 끝이다.**
+  ///
+  /// 이게 없던 동안 목록이 첫 장(30건)에서 끊겼는데 요약 카드는 서버 집계
+  /// (`allTimeCount`)를 그렸다 — 40회라고 적힌 화면에 30개만 있었다 (#161).
+  final String? nextCursor;
+
+  final bool hasMore;
+
   const WalkFeedData({
     required this.walks,
     required this.pending,
     required this.stats,
     required this.offline,
+    this.nextCursor,
+    this.hasMore = false,
   });
 
   static const empty = WalkFeedData(
@@ -48,6 +58,16 @@ class WalkFeedData {
     stats: ServerWalkStats.empty,
     offline: true,
   );
+
+  /// 다음 장을 이어 붙인 새 값.
+  WalkFeedData appending(ServerWalkPage page) => WalkFeedData(
+        walks: [...walks, ...page.items],
+        pending: pending,
+        stats: stats,
+        offline: false,
+        nextCursor: page.nextCursor,
+        hasMore: page.hasMore,
+      );
 
   bool get hasAnything => walks.isNotEmpty || pending.isNotEmpty;
 
@@ -156,11 +176,14 @@ class WalkFeed {
         _repo.walks(dogId: dogId, limit: pageSize),
         _repo.stats(dogId: dogId),
       ]);
+      final page = results[0] as ServerWalkPage;
       return WalkFeedData(
-        walks: (results[0] as ServerWalkPage).items,
+        walks: page.items,
         pending: pending,
         stats: results[1] as ServerWalkStats,
         offline: false,
+        nextCursor: page.nextCursor,
+        hasMore: page.hasMore,
       );
     } on WalkFailure {
       // 서버를 못 불렀다. **대기 중인 것은 그대로 보여 준다** — 그것마저 감추면
@@ -171,6 +194,17 @@ class WalkFeed {
         stats: ServerWalkStats.empty,
         offline: true,
       );
+    }
+  }
+
+  /// 다음 장. **커서가 없으면 부르지 마라** — 서버는 커서 없는 요청을 첫 장으로 답한다.
+  ///
+  /// 실패하면 `null` 이다. 다음 장을 못 받았다고 **이미 그린 목록을 버리지 않는다.**
+  Future<ServerWalkPage?> more(String cursor, {int? dogId}) async {
+    try {
+      return await _repo.walks(dogId: dogId, cursor: cursor, limit: pageSize);
+    } on WalkFailure {
+      return null;
     }
   }
 }
