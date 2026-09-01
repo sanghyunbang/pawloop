@@ -5,6 +5,7 @@ import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/today_care_card.dart';
 import '../widgets/walk_feed_builder.dart';
+import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
 import 'main_shell.dart';
 import 'start_walk.dart';
@@ -33,7 +34,7 @@ class TodayScreen extends StatelessWidget {
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
-          child: ValueListenableBuilder<DogProfile>(
+          child: ValueListenableBuilder<DogProfile?>(
             valueListenable: kMyDog,
             builder: (_, dog, __) => Padding(
               padding: EdgeInsets.fromLTRB(22, 14, 22, MediaQuery.of(context).padding.bottom + 118),
@@ -46,7 +47,10 @@ class TodayScreen extends StatelessWidget {
                         Text(_dateLabel,
                             style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: 0.3, color: Color(0xBD463C69))),
                         const SizedBox(height: 6),
-                        Text('${dog.name}랑\n산책 갈까요?',
+                        // 아이가 없으면 이름을 지어내지 않는다. 예전에는 '보리' 가
+                        // 하드코딩돼 있어서 등록도 안 한 사람에게 "보리랑 산책 갈까요?"
+                        // 를 물었다 (#159).
+                        Text(dog == null ? '오늘\n산책 갈까요?' : '${dog.name}랑\n산책 갈까요?',
                             style: const TextStyle(fontSize: 25, height: 1.25, letterSpacing: -0.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
                       ]),
                     ),
@@ -63,13 +67,26 @@ class TodayScreen extends StatelessWidget {
                           children: [
                             _dogHero(dog),
                             const SizedBox(height: 16),
-                            Text(dog.name, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                            const SizedBox(height: 4),
-                            Text('${dog.species.label} · ${dog.breed} · ${dog.ageLabel} · ${dog.size.label}',
-                                style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
-                            if (kMyPets.value.length > 1) ...[
-                              const SizedBox(height: 12),
-                              _petSwitcher(),
+                            if (dog == null) ...[
+                              const Text('아직 등록된 아이가 없어요',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                              const SizedBox(height: 6),
+                              const Text('등록하면 산책이 기록되기 시작해요',
+                                  style: TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+                              const SizedBox(height: 10),
+                              TextButton(
+                                onPressed: () => showPetRegistrationSheet(context),
+                                child: const Text('우리 아이 등록하기'),
+                              ),
+                            ] else ...[
+                              Text(dog.name, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                              const SizedBox(height: 4),
+                              Text(dog.subtitle,
+                                  style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+                              if (kMyPets.value.length > 1) ...[
+                                const SizedBox(height: 12),
+                                _petSwitcher(),
+                              ],
                             ],
                           ],
                         ),
@@ -138,7 +155,8 @@ class TodayScreen extends StatelessWidget {
     ]);
   }
 
-  Widget _dogHero(DogProfile dog) {
+  /// 아이가 없으면 발바닥 아이콘을 그린다 — 남의 강아지를 보여 주지 않는다.
+  Widget _dogHero(DogProfile? dog) {
     return Container(
       width: 150,
       height: 150,
@@ -148,7 +166,7 @@ class TodayScreen extends StatelessWidget {
         gradient: RadialGradient(colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)]),
         boxShadow: [BoxShadow(color: Color(0x55FF9E7D), blurRadius: 34, offset: Offset(0, 16))],
       ),
-      child: Image.asset(dog.avatarAsset, width: 96, height: 96, gaplessPlayback: true),
+      child: Image.asset(dog?.avatarAsset ?? 'assets/emoji/paw.png', width: 96, height: 96, gaplessPlayback: true),
     );
   }
 

@@ -59,6 +59,12 @@ enum PetSpecies {
 
 /// 우리 아이 프로필. (강아지/고양이 등 여러 마리 지원)
 class DogProfile {
+  /// 서버의 `dog.id`. **아직 서버에 없으면 `null`** 이다.
+  ///
+  /// 산책을 저장하려면 이 값이 필요하다 — 계약의 `WalkInput.dogId` 가 필수다.
+  /// 이 값이 `null` 인 프로필로는 산책을 올릴 수 없고, 그래서 등록 시트가 뜬다.
+  final int? serverId;
+
   final String name;
   final String breed;
   final PetSpecies species;
@@ -67,6 +73,7 @@ class DogProfile {
   final bool neutered;
 
   const DogProfile({
+    this.serverId,
     required this.name,
     required this.breed,
     this.species = PetSpecies.dog,
@@ -78,6 +85,18 @@ class DogProfile {
   String get ageLabel =>
       ageMonths >= 12 ? '${ageMonths ~/ 12}살' : '$ageMonths개월';
 
+  /// 화면 부제 — "고양이 · 코숏 · 3살 · 소형견".
+  ///
+  /// **모르는 것은 안 그린다.** 품종을 안 받았으면 구분점만 남아 "고양이 · · 0개월" 이
+  /// 되고, 나이를 모르는데 `ageMonths` 가 0 이면 **"0개월"** 이 되어 갓 태어났다고 말한다.
+  /// 서버는 생일을 안 받으므로(#159 범위 밖) 지금은 나이가 항상 모르는 값이다.
+  String get subtitle => [
+        species.label,
+        if (breed.isNotEmpty) breed,
+        if (ageMonths > 0) ageLabel,
+        size.label,
+      ].join(' · ');
+
   /// 종류별 아바타(Fluent Emoji).
   String get avatarAsset => switch (species) {
     PetSpecies.dog => 'assets/emoji/dog.png',
@@ -86,6 +105,7 @@ class DogProfile {
   };
 
   DogProfile copyWith({
+    int? serverId,
     String? name,
     String? breed,
     PetSpecies? species,
@@ -93,6 +113,7 @@ class DogProfile {
     int? ageMonths,
     bool? neutered,
   }) => DogProfile(
+    serverId: serverId ?? this.serverId,
     name: name ?? this.name,
     breed: breed ?? this.breed,
     species: species ?? this.species,
@@ -102,39 +123,45 @@ class DogProfile {
   );
 }
 
-/// 우리 아이들(전역, 여러 마리). 추후 백엔드 dog 테이블과 연결.
+/// 우리 아이들(전역, 여러 마리). 서버의 `GET /api/dogs` 가 채운다 — `data/pet_sync.dart`.
+///
+/// **빈 목록으로 시작한다.** 예전에는 '보리'·'치즈' 두 마리가 하드코딩돼 있었는데,
+/// 그 상태에서는 서버에 0마리인 사용자에게도 화면이 "우리 아이 2마리" 를 보여 줬다.
+/// 그러고는 산책을 저장할 때 "반려동물을 등록하면 올릴게요" 라고 말했다 — 화면과 안내가
+/// 서로 다른 말을 한 것이다 (#159).
 final ValueNotifier<List<DogProfile>> kMyPets =
-    ValueNotifier<List<DogProfile>>([
-      const DogProfile(
-        name: '보리',
-        breed: '믹스견',
-        species: PetSpecies.dog,
-        size: DogSize.small,
-        ageMonths: 30,
-        neutered: true,
-      ),
-      const DogProfile(
-        name: '치즈',
-        breed: '코리안숏헤어',
-        species: PetSpecies.cat,
-        size: DogSize.small,
-        ageMonths: 22,
-      ),
-    ]);
+    ValueNotifier<List<DogProfile>>(const []);
 
 /// 현재 선택된 아이 인덱스.
 final ValueNotifier<int> kSelectedPetIdx = ValueNotifier<int>(0);
 
 /// 현재 선택된 아이(전역) — 홈 히어로/프로필이 구독.
-final ValueNotifier<DogProfile> kMyDog = ValueNotifier<DogProfile>(
-  kMyPets.value.first,
-);
+///
+/// **`null` 일 수 있다.** 로그인 전이거나, 아직 한 마리도 등록하지 않았거나, 서버를 못
+/// 불렀을 때다. 화면은 그때 **빈 상태**를 그려야 한다 — 지어낸 '보리' 를 보여 주면
+/// 사용자는 등록이 끝난 줄 안다.
+final ValueNotifier<DogProfile?> kMyDog = ValueNotifier<DogProfile?>(null);
 
 /// 아이 선택.
 void selectPet(int i) {
   if (i < 0 || i >= kMyPets.value.length) return;
   kSelectedPetIdx.value = i;
   kMyDog.value = kMyPets.value[i];
+}
+
+/// 서버가 준 목록으로 통째로 갈아 끼운다. **여기가 유일한 출처다.**
+///
+/// 빈 목록이면 선택도 비운다 — 지운 아이가 화면에 남아 있으면 안 된다.
+void replacePets(List<DogProfile> pets) {
+  kMyPets.value = pets;
+  if (pets.isEmpty) {
+    kSelectedPetIdx.value = 0;
+    kMyDog.value = null;
+    return;
+  }
+  final i = kSelectedPetIdx.value.clamp(0, pets.length - 1);
+  kSelectedPetIdx.value = i;
+  kMyDog.value = pets[i];
 }
 
 /// 선택된 아이 프로필 갱신(편집 저장).

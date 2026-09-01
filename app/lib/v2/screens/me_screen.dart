@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
+import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../data/auth_state.dart';
@@ -53,22 +54,26 @@ class MeScreen extends StatelessWidget {
               ]),
             ),
             Expanded(
-              child: ValueListenableBuilder<DogProfile>(
+              child: ValueListenableBuilder<DogProfile?>(
                 valueListenable: kMyDog,
-                builder: (_, dog, __) => ListView(
+                // 아이가 없으면 지어내지 않는다. 예전에는 '보리' 가 하드코딩돼 있어서
+                // 서버에 0마리인 사람에게도 프로필이 있는 것처럼 보였다 (#159).
+                builder: (_, dog, __) => dog == null
+                    ? _emptyState(context)
+                    : ListView(
                   padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
                   children: [
                     _dogHeader(dog),
                     const SizedBox(height: 10),
                     _accountLine(),
                     const SizedBox(height: 16),
-                    _petsRow(context),
+                    _petsRow(context, dog),
                     const SizedBox(height: 16),
                     _statsCard(context),
                     const SizedBox(height: 16),
                     _locationCard(),
                     const SizedBox(height: 16),
-                    _menuCard(context),
+                    _menuCard(context, dog),
                   ],
                 ),
               ),
@@ -80,6 +85,45 @@ class MeScreen extends StatelessWidget {
   }
 
   // ───────────── 우리 아이 프로필 ─────────────
+  /// 등록된 아이가 없을 때. **지어낸 프로필을 보여 주지 않는다.**
+  ///
+  /// 로그인 전이거나, 아직 한 마리도 등록하지 않았거나, 서버를 못 불렀을 때다.
+  /// 셋을 구분하지 않는 이유: 사용자가 할 일은 셋 다 같다 — 로그인하고 등록하는 것이다.
+  Widget _emptyState(BuildContext context) => ListView(
+        padding: const EdgeInsets.fromLTRB(22, 40, 22, 28),
+        children: [
+          Center(
+            child: Image.asset('assets/emoji/paw.png',
+                width: 72, height: 72, gaplessPlayback: true),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            '아직 등록된 아이가 없어요',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '우리 아이를 등록하면 산책이 기록되기 시작해요',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary),
+          ),
+          const SizedBox(height: 22),
+          FilledButton(
+            onPressed: () => showPetRegistrationSheet(context),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+            child: const Text('우리 아이 등록하기'),
+          ),
+          const SizedBox(height: 16),
+          _accountLine(),
+        ],
+      );
+
   Widget _dogHeader(DogProfile dog) {
     return Column(children: [
       // 원형 그라데이션 배경 위 강아지 아바타
@@ -97,7 +141,7 @@ class MeScreen extends StatelessWidget {
       const SizedBox(height: 14),
       Text(dog.name, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: T.textPrimary)),
       const SizedBox(height: 5),
-      Text('${dog.breed} · ${dog.ageLabel} · ${dog.size.label}',
+      Text(dog.subtitle,
           style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
       if (dog.neutered) ...[
         const SizedBox(height: 9),
@@ -163,7 +207,7 @@ class MeScreen extends StatelessWidget {
   }
 
   // ───────────── 우리 아이들 (여러 마리 전환/추가) ─────────────
-  Widget _petsRow(BuildContext context) {
+  Widget _petsRow(BuildContext context, DogProfile dog) {
     return ValueListenableBuilder<List<DogProfile>>(
       valueListenable: kMyPets,
       builder: (_, pets, __) => GlassCard(
@@ -208,10 +252,9 @@ class MeScreen extends StatelessWidget {
                 ),
               // 새 아이 추가
               GestureDetector(
-                onTap: () {
-                  addPet(const DogProfile(name: '새 친구', breed: '', size: DogSize.small, ageMonths: 12));
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditScreen()));
-                },
+                // 예전에는 '새 친구' 라는 가짜 프로필을 로컬에 만들고 편집 화면을 열었다.
+                // 그 아이는 서버에 없으므로 산책을 붙일 수 없었다 (#159).
+                onTap: () => showPetRegistrationSheet(context),
                 behavior: HitTestBehavior.opaque,
                 child: Column(children: [
                   Container(
@@ -341,7 +384,7 @@ class MeScreen extends StatelessWidget {
   }
 
   // ───────────── 메뉴 ─────────────
-  Widget _menuCard(BuildContext context) {
+  Widget _menuCard(BuildContext context, DogProfile dog) {
     Widget row(IconData icon, String label, {Color? color, bool border = true, VoidCallback? onTap}) {
       final c = color ?? T.textPrimary;
       return GestureDetector(
@@ -369,9 +412,9 @@ class MeScreen extends StatelessWidget {
       child: GlassCard(
         padding: EdgeInsets.zero,
         child: Column(children: [
-          _menuBanner(context),
+          _menuBanner(context, dog),
           row(Icons.pets_outlined, '프로필 편집',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditScreen()))),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EditScreen(pet: dog)))),
           row(Icons.article_outlined, '내 산책 기록',
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
           row(Icons.diversity_1_rounded, '우리 가족',
@@ -403,9 +446,9 @@ class MeScreen extends StatelessWidget {
   }
 
   // 메뉴 상단 따뜻한 배너 (프로필 편집 유도).
-  Widget _menuBanner(BuildContext context) {
+  Widget _menuBanner(BuildContext context, DogProfile dog) {
     return GestureDetector(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditScreen())),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EditScreen(pet: dog))),
       behavior: HitTestBehavior.opaque,
       child: Container(
         margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),

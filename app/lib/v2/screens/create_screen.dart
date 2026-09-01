@@ -3,6 +3,7 @@ import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../data/walk_outbox.dart';
 import '../data/walk_sync.dart';
+import '../widgets/pet_registration_sheet.dart';
 
 /// 산책 기록 작성 (create) — 장소·거리·시간·메모·사진.
 ///
@@ -114,6 +115,28 @@ class _CreateScreenState extends State<CreateScreen> {
     }
 
     if (!mounted) return;
+
+    // 반려동물이 없어서 못 올린 경우다. **스낵바로 끝내지 않는다** — 사용자는 안내를
+    // 받고도 등록할 곳을 찾을 수 없었다(#159). 지금 그 자리에서 등록하게 하고, 성공하면
+    // 방금 그 산책을 바로 올린다.
+    if (result.outcome == WalkSyncOutcome.queued && result.needsPet) {
+      final registered = await showPetRegistrationSheet(
+        context,
+        reason: '산책을 저장하려면 어느 아이의 산책인지 알아야 해요',
+      );
+      if (!mounted) return;
+      if (registered != null) {
+        final retried = await WalkSync.open().then((s) => s.flush());
+        if (!mounted) return;
+        setState(() => _saving = false);
+        _toast(retried > 0
+            ? '산책 기록이 저장됐어요 🐾'
+            : '기록을 보관했어요 · 연결되면 올릴게요');
+        Navigator.of(context).maybePop();
+        return;
+      }
+    }
+
     setState(() => _saving = false);
 
     _toast(switch (result.outcome) {
