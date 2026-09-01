@@ -120,7 +120,7 @@ graph LR
     H --> H6["오늘의 케어 카드 (예정)<br/>→ 가족 화면"]
 ```
 - 진입점 2개: **산책 시작**(→ `WalkTrackingScreen` push), **코스 찾기**(→ `RootTab.index=1` 지도 탭).
-- 데이터: `kMyDog`(`ValueNotifier<DogProfile>`), `WalkToday`(오늘 요약, 현재 0 기준).
+- 데이터: `kMyDog`(`ValueNotifier<DogProfile>`), `WalkFeedData.today`(오늘 요약 — 서버 + 전송 대기).
 - (예정) **오늘의 케어 카드**: 가족 케어 & 채팅 도입 시 추가 — 탭하면 가족 화면(`family_screen`) push, 가족 화면에서 채팅(`family_chat_screen`)으로 진입. [기능 명세 §6](./feature-spec.md) 참조.
 
 ### 4.2 🗺️ 지도 (`ExploreScreen`)
@@ -173,7 +173,7 @@ graph LR
     I --> I3["자주 가는 곳 Top 3"]
 ```
 - 순수 열람 화면. 하위 push 없음(우상단 아바타 → 프로필만 예외).
-- 데이터: `kWeekKm`(요일별 거리), `kWalks`(장소 빈도 집계).
+- 데이터: `WalkStats.weekKm`(요일별 거리, KST 주 경계). 장소 빈도는 **없다** — `Walk` 에 장소 축이 없다.
 
 ### 4.6 👤 내 프로필 (`MeScreen`, 글로벌 push)
 ```mermaid

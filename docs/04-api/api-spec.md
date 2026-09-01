@@ -424,8 +424,8 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 ## 5. 산책 (Walks)
 
-실시간 GPS 트래킹 결과를 저장/조회. 프론트 도메인: `WalkLog { date, place, km, minutes, memo, pace }`, 통계용 `kWeekKm`.
-현재 앱은 시뮬 이동 + 로컬 샘플(`kWalks`). 백엔드 미연동.
+실시간 GPS 트래킹 결과를 저장/조회. 프론트: `ServerWalk`(계약의 `Walk` 그대로) + 아직 못 보낸 `WalkDraft`.
+**연동 완료(#145).** 종료하면 `POST /api/walks` 로 저장되고, 못 보내면 초안 큐에 남아 연결되면 나간다. `path` 는 `[경도, 위도]` 순서다 — 앱의 `NLatLng(위도, 경도)` 와 반대이고, 뒤집어 보내면 서버가 400 으로 거절한다.
 
 경로 저장 규약: GPS 경로는 `walk.path` **한 컬럼**(LINESTRING / 인코딩 폴리라인). 개별 포인트 테이블 없음.
 
@@ -507,7 +507,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 {
   "period": "week",
   "range": { "from": "2026-06-24", "to": "2026-06-30" },
-  "daily": [                            // 프론트 kWeekKm / kWeekDayLabels 대응
+  "daily": [                            // 계약의 WalkStats.weekKm 대응 (월~일, KST)
     { "day": "월", "date": "2026-06-24", "distanceKm": 2.1, "count": 1 },
     { "day": "화", "date": "2026-06-25", "distanceKm": 2.9, "count": 1 },
     { "day": "수", "date": "2026-06-26", "distanceKm": 1.2, "count": 1 },
@@ -747,10 +747,10 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 | 화면(lib/v2) | 현재 데이터 소스 | 목표 API |
 |---|---|---|
-| 홈 (강아지 히어로/오늘 산책) | `kMyDog`, `WalkToday` (로컬) | `GET /auth/me`, `GET /api/dogs`, `GET /api/walks/stats` |
+| 홈 (강아지 히어로/오늘 산책) | `kMyDog`(로컬) + **산책은 서버**(#145) | `GET /auth/me`, `GET /api/dogs`, `GET /api/walks`, `GET /api/walks/stats/weekly` |
 | 지도 (KTO 45곳 + 병원/펫샵/산책로 더미) | KTO 직접호출(`PetPlacesRepository`) | `GET /api/places/nearby`, `GET /api/places/{id}` |
 | 실시간 산책 (시뮬) | 로컬 | `POST /api/walks` |
-| 산책 통계 (fl_chart) | `kWeekKm`(로컬) | `GET /api/walks/stats` |
+| 산책 통계 (fl_chart) | **서버 연동 완료**(#145) | `GET /api/walks/stats/weekly` |
 | 커뮤니티 (더미) | `kPetPosts`(로컬) | `GET/POST /api/posts`, `/comments`, `/reactions` |
 | 강아지 프로필/편집 | `kMyDog`(로컬) | `GET/POST/PATCH /api/dogs` |
 | 홈 오늘의 케어 카드 · family_screen (멤버·케어·주의사항) | ~~`kCareToday`, `kFamilyMembers`, `kWalkNotes`~~ → **서버 연동 완료**(#76). 남은 더미는 `kFamilyInviteCode`·`FamilyMember.todayKm` | `GET /api/groups/me`, `GET/POST /api/groups/{id}/care-logs`, `GET/PUT /api/groups/{id}/walk-notes` |

@@ -13,18 +13,18 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 - 진입: `main.dart` → `MainShell`(`lib/v2/screens/main_shell.dart`)
 - 네비 5탭 구성: **홈 · 지도 · [산책 기록 FAB] · 커뮤니티 · 통계** (가운데 솟은 원형 FAB → 실시간 산책 트래킹)
 - 상태관리: `ValueNotifier` + `ValueListenableBuilder` (경량). 탭 인덱스/지도뷰는 `RootTab`(전역 `ValueNotifier`)로 보관.
-- 도메인 SSOT: `lib/v2/domain/pet.dart` (`DogProfile`, `PetCategory`, `WalkLog`, `PetPost` 등)
+- 도메인 SSOT: `lib/v2/domain/pet.dart` (`DogProfile`, `PetCategory`, `PetPost` 등). 산책은 `lib/v2/data/walk_*.dart` 다(#145).
 
 ### 기능 우선순위 (한눈에)
 
 | 우선순위 | 기능 | 상태 | 데이터 소스 | 비고 |
 |---|---|---|---|---|
 | P0 | 실시간 산책 트래킹 | 더미 시뮬레이션 | 로컬(시뮬 경로) | 배포 시 `geolocator` → `walk.path(LINESTRING)` |
-| P0 | 산책 기록 작성/조회 | 화면 완성, 미영속 | 로컬 상수(`kWalks`) | 저장 시 스낵바만, DB 미연동 |
+| P0 | 산책 기록 작성/조회 | **완료(#145)** | `GET/POST /api/walks` | 트래킹 초안 → 저장. 못 보내면 초안 큐에 남는다 |
 | P0 | 지도 · 동반장소 | KTO 실연동 | 관광공사 KorPetTourService2 | 병원/펫샵/산책로 레이어는 더미 |
 | P0 | 강아지 프로필 | 세션 내 편집 반영 | 전역 `kMyDog` | 앱 재시작 시 초기화(미영속) |
 | P1 | 커뮤니티(피드/상세/댓글/반응) | 더미 | 로컬 상수(`kPetPosts`) | 백엔드 social API 미연동 |
-| P1 | 산책 통계 | 더미 | 로컬 상수(`kWeekKm`) | fl_chart 주간 막대 |
+| P1 | 산책 통계 | **완료(#145)** | `GET /api/walks/stats/weekly` | fl_chart 주간 막대. 이번 주 + 전체 기간이 한 응답 |
 | P1 | 가족 케어 & 채팅(그룹·오늘의 케어·주의사항·채팅) | 더미 예정 | 로컬 상수 예정(`kCareToday`·`kFamilyMembers`·`kChatMessages` 등) | 신규 MVP — §6 |
 | P2 | 로그인 | 미구현 | (백엔드 auth 존재) | 앱은 로그아웃 스낵바만 |
 | P2 | 실위치(geolocator) | 미도입 | 서울 시청 고정 | `_center` 하드코딩 |
@@ -60,15 +60,15 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 동작 | 장소(TextField, `prefillPlace` 프리필) · 날짜(오늘 표시, 선택 UI 미구현) · 거리/시간 스텝퍼(±0.1km / ±5분) · 사진(플레이스홀더, "곧 지원") · 메모(4줄) |
 | 저장 | `_save()` → `maybePop()` + "산책 기록이 저장됐어요 🐾" 스낵바. **DB 저장 없음(미영속)** |
 | 상태 | `km`(기본 2.0), `minutes`(기본 30), `_place`/`_memo` TextEditingController |
-| 데이터 모델 | `WalkLog{date, place, km, minutes, memo}` + 파생 `pace`(분/km). 향후 `walk` 테이블 매핑 |
+| 데이터 모델 | `ServerWalk{id, dogId, clientWalkId, startedAt, endedAt, distanceM, durationS, path, memo, weather}` — 계약의 `Walk` 그대로. 아직 못 보낸 것은 `WalkDraft` |
 
 ### 1.3 내 산책 기록 조회 — `myrecords_screen.dart`
 
 | 항목 | 내용 |
 |---|---|
 | 목적 | 이번 달 요약 + 전체 산책 리스트 열람 |
-| 동작 | 요약 카드(총 거리·횟수·총 시간, `kWalks` 집계) + 산책 카드 리스트(장소·날짜·km·분·페이스·메모) |
-| 데이터 | **더미** 상수 `kWalks`(샘플 5건). 실제론 `walk` 조회 |
+| 동작 | 요약 카드(전체 기간 거리·횟수·시간) + 산책 카드 리스트(시각대·날짜·km·분·페이스·메모). 전송 대기 중인 것은 위에 놓이고 뱃지가 붙는다 |
+| 데이터 | `GET /api/walks`(커서, 경로 미포함) + 전송 대기 초안. `kWalks` 는 지웠다(#145) |
 
 ---
 
@@ -151,7 +151,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 |---|---|
 | 목적 | 강아지 프로필 카드 + 산책 활동 요약 + 메뉴 |
 | 프로필 | 아바타 · 이름 · "견종 · 나이 · 크기" · 중성화 배지 |
-| 요약 | 총 산책 횟수·총 거리·이번주(`kWalks`/`kWeekKm` 집계) → 탭 시 `MyRecordsScreen` |
+| 요약 | 총 산책 횟수·총 거리·이번주(`WalkStats` 의 `allTime*` + `week*`, **한 번의 호출**) → 탭 시 `MyRecordsScreen` |
 | 메뉴 | 프로필 편집 · 내 산책 기록 · 북마크(스낵바만) · 로그아웃(스낵바만) |
 | 데이터 | 전역 `kMyDog`(`ValueNotifier<DogProfile>`) |
 
@@ -175,7 +175,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 항목 | 내용 |
 |---|---|
 | 목적 | 우리 아이 히어로 + 오늘 산책 요약 + 진입 CTA |
-| 구성 | 날짜/인사("{이름}랑 산책 갈까요?") · 강아지 히어로 · 오늘 산책 요약(**0부터** `WalkToday()`) · CTA(산책 시작/코스 찾기) · 날씨 카드(하드코딩) |
+| 구성 | 날짜/인사("{이름}랑 산책 갈까요?") · 강아지 히어로 · 오늘 산책 요약(**서버 + 전송 대기**) · CTA(산책 시작/코스 찾기) · 날씨 카드(하드코딩) |
 | 상태 | `kMyDog` 구독. 요약은 항상 0(실기록 연동 전) |
 
 ### 5.2 산책 통계 — `insight_screen.dart`
@@ -183,10 +183,10 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 항목 | 내용 |
 |---|---|
 | 목적 | 이번 주 요약 + 주간 거리 막대그래프 + 자주 가는 곳 |
-| 요약 | 총 거리·횟수·평균(`kWeekKm` 파생) |
-| 차트 | `fl_chart` `BarChart` 주간(월~일) 막대. 오늘(`kWalkTodayIdx`) 강조 그라데이션, 툴팁 |
-| 자주 가는 곳 | `kWalks` place 빈도 상위 3 |
-| 데이터 | **더미** `kWeekKm`(7일)·`kWalks` |
+| 요약 | 총 거리·횟수·평균(`WalkStats` 의 이번 주 값) |
+| 차트 | `fl_chart` `BarChart` 주간(월~일) 막대. 오늘(**실제 요일**) 강조 그라데이션, 툴팁 |
+| 자주 가는 곳 | **항상 빈 상태** — `Walk` 에 장소 축이 없다(#145) |
+| 데이터 | `GET /api/walks/stats/weekly` + 전송 대기 초안. 주 경계는 **KST** 이고 서버가 자른다 |
 
 ---
 
