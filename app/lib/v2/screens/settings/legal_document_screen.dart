@@ -27,6 +27,12 @@ import '../../theme/app_tokens.dart';
 enum LegalDocument {
   terms('이용약관', 'assets/terms/terms_ko.md'),
   privacy('개인정보처리방침', 'assets/terms/privacy_ko.md'),
+
+  /// 위치정보법 제18조가 요구하는 문서. **이용약관과 따로 있어야 한다** — 법이
+  /// "위치기반서비스 이용약관에 명시하고 동의를 받으라" 고 정하고 있어서, 일반
+  /// 이용약관 안에 한 조로 넣으면 그 요건을 채웠다고 말하기 어렵다.
+  location('위치기반서비스 이용약관', 'assets/terms/location_ko.md'),
+
   marketing('마케팅 정보 수신 동의', 'assets/terms/marketing_ko.md');
 
   /// 화면 제목이자 `pubspec.yaml` 에 등재된 asset 경로.

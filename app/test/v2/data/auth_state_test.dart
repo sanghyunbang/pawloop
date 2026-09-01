@@ -15,7 +15,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
+import 'package:heat_trip_flutter/v2/data/consent_gate.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
@@ -293,6 +296,20 @@ void main() {
       expect(seen, isEmpty, reason: '탈퇴 뒤에는 부를 세션이 없다');
       expect(store.access, isNull);
       expect(store.refresh, isNull);
+    });
+
+    test('이 계정의 약관 동의도 지운다 — 같은 id 로 다시 온 사람에게 남으면 안 된다', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      _install((req) async => http.Response('', 204));
+      AuthState.signInForTest(const AuthUser(id: 11, nickname: '탈퇴자'));
+      await const ConsentGate().markAgreed(11, marketing: true);
+      expect(await const ConsentGate().hasAgreed(11), isTrue);
+
+      await AuthState.clearLocalSession();
+
+      expect(await const ConsentGate().hasAgreed(11), isFalse,
+          reason: '남으면 그 사람은 약관을 본 적이 없는데 동의한 것이 된다');
+      expect(await const ConsentGate().marketingOptIn(11), isFalse);
     });
 
     test('상태도 함께 내린다 — 이게 없으면 로그인 화면이 홈으로 되튕긴다', () async {
