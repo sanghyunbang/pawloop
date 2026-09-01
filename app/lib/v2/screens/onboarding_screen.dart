@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/pet_registration_sheet.dart';
 
 import '../data/auth_state.dart';
 import '../theme/app_tokens.dart';
@@ -64,16 +65,28 @@ class OnboardingScreen extends StatelessWidget {
                   ),
                 ),
                 const Spacer(flex: 4),
-                // TODO(#12 후속): 반려동물 프로필 등록 폼을 여기에 붙인다.
+                // 등록을 **강제하지 않는다** — 로그인 화면에 "그냥 둘러보기" 가 있는데
+                // 여기서 필수로 만들면 구경만 하려는 사람도 폼을 채워야 한다.
+                // 건너뛴 사람은 산책을 저장하려는 순간 잡는다(create_screen) — 그때가
+                // 사용자가 "왜 필요한지" 아는 유일한 시점이다 (#159).
                 FilledButton(
-                  onPressed: AuthState.completeOnboarding,
+                  onPressed: () async {
+                    final registered = await showPetRegistrationSheet(
+                      context,
+                      reason: '등록하면 산책 기록이 서버에 남아요',
+                    );
+                    // 등록했든 닫았든 온보딩은 끝난다. 닫았다면 나중에 다시 권한다.
+                    if (registered != null || context.mounted) {
+                      AuthState.completeOnboarding();
+                    }
+                  },
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(54),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text('시작하기'),
+                  child: const Text('우리 아이 등록하기'),
                 ),
                 const SizedBox(height: 8),
                 TextButton(

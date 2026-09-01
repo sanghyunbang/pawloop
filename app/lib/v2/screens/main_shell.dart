@@ -6,6 +6,7 @@ import 'explore_screen.dart';
 import 'feed_screen.dart';
 import 'chat_list_screen.dart';
 import 'start_walk.dart';
+import '../widgets/pet_loader.dart';
 
 /// 루트 탭 상태. 푸시된 화면(result 등)에서도 탭을 바꿀 수 있게 전역 보관.
 class RootTab {
@@ -26,7 +27,10 @@ class MainShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // 반려동물 목록을 서버와 맞추는 책임은 여기 하나다 (#159). 화면마다 initState 에서
+    // 부르면 한 곳을 빠뜨리는 날이 오고, 그 화면만 영원히 빈 목록을 본다.
+    return PetLoader(
+      child: Scaffold(
       backgroundColor: T.lilacTop,
       body: ValueListenableBuilder<int>(
         valueListenable: RootTab.index,
@@ -54,6 +58,7 @@ class MainShell extends StatelessWidget {
             const Align(alignment: Alignment.bottomCenter, child: _ShellNav()),
           ]);
         },
+      ),
       ),
     );
   }

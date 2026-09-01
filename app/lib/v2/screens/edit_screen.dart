@@ -7,7 +7,14 @@ import '../widgets/aurora.dart';
 
 /// 프로필 수정 (edit). 우리 아이(강아지) 프로필 편집.
 class EditScreen extends StatefulWidget {
-  const EditScreen({super.key});
+  /// 편집할 아이. **필수다** — 한 마리도 없으면 이 화면에 올 수 없다.
+  ///
+  /// 예전에는 전역 `kMyDog` 를 직접 읽었는데, 그 값이 `null` 일 수 있게 되면서(#159)
+  /// 이 화면이 "없는 아이" 를 편집하려 들 수 있었다. 인자로 받으면 그 경우가 애초에
+  /// 생기지 않는다.
+  final DogProfile pet;
+
+  const EditScreen({super.key, required this.pet});
   @override
   State<EditScreen> createState() => _EditScreenState();
 }
@@ -30,7 +37,7 @@ class _EditScreenState extends State<EditScreen> {
   @override
   void initState() {
     super.initState();
-    final dog = kMyDog.value;
+    final dog = widget.pet;
     _name = TextEditingController(text: dog.name);
     _breed = TextEditingController(text: dog.breed);
     _age = TextEditingController(text: dog.ageMonths.toString());
@@ -47,27 +54,33 @@ class _EditScreenState extends State<EditScreen> {
     super.dispose();
   }
 
+  /// 편집 저장.
+  ///
+  /// **이 화면의 편집은 아직 서버에 가지 않는다.** 계약에 `PATCH /api/dogs/{dogId}` 가
+  /// 선언돼 있지만 서버에 구현이 없고(#145 가 미뤘다), 계약이 생성용 `DogInput` 을
+  /// 그대로 재사용해서 **계약대로면 부분 수정이 불가능**하다 — `DogPatch` 분리는
+  /// 이슈 #24 가 소유한다.
+  ///
+  /// 그래서 화면이 "저장됐어요" 라고만 말하면 거짓말이 된다. 앱 안에서만 바뀐다는 것을
+  /// 문구로 밝힌다(#159).
   void _save() {
     final months = int.tryParse(_age.text.trim());
+    final base = widget.pet;
     // 선택된 아이(kMyPets[kSelectedPetIdx])를 갱신 — 여러 마리 지원.
     updateSelectedPet(
-      kMyDog.value.copyWith(
-        name: _name.text.trim().isEmpty ? kMyDog.value.name : _name.text.trim(),
-        breed: _breed.text.trim().isEmpty
-            ? kMyDog.value.breed
-            : _breed.text.trim(),
+      base.copyWith(
+        name: _name.text.trim().isEmpty ? base.name : _name.text.trim(),
+        breed: _breed.text.trim().isEmpty ? base.breed : _breed.text.trim(),
         species: _species,
         size: _size,
-        ageMonths: (months == null || months < 0)
-            ? kMyDog.value.ageMonths
-            : months,
+        ageMonths: (months == null || months < 0) ? base.ageMonths : months,
         neutered: _neutered,
       ),
     );
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('우리 아이 프로필이 저장됐어요'),
-        duration: Duration(milliseconds: 1400),
+        content: Text('이 기기에만 반영했어요 · 서버 저장은 준비 중이에요'),
+        duration: Duration(milliseconds: 2000),
       ),
     );
     Navigator.of(context).maybePop();
@@ -208,10 +221,10 @@ class _EditScreenState extends State<EditScreen> {
                 ),
               ],
             ),
-            child: ValueListenableBuilder<DogProfile>(
+            child: ValueListenableBuilder<DogProfile?>(
               valueListenable: kMyDog,
               builder: (_, dog, __) => Image.asset(
-                dog.avatarAsset,
+                (dog ?? widget.pet).avatarAsset,
                 width: 60,
                 height: 60,
                 gaplessPlayback: true,

@@ -41,7 +41,14 @@ class WalkSyncResult {
   /// 못 보냈으면 그 이유. 화면이 그대로 보여 준다.
   final String? reason;
 
-  const WalkSyncResult(this.outcome, {this.walk, this.reason});
+  /// **반려동물이 없어서** 못 보냈나.
+  ///
+  /// 이걸 문구로 판별하게 두면(reason 문자열 비교) 문구를 고치는 날 조용히 깨진다.
+  /// 화면은 이 값으로 등록 시트를 띄울지 정한다 (#159).
+  final bool needsPet;
+
+  const WalkSyncResult(this.outcome,
+      {this.walk, this.reason, this.needsPet = false});
 }
 
 /// 초안 큐를 서버로 밀어 올린다.
@@ -72,9 +79,11 @@ class WalkSync {
     } on WalkFailure catch (e) {
       return WalkSyncResult(WalkSyncOutcome.queued, reason: e.message);
     } on StateError {
+      // 서버에 한 마리도 없다. 화면이 등록 시트를 띄울 수 있게 표시해 준다.
       return const WalkSyncResult(
         WalkSyncOutcome.queued,
         reason: '반려동물을 등록하면 이 산책을 올릴게요',
+        needsPet: true,
       );
     }
 
