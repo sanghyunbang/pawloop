@@ -6,6 +6,7 @@ import '../data/walk_outbox.dart';
 import '../data/walk_repository.dart';
 import '../widgets/walk_feed_builder.dart';
 import 'create_screen.dart';
+import 'walk_detail_screen.dart';
 
 /// 내 기록 (myRecords) — 산책 기록. 전체 기간 요약 + 산책 목록.
 class MyRecordsScreen extends StatelessWidget {
@@ -224,10 +225,25 @@ class MyRecordsScreen extends StatelessWidget {
     final card = _cardBody(w);
     if (!w.deletable) return card;
     return GestureDetector(
+      // 서버에 있는 것만 회고를 쓸 수 있다. 거절된 것은 서버에 행이 없어 고칠 대상이
+      // 없고, 전송 대기 중인 것은 아직 id 가 없다.
+      onTap: w.walkId == null ? null : () => _openDetail(context, w),
       onLongPress: () => _confirmDelete(context, w),
       behavior: HitTestBehavior.opaque,
       child: card,
     );
+  }
+
+  void _openDetail(BuildContext context, _RecordView w) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => WalkDetailScreen(
+        walkId: w.walkId!,
+        startedAt: w.startedAt,
+        km: w.km,
+        minutes: w.minutes,
+        initialMemo: w.memo,
+      ),
+    ));
   }
 
   /// 지우기 전에 반드시 묻는다. 하드 삭제라 되돌릴 수 없다.
@@ -373,12 +389,14 @@ class MyRecordsScreen extends StatelessWidget {
                 style: const TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFFB5453F))),
           ),
         ],
-        // 지울 수 있다는 것을 화면이 말해야 한다 — 롱프레스는 눌러 보기 전에는
+        // 무엇을 할 수 있는지 화면이 말해야 한다 — 탭도 롱프레스도 눌러 보기 전에는
         // 있는지조차 알 수 없다.
         if (w.deletable) ...[
           const SizedBox(height: 9),
-          const Text('길게 눌러 지우기',
-              style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+          Text(
+            w.walkId == null ? '길게 눌러 지우기' : '눌러서 회고 쓰기 · 길게 눌러 지우기',
+            style: const TextStyle(fontSize: 11.5, color: T.textMuted),
+          ),
         ],
       ]),
     );
@@ -441,8 +459,12 @@ class _RecordView {
   /// 서버 산책의 id. 서버에 있는 것만 값이 있다.
   final int? walkId;
 
-  /// 기기 큐 안의 식별자. 초안(대기·거절)만 값이 있다.
+  /// 기기 큐 안의 식별자. 서버 산책도 들고 있다 — 계약이 required 이고(`openapi.yaml`),
+  /// 나중에 경로를 기기에만 두게 되면 이 열쇠로 서버 기록과 짝지어야 한다.
   final String? clientWalkId;
+
+  /// 시작 시각. 상세 화면이 첫 프레임을 이 값으로 그린다.
+  final DateTime startedAt;
 
   /// 지울 수 있는가.
   ///
@@ -453,6 +475,7 @@ class _RecordView {
   const _RecordView({
     required this.title,
     required this.date,
+    required this.startedAt,
     required this.km,
     required this.minutes,
     required this.memo,
@@ -469,16 +492,19 @@ class _RecordView {
   factory _RecordView.ofWalk(ServerWalk w) => _RecordView(
         title: MyRecordsScreen._titleOf(w.startedAt),
         date: MyRecordsScreen._dateOf(w.startedAt),
+        startedAt: w.startedAt,
         km: w.km,
         minutes: w.minutes,
         memo: w.memo ?? '',
         pending: false,
         walkId: w.id,
+        clientWalkId: w.clientWalkId,
       );
 
   factory _RecordView.ofDraft(WalkDraft d) => _RecordView(
         title: MyRecordsScreen._titleOf(d.startedAt),
         date: MyRecordsScreen._dateOf(d.startedAt),
+        startedAt: d.startedAt,
         km: d.km,
         minutes: d.minutes,
         memo: d.lastError ?? d.memo ?? '',
@@ -492,6 +518,7 @@ class _RecordView {
   factory _RecordView.ofRejected(WalkDraft d) => _RecordView(
         title: MyRecordsScreen._titleOf(d.startedAt),
         date: MyRecordsScreen._dateOf(d.startedAt),
+        startedAt: d.startedAt,
         km: d.km,
         minutes: d.minutes,
         memo: d.memo ?? '',

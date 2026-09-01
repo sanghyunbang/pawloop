@@ -196,6 +196,25 @@ public class WalkService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
+    /**
+     * 회고 글 교체 — 이슈 #187.
+     *
+     * <p><b>없는 산책과 남의 산책이 똑같이 404 다.</b> {@code detail}·{@code delete} 와 같은
+     * 규칙이다 — 403 을 주면 "그 id 는 존재한다" 를 알려 주는 셈이라 id 를 훑어 남의 기록
+     * 수를 셀 수 있다.
+     *
+     * <p>바뀐 뒤의 산책을 그대로 돌려준다. 앱이 저장 후 다시 조회하지 않아도 화면을 갱신할
+     * 수 있어야 하고, 서버가 눕힌 값(빈 문자열 → {@code null})을 앱이 짐작하지 않게 한다.
+     */
+    @Transactional
+    public WalkResponse rewriteMemo(long userId, long walkId, String memo) {
+        Walk walk = walks.findMineById(walkId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        walk.rewriteMemo(memo);
+        // 경로를 실어 돌려준다 — 이 응답을 받는 곳이 상세 화면이고, 거기는 경로를 그린다.
+        return WalkResponse.withPath(walk);
+    }
+
     /** 삭제. 남의 산책은 0행이 지워지고 그것이 404 다. */
     @Transactional
     public void delete(long userId, long walkId) {

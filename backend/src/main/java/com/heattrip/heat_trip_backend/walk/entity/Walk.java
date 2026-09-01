@@ -168,6 +168,23 @@ public class Walk {
         }
     }
 
+    /**
+     * 회고 글을 다시 쓴다 — 이슈 #187.
+     *
+     * <p>산책이 끝난 직후에 쓰는 글과 나중에 돌아보며 쓰는 글은 다르다. 예전에는 저장
+     * 시점의 한 번이 전부였고, 잘못 쓰면 <b>지우고 다시 만드는 수밖에</b> 없었다.
+     *
+     * <p><b>빈 문자열은 {@code null} 로 눕힌다.</b> 저장 경로({@code WalkRequest})가 안 보낸
+     * 메모를 {@code null} 로 두므로, 여기서 {@code ""} 를 그대로 넣으면 "안 썼다" 가 두
+     * 모양이 된다. 그러면 목록 화면이 둘 중 하나만 처리하다 한쪽을 빠뜨린다.
+     *
+     * <p>거리·시간은 여기서 안 바꾼다. 실측값이거나 사용자가 저장 시점에 정한 값이고,
+     * 여기서 열면 "회고를 쓴다" 가 "기록을 고친다" 로 번진다.
+     */
+    public void rewriteMemo(String newMemo) {
+        this.memo = (newMemo == null || newMemo.isBlank()) ? null : newMemo;
+    }
+
     /** 저장된 UTC 벽시계를 다시 시점으로 세운다. 응답은 이 값으로 나간다. */
     public Instant startedAtInstant() {
         return startedAt.toInstant(ZoneOffset.UTC);

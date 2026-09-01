@@ -191,6 +191,11 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("DELETE".equals(method) && path.matches("^/api/walks/\\d+$")) {
             return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
         }
+        // 회고 글 교체(#187)도 같은 버킷이다. 글을 고치는 일이 산책을 저장하는 일보다
+        // 잦을 이유가 없고, 한도를 따로 움직일 근거가 아직 없다.
+        if ("PUT".equals(method) && path.matches("^/api/walks/\\d+/memo$")) {
+            return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
+        }
         if (path.startsWith("/api/curation/")) {
             return new Rule("curation", rateLimitProperties.getCurationMaxRequests());
         }

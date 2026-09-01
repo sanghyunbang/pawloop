@@ -80,6 +80,7 @@ Map<String, Object?> walkJson({
   int id = 7,
   int dogId = 3,
   Object? path,
+  String? memo = '한강 한 바퀴',
 }) =>
     {
       'id': id,
@@ -90,7 +91,7 @@ Map<String, Object?> walkJson({
       'distanceM': 2400,
       'durationS': 1800,
       'path': path,
-      'memo': '한강 한 바퀴',
+      'memo': memo,
       'weather': '맑음 24°C',
     };
 
@@ -326,6 +327,39 @@ void main() {
 
       expect(r.seen.single.method, 'DELETE');
       expect(r.seen.single.url.path, '/api/walks/7');
+    });
+  });
+
+  group('회고 글 교체 (#187)', () {
+    test('PUT /api/walks/{id}/memo 로 memo 하나만 보낸다', () async {
+      final r = repositoryThatAnswers((_) => _json(walkJson(memo: '고친 글')));
+
+      final walk = await r.repo.rewriteMemo(7, '고친 글');
+
+      expect(r.seen.single.method, 'PUT');
+      expect(r.seen.single.url.path, '/api/walks/7/memo');
+      expect(jsonDecode(r.seen.single.body), {'memo': '고친 글'},
+          reason: '거리·시간을 함께 보내면 회고가 기록 수정으로 번진다');
+      expect(walk.memo, '고친 글');
+    });
+
+    test('빈 글도 그대로 보낸다 — 지우는 것은 정상 요청이다', () async {
+      final r = repositoryThatAnswers((_) => _json(walkJson(memo: null)));
+
+      final walk = await r.repo.rewriteMemo(7, '');
+
+      expect(jsonDecode(r.seen.single.body), {'memo': ''},
+          reason: '앱이 미리 걸러 내면 서버에 도달하지 못해 영영 못 지운다');
+      expect(walk.memo, isNull, reason: '서버가 눕힌 값을 그대로 받는다');
+    });
+
+    test('404 는 다시 보내도 소용없는 실패다', () async {
+      final r = repositoryThatAnswers((_) => _json({'error': {}}, status: 404));
+
+      await expectLater(
+        r.repo.rewriteMemo(7, '글'),
+        throwsA(isA<WalkFailure>().having((e) => e.retryable, 'retryable', isFalse)),
+      );
     });
   });
 
