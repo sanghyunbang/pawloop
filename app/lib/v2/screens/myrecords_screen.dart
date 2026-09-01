@@ -19,10 +19,14 @@ class MyRecordsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => WalkFeedBuilder(
-        builder: (context, data) => _build(context, data),
+        builder: (context, data, loadMore) => _build(context, data, loadMore),
       );
 
-  Widget _build(BuildContext context, WalkFeedData data) {
+  Widget _build(
+    BuildContext context,
+    WalkFeedData data,
+    Future<void> Function()? loadMore,
+  ) {
     // **전체 기간이다.** 예전 주석은 "이번 달 요약 집계" 라고 적혀 있었지만 코드는
     // `kWalks` 전체를 접고 있었다 — 라벨을 코드가 실제로 하는 일에 맞춘다.
     final totalKm = data.stats.allTimeKm;
@@ -64,6 +68,17 @@ class MyRecordsScreen extends StatelessWidget {
                   for (final w in data.walks) ...[
                     _walkCard(_RecordView.ofWalk(w)),
                     const SizedBox(height: 12),
+                  ],
+                  // 다음 장이 있는데 안 그리면, 요약은 "40회" 인데 목록은 30개가 된다.
+                  // 사용자는 10건이 사라졌다고 읽는다 (#161).
+                  if (loadMore != null) ...[
+                    Center(
+                      child: TextButton(
+                        onPressed: loadMore,
+                        child: const Text('더 보기'),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                   ],
                   if (!data.hasAnything) ...[
                     Center(

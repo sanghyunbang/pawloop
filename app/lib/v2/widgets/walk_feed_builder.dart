@@ -19,7 +19,13 @@ import '../data/walk_feed.dart';
 /// 이 자료가 화면의 일부(요약 카드·막대)라서, 그 자리만 도는 스피너가 화면을 더
 /// 어지럽히기 때문이다. 값이 오면 조용히 바뀐다.
 class WalkFeedBuilder extends StatefulWidget {
-  final Widget Function(BuildContext context, WalkFeedData data) builder;
+  /// [loadMore] 는 다음 장이 **있을 때만** 준다. `null` 이면 끝이다 —
+  /// 화면은 그때 '더 보기' 를 그리지 않는다.
+  final Widget Function(
+    BuildContext context,
+    WalkFeedData data,
+    Future<void> Function()? loadMore,
+  ) builder;
 
   /// 특정 반려동물만. 생략하면 내 전체를 섞는다.
   final int? dogId;
@@ -50,6 +56,9 @@ class _WalkFeedBuilderState extends State<WalkFeedBuilder> {
     super.dispose();
   }
 
+  /// 다음 장을 받는 중인가. 두 번 눌러도 한 번만 나간다.
+  bool _loadingMore = false;
+
   Future<void> _reload() async {
     final mine = ++_generation;
     final data = await WalkFeed().load(dogId: widget.dogId);
@@ -57,6 +66,28 @@ class _WalkFeedBuilderState extends State<WalkFeedBuilder> {
     setState(() => _data = data);
   }
 
+  /// 다음 장을 이어 붙인다.
+  ///
+  /// 실패하면 **아무것도 안 바꾼다** — 이미 그린 목록을 버리면 사용자는 기록이
+  /// 사라졌다고 읽는다.
+  Future<void> _loadMore() async {
+    final cursor = _data.nextCursor;
+    if (cursor == null || _loadingMore) return;
+    final mine = _generation;
+    setState(() => _loadingMore = true);
+
+    final page = await WalkFeed().more(cursor, dogId: widget.dogId);
+    if (!mounted || mine != _generation) return;
+    setState(() {
+      _loadingMore = false;
+      if (page != null) _data = _data.appending(page);
+    });
+  }
+
   @override
-  Widget build(BuildContext context) => widget.builder(context, _data);
+  Widget build(BuildContext context) => widget.builder(
+        context,
+        _data,
+        _data.hasMore && _data.nextCursor != null ? _loadMore : null,
+      );
 }

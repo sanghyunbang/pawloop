@@ -279,7 +279,7 @@ class MeScreen extends StatelessWidget {
 
   // ───────────── 산책 활동 요약 ─────────────
   Widget _statsCard(BuildContext context) => WalkFeedBuilder(
-        builder: (context, data) => _statsCardOf(context, data),
+        builder: (context, data, _) => _statsCardOf(context, data),
       );
 
   /// 총 산책 · 총 거리 · 이번주. **셋 다 한 번의 호출로 온다** — 계약의 `WalkStats` 가
@@ -311,6 +311,12 @@ class MeScreen extends StatelessWidget {
             div(),
             cell('${weekKm.toStringAsFixed(1)}km', '이번주'),
           ]),
+          // 서버를 못 불렀는데 0 을 그냥 보여 주면 "한 번도 안 걸었다" 로 읽힌다 (#161).
+          if (data.offline && !data.hasAnything) ...[
+            const SizedBox(height: 10),
+            const Text('기록을 불러오지 못했어요',
+                style: TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+          ],
           const SizedBox(height: 12),
           Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: const [
             Icon(Icons.article_outlined, size: 14, color: Color(0xFFFF8F63)),
