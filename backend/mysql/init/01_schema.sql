@@ -582,6 +582,25 @@ CREATE TABLE `users` (
   UNIQUE KEY `UK6dotkott2kjsp8vw4d0m25fb7` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `walk` (
+  `distance_m` int NOT NULL,
+  `duration_s` int NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `dog_id` bigint NOT NULL,
+  `ended_at` datetime(6) DEFAULT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `started_at` datetime(6) NOT NULL,
+  `weather` varchar(30) DEFAULT NULL,
+  `client_walk_id` varchar(64) NOT NULL,
+  `memo` varchar(500) DEFAULT NULL,
+  `path` linestring /*!80003 SRID 4326 */ DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_walk_client` (`dog_id`,`client_walk_id`),
+  KEY `idx_walk_dog` (`dog_id`,`started_at`),
+  KEY `idx_walk_dog_created` (`dog_id`,`created_at`,`id`),
+  CONSTRAINT `fk_walk_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `walk_note` (
   `group_id` bigint NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
