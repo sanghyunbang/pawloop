@@ -1,4 +1,19 @@
-// lib/features/profile/presentation/account_delete_screen.dart
+// lib/v2/screens/settings/account_delete_screen.dart
+//
+// 회원 탈퇴 — 이슈 #165.
+//
+// ## 이 화면은 있었지만 앱에서 닿을 수 없었다
+//
+// `features/profile/.../menu/` 에 있었고, 유일한 호스트인 `RightSideMenuPanel` 을 여는
+// `ProfileScreen` 이 **주석 처리된 줄에만** 있었다(`main_nav_layout.dart:63`). 즉
+// **앱 안에서 계정을 지울 방법이 없었다.**
+//
+// Apple App Store Review Guideline 5.1.1(v)는 계정 생성이 있는 앱에 **인앱 삭제 경로**를
+// 요구한다. 이 앱은 소셜·이메일 두 가지로 계정을 만든다.
+//
+// 그래서 v2 설정(`settings_screen.dart`)으로 옮겼다. 파일 위치만 바뀌었고 삭제 흐름은
+// 그대로다 — `context.goNamed` 가 동작하는 것은 앱 루트가 여전히 `MaterialApp.router` 이기
+// 때문이다(`main.dart:142`).
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
