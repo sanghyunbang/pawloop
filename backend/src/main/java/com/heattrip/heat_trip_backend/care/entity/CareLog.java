@@ -95,7 +95,8 @@ public class CareLog {
      * 대상 강아지. <b>오늘은 항상 {@code null} 이고 FK 도 없다</b> — 이유는 클래스 javadoc.
      *
      * <p>{@code CareService.record} 가 요청 본문의 {@code dogId} 를 <b>읽지 않는다.</b>
-     * 확인할 표가 없는 외래 id 를 그대로 저장하면 아무도 해석할 수 없는 숫자가 남는다.
+     * 이 경로가 <b>그룹 단위 기록</b>이라 대상 개체를 아직 받지 않기 때문이다 — 표가 없어서가
+     * 아니다({@code dog} 는 #145 가 만들었다). FK 를 안 거는 진짜 이유는 위 클래스 javadoc 에 있다.
      */
     @Column(name = "dog_id")
     private Long dogId;

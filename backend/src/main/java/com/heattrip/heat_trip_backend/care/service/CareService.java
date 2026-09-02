@@ -132,7 +132,9 @@ public class CareService {
         String memo = trimmedToNull(request.memo(), "메모");
 
         CareLog saved = careLogs.saveAndFlush(CareLog.builder()
-                // dogId 는 요청에서 읽지 않는다 — dog 표가 없어 검증할 수 없다(CareLog javadoc).
+                // dogId 는 요청에서 읽지 않는다 — 이 경로는 그룹 단위 기록이라 대상 개체를
+                // 아직 받지 않는다(CareLog javadoc). dog 표는 #145 가 만들었으므로
+                // "표가 없어서" 가 아니다.
                 .group(group)
                 .type(request.type())
                 .doneBy(actor)

@@ -99,6 +99,11 @@ scan() {
 
 scan "앱 문서가 .env 를 현재형으로 말한다" "docs" '`\.env`|flutter_dotenv'
 
+# 루트 README 도 본다. 저장소의 첫인상 문서인데 검사 밖에 있었고, 그 사이
+# 넉 달 전을 말하는 서술이 15곳까지 쌓였다(2026-09-02). grep -r 은 파일 하나에도
+# 그대로 동작한다.
+scan "README 가 .env 를 현재형으로 말한다" "README.md" '`\.env`|flutter_dotenv'
+
 # 코드에도 남아 있으면 안 된다 — #29 가 의존성을 지웠으므로 import 는 컴파일도 안 되지만,
 # 주석·문자열로 남아 사용자에게 보이는 안내가 되는 경우가 있었다(emotion_map_screen.dart).
 scan "앱 코드가 사용자에게 .env 를 안내한다" "app/lib" 'flutter_dotenv|\.env 확인|\.env를 확인|\.env 를 확인'
