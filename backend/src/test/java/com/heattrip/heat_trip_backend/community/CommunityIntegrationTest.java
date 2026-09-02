@@ -19,10 +19,20 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -228,6 +238,112 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
                         뒤에는 DB 의 chk_post_board 가 있다(#167) — 그건 서비스를 안 지나는 길을 \
                         막을 뿐 메시지를 만들어 주지는 않는다.""")
                 .contains("walk_review");
+    }
+
+    @Test
+    @DisplayName("긴 닉네임을 가진 사람도 글과 댓글을 쓸 수 있다 — handle 이 users.nickname 보다 좁으면 안 된다")
+    void aLongNicknameDoesNotWedgeWriting() throws Exception {
+        // users.nickname 은 VARCHAR(255) 인데 post.handle 을 50 으로 세웠던 적이 있다(#169).
+        // 그러면 51자 닉네임을 가진 사람의 **모든** 글·댓글 작성이 영구히 500 이 된다 —
+        // MySQL 8 의 STRICT_TRANS_TABLES 는 자르지 않고 ERROR 1406 으로 거절한다.
+        // 읽기와 반응은 되는데 쓰기만 죽어서, 사용자도 로그도 이유를 못 말한다.
+        Account me = account("가".repeat(200));
+
+        long postId = newPost(me);
+
+        mockMvc.perform(post("/api/community/posts/" + postId + "/comments")
+                        .header("Authorization", "Bearer " + me.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"body":"긴 닉네임으로 다는 댓글"}
+                                """))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("createdAt 이 오프셋을 달고 나간다 — 계약이 format: date-time 이라고 선언했다")
+    void createdAtCarriesAnOffset() throws Exception {
+        Account me = account("시각");
+
+        JsonNode created = body(createPost(me, """
+                {"board":"free","title":"제목","body":"본문"}
+                """).andExpect(status().isCreated()));
+        String createdAt = created.path("createdAt").asText();
+
+        assertThat(createdAt)
+                .as("""
+                        LocalDateTime 은 Jackson 이 오프셋 없이 직렬화한다. 계약은 \
+                        format: date-time 이라고 선언해 뒀는데 그건 오프셋이 있어야 성립하는 \
+                        형식이고, 앱의 DateTime.tryParse 는 오프셋 없는 문자열을 **기기 지역 \
+                        시각**으로 읽는다 — 서버와 기기의 시간대가 다르면 그만큼 어긋난 시각이 \
+                        그려진다. WalkResponse 가 같은 이유로 Instant 다.""")
+                .endsWith("Z");
+
+        assertThat(Instant.parse(createdAt))
+                .as("값 자체도 지금이어야 한다 — 시간대를 안 붙였을 뿐 아니라 9시간 어긋나 있으면 안 된다")
+                .isCloseTo(Instant.now(), within(2, ChronoUnit.MINUTES));
+    }
+
+    @Test
+    @DisplayName("같은 반응을 동시에 두 번 눌러도 200 이다 — 예외를 삼키는 것으로는 멱등이 안 된다")
+    void concurrentReactionsStayIdempotent() throws Exception {
+        Account me = account("동시반응");
+        long postId = newPost(me);
+
+        // 선조회를 지나 둘 다 INSERT 를 시도하게 만든다. 예전 구현은 여기서 한 쪽이
+        // DataIntegrityViolationException 을 맞고, 그것을 잡아도 트랜잭션이 이미
+        // rollback-only 라 500 이 나갔다.
+        int threads = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<Integer>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            futures.add(pool.submit(() -> {
+                start.await();
+                return mockMvc.perform(post("/api/community/posts/" + postId + "/reactions/help")
+                                .header("Authorization", "Bearer " + me.token()))
+                        .andReturn().getResponse().getStatus();
+            }));
+        }
+        start.countDown();
+
+        List<Integer> statuses = new ArrayList<>();
+        for (Future<Integer> f : futures) {
+            statuses.add(f.get(30, TimeUnit.SECONDS));
+        }
+        pool.shutdown();
+
+        assertThat(statuses)
+                .as("한 번이라도 500 이면 '이미 눌렀어도 200' 이라는 약속이 동시 요청에서 거짓이다")
+                .containsOnly(200);
+
+        JsonNode detail = body(mockMvc.perform(
+                get("/api/community/posts/" + postId)
+                        .header("Authorization", "Bearer " + me.token())));
+        assertThat(detail.path("reactions").path("help").asInt())
+                .as("멱등이면 여덟 번 눌러도 하나다")
+                .isEqualTo(1);
+
+        // 취소도 같다 — 조회 후 삭제였을 때는 진 쪽이 StaleStateException 으로 500 이었다.
+        ExecutorService pool2 = Executors.newFixedThreadPool(threads);
+        CountDownLatch start2 = new CountDownLatch(1);
+        List<Future<Integer>> off = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            off.add(pool2.submit(() -> {
+                start2.await();
+                return mockMvc.perform(delete("/api/community/posts/" + postId + "/reactions/help")
+                                .header("Authorization", "Bearer " + me.token()))
+                        .andReturn().getResponse().getStatus();
+            }));
+        }
+        start2.countDown();
+        List<Integer> offStatuses = new ArrayList<>();
+        for (Future<Integer> f : off) {
+            offStatuses.add(f.get(30, TimeUnit.SECONDS));
+        }
+        pool2.shutdown();
+
+        assertThat(offStatuses).containsOnly(200);
     }
 
     @Test

@@ -925,6 +925,7 @@ paths:
                       items:
                         type: array
                         items: { $ref: '#/components/schemas/Post' }
+        '400': { $ref: '#/components/responses/ValidationError' }
     post:
       tags: [Community]
       summary: 게시글 작성
@@ -939,6 +940,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Post' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /api/community/posts/{postId}:
@@ -993,6 +995,7 @@ paths:
                       items:
                         type: array
                         items: { $ref: '#/components/schemas/Comment' }
+        '404': { $ref: '#/components/responses/NotFound' }
     post:
       tags: [Community]
       summary: 댓글 작성
@@ -1017,7 +1020,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Comment' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /api/community/posts/{postId}/reactions/{type}:
     parameters:

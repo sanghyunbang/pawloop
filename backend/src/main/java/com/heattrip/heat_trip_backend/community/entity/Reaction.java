@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.community.entity;
 
+import com.heattrip.heat_trip_backend.community.CommunityTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
 import jakarta.persistence.Column;
@@ -16,6 +17,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.Check;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
@@ -76,6 +78,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder
+@Check(name = "chk_reaction_type", constraints = "type in ('help','cute','empathy')")
 public class Reaction {
 
     @Id
@@ -112,7 +115,7 @@ public class Reaction {
     @PrePersist
     void onCreate() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = CommunityTime.nowUtc();
         }
     }
 }

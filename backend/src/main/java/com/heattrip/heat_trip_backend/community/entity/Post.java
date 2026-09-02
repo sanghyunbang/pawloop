@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.community.entity;
 
+import com.heattrip.heat_trip_backend.community.CommunityTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
 import jakarta.persistence.Column;
@@ -16,6 +17,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.Check;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
@@ -25,6 +27,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 /**
@@ -93,6 +96,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder
+@Check(name = "chk_post_board", constraints = "board in ('walk_review','pet_place','health','free','brag')")
 public class Post {
 
     @Id
@@ -125,10 +129,33 @@ public class Post {
     @Column(name = "loc", length = 100)
     private String loc;
 
-    /** 작성 시점 닉네임 스냅샷. <b>응답에는 안 싣는다</b> — 클래스 javadoc 참조. */
-    @Column(name = "handle", length = 50)
+    /**
+     * 작성 시점 닉네임 스냅샷. <b>응답에는 안 싣는다</b> — 클래스 javadoc 참조.
+     *
+     * <p><b>폭은 {@code users.nickname} 과 같은 255 다.</b> #169 는 50 으로 좁혔는데, 그러면
+     * 51자 닉네임을 가진 사람의 <b>모든 글·댓글 작성이 영구히 500</b> 이 된다 — MySQL 8 의
+     * {@code STRICT_TRANS_TABLES} 는 자르지 않고 {@code ERROR 1406} 으로 거절하고, 그 사람은
+     * 읽기와 반응은 되는데 쓰기만 죽은 상태에 갇힌다. 실제 DB 에 60자를 넣어 재현했다.
+     *
+     * <p>닉네임 쪽에 상한이 없다는 것이 진짜 원인이다 — {@code UpdateProfileRequest} 에
+     * {@code @Size} 가 없고 컨트롤러에 {@code @Valid} 도 없다. 그건 {@code user} 도메인의 일이라
+     * 별도 이슈로 냈다. 여기서는 <b>참조하는 쪽이 원본보다 좁지 않게</b> 맞춘다 —
+     * {@code chat_message.sender_name} 이 같은 이유로 255 이고 그 자리에 "users.nickname 과
+     * 같은 폭이다" 라고 적혀 있다.
+     */
+    @Column(name = "handle", length = 255)
     private String handle;
 
+    /**
+     * <b>{@code LocalDateTime} 인데 담긴 값이 UTC 다.</b> {@code Walk} 이 #40 에서 정한 것과
+     * 같은 규약이고, 그 클래스 javadoc 이 이유를 적어 뒀다 — {@code LocalDateTime.now()} 는
+     * <b>JVM 기본 시간대</b>를 읽어서 개발 기계(KST)와 CI 컨테이너(UTC)가 다른 값을 넣는다.
+     *
+     * <p>#169 는 그 규약을 안 따랐다. 이 컬럼이 <b>커서의 첫 축</b>이라 더 나빴다 — 서버
+     * 시간대가 바뀌면 커서가 건너뛰거나 되돌아간다. 그리고 응답의 {@code createdAt} 이
+     * 오프셋 없는 문자열로 나가서, 앱이 그것을 자기 지역 시각으로 읽어 <b>9시간 어긋난
+     * 시각</b>을 그렸다(계약은 {@code format: date-time} 이라고 선언해 뒀는데도).
+     */
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -139,7 +166,12 @@ public class Post {
     @PrePersist
     void onCreate() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = CommunityTime.nowUtc();
         }
+    }
+
+    /** 저장된 값을 다시 시각으로 세운다. 응답이 오프셋을 갖게 하는 자리다. */
+    public Instant createdAtInstant() {
+        return CommunityTime.toInstant(createdAt);
     }
 }

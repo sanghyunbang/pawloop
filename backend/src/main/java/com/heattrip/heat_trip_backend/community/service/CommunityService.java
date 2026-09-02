@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.community.service;
 
+import com.heattrip.heat_trip_backend.community.CommunityTime;
 import com.heattrip.heat_trip_backend.community.dto.CommentPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.CommentResponse;
@@ -187,30 +188,32 @@ public class CommunityService {
     /**
      * 반응을 누른다. <b>멱등</b>이다 — 이미 눌러 뒀어도 200 이고 집계가 늘지 않는다.
      *
-     * <p>동시에 두 번 들어오면 {@code uq_reaction} 이 하나를 거절하는데, 그것은 "이미 눌렀다"
-     * 와 <b>같은 뜻</b>이므로 삼키고 최신 집계를 돌려준다. 그게 멱등의 정의다.
+     * <p><b>동시 요청에서도 그렇다.</b> #170 은 {@code saveAndFlush} 뒤에
+     * {@code DataIntegrityViolationException} 을 삼켰는데, 그건 멱등이 아니었다 — 제약 위반이
+     * 나는 순간 Hibernate 가 트랜잭션을 rollback-only 로 표시하고 예외를 잡아도 그 표시가 안
+     * 지워져서, 결국 500 이 나간다. 지금은 한 문장짜리
+     * {@link ReactionRepository#insertIfAbsent}(중복 키만 no-op)가 그 창을 닫는다.
      */
     @Transactional
     public ReactionSummaryResponse addReaction(User me, long postId, String type) {
         requireReactionType(type);
-        Post post = requirePost(postId);
-        if (reactions.findOne(postId, me.getId(), type).isEmpty()) {
-            try {
-                reactions.saveAndFlush(Reaction.builder().post(post).user(me).type(type).build());
-            } catch (DataIntegrityViolationException raced) {
-                // 같은 사람이 같은 반응을 동시에 두 번 보냈다. 선조회로는 못 막는 창이고,
-                // DB 제약이 그 창을 닫는다. 결과는 "눌려 있다" 로 같다.
-            }
-        }
+        requirePost(postId);
+        reactions.insertIfAbsent(postId, me.getId(), type, CommunityTime.nowUtc());
         return summarizeOne(postId, me.getId());
     }
 
-    /** 반응을 취소한다. <b>멱등</b>이다 — 안 눌렀던 것을 취소해도 200 이다. */
+    /**
+     * 반응을 취소한다. <b>멱등</b>이다 — 안 눌렀던 것을 취소해도 200 이다.
+     *
+     * <p>조회 후 엔티티 삭제가 아니라 조건 삭제다. 동시에 두 번 취소하면 진 쪽의
+     * {@code DELETE ... WHERE id = ?} 가 0행이 되고 Hibernate 가 {@code StaleStateException}
+     * 으로 올린다 — 0행이 정상인 이 자리에서는 그게 500 이 된다.
+     */
     @Transactional
     public ReactionSummaryResponse removeReaction(User me, long postId, String type) {
         requireReactionType(type);
         requirePost(postId);
-        reactions.findOne(postId, me.getId(), type).ifPresent(reactions::delete);
+        reactions.deleteIfPresent(postId, me.getId(), type);
         return summarizeOne(postId, me.getId());
     }
 
