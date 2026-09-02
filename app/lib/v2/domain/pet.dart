@@ -204,33 +204,7 @@ const List<String> kWeekDayLabels = ['월', '화', '수', '목', '금', '토', '
 
 // ─────────────────────── 반려 커뮤니티 ───────────────────────
 
-/// 커뮤니티 카테고리.
-const List<String> kPetBoards = ['전체', '산책로 후기', '동반장소', '건강·병원', '자유', '자랑'];
 
-/// 반응 3종.
-const List<String> kPetReactions = ['도움돼요', '귀여워요', '공감'];
-
-/// 커뮤니티 글 1건.
-class PetPost {
-  final String nick;
-  final String board;
-  final String? loc;
-  final String date;
-  final String title;
-  final String body;
-  final int commentCount;
-  final List<int> reactions; // kPetReactions와 동일 순서
-  const PetPost({
-    required this.nick,
-    required this.board,
-    this.loc,
-    required this.date,
-    required this.title,
-    required this.body,
-    this.commentCount = 0,
-    this.reactions = const [0, 0, 0],
-  });
-}
 
 // ─────────────────────── 가족 케어 (물·밥·산책 공유) ───────────────────────
 
@@ -394,45 +368,19 @@ final List<String> kWalkNotes = [
 /// **여기에 채팅 더미를 다시 만들지 말 것.** 화면이 그것을 그리는 순간 서버가 무엇을 주는지
 /// 아무도 확인하지 않게 된다 — 그 상태로 다섯 이슈를 지나온 적이 있다.
 
-const List<PetPost> kPetPosts = [
-  PetPost(
-    nick: '보리아빠',
-    board: '산책로 후기',
-    loc: '서울숲',
-    date: '2026.06.30',
-    title: '서울숲 아침 산책 코스 추천',
-    body: '이른 아침엔 사람이 적어서 대형견도 편해요. 잔디마당 쪽은 목줄 필수! 배변봉투통도 곳곳에 있어서 편했습니다.',
-    commentCount: 4,
-    reactions: [7, 3, 2],
-  ),
-  PetPost(
-    nick: '초코맘',
-    board: '동반장소',
-    loc: '성수동',
-    date: '2026.06.29',
-    title: '성수동 반려동반 카페 다녀왔어요',
-    body: '실내 동반 가능하고 물그릇도 챙겨주세요. 소형견 위주지만 얌전하면 중형견도 괜찮대요. 사진 명당 많음 🐶',
-    commentCount: 6,
-    reactions: [5, 8, 1],
-  ),
-  PetPost(
-    nick: '몽이누나',
-    board: '건강·병원',
-    loc: null,
-    date: '2026.06.29',
-    title: '슬개골 탈구, 어느 동물병원 다니세요?',
-    body: '작은 아이라 슬개골이 걱정이에요. 강남 쪽에 정형외과 잘 보는 병원 추천 받습니다. 수술까진 아니고 관리 상담이요.',
-    commentCount: 9,
-    reactions: [11, 0, 4],
-  ),
-  PetPost(
-    nick: '워킹독',
-    board: '자랑',
-    loc: '올림픽공원',
-    date: '2026.06.28',
-    title: '오늘 3km 완주한 우리 아이 🐾',
-    body: '평소 1km도 힘들어했는데 오늘은 신나서 3km를 걸었어요. 날이 선선해서 그런가 봐요. 다들 무더위 조심하세요!',
-    commentCount: 3,
-    reactions: [4, 12, 5],
-  ),
-];
+// **여기 있던 커뮤니티 더미를 전부 지웠다 (이슈 #171).**
+//
+//   kPetPosts · PetPost · kPetBoards · kPetReactions
+//
+// 커뮤니티는 이제 서버에 있다. 읽는 곳은 `data/community_repository.dart` 하나이고
+// 모델은 그 파일의 CommunityPost · CommunityComment · ReactionSummary 다.
+//
+// kPetPosts 는 상수 4건이었다 — 누가 글을 써도 **아무에게도 안 보였고**, 반응은
+// 화면 로컬 토글이라 앱을 껐다 켜면 사라졌다. 댓글도 같았다.
+//
+// kPetBoards 는 한글 문자열을 board **값**으로 들고 있었다. ADR-0016 이 그 값을
+// ASCII 키(walk_review 등)로 정했고 한글은 화면 문구가 됐다 — 둘을 묶는 자리는
+// CommunityBoard enum 하나다. 여기에 라벨 목록을 다시 만들면 그 짝이 두 벌이 된다.
+//
+// 이 더미를 다시 넣지 마라. 화면이 서버를 못 불렀을 때 그릴 것은 **빈 목록이 아니라
+// "불러오지 못했어요"** 다 — 빈 목록은 "아직 글이 없다" 로 읽힌다.
