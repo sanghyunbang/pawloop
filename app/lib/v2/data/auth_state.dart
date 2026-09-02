@@ -34,6 +34,8 @@
 // 없다. 대신 의존성(토큰 저장소·HTTP)은 [configureForTest] 로 갈아끼울 수 있게 두어
 // 유닛 테스트가 플랫폼 채널 없이 돈다(정책 #21).
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
@@ -145,6 +147,41 @@ class AuthState {
   /// 서버가 확인해 준 사용자. [AuthStatus.authenticated]·[AuthStatus.onboarding]
   /// 일 때만 채워져 있다.
   static AuthUser? get user => _user;
+
+  /// 로그인 왕복이 <b>끝날 때까지</b> 기다린다.
+  ///
+  /// ## 왜 필요한가
+  ///
+  /// `login_screen` 은 **pop 을 먼저 하고** 그 뒤에 `await AuthState.completeLogin(...)`
+  /// 을 부른다. 그래서 `await navigator.push(LoginScreen())` 이 풀리는 순간의
+  /// [isAuthenticated] 는 아직 `false` 다 — 로그인에 성공했는데도.
+  ///
+  /// 로그인을 마치고 돌아온 사람에게 아무 일도 안 일어나는 것이 그 증상이다.
+  /// `start_walk` 와 `writePost` 가 둘 다 그 자리에서 판정한다.
+  ///
+  /// [AuthStatus.authenticating] 이 아닐 때까지만 기다린다. 그 상태는
+  /// `beginAuthenticating()` 이 켜고 `completeLogin`/`cancelAuthenticating` 이 끈다.
+  /// 상한을 두는 이유는 외부 브라우저가 안 돌아오는 경우가 있어서다 — 그때는
+  /// 기다리다 포기하고 "로그인 안 됨" 으로 읽는 것이 맞다.
+  static Future<void> settle({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    if (status.value != AuthStatus.authenticating) return;
+
+    final done = Completer<void>();
+    void listener() {
+      if (status.value != AuthStatus.authenticating && !done.isCompleted) {
+        done.complete();
+      }
+    }
+
+    status.addListener(listener);
+    try {
+      await done.future.timeout(timeout, onTimeout: () {});
+    } finally {
+      status.removeListener(listener);
+    }
+  }
 
   /// 보호된 라우트를 열어도 되는가.
   ///

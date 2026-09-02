@@ -58,7 +58,12 @@ Future<CommunityPost?> writePost(
     await navigator.push(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
     );
-    // 로그인 화면에서 그냥 돌아왔을 수 있다. 그러면 열지 않는다.
+    // 로그인 화면은 **pop 을 먼저 하고** 그 뒤에 completeLogin() 을 부른다. 여기서
+    // 바로 물으면 성공한 로그인도 아직 false 다 — 그러면 다 하고 돌아온 사람에게
+    // 아무 일도 안 일어난다.
+    await AuthState.settle();
+
+    // 그냥 돌아왔을 수 있다. 그러면 열지 않는다.
     if (!AuthState.isAuthenticated) return null;
     if (!context.mounted) return null;
   }
@@ -146,6 +151,19 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
     }
     if (body.isEmpty) {
       setState(() => _error = '본문을 적어 주세요');
+      return;
+    }
+
+    // 입력칸의 maxLength 로는 부족하다. Flutter 는 **글자(grapheme)** 단위로 자르는데
+    // 서버의 @Size 는 자바 String.length() — 즉 **UTF-16 코드 단위**로 센다. 이모지가
+    // 섞이면 화면에서는 상한 안인데 서버가 400 을 낸다. 그때 사용자는 다 쓰고 나서야
+    // 알게 되고, 무엇을 지워야 하는지도 모른다.
+    if (title.length > CommunityRepository.maxTitleLength) {
+      setState(() => _error = '제목이 너무 길어요 · 이모지는 여러 글자로 세어져요');
+      return;
+    }
+    if (body.length > CommunityRepository.maxBodyLength) {
+      setState(() => _error = '본문이 너무 길어요 · 이모지는 여러 글자로 세어져요');
       return;
     }
 

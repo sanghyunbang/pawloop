@@ -42,6 +42,13 @@ class _FeedScreenState extends State<FeedScreen> {
   /// 읽히고, 그러면 서버가 죽은 것을 아무도 모른다.
   CommunityFailure? _failure;
 
+  /// 요청 세대. 늦게 온 응답이 화면을 되돌리는 것을 막는다.
+  ///
+  /// 게시판을 빠르게 두 번 바꾸면 첫 요청이 나중에 도착할 수 있다. 그러면 지금 고른
+  /// 게시판의 목록 위에 **아까 게시판의 글**이 덮인다 — 사용자에게는 필터가 안 먹는
+  /// 것으로 보인다. 커서도 같이 덮여서 '더 보기' 가 남의 게시판 다음 장을 붙인다.
+  int _generation = 0;
+
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
@@ -55,13 +62,14 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _load() async {
+    final generation = ++_generation;
     setState(() {
       _loading = true;
       _failure = null;
     });
     try {
       final page = await _repo.feed(board: _board);
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _posts = page.items;
         _nextCursor = page.nextCursor;
@@ -69,7 +77,7 @@ class _FeedScreenState extends State<FeedScreen> {
         _loading = false;
       });
     } on CommunityFailure catch (failure) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _failure = failure;
         _loading = false;
@@ -80,10 +88,13 @@ class _FeedScreenState extends State<FeedScreen> {
   Future<void> _loadMore() async {
     final cursor = _nextCursor;
     if (cursor == null || _loadingMore) return;
+    final generation = _generation;
     setState(() => _loadingMore = true);
     try {
       final page = await _repo.feed(board: _board, cursor: cursor);
-      if (!mounted) return;
+      // 기다리는 동안 게시판이 바뀌었으면 이 장은 남의 것이다. 붙이면 두 게시판의
+      // 글이 한 목록에 섞인다.
+      if (!mounted || generation != _generation) return;
       setState(() {
         _posts = [..._posts, ...page.items];
         _nextCursor = page.nextCursor;
@@ -92,7 +103,7 @@ class _FeedScreenState extends State<FeedScreen> {
       });
     } on CommunityFailure {
       // 다음 장을 못 받은 것은 첫 장까지 지울 이유가 아니다. 버튼만 되살린다.
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() => _loadingMore = false);
     }
   }
@@ -440,13 +451,17 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _open(CommunityPost post) async {
-    await Navigator.of(context).push(
+    final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => PostDetailScreen(post: post, repository: _repo),
       ),
     );
-    // 상세에서 댓글·반응이 늘었을 수 있다. 목록의 숫자가 낡은 채 남지 않게 한다.
-    if (mounted) await _load();
+    // 상세에서 **실제로 뭔가 바뀌었을 때만** 다시 부른다.
+    //
+    // 예전에는 무조건 불렀다. 그러면 글 하나를 열어 보고 나온 것만으로 '더 보기' 로
+    // 쌓아 둔 장이 전부 사라지고 스크롤이 맨 위로 돌아간다 — 목록을 훑어보는 사람에게
+    // 그건 앱이 자기를 되돌리는 것으로 느껴진다.
+    if (mounted && changed == true) await _load();
   }
 
   // 닉네임 원형 아바타 (닉 첫 글자, 따뜻한 그라데이션).
@@ -531,9 +546,15 @@ class _FeedScreenState extends State<FeedScreen> {
                         const Icon(Icons.place_outlined,
                             size: 13, color: T.textMuted),
                         const SizedBox(width: 2),
-                        Text(post.loc!,
-                            style: const TextStyle(
-                                fontSize: 11.5, color: T.textMuted)),
+                        // Flexible 이 없으면 긴 장소 이름이 Row 를 넘쳐 노란 줄무늬가
+                        // 뜬다. 아래 리스트 뷰는 진작부터 이 모양이었다.
+                        Flexible(
+                          child: Text(post.loc!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 11.5, color: T.textMuted)),
+                        ),
                       ],
                     ]),
                   ]),

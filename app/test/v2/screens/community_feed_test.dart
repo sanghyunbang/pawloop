@@ -67,11 +67,18 @@ Map<String, Object?> _post({
 ({CommunityRepository repo, List<http.BaseRequest> calls}) fixture(
   Future<http.Response> Function(http.Request request) handler, {
   String? token = 'AT-1',
+  Map<String, Object?>? detail,
 }) {
   final calls = <http.BaseRequest>[];
   final client = AuthedClient(
     inner: MockClient((request) async {
       calls.add(request);
+      // 상세 화면은 진입할 때 글을 **다시 읽는다** — 목록이 넘긴 것은 그때의 세션으로
+      // 읽은 값이라, 게스트로 훑다가 로그인한 사람에게는 낡았다.
+      if (request.method == 'GET' &&
+          RegExp(r'^/api/community/posts/\d+$').hasMatch(request.url.path)) {
+        return _json(detail ?? _post());
+      }
       return handler(request);
     }),
     baseUrl: _base,
@@ -148,6 +155,8 @@ void main() {
         'hasMore': false,
       }),
       token: null,
+      // 상세가 다시 읽을 때도 게스트 응답이어야 한다 — mine 이 null 인 것이 신호다.
+      detail: _post(mine: null),
     );
     final post = CommunityPost.tryParse(_post(mine: null))!;
 
@@ -223,7 +232,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('저도 가봐야겠어요'), findsOneWidget);
-    expect(find.text('댓글 1'), findsOneWidget);
+    // 화면이 세는 것이 아니라 **서버가 센 값**이다. 픽스처의 글은 commentCount 가 1 이고
+    // 방금 하나를 달았으니 2 다 — 목록 카드의 숫자와 같은 값이어야 한다.
+    expect(find.text('댓글 2'), findsOneWidget);
   });
 
   testWidgets('댓글을 못 불러오면 빈 스레드가 아니라 이유가 뜬다', (tester) async {
