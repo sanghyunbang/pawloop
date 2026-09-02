@@ -53,6 +53,11 @@
 -- 중단 장치. SIGNAL 은 prepared statement 프로토콜이 지원하지 않아서(ERROR 1295)
 -- 조건부로 던지려면 프로시저 한 겹이 필요하다. CALL 은 PREPARE 가능하다.
 -- MESSAGE_TEXT 는 128자가 상한이다(넘기면 ERROR 1648).
+-- 이 파일은 UTF-8 이고 중단 메시지가 한글이다. 세션 문자셋을 먼저 고정한다 —
+-- 안 하면 클라이언트 기본값(윈도우 mysql 은 euckr)을 물려받아, 중단이 걸리는 순간
+-- 이유는 안 보이고 ERROR 1366 (Incorrect string value) 만 남는다. 실측 2026-09-02, #169.
+SET NAMES utf8mb4;
+
 DROP PROCEDURE IF EXISTS heattrip_migration_abort;
 CREATE PROCEDURE heattrip_migration_abort(IN msg VARCHAR(128))
   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = msg;

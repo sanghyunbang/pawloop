@@ -2,7 +2,7 @@
 
 > Pawloop(포루프) MySQL 공간형 데이터 모델의 개체-관계도. GPS 산책 경로(`LINESTRING`)와 장소 좌표(`POINT`)를 공간 컬럼으로 저장하고, `SPATIAL INDEX` + `ST_Distance_Sphere`/`MBRContains`로 주변 검색을 수행한다. **가족 케어 공유**와 **채팅** 기능으로 `family_group`·`chat_room`·`chat_room_member`·`chat_room_invite`·`chat_message`·`walk_note` 엔티티가 추가되고, `care_log`는 `group_id`/`done_by`를 더해 "누가·언제 했는지"를 가족과 공유하는 케어 기록으로 확장된다. 방·멤버십·초대는 가족 그룹에 종속되지 않는 범용 3엔티티이고, `family_group` 은 `origin_kind`/`origin_ref` 쌍으로 방에 **불투명하게** 닿는다 — 그 방향의 FK 는 없다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `users` · `refresh_token` · `family_group` · `chat_room` · `chat_room_member` · `chat_room_invite` · `chat_message` · `walk_note` · `care_log` · **`dog` · `walk`** 열하나다(#145) — 정본은 `backend/mysql/init/01_schema.sql` 이고, 절별 표기는 [테이블 스키마](./schema.md)의 **실재** 표시가 정본이다. 나머지 엔티티는 아직 **계획**이다 — 커뮤니티의 `post`·`comment`·`reaction` 이 그렇다(M3.1). 감정 여행 시절의 `places` 계열은 정본에 있지만 반려 축에서는 쓰지 않는다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
+> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `users` · `refresh_token` · `family_group` · `chat_room` · `chat_room_member` · `chat_room_invite` · `chat_message` · `walk_note` · `care_log` · **`dog` · `walk`**(#145) · **`post` · `comment` · `reaction`**(#169) 열넷이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고, 절별 표기는 [테이블 스키마](./schema.md)의 **실재** 표시가 정본이다. 나머지 엔티티는 아직 **계획**이다 — `place`·`trail`·`bookmark` 가 그렇다. 감정 여행 시절의 `places` 계열은 정본에 있지만 반려 축에서는 쓰지 않는다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
 
 ## ER 다이어그램
 

@@ -38,6 +38,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\11_dog.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\12_walk.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\13_walk_path_t.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\14_community.sql
 ```
 
 | 파일 | 무엇을 |
@@ -55,6 +56,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `11_dog.sql` | 반려동물 프로필 — `dog` 생성, `users` 로의 FK 하나(`ON DELETE CASCADE`)·`idx_dog_user`·이름 붙은 CHECK 둘(`ck_dog_species`·`ck_dog_size`). **CASCADE 여야 합니다** — `UserService.deleteMe` 가 `users` 행을 물리 삭제하므로 `RESTRICT` 면 반려동물을 등록한 사람이 영구히 탈퇴 불가가 됩니다(MySQL 1451). 사후 검증이 그 모드까지 확인합니다 (이슈 #145) |
 | `12_walk.sql` | 산책 기록 — `walk` 생성, `dog` 로의 FK 하나(`ON DELETE CASCADE`)·`uq_walk_client(dog_id, client_walk_id)`(재전송 멱등)·인덱스 둘. **`11` 이 먼저입니다.** `path` 는 `LINESTRING SRID 4326` 이고 **NULL 을 허용합니다** — `SPATIAL INDEX` 를 만들지 않는 이유와 함께 [ADR-0015](../../docs/99-decisions/decision-log.md) 에 있습니다. **SRID 검증은 이 파일의 사후 검증에서만 됩니다** — `information_schema.columns.column_type` 이 `linestring` 뿐이라 `SchemaDdlDriftTest` 는 SRID 가 빠진 스키마를 같다고 봅니다(실측) (이슈 #145) |
 | `13_walk_path_t.sql` | 산책 경로의 **점별 시각** — `walk.path_t JSON NULL` 추가. `path` 와 길이가 같아야 하지만 **DB 에 CHECK 를 걸지 않았습니다** — 검사는 `WalkPath.toPathTimes` 가 유일한 방어선이고 그 사실을 이 스크립트 §B-1 이 적어 뒀습니다. **12 가 먼저입니다** (이슈 #155) |
+| `14_community.sql` | 커뮤니티 표 셋 — `post`·`comment`·`reaction` 생성. `users` 로의 FK 셋(**CASCADE 아님** — 탈퇴가 남의 글에서 대화를 끊지 않는다)·`post` 로의 FK 둘(CASCADE)·`uq_reaction(post_id, user_id, type)`(**사용자당 글마다 여러 반응** — ADR-0016 결정 2)·인덱스 둘. **04 가 먼저입니다.** `board` 는 ASCII 키이고 장소 참조는 `content_id VARCHAR(64)` 이며 FK 가 없습니다 (장소는 캐시라 행이 없을 수 있습니다) (이슈 #169) |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 

@@ -2583,7 +2583,30 @@ components:
 
     Board:
       type: string
-      enum: ["산책로 후기", "동반장소", "건강·병원", "자유", "자랑"]
+      enum: [walk_review, pet_place, health, free, brag]
+      description: |
+        게시판. **값은 ASCII 키이고 화면 문구는 앱이 든다.**
+
+        | 값 | 화면 문구 |
+        |---|---|
+        | `walk_review` | 산책로 후기 |
+        | `pet_place` | 동반장소 |
+        | `health` | 건강·병원 |
+        | `free` | 자유 |
+        | `brag` | 자랑 |
+
+        2026-09 이전에는 값 자체가 한글 표시 문자열이었습니다(`"산책로 후기"` 등). 그것을
+        바꾼 이유가 셋입니다.
+
+        1. **이 계약의 다른 enum 은 전부 ASCII 입니다** — `DogSize`·`PetSpecies`·`GroupRole`·
+           `CareType`·`ReactionType`. `Board` 하나만 달랐습니다.
+        2. **이 값이 query 파라미터로 나갑니다.** 공백과 가운뎃점(`·`)을 품은 문자열이라
+           인코딩을 한 군데라도 빠뜨리면 조용히 안 걸립니다.
+        3. **이 값이 DB 컬럼에 들어갑니다.** 표시 문구를 저장하면 게시판 이름을 다듬는 날
+           **쌓인 행을 전부 고쳐야** 합니다. 값과 문구를 갈라 두면 문구만 바꿉니다.
+
+        `CareType` 이 이미 같은 모양입니다 — `water|meal|walk|med|vet` 이고 "물/밥/산책/투약/병원"
+        은 앱이 붙입니다.
 
     ReactionType:
       type: string

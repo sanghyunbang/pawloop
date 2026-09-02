@@ -89,6 +89,11 @@
 -- 모양이 다른 표가 있으면 이 스크립트는 조용히 성공하고, 그 차이는 prod 부팅
 -- (ddl-auto=validate)에서야 드러난다. 그 전에 여기서 멈춘다.
 
+-- 이 파일은 UTF-8 이고 중단 메시지가 한글이다. 세션 문자셋을 먼저 고정한다 —
+-- 안 하면 클라이언트 기본값(윈도우 mysql 은 euckr)을 물려받아, 중단이 걸리는 순간
+-- 이유는 안 보이고 ERROR 1366 (Incorrect string value) 만 남는다. 실측 2026-09-02, #169.
+SET NAMES utf8mb4;
+
 DROP PROCEDURE IF EXISTS heattrip_migration_abort;
 CREATE PROCEDURE heattrip_migration_abort(IN msg VARCHAR(128))
   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = msg;
