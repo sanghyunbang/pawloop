@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
+import com.heattrip.heat_trip_backend.support.TestProjectPaths;
+import org.yaml.snakeyaml.Yaml;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,7 +18,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import java.util.List;
 import java.util.Map;
@@ -143,6 +148,103 @@ class GeneratedOpenApiSpecTest extends AbstractMySqlIntegrationTest {
         assertThat(withBody)
                 .as("401 은 본문 없이 나간다. 계약이 본문을 약속하면 클라이언트가 없는 것을 기다린다")
                 .isEmpty();
+    }
+
+
+    // ─────────── 반대 방향: 계약이 약속한 것에 핸들러가 있는가 ───────────
+
+    /**
+     * HTTP 메서드가 아닌 경로 수준 키. {@code paths./x.parameters} 는 오퍼레이션이 아니다.
+     */
+    private static final Set<String> HTTP_METHODS =
+            Set.of("get", "post", "put", "patch", "delete", "head", "options", "trace");
+
+    @Test
+    @DisplayName("정본이 약속한 모든 오퍼레이션은 핸들러가 있거나, 없다고 스스로 표시한다")
+    void contract_everyOperationEitherHasAHandlerOrSaysSo() throws Exception {
+        Set<String> generated = operationsOf(generatedSpec());
+        List<String> unmarked = new ArrayList<>();
+
+        for (Map.Entry<String, Map<String, Object>> op : handWrittenOperations().entrySet()) {
+            if (generated.contains(op.getKey())) {
+                continue;
+            }
+            Object status = op.getValue().get("x-status");
+            if (!"planned".equals(status) && !"framework".equals(status)) {
+                unmarked.add(op.getKey());
+            }
+        }
+
+        assertThat(unmarked)
+                .as("""
+                        이 문서는 "서버가 무엇을 약속하는가" 의 단일 출처다(#4). 핸들러 없는 경로를 \
+                        표시 없이 실어 두면 그것을 보고 만든 앱이 404 를 받는다 — 실제로 열여섯 개가 \
+                        그랬다(#201). 구현이 아직이면 x-status: planned 를, 우리 컨트롤러가 아니면 \
+                        x-status: framework 를 적고 x-status-note 에 무엇이 막고 있는지 한 줄 남긴다.""")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("핸들러가 붙은 오퍼레이션에는 planned 표시가 남아 있지 않다")
+    void contract_plannedIsRemovedOnceTheHandlerLands() throws Exception {
+        Set<String> generated = operationsOf(generatedSpec());
+        List<String> stale = new ArrayList<>();
+
+        for (Map.Entry<String, Map<String, Object>> op : handWrittenOperations().entrySet()) {
+            if (generated.contains(op.getKey()) && "planned".equals(op.getValue().get("x-status"))) {
+                stale.add(op.getKey());
+            }
+        }
+
+        assertThat(stale)
+                .as("""
+                        표시는 한 방향으로만 썩는다 — 구현이 붙는 날 아무도 계약으로 돌아가지 않는다. \
+                        그러면 "아직 없다" 고 적힌 경로를 앱이 안 쓰고 지나간다. 여기서 잡는다.""")
+                .isEmpty();
+    }
+
+    /** 손으로 쓴 정본의 오퍼레이션 → 그 오퍼레이션 맵. 키는 {@code "GET /api/dogs/{}"} 꼴이다. */
+    @SuppressWarnings("unchecked")
+    private static java.util.Map<String, Map<String, Object>> handWrittenOperations() throws Exception {
+        String raw = Files.readString(
+                TestProjectPaths.requireFile("../docs/04-api/openapi.yaml"), StandardCharsets.UTF_8);
+        Map<String, Object> spec = (Map<String, Object>) new Yaml().load(raw);
+        Map<String, Object> paths = (Map<String, Object>) spec.get("paths");
+
+        assertThat(paths)
+                .as("정본에서 paths 를 못 읽으면 아래 단언들이 조용히 통과한다")
+                .isNotNull();
+
+        java.util.Map<String, Map<String, Object>> out = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, Object> path : paths.entrySet()) {
+            Map<String, Object> item = (Map<String, Object>) path.getValue();
+            for (Map.Entry<String, Object> op : item.entrySet()) {
+                if (!HTTP_METHODS.contains(op.getKey())) {
+                    continue;
+                }
+                out.put(key(op.getKey(), path.getKey()), (Map<String, Object>) op.getValue());
+            }
+        }
+        assertThat(out.size()).as("정본 오퍼레이션이 이렇게 적을 리 없다").isGreaterThan(30);
+        return out;
+    }
+
+    /** 생성본의 오퍼레이션 집합. */
+    private static Set<String> operationsOf(JsonNode spec) {
+        Set<String> out = new LinkedHashSet<>();
+        forEachOperation(spec.path("paths"), (label, ignored) -> {
+            String[] parts = label.split(" ", 2);
+            out.add(key(parts[0], parts[1]));
+        });
+        return out;
+    }
+
+    /**
+     * 경로 변수의 <b>이름</b>은 계약과 코드가 다를 수 있다({@code {dogId}} vs {@code {id}}).
+     * 그건 드리프트가 아니므로 이름을 지우고 자리만 비교한다.
+     */
+    private static String key(String method, String path) {
+        return method.toUpperCase() + " " + path.replaceAll("\\{[^}]*\\}", "{}");
     }
 
     // ─────────────────────────── 지그 ───────────────────────────

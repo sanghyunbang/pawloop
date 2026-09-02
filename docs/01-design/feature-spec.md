@@ -19,7 +19,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 
 | 우선순위 | 기능 | 상태 | 데이터 소스 | 비고 |
 |---|---|---|---|---|
-| P0 | 실시간 산책 트래킹 | 더미 시뮬레이션 | 로컬(시뮬 경로) | 배포 시 `geolocator` → `walk.path(LINESTRING)` |
+| P0 | 실시간 산책 트래킹 | **완료(#145·#160)** | `geolocator` 위치 스트림 → `walk.path(LINESTRING)` | 실 GPS — 위치를 못 쓰면 이유별 안내 화면 + 직접 입력 |
 | P0 | 산책 기록 작성/조회 | **완료(#145)** | `GET/POST /api/walks` | 트래킹 초안 → 저장. 못 보내면 초안 큐에 남는다 |
 | P0 | 지도 · 동반장소 | KTO 실연동 | 관광공사 KorPetTourService2 | 병원/펫샵/산책로 레이어는 더미 |
 | P0 | 강아지 프로필 | 세션 내 편집 반영 | 전역 `kMyDog` | 앱 재시작 시 초기화(미영속) |
@@ -47,9 +47,9 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 진입 | 홈 "산책 시작" CTA / 바텀네비 가운데 FAB |
 | 동작 | 네이버 지도 위 라이브 스탯 패널(km·시간·페이스), 경로 폴리라인 + 헤드 마커, 카메라 추적. 일시정지/재개, 종료 |
 | 종료 흐름 | 바텀시트(시간·거리·페이스 요약) → "기록 저장하기"(→ `CreateScreen(prefillPlace:'오늘 산책')`) / "저장 안 함" |
-| 데이터 | **더미 시뮬레이션**: `_makeRoute()`가 서울숲 근처 40점 루프 생성. `Timer.periodic(1s)`로 한 점씩 전진, Haversine `_dist()`로 누적 거리 계산 |
-| 상태 | `_seconds`, `_km`, `_paused`, `_path`(진행 경로), `_idx`(진행 인덱스). `NaverMapController _ctrl` |
-| 미연동 | 실제 GPS 스트림 없음. 배포 시 `geolocator` 위치 스트림 → `walk.path`(LINESTRING/인코딩 폴리라인) 저장 필요 |
+| 데이터 | **실 GPS**: `LocationService.locate()` 로 첫 점을 잡고 `Geolocator.getPositionStream`(5m)을 구독. Haversine `_dist()`로 누적 거리. 위치를 못 쓰면 `WalkLocationDeniedScreen` 이 이유를 말하고 직접 입력으로 보낸다 — 가짜 경로를 그리지 않는다(#160) |
+| 상태 | `_seconds`, `_km`, `_paused`, `_path`(진행 경로), `_pathT`(점별 델타 초, `_path` 와 길이 동일), `_denial`(위치 판정 — `null` 이면 판정 전이라 지도를 만들지 않는다). `NaverMapController _ctrl` |
+| 남은 것 | 백그라운드 트래킹(화면을 끄면 스트림이 끊긴다). 경로 자체는 `POST /api/walks` 로 `walk.path`(LINESTRING SRID 4326)에 저장된다 |
 
 ### 1.2 산책 기록 작성 — `create_screen.dart`
 
@@ -201,9 +201,9 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 목적 | 케어를 함께 나눌 가족 단위를 만든다(그룹 생성·초대코드로 참여·멤버 목록) |
 | 진입 | 홈 "오늘의 케어" 카드 / 프로필 메뉴 "우리 가족" |
 | 동작 | 그룹 생성, 초대코드 공유/입력으로 참여, 멤버 목록(역할 owner/member) 표시. 가족 화면에서 케어 현황·주의사항·채팅으로 진입 |
-| 데이터 | `family_group(id, name, invite_code, created_at)` · `group_member(id, group_id FK, user_id FK, role[owner/member], joined_at)`. 더미: `FamilyMember`/`kFamilyMembers`/`kFamilyInviteCode` |
-| API | `POST /api/groups`(생성) · `POST /api/groups/join`(초대코드) · `GET /api/groups/me`(내 그룹+멤버) |
-| 상태 | **더미 예정**(백엔드 groups API 연동 전) |
+| 데이터 | `family_group(id, name, created_at)` — **초대코드도 멤버 표도 여기 없다.** ADR-0011(#72)이 초대코드를 방으로 옮겼고 멤버십은 `chat_room_member` 다 |
+| API | `POST /api/groups`(생성 — 같은 트랜잭션에서 방과 방장 멤버십이 함께 생긴다) · `POST /api/chat/rooms/{roomId}/invites`(초대코드 발급) · `POST /api/chat/invites/{code}/join`(참여) · `GET /api/groups/me`(내 그룹) |
+| 상태 | ✅ 서버 연동됨. 2026-08 이전에는 이 칸이 `POST /api/groups/join` 을 적었는데, ADR-0014(#152)가 지운 경로가 여기서 되살아나 있던 것이다(#201) |
 
 ### 6.2 오늘의 케어 공유 (MVP)
 
