@@ -1,6 +1,7 @@
 // lib/features/start/start_screen.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:heat_trip_flutter/app/auth_redirect.dart';
 
 class StartScreen extends StatelessWidget {
   const StartScreen({super.key});
@@ -51,7 +52,9 @@ class StartScreen extends StatelessWidget {
                 ),
               ),
               TextButton(
-                onPressed: () => context.go('/foryou_v2'),
+                // v2 홈으로. 예전에는 `/foryou_v2`(감정 여행 셸)였다 — 이 버튼이
+                // Pawloop 을 켠 사람을 다른 제품으로 보내고 있었다 (#184).
+                onPressed: () => context.go(homeRoute),
                 child: const Text(
                   'Skip',
                   style: TextStyle(fontSize: 16, color: Colors.black54),

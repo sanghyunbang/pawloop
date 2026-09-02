@@ -1,6 +1,7 @@
 // lib/features/auth/presentation/sign_up_screen.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:heat_trip_flutter/app/auth_redirect.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/register_request.dart';
@@ -210,7 +211,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
         leading: IconButton(
           tooltip: '뒤로',
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => context.goNamed('start'),
+          // 정본 로그인 화면으로. `start` 는 레거시 시작 화면이다 (#184).
+          onPressed: () => context.go(loginRoute),
         ),
       ),
       body: SafeArea(

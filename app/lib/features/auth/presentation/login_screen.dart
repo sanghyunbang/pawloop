@@ -17,6 +17,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart'; // ✅ 유지
+import 'package:heat_trip_flutter/app/auth_redirect.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/login_request.dart';
 import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
@@ -68,7 +69,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // 신규 가입자는 라우터의 redirect 가 온보딩으로 붙잡으므로 여기서 미리
         // 가로채지 않는다. 기존 사용자만 "오늘" 홈으로 보낸다 (새 IA, F0-4).
-        if (!tokens.isNew) context.go('/foryou_v2');
+        // v2 홈으로 간다. 예전에는 `/foryou_v2`(감정 여행 레거시 셸)였고, 이 화면으로
+        // 들어온 사람은 Pawloop 이 아니라 **다른 제품**에 착지했다 (#184).
+        if (!tokens.isNew) context.go(homeRoute);
       } else {
         _showDialog('[로그인 실패] 아이디와 비밀번호를 확인해주세요.');
       }
@@ -122,7 +125,9 @@ class _LoginScreenState extends State<LoginScreen> {
             if (context.canPop()) {
               context.pop();
             } else {
-              context.goNamed('start');
+              // 정본 로그인 화면으로 돌아간다. 예전에는 `start`(Heat Trip 로고가 붙은
+              // 레거시 시작 화면)였다 — 거기 Skip 이 감정 여행 셸로 간다 (#184).
+              context.go(loginRoute);
             }
           },
         ),
