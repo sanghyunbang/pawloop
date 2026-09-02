@@ -50,6 +50,11 @@ class WalkDraft {
   /// `[경도, 위도]` 순서. **비어 있을 수 있다** — 손입력 기록과 위치 권한 거부다.
   final List<List<double>> path;
 
+  /// 각 점의 시각 — 시작 기준 델타 초. **`path` 와 길이가 같다.** 이슈 #155.
+  ///
+  /// 길이가 다르면 서버가 400 을 준다. 손입력 기록처럼 경로가 없으면 이것도 비어 있다.
+  final List<int> pathT;
+
   final String? memo;
   final String? weather;
 
@@ -67,6 +72,7 @@ class WalkDraft {
     required this.distanceM,
     required this.durationS,
     required this.path,
+    this.pathT = const [],
     this.memo,
     this.weather,
     this.dogId,
@@ -84,6 +90,7 @@ class WalkDraft {
     required int distanceM,
     required int durationS,
     required List<List<double>> path,
+    List<int> pathT = const [],
     int? dogId,
   }) =>
       WalkDraft(
@@ -93,6 +100,7 @@ class WalkDraft {
         distanceM: distanceM,
         durationS: durationS,
         path: path,
+        pathT: pathT,
         dogId: dogId,
       );
 
@@ -111,6 +119,9 @@ class WalkDraft {
         distanceM: distanceM ?? this.distanceM,
         durationS: durationS ?? this.durationS,
         path: path,
+        // path 와 짝이라 함께 옮긴다. 빠뜨리면 서버로 나가는 길에서 시각만 사라진다 —
+        // 테스트가 그것을 잡았다. (#155)
+        pathT: pathT,
         memo: memo ?? this.memo,
         weather: weather ?? this.weather,
         dogId: dogId ?? this.dogId,
@@ -124,6 +135,7 @@ class WalkDraft {
         'distanceM': distanceM,
         'durationS': durationS,
         'path': path,
+        if (pathT.isNotEmpty) 'pathT': pathT,
         if (memo != null) 'memo': memo,
         if (weather != null) 'weather': weather,
         if (dogId != null) 'dogId': dogId,
@@ -149,6 +161,16 @@ class WalkDraft {
             .toList()
         : <List<double>>[];
 
+    // **길이가 안 맞으면 통째로 버린다.** 짝이 안 맞는 시각 배열은 어느 점이 언제인지
+    // 말해 주지 못하고, 그대로 보내면 서버가 400 을 준다 — 그러면 그 초안이 거절 큐로
+    // 가고 사용자가 실제로 걸은 기록이 못 올라간다. 시각을 잃는 편이 산책을 잃는 것보다
+    // 낫다. (#155)
+    final rawPathT = json['pathT'];
+    final parsedT = rawPathT is List
+        ? rawPathT.whereType<num>().map((n) => n.toInt()).toList()
+        : <int>[];
+    final pathT = parsedT.length == path.length ? parsedT : <int>[];
+
     return WalkDraft(
       clientWalkId: key,
       startedAt: startedAt.toLocal(),
@@ -156,6 +178,7 @@ class WalkDraft {
       distanceM: (json['distanceM'] as num?)?.toInt() ?? 0,
       durationS: (json['durationS'] as num?)?.toInt() ?? 0,
       path: path,
+      pathT: pathT,
       memo: json['memo'] as String?,
       weather: json['weather'] as String?,
       dogId: (json['dogId'] as num?)?.toInt(),

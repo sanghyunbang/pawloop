@@ -115,6 +115,7 @@ public class WalkService {
                 .distanceM(request.distanceM())
                 .durationS(request.durationS())
                 .path(WalkPath.toLineString(request.path()))
+                .pathT(WalkPath.toPathTimes(request.path(), request.pathT()))
                 .memo(blankToNull(request.memo()))
                 .weather(blankToNull(request.weather()))
                 .build();

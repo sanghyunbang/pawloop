@@ -144,6 +144,28 @@ public class Walk {
     @Column(name = "path", columnDefinition = "linestring srid 4326")
     private LineString path;
 
+    /**
+     * 점별 시각 — 시작 시각 기준 <b>델타 초</b> 배열. 이슈 #155.
+     *
+     * <p>{@code path} 의 점 개수와 <b>길이가 같아야 한다.</b> LINESTRING 은 x, y 만 담아서
+     * 점마다 몇 초에 찍혔는지가 어디에도 없었고, 시각은 그 순간에만 있는 정보라 나중에
+     * 만들 수 없다. 안 넣으면 구간 페이스·일시정지 복원·거리 재계산이 <b>쌓인 행 전체에
+     * 대해 영영 불가능</b>해진다.
+     *
+     * <p><b>DB 제약이 아니라 서비스가 길이를 검사한다.</b> MySQL CHECK 로 쓰려면
+     * {@code ST_NumPoints} 와 {@code JSON_LENGTH} 를 함께 부르는 식이 되고 실익 대비
+     * 복잡하다. 그래서 {@code WalkService} 의 검사가 <b>유일한 방어선</b>이고, 그 사실이
+     * 테스트로 잠겨 있다.
+     *
+     * <p>{@code path} 와 같이 NULL 을 허용한다 — 손입력 기록과 위치 거부 기록에는 경로가
+     * 없고, 그러면 시각도 없다. 13_walk_path_t.sql 이전에 쌓인 행도 영영 NULL 이다.
+     *
+     * <p><b>응답에는 싣지 않는다.</b> 지금 이 값을 그리는 화면이 없다 — 목록에서 path 를
+     * 뺀 것과 같은 이유다.
+     */
+    @Column(name = "path_t", columnDefinition = "json")
+    private String pathT;
+
     @Column(name = "memo", length = 500)
     private String memo;
 

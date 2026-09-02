@@ -553,6 +553,110 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(after.path("durationS").asInt()).isEqualTo(900);
     }
 
+    // ─────────────── 점별 시각 (#155) ───────────────
+    //
+    // LINESTRING 은 x, y 만 담아서 점마다 몇 초에 찍혔는지가 어디에도 없었다. 시각은 그
+    // 순간에만 있는 정보라 나중에 만들 수 없다 — 안 받으면 쌓인 행 전체에 대해 구간
+    // 페이스·일시정지 복원·거리 재계산이 영영 불가능해진다.
+    //
+    // DB 에 CHECK 를 안 걸었으므로 **아래 검사가 유일한 방어선이다.**
+
+    @Test
+    @DisplayName("점별 시각을 경로와 함께 저장한다")
+    void savesPathTimes() throws Exception {
+        Account me = account("시각기록");
+        long dogId = dog(me, "콩이");
+
+        save(me, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":100,"durationS":7,
+                 "path":[[126.9780,37.5665],[126.9800,37.5670],[126.9820,37.5675]],
+                 "pathT":[0,3,7]}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(7)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("응답에는 안 실린다 — 그리는 화면이 없다")
+    void doesNotExposePathTimes() throws Exception {
+        Account me = account("응답확인");
+        long dogId = dog(me, "보리");
+
+        JsonNode saved = body(save(me, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":100,"durationS":7,
+                 "path":[[126.9780,37.5665],[126.9800,37.5670]],"pathT":[0,7]}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(7)))
+                .andExpect(status().isCreated()));
+
+        assertThat(saved.has("pathT"))
+                .as("목록에서 path 를 뺀 것과 같은 이유다 — 쓰지 않는 것을 실으면 응답이 커진다")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("길이가 다르면 400 이다 — 짝이 안 맞으면 어느 점이 언제인지 모른다")
+    void rejectsMismatchedLength() throws Exception {
+        Account me = account("길이불일치");
+        long dogId = dog(me, "탄이");
+
+        save(me, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":100,"durationS":7,
+                 "path":[[126.9780,37.5665],[126.9800,37.5670],[126.9820,37.5675]],
+                 "pathT":[0,7]}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(7)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("경로 없이 시각만 보내면 400 이다")
+    void rejectsTimesWithoutPath() throws Exception {
+        Account me = account("경로없음");
+        long dogId = dog(me, "구름");
+
+        save(me, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":100,"durationS":7,
+                 "pathT":[0,3,7]}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(7)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("뒤로 흐르면 400 이다 — 시계가 거꾸로 간 것이다")
+    void rejectsGoingBackwards() throws Exception {
+        Account me = account("거꾸로");
+        long dogId = dog(me, "달이");
+
+        save(me, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":100,"durationS":7,
+                 "path":[[126.9780,37.5665],[126.9800,37.5670]],"pathT":[7,3]}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(7)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("음수면 400 이다 — 시작 전이다")
+    void rejectsNegative() throws Exception {
+        Account me = account("음수");
+        long dogId = dog(me, "나무");
+
+        save(me, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":100,"durationS":7,
+                 "path":[[126.9780,37.5665],[126.9800,37.5670]],"pathT":[-1,3]}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(7)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("안 보내도 저장된다 — 손입력 기록에는 시각이 없다")
+    void pathTimesAreOptional() throws Exception {
+        Account me = account("손입력");
+        long dogId = dog(me, "복이");
+
+        save(me, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":2000,"durationS":1800}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(1800)))
+                .andExpect(status().isCreated());
+    }
+
     /** 글을 고치는 요청 하나. */
     private ResultActions memo(Account account, long walkId, String json) throws Exception {
         return mockMvc.perform(put("/api/walks/" + walkId + "/memo")
