@@ -6,7 +6,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -37,11 +40,41 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 이 테스트가 지키는 것은 <b>"빠뜨리지 않았다"</b> 하나다.
  *
  * <p>네트워크를 타지 않는다. 저장소 안의 파일만 읽는다.
+ *
+ * <h2>로컬에서 이 검사를 깨 볼 때</h2>
+ * <p><b>{@code --rerun-tasks --no-build-cache} 를 붙여야 한다.</b> 여기서 읽는 것들
+ * ({@code app/lib/**.dart} · {@code docs/**.md})은 Gradle 의 {@code test} 입력이 아니라,
+ * 그 파일만 고치고 다시 돌리면 <b>실행조차 안 되고 캐시된 초록불이 나온다.</b> #177 의
+ * 빨간불을 확인하다 실제로 두 번 속았다 — {@code cleanTest} 도 안 통한다(결과가
+ * 캐시에서 복원된다).
+ *
+ * <p>CI 는 깨끗한 작업 공간에서 돌아 이 함정이 없다. 입력을 선언해 고칠 수도 있지만
+ * 그러면 문서 한 줄만 고쳐도 전체 테스트 태스크가 다시 도는 값을 치른다.
  */
 class StructureDocDriftTest {
 
     /** 백엔드 기저 패키지. 이 아래 1단 디렉터리가 곧 "패키지 목록" 이다. */
     private static final String BASE_PACKAGE = "src/main/java/com/heattrip/heat_trip_backend";
+
+    /** 탭 표를 <b>표 모양까지</b> 지키는 문서. 여기 한 곳만 조인다. */
+    private static final String TAB_TABLE_DOC = "01-design/information-architecture.md";
+
+    /** {@code | 탭 3 | 채팅 | ...} 행. {@code FAB(가운데)} · {@code 글로벌} 행은 안 걸린다. */
+    private static final Pattern TAB_TABLE_ROW =
+            Pattern.compile("\\|\\s*탭\\s+(\\d+)\\s*\\|([^|]+)\\|");
+
+    /** {@code item(Icons.chat_bubble_outline, '채팅', 3)}. */
+    private static final Pattern SHELL_TAB_ITEM = Pattern.compile(
+            "item\\(\\s*Icons\\.\\w+\\s*,\\s*'([^']+)'\\s*,\\s*(\\d+)\\s*\\)");
+
+    /** 탭을 <b>나열</b>하는 문서들. 라벨이 나오는지만 본다. */
+    private static final List<String> TAB_LISTING_DOCS = List.of(
+            "01-design/information-architecture.md",
+            "01-design/feature-spec.md",
+            "01-design/screen-spec.md",
+            "01-design/user-flows.md",
+            "02-architecture/system-overview.md",
+            "05-build/implementation-status.md");
 
     /**
      * 시뮬 이동을 <b>현재 동작</b>이라고 말하는 표현들.
@@ -195,7 +228,90 @@ class StructureDocDriftTest {
                 .isEmpty();
     }
 
+    @Test
+    @DisplayName("탭 표가 main_shell.dart 의 라벨·화면과 1:1 로 맞는다")
+    void tabDocs_matchTheShell() {
+        Map<Integer, String> code = shellTabs();
+
+        assertThat(code)
+                .as("main_shell.dart 에서 탭을 하나도 못 읽었다면 아래 단언들이 조용히 통과한다")
+                .isNotEmpty();
+
+        String doc = RepositoryDocs.requireDoc(TAB_TABLE_DOC);
+        Map<Integer, String> table = new LinkedHashMap<>();
+        Matcher row = TAB_TABLE_ROW.matcher(doc);
+        while (row.find()) {
+            table.put(Integer.parseInt(row.group(1)), row.group(2).trim());
+        }
+
+        assertThat(table)
+                .as("""
+                        %s 의 탭 표를 한 행도 못 읽었다. 표의 모양이 바뀐 것이라면 이 검사도 \
+                        함께 고친다 — 못 읽는 검사는 통과하는 검사와 구별되지 않는다.""", TAB_TABLE_DOC)
+                .isNotEmpty();
+
+        assertThat(table)
+                .as("""
+                        5번째 탭을 '통계' 라고 적은 문서가 여섯 개 남아 있었다(#177). 통계는 \
+                        2026-08 에 탭에서 내려갔고 그 자리에 채팅이 들어왔다(#78~#81). 그 사이 \
+                        수동 회귀 항목 둘(test-checklist N2·N3)이 없는 라벨을 찾으라고 \
+                        지시하고 있었다. 탭을 바꿨으면 이 표도 함께 고친다.""")
+                .containsExactlyInAnyOrderEntriesOf(code);
+    }
+
+    @Test
+    @DisplayName("탭을 나열하는 문서들이 실제 탭 라벨을 하나도 빠뜨리지 않는다")
+    void tabDocs_nameEveryTabLabel() {
+        Collection<String> labels = shellTabs().values();
+        assertThat(labels).as("라벨을 하나도 못 읽었다").isNotEmpty();
+
+        List<String> missing = new ArrayList<>();
+        for (String docPath : TAB_LISTING_DOCS) {
+            String doc = RepositoryDocs.requireDoc(docPath);
+            labels.stream().filter(label -> !doc.contains(label))
+                    .forEach(label -> missing.add(docPath + " — " + label));
+        }
+
+        assertThat(missing)
+                .as("""
+                        느슨하게 잡는다 — 라벨이 문서 어딘가 나오는지만 본다. 표의 모양은 \
+                        위 검사가 한 문서에서만 조인다. 여기가 잡는 것은 '탭을 하나 더 \
+                        늘렸는데 문서 여덟 곳을 안 고쳤다' 쪽이다.""")
+                .isEmpty();
+    }
+
     // ─────────────────────────── 지그 ───────────────────────────
+
+    /**
+     * {@code main_shell.dart} 의 바텀네비에서 (탭 번호 → 라벨) 을 읽는다.
+     *
+     * <p>{@code item(Icons.chat_bubble_outline, '채팅', 3)} 한 줄이 원본이다. 스위치(화면)가
+     * 아니라 <b>라벨</b>을 읽는 이유는 #177 이 틀렸던 것이 라벨이기 때문이다 — 화면 클래스는
+     * {@code ChatListScreen} 으로 맞게 적혀 있었는데 사람이 보는 이름만 '통계' 였다.
+     */
+    private static Map<Integer, String> shellTabs() {
+        Path repositoryRoot = TestProjectPaths.backendDir().getParent();
+        assertThat(repositoryRoot).as("저장소 루트를 못 찾았다").isNotNull();
+
+        Path shell = repositoryRoot.resolve("app/lib/v2/screens/main_shell.dart");
+        assertThat(Files.isRegularFile(shell))
+                .as("셸을 못 찾았다: %s — 옮겼다면 이 테스트도 함께 고친다. skip 하지 않는다", shell)
+                .isTrue();
+
+        String source;
+        try {
+            source = Files.readString(shell, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("셸을 읽지 못했다: " + shell, e);
+        }
+
+        Map<Integer, String> tabs = new LinkedHashMap<>();
+        Matcher item = SHELL_TAB_ITEM.matcher(source);
+        while (item.find()) {
+            tabs.put(Integer.parseInt(item.group(2)), item.group(1));
+        }
+        return tabs;
+    }
 
     /** 디렉터리 바로 아래의 하위 디렉터리 이름들. */
     private static List<String> subdirectoriesOf(Path dir) {
