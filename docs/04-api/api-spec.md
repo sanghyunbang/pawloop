@@ -576,9 +576,9 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
       "loc": "서울숲",
       "contentId": "126508",
       "title": "서울숲 아침 산책 코스 추천",
-      "bodyPreview": "이른 아침엔 사람이 적어서 대형견도 편해요...",
+      "body": "이른 아침엔 사람이 적어서 대형견도 편해요. 잔디마당은 목줄 필수!",
       "commentCount": 4,
-      "reactions": { "help": 7, "cute": 3, "empathy": 2 },
+      "reactions": { "help": 7, "cute": 3, "empathy": 2, "mine": ["cute"] },
       "createdAt": "2026-06-30T09:00:00+09:00"
     }
   ],
@@ -627,7 +627,7 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
   "items": [
     {
       "id": 900,
-      "author": { "id": 51, "nickname": "초코맘", "avatarUrl": "https://.../51.png" },
+      "author": { "userId": 51, "nickname": "초코맘" },
       "body": "저도 아침에 자주 가요! 배변봉투통 위치 공유 감사합니다.",
       "createdAt": "2026-06-30T09:20:00+09:00"
     }

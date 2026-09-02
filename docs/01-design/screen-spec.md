@@ -20,7 +20,7 @@
 
 ### 네비게이션 셸 (`main_shell.dart` · `MainShell`)
 - **떠 있는 글래스 알약 바텀네비**(하단 오버레이, 배경 위에 항상 표시) + **가운데 솟은 기록(+) 버튼**.
-- 탭 5개: **홈(0) · 지도(1) · [산책 FAB] · 커뮤니티(2) · 채팅(3)**. 통계는 탭이 아니라 `me_screen` 에서 push 한다.
+- 탭 5개: **홈(0) · 지도(1) · [산책 FAB] · 커뮤니티(2) · 채팅(3)**. 통계는 탭이 아니라 `me_screen`·`today_screen` 둘에서 push 한다.
   - 탭 상태: `RootTab.index`(ValueNotifier<int>). 지도 서브뷰: `RootTab.exploreView`('list'|'map').
   - 활성 탭 강조색 accent `#8E7BFF`(굵게 + 색).
 - 가운데 FAB(58px, warm→lilac 그라데이션, edit 아이콘): 탭하면 `WalkTrackingScreen`(산책 트래킹)을 push.

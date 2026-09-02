@@ -37,21 +37,39 @@
 
 ## 2. Controller
 
-**클래스:** `CommunityController` — `@RestController` + `@RequestMapping("/api/community")`
-(social `SocialController` 스타일: 생성자 주입 `CommunityService`/`JWTProvider`/`UserService`, `private User requireUser(HttpServletRequest)`로 JWT subject(email)→User 추출. 읽기 엔드포인트는 requireUser 호출 안 함.)
+**클래스:** `CommunityController` — `@RestController` + `@RequestMapping("/api/community")`. 생성자 주입은 `CommunityService` 하나다.
+
+> [!WARNING]
+> **`requireUser(HttpServletRequest)` 를 만들지 않는다.** 2026-09 이전 이 문서는 그 패턴을
+> 지시했는데, #5 가 컨트롤러별 헬퍼를 전부 지웠고 `AuthSubjectContractSpecTest` 가 **소스
+> 스캔으로 막는다.** 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이다.
+>
+> - **인증 필수** 경로 — `@CurrentUser User me` 파라미터 하나. 주입 실패는 전부 본문 없는 401.
+> - **인증 선택** 경로(GET 셋) — `@CurrentUser` 를 **쓰지 않는다.** 그것은 실패를 401 로 만드는
+>   것이 설계라 게스트를 못 받는다. 주체는 **컨트롤러 밖**, 즉 필터가 채운 `SecurityContext` 의
+>   `AuthenticatedUser` 에서 읽는다([ADR-0016](../../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) 결정 3).
+>   새 애노테이션도 새 리졸버도 만들지 않는다.
 
 | # | HTTP · 경로 | 메서드 시그니처 (파라미터 타입) | 반환 DTO | 인증 | openapi paths |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `GET /api/community/posts` | `feed(@RequestParam(required=false) String board, @RequestParam(required=false) String cursor, @RequestParam(defaultValue="20") Integer limit, HttpServletRequest req)` | `PostPageDto` (`Page` + `items: List<PostDto>`) | ✕ | `/api/community/posts` GET |
-| 2 | `POST /api/community/posts` | `create(@RequestBody PostRequest body, HttpServletRequest req)` | `PostDto` (201) | ✔ | `/api/community/posts` POST |
-| 3 | `GET /api/community/posts/{postId}` | `detail(@PathVariable Long postId, HttpServletRequest req)` | `PostDto` | ✕ | `/api/community/posts/{postId}` GET |
-| 4 | `GET /api/community/posts/{postId}/comments` | `comments(@PathVariable Long postId)` | `List<CommentDto>` | ✕ | `.../comments` GET |
-| 5 | `POST /api/community/posts/{postId}/comments` | `addComment(@PathVariable Long postId, @RequestBody CommentRequest body, HttpServletRequest req)` | `CommentDto` (201) | ✔ | `.../comments` POST |
+| 1 | `GET /api/community/posts` | `feed(String board, String cursor, Integer limit)` | `PostPageResponse` (`Page` + `items: List<PostResponse>`) | **선택** | `/api/community/posts` GET |
+| 2 | `POST /api/community/posts` | `create(@CurrentUser User me, @Valid @RequestBody PostRequest body)` | `PostResponse` (201) | ✔ | `/api/community/posts` POST |
+| 3 | `GET /api/community/posts/{postId}` | `detail(@PathVariable long postId)` | `PostResponse` | **선택** | `/api/community/posts/{postId}` GET |
+| 4 | `GET /api/community/posts/{postId}/comments` | `comments(@PathVariable long postId, String cursor, Integer limit)` | `CommentPageResponse` (커서 봉투) | **선택** | `.../comments` GET |
+| 5 | `POST /api/community/posts/{postId}/comments` | `addComment(@CurrentUser User me, @PathVariable long postId, @Valid @RequestBody CommentRequest body)` | `CommentResponse` (201) | ✔ | `.../comments` POST |
 | 6 | `POST /api/community/posts/{postId}/reactions/{type}` | `addReaction(@CurrentUser User me, @PathVariable Long postId, @PathVariable String type)` | `ReactionSummary` | ✔ | `.../reactions/{type}` POST |
 | 7 | `DELETE /api/community/posts/{postId}/reactions/{type}` | `removeReaction(@CurrentUser User me, @PathVariable Long postId, @PathVariable String type)` | `ReactionSummary` | ✔ | `.../reactions/{type}` DELETE |
 
-> **반환 규약(social 준수):** 메서드는 `ResponseEntity<?>` 반환. 정상은 `ResponseEntity.ok(dto)` / 작성은 `ResponseEntity.status(HttpStatus.CREATED).body(dto)`. 검증 실패는 `IllegalArgumentException` → `ResponseEntity.badRequest().body(Map.of("error", ...))`, not-found는 404 매핑, 그 외는 500. (읽기 시 `mine`은 인증 헤더가 있으면 채우고 없으면 null — requireUser 대신 optional 추출 헬퍼를 두는 것도 가능.)
-> **인증 추출:** `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (#5 이전에는 컨트롤러마다 `requireUser` 헬퍼가 헤더를 다시 읽고 `findByEmail` 을 했다 — 그 헬퍼들은 전부 삭제됐다.)
+> **반환 규약.** `ResponseEntity<?>` 를 쓰지 않는다 — DTO 를 그대로 반환하고 상태 코드는
+> `@ResponseStatus` 로 붙인다(`walk`·`dog` 이 그 모양이다). `ResponseEntity<?>` 는 springdoc 이
+> 응답 스키마를 못 읽어 **생성 계약이 비어 버린다.**
+>
+> 검증 실패는 `IllegalArgumentException`, 없는 리소스는 `ResponseStatusException(NOT_FOUND)`.
+> 오류 봉투는 `GlobalExceptionHandler` 하나가 만든다 — 컨트롤러가 `Map.of("error", ...)` 를
+> 직접 만들지 않는다(#10 이 봉투를 하나로 합쳤다).
+>
+> **`mine` 은 인증 선택 경로에서만 채워진다.** 게스트에게는 `null` 이고 그것이 계약이다
+> (ADR-0017 규약 6). `[]` 는 "로그인했는데 아무것도 안 눌렀다" 라 뜻이 다르다.
 
 ---
 
@@ -153,7 +171,7 @@
 
 ## 5. Entity & Repository
 
-패키지 `com.heattrip.heat_trip_backend.community.entity` / `.repository`. lombok `@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder`, `@PrePersist`로 `createdAt` 세팅(social 스타일). 테이블 정의는 [`schema.md`](../../03-database/schema.md) §6~8 기준.
+패키지 `com.heattrip.heat_trip_backend.community.entity` / `.repository`. lombok `@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder`, `@PrePersist`로 `createdAt` 세팅(social 스타일). 테이블 정의는 `schema.md §7` `post` · `schema.md §8` `comment` · `schema.md §9` `reaction` 기준이고, **세 표는 실재한다** — `mysql/post-start/14_community.sql` 이 세웠다(#169). 정본은 [`schema.md`](../../03-database/schema.md) 다.
 
 ### Entity: `Post` (`@Table(name="post")`)
 | 엔티티 필드 | 컬럼 | 타입/제약 | 비고 |

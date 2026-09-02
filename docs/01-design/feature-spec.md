@@ -11,7 +11,7 @@
 Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 공간"을 지향한다. **산책을 wedge로** 좁게 시작해 지도(동반장소)·커뮤니티·프로필로 확장한다. 감정 여행(heattrip) 앱에서 피벗하며 감정 요소는 전부 제거됐다.
 
 - 진입: `main.dart` → `MainShell`(`lib/v2/screens/main_shell.dart`)
-- 네비 5탭 구성: **홈 · 지도 · [산책 기록 FAB] · 커뮤니티 · 채팅** (가운데 솟은 원형 FAB → 실시간 산책 트래킹). 통계는 탭이 아니라 `me_screen` 에서 push 한다
+- 네비 5탭 구성: **홈 · 지도 · [산책 기록 FAB] · 커뮤니티 · 채팅** (가운데 솟은 원형 FAB → 실시간 산책 트래킹). 통계는 탭이 아니라 `me_screen`·`today_screen` 둘에서 push 한다
 - 상태관리: `ValueNotifier` + `ValueListenableBuilder` (경량). 탭 인덱스/지도뷰는 `RootTab`(전역 `ValueNotifier`)로 보관.
 - 도메인 SSOT: `lib/v2/domain/pet.dart` (`DogProfile`, `PetCategory`, `PetPost` 등). 산책은 `lib/v2/data/walk_*.dart` 다(#145).
 
