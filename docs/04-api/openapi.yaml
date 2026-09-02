@@ -96,6 +96,21 @@ security:
   - bearerAuth: []
 
 paths:
+  # ── 구현 없는 오퍼레이션의 표시 ──────────────────────────────
+  #
+  # 이 문서는 "서버가 무엇을 약속하는가" 의 단일 출처다(#4). 그래서 핸들러가 없는
+  # 경로를 아무 표시 없이 실어 두면, 그것을 보고 만든 앱이 404 를 받는다.
+  #
+  #   x-status: planned    아직 구현이 없다. 계약을 먼저 둔 것이다(선행 계약).
+  #   x-status: framework  구현은 있지만 우리 컨트롤러가 아니다(Spring Security 필터 등).
+  #                        생성본(/v3/api-docs)에는 안 나오므로 따로 구분한다.
+  #   (표시 없음)          컨트롤러 매핑이 실제로 있다.
+  #
+  # x-status-note 에 "왜 아직 없는가" 를 한 줄로 적는다. 무엇이 막고 있는지를 적어야
+  # 다음 사람이 그 순서를 다시 추론하지 않는다.
+  #
+  # GeneratedOpenApiSpecTest 가 이 표시를 강제한다 — 표시 없는 오퍼레이션이 생성본에
+  # 없으면 빨간불이다. 반대로 구현이 붙었는데 planned 가 남아 있어도 빨간불이다.
   # ─────────────────────────── Auth ───────────────────────────
   /auth/signup:
     post:
@@ -167,6 +182,9 @@ paths:
 
   /oauth2/authorization/{provider}:
     get:
+      x-status: framework
+      x-status-note: |
+        Spring Security 의 OAuth2 인가 엔드포인트다. 우리 컨트롤러가 아니라 필터가 처리하므로 생성본(/v3/api-docs)에는 안 나온다.
       tags: [Auth]
       summary: 소셜 로그인 시작(302 리다이렉트) — Spring Security OAuth2 진입점
       description: |
@@ -229,6 +247,9 @@ paths:
 
   /login/oauth2/code/{provider}:
     get:
+      x-status: framework
+      x-status-note: |
+        Spring Security 의 리다이렉트 수신 엔드포인트다. 우리 컨트롤러가 아니라 필터가 처리하므로 생성본에는 안 나온다.
       tags: [Auth]
       summary: 공급자 리디렉션 수신(Spring Security 내부 콜백)
       description: |
@@ -541,6 +562,9 @@ paths:
               schema: { $ref: '#/components/schemas/Dog' }
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
+      x-status: planned
+      x-status-note: |
+        부분 수정은 아직 없다. `DogPatch` 를 `DogRequest` 와 어떻게 나눌지는 #24(계약 규약 ADR)가 소유한다 — `DogController` javadoc 이 같은 말을 한다.
       tags: [Dogs]
       summary: 반려견 수정(부분)
       requestBody:
@@ -556,6 +580,9 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
     delete:
+      x-status: planned
+      x-status-note: |
+        삭제는 아직 없다. 산책 기록이 매달린 반려동물을 지울 때의 규칙(#154)이 먼저다.
       tags: [Dogs]
       summary: 반려견 삭제
       responses:
@@ -823,6 +850,9 @@ paths:
   # ─────────────────────────── Community ───────────────────────────
   /api/community/posts:
     get:
+      x-status: planned
+      x-status-note: |
+        M3.1(#169~#172)의 선행 계약이다. 앱이 이 모양을 보고 먼저 만들 수 있도록 계약을 먼저 뒀다.
       tags: [Community]
       summary: 게시글 목록
       security: []
@@ -847,6 +877,9 @@ paths:
                         type: array
                         items: { $ref: '#/components/schemas/Post' }
     post:
+      x-status: planned
+      x-status-note: |
+        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 게시글 작성
       requestBody:
@@ -864,6 +897,9 @@ paths:
 
   /api/community/posts/{postId}:
     get:
+      x-status: planned
+      x-status-note: |
+        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 게시글 상세
       security: []
@@ -881,6 +917,9 @@ paths:
     parameters:
       - $ref: '#/components/parameters/PostId'
     get:
+      x-status: planned
+      x-status-note: |
+        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 댓글 목록
       security: []
@@ -893,6 +932,9 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/Comment' }
     post:
+      x-status: planned
+      x-status-note: |
+        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 댓글 작성
       requestBody:
@@ -914,6 +956,9 @@ paths:
 
   /api/community/posts/{postId}/reactions:
     post:
+      x-status: planned
+      x-status-note: |
+        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 반응 토글(도움돼요/귀여워요/공감)
       parameters:
@@ -938,6 +983,9 @@ paths:
   # ─────────────────────────── Bookmarks ───────────────────────────
   /api/bookmarks:
     get:
+      x-status: planned
+      x-status-note: |
+        v2(반려) 북마크는 아직 없다. 레거시 heattrip 의 `/bookmarks` 는 경로도 스키마도 다른 별개 기능이고 이 계약의 범위 밖이다 — #94 의 레거시 셸 결정을 기다린다.
       tags: [Bookmarks]
       summary: 저장한 장소 목록
       responses:
@@ -950,6 +998,9 @@ paths:
                 items: { $ref: '#/components/schemas/Place' }
         '401': { $ref: '#/components/responses/Unauthorized' }
     post:
+      x-status: planned
+      x-status-note: |
+        v2(반려) 북마크는 아직 없다. 레거시 `/bookmarks` 와 다른 기능이다 — #94.
       tags: [Bookmarks]
       summary: 장소 북마크 추가
       requestBody:
@@ -968,6 +1019,9 @@ paths:
 
   /api/bookmarks/{placeId}:
     delete:
+      x-status: planned
+      x-status-note: |
+        v2(반려) 북마크는 아직 없다. 레거시 `/bookmarks/{contentId}` 와 다른 기능이다 — #94.
       tags: [Bookmarks]
       summary: 북마크 삭제
       parameters:
@@ -1204,6 +1258,9 @@ paths:
     parameters:
       - $ref: '#/components/parameters/RoomId'
     get:
+      x-status: planned
+      x-status-note: |
+        방 상세 단건 조회는 아직 없다. 앱은 `GET /api/chat/rooms` 목록에서 방을 고른다.
       tags: [Chat]
       summary: 방 상세(멤버 목록 · 내 lastReadSeq · 역할)
       responses:
@@ -1514,6 +1571,9 @@ paths:
     parameters:
       - $ref: '#/components/parameters/RoomId'
     delete:
+      x-status: planned
+      x-status-note: |
+        방 나가기는 아직 없다. `ChatMemberController` 가 자기 javadoc 에 "여기 없다" 고 적어 둔 그 동작이다 — 강퇴(`members/{userId}`)와 다른 규칙이 필요하다.
       tags: [Chat]
       summary: 방 나가기
       responses:
@@ -1588,6 +1648,9 @@ paths:
         required: true
         schema: { type: integer, format: int64 }
     delete:
+      x-status: planned
+      x-status-note: |
+        메시지 삭제는 아직 없다. 지운 자리를 목록·커서에서 어떻게 다루는지가 먼저 정해져야 한다.
       tags: [Chat]
       summary: 메시지 삭제
       description: |

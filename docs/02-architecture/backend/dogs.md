@@ -24,18 +24,20 @@
 
 ## 2. Controller — `DogController`
 
-`@RestController @RequestMapping("/api/dogs")`. openapi paths와 1:1.
+`@RestController @RequestMapping("/api/dogs")`.
+
+**openapi paths 와 1:1 이 아니다.** 계약에는 다섯이 있고 핸들러는 셋이다 — 나머지 둘은 계약에서 `x-status: planned` 로 표시돼 있고 `GeneratedOpenApiSpecTest` 가 그 표시를 강제한다(#201). 아바타 업로드는 **계약에도 코드에도 없다.**
 
 > **아래 표의 `HttpServletRequest request` 시그니처는 #5 이전 서술이라 더는 맞지 않는다.** 인증 사용자는 `@CurrentUser User me` 파라미터 하나로 받는다 — `HttpServletRequest` 에서 직접 꺼내는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다(§6.1).
 
 | HTTP · 경로 | 메서드 시그니처 | 반환 DTO | 인증 | openapi |
 | --- | --- | --- | --- | --- |
-| `GET /api/dogs` | `list(HttpServletRequest request)` | `List<DogDto>` (200) | 필요 | `/api/dogs` get |
-| `POST /api/dogs` | `create(@RequestBody DogInputRequest req, HttpServletRequest request)` | `DogDto` (201) | 필요 | `/api/dogs` post |
-| `GET /api/dogs/{dogId}` | `detail(@PathVariable("dogId") Long dogId, HttpServletRequest request)` | `DogDto` (200 / 404) | 필요\* | `/api/dogs/{dogId}` get |
-| `PATCH /api/dogs/{dogId}` | `update(@PathVariable("dogId") Long dogId, @RequestBody DogInputRequest req, HttpServletRequest request)` | `DogDto` (200 / 403 / 404) | 필요 | `/api/dogs/{dogId}` patch |
-| `DELETE /api/dogs/{dogId}` | `delete(@PathVariable("dogId") Long dogId, HttpServletRequest request)` | `Void` (204 / 403) | 필요 | `/api/dogs/{dogId}` delete |
-| `POST /api/dogs/{dogId}/avatar` | `uploadAvatar(@PathVariable("dogId") Long dogId, @RequestPart("file") MultipartFile file, HttpServletRequest request)` | `DogDto` (200 / 403 / 404) | 필요 | (openapi 미기재 — 아바타 업로드 확장. `consumes=multipart/form-data`) |
+| `GET /api/dogs` | `list(@CurrentUser User user)` | `List<DogResponse>` (200) | 필요 | `/api/dogs` get |
+| `POST /api/dogs` | `register(@CurrentUser User user, @Valid @RequestBody DogRequest request)` | `DogResponse` (201) | 필요 | `/api/dogs` post |
+| `GET /api/dogs/{dogId}` | `detail(@CurrentUser User user, long dogId)` | `DogResponse` (200 / 404) | 필요\* | `/api/dogs/{dogId}` get |
+| ~~`PATCH /api/dogs/{dogId}`~~ | **아직 없다.** 부분 수정을 `DogRequest` 와 어떻게 나눌지는 #24 가 소유한다 | — | — | `x-status: planned` |
+| ~~`DELETE /api/dogs/{dogId}`~~ | **아직 없다.** 산책 기록이 매달린 반려동물을 지울 때의 규칙(#154)이 먼저다 | — | — | `x-status: planned` |
+| ~~`POST /api/dogs/{dogId}/avatar`~~ | **아직 없다.** 계약에도 없다 | — | — | (계약 미기재) |
 
 - openapi `Dog` 스펙상 CRUD 응답은 순수 `Dog` 객체(커서 페이지네이션 대상 아님 — 목록은 배열 그대로). 따라서 `Page`/`nextCursor` 미적용.
 - `\*` 상세(get)는 openapi에 `security` 표기가 없으나, 소유권 검증이 필요하므로 인증 유지 권장(타인 dog 열람 차단). 정책 확정 필요 시 노트 참고.
@@ -48,7 +50,7 @@
 
 Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 
-### 3.1 `DogDto` (응답) ↔ openapi `Dog`
+### 3.1 `DogResponse` (자바, 응답) ↔ 계약의 `Dog`
 
 | 필드 | 타입 | openapi `Dog` | 비고 |
 | --- | --- | --- | --- |
@@ -61,7 +63,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | `neutered` | `boolean` | `neutered` | |
 | `avatarUrl` | `String` | `avatarUrl` | nullable. 저장은 objectKey, 응답은 `MediaService.publicUrl(...)` 조립 값 |
 
-### 3.2 `DogInputRequest` (요청) ↔ openapi `DogInput`
+### 3.2 `DogRequest` (자바, 요청) ↔ 계약의 `DogInput`
 
 | 필드 | 타입 | 필수 | openapi `DogInput` | 비고 |
 | --- | --- | --- | --- | --- |
@@ -71,7 +73,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | `birth` | `String` | 선택 | `birth` | ISO date 문자열; 서비스에서 `LocalDate.parse` |
 | `neutered` | `Boolean` | 선택 | `neutered` | 기본 `false`(래퍼 타입으로 두어 PATCH 부분수정 구분) |
 
-- PATCH(부분 수정)는 `DogInputRequest` 재사용. **null=미변경** 규약(social의 `handle` null 처리 스타일). `size`는 값이 오면 검증, `name`은 create시 필수·patch시 선택으로 서비스에서 분기.
+- PATCH(부분 수정)는 `DogRequest` 재사용. **null=미변경** 규약(social의 `handle` null 처리 스타일). `size`는 값이 오면 검증, `name`은 create시 필수·patch시 선택으로 서비스에서 분기.
 - `ageMonths`는 요청에 없고 응답 전용 파생값(`birth` → 현재일 기준 개월). 정규 저장값은 `birth`(schema.md §3 주석: "나이는 앱에서 개월 수로 표시하나 DB는 birth로 저장").
 - 아바타 업로드 요청 바디는 별도 DTO 없음 — multipart `file` 파트만(MediaController와 동일).
 - 공통 DTO: 에러는 별도 record 없이 social 관례대로 `Map.of("error", ...)` 사용(참조만). openapi `Error`/`Page` 스키마는 이 리소스 응답에 직접 등장하지 않음.
@@ -84,14 +86,14 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 
 | 시그니처 | 책임(한 줄) |
 | --- | --- |
-| `List<DogDto> listByUser(Long userId)` | 해당 사용자의 dog 전체를 등록순/이름순으로 조회해 DTO 목록 반환. |
-| `DogDto create(Long userId, DogInputRequest req)` | size/name 검증 후 `Dog` 신규 저장(소유자=userId), 저장 결과를 DTO로. |
-| `DogDto get(Long userId, Long dogId)` | dogId 조회 → 없으면 NOT_FOUND, 소유자 아니면 FORBIDDEN, DTO 반환. |
-| `DogDto update(Long userId, Long dogId, DogInputRequest req)` | 소유권 검증 후 전달된 non-null 필드만 부분 갱신, DTO 반환. |
-| `void delete(Long userId, Long dogId)` | 소유권 검증 후 삭제(연쇄 삭제 영향은 노트 참고). |
-| `DogDto updateAvatar(Long userId, Long dogId, MultipartFile file)` | 소유권 검증 → `MediaService`로 업로드(카테고리 `PROFILE_IMAGE`) → `dog.avatar`에 objectKey 저장 → 응답 DTO의 `avatarUrl`은 `publicUrl`로 조립. |
-| `DogDto toDto(Dog dog)` (private/헬퍼) | 엔티티→DTO 매핑(`ageMonths` 파생, `avatar`→`avatarUrl` publicUrl 변환). |
-| `void requireOwner(Dog dog, Long userId)` (private 헬퍼) | `dog.userId != userId` 이면 403(`ResponseStatusException` 또는 도메인 예외). |
+| `List<DogResponse> mine(Long userId)` | 해당 사용자의 dog 전체를 조회해 응답 목록으로. |
+| `DogResponse one(Long userId, long dogId)` | 단건 조회 → 없거나 타인 소유면 404. |
+| `DogResponse register(User owner, DogRequest request)` | 검증 후 신규 저장(소유자=owner), 저장 결과를 응답으로. |
+| `void requireMine(Long userId, long dogId)` | 소유권만 확인한다. **다른 도메인(walk 등)이 부르는 공개 지점이다.** |
+| `Dog requireMineEntity(Long userId, Long dogId)` | 소유권 확인 + 엔티티 반환. 연관을 걸어야 하는 쪽이 쓴다. |
+| `(private) Dog require(Long userId, long dogId)` | 조회 + 소유권. 위 셋의 공통 바닥. |
+
+> **`update`·`delete`·`updateAvatar` 는 아직 없다.** 위 §2 의 표시와 같은 이유다. 아래 §3.2·§6 의 PATCH 부분수정 서술은 **그 날을 위한 설계**이지 현재 동작이 아니다.
 
 - 소유권 실패는 **403**, 리소스 없음은 **404** 로 구분(social은 400/500만 쓰지만, openapi Dogs는 403/404 명시하므로 `ResponseStatusException(HttpStatus.FORBIDDEN/NOT_FOUND)` 사용).
 - 검증 실패(잘못된 size, name 누락)는 **400**(`IllegalArgumentException` → 컨트롤러에서 `badRequest`, social 패턴).
@@ -139,7 +141,7 @@ schema.md §3 `dog` 테이블 기준. 엔티티 필드 ↔ 컬럼:
 3. **`ageMonths` 파생**: 저장 금지, 응답 시 `birth`↔현재일로 계산(`Period.between(birth, LocalDate.now()).toTotalMonths()`). `birth==null`이면 null 반환할지 0으로 둘지 openapi에 미정의 → 프론트와 합의(권장: null).
 4. **`birth` 직렬화**: 요청/응답 모두 ISO `yyyy-MM-dd` 문자열. 엔티티는 `LocalDate`. 파싱 실패는 400으로.
 5. **아바타 업로드 프록시(직접 S3 금지)**: `MediaService`에 위임. `UploadCategory.PROFILE_IMAGE`(prefix `profiles`, 허용 image/jpeg·png·webp, 최대 5MB) 사용. 검증(타입/크기)은 `S3/ImageValidator`·`UploadValidator`가 담당하므로 중복 검증 불필요. `dog.avatar`에는 **objectKey**를 저장하고, DTO의 `avatarUrl`은 `mediaService.publicUrl(objectKey)`로 조립(원본 URL을 DB에 박지 말 것 — CDN/버킷 변경 대응).
-6. **PATCH 부분수정 null 규약**: `DogInputRequest`의 래퍼 타입(`Boolean neutered` 등)으로 "미전송(null)=미변경" vs "false로 변경"을 구분. primitive로 두면 이 구분이 불가능하니 주의.
+6. **PATCH 부분수정 null 규약**: `DogRequest`의 래퍼 타입(`Boolean neutered` 등)으로 "미전송(null)=미변경" vs "false로 변경"을 구분. primitive로 두면 이 구분이 불가능하니 주의.
 7. **좌표/공간 없음**: Dogs는 EPSG:5174→WGS84, `ST_Distance_Sphere`, SPATIAL INDEX 모두 **해당 없음**(그건 `place`/`walk`/`trail` 리소스 사항). 여기선 신경 쓸 필요 없음.
 8. **트랜잭션**: `DogService`에 `@Transactional(readOnly=true)` 기본 + 쓰기 메서드(`create/update/delete/updateAvatar`)에 `@Transactional`(social `SocialService` 패턴 동일).
 9. **삭제 연쇄 영향 — `DELETE /api/dogs` 를 구현하는 날 반드시 소프트 삭제여야 한다.** `walk.fk_walk_dog ON DELETE CASCADE` 라, 물리 삭제하면 **그 반려동물의 산책 이력 전부가 조용히 함께 사라진다.** 되돌릴 수 없고, 사용자는 "프로필만 지웠다" 고 생각한다.

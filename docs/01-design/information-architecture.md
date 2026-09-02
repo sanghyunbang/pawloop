@@ -148,7 +148,7 @@ graph LR
     E --> Save["기록 저장하기 → CreateScreen"]
     E --> Skip["저장 안 함 → 닫기"]
 ```
-- 라이브 패널: 거리(km)·시간·페이스 + 일시정지/종료. (현재 GPS는 시뮬 이동, 실제론 geolocator → `walk.path` LINESTRING 예정.)
+- 라이브 패널: 거리(km)·시간·페이스 + 일시정지/종료. (실 GPS — `geolocator` 스트림 → `walk.path` LINESTRING 저장. 위치를 못 쓰면 이유별 안내 화면 + 직접 입력.)
 - **종료 → 완료 시트 → 기록 저장하기**가 `CreateScreen`으로의 핵심 진입점(`pushReplacement`, `prefillPlace: '오늘 산책'`).
 
 ### 4.4 💬 커뮤니티 (`FeedScreen`)

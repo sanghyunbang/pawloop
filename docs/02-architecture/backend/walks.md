@@ -27,24 +27,26 @@
 
 | HTTP · 경로 | 메서드 시그니처 (파라미터 타입) | 반환 DTO | 인증 |
 | --- | --- | --- | --- |
-| `GET /api/walks` | `listWalks(@RequestParam(required=false) Long dogId, @RequestParam(required=false) String cursor, @RequestParam(defaultValue="20") int limit, HttpServletRequest req)` | `ResponseEntity<WalkPageDto>` (items: `List<WalkDto>` + nextCursor + hasMore) | O |
-| `POST /api/walks` | `createWalk(@RequestBody WalkInput body, HttpServletRequest req)` | `ResponseEntity<WalkDto>` (201) | O |
-| `GET /api/walks/{walkId}` | `getWalk(@PathVariable Long walkId, HttpServletRequest req)` | `ResponseEntity<WalkDto>` (경로 포함) | O |
-| `GET /api/walks/stats/weekly` | `weeklyStats(@RequestParam(required=false) Long dogId, HttpServletRequest req)` | `ResponseEntity<WalkStatsDto>` | O |
+| `GET /api/walks` | `list(@CurrentUser User user, Long dogId, String cursor, Integer limit)` | `WalkPageResponse` (`items: List<WalkResponse>` · `nextCursor` · `hasMore`) | O |
+| `POST /api/walks` | `save(@CurrentUser User user, @Valid @RequestBody WalkRequest request)` | `ResponseEntity<WalkResponse>` (201) | O |
+| `GET /api/walks/stats/weekly` | `stats(@CurrentUser User user, Long dogId)` | `WalkStatsResponse` | O |
+| `GET /api/walks/{walkId}` | `detail(@CurrentUser User user, long walkId)` | `WalkResponse` — **경로가 실리는 유일한 응답이다** | O |
+| `PUT /api/walks/{walkId}/memo` | `rewriteMemo(@CurrentUser User user, long walkId, @Valid @RequestBody WalkMemoRequest request)` | `WalkResponse` (#187) | O |
+| `DELETE /api/walks/{walkId}` | `delete(@CurrentUser User user, long walkId)` | `void` (204) | O |
 
 > 메모: `GET /{walkId}` 의 `401` 은 계약에 추가됐다(#24 · #145). **타인 산책과 없는 산책은 똑같이 404 다** — 403 을 주면 "그 id 는 존재한다" 를 알려 주는 셈이라 id 를 훑어 남의 기록 수를 셀 수 있다.
 >
-> `userId` 는 `@CurrentUser User me` 로 받는다. `HttpServletRequest` 에서 직접 꺼내는 것은 **금지**이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다(§6 참조). 위 표의 `HttpServletRequest req` 시그니처는 #5 이전 서술이라 더는 맞지 않는다.
+> `userId` 는 `@CurrentUser User me` 로 받는다. `HttpServletRequest` 에서 직접 꺼내는 것은 **금지**이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다(§6 참조). 
 
 ---
 
 ## 3. DTO (record)
 
-패키지 `...walk.dto`. 요청 `XxxInput`, 응답 `XxxDto`. 공통 `Error`는 기존 것 참조, 페이지 응답은 `Page` 스키마(`items`/`nextCursor`/`hasMore`)와 매핑.
+패키지 `...walk.dto`. **자바 쪽 이름은 요청 `XxxRequest`, 응답 `XxxResponse`** 이고(`WalkRequest`·`WalkResponse`·`WalkPageResponse`·`WalkStatsResponse`·`WalkMemoRequest`), **계약(openapi)의 스키마 이름은 `WalkInput`·`Walk`** 다. 둘이 다른 것은 의도다 — 계약은 언어를 안 고르고, 자바는 자기 관용을 따른다. 아래 절들이 어느 쪽 이름을 말하는지 매번 밝힌다. 공통 `Error` 는 기존 것 참조, 페이지 응답은 `Page` 스키마(`items`/`nextCursor`/`hasMore`)와 매핑.
 
 ### 3.1 요청
 
-**`WalkInput`** — openapi `WalkInput` 매핑 (required: dogId, startedAt, distanceM, durationS)
+**`WalkRequest`** (자바) — 계약의 `WalkInput` 스키마와 매핑 (required: dogId, startedAt, distanceM, durationS)
 
 | 필드 | 타입 | 비고 |
 | --- | --- | --- |
@@ -59,7 +61,7 @@
 
 ### 3.2 응답
 
-**`WalkDto`** — openapi `Walk` 매핑
+**`WalkResponse`** (자바) — 계약의 `Walk` 스키마와 매핑
 
 | 필드 | 타입 | 비고 |
 | --- | --- | --- |
@@ -75,15 +77,15 @@
 
 > 목록(`GET /api/walks`) 응답의 `path`는 페이로드 절감을 위해 생략/빈 배열 정책 고려 가능(상세에서만 완전 경로 반환). 정책 선택은 구현 노트 참조.
 
-**`WalkPageDto`** — `Page`(allOf) 매핑 (커서 페이지네이션)
+**`WalkPageResponse`** (자바) — 계약의 `Page`(allOf) 와 매핑 (커서 페이지네이션)
 
 | 필드 | 타입 | 비고 |
 | --- | --- | --- |
-| `items` | `List<WalkDto>` | |
+| `items` | `List<WalkResponse>` | |
 | `nextCursor` | `String` | nullable. 다음 페이지 커서(불투명 토큰) |
 | `hasMore` | `boolean` | |
 
-**`WalkStatsDto`** — openapi `WalkStats` 매핑
+**`WalkStatsResponse`** (자바) — 계약의 `WalkStats` 스키마와 매핑
 
 | 필드 | 타입 | 비고 |
 | --- | --- | --- |
@@ -110,12 +112,12 @@
 
 | 메서드 시그니처 | 한 줄 책임 |
 | --- | --- |
-| `WalkPageDto listWalks(Long userId, Long dogId, String cursor, int limit)` | 요청자 소유 산책만 커서 기준으로 페이징 조회 후 DTO 변환 |
-| `WalkDto createWalk(Long userId, WalkInput input)` | dog 소유 검증 후 좌표배열→LINESTRING 변환하여 walk 저장, 저장된 walk를 DTO로 반환 |
-| `WalkDto getWalk(Long userId, Long walkId)` | 단건 조회 + 소유권 확인 후 경로 포함 DTO 반환(없거나 타인 소유면 예외) |
-| `WalkStatsDto weeklyStats(Long userId, Long dogId)` | 이번 주(월~일) 소유 산책을 요일별 거리로 집계하여 통계 DTO 생성 |
-| `(private) assertDogOwned(Long userId, Long dogId)` | dog 존재 + `dog.user_id == userId` 검증(위반 시 403/404) |
-| `(private) WalkDto toDto(Walk w)` | 엔티티→DTO 매핑(LINESTRING→`List<List<Double>>` 역변환 포함) |
+| `Saved save(long userId, WalkRequest request)` | dog 소유 검증 → 좌표 배열을 LINESTRING 으로, 점별 시각을 `path_t` 로 변환해 저장. **`Saved.created`** 로 "새로 만들었나" 를 알린다 — 멱등키가 같으면 기존 것을 그대로 돌려준다 |
+| `WalkPageResponse page(long userId, Long dogId, String cursor, Integer limit)` | 요청자 소유 산책만 커서로 페이징. **경로는 안 싣는다** |
+| `WalkResponse detail(long userId, long walkId)` | 단건 + 소유권 확인. **경로가 실리는 유일한 응답이다**. 없거나 타인 소유면 똑같이 404 |
+| `WalkResponse rewriteMemo(long userId, long walkId, String memo)` | 회고 메모 덮어쓰기(#187) |
+| `void delete(long userId, long walkId)` | 소유권 확인 후 삭제. 멱등키 때문에 같은 산책을 다시 저장할 수 없으므로 **지울 길이 반드시 있어야 한다** |
+| `WalkStatsResponse stats(long userId, Long dogId)` | 이번 주(KST 월~일) 요일별 거리 + 전체 기간 합계. **화면 둘이 이 하나로 채워진다** |
 
 > `limit` 상한(openapi 기본 20 / 최대 100) 클램프, `dogId` 미지정 시 요청자 소유 전체 dog 대상으로 확장 — 이 결정은 Service에서 처리(Controller는 얇게 유지).
 

@@ -500,7 +500,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 ### 5.5 산책 통계 — 🟡 계획
 
-`GET /api/walks/stats?dogId={id}&period=week` — `period ∈ {week, month}`. 통계 차트(`fl_chart`)용 집계.
+`GET /api/walks/stats/weekly?dogId={id}` — 통계 차트(`fl_chart`)용 집계. **`period` 파라미터는 없다.** 이번 주(KST 월~일)와 전체 기간을 한 응답에 함께 담아 화면 둘을 채운다. 2026-08 이전에는 이 절이 `/api/walks/stats` 에 `period ∈ {week, month}` 라고 적혀 있었고, 그대로 짜면 404 였다(#201).
 
 ```json
 // 200 OK
@@ -749,7 +749,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 |---|---|---|
 | 홈 (강아지 히어로/오늘 산책) | `kMyDog`(로컬) + **산책은 서버**(#145) | `GET /auth/me`, `GET /api/dogs`, `GET /api/walks`, `GET /api/walks/stats/weekly` |
 | 지도 (KTO 45곳 + 병원/펫샵/산책로 더미) | KTO 직접호출(`PetPlacesRepository`) | `GET /api/places/nearby`, `GET /api/places/{id}` |
-| 실시간 산책 (시뮬) | 로컬 | `POST /api/walks` |
+| 실시간 산책 (실 GPS) | **서버 연동 완료**(#145) | `POST /api/walks` |
 | 산책 통계 (fl_chart) | **서버 연동 완료**(#145) | `GET /api/walks/stats/weekly` |
 | 커뮤니티 (더미) | `kPetPosts`(로컬) | `GET/POST /api/posts`, `/comments`, `/reactions` |
 | 강아지 프로필/편집 | `kMyDog`(로컬) | `GET/POST/PATCH /api/dogs` |

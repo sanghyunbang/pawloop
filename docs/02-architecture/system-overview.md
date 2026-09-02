@@ -30,7 +30,7 @@ flowchart TB
         UI["화면 5탭<br/>홈·지도·[산책 FAB]·커뮤니티·통계"]
         REPO["Repository<br/>pet_places_repository.dart"]
         MAP["네이버맵 위젯<br/>NaverMap / Controller"]
-        GPS["실시간 트래킹<br/>geolocator (현재 시뮬)"]
+        GPS["실시간 트래킹<br/>geolocator 위치 스트림"]
         ENV["Env<br/>core/config/env.dart"]
     end
 
@@ -196,18 +196,18 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    GPS["geolocator<br/>(현재 시뮬 이동)"] --> STAT["라이브 스탯<br/>거리·시간·페이스"]
+    GPS["geolocator<br/>위치 스트림 5m"] --> STAT["라이브 스탯<br/>거리·시간·페이스"]
     GPS --> POLY["경로 폴리라인<br/>네이버맵"]
-    STAT --> SAVE["산책 저장 (예정)"]
+    STAT --> SAVE["산책 저장<br/>POST /api/walks"]
     POLY --> SAVE
     SAVE -->|"LINESTRING"| WALK[("walk.path<br/>MySQL")]
     WALK --> CHART["통계 화면<br/>fl_chart 주간 막대"]
 
     classDef dummy fill:#FFF4E6,stroke:#EFA13C,color:#7a4b00,stroke-dasharray:4 3;
-    class GPS,SAVE,WALK dummy;
+    class CHART dummy;
 ```
 
-> 현재 트래킹은 시뮬 이동이며, 실위치(geolocator 실도입)와 `walk` 저장/조회 API는 미연동(더미)이다.
+> 실 GPS 다(#145·#160). 위치를 못 쓰는 여섯 경우는 각각 이유를 말하는 화면을 띄우고 직접 입력으로 넘긴다 — 가짜 경로를 그리지 않는다. 경로는 `walk.path`(LINESTRING SRID 4326), 점별 시각은 `walk.path_t`(#155). 통계 화면만 아직 샘플이 섞인다.
 
 ### 4.4 소셜 로그인 (OAuth2 + JWT, 레거시 재사용)
 
@@ -248,7 +248,7 @@ sequenceDiagram
 | --- | --- |
 | 지도 KTO 실연동(서울 반려동반 장소) | ✅ 됨 (백엔드 프록시 경유, #40) |
 | 네이버맵 SDK 렌더링 | ✅ 됨 |
-| 실시간 산책 트래킹 | ⚠️ 시뮬(실 GPS 미도입) |
+| 실시간 산책 트래킹 | ✅ 실 GPS — 위치를 못 쓰면 이유별 안내 화면 + 직접 입력 (#145·#160) |
 | 산책 통계(fl_chart) | ✅ 됨 (샘플 데이터) |
 | 병원·펫샵(LOCALDATA)·산책로(두루누비) | ⛔ 더미 레이어 |
 | 커뮤니티(게시판·반응·댓글) | ⛔ 더미(백엔드 social 미연동) |

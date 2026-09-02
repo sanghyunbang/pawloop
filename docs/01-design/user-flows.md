@@ -17,7 +17,7 @@
 
 ## 1. 산책 시작 → 실시간 트래킹 → 종료 → 기록 저장
 
-가장 중요한 wedge 플로우. 현재 GPS는 **더미 시뮬레이션**(서울숲 근처 루프를 1초에 한 점씩 그림)이며, 실배포 시 `geolocator` 위치 스트림 → `walk.path`(LINESTRING) 저장으로 대체된다.
+가장 중요한 wedge 플로우. **실 GPS** 다 — `geolocator` 위치 스트림(5m)을 구독해 그리고, 종료하면 `walk.path`(LINESTRING)로 저장한다(#145). 위치를 못 쓰는 여섯 경우는 각각 이유를 말하는 화면을 띄우고 직접 입력으로 넘긴다 — 가짜 경로를 그리지 않는다(#160).
 
 ```mermaid
 flowchart TD
@@ -44,10 +44,9 @@ flowchart TD
 ```
 
 **구현 메모**
-- `_start()`가 `Timer.periodic(1s)`로 시뮬 이동. 실 GPS 미도입(위치는 서울 고정).
+- `_boot()`이 `LocationService.locate()` 로 첫 위치를 잡은 **뒤에야** 지도를 만든다. 판정 전에 그리면 대기 중 찍힌 점이 경로 앞머리에 남는다.
 - 종료 바텀시트의 "기록 저장하기"는 `pushReplacement`로 `CreateScreen(prefillPlace: '오늘 산책')` 진입 → 트래킹 화면은 스택에서 교체된다.
-- `CreateScreen._save()`는 아직 백엔드에 저장하지 않고 스낵바만 띄운 뒤 `maybePop()`. 사진 첨부도 "곧 지원" 플레이스홀더.
-- 향후: `walk(dog_id, started_at, ended_at, distance_m, duration_s, path LINESTRING, memo, weather)` 레코드 생성.
+- `CreateScreen._save()`는 `WalkRepository.saveWalk()` 로 `POST /api/walks` 에 올린다. 못 보내면 초안이 큐에 남고 나중에 다시 보낸다(`walk_outbox`). 사진 첨부는 아직 플레이스홀더.
 
 ---
 
