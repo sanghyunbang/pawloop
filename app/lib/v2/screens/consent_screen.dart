@@ -28,6 +28,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../data/consent_gate.dart';
+import '../data/location_service.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import 'settings/legal_document_screen.dart';
@@ -88,6 +89,8 @@ class _ConsentScreenState extends State<ConsentScreen> {
       ));
       return;
     }
+    // 좌표를 얻는 길을 연다. 이 한 줄이 없으면 동의를 마치고도 산책이 안 시작된다.
+    LocationService.consented.value = true;
     widget.onAgreed();
   }
 

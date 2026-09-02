@@ -6,6 +6,7 @@ import 'package:heat_trip_flutter/core/widgets/layout/main_nav_shell.dart';
 import 'package:heat_trip_flutter/features/bookmark/bookmark_routes.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/data/consent_gate.dart';
+import 'package:heat_trip_flutter/v2/data/location_service.dart';
 import 'package:heat_trip_flutter/v2/screens/consent_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/main_shell.dart';
 import 'package:heat_trip_flutter/v2/screens/onboarding_screen.dart';
@@ -44,9 +45,14 @@ Future<void> _refreshConsent() async {
   if (user == null ||
       (status != AuthStatus.authenticated && status != AuthStatus.onboarding)) {
     _consented.value = null;
+    // 로그인하지 않은 사람("그냥 둘러보기")은 동의한 적이 없다. 좌표를 얻는 길을
+    // 닫는다 — `/explore` 는 공개 라우트라 라우터가 못 붙잡는다. (#180)
+    LocationService.consented.value = false;
     return;
   }
-  _consented.value = await const ConsentGate().hasAgreed(user.id);
+  final agreed = await const ConsentGate().hasAgreed(user.id);
+  _consented.value = agreed;
+  LocationService.consented.value = agreed;
 }
 
 /// 라우터를 다시 돌리는 신호 둘을 하나로 묶는다 — 인증 상태와 동의 여부.
