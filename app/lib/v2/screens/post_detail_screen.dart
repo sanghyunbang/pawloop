@@ -37,7 +37,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   List<CommunityComment> _comments = const [];
   bool _loadingComments = true;
+  bool _loadingMoreComments = false;
+  String? _commentCursor;
+  bool _hasMoreComments = false;
   CommunityFailure? _commentsFailure;
+
+  /// 이 화면에서 <b>서버의 값을 바꿨는가.</b> 목록이 이 값으로 새로고침 여부를 정한다 —
+  /// 열어 보기만 하고 나온 것까지 새로 부르면 '더 보기' 로 쌓아 둔 장이 다 날아간다.
+  bool _changed = false;
 
   /// 반응·댓글을 보내는 중. 두 번 눌러 두 줄이 되는 것을 막는다.
   bool _sending = false;
@@ -61,7 +68,26 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _refreshPost();
     _loadComments();
+  }
+
+  /// 글을 다시 읽는다. <b>목록이 넘긴 것은 그때의 세션으로 읽은 값이다.</b>
+  ///
+  /// 목록을 게스트로 훑다가 글쓰기에서 로그인하고 돌아오면, 목록의 글들은 여전히
+  /// `mine == null` 인 게스트 응답이다. 그 값을 그대로 들고 상세로 들어가면
+  /// 로그인한 사람에게 "로그인하면 …" 안내가 뜨고 반응도 못 누른다.
+  ///
+  /// 실패하면 넘겨받은 값 그대로 그린다 — 화면이 안 뜨는 것보다 낫고, 댓글 쪽이
+  /// 이미 실패를 말한다.
+  Future<void> _refreshPost() async {
+    try {
+      final fresh = await _repo.post(widget.post.id);
+      if (!mounted) return;
+      setState(() => _post = fresh);
+    } on CommunityFailure {
+      // 넘겨받은 값으로 계속한다.
+    }
   }
 
   @override
@@ -80,6 +106,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (!mounted) return;
       setState(() {
         _comments = page.items;
+        _commentCursor = page.nextCursor;
+        _hasMoreComments = page.hasMore;
         _loadingComments = false;
       });
     } on CommunityFailure catch (failure) {
@@ -88,6 +116,31 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         _commentsFailure = failure;
         _loadingComments = false;
       });
+    }
+  }
+
+  /// 댓글 다음 장.
+  ///
+  /// 이게 없던 동안 <b>21번째 댓글부터는 볼 방법이 아예 없었다.</b> 게다가 목록 카드가
+  /// 서버의 전체 댓글 수를 보여 주므로, "댓글 34개" 를 보고 들어와 20개만 있는 화면을
+  /// 만나게 된다 — 사용자는 댓글이 지워졌다고 읽는다.
+  Future<void> _loadMoreComments() async {
+    final cursor = _commentCursor;
+    if (cursor == null || _loadingMoreComments) return;
+    setState(() => _loadingMoreComments = true);
+    try {
+      final page = await _repo.comments(_post.id, cursor: cursor);
+      if (!mounted) return;
+      setState(() {
+        _comments = [..._comments, ...page.items];
+        _commentCursor = page.nextCursor;
+        _hasMoreComments = page.hasMore;
+        _loadingMoreComments = false;
+      });
+    } on CommunityFailure {
+      // 다음 장을 못 받은 것은 앞 장까지 지울 이유가 아니다.
+      if (!mounted) return;
+      setState(() => _loadingMoreComments = false);
     }
   }
 
@@ -101,8 +154,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       setState(() {
         // 목록의 끝에 붙인다 — 댓글은 오래된 것부터라 새 것이 마지막이다.
         _comments = [..._comments, comment];
+        _post = _withCommentCount(_post, _post.commentCount + 1);
         _ctrl.clear();
         _sending = false;
+        _changed = true;
       });
       FocusScope.of(context).unfocus();
     } on CommunityFailure catch (failure) {
@@ -132,6 +187,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       setState(() {
         _post = _withReactions(_post, summary);
         _sending = false;
+        _changed = true;
       });
     } on CommunityFailure catch (failure) {
       if (!mounted) return;
@@ -139,6 +195,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       _toast(failure.message);
     }
   }
+
+  static CommunityPost _withCommentCount(CommunityPost post, int commentCount) =>
+      CommunityPost(
+        id: post.id,
+        author: post.author,
+        board: post.board,
+        title: post.title,
+        body: post.body,
+        loc: post.loc,
+        contentId: post.contentId,
+        commentCount: commentCount,
+        reactions: post.reactions,
+        createdAt: post.createdAt,
+      );
 
   static CommunityPost _withReactions(
     CommunityPost post,
@@ -179,7 +249,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: () => Navigator.of(context).maybePop(),
+                      onTap: () => Navigator.of(context).maybePop(_changed),
                       child: Container(
                         width: 40,
                         height: 40,
@@ -225,7 +295,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         ),
                         const SizedBox(width: 7),
                         Text(
-                          '댓글 ${_comments.length}',
+                          // 서버가 센 값이다. 화면에 몇 장을 불러왔든 글의 댓글 수는
+                          // 하나다 — 목록 카드의 숫자와도 그래야 같다.
+                          '댓글 ${_post.commentCount}',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
@@ -307,6 +379,25 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         _commentCard(comment),
         const SizedBox(height: 10),
       ],
+      if (_hasMoreComments)
+        Center(
+          child: GestureDetector(
+            onTap: _loadingMoreComments ? null : _loadMoreComments,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xCCFFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0x66FFFFFF)),
+              ),
+              child: Text(_loadingMoreComments ? '불러오는 중…' : '댓글 더 보기',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: T.textSecondary)),
+            ),
+          ),
+        ),
     ];
   }
 
@@ -643,10 +734,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             child: Container(
               width: 44,
               height: 44,
+              // gradient 가 있으면 color 는 무시된다 — 보내는 중 표시가 안 보였다.
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: _warm,
-                color: _sending ? T.textMuted : null,
+                gradient: _sending ? null : _warm,
+                color: _sending ? const Color(0xFFC9C2D8) : null,
               ),
               child: const Icon(Icons.send, color: Colors.white, size: 20),
             ),

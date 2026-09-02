@@ -41,7 +41,12 @@ Future<void> startWalk(BuildContext context) async {
     await navigator.push(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
     );
-    // 로그인 화면에서 그냥 돌아왔을 수 있다. 그러면 시작하지 않는다.
+    // 로그인 화면은 **pop 을 먼저 하고** 그 뒤에 completeLogin() 을 부른다. 여기서
+    // 바로 물으면 성공한 로그인도 아직 false 라, 걸으러 온 사람이 아무것도 못 하고
+    // 서 있게 된다. `writePost` 도 같은 자리를 지난다.
+    await AuthState.settle();
+
+    // 그냥 돌아왔을 수 있다. 그러면 시작하지 않는다.
     if (!AuthState.isAuthenticated) return;
     if (!context.mounted) return;
   }
