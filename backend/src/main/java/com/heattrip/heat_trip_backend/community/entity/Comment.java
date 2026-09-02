@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.community.entity;
 
+import com.heattrip.heat_trip_backend.community.CommunityTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
 import jakarta.persistence.Column;
@@ -25,6 +26,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 /**
@@ -92,10 +94,11 @@ public class Comment {
     @Column(name = "body", nullable = false, columnDefinition = "text")
     private String body;
 
-    /** 작성 시점 닉네임 스냅샷. <b>응답에는 안 싣는다</b> — 클래스 javadoc 참조. */
-    @Column(name = "handle", length = 50)
+    /** 작성 시점 닉네임 스냅샷. 폭은 {@code Post.handle} 과 같은 이유로 255 다. */
+    @Column(name = "handle", length = 255)
     private String handle;
 
+    /** {@code Post.createdAt} 과 같은 규약 — 담긴 값이 UTC 다. */
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -103,7 +106,11 @@ public class Comment {
     @PrePersist
     void onCreate() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = CommunityTime.nowUtc();
         }
+    }
+
+    public Instant createdAtInstant() {
+        return CommunityTime.toInstant(createdAt);
     }
 }

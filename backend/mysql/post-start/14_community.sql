@@ -186,7 +186,7 @@ CREATE TABLE IF NOT EXISTS post (
   body        TEXT         NOT NULL,
   content_id  VARCHAR(64)  NULL COMMENT '연결 장소. Place.contentId 와 같은 키. FK 는 없다 — 장소는 캐시라 행이 없을 수 있다',
   loc         VARCHAR(100) NULL COMMENT '표시용 장소 이름. content_id 와 별개다',
-  handle      VARCHAR(50)  NULL COMMENT '작성 시점 닉네임 스냅샷. 응답에는 안 싣는다 — 표시는 현재값이다(ADR-0017 규약 5)',
+  handle      VARCHAR(255) NULL COMMENT '작성 시점 닉네임 스냅샷. 폭은 users.nickname 과 같다 — 좁히면 긴 닉네임이 글쓰기를 영구히 막는다',
   created_at  DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
   KEY idx_post_user (user_id),
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS comment (
   post_id     BIGINT       NOT NULL,
   user_id     BIGINT       NULL COMMENT '작성자. 탈퇴하면 NULL — 결정 5',
   body        TEXT         NOT NULL,
-  handle      VARCHAR(50)  NULL COMMENT 'post.handle 과 같은 이유',
+  handle      VARCHAR(255) NULL COMMENT 'post.handle 과 같은 이유 · 같은 폭',
   created_at  DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
   KEY idx_comment_user (user_id),
@@ -351,6 +351,32 @@ SET @stmt := IF(@exists = 0,
     'SELECT ''[B-5] chk_reaction_type 이미 있음 — 건너뜀'' AS message');
 PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- B-6. #169 가 handle 을 VARCHAR(50) 으로 세운 DB 를 고친다.
+--
+--      users.nickname 은 VARCHAR(255) 인데 그것을 그대로 스냅샷하면서 컬럼만 50 으로
+--      좁혀 놨다. 51자 닉네임을 가진 사람은 **모든 글·댓글 작성이 영구히 500** 이 된다 —
+--      MySQL 8 의 STRICT_TRANS_TABLES 는 자르지 않고 ERROR 1406 으로 거절한다. 읽기와
+--      반응은 되는데 쓰기만 죽은 상태라 원인을 찾기도 어렵다. 실제 DB 에 60자를 넣어
+--      재현했다.
+--
+--      chat_message.sender_name 이 같은 이유로 255 이고 그 자리에 "users.nickname 과 같은
+--      폭이다" 라고 적혀 있다. 참조하는 쪽이 원본보다 좁으면 안 된다.
+--
+--      넓히는 것이라 데이터 손실이 없다. 이미 255 면 MySQL 이 알아서 no-op 이지만,
+--      큰 표에서 불필요한 테이블 재작성을 피하려고 조건부로 돈다.
+SET @narrow := (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND column_name = 'handle'
+      AND table_name IN ('post', 'comment')
+      AND character_maximum_length < 255);
+
+SET @stmt := IF(@narrow > 0, 'ALTER TABLE post MODIFY handle VARCHAR(255) NULL', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @stmt := IF(@narrow > 0, 'ALTER TABLE comment MODIFY handle VARCHAR(255) NULL', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SELECT '[B-6] handle 폭' AS section, @narrow AS was_narrow;
+
 -- ── D. 사후 검증 ───────────────────────────────────────────────────────────
 -- 여기까지 왔는데 숫자가 다르면 **반쯤 적용된 것**이다. 성공처럼 끝내지 않는다.
 
@@ -399,14 +425,21 @@ SET @d_checks := (
     WHERE constraint_schema = DATABASE() AND constraint_type = 'CHECK'
       AND constraint_name IN ('chk_post_board', 'chk_reaction_type'));
 
+-- handle 은 users.nickname 과 같은 폭이어야 한다. 좁으면 긴 닉네임이 쓰기를 막는다.
+SET @d_handles := (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND column_name = 'handle'
+      AND table_name IN ('post', 'comment')
+      AND character_maximum_length >= 255);
+
 SELECT '[D] 사후 검증' AS section,
        @d_tables AS tables_3, @d_post_cols AS post_cols_9, @d_uq_cols AS uq_cols_3,
        @d_cascade AS cascade_2, @d_user_set_null AS user_setnull_3, @d_idx AS idx_5,
-       @d_checks AS checks_2;
+       @d_checks AS checks_2, @d_handles AS handles_2;
 
 SET @stmt := IF(@d_tables = 3 AND @d_post_cols = 9 AND @d_uq_cols = 3
                 AND @d_cascade = 2 AND @d_user_set_null = 3 AND @d_idx = 5
-                AND @d_checks = 2,
+                AND @d_checks = 2 AND @d_handles = 2,
     'SELECT ''[D] 통과'' AS message',
     'CALL heattrip_migration_abort(''ABORT: 사후 검증 실패. 위 [D] 행의 숫자를 확인하라.'')');
 PREPARE stmt FROM @stmt;
