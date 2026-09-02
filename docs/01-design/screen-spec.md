@@ -164,7 +164,8 @@
 ### 구성요소
 1. **헤더**: `커뮤니티` + 뷰 토글(card/list) + `ProfileAvatar` + 서브 `우리 아이들 이야기`.
 2. **게시판 필터 바**(`_boardFilter`): `전체 ▾` 버튼(탭 시 바텀시트) + 우측 `{N}개의 글` 카운트.
-   - 바텀시트(`_openBoardSheet`): `kPetBoards` 6종(전체/산책로 후기/동반장소/건강·병원/자유/자랑) Wrap 칩. 선택 시 warm 강조.
+   - 바텀시트(`_openBoardSheet`): '전체' + `CommunityBoard` 다섯(산책로 후기/동반장소/건강·병원/자유/자랑) Wrap 칩. 선택 시 warm 강조. '전체' 는 **필터이지 게시판이 아니다** — 글쓰기 선택지에는 없다.
+   - 우측 끝에 **글쓰기 버튼**. 떠 있는 FAB 이 아닌 이유는 셸이 화면 위에 네비 띠를 덮기 때문이다(알약 bottom+8~74, 가운데 버튼 bottom+38~96).
 3. **피드 리스트**(뷰별 분기):
    - **카드 뷰**(`_card`): 닉 아바타(닉 첫 글자, warm) + 닉 + 날짜 + 보드 칩(보드별 색) + 위치 → 제목 → 본문 3줄 → **반응 칩 3종**(도움돼요/귀여워요/공감 + 카운트) → 구분선 → `댓글 N개 · 자세히 보기`.
    - **리스트 뷰**(`_row`): 아바타 + 제목 1줄 + 보드 칩 + 위치 + 댓글 수(압축).
@@ -178,9 +179,9 @@
 | 카드/행 탭 | `PostDetailScreen(post)` push |
 
 ### 데이터
-- `kPetPosts`(더미 4건). `PetPost`: nick/board/loc/date/title/body/commentCount/reactions[3].
-- 필터: `feedBoard == '전체'` 이거나 `p.board == feedBoard`.
-- **더미** — 백엔드 커뮤니티 API 미연동, 작성 기능 없음(피드에 새 글 추가 불가).
+- `GET /api/community/posts?board=&cursor=&limit=` (`CommunityRepository.feed`). `CommunityPost`: id/author(`PersonRef`)/board/loc/contentId/title/body/commentCount/reactions/createdAt.
+- 필터는 서버가 한다 — `board` 가 없으면 전체다. 커서 페이지이고 다음 장은 '더 보기'.
+- **못 불러온 것과 빈 것을 구분한다**(#173). 실패는 "불러오지 못했어요" + 다시 시도, 0건은 "아직 {게시판} 게시판에 글이 없어요" + 글쓰기.
 
 ---
 
@@ -199,14 +200,14 @@
 ### 상호작용
 | 요소 | 동작 |
 | --- | --- |
-| 반응 버튼 | `_toggleReaction(i)` — 로컬 토글(`_picked`), 카운트 ±1 |
-| 댓글 전송 | `_send()` — 빈 값 아니면 `_cmts`에 `('나', 입력)` 추가, 입력 클리어, 키보드 내림 |
+| 반응 버튼 | `_toggleReaction(reaction)` — 멱등 `POST`/`DELETE .../reactions/{type}`. **응답의 집계를 그대로 그린다**(로컬에서 안 센다) |
+| 댓글 전송 | `_send()` — `POST .../comments`, 서버가 준 것을 스레드 끝에 붙인다 |
 | 뒤로가기 | pop |
 
 ### 데이터
-- `widget.post`(전달받은 `PetPost`).
-- 로컬 상태: `_reactions`(초기 post.reactions 복제), `_picked`(선택 집합), `_cmts`(더미 3건 시드 + 사용자 추가).
-- **로컬 전용** — 반응/댓글 모두 화면 메모리에만 존재(백엔드 미연동, 새로고침 시 초기화).
+- `widget.post`(목록이 넘긴 `CommunityPost`) + `GET .../comments`.
+- **게스트인지 서버에게 묻는다** — `post.reactions.mine` 이 `null` 이면 게스트다. `AuthState` 를 안 보는 이유는 토큰이 만료된 채 읽기만 하면 앱은 로그인했다고 믿지만 서버는 게스트로 대접하기 때문이다.
+- 게스트에게는 반응이 꺼진 채 집계만 보이고, 입력칸 대신 "로그인하면 댓글과 반응을 남길 수 있어요" 가 뜬다.
 
 ---
 
@@ -315,7 +316,8 @@
 | 산책 회고 | `walk_detail_screen.dart` | 기록 카드 탭 | `PUT /api/walks/{id}/memo`(#187) |
 | 내 산책 기록 | `myrecords_screen.dart` | 프로필 → 내 산책 기록 | `GET /api/walks`(커서) + 전송 대기·거절 큐 |
 | 산책 통계 | `insight_screen.dart` | `me_screen` 에서 진입 | `GET /api/walks/stats/weekly` |
-| 글 상세 | `post_detail_screen.dart` | 커뮤니티 카드 탭 | `PetPost` + **로컬 댓글/반응**(#171) |
+| 글 상세 | `post_detail_screen.dart` | 커뮤니티 카드 탭 | `GET /api/community/posts/{id}/comments` · 멱등 반응 둘(#171) |
+| 커뮤니티 글쓰기 | `post_write_screen.dart` | 피드 글쓰기 버튼 · 빈 목록 · 지도 장소 시트 | `POST /api/community/posts`(#172). 지도에서 오면 `loc`·`contentId` 를 물고 온다 |
 | 프로필 | `me_screen.dart` | (push, 프로필 진입) | `kMyDog`, `GET /api/walks/stats/weekly` |
 | 프로필 편집 | `edit_screen.dart` | 프로필 → 편집 | `PUT /api/dogs/{id}` |
 | 설정 | `settings_screen.dart` | 프로필 → 설정 | 약관 넷 · 탈퇴 · 연락처(#165) |

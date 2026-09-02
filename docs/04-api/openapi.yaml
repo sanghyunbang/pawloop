@@ -1004,7 +1004,13 @@ paths:
               type: object
               required: [body]
               properties:
-                body: { type: string, example: "저도 여기 자주 가요! 정보 감사합니다 🐾" }
+                body:
+                  type: string
+                  maxLength: 1000
+                  example: "저도 여기 자주 가요! 정보 감사합니다 🐾"
+                  description: |
+                    글보다 짧습니다. 댓글은 스레드에서 다른 댓글들과 함께 읽히는 것이라,
+                    한 줄이 화면을 다 먹으면 스레드가 아니게 됩니다.
       responses:
         '201':
           description: 작성됨
@@ -2655,11 +2661,23 @@ components:
       required: [board, title, body]
       properties:
         board: { $ref: '#/components/schemas/Board' }
-        title: { type: string }
-        body: { type: string }
-        loc: { type: string }
+        title: { type: string, maxLength: 200 }
+        body:
+          type: string
+          maxLength: 5000
+          description: |
+            본문. **상한이 컬럼이 아니라 제품이 정한 수입니다.**
+
+            `post.body` 는 `TEXT` 라 안 막으면 65535**바이트**까지 들어갑니다(한글은
+            utf8mb4 에서 한 자가 3바이트라 실질 약 21,800자). 그 수는 컬럼 타입이 흘린
+            것이지 제품이 고른 것이 아니고, 상한이 없으면 로그인한 사람 누구나 수십 MB 짜리
+            본문을 밀어 넣을 수 있습니다.
+
+            2026-09-03 이전에는 이 상한이 계약에도 서버에도 없었습니다(#172 에서 찾음).
+        loc: { type: string, maxLength: 100 }
         contentId:
           type: string
+          maxLength: 64
           description: 연결된 장소(선택). `Place.contentId` 와 같은 키입니다.
 
     Comment:

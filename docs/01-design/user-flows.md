@@ -126,9 +126,9 @@ flowchart TD
 
 **구현 메모**
 - 목록의 보드 필터는 `_openBoardSheet()` 바텀시트로 선택(가로 칩이 무한정 늘지 않도록).
-- 상세 반응은 `_toggleReaction()`으로 `_picked` 집합 토글 + 카운트 ±1(로컬). 댓글은 `_send()`로 `_cmts`에 '나' 추가 후 입력창 초기화.
-- **커뮤니티 글쓰기 화면은 아직 없음.** `CreateScreen`은 산책 기록 전용이다. 커뮤니티 글 작성은 post-MVP 확장 지점(위 다이어그램 점선 노드).
-- 향후: `post(user_id, board, place_id?, title, body)` / `comment` / `reaction(type[help/cute/empathy])` 백엔드 연동. `place_id`로 동반장소 상세 ↔ 커뮤니티 글 연결.
+- 상세 반응은 `_toggleReaction()`이 서버의 멱등 `POST`/`DELETE .../reactions/{type}` 을 부르고 **응답의 집계를 그대로 그린다**(로컬에서 세지 않는다). 댓글은 `_send()`가 `POST .../comments` 로 보내고 서버가 준 것을 스레드에 붙인다.
+- **커뮤니티 글쓰기는 `PostWriteScreen`이다**(#172). `CreateScreen`은 산책 기록 전용이고 그건 그대로다. 2026-09 이전 이 줄은 "아직 없음 · post-MVP 확장 지점"이었는데, 같은 시점 `mvp-scope.md`는 같은 것을 In-scope 로 적고 있었다 — 문서 둘이 반대말을 하고 있었고(#175) 화면을 만드는 쪽으로 정했다.
+- 백엔드 연동은 끝났다(#170·#171·#172). 표는 `post(user_id, board, content_id?, title, body, loc)` / `comment` / `reaction(type[help/cute/empathy])` 이다. 장소 키는 `place_id` 가 아니라 **`content_id`** 다 — 조회의 `Place.contentId` 와 같은 키로 통일했다(ADR-0017). 지도 장소 시트의 '이 장소로 글쓰기' 가 그 값을 물고 간다.
 
 ---
 

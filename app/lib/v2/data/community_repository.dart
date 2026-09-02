@@ -333,7 +333,17 @@ class CommunityRepository {
   /// 요청 하나의 상한. 없으면 응답을 주지 않는 서버에서 화면이 영원히 로딩만 돈다.
   static const Duration timeout = Duration(seconds: 12);
 
-  /// 제목·본문의 최대 길이. 계약의 `maxLength` 와 같다.
+  /// 제목·본문의 최대 길이. 계약의 `maxLength` 이자 서버의 `@Size` 와 같은 수다.
+  ///
+  /// 여기서 막지 않으면 상한을 넘긴 사람이 **올리기를 누른 뒤에야** 400 을 받는다 —
+  /// `create_screen` 이 #161 에서 같은 이유를 적어 뒀다.
+  ///
+  /// 숫자가 두 곳에 있는 것을 없앨 수는 없다(서버는 자바다). 대신 갈리면
+  /// `CommunityContractSpecTest` 가 이 파일을 읽어 빨간불을 낸다.
+  ///
+  /// 본문 상한은 #172 에서 생겼다. 그전에는 계약에도 서버에도 없었고, `post.body` 가
+  /// `TEXT` 라 65535**바이트**까지 들어갔다 — 컬럼 타입이 흘린 수였지 제품이 고른 수가
+  /// 아니다.
   static const int maxTitleLength = 200;
   static const int maxBodyLength = 5000;
   static const int maxCommentLength = 1000;
