@@ -4,7 +4,7 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 class BookmarkRepositoryImpl implements BookmarkRepository {
-  final String base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
+  final String base = Env.apiBase.replaceAll(RegExp(r'/+$'), '');
 
   /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
   final AuthedClient _client = AuthedClient.instance;

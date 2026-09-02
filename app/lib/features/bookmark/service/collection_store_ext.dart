@@ -12,7 +12,7 @@ extension BulkRemoveEverywhere on CollectionStore {
   Future<void> removeContentEverywhere(String contentId) async {
     if (contentId.isEmpty) return;
 
-    final base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
+    final base = Env.apiBase.replaceAll(RegExp(r'/+$'), '');
     // 인증 헤더 부착과 401 갱신은 전부 AuthedClient 가 한다 (#11).
     final client = AuthedClient.instance;
 

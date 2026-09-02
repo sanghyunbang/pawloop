@@ -75,7 +75,7 @@ class AuthRepositoryImpl {
   final AuthedClient _authed;
 
   AuthRepositoryImpl({String? baseUrl, http.Client? plainClient, AuthedClient? authedClient})
-    : baseUrl = baseUrl ?? Env.apiBase ?? '',
+    : baseUrl = baseUrl ?? Env.apiBase,
       _plain = plainClient ?? http.Client(),
       _authed = authedClient ?? AuthedClient.instance;
 

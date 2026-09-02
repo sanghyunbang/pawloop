@@ -39,7 +39,7 @@ class CollectionStore extends ChangeNotifier {
   CollectionStore._internal();
   static final CollectionStore instance = CollectionStore._internal();
 
-  final String _base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
+  final String _base = Env.apiBase.replaceAll(RegExp(r'/+$'), '');
 
   /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
   final AuthedClient _client = AuthedClient.instance;

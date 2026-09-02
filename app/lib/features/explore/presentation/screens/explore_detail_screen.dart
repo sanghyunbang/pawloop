@@ -225,7 +225,7 @@ class _ExploreDetailScreenState extends State<ExploreDetailScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: ChangeNotifierProvider(
                     create: (_) {
-                      final host = (Env.apiBase ?? 'http://localhost:8080')
+                      final host = Env.apiBase
                           .replaceFirst(RegExp(r'/*$'), ''); // 말단 슬래시 제거
                       final api = EmotionApi(
                         LoggingClient(http.Client()),

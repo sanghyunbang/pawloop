@@ -1,6 +1,5 @@
 // lib/features/record/presentation/screens/schedule_list_screen.dart
 
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';

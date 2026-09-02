@@ -15,6 +15,13 @@ dependencies:
 
   intl: ^0.18.1
   http: ^1.4.0
+
+  # http 가 끌어오던 전이 의존이었다. 다섯 파일이 직접 import 하는데 그중 하나가
+  # core/net/authed_client.dart 라, http 가 언젠가 이것들을 안 끌면 인증 클라이언트부터
+  # 컴파일이 깨진다 — 앱 전체가 그 위에 있다. 쓰는 것은 직접 적는다.
+  http_parser: ^4.1.0   # MediaType — multipart 재조립(authed_client)
+  mime: ^2.0.0          # lookupMimeType — 업로드 파일 형식 판별
+  meta: ^1.16.0         # @immutable — core/mood, foryou_v2/domain
   flutter_secure_storage: ^9.2.4
   table_calendar: ^3.0.9
 

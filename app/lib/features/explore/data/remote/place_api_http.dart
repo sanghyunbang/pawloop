@@ -14,7 +14,7 @@ import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
 
 class PlaceApiHttp implements PlaceApi {
-  final String baseUrl = Env.apiBase ?? '';
+  final String baseUrl = Env.apiBase;
 
   final http.Client _client;
   final Duration _timeout;

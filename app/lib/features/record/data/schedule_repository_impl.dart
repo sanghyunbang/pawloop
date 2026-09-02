@@ -7,7 +7,7 @@ import 'package:heat_trip_flutter/core/errors/app_exception.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 class ScheduleRepositoryImpl {
-  final String baseUrl = Env.apiBase ?? '';
+  final String baseUrl = Env.apiBase;
 
   /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
   final AuthedClient _client = AuthedClient.instance;
