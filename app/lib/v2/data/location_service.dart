@@ -9,6 +9,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// 없었다** — 설정으로 가야 하는지, 앱 안에서 토글만 끄면 되는지, 그냥 밖으로 나가면
 /// 되는지가 전부 다르다. (이슈 #160)
 enum LocationDenial {
+  /// 아직 위치기반서비스 이용약관에 동의하지 않았다 — 이슈 #180.
+  ///
+  /// **가장 먼저 본다.** 권한도 서비스도 켜져 있는데 동의가 없으면 그건 우리가 수집하면
+  /// 안 되는 상태다. 위치정보법 제15조 — 동의 없는 수집은 3년 이하 징역 또는 3천만원
+  /// 이하 벌금이다.
+  ///
+  /// 로그인한 사람은 라우터가 동의 화면으로 붙잡으므로 여기 닿지 않는다. 여기 닿는 것은
+  /// **"그냥 둘러보기" 로 들어온 게스트**다. 그 경로가 열려 있던 것을 이 값이 막는다 —
+  /// `/explore` 는 공개 라우트인데 `explore_screen._boot` 이 현위치를 잡아
+  /// `/api/places/nearby?lat=..&lng=..` 로 **우리 백엔드에** 보내고 있었다.
+  notConsented,
+
   /// 사용자가 프로필에서 '위치 정보 수집 일시 중단' 을 켰다. **앱 안에서 끌 수 있다.**
   pausedByUser,
 
@@ -41,6 +53,16 @@ class LocationFix {
 
 /// 위치 권한/현위치/위치 스트림을 단순화한 서비스.
 class LocationService {
+  /// 위치기반서비스 이용약관에 동의했는가 — 이슈 #180.
+  ///
+  /// **기본값이 `false` 다.** 확인되기 전에는 안 한 것으로 본다 — 반대로 두면 앱이 뜨는
+  /// 사이에 동의 없이 좌표가 나간다.
+  ///
+  /// 라우터가 인증 상태를 볼 때마다 여기에 써 준다. 화면이 아니라 여기 두는 이유는
+  /// 좌표를 얻는 길이 여기 하나이기 때문이다 — 화면마다 검사를 두면 새 화면이 생길 때
+  /// 한 곳을 빠뜨리고, 그 화면만 동의 없이 좌표를 보낸다.
+  static final ValueNotifier<bool> consented = ValueNotifier<bool>(false);
+
   /// 위치 정보 수집 일시 중단(사용자 설정).
   ///
   /// 위치정보법 제24조의 이용중지 요구권을 화면으로 만든 것이다(프로필의 토글).
@@ -87,6 +109,11 @@ class LocationService {
 
   /// 권한을 확보하고 현재 좌표를 얻는다. 못 얻으면 **이유를 함께** 준다.
   static Future<LocationFix> locate() async {
+    // 동의를 가장 먼저 본다. 권한 대화상자를 띄우기도 전이다 — 동의 없이 권한을 묻는
+    // 것 자체가 순서가 뒤집힌 것이다.
+    if (!consented.value) {
+      return const LocationFix.denied(LocationDenial.notConsented);
+    }
     if (paused.value) {
       return const LocationFix.denied(LocationDenial.pausedByUser);
     }
@@ -119,9 +146,9 @@ class LocationService {
   /// 이유를 화면에 띄워야 하면 [locate] 를 쓴다.
   static Future<Position?> current() async => (await locate()).position;
 
-  /// 실시간 위치 스트림(산책 트래킹용). 5m 이동마다. 일시중지 시 빈 스트림.
+  /// 실시간 위치 스트림(산책 트래킹용). 5m 이동마다. 동의 전·일시중지 시 빈 스트림.
   static Stream<Position> stream() {
-    if (paused.value) return const Stream.empty();
+    if (!consented.value || paused.value) return const Stream.empty();
     return Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5),
     );

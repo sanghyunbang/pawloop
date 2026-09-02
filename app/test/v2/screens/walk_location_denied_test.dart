@@ -34,9 +34,17 @@ void main() {
 
   // '위치 수집 다시 켜기' 가 `setPaused` 로 **디스크에 남긴다**. 목이 없으면
   // MissingPluginException 이다 — 이 줄이 그 버튼이 실제로 저장한다는 증거이기도 하다.
-  setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    // 동의는 기본이 false 다. 좌표를 얻는 시험을 하려면 켜 줘야 한다 — 그 자체가
+    // "동의 없이는 아무것도 안 나간다" 는 증거이기도 하다. (#180)
+    LocationService.consented.value = true;
+  });
 
-  tearDown(() => LocationService.paused.value = false);
+  tearDown(() {
+    LocationService.paused.value = false;
+    LocationService.consented.value = false;
+  });
 
   group('이유마다 다른 것을 말한다', () {
     testWidgets('다섯 이유가 전부 다른 제목을 낸다', (t) async {
@@ -112,6 +120,38 @@ void main() {
 
       expect(LocationService.paused.value, isFalse);
       expect(retried, 1, reason: '토글만 끄고 재판정을 안 하면 화면이 그대로 멈춘다');
+    });
+  });
+
+  group('동의 없이는 좌표를 안 준다 (#180)', () {
+    test('동의 전이면 Geolocator 를 건드리지 않는다 — 게스트가 여기 걸린다', () async {
+      LocationService.consented.value = false;
+
+      // 테스트 환경에는 플랫폼 채널이 없다. Geolocator 로 내려가면
+      // MissingPluginException 이다 — 안 난다는 것이 곧 단락 증거다.
+      final fix = await LocationService.locate();
+
+      expect(fix.ok, isFalse);
+      expect(fix.denial, LocationDenial.notConsented);
+    });
+
+    test('동의가 일시중지보다 먼저다 — 순서가 뒤집히면 동의 없이 권한을 묻는다', () async {
+      LocationService.consented.value = false;
+      LocationService.paused.value = true;
+
+      expect((await LocationService.locate()).denial, LocationDenial.notConsented);
+    });
+
+    test('동의 전에는 스트림이 비어 있다', () async {
+      LocationService.consented.value = false;
+
+      expect(await LocationService.stream().isEmpty, isTrue);
+    });
+
+    test('current() 도 같이 막힌다 — 둘러보기 화면이 이걸 쓴다', () async {
+      LocationService.consented.value = false;
+
+      expect(await LocationService.current(), isNull);
     });
   });
 

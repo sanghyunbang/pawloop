@@ -1113,6 +1113,7 @@ class WalkLocationDeniedScreen extends StatelessWidget {
 
   /// 무엇이 막혔는지. 사용자가 화면에서 읽는 문장이다.
   String get _title => switch (denial) {
+    LocationDenial.notConsented => '위치기반서비스 동의가 필요해요',
     LocationDenial.pausedByUser => '위치 수집을 중단해 두셨어요',
     LocationDenial.serviceOff => '기기의 위치 서비스가 꺼져 있어요',
     LocationDenial.denied => '위치 권한이 필요해요',
@@ -1123,6 +1124,8 @@ class WalkLocationDeniedScreen extends StatelessWidget {
   /// 무엇을 하면 되는지. 사용자가 고칠 수 없는 경우(실내·터널)에는 고치라고 하지
   /// 않는다.
   String get _body => switch (denial) {
+    LocationDenial.notConsented =>
+      '약관 동의를 확인하는 중이에요. 잠시 뒤 다시 시도해 주세요.',
     LocationDenial.pausedByUser =>
       '프로필에서 켜면 산책 경로가 다시 기록돼요.',
     LocationDenial.serviceOff =>
@@ -1141,6 +1144,11 @@ class WalkLocationDeniedScreen extends StatelessWidget {
   /// `serviceOff` 는 앱 권한이 아니라 기기 설정이라 위치 설정 화면으로 보낸다.
   /// `pausedByUser` 는 **앱 안에서 끝난다** — 토글을 끄고 바로 다시 시도한다.
   (String, Future<void> Function()) get _primary => switch (denial) {
+    // 이 화면은 로그인한 사람만 온다 — `startWalk` 이 미로그인이면 로그인 화면부터
+    // 띄운다. 그러니 여기서 동의가 없다는 것은 **아직 못 읽었다**는 뜻이고,
+    // 다시 시도가 정확한 답이다. '로그인하기' 라고 적어 놓고 재시도만 하면 화면이
+    // 거짓말하는 것이 된다.
+    LocationDenial.notConsented => ('다시 시도', onRetry),
     LocationDenial.pausedByUser => (
       '위치 수집 다시 켜기',
       () async {
