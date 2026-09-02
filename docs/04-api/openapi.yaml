@@ -1028,31 +1028,58 @@ paths:
               schema: { $ref: '#/components/schemas/Comment' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-  /api/community/posts/{postId}/reactions:
+  /api/community/posts/{postId}/reactions/{type}:
+    parameters:
+      - $ref: '#/components/parameters/PostId'
+      - name: type
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ReactionType' }
     post:
       x-status: planned
       x-status-note: |
         M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
-      summary: 반응 토글(도움돼요/귀여워요/공감)
-      parameters:
-        - $ref: '#/components/parameters/PostId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [type]
-              properties:
-                type: { $ref: '#/components/schemas/ReactionType' }
+      summary: 반응 누르기(도움돼요/귀여워요/공감)
+      description: |
+        **셋을 동시에 누를 수 있습니다.** 도움돼요·귀여워요·공감은 서로 배타적인 개념이 아닙니다 —
+        한 글이 도움도 되고 귀엽기도 합니다(ADR-0016 결정 2).
+
+        **멱등입니다** — 이미 눌러 뒀어도 `200` 이고 집계가 늘지 않습니다.
+        2026-09 이전에는 `POST .../reactions` 하나가 **토글**이었습니다. 요청에 의도가 없어서
+        **네트워크 재시도 한 번이 사용자의 반응을 조용히 되돌렸습니다.**
+
+        모양은 `POST /api/chat/blocks` + `DELETE /api/chat/blocks/{userId}` 와 같습니다 —
+        집합 원소를 자원으로 켜고 끕니다.
+
+        응답에 **최신 집계**를 실어 왕복을 한 번으로 줄입니다.
       responses:
         '200':
           description: 반응 반영 후 최신 집계
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ReactionSummary' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      x-status: planned
+      x-status-note: |
+        M3.1(#169~#172)의 선행 계약이다.
+      tags: [Community]
+      summary: 반응 취소
+      description: |
+        **멱등입니다** — 안 눌렀던 것을 취소해도 `200` 입니다. 없던 것과 있던 것을 상태 코드로
+        나누면 앱이 두 갈래를 다뤄야 하는데 **사용자에게는 결과가 같습니다.**
+      responses:
+        '200':
+          description: 반응 반영 후 최신 집계
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReactionSummary' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   # ─────────────────────────── Bookmarks ───────────────────────────
   /api/bookmarks:
@@ -2565,21 +2592,36 @@ components:
 
     ReactionSummary:
       type: object
+      # mine 은 required 가 아니다 — 게스트에게는 채워질 수 없다(ADR-0017 규약 1·6).
       required: [help, cute, empathy]
       properties:
         help: { type: integer }
         cute: { type: integer }
         empathy: { type: integer }
         mine:
-          type: [string, "null"]
+          type: ["array", "null"]
+          items: { $ref: '#/components/schemas/ReactionType' }
           description: |
-            내가 누른 반응(없으면 `null`).
+            **내가 누른 반응들.** 배열인 것은 셋을 동시에 누를 수 있기 때문입니다(ADR-0016 결정 2).
+            2026-09 이전에는 단수 문자열이었습니다.
 
-            **비인증 요청에서는 항상 `null`** 입니다. 이 필드가 값을 가지려면 요청에 토큰이
-            있어야 하고, 그래서 조회 오퍼레이션들이 `security: [{}, {bearerAuth: []}]`
-            (인증 선택)로 선언돼 있습니다 — ADR-0017 규약 6.
+            **`null` 과 `[]` 는 다릅니다.**
 
-            `required` 가 아닌 이유가 이것입니다. 게스트에게는 채워질 수 없습니다.
+            | 값 | 뜻 |
+            |---|---|
+            | `null` | **비인증 요청**입니다. 누가 눌렀는지 물을 대상이 없습니다 |
+            | `[]` | 로그인했고, **아무것도 안 눌렀습니다** |
+
+            둘을 같게 두면 `[]` 가 "아무것도 안 눌렀다" 로 읽혀 게스트에게 거짓말을 합니다.
+
+            이 필드가 값을 가지려면 요청에 토큰이 있어야 하고, 그래서 조회 오퍼레이션들이
+            `security: [{}, {bearerAuth: []}]`(인증 선택)로 선언돼 있습니다 — ADR-0017 규약 6.
+            `required` 가 아닌 이유도 이것입니다.
+
+            **토큰이 있는데 만료됐으면 `null` 입니다.** 인증 선택 경로에서는 필터가 깨진 토큰을
+            조용히 무시하므로 `401` 이 아니라 `200` 이 나갑니다. 앱은 `401` 에서만 토큰을
+            갱신하므로 **그 화면에서는 세션 복구가 일어나지 않습니다** — 다만 앱을 다시 켜면
+            `GET /auth/me` 가 반드시 `401` 을 주므로 창은 한 세션입니다(ADR-0016 결정 3).
 
     Post:
       type: object

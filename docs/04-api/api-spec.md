@@ -642,21 +642,28 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 `DELETE /api/comments/{commentId}` — 작성자만. `204 No Content`.
 
-### 6.9 반응 토글 — ✅ 구현(개편)
+### 6.9 반응 — ⬜ 미구현 (M3.1 선행 계약)
 
-`POST /api/posts/{postId}/reactions` — 인증 필요. 같은 타입 재요청 시 취소(토글). (레거시 `toggleReaction()` 계승)
+> 2026-09 이전에는 이 절이 `POST /api/posts/{postId}/reactions` 를 **"✅ 구현(개편)"** 으로 적었습니다.
+> 그 경로는 **계약에도 코드에도 없고**(커뮤니티 백엔드는 0줄입니다) 응답 필드 이름도 `myReaction` 이라
+> 달랐습니다. 그대로 짜면 404 입니다.
 
-```json
-// Request
-{ "type": "cute" }                     // help | cute | empathy
+**셋을 동시에 누를 수 있습니다** — 도움돼요·귀여워요·공감은 서로 배타적인 개념이 아닙니다
+([ADR-0016](../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) 결정 2).
+
+```
+POST   /api/community/posts/{postId}/reactions/{type}   # 이미 눌렀어도 200 (멱등)
+DELETE /api/community/posts/{postId}/reactions/{type}   # 안 눌렀어도 200 (멱등)
 ```
 
+토글이 아닌 이유가 있습니다. 요청에 의도가 없으면 **네트워크 재시도 한 번이 사용자의 반응을
+조용히 되돌립니다.** 모양은 `POST /api/chat/blocks` + `DELETE /api/chat/blocks/{userId}` 와 같습니다.
+
 ```json
-// 200 OK
+// 200 OK — 둘 다 최신 집계를 돌려줍니다
 {
-  "postId": 331,
-  "myReaction": "cute",                // 취소된 경우 null
-  "reactions": { "help": 7, "cute": 4, "empathy": 2 }
+  "help": 7, "cute": 4, "empathy": 2,
+  "mine": ["cute", "empathy"]          // null = 비인증 / [] = 로그인했는데 안 누름
 }
 ```
 

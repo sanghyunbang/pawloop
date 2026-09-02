@@ -25,6 +25,7 @@
 | [0013](#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다) | KTO 프록시 — 0.02° 격자 캐시 + DB 행이 지키는 일일 호출 예산 | 채택 (Accepted) | 2026-08 |
 | [0014](#adr-0014--제품-기획-문서도-저장소에-넣는다) | 제품 기획 문서(`00-product/`)도 저장소에 넣는다 — ADR-0008 의 한 줄을 뒤집는다 | 채택 (Accepted) | 2026-09 |
 | [0015](#adr-0015--산책-경로는-linestring-으로-저장하되-spatial-index-는-만들지-않는다) | 산책 경로는 LINESTRING 으로 저장하되 SPATIAL INDEX 는 만들지 않는다 — ADR-0013 의 절반을 뒤집는다 | 채택 (Accepted) | 2026-09 |
+| [0016](#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) | 커뮤니티 착수 전 결정 셋 — 신고 미룸(모양만 고정) · 반응은 복수 · 게스트 읽기는 메서드 축 | 채택 (Accepted) | 2026-09 |
 | [0017](#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다) | 계약이 지키는 여섯 규약 — `required` · 목록 봉투 · 404 · 부분수정 · 사람 참조 · 선택적 인증 | 채택 (Accepted) | 2026-09 |
 
 > 상태 범례: **채택(Accepted)** = 현재 유효 · **임시(Accepted, 임시)** = 채택했으나 대체 계획 존재 · (필요 시) 폐기(Superseded)/거절(Rejected).
@@ -1482,6 +1483,239 @@ ADR-0008 이 04-api 계열을 올릴 때 쓴 것과 같은 기준이다.
 - **모르는 것을 적어 둔다**: 경로 점 수의 실제 분포(상한을 20,000 으로 잡았지만 관측이 아니다) ·
   DAU(그래서 `walk` 표가 얼마나 커질지 모른다) · 점별 시각을 나중에 넣을지(LINESTRING 은 x,y 만
   담으므로 넣으려면 컬럼이 하나 더 필요하다 — **넣었다.** 이슈 #155 가 `path_t JSON` 을 더했다).
+
+---
+
+## ADR-0016 — 커뮤니티 착수 전 결정 셋 — 신고는 미루고, 반응은 복수로 열고, 게스트 읽기는 메서드 축으로 연다
+
+- **상태**: 채택 (Accepted)
+- **날짜**: 2026-09-02
+- **이슈**: [#166](https://github.com/sanghyunbang/heattrip/issues/166) · [#164](https://github.com/sanghyunbang/heattrip/issues/164) · [#211](https://github.com/sanghyunbang/heattrip/issues/211) · 참조 이슈 [#216](https://github.com/sanghyunbang/heattrip/issues/216)
+- **관련**: [ADR-0011](#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다) · [ADR-0017](#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다)
+
+### 맥락
+
+M3.1(커뮤니티)의 **표를 짜기 전에** 정해야 하는 것이 셋이다. 셋 다 "나중에 정하면 마이그레이션"
+이라는 공통점이 있고, [#169](https://github.com/sanghyunbang/heattrip/issues/169) 가 스스로
+*"이 결정 전에는 이 표를 만들지 않습니다"* 로 막아 뒀다.
+
+세 결정의 근거를 각각 코드에서 모으고, **모은 근거를 다시 반박**했다. 반박이 **첫 결론 둘을 뒤집었다** —
+아래에 무엇이 어떻게 뒤집혔는지 함께 적는다. 그 과정이 결정의 일부다.
+
+---
+
+### 결정 1 — 신고·차단은 **지금 옮기지 않는다.** 대신 **모양을 지금 못 박는다**
+
+[#166](https://github.com/sanghyunbang/heattrip/issues/166) 의 제목은 *"커뮤니티 착수 전이 가장 싸다"* 인데,
+**그 전제가 절반만 참이다.**
+
+`chat_report` 는 [#82](https://github.com/sanghyunbang/heattrip/issues/82) 에서 **이미 섰다.**
+그래서 "표가 서기 전" 이라는 창은 채팅 쪽에서는 이미 닫혔고, 열려 있는 것은 커뮤니티 쪽뿐이다.
+
+#### 무엇이 채팅 좌표에 못박혀 있나
+
+| | |
+|:---|:---|
+| `chat_report.context_from_seq` · `context_to_seq` · `room_id` | 셋 다 `NOT NULL`. 앞의 둘은 `room_seq` 라는 **채팅 전용 좌표**다 |
+| `chat_reported_message.room_seq` | `NOT NULL` 이고 `UNIQUE (report_id, room_seq)` — 게시글에는 **이 값을 채울 것이 없다** |
+| **"무엇을 신고했나" 축** | **없다.** 컬럼 아홉 중 대상 종류·대상 id 가 0개다 |
+
+**차단은 다르다.** `chat_block` 은 컬럼 넷(`blocker_user_id`·`blocked_user_id`·`created_at`·`id`)에
+`UNIQUE (blocker_user_id, blocked_user_id)` 뿐이라 **이미 사람 단위**이고, 가리는 일도 이미 chat **밖**에서
+한다(`chatweb/ChatMessages.java` 가 장당 한 번 `blocks.blockedBy(userId)` 를 부른다).
+즉 차단은 옮길 것이 표가 아니라 **패키지 위치**뿐이다.
+
+#### 왜 지금 안 옮기나
+
+처음에는 *"커뮤니티 전용 신고 표를 지금 만든다"* 로 결론냈다. **반박이 그 비용 산정을 무너뜨렸다.**
+
+- [#169](https://github.com/sanghyunbang/heattrip/issues/169) 의 완료 조건이 **표 개수를 숫자로 못박는다** —
+  *"`CREATE TABLE` 이 **3** 늘어나고 `post`·`comment`·`reaction` 이 거기 있다"*. 신고 표를 얹으면 4가 되어
+  그 조건이 빨간불이다.
+- `SchemaDdlDriftTest` 가 **엔티티 없는 표를 정본에서 금지**한다. 그런데 #169 는 *"엔티티를 만들지 않습니다"* 다.
+  그러니 표는 #169 가 아니라 **#170 에 붙어야** 하고, "마이그레이션 파일 0개" 라는 계산이 성립하지 않는다.
+- `mvp-scope.md` 가 신고·차단을 커뮤니티 **Out-of-scope** 로 이미 적었고 #169·#170 이 그것을 되짚는다.
+  지금 저장소는 **미루는 쪽으로 일관돼 있다.**
+
+또 하나 — *"신고가 0행이라 아직 안 쌓였다"* 는 근거는 **컨테이너 DB(3307)** 에서 나왔다. 개발이 실제로
+쓰는 것은 **호스트 3306** 이다(`application-dev.properties`). 그 근거는 쓰지 않는다.
+
+#### 그래서 무엇을 정하나
+
+**미루되, 그날 값이 싸도록 모양을 지금 적는다.** 커뮤니티 신고를 만드는 날 이 모양을 쓴다.
+
+```
+report(id, target_type, target_id, reporter_user_id, reason, memo, created_at)
+  + 스냅샷 자식표 — 원본이 사라진 뒤에 읽는 기록이라 본문까지 베낀다
+```
+
+`target_type` 축이 있으면 채팅 신고를 합치는 것이 재설계가 아니라 `INSERT ... SELECT` 다.
+`chat_report` 는 그날 이 모양으로 흡수한다.
+
+**방아쇠를 적어 둔다** — *"M5(출시) 심사 준비를 시작하는 날."* 스토어 UGC 정책이 신고 수단을 요구하고,
+채팅 쪽 신고를 만든 근거도 그것이었다.
+
+> **주의** — 신고 대상이 될 UGC 가 커뮤니티 하나가 아니다. `emotion_card`·`card_comment` 가 정본에 살아
+> 있고 `/api/social/cards` 로 서빙되며 앱이 부른다. 그래서 표 이름을 `community_report` 로 좁히면
+> 그 축을 또 못 담는다 — 이름은 **`report`** 다.
+
+---
+
+### 결정 2 — 반응은 **복수**다. 요청은 `POST` / `DELETE .../reactions/{type}`
+
+**이것이 반박으로 뒤집힌 결론이다.** 처음에는 *단수 + `PUT .../reactions {type|null}}`* 로 결론냈고,
+근거는 *"복수를 지지하는 실측은 더미 화면 하나뿐"* 이었다.
+
+**그 근거가 틀렸다.** 설계 문서 **넷**이 복수를 화면 규약으로 적고 있다.
+
+```
+feature-spec.md:135   버튼 탭 시 로컬 토글(카운트 ±1, `_picked` Set)
+screen-spec.md:200    `_toggleReaction(i)` — 로컬 토글(`_picked`)
+user-flows.md:129     `_picked` 집합 토글
+information-architecture.md:164-165
+```
+
+여기에 레거시 표(`UNIQUE (card_id, user_id, reaction_type)`)와 서비스(`SocialService.toggleReaction`,
+응답이 `myReactions` **리스트**)가 전부 복수다. 그리고 **제품 의미가 그렇다** — 도움돼요·귀여워요·공감은
+서로 배타적인 개념이 아니다. 한 글이 도움도 되고 귀엽기도 하다.
+
+#### 요청 모양
+
+지금 계약의 `POST .../reactions` 는 **토글**이라 요청에 의도가 없다. **재시도 한 번이 사용자의 반응을
+조용히 되돌린다.** 어느 안을 골라도 그 모양은 사라져야 한다.
+
+복수는 **집합**이고, 집합 원소를 켜고 끄는 모양은 이 계약이 **이미 풀어 뒀다.**
+
+```
+POST   /api/chat/blocks              → "이미 가려 뒀어도 201"
+DELETE /api/chat/blocks/{userId}     → "없던 것을 풀어도 204"
+```
+
+반응도 그대로 쓴다.
+
+```
+POST   /api/community/posts/{postId}/reactions/{type}   → 200 ReactionSummary  (이미 눌렀어도 200)
+DELETE /api/community/posts/{postId}/reactions/{type}   → 200 ReactionSummary  (안 눌렀어도 200)
+```
+
+둘 다 **구조적으로 멱등**이다. 응답에 최신 집계를 실어 왕복을 한 번으로 줄인다.
+
+> **`POST` 가 멱등해도 되는가.** 된다. 이 계약에 이미 셋 있다 — `/auth/logout`(*"이미 폐기된 상태여도 204"*),
+> `POST /api/chat/blocks`, `POST /api/chat/invites/{code}/join`(*"두 번 들어와도 멤버 행도 usedCount 도
+> 늘지 않고 200"*). 처음 근거에 *"이 계약에 멱등한 POST 는 한 자리도 없다"* 고 적었는데 **사실이 아니었다.**
+
+#### 표와 스키마
+
+- **`UNIQUE (post_id, user_id, type)`** — `schema.md`·`community.md` 의 초안이 이미 이 모양이다. **안 고친다.**
+- **`ReactionSummary.mine` 은 배열이 된다.** 그리고 **nullable 을 잃으면 안 된다** —
+  `$ref: ReactionType` 으로 바꾸면 그 enum 이 `null` 을 허용하지 않아 **게스트 응답이 계약 위반**이 된다.
+  `anyOf` 로 쓴다.
+- **게스트는 `null`, 로그인했는데 안 누른 사람은 `[]`** 다. 둘을 같게 두면 `[]` 가 *"아무것도 안 눌렀다"* 로
+  읽혀 거짓말이 된다.
+- 카운트는 **"몇 번" 이지 "몇 명" 이 아니다.** 한 사람이 셋을 다 누를 수 있다. 화면이 사람 수로 읽히게
+  적으면 안 된다.
+
+#### 뒤집는 값
+
+A(단수)→B(복수)는 계약의 파괴적 변경이고, B→A 는 **행을 지우는** 마이그레이션이다(어느 반응을 남길지
+제품이 다시 답해야 한다). 지금은 **표도 컨트롤러도 없어서 둘 다 0** 이다. 그래서 이 결정은
+**지금이 유일하게 공짜인 시점**이고, 제품 의미가 이기게 둔다.
+
+---
+
+### 결정 3 — 게스트 읽기는 **같은 체인에 메서드 축 한 줄**. 주체는 **컨트롤러 밖**에서 읽는다
+
+계약 쪽은 [ADR-0017](#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다)
+규약 6 이 정했다 — 커뮤니티 GET 셋은 `security: [{}, {bearerAuth: []}]`(인증 선택)다. 여기서는 **서버**를 정한다.
+
+#### 왜 경로만으로는 못 여는가
+
+커뮤니티는 **같은 경로에 GET(인증 선택)과 POST(인증 필수)가 겹친다.** 그런데 `SecurityConfig` 의
+`publicMatchers` 는 `List<String>` 이라 **메서드 축이 없다.**
+
+경로로 열면 어떻게 되는지 보여 주는 자리가 **이미 있다** — `/api/explore/**` 가 `permitAll` 이고
+그 아래에 `POST .../{contentId}/feedback` 이 있다. **토큰 없이 행을 만드는 쓰기**다.
+
+> 다만 그 경로는 rate limit 표가 덮고 있다(`feedback` 버킷). 처음 근거에 *"인증 없음 + 한도 무한"* 이라고
+> 적었는데 **한도는 있었다.** 정작 없는 것은 **계약 등재**다 — `openapi.yaml` 에 `feedback` 이 0건이다.
+
+#### 정하는 것
+
+```java
+.requestMatchers(HttpMethod.GET,
+        "/api/community/posts",
+        "/api/community/posts/*",
+        "/api/community/posts/*/comments").permitAll()
+```
+
+`anyRequest().authenticated()` **앞**에 둔다. 같은 경로의 `POST` 는 그대로 401 이다.
+*"먼저 일치하는 규칙이 이긴다"* 는 순서 규약이 같은 파일에 이미 문서화·테스트돼 있다.
+
+**체인은 하나로 둔다.** 별도 `SecurityFilterChain` 을 만들면 필터 순서
+(`chatBodySizeLimit` → `apiRateLimit` → `JWTAuthentication` → `chatRateLimit`)를 어느 체인에 복제할지
+매번 정해야 하고, 빠뜨리면 **게스트 경로만 한도 없이 열린다.** 그리고 `securityMatcher` 가 결국 같은
+경로에서 GET/POST 를 갈라야 해서 **메서드 축을 쓰는 것은 똑같다** — 얻는 것 없이 조립 지점만 둘이 된다.
+
+**와일드카드(`/api/community/**`)는 쓰지 않는다.** `SecurityConfig` 가 `/api/places/**` 를 거부한 이유가
+그것이고, `/api/explore/**` 가 그 반례다.
+
+#### 주체는 어디서 읽나
+
+**`@CurrentUser` 는 지금 그대로 둔다.** 그것은 실패를 전부 401 로 만드는 것이 **설계**이고,
+`@CurrentUser` 자신이 *"`required=false` 같은 것을 두면 '인증이 선택인 엔드포인트' 라는 개념이
+되살아난다"* 고 적어 뒀다. 지금 `@CurrentUser User` 파라미터가 **64개 / 17개 파일**인데, 그것들은
+**한 줄도 안 바뀌어야 한다.**
+
+**새 애노테이션도 만들지 않는다.** 처음에는 그쪽으로 기울었는데, 반박이 두 가지를 짚었다 —
+(1) springdoc 무시 등록을 함께 안 하면 생성 계약이 오염되고, (2) *"서명은 멀쩡한데 계정이 사라진 토큰"*
+갈래를 어디로 보낼지 정하지 않은 채였다.
+
+**대신 컨트롤러 밖에서 읽는다.** 필터가 넣는 principal(`AuthenticatedUser`)이 이미 *"없으면 없는 대로"*
+인 표현이고, 토큰이 없으면 `SecurityContext` 가 비어 있을 뿐이다. **새 파일 0개, 리졸버 수정 0줄**이다.
+
+#### 함께 해야 하는 것
+
+- **rate limit 규칙**을 커뮤니티 GET 셋에 붙인다. **표에 없는 경로는 한도가 0 이 아니라 무한**이고,
+  지금은 `authenticated` 가 방어선인데 게스트에 열면 그 방어선이 사라진다.
+- `AuthEndpointAuthorizationTest` 에 *"GET 은 안 막히고 같은 경로 POST 는 401"* 쌍을 넣는다.
+  **단, 엔드포인트가 실재하는지 먼저 확인하는 가드를 함께 넣는다** — 지금 커뮤니티는 백엔드 0줄이라
+  `permitAll` 만 붙이면 `GET` 이 **404** 로 끝나고, "401 이 아니다" 는 404 로도 통과한다.
+  같은 저장소가 `GeneratedOpenApiSpecTest` 에서 이미 그 공회전을 막는 방식을 쓴다.
+
+---
+
+### 대안
+
+세 결정의 안과 비용은 위 각 절에 적었다. 셋을 **하나의 ADR 로 묶은 것**은 로드맵이 그렇게 예약해서이기도
+하지만, 실제로 서로 물려 있어서다 — 결정 2 가 표의 `UNIQUE` 를 정하고, 결정 3 이 그 표를 읽는 경로의
+인가를 정하며, 결정 1 이 그 표 **옆에 무엇을 더 만들지 않을지**를 정한다. 따로 내면 세 번 같은 맥락을
+다시 쌓아야 한다.
+
+### 결과
+
+- **[#169](https://github.com/sanghyunbang/heattrip/issues/169) 가 풀린다.** `reaction` 의 `UNIQUE` 는
+  `(post_id, user_id, type)` 이고, 그건 `schema.md`·`community.md` 의 초안 그대로라 **고칠 것이 없다.**
+- **마이그레이션 번호는 `14` 다.** `13` 은 [#155](https://github.com/sanghyunbang/heattrip/issues/155) 의
+  `13_walk_path_t.sql` 이 이미 쓴다. 로드맵과 #169 본문이 적은 `13_community.sql` 은 충돌한다.
+  그리고 `backend/mysql/README.md` 의 실행 목록과 표가 **`12_walk.sql` 에서 끝난다** — 13 도 등재돼 있지 않다.
+- **계약이 바뀐다** — 반응 오퍼레이션이 `POST`/`DELETE .../reactions/{type}` 둘로 갈리고,
+  `ReactionSummary.mine` 이 `anyOf` 배열이 된다. 새 오퍼레이션은 `401` 을 선언해야
+  [ADR-0017](#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다) 규약 3 의
+  검사를 통과한다. 그리고 반응에 **`400` 이 없다** — 잘못된 `type` 을 받는 자리라 함께 붙인다.
+- **청사진과 설계 문서를 고쳐야 한다.** `community.md` 는 단수를 **여덟 자리**에 박아 뒀고, 게스트 읽기
+  근거로 *"openapi `security: []` 계약과 어긋난다"* 를 드는데 **ADR-0017 이 그 `security: []` 를 뒤집었다.**
+  `api-spec.md §6.9` 는 더 나쁘다 — 없는 경로(`POST /api/posts/{postId}/reactions`)를 **"✅ 구현(개편)"**
+  으로 적고 필드 이름도 `myReaction` 이다.
+- **만료 토큰이 게스트로 떨어진다.** 인증 선택 경로에서는 깨진 토큰이 401 이 아니라 **200 + `mine: null`**
+  이 되고, 앱은 **401 에서만** 갱신한다. 다만 영구는 아니다 — `AuthState.init()` 이 실행마다
+  `GET /auth/me` 를 부르고 그 경로는 반드시 401 을 준다. **창은 "앱을 켠 뒤 커뮤니티 읽기만 만지는 한 세션"**
+  이다. 계약이 이 상태를 아직 말하지 않으므로 `mine` 설명에 한 줄 적는다.
+- **차단은 이 결정에서 뗐지만 먼 미래가 아니다.** ADR-0017 이 `PersonRef{userId, nickname}` 을 넣은 이유
+  중 하나가 *"`Comment.author` 에 식별자가 없어 차단이 계약상 불가능하다"* 였다. 즉 오늘 결정이 이미
+  그날을 준비했다. 미루는 근거는 *"요구가 없다"* 가 아니라 **"표를 옮기는 값이 지금 제일 비싸다"** 다.
+- **모르는 것을 적어 둔다**: 게스트 읽기에 붙일 rate limit 의 적정값(관측이 없다) ·
+  `report` 표를 만드는 날 `emotion_card` 계열까지 담을지(레거시 셸 처리 [#94](https://github.com/sanghyunbang/heattrip/issues/94) 와 물린다) ·
+  복수 반응에서 카운트를 화면이 어떻게 읽히게 쓸지(*"7명"* 이 아니라 *"7"* 이다).
 
 ---
 
