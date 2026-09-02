@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/sanghyunbang/heattrip/actions/workflows/ci.yml/badge.svg)](https://github.com/sanghyunbang/heattrip/actions/workflows/ci.yml)
 
-> **반려동물과 함께 걷고, 동네 반려인들과 연결되는 공간.**
-> 산책 GPS 트래킹 · 반려동반 장소 지도 · 동네 커뮤니티 — Flutter 앱과 Spring Boot 서버를 함께 담은 모노레포입니다.
+> **반려동물과 함께 걷고, 가족과 나누고, 동네 반려인들과 연결되는 공간.**
+> 산책 GPS 트래킹 · 반려동반 장소 지도 · 가족 케어 공유 · 채팅 · 동네 커뮤니티 — Flutter 앱과 Spring Boot 서버를 함께 담은 모노레포입니다.
 
 산책을 wedge로 좁게 시작해 **반려 일상 로그(산책 → 건강·식사·병원·동네) + 동반장소 지도 + 커뮤니티**로 확장합니다.
 
@@ -11,18 +11,22 @@
 
 ## 무엇을 하는 앱인가
 
-5탭 구조입니다 — 홈 / 지도 / **[산책 FAB]** / 커뮤니티 / 통계.
+5탭 구조입니다 — 홈 / 지도 / **[산책 FAB]** / 커뮤니티 / 채팅. 통계는 탭이 아니라 프로필에서 들어갑니다.
 
 | | |
 | :--- | :--- |
-| **산책** | 실시간 경로 기록 · 거리/시간/페이스 라이브 스탯 |
-| **지도** | 반려동반 가능 장소 · 동물병원 · 펫샵 · 산책로 레이어 |
+| **산책** | 실 GPS 경로 기록 · 거리/시간/페이스 라이브 스탯 · 종료 시 서버 저장 |
+| **지도** | 반려동반 가능 장소(관광공사 실데이터) · 동물병원 · 펫샵 · 산책로 레이어 |
+| **가족** | 초대코드로 묶인 가족 그룹 · 오늘의 케어 공유(밥·물·산책·투약·병원) · 산책 주의사항 |
+| **채팅** | 가족 방 · 미읽음 뱃지 · 신고/차단/강퇴 |
 | **커뮤니티** | 동네 반려인 게시판 — 글·댓글·반응 |
-| **통계** | 주간 산책 거리 차트 · 자주 가는 곳 |
-| **프로필** | 반려동물 프로필(견종·크기·나이·중성화) |
+| **통계** | 주간 산책 거리 차트 · 총거리/횟수/평균 요약 |
+| **프로필** | 반려동물 프로필(종·품종·크기·나이·중성화) |
 
 > [!NOTE]
-> 화면은 전부 동작하지만 데이터는 아직 대부분 더미입니다. 지도의 **반려동반 장소만 관광공사(KTO) 실데이터**로 연결돼 있고, 산책 GPS·커뮤니티·계정은 진행 중입니다.
+> **산책·인증·가족 케어·채팅·반려동물·장소는 서버 연동이 끝났습니다.**
+> 남은 더미는 **커뮤니티**(백엔드 코드 0줄 — M3.1)와 지도의 **병원/펫샵/산책로 레이어**(M3)입니다.
+> 통계의 "자주 가는 곳" 은 만들어졌지만 **항상 비어 있습니다** — 산책에 장소 축이 없어서, 그럴듯한 값을 만들지 않습니다.
 > 화면·기능별 정확한 상태는 [구현 현황](docs/05-build/implementation-status.md)에 정리돼 있습니다.
 
 ---
@@ -50,10 +54,10 @@ heattrip/
 ├── backend/           Spring Boot API 서버 + MySQL · 관측성(Prometheus/Grafana) · k6
 ├── docs/              기술 문서 — 설계 · 아키텍처 · DB · API 계약 · 빌드 · 테스트 · ADR
 ├── design_refactor/   피벗 이전 디자인 프로토타입 핸드오프 (정리 대상)
-└── .github/           이슈·PR 템플릿 · CI 워크플로
+└── .github/           이슈·PR 템플릿 · CI 워크플로 · 문서 드리프트 검사 스크립트
 ```
 
-- **`docs/`** 는 "코드와 함께 리뷰되어야 하는 문서"만 담습니다. 제품 기획·전략 문서는 저장소 밖에서 관리합니다([ADR-0008](docs/99-decisions/decision-log.md)).
+- **`docs/`** 는 "코드와 함께 리뷰되어야 하는 문서" 를 담고, **제품 기획 문서도 `docs/00-product/` 에 함께 담습니다** — [ADR-0014](docs/99-decisions/decision-log.md#adr-0014--제품-기획-문서도-저장소에-넣는다) 가 ADR-0008 의 "기획 문서는 저장소 밖" 한 줄을 뒤집었습니다.
 - **`design_refactor/`** 는 감정 여행 앱 시절의 HTML 디자인 프로토타입 2개(+런타임 스크립트, 설명 README)입니다. 2026-06 모노레포 통합 이후 손대지 않았고 현재 코드베이스와 연결점이 없는 **피벗 이전 산출물이라 정리(아카이브 또는 삭제) 대상**입니다.
 
 ---
@@ -76,19 +80,20 @@ heattrip/
 
 | | 버전 | 비고 |
 | :--- | :--- | :--- |
-| Java | **21** | Gradle toolchain |
+| Java / Kotlin | **21** / 2.2.20 | Gradle toolchain. Kotlin 은 일부 설정·유틸에 섞여 있습니다 |
 | Spring Boot | **3.5.4** | Web · WebFlux · Data JPA · Validation |
+| 모듈 경계 | Spring Modulith 1.4.13 | 구조 검사만 들입니다 — 이벤트는 보류([ADR-0012](docs/99-decisions/decision-log.md#adr-0012--모듈-경계는-spring-modulith-의-구조-검사만-들인다)) |
 | 인증 | Spring Security + OAuth2 Client · JJWT 0.11.5 | 카카오 · 구글 |
-| DB | **MySQL 8.0** | 공간형 `POINT`/`LINESTRING` + `SPATIAL INDEX` ([ADR-0003](docs/99-decisions/decision-log.md)) |
+| DB | **MySQL 8.0** + `hibernate-spatial` | 산책 경로를 `walk.path LINESTRING SRID 4326` 으로 저장합니다. **`SPATIAL INDEX` 는 만들지 않습니다** — 공간으로 묻는 질의가 없고, 인덱스가 `NOT NULL` 을 요구해 경로 없는 산책을 못 담게 됩니다([ADR-0015](docs/99-decisions/decision-log.md#adr-0015--산책-경로는-linestring-으로-저장하되-spatial-index-는-만들지-않는다)). 장소 캐시는 공간형이 아니라 0.02° 격자입니다([ADR-0013](docs/99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)) |
 | API 문서 | springdoc-openapi 2.7.0 | 계약 원본은 [`docs/04-api/openapi.yaml`](docs/04-api/openapi.yaml) |
 | 관측성 · 부하 | Micrometer + Prometheus · Grafana · k6 | |
 
 ### 외부 데이터
 
-- **한국관광공사 `KorPetTourService2`** — 반려동반 가능 장소. 현재 유일한 실데이터 레이어이며, 앱이 직접 호출하는 것은 임시 구조입니다(백엔드 프록시로 이전 예정 — [ADR-0006](docs/99-decisions/decision-log.md)).
+- **한국관광공사 `KorPetTourService2`** — 반려동반 가능 장소. 현재 유일한 실데이터 레이어입니다. **앱은 관광공사를 직접 부르지 않습니다** — `GET /api/places/nearby` 만 부르고, 서비스키는 서버 환경변수 `TOUR_API_SECRET` 으로만 존재합니다([#40](https://github.com/sanghyunbang/heattrip/issues/40)). 캐시는 0.02° 격자 스냅샷이고 일일 호출 예산은 `kto_call_budget` 표가 지킵니다([ADR-0013](docs/99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)).
 - **LOCALDATA**(동물병원·펫샵), **두루누비**(산책로) — 연동 예정. 지금은 더미 레이어입니다.
 
-> 감정 여행 시절의 OpenAI 추천 파이프라인(Spring AI 의존성)이 코드에 남아 있으며, 반려 맥락에서 **재검토 대상**입니다. 자세한 내용은 [결정 기록](docs/99-decisions/decision-log.md)을 참고하세요.
+> 감정 여행 시절의 OpenAI 추천 파이프라인이 아직 남아 있습니다 — `spring-ai-starter-model-openai`(`backend/build.gradle:133`)와 `curation`·`llm` 패키지입니다. 반려 맥락에서 쓰이지 않으므로 **재검토 대상**이고, 레거시 셸 전체의 처리는 [#94](https://github.com/sanghyunbang/heattrip/issues/94) 가 정합니다.
 
 ---
 
@@ -103,7 +108,7 @@ cd heattrip
 # 앱 — Flutter 3.44.4 필요
 cd app
 flutter pub get
-flutter run               # 키가 없어도 앱은 뜹니다 (지도·공공데이터만 비활성)
+flutter run               # 키가 없어도 앱은 뜹니다 (지도 탭만 비활성 — 장소는 백엔드가 대신 부릅니다)
 
 # 서버 (선택) — JDK 21 + MySQL 8 필요
 cd ../backend
@@ -124,27 +129,32 @@ flutter run --dart-define=API_BASE=http://10.0.2.2:8080
 검증 명령:
 
 ```bash
-cd app     && flutter analyze --no-fatal-warnings --no-fatal-infos && flutter test
-cd backend && ./gradlew test jacocoTestCoverageVerification   # Docker 필요 (Testcontainers)
+(cd app     && flutter analyze --no-fatal-warnings --no-fatal-infos && flutter test)
+(cd backend && ./gradlew test jacocoTestCoverageVerification)   # Docker 필요 (Testcontainers)
 ```
 
 ---
 
 ## 현재 상태
 
-**M2 — 로그인(소셜 인증) 진행 중.** 전체 마일스톤은 [로드맵](docs/05-build/roadmap.md)에 있습니다.
+**2.x 밴드 끝자락 — M2.8(알림) 앞.** 로그인·가족 케어·채팅까지 닫혔고, 남은 것은 커뮤니티(M3.1)와 병원/펫샵/산책로 실데이터(M3)입니다. 전체 마일스톤은 [로드맵](docs/05-build/roadmap.md)에 있습니다.
 
 | 마일스톤 | 한 줄 | 상태 |
 | :--- | :--- | :---: |
 | **M0** — 더미 UX 완성 | 5탭 전 화면을 더미 데이터로 완성 | ✅ 완료 |
-| **M1** — 실위치 + 실시간 트래킹 | 시뮬 좌표를 실제 GPS로 대체 | ⬜ 예정 |
-| **M2** — 로그인(소셜 인증) | 카카오·구글 계정 도입, 서버 동기화의 기반 | 🟡 **진행 중** |
-| **M2.5** — 가족 케어 & 채팅 | 가족이 함께 돌본다 | ⬜ 예정 |
-| **M3** — 실데이터 + 백엔드 프록시 | 더미 레이어를 공공데이터로, KTO 키를 서버로 | ⬜ 예정 |
+| **M1** — 실위치 + 실시간 트래킹 | 시뮬 좌표를 실 GPS로, 경로를 서버에 저장 | ✅ 완료 |
+| **M2** — 로그인(소셜 인증) | 카카오·구글 계정, 서버 동기화의 기반 | ✅ 하위 닫힘 |
+| **M2.5** — 가족 그룹 & 케어 공유 | 가족이 함께 돌본다 | ✅ 하위 닫힘 |
+| **M2.6** — 채팅(폴링) | 방 목록·미읽음·폴링 송수신 | ✅ 하위 닫힘 |
+| **M2.7** — 채팅 안전 & 스토어 요건 | 신고·차단·강퇴·연령 게이트 | ✅ 완료 |
+| **M2.8** — 알림(푸시) | FCM/APNs · 방별 음소거 | ⬜ 예정 |
+| **M2.9** — 실시간(소켓) | 받기만 소켓 | ⬜ 트리거 기반 |
+| **M3** — 실데이터 + 백엔드 프록시 | KTO 프록시·캐싱 완료 · LOCALDATA/두루누비 남음 | 🟡 부분 완료 |
+| **M3.1** — 커뮤니티 | `post`·`comment`·`reaction` · `/api/community` · 앱 연결 | ⬜ 예정 |
 | **M4** — 확장 로그 | 산책 wedge를 "반려 일상 로그"로 확장 | ⬜ 예정 |
 | **M5** — 출시 | 양대 스토어 정식 배포 | ⬜ 예정 |
 
-M2와 M3는 병렬 진행이 가능합니다. 인증이 막히면 다른 서버 기능이 전부 막히기 때문에 M1보다 M2를 먼저 하고 있습니다.
+의존은 이렇습니다 — 2.x 밴드 안에서 **M2.5 → M2.6 이 하드 의존**(방이 있어야 메시지를 붙입니다)이고, M2.7·M2.8 은 그 뒤에서 병렬, M2.9 는 실측 트리거가 걸릴 때만 엽니다. **M3.1(커뮤니티)은 M3 과 병렬이되 M4 앞**이어야 합니다 — M4 가 "커뮤니티 건강·병원 보드와 연동" 을 서버가 이미 있다는 전제로 적습니다. **M2.7 은 M5 의 하드 전제**입니다(스토어 UGC 요건).
 
 ---
 
@@ -160,7 +170,8 @@ M2와 M3는 병렬 진행이 가능합니다. 인증이 막히면 다른 서버 
 | [ERD](docs/03-database/erd.md) · [스키마](docs/03-database/schema.md) | MySQL 공간형 데이터 모델 |
 | [API 명세](docs/04-api/api-spec.md) · [`openapi.yaml`](docs/04-api/openapi.yaml) | 프론트/백엔드 합의 계약 |
 | [디자인 시스템](docs/01-design/design-system.md) · [화면 명세](docs/01-design/screen-spec.md) | 오라 배경 · 글래스 카드 · 토큰 |
-| [결정 기록(ADR)](docs/99-decisions/decision-log.md) | 피벗 · 네이밍 · RDB · KTO · 문서 범위 |
+| [제품 기획](docs/00-product/concept.md) · [비전](docs/00-product/vision.md) | 컨셉 · 페르소나 · 시장 · 수익화 · 위치정보법 |
+| [결정 기록(ADR)](docs/99-decisions/decision-log.md) | 피벗 · 네이밍 · RDB · KTO · 채팅 · 모듈 경계 · 산책 경로 · 계약 규약 |
 
 ---
 
@@ -168,9 +179,11 @@ M2와 M3는 병렬 진행이 가능합니다. 인증이 막히면 다른 서버 
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 의 **CI** 워크플로가 PR과 `main` 푸시마다 돕니다.
 
-- **경로 필터** — `backend/**` 가 바뀐 PR에서는 백엔드 잡만, `app/**` 이면 앱 잡만 돕니다.
-- **백엔드** — `./gradlew test jacocoTestReport jacocoTestCoverageVerification`. 커버리지 게이트는 인증 패키지에만 걸려 있고 **내리는 것은 금지**입니다. 검색 테스트가 MySQL FULLTEXT 를 Testcontainers 로 실제 실행하므로 **로컬에서도 Docker 가 필요**합니다([#26](https://github.com/sanghyunbang/heattrip/issues/26)).
-- **앱** — `flutter analyze` (에러 0건) + `flutter test --coverage`.
+- **경로 필터** — 바뀐 경로에 따라 검증 잡 넷을 각각 켭니다. `docs` 필터는 `docs/**` 뿐 아니라 **`app/lib/**` 변경에도 켜집니다**(화면이 바뀌면 화면 문서도 봐야 하므로).
+- **백엔드 — 테스트 + 커버리지** — `./gradlew test jacocoTestReport jacocoTestCoverageVerification`. 커버리지 게이트는 인증 패키지에만 걸려 있고 **내리는 것은 금지**입니다. 검색 테스트가 MySQL FULLTEXT 를 Testcontainers 로 실제 실행하므로 **로컬에서도 Docker 가 필요**합니다([#26](https://github.com/sanghyunbang/heattrip/issues/26)).
+- **프론트 — 정적분석 + 테스트** — `flutter analyze` (에러 0건) + `flutter test --coverage`.
+- **문서 — 코드와의 드리프트** — `.github/scripts/check-docs-drift.sh` 가 낡은 서술을 잡습니다([#59](https://github.com/sanghyunbang/heattrip/issues/59)).
+- **문서 — 계약 테스트** — 백엔드 잡이 안 켜진 문서 PR 에서만 돕니다. `DecisionLogTest`·`DocDriftTest`·`OpenApiAuthContractTest`·`PackageConventionDocTest`([#113](https://github.com/sanghyunbang/heattrip/issues/113)).
 - **`CI 통과`** 잡 하나가 최종 판정입니다. 브랜치 보호 규칙에는 이 잡만 등록하면 됩니다.
 
 테스트 정책과 기여 규약은 이슈로 관리합니다 — [규약 #4](https://github.com/sanghyunbang/heattrip/issues/4) · [테스트 정책 #21](https://github.com/sanghyunbang/heattrip/issues/21) · [로드맵 #20](https://github.com/sanghyunbang/heattrip/issues/20).
