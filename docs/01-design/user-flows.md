@@ -11,7 +11,7 @@
 | 3 | 커뮤니티 글 읽기 / 쓰기 | 커뮤니티 탭 | `feed_screen` → `post_detail_screen` |
 | 4 | 온보딩 + 로그인 | 앱 최초 실행 | `splash` → `consent` → `onboarding` → `login` → `MainShell` |
 
-네비게이션 골격은 `main_shell.dart`의 5개 진입점이다: **홈 · 지도 · [가운데 기록 FAB] · 커뮤니티 · 통계**. 가운데 FAB와 홈의 "산책 시작" 버튼은 모두 실시간 산책 트래킹 화면(`WalkTrackingScreen`)으로 이동한다.
+네비게이션 골격은 `main_shell.dart`의 5개 진입점이다: **홈 · 지도 · [가운데 기록 FAB] · 커뮤니티 · 채팅**. 통계는 탭이 아니라 `me_screen`·`today_screen` 둘에서 push 한다. 가운데 FAB와 홈의 "산책 시작" 버튼은 모두 실시간 산책 트래킹 화면(`WalkTrackingScreen`)으로 이동한다.
 
 ---
 

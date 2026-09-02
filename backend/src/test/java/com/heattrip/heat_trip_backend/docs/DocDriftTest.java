@@ -407,7 +407,10 @@ class DocDriftTest {
     private static final List<String> REFERRING_DOCS = List.of(
             "02-architecture/backend/bookmarks.md",
             "02-architecture/backend/dogs.md",
-            "02-architecture/backend/places.md");
+            "02-architecture/backend/places.md",
+            // #169 가 표 셋을 세운 뒤 이 문서가 §7~9 를 가리킨다. 목록에 없으면
+            // 절 번호가 틀려도 아무도 안 알려준다 — 실제로 §6~8 로 적혀 있었다(#168).
+            "02-architecture/backend/community.md");
 
     /** {@code schema.md §12} 형태의 참조. */
     private static final Pattern SECTION_REFERENCE =

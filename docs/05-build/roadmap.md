@@ -41,7 +41,7 @@
 
 **완료된 산출물**
 
-- **네비게이션.** `go_router` → `MainShell`(`lib/v2/screens/main_shell.dart`), 5탭 구조 홈 / 지도 / [산책 FAB] / 커뮤니티 / **채팅**. 통계(`insight_screen`)는 탭에서 내려가 `me_screen` 에서 진입한다.
+- **네비게이션.** `go_router` → `MainShell`(`lib/v2/screens/main_shell.dart`), 5탭 구조 홈 / 지도 / [산책 FAB] / 커뮤니티 / **채팅**. 통계(`insight_screen`)는 탭에서 내려가 `me_screen`·`today_screen` 둘에서 진입한다.
 - **홈(today_screen).** 강아지 히어로 + 오늘 산책 요약(그때는 상수 0).
 - **지도(explore_screen).** 관광공사 KTO **실연동**(서울 반려동반 장소) + 병원/펫샵/산책로 **더미 레이어** + 카테고리 필터·범례·장소 시트.
 - **실시간 산책(walk_tracking_screen).** **더미 시뮬레이션**(서울숲 고정 좌표 루프를 타이머로 한 점씩 그림) + 경로 폴리라인 + 라이브 스탯(시간/거리).

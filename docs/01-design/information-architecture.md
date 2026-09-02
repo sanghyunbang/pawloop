@@ -47,7 +47,7 @@ graph TD
 | 탭 2 | 커뮤니티 | `FeedScreen` | `feed_screen.dart` | `RootTab.index=2` |
 | 탭 3 | 채팅 | `ChatListScreen` | `chat_list_screen.dart` | `RootTab.index=3` |
 
-> **통계(`InsightScreen`)는 탭이 아니다.** `me_screen` 에서 `push` 로 들어간다 — 2026-08 에 탭에서 내려갔고 그 자리에 채팅이 들어왔다(#78~#81).
+> **통계(`InsightScreen`)는 탭이 아니다.** 진입점이 **둘**이다 — `me_screen`(마이 화면 메뉴)과 `today_screen`(홈의 오늘 산책 요약). 2026-08 에 탭에서 내려갔고 그 자리에 채팅이 들어왔다(#78~#81).
 | 글로벌 | 내 프로필 | `MeScreen` | `me_screen.dart` | 아바타 탭 → `push` |
 
 > **주의**: 가운데 FAB은 탭 상태(index)를 바꾸지 않고 `WalkTrackingScreen`을 **위에 push**한다. 즉 산책 트래킹은 탭이 아니라 "실행되는 흐름"이며, 종료 후 원래 탭으로 되돌아온다.
@@ -86,7 +86,8 @@ graph TD
 
     %% 통계
     Shell --> Chat["💬 채팅 · ChatListScreen<br/>방 목록·미읽음 뱃지"]
-    Me --> Insight["📊 통계 · InsightScreen<br/>주간 요약·막대 (탭 아님 — me_screen 에서 push)"]
+    Me --> Insight["📊 통계 · InsightScreen<br/>주간 요약·막대 (탭 아님)"]
+    Home --> Insight
     Insight -->|아바타| Me
 
     %% 프로필(글로벌)
@@ -168,7 +169,7 @@ graph LR
 - 글 상세에서 반응 토글·댓글 작성은 **로컬 상태**(백엔드 미연동, 더미).
 - ⚠️ **글쓰기 진입점 없음**: 현재 커뮤니티에는 새 글 작성 버튼이 없다. `CreateScreen`은 "산책 기록"용이며 게시판 글쓰기와 분리됨(향후 커뮤니티 글쓰기 진입점 추가 필요).
 
-### 4.5 📊 통계 (`InsightScreen`) — **탭이 아니라 `me_screen` 에서 push**
+### 4.5 📊 통계 (`InsightScreen`) — **탭이 아니다. `me_screen`·`today_screen` 둘에서 push**
 ```mermaid
 graph LR
     I["통계"] --> I1["이번 주 요약<br/>(총거리·횟수·평균)"]

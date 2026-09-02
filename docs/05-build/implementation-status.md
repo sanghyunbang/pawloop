@@ -4,7 +4,7 @@
 
 - **기준 커밋/시점**: `app/lib/v2/` 현재 상태
 - **엔트리**: `app/lib/main.dart` → go_router(`app/lib/app/app_router.dart`) → `/home` = `v2/screens/main_shell.dart`(`MainShell`)
-- **네비**: 플로팅 글래스 알약 5탭 — 홈 / 지도 / **[산책 기록 FAB]** / 커뮤니티 / **채팅** (`main_shell.dart:108-111`). 통계(`insight_screen`)는 탭이 아니라 `me_screen` 에서 진입한다
+- **네비**: 플로팅 글래스 알약 5탭 — 홈 / 지도 / **[산책 기록 FAB]** / 커뮤니티 / **채팅** (`main_shell.dart:108-111`). 통계(`insight_screen`)는 탭이 아니라 `me_screen`·`today_screen` **둘**에서 진입한다
 - **상태 표기**: `구현완료`(UI+동작) · `실연동`(외부 데이터 연동됨) · `더미`(하드코딩·시뮬) · `미구현`
 
 ---
