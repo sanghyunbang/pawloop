@@ -67,6 +67,33 @@
 --    handle 은 그 조회가 실패했을 때를 위한 저장 기록이지 표시용이 아니다 — 저장은
 --    스냅샷, 표시는 현재값 두 규칙이 한 화면에서 만나지 않게 하는 것이 요점이다.
 --
+-- 5) users 로의 FK 는 ON DELETE SET NULL 이고 user_id 는 nullable 이다.
+--
+--    처음에는 FK 를 걸되 ON DELETE 를 안 적었다(= RESTRICT). 그러면 **글을 쓴 사람이
+--    영원히 탈퇴하지 못한다** — UserService.deleteMe 가 users 행을 물리 삭제하는데
+--    커뮤니티 행이 그것을 막는다. 실측:
+--
+--      DELETE FROM users WHERE id = 1;
+--      ERROR 1451 (23000): Cannot delete or update a parent row:
+--        a foreign key constraint fails (post, CONSTRAINT fk_post_user ...)
+--
+--    11_dog.sql 이 dog 에 대해 적어 둔 것과 같은 실패다. 다만 dog 은 CASCADE 로 풀었고
+--    여기는 SET NULL 로 푼다 — 차이가 있다.
+--
+--      dog        탈퇴하면 반려동물도 사라지는 것이 맞다. 그 사람의 것이다.
+--      post       탈퇴해도 글은 남아야 한다. **남의 댓글이 매달려 있다** —
+--                 CASCADE 면 탈퇴 한 번에 남의 대화가 통째로 끊긴다.
+--
+--    care_log.done_by 가 이미 이 모양이다(fk_carelog_doneby ... ON DELETE SET NULL).
+--
+--    user_id 가 NULL 인 행은 "탈퇴한 사람이 쓴 것" 이고, 응답의 author 는
+--    PersonRef{userId: 0, nickname: "알 수 없음"} 이다(ADR-0017 규약 5). 그 규칙이
+--    채팅과 같아서 탈퇴 정책이 하나로 유지된다.
+--
+--    handle(작성 시점 스냅샷)이 여기서 값을 한다 — users 행이 사라진 뒤 그 글을 누가
+--    썼는지 아는 유일한 기록이다. 다만 **응답에는 여전히 안 싣는다.** 표시는 규약대로
+--    "알 수 없음" 이고, handle 은 운영이 들여다볼 때의 기록이다.
+--
 -- ----------------------------------------------------------------------------
 -- 여기서 하지 않는 것
 --
@@ -153,7 +180,7 @@ DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS post (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
-  user_id     BIGINT       NOT NULL COMMENT '작성자. users 로 FK',
+  user_id     BIGINT       NULL COMMENT '작성자. 탈퇴하면 NULL 이 된다(ON DELETE SET NULL) — 결정 5',
   board       VARCHAR(20)  NOT NULL COMMENT 'ASCII 키 — walk_review/pet_place/health/free/brag. 화면 문구는 앱이 든다',
   title       VARCHAR(200) NOT NULL,
   body        TEXT         NOT NULL,
@@ -162,30 +189,32 @@ CREATE TABLE IF NOT EXISTS post (
   handle      VARCHAR(50)  NULL COMMENT '작성 시점 닉네임 스냅샷. 응답에는 안 싣는다 — 표시는 현재값이다(ADR-0017 규약 5)',
   created_at  DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
-  CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users (id)
+  KEY idx_post_user (user_id),
+  CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS comment (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
   post_id     BIGINT       NOT NULL,
-  user_id     BIGINT       NOT NULL,
+  user_id     BIGINT       NULL COMMENT '작성자. 탈퇴하면 NULL — 결정 5',
   body        TEXT         NOT NULL,
   handle      VARCHAR(50)  NULL COMMENT 'post.handle 과 같은 이유',
   created_at  DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
+  KEY idx_comment_user (user_id),
   CONSTRAINT fk_comment_post FOREIGN KEY (post_id) REFERENCES post (id) ON DELETE CASCADE,
-  CONSTRAINT fk_comment_user FOREIGN KEY (user_id) REFERENCES users (id)
+  CONSTRAINT fk_comment_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS reaction (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
   post_id     BIGINT       NOT NULL,
-  user_id     BIGINT       NOT NULL,
+  user_id     BIGINT       NULL COMMENT '누른 사람. 탈퇴하면 NULL — 결정 5',
   type        VARCHAR(20)  NOT NULL COMMENT 'help/cute/empathy',
   created_at  DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
   CONSTRAINT fk_reaction_post FOREIGN KEY (post_id) REFERENCES post (id) ON DELETE CASCADE,
-  CONSTRAINT fk_reaction_user FOREIGN KEY (user_id) REFERENCES users (id)
+  CONSTRAINT fk_reaction_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- ── B. 인덱스·제약 ─────────────────────────────────────────────────────────
@@ -226,6 +255,59 @@ PREPARE stmt FROM @stmt;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- B-4. 결정 5 이전 모양(user_id NOT NULL · ON DELETE 없음)으로 이미 선 표를 고친다.
+--      #169 가 처음 낸 모양이 그것이었다. 그 DB 에서는 글을 쓴 사람이 탈퇴하지 못한다.
+--      FK 를 먼저 떼고 컬럼을 nullable 로 바꾼 뒤 다시 건다 — 순서를 바꾸면 MySQL 이 거절한다.
+SET @needs := (
+    SELECT COUNT(*) FROM information_schema.referential_constraints
+    WHERE constraint_schema = DATABASE()
+      AND constraint_name IN ('fk_post_user', 'fk_comment_user', 'fk_reaction_user')
+      AND delete_rule <> 'SET NULL');
+
+SET @stmt := IF(@needs > 0, 'ALTER TABLE post DROP FOREIGN KEY fk_post_user', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @stmt := IF(@needs > 0, 'ALTER TABLE post MODIFY user_id BIGINT NULL', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @stmt := IF(@needs > 0, 'ALTER TABLE post ADD CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @stmt := IF(@needs > 0, 'ALTER TABLE comment DROP FOREIGN KEY fk_comment_user', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @stmt := IF(@needs > 0, 'ALTER TABLE comment MODIFY user_id BIGINT NULL', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @stmt := IF(@needs > 0, 'ALTER TABLE comment ADD CONSTRAINT fk_comment_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @stmt := IF(@needs > 0, 'ALTER TABLE reaction DROP FOREIGN KEY fk_reaction_user', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @stmt := IF(@needs > 0, 'ALTER TABLE reaction MODIFY user_id BIGINT NULL', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @stmt := IF(@needs > 0, 'ALTER TABLE reaction ADD CONSTRAINT fk_reaction_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL', 'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- SET NULL 이 훑는 자리라 인덱스가 없으면 users 삭제가 표 전체 스캔이다.
+-- (reaction 은 uq_reaction 의 왼쪽 접두가 post_id 라 user_id 단독 인덱스를 따로 둔다.)
+SET @exists := (
+    SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'post' AND index_name = 'idx_post_user');
+SET @stmt := IF(@exists = 0, 'CREATE INDEX idx_post_user ON post (user_id)',
+    'SELECT ''[B-4] idx_post_user 이미 있음 — 건너뜀'' AS message');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @exists := (
+    SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'comment' AND index_name = 'idx_comment_user');
+SET @stmt := IF(@exists = 0, 'CREATE INDEX idx_comment_user ON comment (user_id)',
+    'SELECT ''[B-4] idx_comment_user 이미 있음 — 건너뜀'' AS message');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @exists := (
+    SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'reaction' AND index_name = 'idx_reaction_user');
+SET @stmt := IF(@exists = 0, 'CREATE INDEX idx_reaction_user ON reaction (user_id)',
+    'SELECT ''[B-4] idx_reaction_user 이미 있음 — 건너뜀'' AS message');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- ── D. 사후 검증 ───────────────────────────────────────────────────────────
 -- 여기까지 왔는데 숫자가 다르면 **반쯤 적용된 것**이다. 성공처럼 끝내지 않는다.
 
@@ -249,29 +331,30 @@ SET @d_cascade := (
       AND constraint_name IN ('fk_comment_post', 'fk_reaction_post')
       AND delete_rule = 'CASCADE');
 
--- users 로의 FK 는 CASCADE 가 **아니어야** 한다. 탈퇴 한 번에 그 사람이 쓴 글이 전부
--- 사라지면 대화의 앞뒤가 끊긴다 — 채팅이 users 로 FK 를 안 낸 것과 같은 이유다.
+-- users 로의 FK 는 **SET NULL** 이어야 한다(결정 5).
 --
--- 값은 'NO ACTION' 이다. ON DELETE 를 안 적은 FK 를 MySQL 은 RESTRICT 로 동작시키면서
--- information_schema 에는 **NO ACTION 으로 적는다**(실측 2026-09-02). RESTRICT 로 세면
--- 항상 0 이 나와 이 검사가 조용히 못 지킨다.
-SET @d_user_no_cascade := (
+-- CASCADE 면 탈퇴 한 번에 남의 댓글이 매달린 글이 통째로 사라진다.
+-- 반대로 아무것도 안 적으면(= NO ACTION/RESTRICT) **글을 쓴 사람이 영원히 탈퇴하지
+-- 못한다** — UserService.deleteMe 가 users 행을 물리 삭제하기 때문이다(MySQL 1451, 실측).
+-- care_log.done_by 가 이미 이 모양이다.
+SET @d_user_set_null := (
     SELECT COUNT(*) FROM information_schema.referential_constraints
     WHERE constraint_schema = DATABASE()
       AND constraint_name IN ('fk_post_user', 'fk_comment_user', 'fk_reaction_user')
-      AND delete_rule = 'NO ACTION');
+      AND delete_rule = 'SET NULL');
 
 SET @d_idx := (
     SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics
     WHERE table_schema = DATABASE()
-      AND index_name IN ('idx_post_board_created', 'idx_comment_post_created'));
+      AND index_name IN ('idx_post_board_created', 'idx_comment_post_created',
+                         'idx_post_user', 'idx_comment_user', 'idx_reaction_user'));
 
 SELECT '[D] 사후 검증' AS section,
        @d_tables AS tables_3, @d_post_cols AS post_cols_9, @d_uq_cols AS uq_cols_3,
-       @d_cascade AS cascade_2, @d_user_no_cascade AS user_noaction_3, @d_idx AS idx_2;
+       @d_cascade AS cascade_2, @d_user_set_null AS user_setnull_3, @d_idx AS idx_5;
 
 SET @stmt := IF(@d_tables = 3 AND @d_post_cols = 9 AND @d_uq_cols = 3
-                AND @d_cascade = 2 AND @d_user_no_cascade = 3 AND @d_idx = 2,
+                AND @d_cascade = 2 AND @d_user_set_null = 3 AND @d_idx = 5,
     'SELECT ''[D] 통과'' AS message',
     'CALL heattrip_migration_abort(''ABORT: 사후 검증 실패. 위 [D] 행의 숫자를 확인하라.'')');
 PREPARE stmt FROM @stmt;

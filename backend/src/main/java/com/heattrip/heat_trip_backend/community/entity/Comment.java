@@ -35,9 +35,10 @@ import java.time.LocalDateTime;
  * <b>부모 없는 행</b>으로 남아 어느 목록에도 안 뜨면서 자리만 차지한다 — 나중에 세면
  * 댓글 수가 맞지 않고, 왜 안 맞는지 아무도 모른다.
  *
- * <p><b>{@code users} 로의 FK 는 CASCADE 가 아니다.</b> 탈퇴 한 번에 그 사람의 댓글이 전부
- * 사라지면 <b>남의 글에서 대화가 끊긴다</b> — 답글이 무엇에 답한 것인지 알 수 없게 된다.
- * {@code Post} 와 같은 판단이다.
+ * <p><b>{@code users} 로의 FK 는 {@code ON DELETE SET NULL} 이다.</b> {@code CASCADE} 면 탈퇴
+ * 한 번에 그 사람의 댓글이 전부 사라져 <b>남의 글에서 대화가 끊기고</b>, 반대로 아무것도 안
+ * 적으면 <b>댓글을 단 사람이 탈퇴하지 못한다</b>({@code MySQL 1451}). {@code Post} 와 같은
+ * 판단이고 근거는 그쪽 javadoc 에 있다.
  *
  * <h2>{@code handle} 은 저장 전용이다</h2>
  * <p>{@code Post.handle} 과 같은 이유다 — 응답의 {@code author} 는 {@code PersonRef} 로
@@ -59,7 +60,9 @@ import java.time.LocalDateTime;
         name = "comment",
         indexes = {
                 // 댓글 목록도 커서다 — 계약이 (created_at, id) 로 내려간다.
-                @Index(name = "idx_comment_post_created", columnList = "post_id, created_at, id")
+                @Index(name = "idx_comment_post_created", columnList = "post_id, created_at, id"),
+                // 탈퇴 시 SET NULL 이 훑는 자리.
+                @Index(name = "idx_comment_user", columnList = "user_id")
         })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -79,9 +82,10 @@ public class Comment {
     private Post post;
 
     /** 작성자. 탈퇴해도 댓글은 남는다 — 클래스 javadoc 참조. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id",
             foreignKey = @ForeignKey(name = "fk_comment_user"))
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private User user;
 
     @Lob

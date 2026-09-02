@@ -221,14 +221,14 @@ CREATE TABLE `comment` (
   `created_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `post_id` bigint NOT NULL,
-  `user_id` bigint NOT NULL,
+  `user_id` bigint DEFAULT NULL,
   `handle` varchar(50) DEFAULT NULL,
   `body` text NOT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_comment_post_created` (`post_id`,`created_at`,`id`),
-  KEY `fk_comment_user` (`user_id`),
+  KEY `idx_comment_user` (`user_id`),
   CONSTRAINT `fk_comment_post` FOREIGN KEY (`post_id`) REFERENCES `post` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_comment_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  CONSTRAINT `fk_comment_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `dog` (
@@ -541,7 +541,7 @@ CREATE TABLE `places` (
 CREATE TABLE `post` (
   `created_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL,
+  `user_id` bigint DEFAULT NULL,
   `board` varchar(20) NOT NULL,
   `handle` varchar(50) DEFAULT NULL,
   `content_id` varchar(64) DEFAULT NULL,
@@ -550,21 +550,21 @@ CREATE TABLE `post` (
   `body` text NOT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_post_board_created` (`board`,`created_at`,`id`),
-  KEY `fk_post_user` (`user_id`),
-  CONSTRAINT `fk_post_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  KEY `idx_post_user` (`user_id`),
+  CONSTRAINT `fk_post_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `reaction` (
   `created_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `post_id` bigint NOT NULL,
-  `user_id` bigint NOT NULL,
+  `user_id` bigint DEFAULT NULL,
   `type` varchar(20) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_reaction` (`post_id`,`user_id`,`type`),
-  KEY `fk_reaction_user` (`user_id`),
+  KEY `idx_reaction_user` (`user_id`),
   CONSTRAINT `fk_reaction_post` FOREIGN KEY (`post_id`) REFERENCES `post` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_reaction_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  CONSTRAINT `fk_reaction_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `refresh_token` (

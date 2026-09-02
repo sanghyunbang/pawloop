@@ -139,8 +139,8 @@ class CommunitySchemaMigrationExecutionTest {
     }
 
     @Test
-    @DisplayName("users 로 가는 FK 셋은 CASCADE 가 아니다 — 탈퇴가 남의 글에서 대화를 끊지 않는다")
-    void userForeignKeys_doNotCascade() throws Exception {
+    @DisplayName("users 로 가는 FK 셋은 SET NULL 이다 — CASCADE 도 RESTRICT 도 아니다")
+    void userForeignKeys_setNull() throws Exception {
         try (Fixture db = fixture()) {
             db.createParents();
             db.runMigration();
@@ -148,11 +148,49 @@ class CommunitySchemaMigrationExecutionTest {
             for (String fk : List.of("fk_post_user", "fk_comment_user", "fk_reaction_user")) {
                 assertThat(db.deleteRuleOf(fk))
                         .as("""
-                                %s 가 CASCADE 면 탈퇴 한 번에 그 사람이 쓴 글이 전부 사라지고, \
-                                거기 달린 남의 댓글도 함께 사라진다. 탈퇴한 사람을 어떻게 보여 줄지는 \
-                                표시 계층의 문제이지 저장 계층의 문제가 아니다.""", fk)
-                        .isEqualTo("NO ACTION");
+                                %s 는 양쪽으로 틀릴 수 있다. CASCADE 면 탈퇴 한 번에 그 사람이 쓴 글이 \
+                                사라지고 **거기 달린 남의 댓글도 함께** 사라진다. 반대로 아무것도 안 \
+                                적으면(NO ACTION/RESTRICT) **글을 쓴 사람이 영원히 탈퇴하지 못한다** — \
+                                UserService.deleteMe 가 users 행을 물리 삭제하기 때문이다. \
+                                care_log.done_by 가 이미 SET NULL 이다.""", fk)
+                        .isEqualTo("SET NULL");
             }
+        }
+    }
+
+    @Test
+    @DisplayName("글·댓글·반응을 남긴 사람이 탈퇴할 수 있다 — 글은 남고 남의 댓글도 산다")
+    void aUserWhoPosted_canStillBeDeleted() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+
+            db.exec("INSERT INTO users (id, role) VALUES (1, 'ROLE_USER'), (2, 'ROLE_USER')");
+            db.exec("INSERT INTO post (id, user_id, board, title, body, handle, created_at) "
+                    + "VALUES (1, 1, 'free', '제목', '본문', '보리아빠', NOW(6))");
+            // 남이 단 댓글. CASCADE 였다면 아래 DELETE 한 번에 이것도 사라진다.
+            db.exec("INSERT INTO comment (id, post_id, user_id, body, handle, created_at) "
+                    + "VALUES (1, 1, 2, '남의 댓글', '초코맘', NOW(6))");
+            db.exec("INSERT INTO reaction (post_id, user_id, type, created_at) "
+                    + "VALUES (1, 2, 'help', NOW(6))");
+
+            // 회원 탈퇴가 하는 일이 이것이다 — UserService.deleteMe 는 users 행을 물리 삭제한다.
+            db.exec("DELETE FROM users WHERE id = 1");
+
+            assertThat(db.count("post"))
+                    .as("""
+                            #169 가 처음 낸 모양(ON DELETE 없음)에서는 이 DELETE 가 MySQL 1451 로 \
+                            죽었다 — 글을 한 번 쓴 사람은 영원히 탈퇴하지 못했다. 실측으로 확인했다.""")
+                    .isEqualTo(1);
+            assertThat(db.query("SELECT user_id FROM post WHERE id = 1"))
+                    .as("탈퇴한 사람의 글은 user_id 가 NULL 이 된다 — 응답의 author 는 PersonRef{0, 알 수 없음} 이다")
+                    .containsExactly((String) null);
+            assertThat(db.query("SELECT handle FROM post WHERE id = 1"))
+                    .as("handle 은 users 행이 사라진 뒤 그 글을 누가 썼는지 아는 유일한 기록이다")
+                    .containsExactly("보리아빠");
+            assertThat(db.count("comment"))
+                    .as("**남의 댓글이 살아 있어야 한다.** CASCADE 였다면 여기서 0 이 된다")
+                    .isEqualTo(1);
         }
     }
 
