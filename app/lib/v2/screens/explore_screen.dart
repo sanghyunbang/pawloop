@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:heat_trip_flutter/core/config/env.dart';
+import '../widgets/map_unavailable.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
@@ -409,7 +411,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _mapStack() {
     return Stack(children: [
       Positioned.fill(
-        child: NaverMap(
+        child: !Env.hasNaverMap
+            ? const MapUnavailable(
+                what: '주변 반려동물 동반 장소를 지도에 보여드리는 화면이에요.')
+            : NaverMap(
           options: NaverMapViewOptions(
             initialCameraPosition: NCameraPosition(target: _center, zoom: 12),
             locationButtonEnable: true,

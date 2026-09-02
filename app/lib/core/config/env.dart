@@ -55,6 +55,13 @@ class Env {
   static const naverMapClientId =
       String.fromEnvironment('NAVER_MAP_CLIENT_ID', defaultValue: '');
 
+  /// 지도를 그릴 수 있는가.
+  ///
+  /// **화면은 `NaverMap(` 을 그리기 전에 이것을 봐야 한다.** 안 보면
+  /// `FlutterNaverMap.isInitialized` assertion 이 사용자에게 그대로 보인다 — 위
+  /// 주석이 "안내문만 표시한다" 고 적어 두었지만 그 안내문이 없었다 (이슈 #182).
+  static bool get hasNaverMap => naverMapClientId.isNotEmpty;
+
   // 관광공사 서비스키와 호출자 표기가 여기 있었다. **이제 앱에 없다** (이슈 #40).
   //
   // --dart-define 으로 넣어도 문자열은 바이너리에 남아서 strings 한 번이면 나온다.

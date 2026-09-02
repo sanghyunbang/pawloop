@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:heat_trip_flutter/v2/widgets/map_unavailable.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:go_router/go_router.dart';
 
@@ -209,6 +210,12 @@ class _EmotionMapViewState extends State<EmotionMapView> {
 
     return Stack(
       children: [
+        // 키가 없으면 지도를 그리지 않는다 — 안 그러면 assertion 이 사용자에게
+        // 그대로 보인다 (#182). 이 화면은 레거시(#164)지만 규칙에 예외를 두면
+        // 그 예외가 다음 버그가 된다.
+        if (!Env.hasNaverMap)
+          const MapUnavailable(what: '감정 지도를 보여드리는 화면이에요.')
+        else
         NaverMap(
           options: NaverMapViewOptions(
             initialCameraPosition: NCameraPosition(target: _center, zoom: 12),

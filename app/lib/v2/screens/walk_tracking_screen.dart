@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:geolocator/geolocator.dart';
 import '../theme/app_tokens.dart';
+import 'package:heat_trip_flutter/core/config/env.dart';
+import '../widgets/map_unavailable.dart';
 import '../domain/pet.dart';
 import '../data/location_service.dart';
 import '../data/pet_places_repository.dart';
@@ -693,7 +695,12 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
         body: Stack(
           children: [
             Positioned.fill(
-              child: NaverMap(
+              // 키가 없으면 지도를 그리지 않는다. 트래킹 자체는 계속 돈다 —
+              // GPS·거리·시간은 지도와 무관하고, 아래 스탯 패널이 그대로 보인다.
+              child: !Env.hasNaverMap
+                  ? const MapUnavailable(
+                      what: '산책은 계속 기록되고 있어요.\n경로를 지도에 그리지 못할 뿐이에요.')
+                  : NaverMap(
                 options: NaverMapViewOptions(
                   // 판정을 통과했으므로 _path 에 실제 첫 좌표가 이미 들어 있다.
                   initialCameraPosition: NCameraPosition(
