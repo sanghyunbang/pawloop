@@ -7,8 +7,6 @@ import 'package:heat_trip_flutter/features/bookmark/service/bookmark_store.dart'
 import 'package:heat_trip_flutter/features/bookmark/service/collection_store.dart';
 // 아래 두 import는 화면 직접 push 안 쓰면 사실 필요 없지만,
 // 프로젝트 내 다른 곳에서 재사용할 수 있으니 유지해도 무방합니다.
-import 'package:heat_trip_flutter/features/bookmark/presentation/collection_list_screen.dart';
-import 'package:heat_trip_flutter/features/bookmark/presentation/collection_detail_screen.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
@@ -331,7 +329,7 @@ class _Post {
 /* ────────────── 서버 통신 유틸 ────────────── */
 
 class _Api {
-  final String base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
+  final String base = Env.apiBase.replaceAll(RegExp(r'/+$'), '');
 
   /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
   final AuthedClient _client = AuthedClient.instance;

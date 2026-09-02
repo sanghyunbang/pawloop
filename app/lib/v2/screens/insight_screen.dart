@@ -426,8 +426,9 @@ class _InsightScreenState extends State<InsightScreen> {
               reservedSize: 26,
               getTitlesWidget: (value, meta) {
                 final i = value.toInt();
-                if (i < 0 || i >= kWeekDayLabels.length)
+                if (i < 0 || i >= kWeekDayLabels.length) {
                   return const SizedBox.shrink();
+                }
                 final today = i == _todayIndex;
                 return Padding(
                   padding: const EdgeInsets.only(top: 8),

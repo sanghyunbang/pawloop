@@ -22,7 +22,7 @@ class CursorPageResponse<T> {
     required this.hasNext,
   });
 
-  /// JSON -> CursorPageResponse<T>
+  /// JSON -> `CursorPageResponse<T>`
   /// [ItemFromJson] : 각 아이템을 T로 바꾸는 함수
 
   static CursorPageResponse<T> fromJson<T>(

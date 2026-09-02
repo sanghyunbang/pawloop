@@ -9,8 +9,9 @@ class ScheduleList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty)
+    if (items.isEmpty) {
       return const Center(child: Text('No schedules to show.'));
+    }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       itemCount: items.length,

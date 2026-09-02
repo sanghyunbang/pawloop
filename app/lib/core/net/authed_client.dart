@@ -127,7 +127,7 @@ class AuthedClient extends http.BaseClient {
   /// 앱 전역 인스턴스. 로깅 래퍼(#61)와 보안 저장소(#8)를 조합한다.
   static final AuthedClient instance = AuthedClient(
     inner: LoggingClient(http.Client()),
-    baseUrl: Env.apiBase ?? '',
+    baseUrl: Env.apiBase,
     store: SecureAuthTokenStore(),
   );
 

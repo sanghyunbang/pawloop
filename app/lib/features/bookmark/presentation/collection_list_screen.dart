@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:heat_trip_flutter/features/bookmark/service/collection_store.dart';
-import 'package:heat_trip_flutter/features/bookmark/presentation/collection_detail_screen.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
@@ -380,7 +379,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 /* ────────────── 썸네일 로드를 위한 API 래퍼 ────────────── */
 
 class _ApiColl {
-  final String base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
+  final String base = Env.apiBase.replaceAll(RegExp(r'/+$'), '');
 
   /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
   final AuthedClient _client = AuthedClient.instance;

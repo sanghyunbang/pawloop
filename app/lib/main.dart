@@ -10,7 +10,6 @@
 // - Provider를 사용하는 모든 화면(AvatarPicker/MediaRepository 등)이 의존성을 해결하게 됨. [③]
 
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';

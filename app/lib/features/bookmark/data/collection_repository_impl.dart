@@ -4,7 +4,7 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 class CollectionRepositoryImpl implements CollectionRepository {
-  final String base = (Env.apiBase ?? '').replaceAll(RegExp(r'/+$'), '');
+  final String base = Env.apiBase.replaceAll(RegExp(r'/+$'), '');
 
   /// 인증 헤더 부착과 401 갱신은 전부 여기가 한다 (#11).
   final AuthedClient _client = AuthedClient.instance;
@@ -25,8 +25,9 @@ class CollectionRepositoryImpl implements CollectionRepository {
       Uri.parse('$base/collections'),
       body: {'name': name},
     );
-    if (r.statusCode != 200 && r.statusCode != 201)
+    if (r.statusCode != 200 && r.statusCode != 201) {
       throw Exception('컬렉션 생성 실패');
+    }
     return CollectionSummary.fromJson(jsonDecode(r.body));
   }
 

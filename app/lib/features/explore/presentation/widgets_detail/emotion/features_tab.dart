@@ -6,7 +6,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/detail_emotion_vm.dart';
-import '../../../domain_detail/emotion_models.dart';
 
 class FeaturesTab extends StatelessWidget {
   const FeaturesTab({super.key});

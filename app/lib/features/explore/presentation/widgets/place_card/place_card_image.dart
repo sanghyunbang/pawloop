@@ -1,7 +1,7 @@
 /// lib/features/explore/presentation/widgets/place_card/place_card_image.dart
 ///
 /// 이미지 영역을 담당.
-/// - Hero 연결 태그는 'place:<contentId>'
+/// - Hero 연결 태그는 `'place:<contentId>'`
 /// - 높이 지정 없으면 16:9 비율 유지
 /// - errorBuilder로 fallback 이미지 제공
 /// - PhysicalModel로 얇은 elevation 연출
