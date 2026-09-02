@@ -201,6 +201,16 @@ enum FamilyFailureKind {
   /// 그 가족의 멤버가 아니다(403).
   forbidden,
 
+  /// 이미 가족 그룹에 속해 있다(409). **만들기에서만 난다.**
+  ///
+  /// 서버가 두 번째 그룹을 막는다 — `GET /api/groups/me` 가 참여 순서로 하나만 돌려주므로
+  /// 두 번째는 사용자가 존재도 삭제도 모르는 행이 된다(계약의 `POST /api/groups` 설명).
+  ///
+  /// [network] 로 뭉치면 "연결이 불안정해요 · 다시 시도" 가 뜬다. 다시 눌러도 영원히 같고,
+  /// 사용자가 할 일은 다시 시도가 아니라 **화면을 새로 부르는 것**이다 — 이미 가족이 있으니
+  /// 목록이 뜨면 된다.
+  alreadyInGroup,
+
   /// 서버가 입력을 거절했다(400). **다시 시도해도 같은 결과다.**
   ///
   /// 이 네 경로에서 사용자가 실제로 만들 수 있는 400 은 **길이**다 — 주의사항 본문과
@@ -233,6 +243,7 @@ class FamilyFailure implements Exception {
         FamilyFailureKind.noGroup => '아직 가족 그룹이 없어요',
         FamilyFailureKind.unauthorized => '다시 로그인해 주세요',
         FamilyFailureKind.forbidden => '이 가족의 멤버가 아니에요',
+        FamilyFailureKind.alreadyInGroup => '이미 가족 그룹에 속해 있어요',
         FamilyFailureKind.invalid =>
           '메모는 모두 합쳐 ${FamilyRepository.maxTextLength}자까지 쓸 수 있어요',
         FamilyFailureKind.rateLimited => '잠시 후 다시 시도해 주세요',
@@ -267,6 +278,27 @@ class FamilyRepository {
       url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
   /// 내 가족 그룹. 속한 그룹이 없으면 [FamilyFailureKind.noGroup] 이다.
+  /// 그룹 이름의 최대 길이. 서버의 `FamilyGroupService.MAX_NAME_LENGTH` 이자 계약의
+  /// `maxLength` 와 같은 수다.
+  ///
+  /// 여기서 막지 않으면 51자를 쓴 사람이 만들기를 누른 뒤에야 400 을 받는다 —
+  /// `create_screen` 이 #161 에서 같은 이유를 적어 뒀다.
+  static const int maxGroupNameLength = 50;
+
+  /// 가족 그룹을 만든다 — 이슈 #196.
+  ///
+  /// **초대 코드는 여기서 안 나온다.** 응답의 [FamilyGroupSummary.roomId] 를 들고
+  /// [issueInvite] 를 부른다. 2026-08 이전에는 이 경로가 초대 코드를 함께 줬는데
+  /// ADR-0011 이 초대를 방으로 옮기면서 옛 모양이 됐다(#75).
+  ///
+  /// 이미 가족이 있으면 [FamilyFailureKind.alreadyInGroup] 이다.
+  Future<FamilyGroupSummary> createGroup(String name) async {
+    final json = await _send(
+      () => _authed.postJson(Uri.parse('$baseUrl/api/groups'), body: {'name': name}),
+    );
+    return FamilyGroupSummary.fromJson(json as Map<String, dynamic>);
+  }
+
   Future<FamilyGroupSummary> myGroup() async {
     final json = await _send(
       () => _authed.getJson(Uri.parse('$baseUrl/api/groups/me')),
@@ -383,6 +415,7 @@ class FamilyRepository {
       // AuthedClient 가 갱신 + 재시도까지 끝낸 뒤의 401 이다. 세션이 끝났다.
       401 => FamilyFailureKind.unauthorized,
       403 => FamilyFailureKind.forbidden,
+      409 => FamilyFailureKind.alreadyInGroup,
       404 => notFoundIs ?? FamilyFailureKind.network,
       429 => FamilyFailureKind.rateLimited,
       _ => FamilyFailureKind.network,
