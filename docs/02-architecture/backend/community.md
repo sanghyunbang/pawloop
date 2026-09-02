@@ -6,6 +6,17 @@
 > 참조 계약: [`openapi.yaml`](../../04-api/openapi.yaml) `/api/community/**` · 데이터 모델: [`erd.md`](../../03-database/erd.md) · [`schema.md`](../../03-database/schema.md) `post`/`comment`/`reaction`
 > 컨벤션 출처: `backend/.../social/**` (record DTO, `ResponseEntity<?>`, JWT 추출), `.../user/controller/AuthController.java`, `.../OAuth/jwt/JWTProvider.java`
 
+> [!IMPORTANT]
+> **장소 식별자는 `contentId` 입니다.** 아래 본문의 `placeId` 서술은 2026-09
+> [ADR-0017](../../99-decisions/decision-log.md#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다)
+> 이전 것이라 **계약과 다릅니다.** 계약이 `contentId` 로 통일했고, 그 방향을 고른 이유는
+> `contentId` 쪽이 앱과 서버에 이미 박혀 있고 `placeId` 를 쓰던 곳이 전부 미구현이었기
+> 때문입니다. 이 청사진을 구현할 때는 **계약을 먼저 읽으세요.**
+>
+> 작성자 표현도 바뀌었습니다 — `Post.author`·`Comment.author` 는 이제 공통 `PersonRef`
+> (`userId`+`nickname`)를 `$ref` 합니다. 특히 `Comment.author` 에는 **식별자가 아예 없었고**,
+> 그래서 "내 댓글인가" 판별·차단이 계약상 불가능했습니다(ADR-0017 규약 5).
+
 ---
 
 ## 1. 개요

@@ -268,7 +268,7 @@
 
 1. **표 셋**(#169) — `post`·`comment`·`reaction`. `mysql/post-start/13_community.sql`. `schema.md`·`erd.md` 정본 갱신.
 2. **API 여섯**(#170) — `/api/community` 도메인 패키지 신설. 재사용 자산이 실재한다(`SocialService` 의 `findByCardIdIn`·`countByCardIdInGroupBy`·`toggleReaction`).
-3. **앱 연결**(#171) — `kPetPosts` 를 걷어내고 `community_repository.dart` 를 만든다. `PetPost` 에 `placeId` 가 없어 계약과 어긋나는 것도 여기서 맞춘다.
+3. **앱 연결**(#171) — `kPetPosts` 를 걷어내고 `community_repository.dart` 를 만든다. `PetPost` 에 `contentId` 가 없어 계약과 어긋나는 것도 여기서 맞춘다(계약이 `placeId` → `contentId` 로 통일했다 — ADR-0017).
 4. **글쓰기 화면**(#172) — 저장소에 없다. `create_screen.dart` 를 재사용하지 않는다 — 그 화면의 호출부 셋이 전부 산책 축이다.
 
 **문서 선행**(#167·#168·#175) — 이 셋을 만드는 사람이 `community.md`·`api-spec.md` 를 베낀다. 지금 그 문서들이 금지된 인증 패턴(`HttpServletRequest req`)을 지시하고, 계약에 없는 경로와 board 코드를 적고, 산책 화면을 커뮤니티 글쓰기라고 지목한다. **구현 전에 안 고치면 틀린 것이 코드가 된다.**

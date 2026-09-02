@@ -35,7 +35,7 @@
 | `GET /api/dogs` | `list(@CurrentUser User user)` | `List<DogResponse>` (200) | 필요 | `/api/dogs` get |
 | `POST /api/dogs` | `register(@CurrentUser User user, @Valid @RequestBody DogRequest request)` | `DogResponse` (201) | 필요 | `/api/dogs` post |
 | `GET /api/dogs/{dogId}` | `detail(@CurrentUser User user, long dogId)` | `DogResponse` (200 / 404) | 필요\* | `/api/dogs/{dogId}` get |
-| ~~`PATCH /api/dogs/{dogId}`~~ | **아직 없다.** 부분 수정을 `DogRequest` 와 어떻게 나눌지는 #24 가 소유한다 | — | — | `x-status: planned` |
+| ~~`PATCH /api/dogs/{dogId}`~~ | **아직 없다.** 계약은 전용 `DogPatch` 로 정해졌다(ADR-0017 규약 4) — 자바 쪽 이름은 구현할 때 정한다 | — | — | `x-status: planned` |
 | ~~`DELETE /api/dogs/{dogId}`~~ | **아직 없다.** 산책 기록이 매달린 반려동물을 지울 때의 규칙(#154)이 먼저다 | — | — | `x-status: planned` |
 | ~~`POST /api/dogs/{dogId}/avatar`~~ | **아직 없다.** 계약에도 없다 | — | — | (계약 미기재) |
 
@@ -73,7 +73,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | `birth` | `String` | 선택 | `birth` | ISO date 문자열; 서비스에서 `LocalDate.parse` |
 | `neutered` | `Boolean` | 선택 | `neutered` | 기본 `false`(래퍼 타입으로 두어 PATCH 부분수정 구분) |
 
-- PATCH(부분 수정)는 `DogRequest` 재사용. **null=미변경** 규약(social의 `handle` null 처리 스타일). `size`는 값이 오면 검증, `name`은 create시 필수·patch시 선택으로 서비스에서 분기.
+- PATCH(부분 수정)는 **생성용 `DogRequest` 를 재사용하지 않는다** — 계약이 전용 `DogPatch` 를 두고 `minProperties: 1` 을 건다(ADR-0017 규약 4). 재사용하면 생성 쪽 `required: [name, size]` 가 따라와 **부분 수정이 계약상 불가능**해진다. **null=미변경** 규약은 그대로다(social 의 `handle` null 처리 스타일).
 - `ageMonths`는 요청에 없고 응답 전용 파생값(`birth` → 현재일 기준 개월). 정규 저장값은 `birth`(schema.md §3 주석: "나이는 앱에서 개월 수로 표시하나 DB는 birth로 저장").
 - 아바타 업로드 요청 바디는 별도 DTO 없음 — multipart `file` 파트만(MediaController와 동일).
 - 공통 DTO: 에러는 별도 record 없이 social 관례대로 `Map.of("error", ...)` 사용(참조만). openapi `Error`/`Page` 스키마는 이 리소스 응답에 직접 등장하지 않음.
