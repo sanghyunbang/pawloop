@@ -258,7 +258,9 @@
 
 - **신고·차단을 chat 밖으로 올릴 것인가**(#166). 지금 `chat_report` 가 `room_id`·`context_from_seq`·`context_to_seq` 를 NOT NULL 로 들고 있어 채팅 좌표에 못박혀 있다. 게시글 신고가 생기는 날 이 표를 나눌지 올릴지는 **표를 짜기 전에** 정해야 두 번 안 만든다.
 - **반응 카디널리티**(#164). 레거시 `card_reaction` 은 `UNIQUE (card_id, user_id, reaction_type)` 로 사용자당 복수인데, 계약의 `ReactionSummary.mine` 은 단수 nullable 이다. 이게 정해져야 reaction 표를 쓴다.
-- **게스트 읽기**. 커뮤니티 GET 셋만 계약에서 `security: []` 인데 `SecurityConfig` 의 publicMatchers 에 `/api/community/**` 가 없고, 그 목록은 경로만 받고 **메서드를 안 받는다**. GET 만 열려면 그 구조부터 손봐야 한다.
+- ~~**게스트 읽기.** 커뮤니티 GET 셋만 계약에서 `security: []` 인데~~ — **계약 쪽은 [ADR-0017](../99-decisions/decision-log.md#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다) 규약 6 이 정했다.** `security: [{}, {bearerAuth: []}]`(인증 선택)이다. `security: []` 로 두면 서버가 토큰을 안 읽어야 하고 그러면 `reactions.mine` 이 **영원히 null 인 죽은 필드**가 된다.
+  남은 것은 **서버 쪽**이다 — `SecurityConfig` 의 publicMatchers 는 경로만 받고 **메서드를 안 받는다.** `GET` 만 열려면 그 구조부터 손봐야 하고, 경로 전체를 열면 `POST` 까지 비인증이 된다.
+- **계약 잔여 여섯**(#211). 반응 멱등성은 위의 반응 카디널리티(#164)와 **같은 결정**이고, `Board` enum 값(공백·가운뎃점을 품은 한글이 query 파라미터로 나간다)은 **표를 짜기 전에** 정해야 한다 — 그 값이 DB 컬럼에도 들어간다.
 
 셋을 **ADR-0016** 으로 함께 적는다.
 
