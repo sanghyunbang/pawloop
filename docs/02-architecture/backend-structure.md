@@ -37,18 +37,38 @@ com.heattrip.heat_trip_backend
 ├─ BootstrapRunner                 # 기동 초기화
 ├─ config/                         # 보안·WebClient·OpenAPI·LLM 설정
 ├─ security/                       # ApiRateLimitFilter
-├─ OAuth/ · login/ · user/         # 인증(소셜 로그인 + JWT + 회원)
-├─ tour/                           # 공공데이터(관광공사) 장소 수집·저장   ← Pawloop place 캐시로 재사용
+├─ OAuth/ · user/                  # 인증(소셜 로그인 + JWT + 회원)
+│
+│  ── Pawloop 축 (반려동물·산책·가족·채팅) ──
+├─ dog/                            # 반려동물 프로필                        (#145)
+├─ walk/                           # 산책 기록·경로(LINESTRING)·통계·회고   (#145 · #187)
+├─ care/                           # 오늘의 케어 로그 · 산책 주의사항        (#76)
+├─ group/                          # 가족 그룹                              (#73~#75)
+├─ chat/                           # 채팅 도메인(방·메시지·신고·차단)        (#78~#82)
+├─ chatweb/                        # 채팅 HTTP 표면(컨트롤러·요청/응답)      (ADR-0011, #72)
+├─ place/                          # KTO 프록시 · 격자 캐시 · 호출 예산      (ADR-0013, #40)
+│
+│  ── 감정 여행에서 물려받은 것 ──
+├─ tour/                           # 공공데이터(관광공사) 장소 수집·저장   ← place 캐시로 재사용
 ├─ kakao/                          # 카카오 로컬 API 연동(장소 링크 백필)   ← 병원/펫샵 좌표 보강에 재사용 후보
 ├─ explore/                        # 장소 탐색/검색(헥사고날 스타일)        ← 지도·장소검색으로 재사용, 감정필드 제거
-├─ curation/                       # 감정 기반 추천(LLM/scoring)           ← Pawloop에서 제거 대상
-├─ social/                         # 감정 카드 커뮤니티(카드/댓글/반응)     ← post/comment/reaction 커뮤니티로 대체
+├─ curation/                       # 감정 기반 추천(LLM/scoring)           ← 제거 대상 (#174)
+├─ social/                         # 감정 카드 커뮤니티(카드/댓글/반응)     ← post/comment/reaction 으로 대체 (#164)
+├─ llm/                            # LLM 호출 클라이언트                    ← curation 이 쓴다
+├─ schedules/                      # 여정(Journey)/일정(Schedule)          ← 감정여행 코스, 제거 대상
+│
+│  ── 공통 ──
 ├─ bookmark/                       # 북마크·컬렉션                         ← 재사용
 ├─ feedback/                       # 피드백                                ← 재사용/축소
-├─ schedules/                      # 여정(Journey)/일정(Schedule)          ← 감정여행 코스, 제거 대상
 ├─ S3/                             # 미디어 업로드                          ← 재사용(강아지/게시글 사진)
 └─ observability/                  # 로깅·에러·알림·AI 관측
 ```
+
+> **이 목록은 `ls backend/src/main/java/com/heattrip/heat_trip_backend/` 와 같아야 합니다.**
+> 2026-09-02 에 대조했을 때 여덟(`walk` `dog` `care` `group` `chat` `chatweb` `llm` `place`)이
+> 빠져 있었고, #110 에서 지운 `login/` 이 남아 있었습니다. 이 문서는 스스로 "현재 실제 코드
+> 구조를 서술한다" 고 선언하는데 **어떤 테스트도 이 파일을 보지 않습니다** — #157 에서
+> `DocDriftTest` 에 검사를 답니다.
 
 ---
 
@@ -149,7 +169,7 @@ web/Controller → service(도메인 유스케이스) → port(인터페이스) 
 - 소셜 로그인: `oauth2Login` + `OAuth/service/CustomOAuth2UserService`(구글/카카오/네이버 `OAuth2UserInfo` 분기) + `OAuth/handler/OAuth2SuccessHandler`(로그인 성공 시 JWT 발급).
 - JWT: `OAuth/jwt/JWTProvider`(발급/검증) + `OAuth/jwt/JWTAuthenticationFilter`(요청당 토큰 파싱). `UsernamePasswordAuthenticationFilter` 앞에 등록.
 - 레이트리밋: `security/ApiRateLimitFilter`를 JWT 필터보다 **앞에** 등록.
-- 비밀번호: `BCryptPasswordEncoder`. 자체 로그인/회원은 `user/`(`AuthController`, `UserService`, `User`), `login/loginController`.
+- 비밀번호: `BCryptPasswordEncoder`. 자체 로그인/회원은 `user/`(`AuthController`, `UserService`, `User`). 예전에 있던 `login/loginController` 는 **#110 에서 지웠습니다.**
 
 ### 5.2 접근 정책 (실제 매처)
 
