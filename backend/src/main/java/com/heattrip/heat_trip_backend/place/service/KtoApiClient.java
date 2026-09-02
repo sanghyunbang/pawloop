@@ -255,11 +255,27 @@ public class KtoApiClient {
      *
      * <p>좌표가 없으면 {@code null} 을 준다 — 지도에 못 찍는 장소를 목록에 실으면 앱이
      * 0,0 에 마커를 그린다(앱이 이미 그 필터를 갖고 있었다).
+     *
+     * <p><b>{@code contentid} 가 없어도 같다.</b> 그 값이 상세로 들어가는 유일한 열쇠라
+     * (경로가 {@code /api/places/{contentId}} 다) 없으면 목록에 떠도 누를 수 없는 줄이다.
+     * 게다가 {@code PlaceDto} 는 {@code @JsonInclude(NON_NULL)} 이라 그런 항목은 키가
+     * <b>통째로 빠진 채</b> 나가서, 계약이 {@code contentId} 를 {@code required} 로 선언한
+     * 순간 그대로 위반이 된다 — 이슈 #24(ADR-0017 규약 1). 옆의 {@code title}·{@code addr1}
+     * 은 {@code nullToEmpty} 로 감쌌으면서 이것만 안 감싸고 있었다.
+     *
+     * <p>패키지 안까지만 여는 것은 <b>테스트가 이 판정을 직접 볼 수 있게</b> 하기 위해서다.
+     * 위의 {@code RESULT_*} 상수와 같은 이유다 — 통합 테스트의 가짜 KTO 는
+     * {@link #fetchNearby} 를 통째로 갈아 끼우므로 이 매핑을 한 줄도 지나지 않는다.
      */
-    private static PlaceDto toPlace(JsonNode item) {
+    static PlaceDto toPlace(JsonNode item) {
         Double lat = number(item, "mapy");
         Double lng = number(item, "mapx");
         if (lat == null || lng == null || lat == 0 || lng == 0) {
+            return null;
+        }
+
+        String contentId = text(item, "contentid");
+        if (contentId == null) {
             return null;
         }
 
@@ -270,7 +286,7 @@ public class KtoApiClient {
         }
 
         return new PlaceDto(
-                text(item, "contentid"),
+                contentId,
                 nullToEmpty(text(item, "title")),
                 PlaceDto.SOURCE_KTO,
                 // 계약의 닫힌 enum 밖이면 생략한다 — 위 KNOWN_CATEGORIES javadoc 참조.

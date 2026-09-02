@@ -389,7 +389,12 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 ### 4.3 장소 상세 — 🔵 프록시 계획
 
-`GET /api/places/{placeId}` — `placeId` = `source:contentId`(예: `kto:126508`).
+`GET /api/places/{contentId}` — `contentId` 는 **KTO 원본 키 그대로**입니다(예: `126508`).
+
+> 2026-09 이전에는 이 절이 `GET /api/places/{placeId}` 이고 `placeId = source:contentId`
+> (예: `kto:126508`)라고 적었습니다. **계약에도 코드에도 없던 제3의 형태**였고, 그대로 짜면
+> 404 입니다. 지금 서버가 만드는 `source` 는 `kto` 하나뿐이라 접두사가 붙을 자리가 없습니다.
+> 복합키는 KTO 가 아닌 출처가 처음 실리는 날 별도로 판단합니다 — ADR-0017.
 
 ```json
 // 200 OK
