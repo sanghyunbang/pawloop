@@ -892,9 +892,6 @@ paths:
   # ─────────────────────────── Community ───────────────────────────
   /api/community/posts:
     get:
-      x-status: planned
-      x-status-note: |
-        M3.1(#169~#172)의 선행 계약이다. 앱이 이 모양을 보고 먼저 만들 수 있도록 계약을 먼저 뒀다.
       tags: [Community]
       summary: 게시글 목록
       description: |
@@ -929,9 +926,6 @@ paths:
                         type: array
                         items: { $ref: '#/components/schemas/Post' }
     post:
-      x-status: planned
-      x-status-note: |
-        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 게시글 작성
       requestBody:
@@ -949,9 +943,6 @@ paths:
 
   /api/community/posts/{postId}:
     get:
-      x-status: planned
-      x-status-note: |
-        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 게시글 상세
       description: 인증은 선택입니다 — 있으면 `reactions.mine` 이 채워집니다(ADR-0017 규약 6).
@@ -973,9 +964,6 @@ paths:
     parameters:
       - $ref: '#/components/parameters/PostId'
     get:
-      x-status: planned
-      x-status-note: |
-        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 댓글 목록
       description: |
@@ -1006,9 +994,6 @@ paths:
                         type: array
                         items: { $ref: '#/components/schemas/Comment' }
     post:
-      x-status: planned
-      x-status-note: |
-        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 댓글 작성
       requestBody:
@@ -1036,9 +1021,6 @@ paths:
         required: true
         schema: { $ref: '#/components/schemas/ReactionType' }
     post:
-      x-status: planned
-      x-status-note: |
-        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 반응 누르기(도움돼요/귀여워요/공감)
       description: |
@@ -1063,9 +1045,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
     delete:
-      x-status: planned
-      x-status-note: |
-        M3.1(#169~#172)의 선행 계약이다.
       tags: [Community]
       summary: 반응 취소
       description: |

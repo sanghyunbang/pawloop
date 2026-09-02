@@ -559,7 +559,7 @@ board 코드 매핑:
 
 reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공감). (ERD `reaction.type[help/cute/empathy]`와 동일)
 
-### 6.1 글 목록 — ⬜ 미구현 (M3.1 선행 계약)
+### 6.1 글 목록 — ✅ 구현(#170) · **인증 선택**
 
 `GET /api/community/posts?board={code}&limit=20&cursor=...` — **인증 선택**(있으면 `reactions.mine` 이 채워집니다 — ADR-0017 규약 6).
 
@@ -587,11 +587,11 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 }
 ```
 
-### 6.2 글 상세 — ⬜ 미구현 (M3.1 선행 계약)
+### 6.2 글 상세 — ✅ 구현(#170) · **인증 선택**
 
 `GET /api/community/posts/{postId}` → 6.1 항목 + `body`(전문). 내가 누른 반응은 `reactions.mine`(**배열 또는 `null`** — ADR-0016 결정 2).
 
-### 6.3 글 작성 — ⬜ 미구현 (M3.1 선행 계약)
+### 6.3 글 작성 — ✅ 구현(#170)
 
 `POST /api/community/posts` — 인증 필요.
 
@@ -617,7 +617,7 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 **계약에 없습니다.** 만든다면 `DELETE /api/community/posts/{postId}` · `204`. 사용자가 쓴 글을 지울 길이 없는 상태로 출시하지 않습니다(#211 `Community-medium-4`).
 
-### 6.6 댓글 목록 — ⬜ 미구현 (M3.1 선행 계약)
+### 6.6 댓글 목록 — ✅ 구현(#170) · **인증 선택** · 커서 봉투
 
 `GET /api/community/posts/{postId}/comments?limit=20&cursor=...` — **커서 봉투**(`items`/`nextCursor`/`hasMore`, ADR-0017 규약 2). **인증 선택**. 정렬 기준은 아직 계약에 없습니다(#211 `Community-low-4`).
 
@@ -637,7 +637,7 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 }
 ```
 
-### 6.7 댓글 작성 — ⬜ 미구현 (M3.1 선행 계약)
+### 6.7 댓글 작성 — ✅ 구현(#170)
 
 `POST /api/community/posts/{postId}/comments` — 인증 필요.
 
@@ -651,7 +651,7 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 **계약에 없습니다.** 만든다면 `DELETE /api/community/comments/{commentId}` · `204`(#211 `Community-medium-4`).
 
-### 6.9 반응 — ⬜ 미구현 (M3.1 선행 계약)
+### 6.9 반응 — ✅ 구현(#170) · 멱등 둘
 
 > 2026-09 이전에는 이 절이 `POST /api/posts/{postId}/reactions` 를 **"✅ 구현(개편)"** 으로 적었습니다.
 > 그 경로는 **계약에도 코드에도 없고**(커뮤니티 백엔드는 0줄입니다) 응답 필드 이름도 `myReaction` 이라
@@ -777,7 +777,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | 지도 (KTO 45곳 + 병원/펫샵/산책로 더미) | **백엔드 프록시 경유**(#40) | `GET /api/places/nearby`, `GET /api/places/{contentId}` |
 | 실시간 산책 (실 GPS) | **서버 연동 완료**(#145) | `POST /api/walks` |
 | 산책 통계 (fl_chart) | **서버 연동 완료**(#145) | `GET /api/walks/stats/weekly` |
-| 커뮤니티 (더미 — 백엔드 0줄) | `kPetPosts`(로컬) | `GET/POST /api/community/posts`, `.../comments`, `.../reactions/{type}` |
+| 커뮤니티 (앱은 아직 더미 — #171) | `kPetPosts`(로컬) | **서버는 붙었다**(#170): `GET/POST /api/community/posts`, `.../comments`, `.../reactions/{type}` |
 | 강아지 프로필/편집 | `kMyDog`(로컬) | `GET/POST/PATCH /api/dogs` |
 | 홈 오늘의 케어 카드 · family_screen (멤버·케어·주의사항) | ~~`kCareToday`, `kFamilyMembers`, `kWalkNotes`~~ → **서버 연동 완료**(#76). 남은 더미는 `kFamilyInviteCode`·`FamilyMember.todayKm` | `GET /api/groups/me`, `GET/POST /api/groups/{id}/care-logs`, `GET/PUT /api/groups/{id}/walk-notes` |
 | chat_list_screen (방 목록·미읽음) | `kChatRooms`(로컬) | `GET /api/chat/rooms` |
