@@ -620,6 +620,39 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("점이 하나뿐이면 400 이다 — 선이 못 되므로 시각만 남는다")
+    void rejectsASinglePointWithTimes() throws Exception {
+        Account me = account("점하나");
+        long dogId = dog(me, "보리");
+
+        // 점 하나는 LINESTRING 이 못 된다. 그런데 pathT 는 길이 1 로 짝이 맞아 보인다 —
+        // 그대로 통과시키면 path = null · pathT = "[0]" 인 행이 남는다. 그 행은 경로가
+        // 없는데 시각만 있어서, 나중에 구간 페이스를 계산하려는 쪽이 무엇을 보고
+        // 계산해야 할지 알 수 없다.
+        save(me, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":0,"durationS":7,
+                 "path":[[126.9780,37.5665]],
+                 "pathT":[0]}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(7)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("점이 하나뿐이어도 시각을 안 보내면 저장된다 — 경로만 버린다")
+    void keepsTheWalkWhenASinglePointComesWithoutTimes() throws Exception {
+        Account me = account("점하나무시각");
+        long dogId = dog(me, "달이");
+
+        // 계약이 그렇게 말한다 — "점이 하나뿐이면 선이 아니므로 경로 없이 저장합니다".
+        // 위 테스트가 막는 것은 "경로가 못 되는데 시각만 남는 것" 이지 산책 자체가 아니다.
+        save(me, """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":0,"durationS":7,
+                 "path":[[126.9780,37.5665]]}
+                """.formatted(dogId, UUID.randomUUID(), Instant.now().minusSeconds(7)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     @DisplayName("뒤로 흐르면 400 이다 — 시계가 거꾸로 간 것이다")
     void rejectsGoingBackwards() throws Exception {
         Account me = account("거꾸로");

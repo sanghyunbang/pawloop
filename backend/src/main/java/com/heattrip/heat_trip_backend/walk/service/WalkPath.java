@@ -73,10 +73,15 @@ public final class WalkPath {
     public static String toPathTimes(List<List<Double>> points, List<Integer> seconds) {
         if (seconds == null || seconds.isEmpty()) return null;
 
-        int pointCount = points == null ? 0 : points.size();
+        // 세는 것은 "보낸 점" 이 아니라 "선이 된 점" 이다. toLineString 은 점이 2개
+        // 미만이면 null 을 주므로(LINESTRING 은 점 하나로 못 만든다), points.size() 를
+        // 그대로 세면 점 1개 + 초 1개가 길이 검사를 통과해 path = null · pathT = "[0]" 인
+        // 행이 남는다. 바로 위 javadoc 이 "경로가 없으면 시각도 없어야 한다" 고 적은 것을
+        // 이 메서드가 스스로 어기는 자리였다.
+        int pointCount = points == null || points.size() < 2 ? 0 : points.size();
         if (pointCount == 0) {
             throw new IllegalArgumentException(
-                    "경로 없이 점별 시각만 보낼 수 없습니다.");
+                    "경로 없이 점별 시각만 보낼 수 없습니다. 점이 하나뿐인 것도 경로가 아닙니다.");
         }
         if (seconds.size() != pointCount) {
             throw new IllegalArgumentException(
