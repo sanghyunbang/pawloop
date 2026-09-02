@@ -216,6 +216,29 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.matches("^/api/explore/places/\\d+/feedback$")) {
             return new Rule("feedback", rateLimitProperties.getFeedbackMaxRequests());
         }
+        // ── 커뮤니티 (이슈 #170 · ADR-0016 결정 3) ─────────────────────────
+        //
+        // **읽기 셋이 게스트에게 열려 있다.** 그 전까지 이 경로를 막고 있던 것은
+        // anyRequest().authenticated() 였는데 그 방어선이 사라졌다 — 표에 없으면
+        // 한도가 0 이 아니라 **무한**이다(resolveRule 이 null 을 주면 그대로 통과).
+        //
+        // 패턴이 SecurityConfig 의 permitAll 과 **같은 집합을 덮어야 한다.** 거기는
+        // "/api/community/posts/*" 라 임의의 한 세그먼트를 열므로, 여기서 [0-9]+ 만
+        // 덮으면 GET /api/community/posts/abc 가 **인증 없음 + 한도 무한**이 된다.
+        // /api/places/** 를 거부한 근거와 같은 모양이라 [^/]+ 로 맞춘다.
+        if ("GET".equals(method)
+                && ("/api/community/posts".equals(path)
+                    || path.matches("^/api/community/posts/[^/]+$")
+                    || path.matches("^/api/community/posts/[^/]+/comments$"))) {
+            return new Rule("community-read", rateLimitProperties.getCommunityReadMaxRequests());
+        }
+        // 쓰기 넷. 버킷을 나눈 이유는 목록을 새로고침하다 한도에 닿아 글을 못 쓰게
+        // 되면 안 되기 때문이다. 반응이 여기 있는 것도 의도다 — 멱등이라 행은 안 늘지만
+        // 요청은 그대로 오고 매번 집계 쿼리가 돈다.
+        if (("POST".equals(method) || "DELETE".equals(method))
+                && path.startsWith("/api/community/")) {
+            return new Rule("community-write", rateLimitProperties.getCommunityWriteMaxRequests());
+        }
         if (path.startsWith("/media")) {
             return new Rule("upload", rateLimitProperties.getUploadMaxRequests());
         }

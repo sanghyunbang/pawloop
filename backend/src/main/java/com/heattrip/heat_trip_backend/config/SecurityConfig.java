@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -125,6 +126,27 @@ public class SecurityConfig {
                 // 운영자가 쓰려면 그 계정 행의 `users.role` 을 `ROLE_ADMIN` 으로 바꾸고
                 // 다시 로그인하면 된다 — 토큰의 role 클레임이 그대로 권한이 되므로
                 // (`JWTAuthenticationFilter.java:56`) 별도 배선이 필요 없다.
+                // ── 커뮤니티 읽기는 인증이 선택이다 (ADR-0016 결정 3 · #170) ────────
+                //
+                // publicMatchers 에 못 넣는다. 그 목록은 **경로만** 받는데 커뮤니티는
+                // 같은 경로에 GET(선택)과 POST(필수)가 겹친다 — 경로로 열면 글쓰기까지
+                // 비인증이 된다. /api/explore/** 가 그 반례이고, 그 아래
+                // POST .../feedback 이 실제로 토큰 없이 행을 만든다.
+                //
+                // 와일드카드(/api/community/**)도 쓰지 않는다. 여는 것은 실제로 있는
+                // GET 셋뿐이다 — /api/places/** 를 거부한 것과 같은 이유다(위 :94-96).
+                //
+                // 체인은 하나로 둔다. 나누면 필터 순서(chatBodySizeLimit → apiRateLimit →
+                // JWTAuthentication → chatRateLimit)를 어느 체인에 복제할지 매번 정해야
+                // 하고, 빠뜨리면 **게스트 경로만 한도 없이 열린다.**
+                //
+                // JWTAuthenticationFilter 는 여기에도 걸린다 — 토큰이 있으면 principal 을
+                // 채우고 없으면 조용히 통과시킨다. 그래서 같은 경로가 게스트에게도, 로그인한
+                // 사람에게도 열리고 CommunityController.viewerId() 가 둘을 가른다.
+                .requestMatchers(HttpMethod.GET,
+                        "/api/community/posts",
+                        "/api/community/posts/*",
+                        "/api/community/posts/*/comments").permitAll()
                 .requestMatchers("/api/curation/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/curation/**").authenticated()
                 .requestMatchers("/public/**").authenticated()

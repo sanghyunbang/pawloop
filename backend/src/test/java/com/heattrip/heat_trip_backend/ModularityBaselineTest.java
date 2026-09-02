@@ -99,8 +99,30 @@ class ModularityBaselineTest {
      * 되는 동시에, 남은 {@code UserRepository} 위반이 "모듈 단위 1줄" 에서 "참조별 4줄" 로
      * 되돌아간다. {@code -3 + 3 = 0}. <b>총계만 보면 아무 일도 안 일어난 것처럼 보이지만
      * 실제로는 바뀌었다</b> — 이 수 하나만 믿지 말고 위반 목록을 봐야 하는 이유다.
+     *
+     * <p><b>232 에서 234 로 올렸다. 이번엔 진짜 빚이다.</b> (#170)
+     * 늘어난 둘은 전부 같은 줄이다 —
+     * {@code community -> OAuth.principal.AuthenticatedUser}. 목록을 직접 떠서 확인했고
+     * 커뮤니티가 만든 다른 모듈 쌍은 없다.
+     *
+     * <p>나온 자리는 {@code CommunityController.viewerId()} 하나다. 커뮤니티 읽기 셋은
+     * <b>인증이 선택</b>이라 {@code @CurrentUser} 를 못 쓴다 — 그건 주입 실패를 401 로
+     * 만드는 것이 설계라 게스트를 못 받는다. 그래서 {@code SecurityContext} 의 principal 을
+     * 직접 읽고, 그 타입이 {@code AuthenticatedUser} 다.
+     *
+     * <p><b>우회로가 있는데 안 갔다.</b> {@code security.ChatRateLimitFilter} 는 같은 자리에서
+     * {@code authentication.getName()} 을 써 이 위반을 피한다. 커뮤니티가 그 길을 가려면
+     * 그 문자열에서 id 를 <b>파싱</b>해야 하는데(principal 이 record 라 그 값은
+     * {@code AuthenticatedUser[id=7, role=ROLE_USER]} 이다), {@code AuthenticatedUser}
+     * javadoc 이 <b>"principal 을 문자열로 두면 … 그 한 줄이 이 이슈의 버그였다"</b> 고
+     * 적어 둔 바로 그 방향이다. 위반 2건이 그 버그로 되돌아가는 것보다 싸다.
+     *
+     * <p><b>{@code @NamedInterface("principal")} 로 열면 이 둘은 사라진다.</b> 그렇게 안 한
+     * 이유는 그게 {@code OAuth} 의 공개 표면을 바꾸는 일이고, 그 표면은 #104 가 정했기
+     * 때문이다. 커뮤니티 API 를 붙이는 PR 이 조용히 뒤집을 자리가 아니다. 제안은 #223 으로
+     * 따로 냈다 — 거기서 열기로 하면 이 수는 232 로 내려간다.
      */
-    private static final int BASELINE_VIOLATIONS = 232;
+    private static final int BASELINE_VIOLATIONS = 234;
 
     private static final char NL = (char) 10;
 

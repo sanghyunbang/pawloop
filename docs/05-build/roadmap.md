@@ -269,7 +269,7 @@
 어느 하나도 앞을 건너뛸 수 없다. 표가 없으면 API 를 못 만들고, API 가 없으면 앱을 못 붙이고, 읽기가 없으면 글쓰기가 어디로 가는지 확인할 수 없다.
 
 1. **표 셋**(#169) — `post`·`comment`·`reaction`. `mysql/post-start/**14**_community.sql` 이다 — **13 은 #155 의 `13_walk_path_t.sql` 이 이미 쓴다.** `schema.md`·`erd.md` 정본 갱신. `reaction` 의 `UNIQUE` 는 `(post_id, user_id, type)` 이고 초안 그대로다(ADR-0016 결정 2).
-2. **API 여섯**(#170) — `/api/community` 도메인 패키지 신설. 재사용 자산이 실재한다(`SocialService` 의 `findByCardIdIn`·`countByCardIdInGroupBy`·`toggleReaction`).
+2. ~~**API 여섯**(#170)~~ **완료 — 일곱이다.** ADR-0016 이 반응을 멱등 둘로 나눴다. `/api/community` 패키지에 엔티티·리포지토리·서비스·컨트롤러가 섰고, 게스트 읽기는 `SecurityConfig` 의 메서드 축 한 줄로 열렸다. 목록의 쿼리 예산은 **셋**이다(`social` 은 넷 — 탈퇴자 조회가 여기서는 필요 없다).
 3. **앱 연결**(#171) — `kPetPosts` 를 걷어내고 `community_repository.dart` 를 만든다. `PetPost` 에 `contentId` 가 없어 계약과 어긋나는 것도 여기서 맞춘다(계약이 `placeId` → `contentId` 로 통일했다 — ADR-0017).
 4. **글쓰기 화면**(#172) — 저장소에 없다. `create_screen.dart` 를 재사용하지 않는다 — 그 화면의 호출부 셋이 전부 산책 축이다.
 
