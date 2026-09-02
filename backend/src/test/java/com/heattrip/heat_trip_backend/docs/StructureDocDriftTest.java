@@ -41,15 +41,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>네트워크를 타지 않는다. 저장소 안의 파일만 읽는다.
  *
- * <h2>로컬에서 이 검사를 깨 볼 때</h2>
- * <p><b>{@code --rerun-tasks --no-build-cache} 를 붙여야 한다.</b> 여기서 읽는 것들
- * ({@code app/lib/**.dart} · {@code docs/**.md})은 Gradle 의 {@code test} 입력이 아니라,
- * 그 파일만 고치고 다시 돌리면 <b>실행조차 안 되고 캐시된 초록불이 나온다.</b> #177 의
- * 빨간불을 확인하다 실제로 두 번 속았다 — {@code cleanTest} 도 안 통한다(결과가
- * 캐시에서 복원된다).
+ * <h2>여기서 읽는 파일은 {@code build.gradle} 에 입력으로 선언돼 있다</h2>
+ * <p><b>{@code app/lib/v2/screens} 와 {@code docs/01-design} 이 그것이다.</b> #177 에서
+ * 이 선언이 없었고, {@code main_shell.dart} 의 탭 라벨을 '통계' 로 되돌려 놓고 돌렸는데
+ * {@code test} 가 {@code UP-TO-DATE} 로 건너뛰어 <b>깨 놓고도 초록불</b>이 났다. 두 번
+ * 속은 뒤에야 알았다 — {@code cleanTest} 도 안 통한다(결과가 캐시에서 복원된다).
  *
- * <p>CI 는 깨끗한 작업 공간에서 돌아 이 함정이 없다. 입력을 선언해 고칠 수도 있지만
- * 그러면 문서 한 줄만 고쳐도 전체 테스트 태스크가 다시 도는 값을 치른다.
+ * <p>선언을 지우면 그 거짓 초록불로 돌아간다. {@code SpecTestInputsDeclaredTest} 가
+ * 같은 이유로 그 목록을 잠근다(#46).
  */
 class StructureDocDriftTest {
 
