@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` 열하나다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§5 place` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
+> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · **`§7 post` · `§8 comment` · `§9 reaction`** · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` 열넷이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§5 place` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -289,99 +289,142 @@ CREATE TABLE trail (
 
 ---
 
-## 7. `post` — 커뮤니티 게시글
+## 7. `post` — 커뮤니티 게시글 (**실재**)
 
-커뮤니티 글. 게시판(`board`)으로 분류하고 장소(`place`) 선택 태그 가능(`place_id` nullable). `users` 1:N `post`.
+커뮤니티 글. 게시판(`board`)으로 분류하고 장소를 선택 태그할 수 있다(`content_id` nullable). `users` 1:N `post`.
 
 ```sql
 CREATE TABLE post (
-  id         BIGINT      NOT NULL AUTO_INCREMENT,
-  user_id    BIGINT      NOT NULL,
-  board      VARCHAR(20) NOT NULL COMMENT '산책로후기|동반장소|건강·병원|자유|자랑',
-  place_id   BIGINT      NULL COMMENT '태그된 장소(nullable)',
-  title      VARCHAR(150) NOT NULL,
-  body       TEXT        NOT NULL,
-  created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id          BIGINT       NOT NULL AUTO_INCREMENT,
+  user_id     BIGINT       NOT NULL,
+  board       VARCHAR(20)  NOT NULL COMMENT 'walk_review|pet_place|health|free|brag',
+  title       VARCHAR(200) NOT NULL,
+  body        TEXT         NOT NULL,
+  content_id  VARCHAR(64)  NULL COMMENT '연결 장소. Place.contentId 와 같은 키. FK 없음',
+  loc         VARCHAR(100) NULL COMMENT '표시용 장소 이름',
+  handle      VARCHAR(50)  NULL COMMENT '작성 시점 닉네임 스냅샷. 응답에는 안 싣는다',
+  created_at  DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
-  KEY idx_post_board (board, created_at),
-  KEY idx_post_user (user_id),
-  KEY idx_post_place (place_id),
-  CONSTRAINT fk_post_user FOREIGN KEY (user_id)
-    REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT fk_post_place FOREIGN KEY (place_id)
-    REFERENCES place (id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY idx_post_board_created (board, created_at, id),
+  CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL, INDEX | 작성자 |
-| `board` | `VARCHAR(20)` | NOT NULL, INDEX(board,created_at) | 게시판 |
-| `place_id` | `BIGINT` | FK→`place.id` nullable, ON DELETE SET NULL | 태그 장소 |
-| `title` | `VARCHAR(150)` | NOT NULL | 제목 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 작성자. **CASCADE 아님** — 아래 각주 |
+| `board` | `VARCHAR(20)` | NOT NULL, INDEX(board, created_at, id) | 게시판. **ASCII 키다** — 아래 각주 |
+| `title` | `VARCHAR(200)` | NOT NULL | 제목 |
 | `body` | `TEXT` | NOT NULL | 본문 |
+| `content_id` | `VARCHAR(64)` | nullable, **FK 없음** | 연결 장소. `Place.contentId` 와 같은 키 |
+| `loc` | `VARCHAR(100)` | nullable | 표시용 장소 이름. `content_id` 와 별개다 |
+| `handle` | `VARCHAR(50)` | nullable | 작성 시점 닉네임 스냅샷 |
+
+> **각주 — `board` 는 왜 ASCII 인가.** 2026-09 이전 계약은 값 자체가 한글 표시 문자열이었다
+> (`"산책로 후기"` 등). 그 값이 **query 파라미터로 나가고 이 컬럼에 들어간다.** 표시 문구를
+> 저장하면 게시판 이름을 다듬는 날 **쌓인 행을 전부 고쳐야 한다.** `CareType` 이 이미 같은
+> 모양이다 — 값은 `water|meal|walk|med|vet` 이고 "물/밥/산책/투약/병원" 은 앱이 붙인다.
+>
+> `CHECK` 는 걸지 않는다. 게시판은 **제품이 늘리는 목록**이라 값이 늘 때마다 마이그레이션이
+> 따라오면 그 자체가 비용이다. 케어 종류는 다섯으로 굳었고 늘리는 날이 M4 로 못 박혀 있다.
+
+> **각주 — 장소 참조에 FK 가 없는 이유.** 반려 앱의 장소는 KTO 프록시 **캐시**
+> (`pet_place_detail`, PK `content_id varchar(64)`)에서 온다. 사용자가 고른 장소의 캐시 행이
+> 아직 없거나 지워질 수 있고, FK 를 걸면 **그때 글 작성이 실패한다** — 장소는 글의 부속물이지
+> 전제가 아니다. 레거시 `places` 표(`contentid bigint`)에는 걸지 않는다. 다른 키 공간이다.
+
+> **각주 — `users` FK 가 CASCADE 가 아닌 이유.** 탈퇴 한 번에 그 사람이 쓴 글이 전부 사라지면
+> **거기 달린 남의 댓글도 함께 사라진다.** 탈퇴한 사람을 어떻게 보여 줄지는 표시 계층의
+> 문제이지 저장 계층의 문제가 아니다 — 응답의 `author` 는 탈퇴 계정을 `userId=0`·"알 수 없음"
+> 으로 싣는다(ADR-0017 규약 5).
 
 ---
 
-## 8. `comment` — 댓글
+## 8. `comment` — 댓글 (**실재**)
 
 게시글 댓글. `post` 1:N, `users` 1:N.
 
 ```sql
 CREATE TABLE comment (
-  id         BIGINT   NOT NULL AUTO_INCREMENT,
-  post_id    BIGINT   NOT NULL,
-  user_id    BIGINT   NOT NULL,
-  body       TEXT     NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id          BIGINT      NOT NULL AUTO_INCREMENT,
+  post_id     BIGINT      NOT NULL,
+  user_id     BIGINT      NOT NULL,
+  body        TEXT        NOT NULL,
+  handle      VARCHAR(50) NULL COMMENT 'post.handle 과 같은 이유',
+  created_at  DATETIME(6) NOT NULL,
   PRIMARY KEY (id),
-  KEY idx_comment_post (post_id, created_at),
-  KEY idx_comment_user (user_id),
+  KEY idx_comment_post_created (post_id, created_at, id),
   CONSTRAINT fk_comment_post FOREIGN KEY (post_id)
     REFERENCES post (id) ON DELETE CASCADE,
-  CONSTRAINT fk_comment_user FOREIGN KEY (user_id)
-    REFERENCES users (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT fk_comment_user FOREIGN KEY (user_id) REFERENCES users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `post_id` | `BIGINT` | FK→`post.id`, NOT NULL, INDEX | 대상 글 |
-| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 작성자 |
+| `post_id` | `BIGINT` | FK→`post.id` **CASCADE**, NOT NULL | 대상 글 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 작성자. CASCADE 아님 |
 | `body` | `TEXT` | NOT NULL | 내용 |
+| `handle` | `VARCHAR(50)` | nullable | 작성 시점 닉네임 스냅샷 |
+
+> **각주 — `post` 쪽만 CASCADE 인 이유.** 글이 사라지면 그 댓글은 **부모 없는 행**으로 남아
+> 어느 목록에도 안 뜨면서 자리만 차지한다. 나중에 세면 댓글 수가 맞지 않고 왜 안 맞는지
+> 아무도 모른다. 사용자 쪽은 반대다 — 탈퇴 한 번에 **남의 글에서 대화가 끊긴다.**
+
+> **각주 — 수정·삭제 컬럼이 없다.** `updated_at`·`deleted_at` 을 넣지 않았다. 계약에 그
+> 오퍼레이션이 없고(#211 `Community-medium-4`), **넣는 날은 컬럼 추가가 아니라 삭제 정책
+> 결정**이다 — 지운 댓글 자리를 목록에서 어떻게 다룰지가 먼저다.
 
 ---
 
-## 9. `reaction` — 반응
+## 9. `reaction` — 반응 (**실재**)
 
-게시글 반응(도움돼요/귀여워요/공감). 사용자당 글별 반응 유형 유니크. `post` 1:N, `users` 1:N.
+게시글 반응(도움돼요/귀여워요/공감). **사용자당 글마다 여러 종류**를 누를 수 있다. `post` 1:N, `users` 1:N.
 
 ```sql
 CREATE TABLE reaction (
-  id         BIGINT      NOT NULL AUTO_INCREMENT,
-  post_id    BIGINT      NOT NULL,
-  user_id    BIGINT      NOT NULL,
-  type       VARCHAR(10) NOT NULL COMMENT 'help|cute|empathy',
-  created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id          BIGINT      NOT NULL AUTO_INCREMENT,
+  post_id     BIGINT      NOT NULL,
+  user_id     BIGINT      NOT NULL,
+  type        VARCHAR(20) NOT NULL COMMENT 'help|cute|empathy',
+  created_at  DATETIME(6) NOT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_reaction (post_id, user_id, type),
-  KEY idx_reaction_user (user_id),
   CONSTRAINT fk_reaction_post FOREIGN KEY (post_id)
     REFERENCES post (id) ON DELETE CASCADE,
-  CONSTRAINT fk_reaction_user FOREIGN KEY (user_id)
-    REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT ck_reaction_type CHECK (type IN ('help','cute','empathy'))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT fk_reaction_user FOREIGN KEY (user_id) REFERENCES users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `post_id` | `BIGINT` | FK→`post.id`, NOT NULL, UNIQUE(post,user,type) | 대상 글 |
-| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 남긴 사람 |
-| `type` | `VARCHAR(10)` | NOT NULL, CHECK | `help`(도움돼요)/`cute`(귀여워요)/`empathy`(공감) |
+| `post_id` | `BIGINT` | FK→`post.id` **CASCADE**, UNIQUE(post, user, type) | 대상 글 |
+| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 누른 사람 |
+| `type` | `VARCHAR(20)` | NOT NULL | `help`(도움돼요)/`cute`(귀여워요)/`empathy`(공감) |
+
+> **각주 — UNIQUE 가 세 컬럼인 이유([ADR-0016](../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) 결정 2).**
+> 도움돼요·귀여워요·공감은 **서로 배타적인 개념이 아니다** — 한 글이 도움도 되고 귀엽기도 하다.
+>
+> `(post_id, user_id)` 로 좁히면 라디오가 되고, 나중에 넓히려면 계약의 파괴적 변경이다.
+> 반대로 넓게 두었다가 좁히려면 **행을 지우는 마이그레이션**이라 어느 반응을 남길지 제품이
+> 다시 답해야 한다. **넓은 쪽이 되돌리기 싸다.**
+
+> **각주 — 이 UNIQUE 가 멱등을 딛는다.** 계약의 쓰기는 토글이 아니라
+> `POST`/`DELETE .../reactions/{type}` 둘이고 **둘 다 멱등**이다. 동시성으로 이 제약이 깨지면
+> 그것은 "이미 눌렀다" 와 같은 뜻이므로 삼키고 최신 집계를 돌려준다.
+>
+> 2026-09 이전에는 `POST .../reactions` 하나가 토글이었다. 요청에 의도가 없어서 **네트워크
+> 재시도 한 번이 사용자의 반응을 조용히 되돌렸다.**
+
+> **각주 — 카운트는 "몇 번" 이지 "몇 명" 이 아니다.** 한 사람이 셋을 다 누를 수 있다.
+> 화면이 "7명이 공감했어요" 로 읽히게 쓰면 거짓말이 된다.
+
+> **각주 — `CHECK` 를 걸지 않는다.** `care_log.type` 은 걸었는데 여기는 안 건다. 반응 종류는
+> **제품이 늘릴 수 있는 목록**이고 계약의 `ReactionType` 이 단일 출처다. 값이 늘 때마다
+> 마이그레이션이 따라오면 그 자체가 비용이다.
 
 ---
 

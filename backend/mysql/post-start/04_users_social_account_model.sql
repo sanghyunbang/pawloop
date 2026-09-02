@@ -60,6 +60,11 @@
 --
 -- ⓘ 중단하면 스크립트 끝의 DROP PROCEDURE 에 도달하지 못해 이 프로시저가 스키마에 남는다.
 --   무해하고(아무도 호출하지 않는다) 다음 실행의 DROP PROCEDURE IF EXISTS 가 지우지만,
+-- 이 파일은 UTF-8 이고 중단 메시지가 한글이다. 세션 문자셋을 먼저 고정한다 —
+-- 안 하면 클라이언트 기본값(윈도우 mysql 은 euckr)을 물려받아, 중단이 걸리는 순간
+-- 이유는 안 보이고 ERROR 1366 (Incorrect string value) 만 남는다. 실측 2026-09-02, #169.
+SET NAMES utf8mb4;
+
 --   재실행하지 않을 거라면 손으로 지워도 된다: DROP PROCEDURE IF EXISTS heattrip_migration_abort;
 --   실행 계정에 CREATE ROUTINE 권한이 필요하다 — 없으면 users 를 건드리기 전에 실패한다(안전 실패).
 DROP PROCEDURE IF EXISTS heattrip_migration_abort;
