@@ -53,8 +53,26 @@ lib/
 | `edit_screen.dart` | 강아지 프로필 편집 + 프로필 테두리색 선택 | me → push |
 | `myrecords_screen.dart` | 내 산책 기록 목록 | me → push |
 | `pin_picker_screen.dart` | 지도에서 장소 핀 선택 | 보조 |
+| `walk_detail_screen.dart` | 산책 회고 — 글을 나중에 고친다 → `PUT /api/walks/{id}/memo` | 기록 카드 탭 (#187) |
+| `family_screen.dart` | 우리 가족 — 그룹·구성원·오늘의 케어 | me → push |
+| `family_chat_screen.dart` | 가족 채팅방 (폴링) | family → push |
+| `chat_list_screen.dart` | 방 목록 · 미읽음 | 탭 3 |
+| `invite_join_screen.dart` | 초대 코드로 방 참여 | 링크·코드 입력 |
+| `settings_screen.dart` | 설정 — 약관 넷 · 회원 탈퇴 · 운영자 연락처 | me → push (#165) |
+| `settings/legal_document_screen.dart` | 약관 전문 렌더 (`assets/terms/*.md`) | 설정·동의 화면 → push |
+| `settings/account_delete_screen.dart` | 회원 탈퇴 → `DELETE /auth/me` | 설정 → push |
+| `consent_screen.dart` | **약관 동의 게이트** — 이용약관·개인정보·위치기반서비스(필수) + 마케팅 | 로그인 직후, 온보딩보다 앞 (#180) |
+| `login_screen.dart` | 소셜 로그인(카카오·구글) · 그냥 둘러보기 | 미로그인 진입 |
+| `onboarding_screen.dart` | 신규 가입자 — 반려동물 등록 권유 | 동의 후 (`isNew`) |
+| `splash_screen.dart` | 저장된 토큰 검증 중 머무는 자리 | 앱 시작 |
+| `start_walk.dart` | 산책 시작 진입 — 미로그인이면 로그인부터 | 화면 아님(함수) |
 
 > **주의:** 화면 파일명은 감정 시절 이름(explore/feed/insight/me)을 유지하지만 내용은 전부 반려/산책으로 대체됐다. 예: `explore_screen.dart` = 지도, `insight_screen.dart` = 산책 통계.
+
+> **이 표는 `find app/lib/v2/screens -name '*.dart'` 와 같아야 합니다.**
+> 2026-09-02 에 세었을 때 실제 **25개**인데 표에는 12개뿐이었고, `settings_screen` ·
+> `legal_document_screen` · `consent_screen` · `walk_detail_screen` 넷은 `docs/` 전체에서
+> **0건**이었습니다. `consent_screen` 은 위치정보법 동의 게이트라 문서에 없으면 안 됩니다. (#201)
 
 ### 2.2 `domain/pet.dart` — 도메인 + 샘플 데이터 + 전역 상태
 
@@ -168,7 +186,8 @@ flowchart LR
 
 ### 미구현/더미 (문서 기준 명시)
 
-- 로그인·실제 위치(geolocator 미도입, 서울 시청 좌표 고정), 병원/펫샵/산책로 실데이터, 건강/식사/병원 로그, 백엔드 반려 API 연동, GPS 실측 경로 저장(`walk.path`)은 아직 없음. 산책 트래킹은 시뮬 이동이다.
+- **아직 없는 것**: 병원/펫샵/산책로 실데이터(M3), 건강/식사/병원 로그(M4), 커뮤니티 서버 연동(M3.1 — 지금은 `kPetPosts` 더미), 날씨.
+- **이제 있는 것**: 소셜 로그인(#12), 실 GPS 와 `walk.path` 경로 저장(#145), 산책 삭제·회고(#161·#187), 반려동물 API(#145), 가족 그룹·케어·채팅, 약관 동의 게이트(#180). 산책 트래킹의 시뮬 이동은 #160 에서 **지웠다** — 위치를 못 잡으면 이유를 말하는 화면이 뜬다.
 
 ---
 

@@ -98,7 +98,9 @@
 ## 3. 산책 트래킹 (`walk_tracking_screen.dart` · `WalkTrackingScreen`)
 
 ### 목적
-실시간 GPS 산책 트래킹 화면 — 지도 위 경로 폴리라인 + 라이브 스탯(거리/시간/페이스). **현재 시뮬레이션 더미**(실제 배포 시 geolocator 스트림 → `walk.path` LINESTRING 저장).
+실시간 GPS 산책 트래킹 화면 — 지도 위 경로 폴리라인 + 라이브 스탯(거리/시간/페이스). **실 GPS 다** — `geolocator` 스트림(5m 간격)이 `walk.path` LINESTRING 으로 저장된다(#145).
+
+위치를 못 잡으면 **지도를 아예 만들지 않고** 이유를 말하는 화면을 띄운다. 이유는 다섯이고(`LocationDenial`) 각각 사용자가 할 일이 다르다 — 약관 미동의 · 앱 안 일시중단 · 기기 위치 서비스 꺼짐 · 권한 거부 · 신호 없음. 예전에는 서울숲 근처 가짜 루프를 그리고 거리를 올렸는데, 그것을 저장하면 부산에서 권한을 끈 사람의 산책이 서울숲에 기록됐다(#160).
 
 ### 구성요소
 1. **풀스크린 NaverMap**: 초기 중심 더미 루트 시작점(37.5445, 127.0374), zoom 16.
@@ -301,15 +303,35 @@
 
 | 화면 | 파일 | 진입 경로 | 데이터 소스 |
 | --- | --- | --- | --- |
+| 셸 | `main_shell.dart` | 루트 (`/home`) | 탭 스와핑 + 산책 FAB |
 | 홈 | `today_screen.dart` | 탭 0 | `kMyDog`, `WalkFeedData.today`(서버 + 전송 대기) |
-| 지도(리스트·지도) | `explore_screen.dart` | 탭 1 | KTO API(실연동) + vet/shop/trail 더미 |
-| 산책 트래킹 | `walk_tracking_screen.dart` | 홈 CTA / 중앙 FAB (**둘 다 `startWalk()` 를 지난다**) | 실 GPS. 위치를 못 잡으면 시뮬을 그리되 저장하지 않는다 |
+| 지도(리스트·지도) | `explore_screen.dart` | 탭 1 | `GET /api/places/nearby`(KTO 프록시, 실연동) + vet/shop/trail 더미 |
+| 커뮤니티 | `feed_screen.dart` | 탭 2 | `kPetPosts`(**더미** — #171) |
+| 채팅 방 목록 | `chat_list_screen.dart` | 탭 3 | `GET /api/chat/rooms` |
+| 산책 트래킹 | `walk_tracking_screen.dart` | 홈 CTA / 중앙 FAB (**둘 다 `startWalk()` 를 지난다**) | 실 GPS. **위치를 못 잡으면 이유를 말하는 화면**을 띄우고 아무것도 그리지 않는다(#160) |
+| 산책 기록 작성 | `create_screen.dart` | 트래킹 완료 / 내 기록 | `POST /api/walks`. 초안 없이 열리면 "직접 입력" 이라고 말한다 |
+| 산책 회고 | `walk_detail_screen.dart` | 기록 카드 탭 | `PUT /api/walks/{id}/memo`(#187) |
+| 내 산책 기록 | `myrecords_screen.dart` | 프로필 → 내 산책 기록 | `GET /api/walks`(커서) + 전송 대기·거절 큐 |
 | 산책 통계 | `insight_screen.dart` | `me_screen` 에서 진입 | `GET /api/walks/stats/weekly` |
-| 커뮤니티 | `feed_screen.dart` | 탭 2 | `kPetPosts`(더미) |
-| 글 상세 | `post_detail_screen.dart` | 커뮤니티 카드 탭 | `PetPost` + 로컬 댓글/반응 |
-| 강아지 프로필 | `me_screen.dart` | (push, 프로필 진입) | `kMyDog`, `WalkStats`(전체 기간 + 이번 주) |
-| 프로필 편집 | `edit_screen.dart` | 프로필 → 편집 | `kMyDog`(갱신) |
-| 산책 기록 작성 | `create_screen.dart` | 트래킹 완료 / 내 기록 | 로컬 상태(미영속) |
-| (내 산책 기록) | `myrecords_screen.dart` | 프로필 → 내 산책 기록 | `GET /api/walks` + 전송 대기 초안 |
+| 글 상세 | `post_detail_screen.dart` | 커뮤니티 카드 탭 | `PetPost` + **로컬 댓글/반응**(#171) |
+| 프로필 | `me_screen.dart` | (push, 프로필 진입) | `kMyDog`, `GET /api/walks/stats/weekly` |
+| 프로필 편집 | `edit_screen.dart` | 프로필 → 편집 | `PUT /api/dogs/{id}` |
+| 설정 | `settings_screen.dart` | 프로필 → 설정 | 약관 넷 · 탈퇴 · 연락처(#165) |
+| 약관 전문 | `settings/legal_document_screen.dart` | 설정·동의 → push | `assets/terms/*.md` |
+| 회원 탈퇴 | `settings/account_delete_screen.dart` | 설정 → push | `DELETE /auth/me` |
+| 우리 가족 | `family_screen.dart` | 프로필 → 우리 가족 | `GET /api/groups/me` · 케어 로그 |
+| 가족 채팅 | `family_chat_screen.dart` | 우리 가족 → push | 폴링. **첫 진입에 약관 동의**(#82) |
+| 초대 참여 | `invite_join_screen.dart` | 초대 코드 | `POST /api/chat/invites/{code}/join` |
+| 핀 선택 | `pin_picker_screen.dart` | 보조 | 지도 |
+| 로그인 | `login_screen.dart` | 미로그인 진입 | 카카오·구글 · 그냥 둘러보기 |
+| **약관 동의** | `consent_screen.dart` | **로그인 직후, 온보딩보다 앞** | 이용약관·개인정보·**위치기반서비스**(필수) + 마케팅(#180) |
+| 온보딩 | `onboarding_screen.dart` | 동의 후 (`isNew`) | 반려동물 등록 권유 |
+| 스플래시 | `splash_screen.dart` | 앱 시작 | 저장된 토큰 검증 |
+| (진입 함수) | `start_walk.dart` | — | 미로그인이면 로그인부터 |
 
-> **미연동/더미 요약**: 로그인·실제 위치(서울 고정)·병원/펫샵/산책로 실데이터·날씨·산책 기록 영속화·커뮤니티 백엔드는 모두 더미 또는 미구현. KTO 반려동반 장소만 실연동.
+> **이 표는 `find app/lib/v2/screens -name '*.dart'` 와 같아야 합니다(2026-09-02 기준 25개).**
+> 세었을 때 표에 10개뿐이었고 `consent_screen` 은 `docs/` 전체에서 0건이었습니다. (#201)
+
+> **아직 더미인 것**: 커뮤니티(`kPetPosts` · 로컬 댓글/반응 — M3.1), 병원/펫샵/산책로 레이어, 날씨.
+> **실연동된 것**: 소셜 로그인, 실 GPS 와 경로 저장, 산책 통계·삭제·회고, KTO 반려동반 장소,
+> 가족 그룹·케어·채팅, 약관 동의.
