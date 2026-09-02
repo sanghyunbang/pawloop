@@ -29,7 +29,7 @@
 | 공공데이터 호출 패턴 | `tour/service/TourApiClient` | `@Qualifier` WebClient + `@Value` serviceKey + `.block()` 동기 호출 그대로 답습. |
 | XML 파싱 | `tour/util/XmlParser` | DOM 파서 방식(`getElementsByTagName("item")`, `getStr/getDouble`) 복제해 KorPet 응답 파싱. |
 | Sanitizer | `tour/util/Sanitizers` | tel/문자열 정리·truncate. |
-| JWT 추출 | `social/controller/SocialController.requireUser()` | Places 읽기는 비인증이라 불필요. (북마크 등 인증 리소스는 별도 담당) |
+| JWT 추출 | `@CurrentUser User me` 파라미터 하나(#5) | Places 읽기는 비인증이라 **안 쓴다**. 인증이 필요한 이웃(북마크)이 이 모양을 쓴다. 여기 적혀 있던 `SocialController.requireUser()` 는 #5 가 지운 메서드다 — 베끼면 컴파일이 안 된다. |
 | 에러 응답 | `social` 컨트롤러 `Map.of("error", ...)` 패턴 | openapi `Error` 스키마(`{error:{code,message}}`)로 통일 권장. |
 
 ---
@@ -198,7 +198,7 @@
    - radius로 bbox를 대략(위경도 델타 ≈ radius/111320 등) 잡거나 `ST_Buffer` 사용. limit 상한 200.
 
 5. **JWT 추출 — Places는 불필요.**
-   - openapi에서 Places 두 엔드포인트는 `security: []`(비인증). `SocialController.requireUser()` 패턴은 여기 **미적용**.
+   - openapi에서 Places 두 엔드포인트는 `security: []`(비인증). 인증 주체가 필요한 곳은 `@CurrentUser User me` 하나로 받고(#5), 컨트롤러가 `Authorization` 헤더를 다시 읽는 것은 `AuthSubjectContractSpecTest` 가 막는다. 여기는 그것조차 필요 없다.
    - 단, `SecurityConfig`가 `anyRequest().authenticated()`이면 `/api/places/**`를 **permitAll**로 열어야 401이 안 난다(`PublicSecurityConfig`/`PublicSecurityProperties` 화이트리스트에 추가).
 
 6. **트랜잭션.**

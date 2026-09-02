@@ -308,6 +308,49 @@ SET @stmt := IF(@exists = 0, 'CREATE INDEX idx_reaction_user ON reaction (user_i
     'SELECT ''[B-4] idx_reaction_user 이미 있음 — 건너뜀'' AS message');
 PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- B-5. 값이 정해진 두 컬럼에 CHECK 를 건다 — board(5) · reaction.type(3).
+--      #86 원칙 5 가 "DB CHECK 가 마지막 방어선" 이라고 정했고 care_log.type 이 이미 그 모양이다.
+--      #169 는 VARCHAR 만 세우고 CHECK 를 안 걸었다. 그러면 서비스 상수를 우회하는 모든 길
+--      (배치·수동 INSERT·다음 사람이 만들 관리 화면)이 아무 문자열이나 넣는다. 그렇게 들어간
+--      행은 목록 쿼리에는 걸리는데 앱이 라벨을 못 찾아 빈 칸으로 뜬다.
+--
+--      ENUM 이 아니라 VARCHAR + CHECK 인 이유는 care_log 와 같다 — 값을 하나 늘릴 때
+--      ENUM 은 표 전체를 다시 쓰지만 CHECK 는 제약만 바꾼다.
+
+-- 먼저 지금 있는 행이 그 값들 안에 있는지 본다. 어긋난 행이 있으면 ALTER 가 MySQL 3819 로
+-- 죽는데, 그 오류만 보고는 어느 표의 어느 값이 문제인지 알 수 없다.
+SET @bad_board := (SELECT COUNT(*) FROM post
+    WHERE board NOT IN ('walk_review', 'pet_place', 'health', 'free', 'brag'));
+SET @bad_type := (SELECT COUNT(*) FROM reaction
+    WHERE type NOT IN ('help', 'cute', 'empathy'));
+
+SELECT '[B-5] 값 범위 밖 행' AS section, @bad_board AS bad_board_0, @bad_type AS bad_type_0;
+
+SET @stmt := IF(@bad_board = 0 AND @bad_type = 0,
+    'SELECT ''[B-5] 값 확인'' AS message',
+    'CALL heattrip_migration_abort(''ABORT: post.board 또는 reaction.type 에 정해진 값 밖의 행이 있다. 위 [B-5] 행을 보고 그 행들을 먼저 고쳐라 — CHECK 를 걸 수 없다.'')');
+PREPARE stmt FROM @stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @exists := (
+    SELECT COUNT(*) FROM information_schema.table_constraints
+    WHERE constraint_schema = DATABASE() AND table_name = 'post'
+      AND constraint_name = 'chk_post_board' AND constraint_type = 'CHECK');
+SET @stmt := IF(@exists = 0,
+    'ALTER TABLE post ADD CONSTRAINT chk_post_board CHECK (board IN (''walk_review'', ''pet_place'', ''health'', ''free'', ''brag''))',
+    'SELECT ''[B-5] chk_post_board 이미 있음 — 건너뜀'' AS message');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @exists := (
+    SELECT COUNT(*) FROM information_schema.table_constraints
+    WHERE constraint_schema = DATABASE() AND table_name = 'reaction'
+      AND constraint_name = 'chk_reaction_type' AND constraint_type = 'CHECK');
+SET @stmt := IF(@exists = 0,
+    'ALTER TABLE reaction ADD CONSTRAINT chk_reaction_type CHECK (type IN (''help'', ''cute'', ''empathy''))',
+    'SELECT ''[B-5] chk_reaction_type 이미 있음 — 건너뜀'' AS message');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- ── D. 사후 검증 ───────────────────────────────────────────────────────────
 -- 여기까지 왔는데 숫자가 다르면 **반쯤 적용된 것**이다. 성공처럼 끝내지 않는다.
 
@@ -349,12 +392,21 @@ SET @d_idx := (
       AND index_name IN ('idx_post_board_created', 'idx_comment_post_created',
                          'idx_post_user', 'idx_comment_user', 'idx_reaction_user'));
 
+-- 값이 정해진 두 컬럼의 CHECK. 서비스 상수만 있고 DB 가 비어 있으면 그 상수를 안 거치는
+-- 모든 경로가 무방비다 (#86 원칙 5).
+SET @d_checks := (
+    SELECT COUNT(*) FROM information_schema.table_constraints
+    WHERE constraint_schema = DATABASE() AND constraint_type = 'CHECK'
+      AND constraint_name IN ('chk_post_board', 'chk_reaction_type'));
+
 SELECT '[D] 사후 검증' AS section,
        @d_tables AS tables_3, @d_post_cols AS post_cols_9, @d_uq_cols AS uq_cols_3,
-       @d_cascade AS cascade_2, @d_user_set_null AS user_setnull_3, @d_idx AS idx_5;
+       @d_cascade AS cascade_2, @d_user_set_null AS user_setnull_3, @d_idx AS idx_5,
+       @d_checks AS checks_2;
 
 SET @stmt := IF(@d_tables = 3 AND @d_post_cols = 9 AND @d_uq_cols = 3
-                AND @d_cascade = 2 AND @d_user_set_null = 3 AND @d_idx = 5,
+                AND @d_cascade = 2 AND @d_user_set_null = 3 AND @d_idx = 5
+                AND @d_checks = 2,
     'SELECT ''[D] 통과'' AS message',
     'CALL heattrip_migration_abort(''ABORT: 사후 검증 실패. 위 [D] 행의 숫자를 확인하라.'')');
 PREPARE stmt FROM @stmt;

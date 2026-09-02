@@ -195,6 +195,53 @@ class CommunitySchemaMigrationExecutionTest {
     }
 
     @Test
+    @DisplayName("정해진 값 밖의 board·반응 종류는 CHECK 가 거절한다 — 서비스 상수가 마지막 방어선이 아니다")
+    void checkConstraints_rejectValuesOutsideTheContract() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+            db.seedOnePost();
+
+            assertThatThrownBy(() -> db.exec(
+                    "INSERT INTO post (user_id, board, title, body, created_at) "
+                            + "VALUES (1, '산책로 후기', '제목', '본문', NOW(6))"))
+                    .as("""
+                            ADR-0016 이 board 를 ASCII 키로 정하기 전 값이 한글 표시 문자열이었다. \
+                            CommunityService.BOARDS 를 안 거치는 길(배치·수동 INSERT·다음 사람이 \
+                            만들 관리 화면)로 그런 값이 들어오면 목록 쿼리에는 걸리는데 앱이 라벨을 \
+                            못 찾아 빈 칸으로 뜬다. #86 원칙 5 — DB CHECK 가 마지막 방어선이다.""")
+                    .hasMessageContaining("chk_post_board");
+
+            assertThatThrownBy(() -> db.exec(
+                    "INSERT INTO reaction (post_id, user_id, type, created_at) "
+                            + "VALUES (1, 1, 'angry', NOW(6))"))
+                    .as("반응 종류도 같다 — 계약의 ReactionType 은 셋뿐이다")
+                    .hasMessageContaining("chk_reaction_type");
+        }
+    }
+
+    @Test
+    @DisplayName("값 밖의 행이 이미 쌓여 있으면 CHECK 를 걸지 않고 사람 말로 중단한다")
+    void migration_stopsWithAReasonWhenExistingRowsWouldBreakTheCheck() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+            db.seedOnePost();
+
+            // CHECK 가 없던 시절의 DB 를 만든다 — #169 가 세운 표가 정확히 이 모양이었다.
+            db.exec("ALTER TABLE post DROP CHECK chk_post_board");
+            db.exec("INSERT INTO post (user_id, board, title, body, created_at) "
+                    + "VALUES (1, '산책로 후기', '제목', '본문', NOW(6))");
+
+            assertThatThrownBy(db::runMigration)
+                    .as("""
+                            그냥 ALTER 를 때리면 MySQL 3819 가 난다. 그 오류는 어느 표의 어느 \
+                            값이 문제인지 말해 주지 않아서, 받은 사람이 스크립트를 거꾸로 읽어야 \
+                            한다. 표 셋을 세우는 길은 이 스크립트 하나뿐이라 여기서 말해야 한다.""")
+                    .hasMessageContaining("정해진 값 밖의 행이 있다");
+        }
+    }
+    @Test
     @DisplayName("두 번 돌려도 성공한다 — 재실행이 안전하다")
     void migration_isIdempotent() throws Exception {
         try (Fixture db = fixture()) {

@@ -213,6 +213,25 @@ tasks.named('test') {
             .withPropertyName('databaseDocs')
             .withPathSensitivity(PathSensitivity.RELATIVE)
 
+    // StructureDocDriftTest 가 읽는 화면 목록·탭 정의(이슈 #201·#177). 여기가 빠져 있어서
+    // main_shell.dart 의 탭 라벨을 '통계' 로 되돌려 놓고도 test 가 UP-TO-DATE 로 건너뛰어
+    // 초록불이 났다 — 빨간불을 확인하다 두 번 속았다. cleanTest 도 안 통했다(캐시에서 복원).
+    //
+    // 대가는 안다 — 화면 파일 하나만 고쳐도 백엔드 test 태스크가 다시 돈다. 그래도
+    // 선언하는 쪽이 맞다. 이 검사들이 지키는 것은 '문서가 코드와 갈리지 않았다' 인데,
+    // 코드가 바뀌었는데 안 도는 검사는 지키는 것이 없다.
+    inputs.files(fileTree(dir: file('../app/lib/v2/screens'), include: '**/*.dart'))
+            .withPropertyName('appScreens')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    // 같은 테스트가 읽는 화면 명세·정보구조·프론트 구조. 02-architecture 는 backend/ 만
+    // 선언돼 있었어서 바로 아래 .md(frontend-structure.md)가 빠져 있었다.
+    inputs.files(fileTree(dir: file('../docs/01-design'), include: '**/*'))
+            .withPropertyName('designDocs')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(fileTree(dir: file('../docs/02-architecture'), include: '*.md'))
+            .withPropertyName('architectureDocs')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+
     // 테스트는 'test' 프로파일로 돈다 → src/test/resources/application-test.properties.
     // 이게 없으면 jwt.secret 등 기본값 없는 플레이스홀더 10개가 해결되지 않아
     // @SpringBootTest 컨텍스트가 뜨지 않는다. 이슈 #22 참조.
