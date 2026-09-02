@@ -7,11 +7,15 @@
 > 컨벤션 출처: `backend/.../social/**` (record DTO, `ResponseEntity<?>`, JWT 추출), `.../user/controller/AuthController.java`, `.../OAuth/jwt/JWTProvider.java`
 
 > [!IMPORTANT]
-> **장소 식별자는 `contentId` 입니다.** 아래 본문의 `placeId` 서술은 2026-09
-> [ADR-0017](../../99-decisions/decision-log.md#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다)
-> 이전 것이라 **계약과 다릅니다.** 계약이 `contentId` 로 통일했고, 그 방향을 고른 이유는
-> `contentId` 쪽이 앱과 서버에 이미 박혀 있고 `placeId` 를 쓰던 곳이 전부 미구현이었기
-> 때문입니다. 이 청사진을 구현할 때는 **계약을 먼저 읽으세요.**
+> **이 청사진은 2026-09-02 에 ADR-0016·ADR-0017 로 맞췄습니다.** 바뀐 것 셋입니다.
+>
+> | | |
+> |---|---|
+> | 장소 식별자 | `placeId` → **`contentId`** ([ADR-0017](../../99-decisions/decision-log.md#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다)). `Place.contentId` 와 같은 키입니다 |
+> | 반응 | 단수 토글 → **복수 + 멱등 `POST`/`DELETE .../reactions/{type}`** ([ADR-0016](../../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) 결정 2) |
+> | 게스트 읽기 | `security: []` → **인증 선택**, 서버는 **메서드 축 한 줄** (ADR-0016 결정 3) |
+>
+> DB 컬럼 이름(`post.place_id`)은 그대로입니다 — 계약의 필드 이름과 컬럼 이름은 다를 수 있습니다.
 >
 > 작성자 표현도 바뀌었습니다 — `Post.author`·`Comment.author` 는 이제 공통 `PersonRef`
 > (`userId`+`nickname`)를 `$ref` 합니다. 특히 `Comment.author` 에는 **식별자가 아예 없었고**,
@@ -25,8 +29,8 @@
 | --- | --- |
 | 책임 | 커뮤니티 게시글 목록/작성/상세, 댓글 목록/작성, 게시글 반응(help/cute/empathy) 토글. |
 | 관련 테이블 | `post`(글), `comment`(댓글), `reaction`(반응). 읽기 조인: `users`(작성자 닉네임), `place`(태그 장소, nullable FK). |
-| 재사용 후보 | 기존 `social` 패키지의 `EmotionCard/CardReaction/CardComment` 구조가 거의 동일 → **패턴을 그대로 복제/개편**한다. 특히 (a) 반응 토글 로직(`SocialService.toggleReaction`), (b) 반응/댓글 수 N+1 방지 배치 집계(`findByCardIdIn`, `countByCardIdInGroupBy`), (c) `ReactionSummary`(reactions map + mine)는 social의 `{reactions, myReactions}` 개편판이다. |
-| 기존과 차이 | ① 반응 타입이 `SAME/CHEER/CALM`(social) → `help/cute/empathy`(community). ② `ReactionSummary.mine`은 **문자열 단수**(내가 누른 1개 또는 null)로, social의 `myReactions`(리스트)와 다르다. openapi `reaction`은 단일 유형 라디오형 → 유저당 글별 **1개만** 유지하는 정책 권장. ③ 목록이 **커서 페이지네이션**(`items`/`nextCursor`/`hasMore`)이다(social은 limit-only). ④ `board` enum·`placeId` nullable FK 존재. |
+| 재사용 후보 | 기존 `social` 패키지의 `EmotionCard/CardReaction/CardComment` 구조가 거의 동일 → **패턴을 그대로 복제/개편**한다. 특히 (a) 반응 저장/삭제 로직(`SocialService.toggleReaction` — **토글이 아니라 멱등 add/remove 로 나눠 쓴다**, ADR-0016 결정 2), (b) 반응/댓글 수 N+1 방지 배치 집계(`findByCardIdIn`, `countByCardIdInGroupBy`), (c) `ReactionSummary`(reactions map + mine)는 social의 `{reactions, myReactions}` 개편판이다. |
+| 기존과 차이 | ① 반응 타입이 `SAME/CHEER/CALM`(social) → `help/cute/empathy`(community). ② `ReactionSummary.mine`은 **배열 또는 `null`** 이다 — 셋을 동시에 누를 수 있다(ADR-0016 결정 2). `null` 은 비인증, `[]` 는 로그인했는데 아무것도 안 누른 것이다. social 의 `myReactions`(리스트)와 **같은 카디널리티**다. ③ 목록이 **커서 페이지네이션**(`items`/`nextCursor`/`hasMore`)이다(social은 limit-only). ④ `board` enum·장소 참조(`contentId`) nullable FK 존재. |
 | 인증 정책 | 읽기(GET 목록/상세/댓글목록)는 **비인증 허용**(openapi `security: []`). 쓰기(글/댓글 작성, 반응 토글)는 **인증 필요**. SecurityConfig에서 `/api/community/**` GET은 permitAll, 그 외 authenticated 로 열어야 함(social은 전부 authenticated였음 — 주의). |
 
 ---
@@ -43,7 +47,8 @@
 | 3 | `GET /api/community/posts/{postId}` | `detail(@PathVariable Long postId, HttpServletRequest req)` | `PostDto` | ✕ | `/api/community/posts/{postId}` GET |
 | 4 | `GET /api/community/posts/{postId}/comments` | `comments(@PathVariable Long postId)` | `List<CommentDto>` | ✕ | `.../comments` GET |
 | 5 | `POST /api/community/posts/{postId}/comments` | `addComment(@PathVariable Long postId, @RequestBody CommentRequest body, HttpServletRequest req)` | `CommentDto` (201) | ✔ | `.../comments` POST |
-| 6 | `POST /api/community/posts/{postId}/reactions` | `toggleReaction(@PathVariable Long postId, @RequestBody ReactionRequest body, HttpServletRequest req)` | `ReactionSummary` | ✔ | `.../reactions` POST |
+| 6 | `POST /api/community/posts/{postId}/reactions/{type}` | `addReaction(@CurrentUser User me, @PathVariable Long postId, @PathVariable String type)` | `ReactionSummary` | ✔ | `.../reactions/{type}` POST |
+| 7 | `DELETE /api/community/posts/{postId}/reactions/{type}` | `removeReaction(@CurrentUser User me, @PathVariable Long postId, @PathVariable String type)` | `ReactionSummary` | ✔ | `.../reactions/{type}` DELETE |
 
 > **반환 규약(social 준수):** 메서드는 `ResponseEntity<?>` 반환. 정상은 `ResponseEntity.ok(dto)` / 작성은 `ResponseEntity.status(HttpStatus.CREATED).body(dto)`. 검증 실패는 `IllegalArgumentException` → `ResponseEntity.badRequest().body(Map.of("error", ...))`, not-found는 404 매핑, 그 외는 500. (읽기 시 `mine`은 인증 헤더가 있으면 채우고 없으면 null — requireUser 대신 optional 추출 헬퍼를 두는 것도 가능.)
 > **인증 추출:** `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (#5 이전에는 컨트롤러마다 `requireUser` 헬퍼가 헤더를 다시 읽고 `findByEmail` 을 했다 — 그 헬퍼들은 전부 삭제됐다.)
@@ -63,7 +68,7 @@
 | `author` | `AuthorDto` | 중첩(아래) |
 | `board` | `String` | Board enum 문자열 |
 | `loc` | `String` | nullable. 표시용 지역명(`place.name` 또는 사용자 입력) |
-| `placeId` | `String` | nullable. 연결 장소 식별자(openapi는 string — `place.external_id` 또는 `place.id` 문자열화) |
+| `contentId` | `String` | nullable. 연결 장소 식별자. **`Place.contentId` 와 같은 키다**(ADR-0017). 2026-09 이전에는 `placeId` 였다 |
 | `title` | `String` | |
 | `body` | `String` | |
 | `commentCount` | `int` | |
@@ -91,7 +96,7 @@
 | `help` | `int` | 도움돼요 카운트 |
 | `cute` | `int` | 귀여워요 카운트 |
 | `empathy` | `int` | 공감 카운트 |
-| `mine` | `String` | nullable. 내가 누른 반응 타입 1개(없으면 null). ⚠️ social의 리스트가 아닌 **단수**. |
+| `mine` | `List<String>` | nullable. 내가 누른 반응들. **`null`=비인증 / `[]`=로그인했는데 안 누름** (ADR-0016 결정 2). |
 
 **`PostPageDto`** ↔ openapi `Page` allOf + `items: List<Post>`
 | 필드 | 타입 | 비고 |
@@ -109,7 +114,7 @@
 | `title` | `String` | ✔ | |
 | `body` | `String` | ✔ | |
 | `loc` | `String` | ✕ | |
-| `placeId` | `String` | ✕ | 있으면 `place` 조회/링크 |
+| `contentId` | `String` | ✕ | 있으면 `place` 조회/링크 |
 
 **`CommentRequest`** ↔ openapi `.../comments` POST body (social `CommentRequest` 재사용 가능하나 community용은 `body`만)
 | 필드 | 타입 | 필수 |
@@ -125,23 +130,24 @@
 
 ## 4. Service
 
-**클래스:** `CommunityService` — `@Service @Transactional(readOnly = true)` (쓰기 메서드에 `@Transactional`). 생성자 주입: `PostRepository`, `CommentRepository`, `ReactionRepository`, `PlaceRepository`(loc/placeId 해석용), `UserRepository`(작성자 닉네임). social과 동일하게 상수(`VALID_REACTION_TYPES = {help,cute,empathy}`, `VALID_BOARDS`, `MAX_LIMIT`, `DEFAULT_LIMIT`)를 둔다.
+**클래스:** `CommunityService` — `@Service @Transactional(readOnly = true)` (쓰기 메서드에 `@Transactional`). 생성자 주입: `PostRepository`, `CommentRepository`, `ReactionRepository`, `PlaceRepository`(loc/contentId 해석용), `UserRepository`(작성자 닉네임). social과 동일하게 상수(`VALID_REACTION_TYPES = {help,cute,empathy}`, `VALID_BOARDS`, `MAX_LIMIT`, `DEFAULT_LIMIT`)를 둔다.
 
 | 메서드 시그니처 | 한 줄 책임 (무엇을) |
 | --- | --- |
 | `PostPageDto feed(String board, String cursor, Integer limit, Long currentUserId)` | board 필터 + 커서 이후 최신순 페이지 조회 → `items/nextCursor/hasMore` 구성. |
-| `PostDto create(Long userId, PostRequest req)` | board·title·body 검증, placeId 해석, `post` 저장 후 DTO 반환. |
+| `PostDto create(Long userId, PostRequest req)` | board·title·body 검증, `contentId` 해석, `post` 저장 후 DTO 반환. |
 | `PostDto detail(Long postId, Long currentUserId)` | 단건 조회(+작성자·반응·댓글수), 없으면 not-found. |
 | `List<CommentDto> comments(Long postId)` | 게시글 존재 검증 후 댓글 오래된 순 목록. |
 | `CommentDto addComment(Long postId, Long userId, String body)` | 글 존재·body 검증 후 댓글 저장 → DTO. |
-| `ReactionSummary toggleReaction(Long postId, Long userId, String type)` | type 검증, 같은 유형이면 삭제/다른 유형이면 교체(유저당 1개), 최신 집계 반환. |
+| `ReactionSummary addReaction(Long postId, Long userId, String type)` | type 검증 후 없으면 저장. **멱등** — 이미 있으면 아무것도 안 하고 최신 집계 반환. |
+| `ReactionSummary removeReaction(Long postId, Long userId, String type)` | 있으면 삭제. **멱등** — 없어도 최신 집계 반환. |
 | `private ReactionSummary summarize(Long postId, Long currentUserId)` (헬퍼) | 단건 글의 help/cute/empathy 카운트 + mine 계산. |
 | `private Map<Long,ReactionSummary> summarizeBatch(List<Long> postIds, Long currentUserId)` (헬퍼) | 목록용 반응 배치 집계(N+1 방지). |
 | `private Map<Long,Integer> commentCounts(List<Long> postIds)` (헬퍼) | 목록용 댓글 수 배치 집계(N+1 방지). |
 | `private PostDto mapPost(Post, AuthorDto, ReactionSummary, int commentCount)` (헬퍼) | 엔티티 → PostDto 변환. |
 
 > **커서 규약:** `cursor`는 이전 응답 `nextCursor`(예: 마지막 post id를 base64 인코딩). 서비스는 커서 디코드 → `id < cursorId` 조건으로 다음 페이지 조회, `limit+1`건 조회해 초과분 존재 여부로 `hasMore` 판단 후 잘라내고 마지막 항목 id로 `nextCursor` 생성. board가 null이면 전체.
-> **반응 정책:** openapi `ReactionSummary.mine`이 단수이므로 유저당 글별 반응 **1개**만 유지. 스키마 유니크는 `(post_id,user_id,type)`이나, 서비스는 "다른 type을 누르면 기존 것을 지우고 새로 저장"으로 mine을 단일화한다(같은 type 재클릭 시 삭제 = 취소).
+> **반응 정책(ADR-0016 결정 2):** 유저당 글마다 **여러 type** 을 동시에 가질 수 있다 — 도움돼요·귀여워요·공감은 서로 배타적인 개념이 아니다. 스키마 유니크 `(post_id, user_id, type)` 이 그대로 불변식이고, **서비스가 따로 단일화하지 않는다.** 켜고 끄는 것은 `POST`/`DELETE .../reactions/{type}` 둘이고 **둘 다 멱등**이다. 2026-09 이전에는 `POST .../reactions` 하나가 토글이었는데, 요청에 의도가 없어 **재시도 한 번이 반응을 되돌렸다.**
 
 ---
 
@@ -209,19 +215,22 @@
 | --- | --- |
 | `List<Reaction> findByPostId(Long postId)` | 단건 집계/mine |
 | `List<Reaction> findByPostIdIn(List<Long> postIds)` | 목록용 배치 집계 |
-| `Optional<Reaction> findByPostIdAndUserId(Long postId, Long userId)` | 유저당 1개 정책(토글/교체) |
-| `Optional<Reaction> findByPostIdAndUserIdAndType(Long postId, Long userId, String type)` | 같은 type 재클릭(취소) 판정 |
+| `List<Reaction> findByPostIdAndUserId(Long postId, Long userId)` | `mine` 배열을 채운다(복수다 — ADR-0016 결정 2) |
+| `Optional<Reaction> findByPostIdAndUserIdAndType(Long postId, Long userId, String type)` | 멱등 판정 — 이미 있는지 본다 |
 
 ---
 
 ## 6. 구현 노트 (함정 위주)
 
-- **인증 분기(읽기 vs 쓰기):** social은 `/api/social/**` 전체가 authenticated였다. community는 **GET을 permitAll**로 열어야 하므로 `SecurityConfig`에서 `HttpMethod.GET, "/api/community/**"` permitAll + POST authenticated를 명시할 것. 안 그러면 openapi `security: []` 계약과 어긋난다.
-- **JWT 추출:** subject 는 **`users.id`** 다(#5 — 예전 서술의 email 이 아니다). `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. 읽기 엔드포인트의 `mine` 처럼 **인증이 선택인 경로**는 컨트롤러 파라미터로 표현하지 않는다 — 그 결정은 `SecurityConfig.publicMatchers` 가 한다(#23). 선택적 인증이 실제로 필요해지면 그때 별도 리졸버로 설계한다.
-- **반응 mine 단수화:** openapi `ReactionSummary.mine`은 문자열 1개. 스키마 유니크가 `(post,user,type)`이라 DB상 여러 type 저장이 가능하지만, **서비스 레벨에서 유저당 1개**로 제한(다른 type 클릭 시 기존 삭제 후 삽입). 이 결정은 social의 `myReactions`(리스트) 로직을 그대로 복붙하면 안 되는 지점이다.
-- **토글 트랜잭션:** `toggleReaction`은 삭제/삽입이 있으므로 `@Transactional`(쓰기). 같은 type 재클릭=취소, 다른 type=교체. 유니크 제약 위반(동시성)은 재조회로 흡수하거나 `find...AndType` 선조회로 회피.
+- **인증 분기(읽기 vs 쓰기) — ADR-0016 결정 3:** GET 셋은 계약이 `security: [{}, {bearerAuth: []}]`(**인증 선택**)이다. `security: []` 가 아니다 — 그것은 인증을 계약에서 **제거**해 `mine` 을 영원히 `null` 로 만든다(ADR-0017 규약 6이 뒤집었다).
+  서버는 **같은 체인에 메서드 축 한 줄**로 연다. `.requestMatchers(HttpMethod.GET, "/api/community/posts", "/api/community/posts/*", "/api/community/posts/*/comments").permitAll()` 을 `anyRequest().authenticated()` **앞**에 둔다.
+  **와일드카드(`/api/community/**`)는 쓰지 않는다** — 같은 경로의 `POST` 까지 열린다. `/api/explore/**` 가 그 반례다(그 아래 `POST .../feedback` 이 토큰 없이 행을 만든다).
+  그리고 **rate limit 규칙을 함께 붙인다** — 표에 없는 경로는 한도가 0 이 아니라 **무한**이고, 지금은 `authenticated` 가 방어선인데 게스트에 열면 그것이 사라진다.
+- **JWT 추출:** subject 는 **`users.id`** 다(#5 — 예전 서술의 email 이 아니다). `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. 읽기 엔드포인트의 `mine` 처럼 **인증이 선택인 경로**는 컨트롤러 파라미터로 표현하지 않는다 — 그 결정은 `SecurityConfig` 가 한다(#23). **`@CurrentUser` 는 그대로 둔다**(실패를 전부 401 로 만드는 것이 설계다). 주체는 **컨트롤러 밖**에서 읽는다 — 필터가 넣는 `AuthenticatedUser` principal 이 이미 "없으면 없는 대로" 이고, 토큰이 없으면 `SecurityContext` 가 비어 있을 뿐이다. **새 애노테이션도 새 리졸버도 만들지 않는다**(ADR-0016 결정 3).
+- **반응은 복수다(ADR-0016 결정 2):** 스키마 유니크 `(post, user, type)` 이 그대로 불변식이고 **서비스가 단일화하지 않는다.** social 의 `myReactions`(리스트) 로직이 여기서는 **맞는 모양**이다 — 복붙하면 안 되는 것은 반응 타입 이름(`SAME/CHEER/CALM` → `help/cute/empathy`)뿐이다.
+- **멱등 트랜잭션:** `addReaction`·`removeReaction` 은 삽입/삭제가 있으므로 `@Transactional`(쓰기). **둘 다 멱등이라 재시도가 안전하다.** 동시성으로 유니크 제약이 깨지면 그것은 "이미 눌렀다" 와 같은 뜻이므로 삼키고 최신 집계를 반환한다.
 - **커서 페이지네이션:** `nextCursor`는 마지막 항목 `id`를 base64 등으로 인코딩(openapi 예 `eyJpZCI6MTIzfQ==`). `limit`은 기본 20·최대 100(`components/parameters/Limit`). `limit+1`건 조회 → 초과 시 `hasMore=true`, 초과분 잘라내고 마지막 id로 커서 생성. 커서 디코드 실패는 400.
-- **placeId 타입 불일치:** openapi `Post.placeId`는 **string**, DB `post.place_id`는 **BIGINT FK**. 요청 `PostRequest.placeId`(String)를 저장 시 `place` 조회(외부 `external_id` 또는 내부 id)로 해석해 `place.id`(Long)에 매핑하고, 응답에선 다시 문자열로. 존재하지 않는 place면 링크 없이 저장(FK는 ON DELETE SET NULL). `loc`은 표시용 문자열로 `place.name` 또는 사용자 입력을 그대로.
+- **장소 참조는 `contentId` 다(ADR-0017):** openapi `Post.contentId` 는 **string** 이고 `Place.contentId` 와 같은 키다. 2026-09 이전에는 `placeId` 였다. DB `post.place_id` 가 **BIGINT FK** 라면 저장할 때 `place` 조회로 해석해 매핑하고 응답에서 다시 문자열로 돌린다. 존재하지 않는 장소면 링크 없이 저장한다(FK 는 `ON DELETE SET NULL`). `loc` 은 표시용 문자열이다.
 - **N+1 방지:** 목록(feed)은 social의 배치 집계 패턴을 그대로 이식 — 페이지 내 postIds로 `findByPostIdIn`(반응)·`countByPostIdInGroupBy`(댓글)·작성자 닉네임 배치 조회 후 메모리에서 조립. 단건 루프 쿼리 금지.
 - **board 검증:** Board enum은 한글(`산책로 후기`/`동반장소`/`건강·병원`/`자유`/`자랑`). 공백/중점(·) 포함 문자열이므로 서비스 상수 `Set`으로 정확히 검증(오타 시 400). DB `board VARCHAR(20)` + `utf8mb4`.
 - **공간/좌표 무관:** 이 리소스는 `POINT`/`LINESTRING`, `ST_Distance_Sphere`, EPSG:5174→WGS84 변환과 **무관**하다(그건 Places/Walks 담당). 커뮤니티에 공간 쿼리를 넣지 말 것.

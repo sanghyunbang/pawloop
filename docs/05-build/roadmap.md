@@ -262,13 +262,13 @@
   남은 것은 **서버 쪽**이다 — `SecurityConfig` 의 publicMatchers 는 경로만 받고 **메서드를 안 받는다.** `GET` 만 열려면 그 구조부터 손봐야 하고, 경로 전체를 열면 `POST` 까지 비인증이 된다.
 - **계약 잔여 여섯**(#211). 반응 멱등성은 위의 반응 카디널리티(#164)와 **같은 결정**이고, `Board` enum 값(공백·가운뎃점을 품은 한글이 query 파라미터로 나간다)은 **표를 짜기 전에** 정해야 한다 — 그 값이 DB 컬럼에도 들어간다.
 
-셋을 **ADR-0016** 으로 함께 적는다.
+**셋 다 정해졌다 — [ADR-0016](../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다)(2026-09-02).** 신고·차단은 **미룬다**(모양만 못 박았다) · 반응은 **복수 + 멱등 `POST`/`DELETE .../reactions/{type}`** · 게스트 읽기는 **같은 체인에 메서드 축 한 줄**이고 주체는 컨트롤러 밖에서 읽는다.
 
 **작업 — 직렬이다**
 
 어느 하나도 앞을 건너뛸 수 없다. 표가 없으면 API 를 못 만들고, API 가 없으면 앱을 못 붙이고, 읽기가 없으면 글쓰기가 어디로 가는지 확인할 수 없다.
 
-1. **표 셋**(#169) — `post`·`comment`·`reaction`. `mysql/post-start/13_community.sql`. `schema.md`·`erd.md` 정본 갱신.
+1. **표 셋**(#169) — `post`·`comment`·`reaction`. `mysql/post-start/**14**_community.sql` 이다 — **13 은 #155 의 `13_walk_path_t.sql` 이 이미 쓴다.** `schema.md`·`erd.md` 정본 갱신. `reaction` 의 `UNIQUE` 는 `(post_id, user_id, type)` 이고 초안 그대로다(ADR-0016 결정 2).
 2. **API 여섯**(#170) — `/api/community` 도메인 패키지 신설. 재사용 자산이 실재한다(`SocialService` 의 `findByCardIdIn`·`countByCardIdInGroupBy`·`toggleReaction`).
 3. **앱 연결**(#171) — `kPetPosts` 를 걷어내고 `community_repository.dart` 를 만든다. `PetPost` 에 `contentId` 가 없어 계약과 어긋나는 것도 여기서 맞춘다(계약이 `placeId` → `contentId` 로 통일했다 — ADR-0017).
 4. **글쓰기 화면**(#172) — 저장소에 없다. `create_screen.dart` 를 재사용하지 않는다 — 그 화면의 호출부 셋이 전부 산책 축이다.
