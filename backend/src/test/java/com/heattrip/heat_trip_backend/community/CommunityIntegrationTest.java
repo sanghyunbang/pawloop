@@ -116,6 +116,12 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
         JsonNode afterRemove = body(react(me, postId, "help", false).andExpect(status().isOk()));
         assertThat(afterRemove.path("help").asInt()).isZero();
         assertThat(afterRemove.path("mine").size()).isZero();
+        assertThat(afterRemove.path("mine").isArray())
+                .as("""
+                        size() == 0 은 null 에도 참이다 — 그 단언만으로는 "로그인했는데 안 \
+                        눌렀다"([])와 "비인증"(null)이 구별되지 않는다. 앱은 그 둘을 다르게 \
+                        그린다 — 꺼진 버튼과 누를 수 없는 상태다.""")
+                .isTrue();
 
         assertThat(itemById(body(feed(me, "")), postId).path("commentCount").asInt())
                 .as("댓글 수는 목록에서 group by 한 번으로 온다")
