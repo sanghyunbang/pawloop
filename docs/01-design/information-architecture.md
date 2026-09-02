@@ -1,6 +1,6 @@
 # 정보구조(IA) — Pawloop(포루프)
 
-> 5탭(홈 / 지도 / 산책 FAB / 커뮤니티 / 통계) 셸 + 각 탭의 하위 화면 트리와 네비게이션 규칙. 실제 구현(`app/lib/v2/`) 기준으로 작성.
+> 5탭(홈 / 지도 / 산책 FAB / 커뮤니티 / 채팅) 셸 + 각 탭의 하위 화면 트리와 네비게이션 규칙. 실제 구현(`app/lib/v2/`) 기준으로 작성.
 
 관련 문서: [화면 목록](./screen-spec.md) · [디자인 시스템](./design-system.md) · [ERD](../03-database/erd.md)
 
@@ -27,7 +27,7 @@ graph TD
     Root -->|탭 1| Map["🗺️ 지도<br/>ExploreScreen"]
     Root -->|가운데 FAB| Walk["✏️ 산책 기록<br/>WalkTrackingScreen"]
     Root -->|탭 2| Community["💬 커뮤니티<br/>FeedScreen"]
-    Root -->|탭 3| Stats["📊 통계<br/>InsightScreen"]
+    Root -->|탭 3| Chat["💬 채팅<br/>ChatListScreen"]
 
     Root -.우상단 아바타.-> Me["👤 내 프로필<br/>MeScreen (push)"]
 
@@ -45,7 +45,9 @@ graph TD
 | 탭 1 | 지도 | `ExploreScreen` | `explore_screen.dart` | `RootTab.index=1` |
 | FAB(가운데) | (산책 기록) | `WalkTrackingScreen` | `walk_tracking_screen.dart` | `Navigator.push` |
 | 탭 2 | 커뮤니티 | `FeedScreen` | `feed_screen.dart` | `RootTab.index=2` |
-| 탭 3 | 통계 | `InsightScreen` | `insight_screen.dart` | `RootTab.index=3` |
+| 탭 3 | 채팅 | `ChatListScreen` | `chat_list_screen.dart` | `RootTab.index=3` |
+
+> **통계(`InsightScreen`)는 탭이 아니다.** `me_screen` 에서 `push` 로 들어간다 — 2026-08 에 탭에서 내려갔고 그 자리에 채팅이 들어왔다(#78~#81).
 | 글로벌 | 내 프로필 | `MeScreen` | `me_screen.dart` | 아바타 탭 → `push` |
 
 > **주의**: 가운데 FAB은 탭 상태(index)를 바꾸지 않고 `WalkTrackingScreen`을 **위에 push**한다. 즉 산책 트래킹은 탭이 아니라 "실행되는 흐름"이며, 종료 후 원래 탭으로 되돌아온다.
@@ -63,7 +65,7 @@ graph TD
     Home -->|산책 시작 CTA / FAB| WalkT["실시간 산책 · WalkTrackingScreen"]
     Home -->|코스 찾기 CTA| Map
     Home -->|아바타| Me
-    Home -.오늘의 케어 카드 예정.-> Family
+    Home -->|오늘의 케어 카드| Family
 
     %% 지도
     Shell --> Map["🗺️ 지도 · ExploreScreen<br/>리스트 ⇄ 지도 토글"]
@@ -83,7 +85,8 @@ graph TD
     Feed -->|아바타| Me
 
     %% 통계
-    Shell --> Insight["📊 통계 · InsightScreen<br/>주간 요약·막대·자주 가는 곳"]
+    Shell --> Chat["💬 채팅 · ChatListScreen<br/>방 목록·미읽음 뱃지"]
+    Me --> Insight["📊 통계 · InsightScreen<br/>주간 요약·막대 (탭 아님 — me_screen 에서 push)"]
     Insight -->|아바타| Me
 
     %% 프로필(글로벌)
@@ -92,8 +95,8 @@ graph TD
     Me -->|내 산책 기록 / 활동카드| Records["산책 기록 · MyRecordsScreen"]
     Records -->|기록 카드| Create
     Me -->|북마크·로그아웃| Snack["(스낵바 · 미구현)"]
-    Me -.우리 가족 예정.-> Family["👪 가족 · FamilyScreen (예정)"]
-    Family -.채팅 진입.-> FamChat["💬 가족 채팅 · FamilyChatScreen (예정)"]
+    Me -->|우리 가족| Family["👪 가족 · FamilyScreen"]
+    Family -->|채팅 진입| FamChat["💬 가족 채팅 · FamilyChatScreen"]
 
     classDef tab fill:#FFE7D2,stroke:#FF9E7D,color:#463C64;
     classDef push fill:#FFF3E6,stroke:#E0A47A,color:#463C64;
@@ -117,11 +120,11 @@ graph LR
     H --> H3["CTA: 산책 시작 → WalkTracking"]
     H --> H4["CTA: 코스 찾기 → 지도 탭"]
     H --> H5["날씨 카드 (더미)"]
-    H --> H6["오늘의 케어 카드 (예정)<br/>→ 가족 화면"]
+    H --> H6["오늘의 케어 카드<br/>→ 가족 화면"]
 ```
 - 진입점 2개: **산책 시작**(→ `WalkTrackingScreen` push), **코스 찾기**(→ `RootTab.index=1` 지도 탭).
 - 데이터: `kMyDog`(`ValueNotifier<DogProfile>`), `WalkFeedData.today`(오늘 요약 — 서버 + 전송 대기).
-- (예정) **오늘의 케어 카드**: 가족 케어 & 채팅 도입 시 추가 — 탭하면 가족 화면(`family_screen`) push, 가족 화면에서 채팅(`family_chat_screen`)으로 진입. [기능 명세 §6](./feature-spec.md) 참조.
+- **오늘의 케어 카드**(`widgets/today_care_card.dart`): 탭하면 가족 화면(`family_screen`) push, 가족 화면에서 채팅(`family_chat_screen`)으로 진입. **서버 연동됐다**(#76·#81) — `family_repository.dart`. [기능 명세 §6](./feature-spec.md) 참조.
 
 ### 4.2 🗺️ 지도 (`ExploreScreen`)
 ```mermaid
@@ -165,7 +168,7 @@ graph LR
 - 글 상세에서 반응 토글·댓글 작성은 **로컬 상태**(백엔드 미연동, 더미).
 - ⚠️ **글쓰기 진입점 없음**: 현재 커뮤니티에는 새 글 작성 버튼이 없다. `CreateScreen`은 "산책 기록"용이며 게시판 글쓰기와 분리됨(향후 커뮤니티 글쓰기 진입점 추가 필요).
 
-### 4.5 📊 통계 (`InsightScreen`)
+### 4.5 📊 통계 (`InsightScreen`) — **탭이 아니라 `me_screen` 에서 push**
 ```mermaid
 graph LR
     I["통계"] --> I1["이번 주 요약<br/>(총거리·횟수·평균)"]
@@ -184,12 +187,12 @@ graph LR
     Me --> M2["내 산책 기록 → MyRecordsScreen"]
     Me --> M3["북마크 (스낵바·미구현)"]
     Me --> M4["로그아웃 (스낵바·미구현)"]
-    Me --> M5["우리 가족 (예정)<br/>→ FamilyScreen → 채팅"]
+    Me --> M5["우리 가족<br/>→ FamilyScreen → 채팅"]
     Records["MyRecordsScreen"] --> Rec1["이번 달 요약 + 산책 리스트"]
 ```
 - 진입: 어느 탭이든 우상단 아바타 → push. 자체 뒤로가기 버튼 보유.
 - `EditScreen`(견종·나이·크기·중성화 편집 → `kMyDog` 갱신), `MyRecordsScreen`(산책 기록 목록, 기록 카드 → `CreateScreen`).
-- (예정) 메뉴 **"우리 가족"** → 가족 화면(`family_screen`: 멤버·초대코드·케어 현황·주의사항·채팅 진입) → 가족 채팅(`family_chat_screen`).
+- 메뉴 **"우리 가족"** → 가족 화면(`family_screen`: 멤버·초대코드·케어 현황·주의사항·채팅 진입) → 가족 채팅(`family_chat_screen`). 셋 다 서버 연동됐다(#75·#76·#81).
 
 ---
 
@@ -218,16 +221,16 @@ graph LR
 | **커뮤니티 글 읽기** | 커뮤니티 탭 → 글 상세 | — |
 | **커뮤니티 글쓰기** | ⚠️ 진입점 미구현 (향후 추가) | — |
 | **프로필/우리 아이 편집** | 아바타 → 내 프로필 → 프로필 편집 | 내 프로필 상단 배너 |
-| **가족 케어 확인/기록** *(예정)* | 홈 "오늘의 케어" 카드 → 가족 화면(`family_screen`) | 프로필 메뉴 "우리 가족" |
-| **가족 채팅** *(예정)* | 가족 화면 → 채팅 진입(`family_chat_screen`) | — |
+| **가족 케어 확인/기록** | 홈 "오늘의 케어" 카드 → 가족 화면(`family_screen`) | 프로필 메뉴 "우리 가족" |
+| **가족 채팅** | 가족 화면 → 채팅 진입(`family_chat_screen`) · 탭 3 | — |
 
 ---
 
 ## 7. 미구현/더미 (IA 관점)
 
-- **로그인/온보딩**: `/home` 직행. 인증 게이트 없음(로그아웃은 스낵바만).
+- **로그인/온보딩**: `main.dart` 가 `AuthState.init()` 을 돌리고 `app_router.dart` 의 `refreshListenable` + `authRedirect` 가 **splash → consent → onboarding → login → home** 을 가른다(#12·#180). 인증 게이트가 있다.
 - **북마크**: 메뉴 항목 존재하나 화면 없음(스낵바). ERD `bookmark` 테이블과 미연동.
 - **커뮤니티 글쓰기**: 화면·진입점 모두 없음.
-- **실위치**: 지도·트래킹 모두 서울 고정 좌표(geolocator 미도입).
+- **실위치**: 지도·트래킹 모두 **실 GPS** 다(#145). 지도는 `LocationService.current()` 로 현위치를 잡고 **실패했을 때만** 서울시청으로 떨어진다. 트래킹은 위치를 못 쓰면 이유별 안내 화면 + 직접 입력이다(#160).
 - **장소 상세 → 산책 기록 prefill**: `CreateScreen(prefillPlace:)` 파라미터는 존재하나, 지도 장소 시트에서 이를 호출하는 버튼은 아직 없음(트래킹 완료 경로만 사용).
-- **가족 케어 & 채팅(신규 예정)**: 홈 "오늘의 케어" 카드 · `family_screen`(멤버·초대코드·케어 현황·주의사항·채팅 진입) · `family_chat_screen`. 도메인 상수(`CareType`/`kCareToday`/`kFamilyMembers`/`kFamilyInviteCode`/`kWalkNotes`/`kChatMessages`)는 `lib/v2/domain/pet.dart`에 추가 예정 — 상세는 [기능 명세 §6](./feature-spec.md).
+- **가족 케어 & 채팅**: 홈 "오늘의 케어" 카드 · `family_screen`(멤버·초대코드·케어 현황·주의사항·채팅 진입) · `family_chat_screen` · `chat_list_screen`(탭 3). **전부 서버 연동됐다**(M2.5·M2.6 — #75·#76·#78~#81). 데이터는 `lib/v2/domain/pet.dart` 의 로컬 상수가 아니라 `lib/v2/data/family_repository.dart`·`chat_repository.dart` 가 든다 — 상세는 [기능 명세 §6](./feature-spec.md).

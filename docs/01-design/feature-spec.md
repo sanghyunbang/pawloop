@@ -11,7 +11,7 @@
 Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 공간"을 지향한다. **산책을 wedge로** 좁게 시작해 지도(동반장소)·커뮤니티·프로필로 확장한다. 감정 여행(heattrip) 앱에서 피벗하며 감정 요소는 전부 제거됐다.
 
 - 진입: `main.dart` → `MainShell`(`lib/v2/screens/main_shell.dart`)
-- 네비 5탭 구성: **홈 · 지도 · [산책 기록 FAB] · 커뮤니티 · 통계** (가운데 솟은 원형 FAB → 실시간 산책 트래킹)
+- 네비 5탭 구성: **홈 · 지도 · [산책 기록 FAB] · 커뮤니티 · 채팅** (가운데 솟은 원형 FAB → 실시간 산책 트래킹). 통계는 탭이 아니라 `me_screen` 에서 push 한다
 - 상태관리: `ValueNotifier` + `ValueListenableBuilder` (경량). 탭 인덱스/지도뷰는 `RootTab`(전역 `ValueNotifier`)로 보관.
 - 도메인 SSOT: `lib/v2/domain/pet.dart` (`DogProfile`, `PetCategory`, `PetPost` 등). 산책은 `lib/v2/data/walk_*.dart` 다(#145).
 
@@ -25,8 +25,8 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | P0 | 강아지 프로필 | 세션 내 편집 반영 | 전역 `kMyDog` | 앱 재시작 시 초기화(미영속) |
 | P1 | 커뮤니티(피드/상세/댓글/반응) | 더미 | 로컬 상수(`kPetPosts`) | 백엔드 social API 미연동 |
 | P1 | 산책 통계 | **완료(#145)** | `GET /api/walks/stats/weekly` | fl_chart 주간 막대. 이번 주 + 전체 기간이 한 응답 |
-| P1 | 가족 케어 & 채팅(그룹·오늘의 케어·주의사항·채팅) | 더미 예정 | 로컬 상수 예정(`kCareToday`·`kFamilyMembers`·`kChatMessages` 등) | 신규 MVP — §6 |
-| P2 | 로그인 | 미구현 | (백엔드 auth 존재) | 앱은 로그아웃 스낵바만 |
+| P1 | 가족 케어 & 채팅(그룹·오늘의 케어·주의사항·채팅) | **완료(M2.5·M2.6)** | `family_repository.dart` · `chat_repository.dart` (서버) | §6 |
+| P2 | 로그인 | **완료(#12)** | `GET /auth/me` · 소셜 로그인(카카오·구글) | 1회용 코드 교환 · 토큰 보관 · 401 자동 갱신 · 서버 로그아웃 |
 | P2 | 실위치(geolocator) | 미도입 | 서울 시청 고정 | `_center` 하드코딩 |
 | P3 | 건강/식사/병원/동네 로그 | 미구현 | — | post-MVP 확장 |
 | P3 | 반려인 매칭/산책 크루 | 미구현 | — | post-MVP 확장 |
@@ -192,7 +192,9 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 
 ## 6. 가족 케어 & 채팅 (Family Care & Chat)
 
-반려는 혼자가 아니라 **가족이 함께** 돌본다. 가족 간 케어 공유로 이중 급여(밥 두 번)·산책 누락을 막고, 앱의 일일 사용 이유(리텐션)를 만든다. 프론트는 더미(로컬 상수)로 선행 구현 예정이며, 도메인은 SSOT(`lib/v2/domain/pet.dart`)에 추가한다: `CareType`/`CareTask`/`kCareToday`/`FamilyMember`/`kFamilyMembers`/`kFamilyInviteCode`/`kWalkNotes`/`ChatMessage`/`kChatMessages`.
+반려는 혼자가 아니라 **가족이 함께** 돌본다. 가족 간 케어 공유로 이중 급여(밥 두 번)·산책 누락을 막고, 앱의 일일 사용 이유(리텐션)를 만든다.
+
+**아래 §6.1~6.4 는 전부 서버 연동이 끝났다**(M2.5·M2.6 — #75·#76·#78~#81). 데이터는 `lib/v2/domain/pet.dart` 의 로컬 상수가 아니라 `lib/v2/data/family_repository.dart`·`chat_repository.dart` 가 든다. 아래 표의 "더미" 표기는 그때의 계획이었고, 각 절의 **상태** 행이 지금을 말한다.
 
 ### 6.1 가족 그룹 — `family_screen.dart` (MVP)
 
@@ -214,7 +216,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 동작 | 오늘의 케어 항목(물/밥/산책) 체크 + 수행자·시각 표시. 기록 시 그룹에 공유 |
 | 데이터 | 기존 care_log 계획 확장: `care_log(id, dog_id FK, group_id FK nullable, type[water/meal/walk/med/vet], done_by(user_id), occurred_at, memo)`. 더미: `CareType`/`CareTask`/`kCareToday` |
 | API | `GET/POST /api/groups/{groupId}/care-logs`(오늘 케어 조회/기록) |
-| 상태 | **더미 예정** |
+| 상태 | ✅ **서버 연동됨** (M2.5·M2.6) |
 
 ### 6.3 산책 시 주의사항 (MVP)
 
@@ -225,7 +227,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 동작 | 공유 메모 열람/수정 |
 | 데이터 | `walk_note(id, group_id FK, body, created_at)` 또는 그룹의 공유 메모. 더미: `kWalkNotes` |
 | API | `GET/PUT /api/groups/{groupId}/walk-notes` |
-| 상태 | **더미 예정** |
+| 상태 | ✅ **서버 연동됨** (M2.5·M2.6) |
 
 ### 6.4 가족 채팅 — `family_chat_screen.dart` (MVP)
 
@@ -236,7 +238,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 동작 | 메시지 목록(커서 페이지네이션) + 입력바 전송. **MVP는 폴링**, 실시간(WebSocket/STOMP)은 post-MVP |
 | 데이터 | `chat_message(id, room_id FK, room_seq, sender_user_id, sender_name, content_type, body, client_msg_id, created_at, deleted_at)`. **`group_id`·`user_id` FK 는 없다** — 방은 가족 그룹에 종속되지 않고([ADR-0011](../99-decisions/decision-log.md)), `users` 로 FK 를 내면 탈퇴 한 번에 그 사람이 쓴 말이 전부 사라진다. 더미: `ChatMessage`/`kChatMessages` |
 | API | `GET/POST /api/chat/rooms/{roomId}/messages` |
-| 상태 | **더미 예정** |
+| 상태 | ✅ **서버 연동됨** (M2.5·M2.6) |
 
 ### 6.5 post-MVP
 

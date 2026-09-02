@@ -665,7 +665,7 @@ CREATE TABLE walk_note (
 ```sql
 CREATE TABLE care_log (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
-  dog_id      BIGINT       NULL COMMENT '대상 강아지. dog 표가 아직 없어 FK 없이 항상 NULL 이다 (#76)',
+  dog_id      BIGINT       NULL COMMENT '대상 강아지. dog 표는 있지만(#145) CareLog 가 스칼라로 들어 FK 가 없고 항상 NULL 이다 — 잇는 것은 #154 (#76)',
   group_id    BIGINT       NULL COMMENT '가족 그룹 공유(nullable — 미소속 시 개인 기록)',
   type        VARCHAR(10)  NOT NULL COMMENT 'water|meal|walk|med|vet',
   done_by     BIGINT       NULL COMMENT '수행자(users.id) — 토큰의 사용자다. 탈퇴하면 NULL 이다',
@@ -702,7 +702,7 @@ CREATE TABLE care_log (
 >
 > 제대로 걸려면 `CareLog` 가 `@ManyToOne Dog` 를 들어야 하고, 그건 `care` 가 `dog` 모듈을 참조한다는 뜻이라 별도 판단이다 — **이슈 #154 가 소유한다.** 지금 `dog_id` 가 항상 `NULL` 이라 무결성 위험은 없다. 잇는 날 `idx_carelog_dog(dog_id, occurred_at)` 도 함께 넣는다.
 >
-> **#9(`refresh_token.user_id`)와 같은 것으로 읽으면 안 된다.** #9 는 `users` 표가 **있는데도** 걸지 않은 판단이다 — 탈퇴 경로가 DB 삭제 순서에 묶이는 것을 피했다. 여기는 **참조할 표가 아직 없는 것**이고 판단이 아니라 사실이다. 그날이 오면 여기는 FK 를 걸고 #9 는 안 건다.
+> **#9(`refresh_token.user_id`)와 같은 것으로 읽으면 안 된다.** #9 는 탈퇴 경로가 DB 삭제 순서에 묶이는 것을 피한 **판단**이다. 여기는 **매핑의 결과**다 — `CareLog` 가 `dog_id` 를 스칼라로 들기 때문이지 안 걸기로 정한 것이 아니다. #154 가 그 매핑을 바꾸는 날 여기는 FK 를 걸고 #9 는 안 건다.
 
 > **`group_id` 가 `NULL` 인 행은 지금 0건이다.** 이 이슈가 여는 경로는 `/api/groups/{groupId}/care-logs` 뿐이라 여기서 만들어지는 행은 전부 그룹을 든다. 개인 기록을 만드는 경로(`POST /api/dogs/{dogId}/care-logs`, M4)는 아직 없고, 조회 필터가 `group_id = :groupId` 라서 만약 `NULL` 행이 생겨도 **어떤 조회에도 나오지 않는다** — 의도다. 컬럼을 nullable 로 두는 것은 그 경로가 생길 자리를 비워 두는 것이고, 그때 개인 기록 조회도 함께 온다.
 

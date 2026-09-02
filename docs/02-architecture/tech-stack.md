@@ -125,7 +125,7 @@
 
 - KorPetTourService2 응답: `mapx`(경도)/`mapy`(위도), `contenttypeid`(12관광지/14문화/28레포츠/32숙박/38쇼핑/39음식점), `addr1`/`tel`/`firstimage`.
 - 오퍼레이션: `locationBasedList2`/`areaBasedList2`/`searchKeyword2`/`detailPetTour2`.
-- **주의**: 1,000콜/일 제한 → 향후 백엔드 프록시 + 캐싱 권장(현재는 앱이 직접 호출).
+- **주의**: 1,000콜/일 제한. **백엔드 프록시 + 0.02° 격자 캐시로 해결됐다**(#40 · [ADR-0013](../99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)) — 앱은 `GET /api/places/nearby` 만 부르고 서비스키를 들지 않는다.
 
 ---
 

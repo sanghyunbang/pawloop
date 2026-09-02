@@ -128,7 +128,7 @@ Provider/Riverpod/Bloc 없이 **정적 전역 `ValueNotifier`** 를 두고, 화�
 
 현재 v2는 **`go_router`를 쓰지 않는다.** `MaterialApp.home: MainShell()`로 시작하고, 화면 전환은 두 방식이다.
 
-1. **탭 전환 (선언적)** — `MainShell.body`가 `ValueListenableBuilder<int>(RootTab.index)`로 `switch(i)` 하여 홈/지도/커뮤니티/통계 위젯을 교체. 바텀네비는 본문 위에 `Stack` 오버레이(배경 끊김 없이 항상 표시).
+1. **탭 전환 (선언적)** — `MainShell.body`가 `ValueListenableBuilder<int>(RootTab.index)`로 `switch(i)` 하여 홈/지도/커뮤니티/채팅 위젯을 교체. 바텀네비는 본문 위에 `Stack` 오버레이(배경 끊김 없이 항상 표시).
 2. **세부 화면 (명령형)** — `Navigator.of(context).push(MaterialPageRoute(...))`. 산책 트래킹·기록 작성·글 상세·프로필 편집 등은 스택에 push.
 
 ```mermaid
@@ -139,7 +139,7 @@ flowchart TD
     T0[TodayScreen · 홈]
     T1[ExploreScreen · 지도]
     T2[FeedScreen · 커뮤니티]
-    T3[InsightScreen · 통계]
+    T3[ChatListScreen · 채팅]
   end
   Shell --> T0 & T1 & T2 & T3
 

@@ -2,7 +2,7 @@
 
 > Pawloop(포루프) MySQL 공간형 데이터 모델의 개체-관계도. GPS 산책 경로(`LINESTRING`)와 장소 좌표(`POINT`)를 공간 컬럼으로 저장하고, `SPATIAL INDEX` + `ST_Distance_Sphere`/`MBRContains`로 주변 검색을 수행한다. **가족 케어 공유**와 **채팅** 기능으로 `family_group`·`chat_room`·`chat_room_member`·`chat_room_invite`·`chat_message`·`walk_note` 엔티티가 추가되고, `care_log`는 `group_id`/`done_by`를 더해 "누가·언제 했는지"를 가족과 공유하는 케어 기록으로 확장된다. 방·멤버십·초대는 가족 그룹에 종속되지 않는 범용 3엔티티이고, `family_group` 은 `origin_kind`/`origin_ref` 쌍으로 방에 **불투명하게** 닿는다 — 그 방향의 FK 는 없다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `users` · `refresh_token` · `family_group` · `chat_room` · `chat_room_member` · `chat_room_invite` · `chat_message` · `walk_note` · `care_log` 아홉이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고, 절별 표기는 [테이블 스키마](./schema.md)의 **실재** 표시가 정본이다. 나머지 엔티티(`dog`·`walk`·`place` 등)는 아직 **계획**이다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
+> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `users` · `refresh_token` · `family_group` · `chat_room` · `chat_room_member` · `chat_room_invite` · `chat_message` · `walk_note` · `care_log` · **`dog` · `walk`** 열하나다(#145) — 정본은 `backend/mysql/init/01_schema.sql` 이고, 절별 표기는 [테이블 스키마](./schema.md)의 **실재** 표시가 정본이다. 나머지 엔티티는 아직 **계획**이다 — 커뮤니티의 `post`·`comment`·`reaction` 이 그렇다(M3.1). 감정 여행 시절의 `places` 계열은 정본에 있지만 반려 축에서는 쓰지 않는다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
 
 ## ER 다이어그램
 
@@ -219,7 +219,7 @@ erDiagram
 | `refresh_token` | 앱 세션의 refresh 토큰 원장(#9). RT 는 JWT 가 아니라 불투명 난수이고 SHA-256 해시로 저장한다. 회전·재사용 감지·전 기기 로그아웃이 이 테이블 위에서 돈다. **실재.** |
 | `dog` | 사용자의 반려견 프로필. 견종·크기·생일·중성화 여부. `users` 1:N `dog`. |
 | `walk` | 산책 기록 1건. GPS 경로를 `LINESTRING`으로, 거리·시간·페이스·메모 저장. `dog` 1:N `walk`. |
-| `care_log` | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. **`dog_id` 에는 FK 가 없다** — `dog` 표가 정본 스키마에 아직 없어서이고, 그 표가 생기는 날 건다([schema.md §17](./schema.md)). |
+| `care_log` | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. **`dog_id` 에는 FK 가 없다** — `dog` 표는 이제 있지만(#145) `CareLog` 가 `dog_id` 를 스칼라로 들어 Hibernate 가 FK 를 만들지 않는다. 잇는 것은 **#154** 가 소유한다([schema.md §17](./schema.md)). |
 | `family_group` | 가족 케어 그룹. **이름과 생성 시각만** 든다 — 초대코드도 멤버십도 여기 없다. 방은 `chat_room` 이 `origin_kind`/`origin_ref` 로 불투명하게 가리킨다. |
 | `chat_room` | 채팅방. **가족 그룹 종속이 아니다** — 산책 크루 방도 같은 표에 산다. `UNIQUE(origin_kind, origin_ref)` 가 같은 출처에 방이 둘 생기는 것을 막고, `last_seq` 가 `room_seq` 발급기이자 미읽음 뺄셈의 좌변이다. |
 | `chat_room_member` | 방 멤버십. **멤버십 표는 이것 하나다**(`group_member` 를 따로 만들지 않는다). 강퇴는 행 삭제가 아니라 `removed_at`+`rejoin_blocked`, 미읽음은 `last_read_seq` 뺄셈. |
