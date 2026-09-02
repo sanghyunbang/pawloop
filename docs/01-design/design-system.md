@@ -170,7 +170,7 @@ GlassCard(
 `MainShell`이 본문 위에 `_ShellNav`를 오버레이(배경 끊김 없이 항상 표시).
 
 - **글래스 알약**: `left/right 16`, 높이 66, radius 26, 배경 `0xAAFFFFFF`, 블러 22. 4개 탭 + 가운데 56px 공백.
-  - 탭: 홈(`home_rounded`) / 지도(`map_outlined`) / [FAB 자리] / 커뮤니티(`chat_bubble_outline`) / 통계(`bar_chart_rounded`).
+  - 탭: 홈(`home_rounded`) / 지도(`map_outlined`) / [FAB 자리] / 커뮤니티(`forum_outlined`) / 채팅(`chat_bubble_outline`).
   - 활성 색 `accent #8E7BFF`, 비활성 `T.textMuted`. 활성 라벨 w800, 비활성 w500.
 - **솟은 산책 FAB**: 58×58 원형, SIG 그라데이션 `#FF9E7D → #D89BFF`, 흰 테두리 3px, 라일락 글로우 그림자. `edit` 아이콘. 탭 시 `WalkTrackingScreen` 푸시.
 - 탭 상태는 전역 `RootTab.index`(+ `exploreView`)로 관리하며, 푸시된 화면에서도 `RootTab.go(...)`로 탭 전환 가능.
@@ -191,7 +191,7 @@ GlassCard(
 
 ### 5.7 통계 차트
 
-- `fl_chart ^1.2` 기반. 통계(흐름) 탭에서 주간 산책 막대차트 + 요약 + 자주 가는 곳.
+- `fl_chart ^1.2` 기반. 통계 화면(`me_screen` 에서 push)에서 주간 산책 막대차트 + 요약.
 - 차트 색은 SIG/카테고리 팔레트와 맞춰 글래스 카드 안에 배치.
 
 ---

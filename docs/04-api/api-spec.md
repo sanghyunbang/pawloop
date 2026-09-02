@@ -262,7 +262,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 프론트 도메인: `app/lib/v2/domain/pet.dart` → `DogProfile { name, breed, size(소형/중형/대형), ageMonths, neutered, avatarAsset }`.
 현재 앱은 전역 `ValueNotifier<DogProfile> kMyDog`로 로컬 보관(백엔드 미연동).
 
-### 3.1 내 강아지 목록 — 🟡 계획
+### 3.1 내 강아지 목록 — ✅ 구현(#145)
 
 `GET /api/dogs` — 인증 필요. 한 사용자가 다견 가정 가능.
 
@@ -284,7 +284,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 > `size` enum은 프론트 `DogSize{small,medium,large}`와 1:1. `ageMonths`는 `birth` 기준 서버 계산값(응답 편의 필드).
 
-### 3.2 강아지 등록 — 🟡 계획
+### 3.2 강아지 등록 — ✅ 구현(#145)
 
 `POST /api/dogs`
 
@@ -302,11 +302,11 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 검증: `name` 1~20자, `size` ∈ enum, `birth` ≤ 오늘.
 
-### 3.3 강아지 상세 — 🟡 계획
+### 3.3 강아지 상세 — ✅ 구현(#145)
 
 `GET /api/dogs/{dogId}` → 3.1 항목 1건.
 
-### 3.4 강아지 수정(부분) — 🟡 계획
+### 3.4 강아지 수정(부분) — ⬜ 미구현 (계약 `x-status: planned`. 전용 `DogPatch` — ADR-0017 규약 4)
 
 `PATCH /api/dogs/{dogId}` — 본인 소유만(아니면 `403`). 변경 필드만 전송.
 
@@ -315,7 +315,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 { "name": "보리", "neutered": true, "size": "medium" }
 ```
 
-### 3.5 강아지 삭제 — 🟡 계획
+### 3.5 강아지 삭제 — ⬜ 미구현 (계약 `x-status: planned`. 산책이 매달린 반려동물을 지우는 규칙 #154 가 먼저)
 
 `DELETE /api/dogs/{dogId}` — `204 No Content`.
 
@@ -348,7 +348,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 **한계:** KTO 1,000콜/일 제한은 그대로다. 지금은 `kto_call_budget` 표가 하루 상한을 게이트로 지키고, 좌표를 0.02° 격자로 접어 셀 단위로 캐시한다. 키 노출은 해소됐다.
 
-### 4.2 주변 장소 조회 (백엔드 프록시) — 🔵 프록시 계획
+### 4.2 주변 장소 조회 (백엔드 프록시) — ✅ 구현(#40)
 
 `GET /api/places/nearby`
 
@@ -360,24 +360,25 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 | `category` | string | - | 필터. `12/14/28/32/38/39`(KTO) 또는 `vet/shop/trail`(공공데이터 레이어) |
 | `limit` | int | 80 | 최대 100 |
 
-동작: 백엔드가 KTO/LOCALDATA/두루누비를 호출·정규화하고 `place` 테이블에 캐시(공간 인덱스), 이후 `ST_Distance_Sphere`로 거리순 반환.
+동작: 백엔드가 KTO 를 호출·정규화하고 **0.02° 격자 스냅샷**에 캐시한다(공간 인덱스가 아니다 — [ADR-0013](../99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)). 일일 호출 예산은 `kto_call_budget` 표가 지킨다. LOCALDATA·두루누비는 아직 연동 전이라 **앱 안 더미 레이어**다.
+
+**응답은 봉투가 아니라 벌거벗은 배열이다** — 서버가 반경 안을 한 번에 주고 상한이 `limit` 으로 코드에 있다(ADR-0017 규약 2의 예외).
 
 ```json
-// 200 OK
-{
-  "items": [
-    {
-      "id": "kto:126508",              // source:contentId
-      "source": "kto_pet",             // kto_pet | localdata_vet | localdata_shop | durunubi_trail
-      "category": "39",                // KTO contenttypeid 또는 vet/shop/trail
-      "name": "성수동 반려카페",
-      "addr": "서울 성동구 ...",
-      "tel": "02-000-0000",
-      "image": "http://tong.visitkorea.or.kr/...jpg",
-      "lat": 37.5445,
-      "lng": 127.0557,
-      "distanceM": 320,
-      "petAllowed": true
+// 200 OK — 계약의 Place[] 그대로
+[
+  {
+    "contentId": "126508",
+    "title": "성수동 반려카페",
+    "source": "kto",
+    "category": "39",
+    "contentTypeId": "39",
+    "addr": "서울 성동구 ...",
+    "tel": "02-000-0000",
+    "image": "http://tong.visitkorea.or.kr/...jpg",
+    "lat": 37.5445,
+    "lng": 127.0557,
+    "distM": 320
     }
   ],
   "count": 45,
@@ -387,7 +388,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 > 카테고리 SSOT: `app/lib/v2/domain/pet.dart` `kPetCategories`. `vet/shop/trail`은 별도 공공데이터 레이어(현재 앱 더미).
 
-### 4.3 장소 상세 — 🔵 프록시 계획
+### 4.3 장소 상세 — ✅ 구현(#40)
 
 `GET /api/places/{contentId}` — `contentId` 는 **KTO 원본 키 그대로**입니다(예: `126508`).
 
@@ -396,20 +397,23 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 > 404 입니다. 지금 서버가 만드는 `source` 는 `kto` 하나뿐이라 접두사가 붙을 자리가 없습니다.
 > 복합키는 KTO 가 아닌 출처가 처음 실리는 날 별도로 판단합니다 — ADR-0017.
 
+**`distM` 은 없다** — 기준점이 없기 때문이다(같은 이유로 계약이 `Place.required` 에서 뺐다).
+
 ```json
-// 200 OK
+// 200 OK — 계약의 PlaceDetail (allOf: Place + overview·petInfo)
 {
-  "id": "kto:126508",
-  "source": "kto_pet",
+  "contentId": "126508",
+  "title": "성수동 반려카페",
+  "source": "kto",
   "category": "39",
-  "name": "성수동 반려카페",
   "addr": "서울 성동구 성수이로 ...",
   "tel": "02-000-0000",
-  "images": ["http://.../1.jpg", "http://.../2.jpg"],
+  "image": "http://.../1.jpg",
   "lat": 37.5445,
   "lng": 127.0557,
-  "petInfo": {                         // KTO detailPetTour2 정규화
-    "acmpyTypeCd": "가능",
+  "overview": "…",                     // 아직 못 받았거나 예산이 없으면 null
+  "petInfo": {                         // 객체 자체는 항상 있다. 안의 세 필드가 각각 null 일 수 있다
+    "acmpyPsblCpam": "가능",
     "acmpyPsblCpam": "실내 동반 가능, 소형견 위주",
     "petFacility": "물그릇 제공"
   },
@@ -434,7 +438,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 경로 저장 규약: GPS 경로는 `walk.path` **한 컬럼**(LINESTRING / 인코딩 폴리라인). 개별 포인트 테이블 없음.
 
-### 5.1 산책 생성 — 🟡 계획
+### 5.1 산책 생성 — ✅ 구현(#145)
 
 `POST /api/walks` — 인증 필요. 트래킹 종료 시 1회 전송.
 
@@ -446,12 +450,17 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   "endedAt":   "2026-06-30T07:48:00+09:00",
   "distanceM": 2400,
   "durationS": 2280,
-  "path": "y`psFhguhW...",             // 인코딩 폴리라인(권장) 또는 좌표배열
-  "placeId": "kto:126508",             // nullable — 시작 근처 장소
-  "placeName": "서울숲",
+  "path": [[127.0397, 37.5448], [127.0399, 37.5451]],   // [경도, 위도] 순서다
+  "pathT": [0, 7],                     // 점별 델타 초. path 와 길이가 같아야 한다(#155)
+  "clientWalkId": "8f14e45f-...",      // 재전송 멱등키
   "memo": "아침 공기가 좋아 한 바퀴 더.",
   "weather": "맑음"
 }
+```
+
+> **`placeId`·`placeName` 은 없다.** `Walk` 에 장소 축 자체가 없어서, 통계의 "자주 가는 곳" 도 항상 빈 배열이다 — 그럴듯한 값을 만들지 않는다.
+
+```json
 ```
 
 ```json
@@ -472,7 +481,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 검증: `endedAt` > `startedAt`, `distanceM ≥ 0`, `dogId`는 본인 소유.
 
-### 5.2 산책 목록 — 🟡 계획
+### 5.2 산책 목록 — ✅ 구현(#145)
 
 `GET /api/walks?dogId={id}&from=2026-06-01&to=2026-06-30&limit=20&cursor=...`
 
@@ -495,15 +504,15 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 }
 ```
 
-### 5.3 산책 상세 — 🟡 계획
+### 5.3 산책 상세 — ✅ 구현(#145)
 
 `GET /api/walks/{walkId}` — 5.1 응답 + `path`(경로 폴리라인) 포함. 지도에서 경로 리플레이용.
 
-### 5.4 산책 삭제 — 🟡 계획
+### 5.4 산책 삭제 — ✅ 구현(#161)
 
 `DELETE /api/walks/{walkId}` — 본인 소유만. `204 No Content`.
 
-### 5.5 산책 통계 — 🟡 계획
+### 5.5 산책 통계 — ✅ 구현(#145)
 
 `GET /api/walks/stats/weekly?dogId={id}` — 통계 차트(`fl_chart`)용 집계. **`period` 파라미터는 없다.** 이번 주(KST 월~일)와 전체 기간을 한 응답에 함께 담아 화면 둘을 채운다. 2026-08 이전에는 이 절이 `/api/walks/stats` 에 `period ∈ {week, month}` 라고 적혀 있었고, 그대로 짜면 404 였다(#201).
 
@@ -550,11 +559,11 @@ board 코드 매핑:
 
 reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공감). (ERD `reaction.type[help/cute/empathy]`와 동일)
 
-### 6.1 글 목록 — ✅ 구현(개편)
+### 6.1 글 목록 — ⬜ 미구현 (M3.1 선행 계약)
 
-`GET /api/posts?board={code}&placeId={id}&limit=20&cursor=...`
+`GET /api/community/posts?board={code}&limit=20&cursor=...` — **인증 선택**(있으면 `reactions.mine` 이 채워집니다 — ADR-0017 규약 6).
 
-- `board` 미지정 = 전체. `placeId` 지정 시 특정 장소 관련 글만.
+- `board` 미지정 = 전체. **장소 필터는 계약에 없다** — `Post.contentId` 는 응답에만 있다.
 
 ```json
 // 200 OK
@@ -563,9 +572,9 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
     {
       "id": 331,
       "board": "walk_review",
-      "author": { "id": 42, "nickname": "보리아빠", "avatarUrl": "https://.../42.png" },
-      "placeName": "서울숲",
-      "placeId": "kto:126508",
+      "author": { "userId": 42, "nickname": "보리아빠" },
+      "loc": "서울숲",
+      "contentId": "126508",
       "title": "서울숲 아침 산책 코스 추천",
       "bodyPreview": "이른 아침엔 사람이 적어서 대형견도 편해요...",
       "commentCount": 4,
@@ -578,13 +587,13 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 }
 ```
 
-### 6.2 글 상세 — 🟡 계획
+### 6.2 글 상세 — ⬜ 미구현 (M3.1 선행 계약)
 
-`GET /api/posts/{postId}` → 6.1 항목 + `body`(전문) + `myReaction`(내가 누른 반응 코드/null).
+`GET /api/community/posts/{postId}` → 6.1 항목 + `body`(전문). 내가 누른 반응은 `reactions.mine`(**배열 또는 `null`** — ADR-0016 결정 2).
 
-### 6.3 글 작성 — ✅ 구현(개편)
+### 6.3 글 작성 — ⬜ 미구현 (M3.1 선행 계약)
 
-`POST /api/posts` — 인증 필요. (레거시 `SocialController.shareCard()` 계승)
+`POST /api/community/posts` — 인증 필요.
 
 ```json
 // Request
@@ -592,25 +601,25 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
   "board": "walk_review",
   "title": "서울숲 아침 산책 코스 추천",
   "body": "이른 아침엔 사람이 적어서 대형견도 편해요. 잔디마당은 목줄 필수!",
-  "placeId": "kto:126508",            // nullable
-  "placeName": "서울숲"                // nullable
+  "contentId": "126508",              // nullable — Place.contentId 와 같은 키
+  "loc": "서울숲"                      // nullable — 표시용 문자열
 }
 // 201 Created → 6.2 상세 반환
 ```
 
 검증: `title` 1~100자, `body` 1~5000자, `board` ∈ enum.
 
-### 6.4 글 수정 — 🟡 계획
+### 6.4 글 수정 — ⬜ 계약에 없다 (#211 Community-medium-4)
 
-`PATCH /api/posts/{postId}` — 작성자만(아니면 `403`). 변경 필드만.
+**계약에 없습니다.** 만든다면 `PATCH /api/community/posts/{postId}` 이고, 남의 글은 `403` 이 아니라 **`404`** 입니다(ADR-0017 규약 3). 부분 수정이므로 전용 `*Patch` 스키마 + `minProperties: 1`(규약 4).
 
-### 6.5 글 삭제 — 🟡 계획
+### 6.5 글 삭제 — ⬜ 계약에 없다 (#211 Community-medium-4)
 
-`DELETE /api/posts/{postId}` — 작성자만. `204 No Content`.
+**계약에 없습니다.** 만든다면 `DELETE /api/community/posts/{postId}` · `204`. 사용자가 쓴 글을 지울 길이 없는 상태로 출시하지 않습니다(#211 `Community-medium-4`).
 
-### 6.6 댓글 목록 — ✅ 구현(개편)
+### 6.6 댓글 목록 — ⬜ 미구현 (M3.1 선행 계약)
 
-`GET /api/posts/{postId}/comments?limit=50&cursor=...` — 오래된 순.
+`GET /api/community/posts/{postId}/comments?limit=20&cursor=...` — **커서 봉투**(`items`/`nextCursor`/`hasMore`, ADR-0017 규약 2). **인증 선택**. 정렬 기준은 아직 계약에 없습니다(#211 `Community-low-4`).
 
 ```json
 // 200 OK
@@ -628,9 +637,9 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 }
 ```
 
-### 6.7 댓글 작성 — ✅ 구현(개편)
+### 6.7 댓글 작성 — ⬜ 미구현 (M3.1 선행 계약)
 
-`POST /api/posts/{postId}/comments` — 인증 필요. (레거시 `addComment()` 계승)
+`POST /api/community/posts/{postId}/comments` — 인증 필요.
 
 ```json
 // Request
@@ -638,9 +647,9 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 // 201 Created → 6.6 항목 1건
 ```
 
-### 6.8 댓글 삭제 — 🟡 계획
+### 6.8 댓글 삭제 — ⬜ 계약에 없다 (#211 Community-medium-4)
 
-`DELETE /api/comments/{commentId}` — 작성자만. `204 No Content`.
+**계약에 없습니다.** 만든다면 `DELETE /api/community/comments/{commentId}` · `204`(#211 `Community-medium-4`).
 
 ### 6.9 반응 — ⬜ 미구현 (M3.1 선행 계약)
 
@@ -669,7 +678,7 @@ DELETE /api/community/posts/{postId}/reactions/{type}   # 안 눌렀어도 200 (
 
 ---
 
-## 7. 채팅 (Chat) — 🟡 계획
+## 7. 채팅 (Chat) — ✅ 구현(M2.6·M2.7)
 
 **가족 그룹 전용이 아니다.** 방은 `chat_room` 이고, 가족 그룹은 `origin_kind`/`origin_ref` 로 방과 이어진 여러 출처 중 하나다. 앱이 이미 방을 둘 들고 있고(`pet.dart` 의 `kChatRooms` — `우리 가족`·`서울숲 산책 크루`), 방별 화면은 이미 범용이다. 근거는 [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다).
 
@@ -692,7 +701,8 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `DELETE` | `/api/chat/rooms/{roomId}/members/me` | 나가기 | M2.6 |
 | `DELETE` | `/api/chat/rooms/{roomId}/members/{userId}` | 강퇴(방장). `removed_at` + `rejoin_blocked` | M2.7 |
 | `DELETE` | `/api/chat/messages/{messageId}` | 삭제 — **소프트**(`deleted_at`). 빈틈이 나면 델타가 깨진다 | M2.6 |
-| `POST` | `/api/chat/messages/{messageId}/reports` | 신고(사유 코드 + 메모). 서버가 본문 스냅샷을 남긴다 | M2.7 |
+| `POST` | `/api/chat/rooms/{roomId}/reports` | 신고(사유 코드 + 메모 + `room_seq` 구간). 서버가 본문 스냅샷을 남긴다 | M2.7 |
+| `DELETE` | `/api/chat/rooms/{roomId}/bans/{userId}` | 재입장 금지 해제 | M2.7 |
 | `POST`·`DELETE` | `/api/chat/blocks` · `/api/chat/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다 | M2.7 |
 
 - **✅ 표시는 구현됐다는 뜻이다**(이슈 #75 · #79). 나머지는 아직 계획이다.
@@ -709,9 +719,13 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| `GET` | `/api/bookmarks` | 내 북마크 장소 목록 |
-| `POST` | `/api/bookmarks` | `{ "placeId": "kto:126508" }` 추가 |
-| `DELETE` | `/api/bookmarks/{placeId}` | 해제 |
+| `GET` | `/api/bookmarks` | 내 북마크 장소 목록. **커서 봉투**(`items`/`nextCursor`/`hasMore` — ADR-0017 규약 2) |
+| `POST` | `/api/bookmarks` | `{ "contentId": "126508" }` 추가 |
+| `DELETE` | `/api/bookmarks/{contentId}` | 해제 |
+
+> **키는 `contentId` 다**(ADR-0017). 2026-09 이전에는 `placeId` 였고 값도 `kto:` 접두사가 붙은 복합키였는데, **계약에도 코드에도 없던 모양**이었다.
+>
+> 그리고 이 세 오퍼레이션은 계약에서 `x-status: planned` 다 — **핸들러가 없다.** 실제로 도는 것은 레거시 `/bookmarks` 이고 앱의 하트가 그것을 부른다(#94 의 레거시 셸 결정과 얽혀 있다).
 
 ---
 
@@ -760,10 +774,10 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | 화면(lib/v2) | 현재 데이터 소스 | 목표 API |
 |---|---|---|
 | 홈 (강아지 히어로/오늘 산책) | `kMyDog`(로컬) + **산책은 서버**(#145) | `GET /auth/me`, `GET /api/dogs`, `GET /api/walks`, `GET /api/walks/stats/weekly` |
-| 지도 (KTO 45곳 + 병원/펫샵/산책로 더미) | KTO 직접호출(`PetPlacesRepository`) | `GET /api/places/nearby`, `GET /api/places/{id}` |
+| 지도 (KTO 45곳 + 병원/펫샵/산책로 더미) | **백엔드 프록시 경유**(#40) | `GET /api/places/nearby`, `GET /api/places/{contentId}` |
 | 실시간 산책 (실 GPS) | **서버 연동 완료**(#145) | `POST /api/walks` |
 | 산책 통계 (fl_chart) | **서버 연동 완료**(#145) | `GET /api/walks/stats/weekly` |
-| 커뮤니티 (더미) | `kPetPosts`(로컬) | `GET/POST /api/posts`, `/comments`, `/reactions` |
+| 커뮤니티 (더미 — 백엔드 0줄) | `kPetPosts`(로컬) | `GET/POST /api/community/posts`, `.../comments`, `.../reactions/{type}` |
 | 강아지 프로필/편집 | `kMyDog`(로컬) | `GET/POST/PATCH /api/dogs` |
 | 홈 오늘의 케어 카드 · family_screen (멤버·케어·주의사항) | ~~`kCareToday`, `kFamilyMembers`, `kWalkNotes`~~ → **서버 연동 완료**(#76). 남은 더미는 `kFamilyInviteCode`·`FamilyMember.todayKm` | `GET /api/groups/me`, `GET/POST /api/groups/{id}/care-logs`, `GET/PUT /api/groups/{id}/walk-notes` |
 | chat_list_screen (방 목록·미읽음) | `kChatRooms`(로컬) | `GET /api/chat/rooms` |
@@ -773,12 +787,14 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 ## 12. 이관 로드맵 (직접호출 → 백엔드)
 
-1. **Phase 1 — 장소 프록시:** `GET /api/places/nearby|{id}`로 KTO 호출을 백엔드 이전. `place` 캐시 테이블 + 공간 인덱스 + KTO 1000콜/일 완화(캐싱·TTL). 프론트 `Env.apiBase` 스위치만으로 전환.
-2. **Phase 2 — 계정·프로필:** 카카오/구글 OAuth + `/auth/me` + `/api/dogs`. 로컬 `kMyDog` → 서버 동기화.
-3. **Phase 3 — 산책 저장:** `POST /api/walks` + `stats` 집계. GPS 경로 `walk.path` LINESTRING 저장.
-4. **Phase 4 — 커뮤니티 실연동:** `/api/posts` 계열로 `kPetPosts` 대체. 레거시 `/api/social` 로직 재사용.
-5. **Phase 5 — 공공데이터 레이어:** LOCALDATA(동물병원 ~9,445건, EPSG:5174→WGS84) · 두루누비 산책로 실데이터. `vet/shop/trail` 레이어 더미 제거.
+1. ~~**Phase 1 — 장소 프록시**~~ **완료(#40).** `GET /api/places/nearby|{contentId}` 로 KTO 호출을 백엔드로 옮겼다. 캐시는 공간 인덱스가 아니라 **0.02° 격자 스냅샷**이고, 1000콜/일은 `kto_call_budget` 표의 조건부 UPDATE 한 문장이 지킨다([ADR-0013](../99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)).
+2. ~~**Phase 2 — 계정·프로필**~~ **완료(#12·#145).** 카카오/구글 OAuth + `/auth/me` + `/api/dogs`.
+3. ~~**Phase 3 — 산책 저장**~~ **완료(#145·#155).** `POST /api/walks` + `stats/weekly`. 경로는 `walk.path LINESTRING SRID 4326`, 점별 시각은 `walk.path_t`.
+4. **Phase 4 — 커뮤니티 실연동:** `/api/community/posts` 계열로 `kPetPosts` 대체 — **M3.1**(#169~#172). 착수 전 결정은 [ADR-0016](../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) 에서 끝났다.
+5. **Phase 5 — 공공데이터 레이어:** LOCALDATA(동물병원 ~9,445건, EPSG:5174→WGS84) · 두루누비 산책로 실데이터. `vet/shop/trail` 레이어 더미 제거 — **M3 잔여**.
 6. **post-MVP:** 북마크, 케어 로그, 매칭/산책 크루.
+
+> **2·3 이 1 보다 먼저 끝났다.** 이 목록의 번호는 순서가 아니라 이름이다.
 
 ---
 

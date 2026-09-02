@@ -9,7 +9,7 @@
 | 1 | 산책 시작 → 실시간 트래킹 → 종료 → 기록 저장 | 홈 "산책 시작" · 가운데 기록(+) FAB | `today_screen` → `walk_tracking_screen` → `create_screen` |
 | 2 | 지도에서 동반장소 찾기 → 상세 | 지도 탭 | `explore_screen`(장소 바텀시트) |
 | 3 | 커뮤니티 글 읽기 / 쓰기 | 커뮤니티 탭 | `feed_screen` → `post_detail_screen` |
-| 4 | 온보딩 + 로그인 (예정) | 앱 최초 실행 | *미구현 — 현재 바로 `MainShell` 진입* |
+| 4 | 온보딩 + 로그인 | 앱 최초 실행 | `splash` → `consent` → `onboarding` → `login` → `MainShell` |
 
 네비게이션 골격은 `main_shell.dart`의 5개 진입점이다: **홈 · 지도 · [가운데 기록 FAB] · 커뮤니티 · 통계**. 가운데 FAB와 홈의 "산책 시작" 버튼은 모두 실시간 산책 트래킹 화면(`WalkTrackingScreen`)으로 이동한다.
 
@@ -56,7 +56,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([지도 탭 진입]) --> B[initState → _load<br/>KTO locationBasedList2 호출<br/>중심: 서울시청 기본]
+    A([지도 탭 진입]) --> B[_boot → LocationService.current<br/>GET /api/places/nearby 호출<br/>중심: 현위치, 실패하면 서울시청]
     B --> C{응답}
     C -->|성공| D[장소 목록 _places 세팅]
     C -->|빈 결과/실패| E[빈 상태 카드<br/>'이 지역엔 등록된 곳이 없어요']
@@ -132,9 +132,9 @@ flowchart TD
 
 ---
 
-## 4. 온보딩 + 로그인 (예정)
+## 4. 온보딩 + 로그인
 
-**현재 미구현.** 앱은 `main.dart` → 바로 `MainShell`로 진입하며 로그인·실제 위치 없이 서울 고정 + 더미 프로필(`kMyDog` = '보리')로 동작한다. 아래는 post-MVP 목표 플로우다.
+**구현됐다**(#12·#180). `main.dart` 가 `AuthState.init()` 을 돌리고, `app_router.dart` 의 `refreshListenable` 이 인증 상태와 동의 상태를 함께 듣는다. 판정은 **순수 함수** `authRedirect(status, location, pending, sessionEnded, consented)` 하나가 한다.
 
 ```mermaid
 flowchart TD
@@ -154,14 +154,13 @@ flowchart TD
     G --> H
     G2 --> H
 
-    classDef todo fill:#f5f0ff,stroke:#9B7BFF,stroke-dasharray:5 4,color:#463C64;
-    class A,B,C,D,D1,E,F,G,G2 todo;
 ```
 
-**구현 메모 (예정 범위)**
-- 데이터: `users(provider, social_id, role, email nullable, nickname)` + `dog(user_id FK, name, breed, size, birth, neutered, avatar)`.
-- 프로필 편집 화면(`edit_screen`)·강아지 도메인(`DogProfile`)은 이미 존재 — 온보딩은 이를 최초 등록 플로우로 재사용.
-- 위치 권한(`geolocator`)은 현재 미도입. 도입 시 지도(플로우 2)의 중심을 "서울시청 기본" → "현재 위치"로 전환.
+**구현 메모**
+- 판정은 `app/lib/app/auth_redirect.dart` 의 **순수 함수** 하나다 — 라우터·상태에서 떼어 놨기 때문에 화면 없이 단위 테스트로 전 갈래를 돈다.
+- **동의 게이트가 로그인과 온보딩 사이에 있다**(#180). 위치기반서비스 약관 동의 전에는 `/consent` 로 보낸다 — 위치정보법 제18·19조가 요구하는 것이고, 그 화면을 지나기 전에는 `LocationService.locate()` 자체가 거부한다.
+- 데이터: `users(provider, social_id, role, email nullable, nickname)` + `dog(user_id FK, name, species, breed, size, birth, neutered, avatar)`.
+- 위치 권한(`geolocator`)은 **도입됐다**(#145). 지도는 현위치로 시작하고 **실패했을 때만** 서울시청으로 떨어진다.
 
 ---
 

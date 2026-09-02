@@ -27,7 +27,7 @@
 ```mermaid
 flowchart TB
     subgraph client["📱 클라이언트 — Flutter 앱 (lib/v2)"]
-        UI["화면 5탭<br/>홈·지도·[산책 FAB]·커뮤니티·통계"]
+        UI["화면 5탭<br/>홈·지도·[산책 FAB]·커뮤니티·채팅"]
         REPO["Repository<br/>pet_places_repository.dart"]
         MAP["네이버맵 위젯<br/>NaverMap / Controller"]
         GPS["실시간 트래킹<br/>geolocator 위치 스트림"]
@@ -100,7 +100,7 @@ flowchart TB
 
 ### 3.1 클라이언트 (Flutter, `lib/v2/`)
 
-- 진입: `main.dart` → `MainShell`(go_router). 5탭 네비(홈/지도/[산책 FAB]/커뮤니티/통계).
+- 진입: `main.dart` → `MainShell`(go_router). 5탭 네비(홈/지도/[산책 FAB]/커뮤니티/채팅). 통계는 탭이 아니라 `me_screen` 에서 push 한다.
 - 상태관리: `ValueNotifier` + `ValueListenableBuilder`(경량). 예) `RootTab.index`, `kMyDog`.
 - 지도: `main.dart`에서 `FlutterNaverMap().init(clientId: ...)` 초기화 후, `explore_screen.dart`의 `NaverMap` 위젯이 타일·마커를 그린다.
 - 데이터 접근: `data/pet_places_repository.dart`(KTO), 도메인 `domain/pet.dart`(카테고리·강아지 프로필·산책/커뮤니티 샘플).
@@ -137,7 +137,7 @@ flowchart TB
 
 | 소스 | 제공 | 앱 상태 | 응답/좌표 | 비고 |
 | --- | --- | --- | --- | --- |
-| 관광공사 KorPetTourService2 (PK 15135102) | data.go.kr | **실연동** | JSON, `mapx`/`mapy`(경위도) | 1000콜/일 제한 → 백엔드 프록시+캐싱 권장 |
+| 관광공사 KorPetTourService2 (PK 15135102) | data.go.kr | **실연동(백엔드 프록시 경유)** | JSON, `mapx`/`mapy`(경위도) | 1000콜/일 제한 → **격자 캐시 + 일일 예산으로 해결됨**(#40 · ADR-0013) |
 | 행안부 LOCALDATA (동물병원 ~9,445건, 펫샵) | data.go.kr | 더미 | 좌표 EPSG:5174→WGS84 변환 필요 | 인허가 데이터 |
 | 두루누비 걷기여행길 | 관광공사 | 더미 | GPX/좌표 폴리라인 | 산책로 코스 |
 
@@ -147,24 +147,28 @@ flowchart TB
 
 ### 4.1 지도: 내 주변 반려동반 장소 조회 (KTO 실연동)
 
-현재는 앱이 KTO를 **직접** 호출한다(`pet_places_repository.dart`의 `fetchNearby`).
+앱은 KTO 를 **직접 부르지 않는다**(#40). `pet_places_repository.dart` 의 `fetchNearby` 가 `GET /api/places/nearby` 만 부르고, 서비스키는 서버 환경변수 `TOUR_API_SECRET` 으로만 존재한다.
 
 ```mermaid
 sequenceDiagram
     participant U as 사용자
     participant M as 지도 화면 (explore)
     participant R as PetPlacesRepository
+    participant P as 백엔드 place 프록시
     participant K as 관광공사 KTO API
     participant NM as 네이버맵 SDK
 
     U->>M: 지도 열기 / 카테고리 필터
     M->>R: fetchNearby(lat, lng, radius, contentTypeId)
-    R->>K: GET locationBasedList2?serviceKey&mapX&mapY&radius&arrange=E
-    K-->>R: JSON items(title, mapx/mapy, contenttypeid, addr1, tel, firstimage, dist)
-    R-->>M: List<PetPlace> (좌표·카테고리 파싱)
+    R->>P: GET /api/places/nearby (서비스키 없음)
+    P->>P: 0.02° 격자 스냅샷 조회
+    P->>K: (캐시 미스일 때만) GET locationBasedList2
+    K-->>P: JSON items
+    P-->>R: Place[] (contentId·title·lat·lng·addr·distM)
+    R-->>M: List<PetPlace>
     M->>NM: 마커/폴리라인 렌더링
     NM-->>U: 지도 위 장소 표시
-    Note over R,K: 향후: 앱→백엔드(tour) 프록시 → KTO 캐시(place 테이블)로 전환 권장
+    Note over P,K: 일일 호출 예산은 kto_call_budget 표의 조건부 UPDATE 한 문장이 지킨다 (ADR-0013)
 ```
 
 ### 4.2 공공데이터 동기화 (목표 아키텍처)

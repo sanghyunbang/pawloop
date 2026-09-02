@@ -31,7 +31,7 @@
 | 관련 테이블 | `post`(글), `comment`(댓글), `reaction`(반응). 읽기 조인: `users`(작성자 닉네임), `place`(태그 장소, nullable FK). |
 | 재사용 후보 | 기존 `social` 패키지의 `EmotionCard/CardReaction/CardComment` 구조가 거의 동일 → **패턴을 그대로 복제/개편**한다. 특히 (a) 반응 저장/삭제 로직(`SocialService.toggleReaction` — **토글이 아니라 멱등 add/remove 로 나눠 쓴다**, ADR-0016 결정 2), (b) 반응/댓글 수 N+1 방지 배치 집계(`findByCardIdIn`, `countByCardIdInGroupBy`), (c) `ReactionSummary`(reactions map + mine)는 social의 `{reactions, myReactions}` 개편판이다. |
 | 기존과 차이 | ① 반응 타입이 `SAME/CHEER/CALM`(social) → `help/cute/empathy`(community). ② `ReactionSummary.mine`은 **배열 또는 `null`** 이다 — 셋을 동시에 누를 수 있다(ADR-0016 결정 2). `null` 은 비인증, `[]` 는 로그인했는데 아무것도 안 누른 것이다. social 의 `myReactions`(리스트)와 **같은 카디널리티**다. ③ 목록이 **커서 페이지네이션**(`items`/`nextCursor`/`hasMore`)이다(social은 limit-only). ④ `board` enum·장소 참조(`contentId`) nullable FK 존재. |
-| 인증 정책 | 읽기(GET 목록/상세/댓글목록)는 **비인증 허용**(openapi `security: []`). 쓰기(글/댓글 작성, 반응 토글)는 **인증 필요**. SecurityConfig에서 `/api/community/**` GET은 permitAll, 그 외 authenticated 로 열어야 함(social은 전부 authenticated였음 — 주의). |
+| 인증 정책 | 읽기(GET 목록/상세/댓글목록)는 **인증 선택**(`security: [{}, {bearerAuth: []}]`) — 토큰이 있으면 `reactions.mine` 이 채워진다. 쓰기(글/댓글 작성, 반응)는 **인증 필요**. `SecurityConfig` 에서 **메서드 축 한 줄**로 GET 셋만 열고 와일드카드는 쓰지 않는다(ADR-0016 결정 3). social 은 전부 authenticated 였다 — 주의. |
 
 ---
 

@@ -14,7 +14,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | 리소스 책임 | 로그인 사용자의 반려견 프로필 CRUD. 목록/상세/등록/부분수정/삭제 + 아바타 이미지 업로드. |
-| 소유권 규칙 | 모든 쓰기(등록 제외)·상세는 `dog.user_id == 현재 userId` 여야 한다. 타인 dog 수정/삭제 시 **403 Forbidden**. |
+| 소유권 규칙 | 모든 쓰기(등록 제외)·상세는 `dog.user_id == 현재 userId` 여야 한다. **남의 반려동물과 없는 반려동물은 바이트까지 같은 `404`** — `403` 을 주면 "그 id 는 존재한다" 를 알려 주는 셈이다([ADR-0017](../../99-decisions/decision-log.md#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다) 규약 3). |
 | 종(species) | `dog|cat|other`. **표와 경로 이름이 `dog` 지만 고양이도 들어온다**(#24 · #145 · `schema.md §3`). 없으면 고양이를 키우는 사람이 반려동물을 서버에 못 올리고, 그 사람의 산책은 붙일 곳이 없다. |
 | 관련 테이블 | `dog`(주), `users`(FK 소유자). 삭제 시 `walk`가 `dog` FK를 `ON DELETE CASCADE` 하므로 산책 기록도 함께 삭제됨(구현 노트 참고). |
 | 재사용 가능한 기존 자산 | ① JWT→User 추출: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (#5 이전 서술이던 `requireUser(HttpServletRequest)` 패턴은 삭제됐다.) ② 아바타 업로드: `S3/media/MediaController`(`POST /media`, `multipart`, `UploadCategory`) + `MediaService.uploadMany/publicUrl`. ③ 에러 응답: social의 `Map.of("error", msg)` + `ResponseStatusException` 패턴. ④ 엔티티/DTO/레포 스타일: `social` 패키지(Lombok `@Getter/@Builder`, record DTO, Spring Data). |
@@ -56,10 +56,11 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | --- | --- | --- | --- |
 | `id` | `Long` | `id` | |
 | `name` | `String` | `name` | |
+| `species` | `PetSpecies` | `species` | `dog`/`cat`/`other`. **생략하면 `dog`** — 이 필드가 없던 때 만들어진 앱과 계약이 맞는다 |
 | `breed` | `String` | `breed` | nullable |
 | `size` | `String` | `size` (`DogSize`) | `small/medium/large` 문자열 |
 | `birth` | `String` | `birth` | `LocalDate`→ISO date 문자열(`yyyy-MM-dd`), nullable |
-| `ageMonths` | `Integer` | `ageMonths` | **파생 필드** — `birth`로부터 계산(비저장). birth==null이면 null/0 정책 결정 |
+| `ageMonths` | `Integer` | `ageMonths` | **파생 필드** — `birth` 로부터 계산(비저장). ⚠️ **`birth` 가 없으면 서버가 `null` 을 내는데 계약은 `required` 다** — 지금 이 순간 계약 위반이고 [#209](https://github.com/sanghyunbang/heattrip/issues/209)가 소유한다 |
 | `neutered` | `boolean` | `neutered` | |
 | `avatarUrl` | `String` | `avatarUrl` | nullable. 저장은 objectKey, 응답은 `MediaService.publicUrl(...)` 조립 값 |
 
@@ -68,6 +69,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | 필드 | 타입 | 필수 | openapi `DogInput` | 비고 |
 | --- | --- | --- | --- | --- |
 | `name` | `String` | 필수 | `name` | |
+| `species` | `PetSpecies` | 선택 | `species` | 생략하면 `dog` |
 | `breed` | `String` | 선택 | `breed` | |
 | `size` | `String` | 필수 | `size` (`DogSize`) | 서비스에서 `small/medium/large` 검증 |
 | `birth` | `String` | 선택 | `birth` | ISO date 문자열; 서비스에서 `LocalDate.parse` |
@@ -95,7 +97,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 
 > **`update`·`delete`·`updateAvatar` 는 아직 없다.** 위 §2 의 표시와 같은 이유다. 아래 §3.2·§6 의 PATCH 부분수정 서술은 **그 날을 위한 설계**이지 현재 동작이 아니다.
 
-- 소유권 실패는 **403**, 리소스 없음은 **404** 로 구분(social은 400/500만 쓰지만, openapi Dogs는 403/404 명시하므로 `ResponseStatusException(HttpStatus.FORBIDDEN/NOT_FOUND)` 사용).
+- **소유권 실패와 리소스 없음을 구분하지 않는다** — 둘 다 `404` 다. 계약의 Dogs 오퍼레이션에는 `403` 이 **하나도 없다**(ADR-0017 규약 3). `ResponseStatusException(HttpStatus.NOT_FOUND)` 하나만 쓴다.
 - 검증 실패(잘못된 size, name 누락)는 **400**(`IllegalArgumentException` → 컨트롤러에서 `badRequest`, social 패턴).
 - `MediaService` 주입해 아바타 업로드 위임(직접 S3 접근 금지). `UploadCategory.PROFILE_IMAGE`(prefix `profiles`, image/jpeg·png·webp, 5MB) 재사용.
 
@@ -127,7 +129,7 @@ schema.md §3 `dog` 테이블 기준. 엔티티 필드 ↔ 컬럼:
 | 메서드 시그니처 | 용도 |
 | --- | --- |
 | `List<Dog> findByUserIdOrderByIdAsc(Long userId)` | 사용자별 dog 목록(파생 쿼리, social `findAllByOrderByIdDesc` 스타일). |
-| `Optional<Dog> findByIdAndUserId(Long id, Long userId)` | 상세/수정/삭제 시 조회+소유권 동시 필터(선택). 소유권을 서비스에서 명시적으로 403 구분하려면 `findById` 후 비교 방식도 가능. |
+| `Optional<Dog> findByIdAndUserId(Long id, Long userId)` | 상세/수정/삭제 시 조회+소유권 **동시 필터**. 이 모양이 규약 3 과 맞는다 — 없는 것과 남의 것이 같은 빈 `Optional` 로 떨어져 분기 자체가 안 생긴다. |
 
 - native/공간 `@Query` **불필요**(공간 컬럼 없음). 전부 Spring Data 파생 쿼리로 충분.
 - 삭제는 `deleteById` 또는 `delete(entity)` 사용(연쇄 삭제는 DB FK가 처리).
@@ -137,7 +139,7 @@ schema.md §3 `dog` 테이블 기준. 엔티티 필드 ↔ 컬럼:
 ## 6. 구현 노트 (함정 위주)
 
 1. **JWT 추출 규약(재사용)**: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. subject 는 `users.id` 이고 `me.getId()` 를 그대로 `dog.user_id` 에 쓴다.
-2. **소유자 검증(403 핵심)**: 상세/수정/삭제/아바타 모두 조회한 `dog.userId`와 현재 `userId` 비교 필수. 불일치 시 **404가 아니라 403**(openapi가 403 Forbidden 명시). 단, "리소스 존재 은닉" 보안 정책을 택하면 타인 dog를 404로 숨기는 변형도 가능 — 팀 정책 확정 후 통일.
+2. **소유자 검증**: 상세/수정/삭제/아바타 모두 소유권 확인이 필수이고, 불일치는 **없는 것과 같은 `404`** 다. "리소스 존재 은닉" 이 이 저장소의 확정 정책이고(ADR-0017 규약 3) `DogController` javadoc·`WalkService` 가 이미 그렇게 구현돼 있다. **Chat·Groups 는 반대로 `403` 으로 합치는데**, 그것도 같은 불변식("남의 것과 없는 것이 구별되지 않는다")의 다른 표현이다.
 3. **`ageMonths` 파생**: 저장 금지, 응답 시 `birth`↔현재일로 계산(`Period.between(birth, LocalDate.now()).toTotalMonths()`). `birth==null`이면 null 반환할지 0으로 둘지 openapi에 미정의 → 프론트와 합의(권장: null).
 4. **`birth` 직렬화**: 요청/응답 모두 ISO `yyyy-MM-dd` 문자열. 엔티티는 `LocalDate`. 파싱 실패는 400으로.
 5. **아바타 업로드 프록시(직접 S3 금지)**: `MediaService`에 위임. `UploadCategory.PROFILE_IMAGE`(prefix `profiles`, 허용 image/jpeg·png·webp, 최대 5MB) 사용. 검증(타입/크기)은 `S3/ImageValidator`·`UploadValidator`가 담당하므로 중복 검증 불필요. `dog.avatar`에는 **objectKey**를 저장하고, DTO의 `avatarUrl`은 `mediaService.publicUrl(objectKey)`로 조립(원본 URL을 DB에 박지 말 것 — CDN/버킷 변경 대응).

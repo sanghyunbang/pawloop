@@ -212,7 +212,8 @@ LOCALDATA 좌표(`x`, `y`)는 경위도가 아니라 **EPSG:5174 (중부원점 T
 
 ```mermaid
 flowchart LR
-  App[Flutter 앱\nlib/v2] -->|locationBasedList2| KTO[(KTO KorPetTourService2)]
+  App[Flutter 앱\nlib/v2] -->|GET /api/places/nearby| BE[백엔드 place 프록시\n0.02° 격자 캐시]
+  BE -->|캐시 미스일 때만\nlocationBasedList2| KTO[(KTO KorPetTourService2)]
   App -. 더미 .-> Vet[병원/펫샵]
   App -. 더미 .-> Trail[산책로]
 ```

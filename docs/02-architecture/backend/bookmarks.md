@@ -1,6 +1,6 @@
 # Bookmarks (저장 장소) — 백엔드 구현 청사진
 
-> 대상 리소스: **Bookmarks**. openapi `/api/bookmarks`(GET/POST), `/api/bookmarks/{placeId}`(DELETE).
+> 대상 리소스: **Bookmarks**. openapi `/api/bookmarks`(GET/POST), `/api/bookmarks/{contentId}`(DELETE).
 > 이 문서는 "무엇을 만들어야 하는지"만 정의한다. **메서드 바디는 개발자가 직접 구현한다**(구현 코드 없음).
 > 계약: [openapi.yaml](../../04-api/openapi.yaml) · 데이터: [erd.md](../../03-database/erd.md), [schema.md](../../03-database/schema.md)
 
@@ -35,7 +35,7 @@
   - `users` (FK 대상) — [schema.md §1](../../03-database/schema.md)
 - **재사용 가능한 기존 자산**:
   - JWT 인증 추출: `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. (이 줄은 #5 이전 서술이었다 — 두 패턴 중 하나를 고르라고 안내했으나 둘 다 삭제됐다.)
-  - 커서 페이지네이션 응답: `explore.dto.CursorPageResponse<T>`(items/nextCursor/hasNext) 및 `explore.dto.PageResponse` 참고. **단, openapi Bookmarks GET은 배열 반환(페이지네이션 없음)** — §2 주의.
+  - 커서 페이지네이션 응답: `explore.dto.CursorPageResponse<T>`(items/nextCursor/hasNext) 및 `explore.dto.PageResponse` 참고. **openapi Bookmarks GET 은 커서 봉투다**(`items`/`nextCursor`/`hasMore` — ADR-0017 규약 2).
   - 에러 패턴: `ResponseEntity.badRequest().body(Map.of("error", ...))` + `ResponseStatusException(HttpStatus.*)` (SocialController), 또는 openapi `Error{error:{code,message,traceId}}` 스키마.
   - `place` 좌표→lat/lng 추출: `explore.mapper.PlaceMapper`, `kakao.service.GeoUtils` 참고.
 
@@ -47,12 +47,12 @@
 
 | # | HTTP · 경로 | 메서드 시그니처 (파라미터 타입) | 반환 DTO | 인증 | openapi |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `GET /api/bookmarks` | `list(@RequestHeader("Authorization") String authHeader)` | `ResponseEntity<List<BookmarkPlaceDto>>` (200) | ✅ | `/api/bookmarks` GET → `array<Place>` |
+| 1 | `GET /api/bookmarks` | `list(@CurrentUser User me, String cursor, Integer limit)` | `CursorPageResponse<PlaceDto>` (200) | ✅ | `/api/bookmarks` GET → `Page` + `items: Place[]` |
 | 2 | `POST /api/bookmarks` | `add(@RequestHeader("Authorization") String authHeader, @RequestBody BookmarkCreateRequest req)` | `ResponseEntity<Void>` (201 / 409 / 400) | ✅ | `/api/bookmarks` POST |
 | 3 | `DELETE /api/bookmarks/{placeId}` | `remove(@RequestHeader("Authorization") String authHeader, @PathVariable("placeId") String placeId)` | `ResponseEntity<Void>` (204) | ✅ | `/api/bookmarks/{placeId}` DELETE |
 
 **주의**
-- openapi에서 GET `/api/bookmarks` 응답은 **`Place` 배열**(커서 페이지네이션 아님). 따라서 반환은 `List<BookmarkPlaceDto>`이며 `CursorPageResponse`로 감싸지 않는다. (프로젝트 공통 규칙상 커서 페이지네이션은 목록형에 권장되나, **이 엔드포인트는 계약이 배열이므로 계약 우선**. 향후 목록이 커지면 계약을 `Page`로 개정 후 커서 방식으로 전환.)
+- openapi 에서 GET `/api/bookmarks` 응답은 **커서 봉투**다(`Page` allOf + `items: Place[]`). 2026-09 이전에는 벌거벗은 배열이었는데, 북마크는 사용자가 **계속 쌓는** 목록이라 상한이 없다 — 배열로 내보낸 뒤 봉투로 바꾸는 것은 파괴적 변경이라 구현 전에 고쳤다([ADR-0017](../../99-decisions/decision-log.md#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다) 규약 2).
 - POST 성공은 **201**(바디 없음, openapi `'201': { description: 추가됨 }`). 중복이면 **409**(`Conflict`). `placeId` 누락/무효면 **400**.
 - DELETE는 **204**(멱등). 존재하지 않아도 204로 처리할지, 404로 할지 정책 결정 — openapi엔 404 정의 없음 → **멱등 204 권장**.
 - `{placeId}`는 경로 문자열. 내부 매핑은 §6 참조.
@@ -87,7 +87,7 @@
 | `image` | `String`(nullable) | `image` | `place.raw_json`에서 추출 또는 null(MVP는 null 허용) |
 | `distM` | `Double`(nullable) | `distM` | 북마크 목록엔 기준점이 없으므로 **null/미포함**(distM은 nearby 전용) |
 
-> 공통 DTO는 **참조만**: 에러는 `#/components/schemas/Error`, 페이지는 `#/components/schemas/Page`(이 리소스는 미사용). `Place`/`PlaceCategory` 스키마는 Places 리소스와 공유하므로 **동일 record를 재사용**하는 것이 이상적(중복 정의 금지). Places 청사진의 `PlaceDto`가 이미 있으면 그것을 재사용하고 `BookmarkPlaceDto`는 만들지 않는다.
+> 공통 DTO는 **참조만**: 에러는 `#/components/schemas/Error`, 페이지는 `#/components/schemas/Page`(**이 리소스도 쓴다** — ADR-0017 규약 2). `Place`/`PlaceCategory` 스키마는 Places 리소스와 공유하므로 **동일 record를 재사용**하는 것이 이상적(중복 정의 금지). Places 청사진의 `PlaceDto`가 이미 있으면 그것을 재사용하고 `BookmarkPlaceDto`는 만들지 않는다.
 
 ---
 
