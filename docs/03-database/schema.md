@@ -296,7 +296,7 @@ CREATE TABLE trail (
 ```sql
 CREATE TABLE post (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
-  user_id     BIGINT       NOT NULL,
+  user_id     BIGINT       NULL COMMENT '작성자. 탈퇴하면 NULL 이 된다',
   board       VARCHAR(20)  NOT NULL COMMENT 'walk_review|pet_place|health|free|brag',
   title       VARCHAR(200) NOT NULL,
   body        TEXT         NOT NULL,
@@ -306,14 +306,15 @@ CREATE TABLE post (
   created_at  DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
   KEY idx_post_board_created (board, created_at, id),
-  CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users (id)
+  KEY idx_post_user (user_id),
+  CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 작성자. **CASCADE 아님** — 아래 각주 |
+| `user_id` | `BIGINT` | FK→`users.id` **SET NULL**, nullable | 작성자. 탈퇴하면 `NULL` — 아래 각주 |
 | `board` | `VARCHAR(20)` | NOT NULL, INDEX(board, created_at, id) | 게시판. **ASCII 키다** — 아래 각주 |
 | `title` | `VARCHAR(200)` | NOT NULL | 제목 |
 | `body` | `TEXT` | NOT NULL | 본문 |
@@ -334,10 +335,22 @@ CREATE TABLE post (
 > 아직 없거나 지워질 수 있고, FK 를 걸면 **그때 글 작성이 실패한다** — 장소는 글의 부속물이지
 > 전제가 아니다. 레거시 `places` 표(`contentid bigint`)에는 걸지 않는다. 다른 키 공간이다.
 
-> **각주 — `users` FK 가 CASCADE 가 아닌 이유.** 탈퇴 한 번에 그 사람이 쓴 글이 전부 사라지면
-> **거기 달린 남의 댓글도 함께 사라진다.** 탈퇴한 사람을 어떻게 보여 줄지는 표시 계층의
-> 문제이지 저장 계층의 문제가 아니다 — 응답의 `author` 는 탈퇴 계정을 `userId=0`·"알 수 없음"
-> 으로 싣는다(ADR-0017 규약 5).
+> **각주 — `users` FK 가 `SET NULL` 인 이유. 양쪽으로 틀릴 수 있는 자리다.**
+>
+> | | 무슨 일이 나는가 |
+> |---|---|
+> | `CASCADE` | 탈퇴 한 번에 그 사람의 글이 사라지고 **거기 달린 남의 댓글도 함께** 사라진다 |
+> | 아무것도 안 적음(= `RESTRICT`) | **글을 한 번 쓴 사람이 영원히 탈퇴하지 못한다** |
+>
+> 후자가 처음 낸 모양이었고 실측으로 확인했다 — `UserService.deleteMe` 가 `users` 행을
+> **물리 삭제**하므로 `DELETE FROM users` 가 `ERROR 1451` 로 죽는다. `11_dog.sql` 이 `dog` 에
+> 대해 적어 둔 것과 같은 실패인데, `dog` 은 `CASCADE` 로 풀고 여기는 `SET NULL` 로 푼다 —
+> 반려동물은 그 사람의 것이지만 **글에는 남의 댓글이 매달려 있다.**
+>
+> `care_log.done_by` 가 이미 이 모양이다. `user_id` 가 `NULL` 인 행은 "탈퇴한 사람이 쓴 것"
+> 이고, 응답의 `author` 는 `userId=0`·"알 수 없음" 이다(ADR-0017 규약 5).
+> `handle`(작성 시점 스냅샷)이 여기서 값을 한다 — `users` 행이 사라진 뒤 **그 글을 누가
+> 썼는지 아는 유일한 기록**이다. 다만 응답에는 여전히 안 싣는다.
 
 ---
 
@@ -349,15 +362,16 @@ CREATE TABLE post (
 CREATE TABLE comment (
   id          BIGINT      NOT NULL AUTO_INCREMENT,
   post_id     BIGINT      NOT NULL,
-  user_id     BIGINT      NOT NULL,
+  user_id     BIGINT      NULL COMMENT '작성자. 탈퇴하면 NULL',
   body        TEXT        NOT NULL,
   handle      VARCHAR(50) NULL COMMENT 'post.handle 과 같은 이유',
   created_at  DATETIME(6) NOT NULL,
   PRIMARY KEY (id),
   KEY idx_comment_post_created (post_id, created_at, id),
+  KEY idx_comment_user (user_id),
   CONSTRAINT fk_comment_post FOREIGN KEY (post_id)
     REFERENCES post (id) ON DELETE CASCADE,
-  CONSTRAINT fk_comment_user FOREIGN KEY (user_id) REFERENCES users (id)
+  CONSTRAINT fk_comment_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
@@ -365,13 +379,14 @@ CREATE TABLE comment (
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
 | `post_id` | `BIGINT` | FK→`post.id` **CASCADE**, NOT NULL | 대상 글 |
-| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 작성자. CASCADE 아님 |
+| `user_id` | `BIGINT` | FK→`users.id` **SET NULL**, nullable | 작성자. 탈퇴하면 `NULL` |
 | `body` | `TEXT` | NOT NULL | 내용 |
 | `handle` | `VARCHAR(50)` | nullable | 작성 시점 닉네임 스냅샷 |
 
 > **각주 — `post` 쪽만 CASCADE 인 이유.** 글이 사라지면 그 댓글은 **부모 없는 행**으로 남아
 > 어느 목록에도 안 뜨면서 자리만 차지한다. 나중에 세면 댓글 수가 맞지 않고 왜 안 맞는지
-> 아무도 모른다. 사용자 쪽은 반대다 — 탈퇴 한 번에 **남의 글에서 대화가 끊긴다.**
+> 아무도 모른다. 사용자 쪽은 `SET NULL` 이다 — 탈퇴해도 댓글이 남아야 **남의 글에서 대화가
+> 안 끊긴다.** §7 의 각주와 같은 판단이다.
 
 > **각주 — 수정·삭제 컬럼이 없다.** `updated_at`·`deleted_at` 을 넣지 않았다. 계약에 그
 > 오퍼레이션이 없고(#211 `Community-medium-4`), **넣는 날은 컬럼 추가가 아니라 삭제 정책
@@ -387,14 +402,15 @@ CREATE TABLE comment (
 CREATE TABLE reaction (
   id          BIGINT      NOT NULL AUTO_INCREMENT,
   post_id     BIGINT      NOT NULL,
-  user_id     BIGINT      NOT NULL,
+  user_id     BIGINT      NULL COMMENT '누른 사람. 탈퇴하면 NULL',
   type        VARCHAR(20) NOT NULL COMMENT 'help|cute|empathy',
   created_at  DATETIME(6) NOT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_reaction (post_id, user_id, type),
+  KEY idx_reaction_user (user_id),
   CONSTRAINT fk_reaction_post FOREIGN KEY (post_id)
     REFERENCES post (id) ON DELETE CASCADE,
-  CONSTRAINT fk_reaction_user FOREIGN KEY (user_id) REFERENCES users (id)
+  CONSTRAINT fk_reaction_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
@@ -402,7 +418,7 @@ CREATE TABLE reaction (
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
 | `post_id` | `BIGINT` | FK→`post.id` **CASCADE**, UNIQUE(post, user, type) | 대상 글 |
-| `user_id` | `BIGINT` | FK→`users.id`, NOT NULL | 누른 사람 |
+| `user_id` | `BIGINT` | FK→`users.id` **SET NULL**, nullable | 누른 사람. 탈퇴하면 `NULL` |
 | `type` | `VARCHAR(20)` | NOT NULL | `help`(도움돼요)/`cute`(귀여워요)/`empathy`(공감) |
 
 > **각주 — UNIQUE 가 세 컬럼인 이유([ADR-0016](../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) 결정 2).**

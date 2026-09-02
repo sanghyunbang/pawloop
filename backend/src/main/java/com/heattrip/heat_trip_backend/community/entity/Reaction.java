@@ -9,6 +9,7 @@ import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
@@ -66,7 +67,11 @@ import java.time.LocalDateTime;
         name = "reaction",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_reaction",
-                columnNames = {"post_id", "user_id", "type"}))
+                columnNames = {"post_id", "user_id", "type"}),
+        indexes = 
+                // 탈퇴 시 SET NULL 이 훑는 자리. uq_reaction 의 왼쪽 접두가 post_id 라
+                // user_id 단독으로는 그 인덱스를 못 쓴다.
+                @Index(name = "idx_reaction_user", columnList = "user_id"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -84,10 +89,17 @@ public class Reaction {
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Post post;
 
-    /** 누른 사람. 탈퇴해도 집계는 남는다 — {@code Post} 와 같은 판단이다. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false,
+    /**
+     * 누른 사람. <b>탈퇴하면 {@code null} 이 되고 집계는 남는다</b>({@code ON DELETE SET NULL}).
+     *
+     * <p>{@code uq_reaction} 의 두 번째 컬럼이라, 탈퇴한 사람의 반응이 {@code null} 로 눕는 순간
+     * <b>같은 글에 여러 탈퇴자의 같은 반응이 공존할 수 있다.</b> 그래도 집계는 맞다 — 세는 것은
+     * 행 수이지 사람 수가 아니다(클래스 javadoc).
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id",
             foreignKey = @ForeignKey(name = "fk_reaction_user"))
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private User user;
 
     /** {@code help} · {@code cute} · {@code empathy}. 계약의 {@code ReactionType} 이 단일 출처다. */

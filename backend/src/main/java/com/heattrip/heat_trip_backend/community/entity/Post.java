@@ -16,6 +16,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -62,18 +65,29 @@ import java.time.LocalDateTime;
  * <p>둘을 섞으면 <b>저장은 스냅샷, 표시는 현재값이라는 두 규칙이 한 화면에서 만난다</b> —
  * 같은 사람의 글 둘이 다른 이름으로 보인다.
  *
- * <h2>{@code users} 로의 FK 는 CASCADE 가 아니다</h2>
- * <p>탈퇴 한 번에 그 사람이 쓴 글이 전부 사라지면 <b>대화의 앞뒤가 끊긴다</b> — 남의 댓글이
- * 매달린 글이 통째로 없어진다. 채팅이 {@code users} 로 FK 를 아예 안 낸 것과 같은 걱정이고,
- * 여기서는 FK 는 걸되 지우지 않는 쪽을 골랐다. 탈퇴한 사람의 글을 어떻게 할지는 표시 계층의
- * 문제이지 저장 계층의 문제가 아니다.
+ * <h2>{@code users} 로의 FK 는 {@code ON DELETE SET NULL} 이다 — 양쪽으로 틀릴 수 있다</h2>
+ * <p><b>{@code CASCADE}</b> 면 탈퇴 한 번에 그 사람의 글이 사라지고 <b>거기 달린 남의 댓글도
+ * 함께</b> 사라진다. 반대로 <b>아무것도 안 적으면</b>({@code RESTRICT}) <b>글을 한 번 쓴 사람이
+ * 영원히 탈퇴하지 못한다</b> — {@code UserService.deleteMe} 가 {@code users} 행을 <b>물리
+ * 삭제</b>하기 때문이다.
+ *
+ * <p>후자가 이 표를 처음 낸 모양이었고 실측으로 확인했다 — {@code DELETE FROM users} 가
+ * {@code ERROR 1451} 로 죽었다. {@code 11_dog.sql} 이 {@code dog} 에 대해 적어 둔 것과 같은
+ * 실패인데, {@code dog} 은 {@code CASCADE} 로 풀고 여기는 {@code SET NULL} 로 푼다 —
+ * <b>반려동물은 그 사람의 것이지만 글에는 남의 댓글이 매달려 있다.</b>
+ *
+ * <p>{@code care_log.done_by} 가 이미 이 모양이다. {@code user} 가 {@code null} 인 행은
+ * "탈퇴한 사람이 쓴 것" 이고, 응답의 {@code author} 는 {@code userId=0} · "알 수 없음" 이다
+ * (ADR-0017 규약 5). 그때 {@link #handle} 이 <b>그 글을 누가 썼는지 아는 유일한 기록</b>이 된다.
  */
 @Entity
 @Table(
         name = "post",
         indexes = {
                 // 목록이 딛는 인덱스. 계약의 커서 페이지네이션이 (created_at, id) 로 내려간다.
-                @Index(name = "idx_post_board_created", columnList = "board, created_at, id")
+                @Index(name = "idx_post_board_created", columnList = "board, created_at, id"),
+                // 탈퇴 시 SET NULL 이 훑는 자리. 없으면 users 삭제가 이 표 전체 스캔이다.
+                @Index(name = "idx_post_user", columnList = "user_id")
         })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -86,9 +100,10 @@ public class Post {
     private Long id;
 
     /** 작성자. 탈퇴해도 글은 남는다 — 클래스 javadoc 참조. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id",
             foreignKey = @ForeignKey(name = "fk_post_user"))
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private User user;
 
     /** ASCII 키. 화면 문구는 앱이 든다 — 클래스 javadoc 참조. */
