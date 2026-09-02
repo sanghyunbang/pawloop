@@ -43,9 +43,9 @@
 | **산책 기록 작성** | `create_screen.dart` `CreateScreen` | ✅ 구현완료 | 트래킹 초안(거리·시간·경로)을 받아 저장, 초안 없으면 손입력 | 사진 첨부 "곧 지원", 날짜 선택 비동작. 스텝퍼를 **만졌을 때만** 실측값을 덮는다(1분 미만이 사라지지 않게) |
 | **내 산책 기록** | `myrecords_screen.dart` `MyRecordsScreen` | ✅ 구현완료 | **전체 기간** 요약, 기록하기 버튼, 산책 카드 리스트(서버 + 전송 대기 뱃지) | 장소 축이 없어 카드 제목은 시작 시각대(새벽/아침/오후/저녁) |
 | **위치 찍기** | `pin_picker_screen.dart` `PinPickerScreen` | 🟡 더미 | 스타일라이즈드 지도 탭 → 좌표 기록, pop 반환 | 실지도 아님(장식용 배경). 현재 플로우에서 호출부 없음 |
-| **채팅 (방 목록)** | `chat_list_screen.dart` `ChatListScreen` | ✅ 서버 연동 | 방 카드 리스트(이름·태그·마지막 메시지·미읽음 뱃지·멤버 수) — `GET /api/chat/rooms` | 방 만들기는 가족 그룹 생성 경로에 묶여 있고, 그 경로가 앱에 아직 없다 |
+| **채팅 (방 목록)** | `chat_list_screen.dart` `ChatListScreen` | ✅ 서버 연동 | 방 카드 리스트(이름·태그·마지막 메시지·미읽음 뱃지·멤버 수) — `GET /api/chat/rooms` | 방은 가족 그룹을 만들 때 함께 생긴다(#196). 방만 따로 만드는 경로는 없다 — ADR-0011 이 방을 `origin_kind`/`origin_ref` 로 그룹에 매달았다 |
 | **채팅 (방 안)** | `family_chat_screen.dart` `FamilyChatScreen` | ✅ 서버 연동 | 적응형 폴링(`afterSeq` 델타·ETag), 낙관적 전송 + 같은 멱등키 재전송, 읽음 보고, 신고·가리기·강퇴, 첫 진입 약관 동의 | 메시지 삭제 UI 없음(서버 API 도 없다) |
-| **가족** | `family_screen.dart` `FamilyScreen` | ✅ 서버 연동 | 멤버 목록, 초대코드, 오늘의 케어 현황, 산책 주의사항, 채팅 진입 — `FamilyRepository`(#76) | 그룹이 없을 때 **만드는 버튼이 없다**(`POST /api/groups` 호출처 0곳) |
+| **가족** | `family_screen.dart` `FamilyScreen` | ✅ 서버 연동 | 멤버 목록, 초대코드, 오늘의 케어 현황, 산책 주의사항, 채팅 진입 — `FamilyRepository`(#76). **그룹 만들기·초대 코드로 참여**(#196) | 그룹이 없으면 만들기·참여 둘 다 보이고, 만들면 초대 코드가 바로 뜬다 |
 
 ---
 

@@ -246,7 +246,18 @@ class _TodayCareCardState extends State<TodayCareCard> {
             child: Text(FamilyFailure.messageFor(failure),
                 style: const TextStyle(fontSize: 12.5, color: T.textMuted)),
           ),
-          if (failure != FamilyFailureKind.noGroup)
+          // 가족이 없는 것은 오류가 아니라 **할 일**이다. 다시 시도는 아무것도 바꾸지
+          // 않고, 그렇다고 아무 버튼도 안 주면 여기서 길이 끊긴다 — #196 이 그 상태였다.
+          // 만들기 자체는 가족 화면이 한다. 여기서는 거기로 보낸다.
+          if (failure == FamilyFailureKind.noGroup && widget.onOpenFamily != null)
+            GestureDetector(
+              onTap: widget.onOpenFamily,
+              behavior: HitTestBehavior.opaque,
+              child: const Text('만들기',
+                  style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+            )
+          else if (failure != FamilyFailureKind.noGroup)
             GestureDetector(
               onTap: _load,
               behavior: HitTestBehavior.opaque,

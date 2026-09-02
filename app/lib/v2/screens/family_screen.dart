@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_tokens.dart';
+import 'invite_join_screen.dart';
 import '../data/family_repository.dart';
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
@@ -249,8 +250,45 @@ class _FamilyScreenState extends State<FamilyScreen> {
               : '연결이 되면 오늘의 케어와 주의사항을 다시 불러올게요',
           style: const TextStyle(fontSize: 12.5, color: T.textMuted),
         ),
-        if (!noGroup) ...[
-          const SizedBox(height: 12),
+        const SizedBox(height: 12),
+        if (noGroup) ...[
+          // 여기가 비어 있던 자리다(#196). 로드맵은 M2.5 를 "앱 그룹 생성 경로만 남음" 이라
+          // 적어 뒀는데, 그룹이 없는 사람에게는 만들 길도 참여할 길도 화면에 없었다 —
+          // 서버는 POST /api/groups 를 진작 갖고 있었다.
+          GestureDetector(
+            onTap: _openCreateSheet,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(13)),
+              child: const Text('가족 그룹 만들기',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 13.5, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 만드는 쪽만 있으면 혼자 쓰는 그룹이 된다(#196 의 3번). 참여는 이미
+          // `InviteJoinScreen` 이 하고 있었는데 채팅 목록에서만 갈 수 있었다.
+          GestureDetector(
+            onTap: _openJoin,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xCCFFFFFF),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: const Color(0x1F8C7BFF)),
+              ),
+              child: const Text('초대 코드로 참여하기',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 13.5, fontWeight: FontWeight.w800, color: T.textSecondary)),
+            ),
+          ),
+        ] else
           GestureDetector(
             onTap: _load,
             behavior: HitTestBehavior.opaque,
@@ -264,7 +302,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
                       fontSize: 13.5, fontWeight: FontWeight.w800, color: Colors.white)),
             ),
           ),
-        ],
       ]),
     );
   }
@@ -340,6 +377,37 @@ class _FamilyScreenState extends State<FamilyScreen> {
         ),
       ]),
     );
+  }
+
+  // ───────────── 만들기 · 참여 (#196) ─────────────
+
+  /// 그룹 이름을 받아 만든다.
+  ///
+  /// 이름을 묻는 이유는 그 값이 **방 이름도 되기 때문**이다(서버가 같은 문자열로
+  /// `chat_room` 을 연다). 기본값을 넣어 두고 그대로 눌러도 되게 한다 — 대부분은
+  /// 이름을 고민하려고 이 화면에 온 것이 아니다.
+  Future<void> _openCreateSheet() async {
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _CreateGroupSheet(repo: _repo),
+    );
+    if (!mounted || created != true) return;
+
+    await _load();
+    if (!mounted) return;
+    // 만들자마자 초대 코드를 보여 준다. 혼자 있는 그룹은 아무 일도 안 한다 —
+    // 가족을 부르는 것이 이 기능의 목적이다.
+    await _openInviteSheet();
+  }
+
+  /// 초대 코드로 참여한다. 성공하면 그룹이 생겼으므로 다시 부른다.
+  Future<void> _openJoin() async {
+    final joined = await Navigator.of(context)
+        .push<bool>(MaterialPageRoute(builder: (_) => const InviteJoinScreen()));
+    if (!mounted || joined != true) return;
+    await _load();
   }
 
   // ───────────── 초대 ─────────────
@@ -862,6 +930,160 @@ class _FamilyScreenState extends State<FamilyScreen> {
           ),
           const SizedBox(width: 8),
           const Icon(Icons.chevron_right, size: 20, color: Colors.white),
+        ]),
+      ),
+    );
+  }
+}
+
+/// 그룹 이름을 받는 시트 — 이슈 #196.
+///
+/// 화면이 아니라 시트인 이유는 필드가 하나뿐이라서다. `pet_registration_sheet` 가 같은
+/// 모양이고, 실패도 스낵바가 아니라 **시트 안의 빨간 한 줄**로 말한다 — 폼에서 스낵바는
+/// 입력칸을 가린다.
+class _CreateGroupSheet extends StatefulWidget {
+  final FamilyRepository repo;
+
+  const _CreateGroupSheet({required this.repo});
+
+  @override
+  State<_CreateGroupSheet> createState() => _CreateGroupSheetState();
+}
+
+class _CreateGroupSheetState extends State<_CreateGroupSheet> {
+  /// **시트가 컨트롤러를 소유한다.** 부르는 쪽이 만들어 넘기고 pop 직후에 dispose 하면,
+  /// 닫히는 애니메이션이 도는 동안 TextField 가 죽은 컨트롤러를 그린다 — 실제로 그렇게
+  /// 짰다가 "A TextEditingController was used after being disposed" 를 봤다.
+  final _name = TextEditingController(text: '우리 가족');
+
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_saving) return;
+    final name = _name.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = '가족 이름을 적어 주세요');
+      return;
+    }
+    // 서버가 50자에서 400 을 낸다. 여기서 막지 않으면 다 쓰고 누른 뒤에 알게 된다.
+    if (name.length > FamilyRepository.maxGroupNameLength) {
+      setState(() =>
+          _error = '이름은 ${FamilyRepository.maxGroupNameLength}자까지 쓸 수 있어요');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.repo.createGroup(name);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on FamilyFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = e.message;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFAFCFAFF),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+            24, 12, 24, 24 + MediaQuery.of(context).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 42,
+            height: 5,
+            decoration: BoxDecoration(
+                color: const Color(0x2E281E30),
+                borderRadius: BorderRadius.circular(3)),
+          ),
+          const SizedBox(height: 18),
+          const Text('가족 그룹 만들기',
+              style: TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 6),
+          const Text('이 이름이 가족 대화방 이름도 됩니다',
+              style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _name,
+            maxLength: FamilyRepository.maxGroupNameLength,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+            style: const TextStyle(fontSize: 15, color: T.textPrimary),
+            decoration: InputDecoration(
+              hintText: '예) 보리네 가족',
+              hintStyle: const TextStyle(fontSize: 14, color: T.textMuted),
+              filled: true,
+              fillColor: const Color(0xCCFFFFFF),
+              counterText: '',
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0x1F8C7BFF)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0x1F8C7BFF)),
+              ),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(_error!,
+                  style: const TextStyle(
+                      fontSize: 12.5, color: Color(0xFFD9534F))),
+            ),
+          ],
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: _saving ? null : _submit,
+            child: Container(
+              width: double.infinity,
+              height: 52,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: _saving
+                    ? null
+                    : const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+                      ),
+                color: _saving ? const Color(0xFFC9C2D8) : null,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              // 스피너가 아니라 문구를 바꾼다 — pet_registration_sheet 와 같은 모양이다.
+              child: Text(_saving ? '만드는 중…' : '만들기',
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white)),
+            ),
+          ),
         ]),
       ),
     );
