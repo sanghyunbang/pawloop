@@ -253,6 +253,49 @@ flutter run --dart-define-from-file=dart-define.json \
 
 ---
 
+## 5.1 안 될 때 — 실제로 겪은 것 둘
+
+### `/api/places/nearby` 가 어느 좌표를 넣어도 `[]` 를 준다
+
+HTTP 는 **200** 이고 본문만 빈 배열이라 오류처럼 안 보입니다. 원인은 둘 중 하나입니다.
+
+**1) 서비스 키가 관광공사에 등록돼 있지 않다.** 백엔드 로그에 이 줄이 있으면 그것입니다.
+
+```
+WARN  c.h.h.place.service.KtoApiClient
+      KTO 게이트웨이가 거절했다 — op=nearby returnReasonCode=30 msg=등록되지 않은 서비스키
+```
+
+키를 직접 던져 보면 갈립니다. `<키>` 자리에 `backend/.env` 의 `TOUR_API_SECRET` 을 넣습니다.
+
+```bash
+curl -s "https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2?serviceKey=<키>&MobileOS=ETC&MobileApp=t&_type=json&numOfRows=1&pageNo=1&mapX=126.99&mapY=37.57&radius=2000"
+```
+
+`resultCode: "0000"` 이면 키는 정상입니다. **403 이면 그 키가 문제**입니다 — 2026-09-02 에 실제로
+`backend/.env` 와 `app/.env` 의 키가 서로 달랐고, 동작하는 쪽이 앱에 남아 있었습니다(#182).
+앱은 #40 이후 그 키를 안 쓰므로 **서버 쪽만 맞으면 됩니다.**
+
+**2) 그날의 호출 예산이 닫혀 있다.** KTO 가 한 번이라도 `resultCode=22`(한도) 나 `30`(키)을 주면
+`KtoCallBudget.closeForToday` 가 **DB 에** `used = cap` 을 박습니다. 재시작해도 안 풀립니다.
+
+```sql
+SELECT `day`, pool, used FROM kto_call_budget ORDER BY `day` DESC;
+-- 오늘 행의 used 가 cap(기본 300)이면 닫힌 것입니다.
+UPDATE kto_call_budget SET used = 0 WHERE `day` = CURDATE() AND pool = 'nearby';
+```
+
+키를 고쳐도 이 행을 안 풀면 **여전히 빈 배열**입니다. 둘을 함께 봐야 합니다.
+
+### 지도 자리에 "지도를 불러올 수 없어요" 가 뜬다
+
+`NAVER_MAP_CLIENT_ID` 없이 빌드한 것입니다. 3절의 `--dart-define` 을 빠뜨리면 이렇게 됩니다.
+
+예전에는 이 경우 **빨간 assertion** 이 그대로 보였습니다. 지금은 세 화면(`explore` ·
+`walk_tracking` · `emotion_map`)이 `Env.hasNaverMap` 을 보고 안내문으로 대신합니다(#182).
+
+---
+
 ## 6. 빌드 명령 정리
 
 ### 프론트 (app/)

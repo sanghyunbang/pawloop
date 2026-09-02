@@ -38,7 +38,12 @@ Future<void> main() async {
 
   // 환경값은 컴파일 타임 --dart-define 으로 들어온다 (Env). 런타임 로드가 없다. → 이슈 #29
 
-  // 네이버 지도 SDK 초기화 (Client ID 없으면 스킵 → 감정지도 탭만 안내문 표시)
+  // 네이버 지도 SDK 초기화.
+  //
+  // Client ID 가 없으면 **여기서 건너뛰고**, 지도를 그리는 화면 셋이 `Env.hasNaverMap` 을
+  // 보고 안내문으로 대신한다(explore · walk_tracking · emotion_map). 예전 주석은 "감정지도
+  // 탭만 안내문 표시" 였는데 두 번 틀렸다 — 감정지도는 탭이 아니고, 안내문은 없었다.
+  // 그래서 키 없는 빌드는 빨간 assertion 을 그대로 보여 줬다 (이슈 #182).
   final naverClientId = Env.naverMapClientId;
   if (naverClientId.isNotEmpty) {
     try {
