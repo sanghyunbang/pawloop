@@ -59,7 +59,22 @@ class AccountDeleteScreen extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('탈퇴가 완료되었습니다.')),
       );
-      context.goNamed('start');
+      // **어디로 갈지는 라우터가 정한다. 여기서는 길만 터 준다.**
+      //
+      // 예전에는 `goNamed('start')` 로 레거시 셸에 보냈고, 그러면 탈퇴한 사람이
+      // Heat Trip 로고가 붙은 **다른 제품**에 착지했다 (#184).
+      //
+      // 그렇다고 아무것도 안 하면 화면이 **여기 그대로 남는다.** 실제로 그랬다 —
+      // 계정은 지워졌는데(로그인이 401) 탈퇴 화면이 그대로였다.
+      //
+      // 이유는 이 화면이 go_router 의 라우트가 아니라 그 위에 `Navigator.push` 로
+      // 얹혀 있기 때문이다(`me_screen` → `settings_screen` → 여기, 셋 다
+      // `MaterialPageRoute`). `clearLocalSession` 이 상태를 내리면 라우터는 자기
+      // 스택을 `/auth/login` 으로 바꾸지만, **그 위에 얹힌 화면들이 그것을 덮는다.**
+      //
+      // 그래서 얹힌 것만 걷어낸다. 그러면 라우터가 이미 바꿔 둔 화면이 드러난다.
+      // 목적지를 여기서 정하지 않으므로 규칙은 여전히 한 곳(`authRedirect`)에 있다.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('탈퇴에 실패했습니다. 잠시 후 다시 시도해주세요.')),
