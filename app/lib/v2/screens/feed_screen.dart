@@ -4,6 +4,7 @@ import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import 'post_detail_screen.dart';
+import 'post_write_screen.dart';
 
 /// 커뮤니티 (feed) — 반려인들의 산책·동반장소·건강 이야기. 카드/리스트 토글.
 ///
@@ -152,10 +153,7 @@ class _FeedScreenState extends State<FeedScreen> {
       return _failureView(failure);
     }
     if (_posts.isEmpty) {
-      return const Center(
-        child: Text('아직 글이 없어요 · 첫 이야기를 남겨보세요',
-            style: TextStyle(fontSize: 13.5, color: T.textMuted)),
-      );
+      return _emptyView();
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -171,6 +169,79 @@ class _FeedScreenState extends State<FeedScreen> {
         ],
       ),
     );
+  }
+
+  /// 글이 하나도 없을 때.
+  ///
+  /// **'불러오지 못했어요' 와 다른 문구여야 한다.** 빈 것과 못 불러온 것은 사용자가 할 일이
+  /// 다르다 — 하나는 쓰면 되고 하나는 기다리면 된다. `pet.dart` 가 산책 더미를 지우며 남긴
+  /// 규칙이 같은 말을 한다: "0 은 '산책을 한 번도 안 했다' 로 읽힌다".
+  ///
+  /// 어느 게시판이 비었는지 말한다. '자유' 를 골랐는데 그냥 "글이 없어요" 라고만 하면
+  /// 앱 전체가 빈 것처럼 읽힌다(#173).
+  Widget _emptyView() {
+    final board = _board;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+            board == null
+                ? '아직 글이 없어요'
+                : '아직 ${board.label} 게시판에 글이 없어요',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w700, color: T.textSecondary),
+          ),
+          const SizedBox(height: 6),
+          const Text('첫 이야기를 남겨보세요',
+              style: TextStyle(fontSize: 13, color: T.textMuted)),
+          const SizedBox(height: 14),
+          _writeButton(label: '글쓰기', big: true),
+        ]),
+      ),
+    );
+  }
+
+  /// 글쓰기로 가는 버튼. 두 자리에서 같은 것을 쓴다 — 게시판 줄과 빈 화면.
+  ///
+  /// 떠 있는 FAB 을 안 만든 이유는 셸이 화면 위에 네비 띠를 덮기 때문이다
+  /// (`main_shell` 의 알약이 bottom+8~74, 가운데 버튼이 bottom+38~96). 그 띠는 Stack 의
+  /// **마지막** 자식이라 그 안에 그린 것은 눌리지 않는다.
+  Widget _writeButton({required String label, bool big = false}) {
+    return GestureDetector(
+      onTap: _openWrite,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+            horizontal: big ? 20 : 13, vertical: big ? 11 : 7),
+        decoration: BoxDecoration(
+            gradient: _warm, borderRadius: BorderRadius.circular(big ? 14 : 11)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.edit_outlined, size: big ? 17 : 14, color: Colors.white),
+          SizedBox(width: big ? 7 : 5),
+          Text(label,
+              style: TextStyle(
+                  fontSize: big ? 14 : 12,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white)),
+        ]),
+      ),
+    );
+  }
+
+  /// 글쓰기 화면을 연다. 미로그인 판정은 [writePost] 안에 한 곳만 있다.
+  ///
+  /// 방금 쓴 글이 목록에 보여야 한다(#172 완료 조건 6). 지금 고른 게시판을 들고 가서
+  /// 사용자가 다시 고르지 않게 한다.
+  Future<void> _openWrite() async {
+    final written = await writePost(
+      context,
+      repository: _repo,
+      initialBoard: _board,
+    );
+    if (!mounted || written == null) return;
+    await _load();
   }
 
   /// 못 불러왔을 때의 화면.
@@ -294,9 +365,15 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
         ),
         const Spacer(),
-        Text(_failure != null ? '' : '${_posts.length}개의 글',
-            style: const TextStyle(
-                fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textMuted)),
+        if (_failure == null) ...[
+          Text('${_posts.length}개의 글',
+              style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: T.textMuted)),
+          const SizedBox(width: 10),
+        ],
+        _writeButton(label: '글쓰기'),
       ]),
     );
   }

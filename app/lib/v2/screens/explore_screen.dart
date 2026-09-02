@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
+import '../data/community_repository.dart';
 import '../theme/app_tokens.dart';
+import 'post_write_screen.dart';
 import '../domain/pet.dart';
 import '../data/pet_places_repository.dart';
 import '../data/location_service.dart';
@@ -496,6 +498,52 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
+  /// 이 장소를 물고 커뮤니티 글쓰기로 간다 — 이슈 #172.
+  ///
+  /// **장소 단위 UGC 가 차별화 논리다**(`market-competition.md:87`). 나중에 붙이면 이미
+  /// 쌓인 글에는 영영 장소가 없다. 그래서 처음부터 `contentId` 를 싣는다.
+  ///
+  /// <b>단, 더미 레이어에서는 안 싣는다.</b> 병원·펫샵은 아직 공공데이터가 아니라
+  /// `_dummyVet`·`_dummyShop` 의 하드코딩이고 `contentId` 가 `'v1'`·`'s1'` 이다. 서버가
+  /// 본 적 없는 값이라, 실으면 나중에 진짜 데이터가 들어왔을 때 아무 장소와도 안 이어지는
+  /// 글이 남는다. 이름(`loc`)만 들고 간다 — 그 필드가 정확히 그 자리다.
+  ///
+  /// 시트를 먼저 닫는다. 그리고 `sheetCtx` 가 아니라 화면의 `context` 로 민다 —
+  /// 닫힌 시트의 컨텍스트는 죽어 있다.
+  Widget _writeAboutPlace(BuildContext sheetCtx, PetPlace p) {
+    final linkable = p.contentId.isNotEmpty && !kLayerKeys.contains(p.contentTypeId);
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        writePost(
+          context,
+          initialBoard: CommunityBoard.petPlace,
+          loc: p.title,
+          contentId: linkable ? p.contentId : null,
+        );
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 46,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+          ),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.edit_outlined, size: 16, color: Colors.white),
+          SizedBox(width: 7),
+          Text('이 장소로 글쓰기',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+        ]),
+      ),
+    );
+  }
+
   void _showPlaceSheet(PetPlace p) {
     final cat = p.category;
     showModalBottomSheet(
@@ -550,6 +598,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
             SizedBox(width: 5),
             Text('반려동물 동반 가능 (관광공사)', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
           ]),
+          const SizedBox(height: 14),
+          _writeAboutPlace(sheetCtx, p),
         ]),
       ),
     );

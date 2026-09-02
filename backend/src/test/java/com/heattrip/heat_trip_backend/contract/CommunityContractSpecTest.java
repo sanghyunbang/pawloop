@@ -15,8 +15,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.heattrip.heat_trip_backend.community.controller.CommunityController;
+import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.CommentResponse;
 import com.heattrip.heat_trip_backend.community.dto.PersonRefResponse;
+import com.heattrip.heat_trip_backend.community.dto.PostRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostResponse;
 import com.heattrip.heat_trip_backend.community.dto.ReactionSummaryResponse;
 import com.heattrip.heat_trip_backend.community.service.CommunityService;
@@ -200,6 +202,33 @@ class CommunityContractSpecTest {
         }
     }
 
+    @Test
+    @DisplayName("본문 길이 상한이 계약·서버·앱 셋에서 같은 수다")
+    void bodyLengthHasOneNumber() {
+        int contractPostBody = maxLengthOf("PostInput", "body");
+        int contractTitle = maxLengthOf("PostInput", "title");
+
+        assertThat(contractPostBody)
+                .as("""
+                        2026-09-03 이전에는 이 상한이 계약에도 서버에도 없었다(#172 에서 찾음). \
+                        post.body 는 TEXT 라 안 막으면 65535바이트까지 들어가고, 그 수는 컬럼 \
+                        타입이 흘린 것이지 제품이 고른 것이 아니다.""")
+                .isEqualTo(PostRequest.MAX_BODY_LENGTH);
+        assertThat(contractTitle).isEqualTo(200);
+
+        String repository = readRepositoryFile("../app/lib/v2/data/community_repository.dart");
+        assertThat(repository)
+                .as("""
+                        앱의 입력칸이 이 수를 봐야 한다. 여기서 안 막으면 상한을 넘긴 사람이 \
+                        올리기를 누른 뒤에야 400 을 받는다 — create_screen 이 #161 에서 같은 \
+                        이유를 적어 뒀다.
+                        숫자가 두 곳에 있는 것을 없앨 수는 없다(다른 언어다). 대신 갈리면 \
+                        여기가 빨간불이 된다.""")
+                .contains("maxBodyLength = " + PostRequest.MAX_BODY_LENGTH)
+                .contains("maxTitleLength = " + contractTitle)
+                .contains("maxCommentLength = " + CommentRequest.MAX_BODY_LENGTH);
+    }
+
     // ─────────────────── D. 게스트 읽기 축 ───────────────────
 
     @Test
@@ -296,6 +325,21 @@ class CommunityContractSpecTest {
         Map<String, Object> found = (Map<String, Object>) schemas.get(name);
         assertThat(found).as("계약에 %s 스키마가 없다", name).isNotNull();
         return found;
+    }
+
+    /** {@code components.schemas.<name>.properties.<field>.maxLength}. */
+    @SuppressWarnings("unchecked")
+    private static int maxLengthOf(String schemaName, String field) {
+        Map<String, Object> properties =
+                (Map<String, Object>) schema(schemaName).get("properties");
+        Map<String, Object> property = (Map<String, Object>) properties.get(field);
+        assertThat(property).as("계약의 %s.%s 가 없다", schemaName, field).isNotNull();
+
+        Object maxLength = property.get("maxLength");
+        assertThat(maxLength)
+                .as("계약이 %s.%s 의 상한을 안 적으면 앱이 얼마까지 쓸 수 있는지 모른다", schemaName, field)
+                .isInstanceOf(Integer.class);
+        return (Integer) maxLength;
     }
 
     @SuppressWarnings("unchecked")

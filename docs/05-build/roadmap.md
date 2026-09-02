@@ -46,7 +46,7 @@
 - **지도(explore_screen).** 관광공사 KTO **실연동**(서울 반려동반 장소) + 병원/펫샵/산책로 **더미 레이어** + 카테고리 필터·범례·장소 시트.
 - **실시간 산책(walk_tracking_screen).** **더미 시뮬레이션**(서울숲 고정 좌표 루프를 타이머로 한 점씩 그림) + 경로 폴리라인 + 라이브 스탯(시간/거리).
 - **통계(insight_screen).** `fl_chart` 주간 막대 + 요약 + 자주 가는 곳. **더미 데이터**.
-- **커뮤니티(feed_screen / post_detail_screen / create_screen).** 게시판·반응·댓글 UI. **더미 데이터**(`kPetPosts`).
+- **커뮤니티(feed_screen / post_detail_screen).** 게시판·반응·댓글 UI. **더미 데이터**(`kPetPosts`). 글쓰기 화면은 M0 에 없었다 — `create_screen` 은 산책 기록이고, 이 줄이 그것을 커뮤니티라고 지목하고 있었다(#175). 지금은 `post_write_screen` 이 M3.1 에서 생겼다(#172).
 - **강아지 프로필(me_screen / edit_screen).** `DogProfile`(견종/크기/나이/중성화) 표시·편집, 전역 `kMyDog` ValueNotifier.
 - **디자인 시스템.** AuroraBackground + GlassCard, 플로팅 글래스 네비(가운데 산책 FAB), 따뜻한 그라데이션(#FFA96B→#FF7E8A), Fluent Emoji 3D 아이콘, Pretendard, `T` 디자인 토큰.
 
@@ -271,7 +271,7 @@
 1. **표 셋**(#169) — `post`·`comment`·`reaction`. `mysql/post-start/**14**_community.sql` 이다 — **13 은 #155 의 `13_walk_path_t.sql` 이 이미 쓴다.** `schema.md`·`erd.md` 정본 갱신. `reaction` 의 `UNIQUE` 는 `(post_id, user_id, type)` 이고 초안 그대로다(ADR-0016 결정 2).
 2. ~~**API 여섯**(#170)~~ **완료 — 일곱이다.** ADR-0016 이 반응을 멱등 둘로 나눴다. `/api/community` 패키지에 엔티티·리포지토리·서비스·컨트롤러가 섰고, 게스트 읽기는 `SecurityConfig` 의 메서드 축 한 줄로 열렸다. 목록의 쿼리 예산은 **셋**이다(`social` 은 넷 — 탈퇴자 조회가 여기서는 필요 없다).
 3. ~~**앱 연결**(#171)~~ **완료.** `kPetPosts`·`PetPost`·`kPetBoards`·`kPetReactions` 를 걷어내고 `community_repository.dart` 를 만들었다. 게시판은 `CommunityBoard` enum 이 ASCII 키와 한글 라벨을 함께 든다 — 한글을 값으로 쓰던 자리가 여기였다. 장소 키는 `contentId` 다(ADR-0017 이 `placeId` 를 없앴다). 서버를 못 부르면 빈 목록이 아니라 "불러오지 못했어요" 다.
-4. **글쓰기 화면**(#172) — 저장소에 없다. `create_screen.dart` 를 재사용하지 않는다 — 그 화면의 호출부 셋이 전부 산책 축이다.
+4. ~~**글쓰기 화면**(#172)~~ **완료.** `post_write_screen.dart` 를 새로 만들었다. `create_screen.dart` 는 재사용하지 않았다 — 그 화면의 호출부가 전부 산책 축이다. 진입점 셋(피드의 글쓰기 버튼 · 빈 목록의 안내 · 지도 장소 시트의 '이 장소로 글쓰기')이 `writePost()` 한 함수를 지난다. 미로그인 판정이 거기 한 곳이다.
 
 **문서 선행**(#167·#168·#175) — 이 셋을 만드는 사람이 `community.md`·`api-spec.md` 를 베낀다. 지금 그 문서들이 금지된 인증 패턴(`HttpServletRequest req`)을 지시하고, 계약에 없는 경로와 board 코드를 적고, 산책 화면을 커뮤니티 글쓰기라고 지목한다. **구현 전에 안 고치면 틀린 것이 코드가 된다.**
 

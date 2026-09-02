@@ -2,6 +2,8 @@ package com.heattrip.heat_trip_backend.community;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
+import com.heattrip.heat_trip_backend.community.dto.PostRequest;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -221,10 +223,46 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
 
         assertThat(body)
                 .as("""
-                        DB 에 CHECK 를 안 걸었고 계약에서만 값이 닫혀 있다 — 서비스가 유일한 \
-                        방어선이다. 그냥 "잘못된 값" 이라고만 하면 부르는 쪽이 계약을 다시 열어 \
-                        봐야 한다.""")
+                        서비스가 첫 방어선이고, 사람에게 말해 주는 유일한 자리다. 그냥 "잘못된 값" \
+                        이라고만 하면 부르는 쪽이 계약을 다시 열어 봐야 한다.
+                        뒤에는 DB 의 chk_post_board 가 있다(#167) — 그건 서비스를 안 지나는 길을 \
+                        막을 뿐 메시지를 만들어 주지는 않는다.""")
                 .contains("walk_review");
+    }
+
+    @Test
+    @DisplayName("본문이 상한을 넘으면 400 이다 — TEXT 컬럼이라 안 막으면 65535바이트까지 들어간다")
+    void rejectsABodyOverTheLimit() throws Exception {
+        Account me = account("긴본문");
+
+        createPost(me, """
+                {"board":"free","title":"제목","body":"%s"}
+                """.formatted("가".repeat(PostRequest.MAX_BODY_LENGTH + 1)))
+                .andExpect(status().isBadRequest());
+
+        createPost(me, """
+                {"board":"free","title":"제목","body":"%s"}
+                """.formatted("가".repeat(PostRequest.MAX_BODY_LENGTH)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("댓글도 상한이 있고 글보다 짧다")
+    void rejectsACommentOverTheLimit() throws Exception {
+        Account me = account("긴댓글");
+        long postId = newPost(me);
+
+        assertThat(CommentRequest.MAX_BODY_LENGTH)
+                .as("댓글은 스레드에서 다른 댓글들과 함께 읽힌다 — 한 줄이 화면을 다 먹으면 스레드가 아니다")
+                .isLessThan(PostRequest.MAX_BODY_LENGTH);
+
+        mockMvc.perform(post("/api/community/posts/" + postId + "/comments")
+                        .header("Authorization", "Bearer " + me.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"body":"%s"}
+                                """.formatted("가".repeat(CommentRequest.MAX_BODY_LENGTH + 1))))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
