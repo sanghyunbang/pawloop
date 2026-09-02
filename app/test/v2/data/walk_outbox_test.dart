@@ -9,6 +9,8 @@
 //  3. 멱등키가 재전송에도 **그대로**인가. 새로 만들면 서버의 UNIQUE 그물을 통과해
 //     같은 산책이 두 줄이 된다.
 
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -49,6 +51,9 @@ class _ScriptedRepository implements WalkRepository {
   int saveCalls = 0;
   final List<String> savedKeys = [];
 
+  /// 매 저장에 실린 점별 시각. `null` 이면 안 보낸 것이다 (#155).
+  final List<List<int>?> sentPathT = [];
+
   @override
   Future<List<ServerPet>> pets() async => pets_;
 
@@ -61,11 +66,13 @@ class _ScriptedRepository implements WalkRepository {
     required int distanceM,
     required int durationS,
     List<List<double>>? path,
+    List<int>? pathT,
     String? memo,
     String? weather,
   }) async {
     saveCalls++;
     savedKeys.add(clientWalkId);
+    sentPathT.add(pathT);
     final result = onSave?.call(clientWalkId);
     if (result is WalkFailure) throw result;
     return ServerWalk(
@@ -88,6 +95,90 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  // ─────────────── 점별 시각 (#155) ───────────────
+  //
+  // LINESTRING 은 x, y 만 담아서 점마다 몇 초에 찍혔는지가 어디에도 없었다. 시각은 그
+  // 순간에만 있는 정보라 나중에 만들 수 없다.
+
+  group('점별 시각', () {
+    test('앱을 껐다 켜도 시각이 살아 있다', () async {
+      final first = await WalkOutbox.open();
+      await first.put(WalkDraft.fresh(
+        startedAt: DateTime(2026, 9, 2, 9, 0),
+        endedAt: DateTime(2026, 9, 2, 9, 30),
+        distanceM: 100,
+        durationS: 7,
+        path: const [
+          [126.9780, 37.5665],
+          [126.9800, 37.5670],
+          [126.9820, 37.5675],
+        ],
+        pathT: const [0, 3, 7],
+      ));
+
+      final second = await WalkOutbox.open();
+
+      expect(second.pending.single.pathT, [0, 3, 7]);
+    });
+
+    test('길이가 어긋나면 시각만 버리고 산책은 지킨다', () async {
+      // 짝이 안 맞는 배열을 그대로 보내면 서버가 400 을 주고, 그러면 그 초안이 거절
+      // 큐로 가서 **사용자가 실제로 걸은 기록이 못 올라간다.** 시각을 잃는 편이 낫다.
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        WalkOutbox.pendingKey: <String>[
+          jsonEncode({
+            'clientWalkId': 'mismatched',
+            'startedAt': '2026-09-02T09:00:00.000',
+            'endedAt': '2026-09-02T09:30:00.000',
+            'distanceM': 100,
+            'durationS': 7,
+            'path': [
+              [126.9780, 37.5665],
+              [126.9800, 37.5670],
+              [126.9820, 37.5675],
+            ],
+            'pathT': [0, 7],
+          }),
+        ],
+      });
+
+      final outbox = await WalkOutbox.open();
+
+      expect(outbox.pending.single.path, hasLength(3),
+          reason: '산책은 남아야 한다');
+      expect(outbox.pending.single.pathT, isEmpty,
+          reason: '짝이 안 맞는 시각은 어느 점이 언제인지 말해 주지 못한다');
+    });
+
+    test('시각이 없으면 서버에 안 싣는다 — 손입력 기록이다', () async {
+      final repo = _ScriptedRepository(pets_: [const ServerPet(id: 1, name: '콩이', species: ServerPetSpecies.dog, size: ServerPetSize.small, neutered: false)]);
+      final sync = WalkSync(repo, await WalkOutbox.open());
+
+      await sync.push(draftOf());
+
+      expect(repo.sentPathT.single, isNull);
+    });
+
+    test('시각이 있으면 함께 보낸다', () async {
+      final repo = _ScriptedRepository(pets_: [const ServerPet(id: 1, name: '콩이', species: ServerPetSpecies.dog, size: ServerPetSize.small, neutered: false)]);
+      final sync = WalkSync(repo, await WalkOutbox.open());
+
+      await sync.push(WalkDraft.fresh(
+        startedAt: DateTime(2026, 9, 2, 9, 0),
+        endedAt: DateTime(2026, 9, 2, 9, 30),
+        distanceM: 100,
+        durationS: 7,
+        path: const [
+          [126.9780, 37.5665],
+          [126.9800, 37.5670],
+        ],
+        pathT: const [0, 7],
+      ));
+
+      expect(repo.sentPathT.single, [0, 7]);
+    });
   });
 
   group('보관소', () {

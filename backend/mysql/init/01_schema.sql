@@ -426,7 +426,7 @@ CREATE TABLE `place_hashtags` (
   PRIMARY KEY (`id`),
   KEY `idx_ph_place` (`place_id`),
   KEY `idx_ph_hashtag` (`hashtag`)
-) ENGINE=InnoDB AUTO_INCREMENT=286 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `place_kakao_links` (
   `kakao_mapx` double DEFAULT NULL,
@@ -446,7 +446,7 @@ CREATE TABLE `place_simple_tags` (
   PRIMARY KEY (`id`),
   KEY `idx_pst_place` (`place_id`),
   KEY `idx_pst_tag` (`tag`)
-) ENGINE=InnoDB AUTO_INCREMENT=286 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `place_star_ratings` (
   `rating` double DEFAULT NULL,
@@ -593,6 +593,7 @@ CREATE TABLE `walk` (
   `weather` varchar(30) DEFAULT NULL,
   `client_walk_id` varchar(64) NOT NULL,
   `memo` varchar(500) DEFAULT NULL,
+  `path_t` json DEFAULT NULL,
   `path` linestring /*!80003 SRID 4326 */ DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_walk_client` (`dog_id`,`client_walk_id`),

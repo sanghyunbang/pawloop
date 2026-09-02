@@ -373,6 +373,9 @@ class WalkRepository {
     required int distanceM,
     required int durationS,
     List<List<double>>? path,
+
+    /// 각 점의 시각 — 시작 기준 델타 초. **`path` 와 길이가 같아야 한다** (#155).
+    List<int>? pathT,
     String? memo,
     String? weather,
   }) async {
@@ -389,6 +392,10 @@ class WalkRepository {
           'distanceM': distanceM,
           'durationS': durationS,
           if (path != null && path.length >= 2) 'path': path,
+          // path 를 실을 때만 함께 싣는다. 길이가 다르면 서버가 400 이고, path 를 뺀
+          // 채로 pathT 만 보내도 400 이다 — 경로 없는 시각은 뜻이 없다. (#155)
+          if (path != null && path.length >= 2 && pathT != null && pathT.length == path.length)
+            'pathT': pathT,
           if (memo != null && memo.isNotEmpty) 'memo': memo,
           if (weather != null && weather.isNotEmpty) 'weather': weather,
         },

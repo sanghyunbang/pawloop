@@ -172,7 +172,7 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
             for (String name : names) {
                 try (ResultSet rs = st.executeQuery("SHOW CREATE TABLE `" + name + "`")) {
                     if (rs.next()) {
-                        ddl.append(rs.getString(2)).append(";\n\n");
+                        ddl.append(stripVolatile(rs.getString(2))).append(";\n\n");
                         tables++;
                     }
                 }
@@ -275,4 +275,19 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
                 .toList();
     }
 
+
+    /**
+     * 실행마다 달라지는 것을 뺀다 — 지금은 {@code AUTO_INCREMENT=N} 하나다.
+     *
+     * <p>{@code SHOW CREATE TABLE} 은 그 표의 <b>다음 자동 증가 값</b>을 함께 뱉는다.
+     * 그 숫자는 테스트가 몇 행을 넣었느냐에 따라 매번 달라지므로, 그대로 정본에 넣으면
+     * <b>스키마가 안 바뀌었는데도 재생성할 때마다 diff 가 난다.</b> 실제로 컬럼 하나를
+     * 더한 변경에 그 줄 셋이 딸려 왔다. (#155)
+     *
+     * <p>정본은 "이 스키마가 어떤 모양인가" 를 말해야 하고, 다음 id 가 몇인지는 그
+     * 모양이 아니다.
+     */
+    private static String stripVolatile(String ddl) {
+        return ddl.replaceAll(" AUTO_INCREMENT=\\d+", "");
+    }
 }

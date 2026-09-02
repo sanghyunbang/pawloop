@@ -65,6 +65,16 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   /// 실제로 걸은 좌표만 들어간다. 지어낸 점은 한 개도 넣지 않는다.
   final List<NLatLng> _path = [];
 
+  /// 각 점이 찍힌 시각 — **시작 기준 델타 초.** `_path` 와 길이가 같다. 이슈 #155.
+  ///
+  /// `LINESTRING` 은 x, y 만 담아서 점마다 몇 초에 찍혔는지가 어디에도 없었다. 시각은
+  /// **그 순간에만 있는 정보라 나중에 만들 수 없다** — 안 보내면 그 산책에 대해 구간
+  /// 페이스·일시정지 구간 복원·거리 재계산이 영영 불가능해진다.
+  ///
+  /// `_seconds` 를 그대로 쓴다. 그래서 **일시정지 동안은 초가 안 흐르고**, 델타가
+  /// 건너뛰면 그 사이가 멈춘 구간이라는 것을 나중에 추론할 수 있다.
+  final List<int> _pathT = [];
+
   @override
   void initState() {
     super.initState();
@@ -105,6 +115,9 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
       setState(() {
         if (_path.isNotEmpty) _km += _dist(_path.last, cur);
         _path.add(cur);
+        // 둘을 **같은 setState 안에서** 늘린다. 나뉘면 그 사이에 길이가 어긋나고,
+        // 서버가 400 으로 거절한다(계약: path 와 길이가 같아야 한다).
+        _pathT.add(_seconds);
       });
       _drawPath();
       if (_follow) _ctrl?.updateCamera(NCameraUpdate.withParams(target: cur));
@@ -573,6 +586,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
       path: [
         for (final p in _path) [p.longitude, p.latitude],
       ],
+      pathT: List<int>.of(_pathT),
     );
   }
 

@@ -44,6 +44,19 @@ public record WalkRequest(
 
         List<List<Double>> path,
 
+        /**
+         * 점별 시각 — 시작 시각 기준 델타 초. 이슈 #155.
+         *
+         * <p><b>{@code path} 와 길이가 같아야 한다.</b> 다르면 400 이다 — 짝이 안 맞는
+         * 배열은 어느 점이 언제인지 말해 주지 못하므로 저장할 가치가 없다.
+         *
+         * <p>{@code path} 가 없으면 이것도 없어야 한다. 경로 없는 시각은 뜻이 없다.
+         *
+         * <p>일시정지 동안은 초가 안 흐른다 — 앱의 {@code _seconds} 와 같은 규칙이다.
+         * 그래서 델타가 건너뛰면 그 사이가 멈춘 구간이라는 것을 화면이 추론할 수 있다.
+         */
+        List<Integer> pathT,
+
         @Size(max = 500, message = "메모는 500자를 넘을 수 없습니다.")
         String memo,
 

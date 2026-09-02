@@ -99,6 +99,7 @@ class WalkSync {
         distanceM: withDog.distanceM,
         durationS: withDog.durationS,
         path: withDog.path.isEmpty ? null : withDog.path,
+        pathT: withDog.pathT.isEmpty ? null : withDog.pathT,
         memo: withDog.memo,
         weather: withDog.weather,
       );

@@ -55,6 +55,57 @@ public final class WalkPath {
      * @throws IllegalArgumentException 모양이 계약과 다르거나, 값이 좌표 범위를 벗어나거나,
      *                                  뒤집혀 보인 경우. 400 이 된다
      */
+    /**
+     * 점별 시각을 JSON 배열 문자열로 만든다 — 이슈 #155.
+     *
+     * <p><b>{@code path} 와 길이가 같아야 한다.</b> 짝이 안 맞으면 어느 점이 언제인지
+     * 말해 주지 못하므로 저장할 가치가 없다. DB 에 CHECK 를 걸지 않았으므로
+     * <b>이 검사가 유일한 방어선</b>이다(13_walk_path_t.sql §B-1).
+     *
+     * <p>경로가 없으면 시각도 없어야 한다 — 경로 없는 시각은 뜻이 없다.
+     *
+     * @param points 경로. {@code null} 이거나 비어 있을 수 있다
+     * @param seconds 시작 기준 델타 초. {@code null} 이면 저장하지 않는다
+     * @return JSON 배열 문자열. 실을 것이 없으면 {@code null}
+     * @throws IllegalArgumentException 길이가 다르거나, 경로 없이 시각만 왔거나,
+     *         초가 음수이거나 뒤로 흐를 때
+     */
+    public static String toPathTimes(List<List<Double>> points, List<Integer> seconds) {
+        if (seconds == null || seconds.isEmpty()) return null;
+
+        int pointCount = points == null ? 0 : points.size();
+        if (pointCount == 0) {
+            throw new IllegalArgumentException(
+                    "경로 없이 점별 시각만 보낼 수 없습니다.");
+        }
+        if (seconds.size() != pointCount) {
+            throw new IllegalArgumentException(
+                    "점별 시각의 개수가 경로의 점 개수와 다릅니다.");
+        }
+
+        // 음수는 시작 전이고, 뒤로 흐르는 것은 시계가 거꾸로 간 것이다. 둘 다 그 배열로
+        // 할 수 있는 계산(구간 페이스)이 의미를 잃는다. 조용히 받아 두면 그 계산을
+        // 처음 하는 날까지 아무도 모른다.
+        int previous = -1;
+        StringBuilder json = new StringBuilder(seconds.size() * 4 + 2).append('[');
+        for (int i = 0; i < seconds.size(); i++) {
+            Integer value = seconds.get(i);
+            if (value == null) {
+                throw new IllegalArgumentException("점별 시각에 빈 값이 있습니다.");
+            }
+            if (value < 0) {
+                throw new IllegalArgumentException("점별 시각은 음수일 수 없습니다.");
+            }
+            if (value < previous) {
+                throw new IllegalArgumentException("점별 시각이 뒤로 흐릅니다.");
+            }
+            previous = value;
+            if (i > 0) json.append(',');
+            json.append(value.intValue());
+        }
+        return json.append(']').toString();
+    }
+
     public static LineString toLineString(List<List<Double>> points) {
         if (points == null || points.size() < 2) {
             return null;
