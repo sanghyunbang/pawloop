@@ -48,14 +48,6 @@ public final class WalkPath {
     }
 
     /**
-     * 계약의 {@code path}({@code [[경도, 위도], ...]})를 선으로 옮긴다.
-     *
-     * @return 점이 2개 미만이면 {@code null} — <b>LINESTRING 은 점 하나로 만들 수 없다.</b>
-     *         시작점을 두 번 넣어 길이 0 짜리 선을 만들지 않는다(지도에 점이 찍힌다).
-     * @throws IllegalArgumentException 모양이 계약과 다르거나, 값이 좌표 범위를 벗어나거나,
-     *                                  뒤집혀 보인 경우. 400 이 된다
-     */
-    /**
      * 점별 시각을 JSON 배열 문자열로 만든다 — 이슈 #155.
      *
      * <p><b>{@code path} 와 길이가 같아야 한다.</b> 짝이 안 맞으면 어느 점이 언제인지
@@ -111,6 +103,15 @@ public final class WalkPath {
         return json.append(']').toString();
     }
 
+    /**
+     * 계약의 {@code path}({@code [[경도, 위도], ...]})를 선으로 옮긴다.
+     *
+     * @return 점이 2개 미만이면 {@code null} — <b>LINESTRING 은 점 하나로 만들 수 없다.</b>
+     *         시작점을 두 번 넣어 길이 0 짜리 선을 만들지 않는다(지도에 점이 찍힌다).
+     * @throws IllegalArgumentException 모양이 계약과 다르거나, 값이 좌표 범위를 벗어나거나,
+     *                                  뒤집혀 보인 경우, 또는 점이 {@link #MAX_POINTS} 를
+     *                                  넘는 경우. 전부 400 이 된다
+     */
     public static LineString toLineString(List<List<Double>> points) {
         if (points == null || points.size() < 2) {
             return null;

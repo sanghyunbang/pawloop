@@ -17,7 +17,13 @@ abstract class JourneyApi {
   Future<DiaryEntry> updateDiary(DiaryEntry entry);
 }
 
-/// 데모용 더미 API → 실제 서버 구현 시 수정 (수정됨)
+/// 서버에 붙은 구현이다. 스케줄은 [ScheduleRepositoryImpl], 여정·다이어리는
+/// [JourneyRepositoryImpl] 이 실제 HTTP 로 부른다.
+///
+/// 다만 [fetchStats] 는 아직 서버를 안 부르고 목록 길이로 통계를 만든다.
+///
+/// (예전 주석은 "데모용 더미 API" 였는데, 그것을 믿으면 이 클래스를 통째로 갈아 끼우려
+///  한다. 감정 여행 시절의 레거시 셸이고 처리는 #94 가 정한다.)
 class RealJourneyApi implements JourneyApi {
   final ScheduleRepositoryImpl _repo = ScheduleRepositoryImpl();
   final JourneyRepositoryImpl _jrepo = JourneyRepositoryImpl();

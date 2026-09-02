@@ -271,8 +271,11 @@ class _CreateScreenState extends State<CreateScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('얼마나 걸었나요?', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
         // 초안이 없으면 아래 2.0km/30분은 **측정값이 아니라 출발점**이다. 그 말을 안
-        // 하면 사용자가 앱이 재어 준 값인 줄 알고 그대로 저장한다. 걷지 않은 2km 가
-        // 통계에 계속 세지고, 지금은 삭제 UI 도 없어 지울 수도 없다. (이슈 #160)
+        // 하면 사용자가 앱이 재어 준 값인 줄 알고 그대로 저장하고, 걷지 않은 2km 가
+        // 통계에 계속 세진다. (이슈 #160)
+        //
+        // 지우는 것은 가능하다 — 내 기록 화면(myrecords_screen)에서 길게 눌러 지운다.
+        // 하드 삭제라 되돌릴 수 없어서 그 화면이 반드시 한 번 묻는다.
         if (widget.draft == null) ...[
           const SizedBox(height: 5),
           const Row(children: [

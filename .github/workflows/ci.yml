@@ -44,6 +44,10 @@ jobs:
               - '.github/workflows/ci.yml'
             docs:
               - 'docs/**'
+              # 저장소의 첫인상 문서다. 여기 없어서 README 만 고친 PR 에서는
+              # 문서 잡 둘이 전부 skipping 이었고, 그 사이 이 파일이 가장 낡았다
+              # (2026-09-02, 15곳). 검사 밖에 두면 그렇게 된다.
+              - 'README.md'
               - 'app/lib/**'
               - '.github/scripts/check-docs-drift.sh'
               - '.github/workflows/ci.yml'
