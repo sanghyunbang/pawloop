@@ -1,28 +1,106 @@
 import 'package:flutter/material.dart';
+import '../data/community_repository.dart';
 import '../theme/app_tokens.dart';
-import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import 'post_detail_screen.dart';
 
 /// 커뮤니티 (feed) — 반려인들의 산책·동반장소·건강 이야기. 카드/리스트 토글.
+///
+/// **서버에서 온다** (이슈 #171). 2026-09 이전에는 `kPetPosts` 상수 4건을 걸렀고,
+/// 그래서 누가 글을 써도 아무에게도 안 보였다.
+///
+/// 게시판 칩의 한글은 **화면 문구**다. 서버로 나가는 값은 `CommunityBoard.wire`
+/// (`walk_review` 등)이고 둘을 묶어 두는 자리는 그 enum 하나다(ADR-0016).
 class FeedScreen extends StatefulWidget {
-  const FeedScreen({super.key});
+  /// 테스트가 가짜 서버를 넣는 자리. 앱에서는 `null` 이라 기본 리포지토리가 선다.
+  final CommunityRepository? repository;
+
+  const FeedScreen({super.key, this.repository});
+
   @override
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  String feedBoard = '전체';
-  String view = 'card'; // 'card' | 'list'
+  late final CommunityRepository _repo =
+      widget.repository ?? CommunityRepository();
+
+  /// `null` 이면 전체.
+  CommunityBoard? _board;
+  String _view = 'card'; // 'card' | 'list'
+
+  List<CommunityPost> _posts = const [];
+  String? _nextCursor;
+  bool _hasMore = false;
+
+  bool _loading = true;
+  bool _loadingMore = false;
+
+  /// 못 불러온 이유. **빈 목록으로 그리지 않는다** — 빈 목록은 "아직 글이 없다" 로
+  /// 읽히고, 그러면 서버가 죽은 것을 아무도 모른다.
+  CommunityFailure? _failure;
 
   static const _warm = LinearGradient(
-    begin: Alignment(-0.8, -1), end: Alignment(0.8, 1),
+    begin: Alignment(-0.8, -1),
+    end: Alignment(0.8, 1),
     colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
   );
 
-  List<PetPost> get _posts =>
-      kPetPosts.where((p) => feedBoard == '전체' || p.board == feedBoard).toList();
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failure = null;
+    });
+    try {
+      final page = await _repo.feed(board: _board);
+      if (!mounted) return;
+      setState(() {
+        _posts = page.items;
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loading = false;
+      });
+    } on CommunityFailure catch (failure) {
+      if (!mounted) return;
+      setState(() {
+        _failure = failure;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final cursor = _nextCursor;
+    if (cursor == null || _loadingMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await _repo.feed(board: _board, cursor: cursor);
+      if (!mounted) return;
+      setState(() {
+        _posts = [..._posts, ...page.items];
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loadingMore = false;
+      });
+    } on CommunityFailure {
+      // 다음 장을 못 받은 것은 첫 장까지 지울 이유가 아니다. 버튼만 되살린다.
+      if (!mounted) return;
+      setState(() => _loadingMore = false);
+    }
+  }
+
+  void _selectBoard(CommunityBoard? board) {
+    if (_board == board) return;
+    setState(() => _board = board);
+    _load();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +113,11 @@ class _FeedScreenState extends State<FeedScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               child: Row(children: [
-                const Text('커뮤니티', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                const Text('커뮤니티',
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: T.textPrimary)),
                 const Spacer(),
                 _viewToggle(),
                 const SizedBox(width: 10),
@@ -47,39 +129,123 @@ class _FeedScreenState extends State<FeedScreen> {
               padding: EdgeInsets.symmetric(horizontal: 15),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('우리 아이들 이야기', style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
+                child: Text('우리 아이들 이야기',
+                    style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
               ),
             ),
             const SizedBox(height: 10),
             _boardFilter(),
             const SizedBox(height: 8),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(12, 4, 12, MediaQuery.of(context).padding.bottom + 100),
-                children: [
-                  for (final p in _posts) ...[
-                    view == 'card' ? _card(p) : _row(p),
-                    SizedBox(height: view == 'card' ? 14 : 10),
-                  ],
-                ],
-              ),
-            ),
+            Expanded(child: _body()),
           ]),
         ),
       ),
     );
   }
 
+  Widget _body() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final failure = _failure;
+    if (failure != null) {
+      return _failureView(failure);
+    }
+    if (_posts.isEmpty) {
+      return const Center(
+        child: Text('아직 글이 없어요 · 첫 이야기를 남겨보세요',
+            style: TextStyle(fontSize: 13.5, color: T.textMuted)),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+            12, 4, 12, MediaQuery.of(context).padding.bottom + 100),
+        children: [
+          for (final post in _posts) ...[
+            _view == 'card' ? _card(post) : _row(post),
+            SizedBox(height: _view == 'card' ? 14 : 10),
+          ],
+          if (_hasMore) _moreButton(),
+        ],
+      ),
+    );
+  }
+
+  /// 못 불러왔을 때의 화면.
+  ///
+  /// 빈 목록이 아니라 **이유와 다시 시도**다. `pet.dart` 가 산책 더미를 지우며 남긴
+  /// 규칙이 그것이다 — "0 은 '산책을 한 번도 안 했다' 로 읽힌다".
+  Widget _failureView(CommunityFailure failure) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.cloud_off, size: 34, color: T.textMuted),
+          const SizedBox(height: 12),
+          Text(
+            failure.message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w700, color: T.textSecondary),
+          ),
+          if (failure.retryable) ...[
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: _load,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                    gradient: _warm, borderRadius: BorderRadius.circular(13)),
+                child: const Text('다시 시도',
+                    style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white)),
+              ),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _moreButton() => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Center(
+          child: GestureDetector(
+            onTap: _loadingMore ? null : _loadMore,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xCCFFFFFF),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: const Color(0x66FFFFFF)),
+              ),
+              child: Text(_loadingMore ? '불러오는 중…' : '더 보기',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: T.textSecondary)),
+            ),
+          ),
+        ),
+      );
+
   Widget _viewToggle() {
-    Widget seg(String v, IconData icon) {
-      final on = view == v;
+    Widget seg(String value, IconData icon) {
+      final on = _view == value;
       return GestureDetector(
-        onTap: () => setState(() => view = v),
+        onTap: () => setState(() => _view = value),
         child: Container(
           width: 42,
           height: 36,
           alignment: Alignment.center,
-          decoration: BoxDecoration(gradient: on ? _warm : null, borderRadius: BorderRadius.circular(11)),
+          decoration: BoxDecoration(
+              gradient: on ? _warm : null,
+              borderRadius: BorderRadius.circular(11)),
           child: Icon(icon, size: 20, color: on ? Colors.white : T.textMuted),
         ),
       );
@@ -92,7 +258,10 @@ class _FeedScreenState extends State<FeedScreen> {
         borderRadius: BorderRadius.circular(13),
         border: Border.all(color: const Color(0x66FFFFFF)),
       ),
-      child: Row(children: [seg('card', Icons.view_agenda_outlined), seg('list', Icons.format_list_bulleted)]),
+      child: Row(children: [
+        seg('card', Icons.view_agenda_outlined),
+        seg('list', Icons.format_list_bulleted),
+      ]),
     );
   }
 
@@ -114,15 +283,20 @@ class _FeedScreenState extends State<FeedScreen> {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.tune, size: 16, color: T.textSecondary),
               const SizedBox(width: 7),
-              Text(feedBoard, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
+              Text(_board?.label ?? '전체',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: T.textSecondary)),
               const SizedBox(width: 5),
               const Icon(Icons.expand_more, size: 16, color: T.textMuted),
             ]),
           ),
         ),
         const Spacer(),
-        Text('${_posts.length}개의 글',
-            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textMuted)),
+        Text(_failure != null ? '' : '${_posts.length}개의 글',
+            style: const TextStyle(
+                fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textMuted)),
       ]),
     );
   }
@@ -132,111 +306,178 @@ class _FeedScreenState extends State<FeedScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => Container(
-        decoration: const BoxDecoration(color: Color(0xFAFCFAFF), borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-        padding: EdgeInsets.fromLTRB(20, 12, 20, 18 + MediaQuery.of(sheetCtx).padding.bottom),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Container(width: 42, height: 5, decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)))),
-          const SizedBox(height: 16),
-          const Text('게시판', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
-          const SizedBox(height: 14),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final b in kPetBoards)
-              GestureDetector(
-                onTap: () { setState(() => feedBoard = b); Navigator.pop(sheetCtx); },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: feedBoard == b ? _warm : null,
-                    color: feedBoard == b ? null : const Color(0xFFF1ECF7),
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Text(b, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: feedBoard == b ? Colors.white : T.textSecondary)),
-                ),
-              ),
-          ]),
-        ]),
+        decoration: const BoxDecoration(
+            color: Color(0xFAFCFAFF),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        padding: EdgeInsets.fromLTRB(
+            20, 12, 20, 18 + MediaQuery.of(sheetCtx).padding.bottom),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                  child: Container(
+                      width: 42,
+                      height: 5,
+                      decoration: BoxDecoration(
+                          color: const Color(0x2E281E30),
+                          borderRadius: BorderRadius.circular(3)))),
+              const SizedBox(height: 16),
+              const Text('게시판',
+                  style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: T.textPrimary)),
+              const SizedBox(height: 14),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _boardOption(sheetCtx, null, '전체'),
+                for (final board in CommunityBoard.values)
+                  _boardOption(sheetCtx, board, board.label),
+              ]),
+            ]),
       ),
     );
   }
 
-  void _open(PetPost p) => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => PostDetailScreen(post: p)),
-      );
+  Widget _boardOption(BuildContext sheetCtx, CommunityBoard? board, String label) {
+    final on = _board == board;
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        _selectBoard(board);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: on ? _warm : null,
+          color: on ? null : const Color(0xFFF1ECF7),
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: on ? Colors.white : T.textSecondary)),
+      ),
+    );
+  }
+
+  Future<void> _open(CommunityPost post) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PostDetailScreen(post: post, repository: _repo),
+      ),
+    );
+    // 상세에서 댓글·반응이 늘었을 수 있다. 목록의 숫자가 낡은 채 남지 않게 한다.
+    if (mounted) await _load();
+  }
 
   // 닉네임 원형 아바타 (닉 첫 글자, 따뜻한 그라데이션).
-  Widget _avatar(PetPost p, double size) => Container(
+  Widget _avatar(CommunityPost post, double size) => Container(
         width: size,
         height: size,
         alignment: Alignment.center,
-        decoration: const BoxDecoration(shape: BoxShape.circle, gradient: _warm),
-        child: Text(p.nick.characters.first,
-            style: TextStyle(fontSize: size * 0.42, fontWeight: FontWeight.w800, color: Colors.white)),
+        decoration:
+            const BoxDecoration(shape: BoxShape.circle, gradient: _warm),
+        child: Text(_initial(post.author.nickname),
+            style: TextStyle(
+                fontSize: size * 0.42,
+                fontWeight: FontWeight.w800,
+                color: Colors.white)),
       );
 
-  // 보드별 색.
-  Color _boardColor(String board) {
-    switch (board) {
-      case '산책로 후기':
-        return const Color(0xFF33BFA6);
-      case '동반장소':
-        return const Color(0xFFFF7E6B);
-      case '건강·병원':
-        return const Color(0xFF5B8DEF);
-      case '자유':
-        return const Color(0xFF9B7BFF);
-      case '자랑':
-        return const Color(0xFFEFA13C);
-      default:
-        return const Color(0xFFFF8F63);
-    }
-  }
+  /// 아바타 글자. 닉네임이 빈 문자열이면 `characters.first` 가 던진다 — 서버가
+  /// 탈퇴한 사람에게 '알 수 없음' 을 주므로 빈 값이 올 일은 없지만, 카드 하나 때문에
+  /// 목록이 죽는 것은 막는다.
+  static String _initial(String nickname) =>
+      nickname.isEmpty ? '?' : nickname.characters.first;
 
-  Widget _boardChip(String board) => Container(
+  /// 보드별 색. 키가 아니라 enum 으로 가른다 — 문자열로 가르면 서버가 값을 바꿀 때
+  /// `default` 로 조용히 떨어진다.
+  Color _boardColor(CommunityBoard? board) => switch (board) {
+        CommunityBoard.walkReview => const Color(0xFF33BFA6),
+        CommunityBoard.petPlace => const Color(0xFFFF7E6B),
+        CommunityBoard.health => const Color(0xFF5B8DEF),
+        CommunityBoard.free => const Color(0xFF9B7BFF),
+        CommunityBoard.brag => const Color(0xFFEFA13C),
+        null => const Color(0xFFFF8F63),
+      };
+
+  Widget _boardChip(CommunityBoard? board) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: _boardColor(board).withValues(alpha: 0.14), borderRadius: BorderRadius.circular(8)),
-        child: Text(board, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _boardColor(board))),
+        decoration: BoxDecoration(
+            color: _boardColor(board).withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(8)),
+        child: Text(board?.label ?? '기타',
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: _boardColor(board))),
       );
 
-  Widget _card(PetPost p) {
+  /// 목록의 날짜. 시각까지는 안 그린다 — 카드 한 줄에 들어가야 한다.
+  static String _date(DateTime at) =>
+      '${at.year % 100}.${at.month.toString().padLeft(2, '0')}.'
+      '${at.day.toString().padLeft(2, '0')}';
+
+  Widget _card(CommunityPost post) {
     return GestureDetector(
-      onTap: () => _open(p),
+      onTap: () => _open(post),
       behavior: HitTestBehavior.opaque,
       child: GlassCard(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _avatar(p, 40),
+            _avatar(post, 40),
             const SizedBox(width: 11),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Text(p.nick, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                  const Spacer(),
-                  Text(p.date, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
-                ]),
-                const SizedBox(height: 5),
-                Row(children: [
-                  _boardChip(p.board),
-                  if (p.loc != null) ...[
-                    const SizedBox(width: 7),
-                    const Icon(Icons.place_outlined, size: 13, color: T.textMuted),
-                    const SizedBox(width: 2),
-                    Text(p.loc!, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
-                  ],
-                ]),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Text(post.author.nickname,
+                          style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                              color: T.textPrimary)),
+                      const Spacer(),
+                      Text(_date(post.createdAt),
+                          style: const TextStyle(
+                              fontSize: 11.5, color: T.textMuted)),
+                    ]),
+                    const SizedBox(height: 5),
+                    Row(children: [
+                      _boardChip(post.board),
+                      if (post.loc != null) ...[
+                        const SizedBox(width: 7),
+                        const Icon(Icons.place_outlined,
+                            size: 13, color: T.textMuted),
+                        const SizedBox(width: 2),
+                        Text(post.loc!,
+                            style: const TextStyle(
+                                fontSize: 11.5, color: T.textMuted)),
+                      ],
+                    ]),
+                  ]),
             ),
           ]),
           const SizedBox(height: 12),
-          Text(p.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          Text(post.title,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: T.textPrimary)),
           const SizedBox(height: 5),
-          Text(p.body,
+          Text(post.body,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xCC463C64))),
+              style: const TextStyle(
+                  fontSize: 13.5, height: 1.5, color: Color(0xCC463C64))),
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            for (int i = 0; i < kPetReactions.length; i++) _reactionChip(i, p.reactions[i]),
+            for (final reaction in CommunityReaction.values)
+              _reactionChip(reaction, post.reactions),
           ]),
           const SizedBox(height: 12),
           Container(height: 1, color: const Color(0x14785AA0)),
@@ -244,8 +485,11 @@ class _FeedScreenState extends State<FeedScreen> {
           Row(children: [
             const Icon(Icons.chat_bubble_outline, size: 16, color: T.textMuted),
             const SizedBox(width: 6),
-            Text('댓글 ${p.commentCount}개 · 자세히 보기',
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
+            Text('댓글 ${post.commentCount}개 · 자세히 보기',
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: T.textSecondary)),
             const Spacer(),
             const Icon(Icons.chevron_right, size: 18, color: T.textMuted),
           ]),
@@ -254,7 +498,8 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  Widget _reactionChip(int i, int count) {
+  Widget _reactionChip(CommunityReaction reaction, ReactionSummary summary) {
+    final count = summary.countOf(reaction);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
@@ -263,46 +508,68 @@ class _FeedScreenState extends State<FeedScreen> {
         border: Border.all(color: const Color(0x66FFFFFF)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text(kPetReactions[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.textSecondary)),
+        Text(reaction.label,
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: T.textSecondary)),
         if (count > 0) ...[
           const SizedBox(width: 5),
-          Text('$count', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: T.textMuted)),
+          Text('$count',
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: T.textMuted)),
         ],
       ]),
     );
   }
 
-  Widget _row(PetPost p) {
+  Widget _row(CommunityPost post) {
     return GestureDetector(
-      onTap: () => _open(p),
+      onTap: () => _open(post),
       behavior: HitTestBehavior.opaque,
       child: GlassCard(
         padding: const EdgeInsets.fromLTRB(13, 12, 12, 12),
         child: Row(children: [
-          _avatar(p, 40),
+          _avatar(post, 40),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(p.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
-              const SizedBox(height: 5),
-              Row(children: [
-                _boardChip(p.board),
-                if (p.loc != null) ...[
-                  const SizedBox(width: 7),
-                  const Icon(Icons.place_outlined, size: 12, color: T.textMuted),
-                  const SizedBox(width: 2),
-                  Flexible(
-                    child: Text(p.loc!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
-                  ),
-                ],
-                const SizedBox(width: 8),
-                const Icon(Icons.chat_bubble_outline, size: 13, color: T.textMuted),
-                const SizedBox(width: 3),
-                Text('${p.commentCount}', style: const TextStyle(fontSize: 12, color: T.textMuted)),
-              ]),
-            ]),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(post.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: T.textPrimary)),
+                  const SizedBox(height: 5),
+                  Row(children: [
+                    _boardChip(post.board),
+                    if (post.loc != null) ...[
+                      const SizedBox(width: 7),
+                      const Icon(Icons.place_outlined,
+                          size: 12, color: T.textMuted),
+                      const SizedBox(width: 2),
+                      Flexible(
+                        child: Text(post.loc!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11.5, color: T.textMuted)),
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                    const Icon(Icons.chat_bubble_outline,
+                        size: 13, color: T.textMuted),
+                    const SizedBox(width: 3),
+                    Text('${post.commentCount}',
+                        style: const TextStyle(
+                            fontSize: 12, color: T.textMuted)),
+                  ]),
+                ]),
           ),
           const Icon(Icons.chevron_right, size: 18, color: T.textMuted),
         ]),
