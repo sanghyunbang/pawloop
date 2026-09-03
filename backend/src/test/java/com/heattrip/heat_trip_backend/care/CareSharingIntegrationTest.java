@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -115,9 +116,17 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                         '누가' 를 이름으로 볼 수 없으면 이 화면은 이중 급여를 못 막는다 — \
                         '누군가 밥을 줬다' 는 '내가 줬나?' 를 지우지 못한다.""")
                 .isEqualTo("보리아빠");
-        assertThat(seenByMom.get(0).path("occurredAt").asText())
+        String occurredAt = seenByMom.get(0).path("occurredAt").asText();
+        assertThat(occurredAt)
                 .as("'언제' 가 없으면 아침 밥과 저녁 밥을 구별할 수 없다")
                 .isNotBlank();
+        assertThat(occurredAt)
+                .as("""
+                        **오프셋이 붙어야 한다** (#209). 계약이 format: date-time 이라고                         선언했고 그건 RFC3339 오프셋이 있어야 성립한다 — 앱의                         DateTime.tryParse 는 오프셋 없는 문자열을 기기 지역 시각으로 읽으므로                         해외에 있는 가족이 보면 그 차이만큼 어긋난 시각이 그려진다.                         2026-09-03 이전에는 '2026-09-03T00:30:00' 이 그대로 나갔다.""")
+                .endsWith("Z");
+        assertThat(java.time.Instant.parse(occurredAt))
+                .as("숫자 타임스탬프로 나가도 안 된다 — 앱이 파싱하지 못한다")
+                .isCloseTo(java.time.Instant.now(), within(5, java.time.temporal.ChronoUnit.MINUTES));
         assertThat(seenByMom.get(0).path("memo").asText()).isEqualTo("사료 반 컵");
     }
 

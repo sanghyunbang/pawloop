@@ -98,6 +98,60 @@ void main() {
       );
     });
 
+    test('오프셋이 붙은 시각은 기기 지역 시각으로 그린다 — 안 그러면 9시간 어긋난다', () async {
+      // 서버가 #209 에서 오프셋을 붙이기 시작했다. Dart 는 오프셋 있는 문자열을 **UTC**
+      // DateTime 으로 돌려주므로, `.toLocal()` 없이 `.hour` 를 읽으면 KST 00:30 이 15:30 이
+      // 된다. community_repository 가 같은 이유로 같은 자리에서 `.toLocal()` 을 부른다.
+      final f = repositoryThatAnswers((_) => _json([
+            {
+              'id': 7,
+              'dogId': null,
+              'groupId': 3,
+              'type': 'meal',
+              'doneBy': {'userId': 11, 'nickname': '아빠'},
+              'occurredAt': '2026-09-02T15:30:00Z',
+              'memo': null,
+            }
+          ]));
+
+      final logs = await f.repo.careLogs(3);
+
+      expect(
+        logs.single.occurredAt.isUtc,
+        isFalse,
+        reason: '기기 존으로 옮겨 놓지 않으면 timeLabel 이 UTC 시각을 그린다. '
+            '이 단언은 테스트를 돌리는 기계의 존과 무관하다',
+      );
+
+      // 라벨도 같은 순간에서 만든다 — 기계 존이 KST 든 UTC 든 이 기대값이 따라간다.
+      final expected = DateTime.utc(2026, 9, 2, 15, 30).toLocal();
+      expect(
+        logs.single.timeLabel,
+        '${expected.hour.toString().padLeft(2, '0')}:'
+        '${expected.minute.toString().padLeft(2, '0')}',
+      );
+    });
+
+    test('오프셋 없는 옛 응답도 그대로 읽는다 — 서버가 바뀌기 전 캐시가 남아 있다', () async {
+      final f = repositoryThatAnswers((_) => _json([
+            {
+              'id': 8,
+              'dogId': null,
+              'groupId': 3,
+              'type': 'meal',
+              'doneBy': {'userId': 11, 'nickname': '아빠'},
+              'occurredAt': '2026-08-30T14:20:00',
+              'memo': null,
+            }
+          ]));
+
+      final logs = await f.repo.careLogs(3);
+
+      expect(logs.single.timeLabel, '14:20',
+          reason: '오프셋이 없으면 Dart 가 지역 시각으로 읽고 .toLocal() 은 무해하다');
+    });
+
+
     test('POST care-logs 는 type 만 보낸다 — 수행자와 시각은 서버가 정한다', () async {
       final f = repositoryThatAnswers((_) => _json({
             'id': 1,

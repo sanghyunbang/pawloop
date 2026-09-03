@@ -85,7 +85,10 @@ class CareLogEntry {
   /// 모르는 종류면 `null` — 호출부가 걸러 낸다.
   static CareLogEntry? tryParse(Map<String, dynamic> json) {
     final type = ServerCareType.tryParse(json['type'] as String?);
-    final occurredAt = DateTime.tryParse('${json['occurredAt']}');
+    // **`.toLocal()` 이 필요하다.** 서버가 오프셋을 붙여 보내면(#209) Dart 는 그것을
+    // **UTC** DateTime 으로 돌려준다 — 그대로 `.hour` 를 읽으면 KST 00:30 이 15:30 으로
+    // 뜬다. community_repository 가 같은 이유로 같은 자리에서 `.toLocal()` 을 부른다.
+    final occurredAt = DateTime.tryParse('${json['occurredAt']}')?.toLocal();
     if (type == null || occurredAt == null) return null;
 
     final doneBy = json['doneBy'];
@@ -132,7 +135,7 @@ class WalkNoteSheet {
     return WalkNoteSheet(
       body: '${json['body'] ?? ''}',
       updatedByName: updatedBy is Map ? '${updatedBy['nickname'] ?? ''}' : null,
-      updatedAt: DateTime.tryParse('${json['updatedAt']}'),
+      updatedAt: DateTime.tryParse('${json['updatedAt']}')?.toLocal(),
     );
   }
 }

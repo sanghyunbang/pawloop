@@ -2,7 +2,9 @@ package com.heattrip.heat_trip_backend.care.dto;
 
 import com.heattrip.heat_trip_backend.care.entity.WalkNote;
 
-import java.time.LocalDateTime;
+import com.heattrip.heat_trip_backend.config.ClockConfig;
+
+import java.time.Instant;
 
 /**
  * 산책 주의사항 한 장 — 계약({@code openapi.yaml})의 {@code WalkNote} 다. 이슈 #76.
@@ -24,19 +26,22 @@ import java.time.LocalDateTime;
  *
  * @param updatedBy 마지막으로 고친 사람. 아직 아무도 안 썼으면 {@code null},
  *                  고친 사람이 탈퇴했으면 {@code 알 수 없음}
+ * @param updatedAt <b>{@code Instant} 다</b> — 이유는 {@link CareLogResponse#occurredAt}
+ *                  javadoc(이슈 #209). 컬럼 값은 {@link ClockConfig#SERVICE_ZONE} 의 로컬
+ *                  시각이라 그 존에서 인스턴트로 세운다.
  */
 public record WalkNoteResponse(
         long groupId,
         String body,
         CareDoerResponse updatedBy,
-        LocalDateTime updatedAt) {
+        Instant updatedAt) {
 
     public static WalkNoteResponse of(WalkNote note) {
         return new WalkNoteResponse(
                 note.getGroup().getId(),
                 note.getBody(),
                 CareDoerResponse.of(note.getUpdatedBy()),
-                note.getUpdatedAt());
+                note.getUpdatedAt().atZone(ClockConfig.SERVICE_ZONE).toInstant());
     }
 
     /** 아직 한 번도 쓰이지 않은 그룹의 답. */
