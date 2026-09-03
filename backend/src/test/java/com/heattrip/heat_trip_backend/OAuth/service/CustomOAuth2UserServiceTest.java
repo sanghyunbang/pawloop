@@ -359,6 +359,94 @@ class CustomOAuth2UserServiceTest {
     // ─────────────────────── fixtures ───────────────────────
 
     /** 카카오 실제 응답 모양 그대로 만든다 — 값이 없으면 키 자체를 넣지 않는다. */
+    // ─────────────────────── 닉네임 상한 (#229) ───────────────────────
+
+    @Test
+    @DisplayName("공급자 이름이 상한보다 길면 자른다 — 거절하면 그 사람은 로그인 자체가 안 된다")
+    void upsert_clampsALongProviderName() {
+        String tooLong = "가".repeat(User.MAX_NAME_LENGTH + 30);
+        OAuth2UserInfo kakao = kakao(SOCIAL_ID, tooLong, null);
+        when(userRepository.findByProviderAndSocialId("kakao", SOCIAL_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("kakao_" + SOCIAL_ID)).thenReturn(Optional.empty());
+        givenSaveAssignsId();
+
+        service.upsertUser(kakao, Map.of("id", SOCIAL_ID));
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        User saved = captor.getValue();
+
+        assertThat(saved.getNickname()).hasSize(User.MAX_NICKNAME_LENGTH);
+        assertThat(saved.getName()).hasSize(User.MAX_NAME_LENGTH);
+    }
+
+    @Test
+    @DisplayName("매 로그인의 프로필 갱신에서도 자른다 — 가입에서만 자르면 다음 로그인에 다시 들어온다")
+    void upsert_clampsOnEveryLogin() {
+        String tooLong = "나".repeat(User.MAX_NAME_LENGTH + 30);
+        User existing = User.builder()
+                .id(42L)
+                .provider("kakao")
+                .socialId(SOCIAL_ID)
+                .role("ROLE_USER")
+                .name("옛이름")
+                .nickname("옛이름")   // 사용자가 손대지 않았다는 뜻 — 공급자 값을 따라간다
+                .build();
+        when(userRepository.findByProviderAndSocialId("kakao", SOCIAL_ID))
+                .thenReturn(Optional.of(existing));
+
+        service.upsertUser(kakao(SOCIAL_ID, tooLong, null), Map.of("id", SOCIAL_ID));
+
+        assertThat(existing.getName()).hasSize(User.MAX_NAME_LENGTH);
+        assertThat(existing.getNickname()).hasSize(User.MAX_NICKNAME_LENGTH);
+    }
+
+    @Test
+    @DisplayName("긴 이름이어도 '사용자가 손댔나' 판정이 이어진다 — 두 상한이 달라 그냥 견주면 갱신이 멈춘다")
+    void upsert_stillTracksProviderNameWhenItIsLong() {
+        // name(50)과 nickname(20)의 상한이 달라서, 긴 이름이면 둘이 애초에 같을 수 없다.
+        // user.getNickname().equals(user.getName()) 로 견주면 이 사람의 닉네임만 영원히
+        // '손댄 것' 으로 오인돼 공급자 갱신이 멈춘다.
+        String first = "다".repeat(User.MAX_NAME_LENGTH + 10);
+        String second = "라".repeat(User.MAX_NAME_LENGTH + 10);
+        User existing = User.builder()
+                .id(43L)
+                .provider("kakao")
+                .socialId(SOCIAL_ID)
+                .role("ROLE_USER")
+                .name(User.clamp(first, User.MAX_NAME_LENGTH))
+                .nickname(User.clamp(first, User.MAX_NICKNAME_LENGTH))
+                .build();
+        when(userRepository.findByProviderAndSocialId("kakao", SOCIAL_ID))
+                .thenReturn(Optional.of(existing));
+
+        service.upsertUser(kakao(SOCIAL_ID, second, null), Map.of("id", SOCIAL_ID));
+
+        assertThat(existing.getNickname())
+                .as("공급자가 이름을 바꿨으면 손대지 않은 닉네임은 따라가야 한다")
+                .isEqualTo(User.clamp(second, User.MAX_NICKNAME_LENGTH));
+    }
+
+    @Test
+    @DisplayName("사용자가 직접 고친 닉네임은 긴 이름이 와도 안 덮는다")
+    void upsert_neverOverwritesANicknameTheUserChose() {
+        String providerName = "마".repeat(User.MAX_NAME_LENGTH + 10);
+        User existing = User.builder()
+                .id(44L)
+                .provider("kakao")
+                .socialId(SOCIAL_ID)
+                .role("ROLE_USER")
+                .name("옛이름")
+                .nickname("내가 고른 닉")
+                .build();
+        when(userRepository.findByProviderAndSocialId("kakao", SOCIAL_ID))
+                .thenReturn(Optional.of(existing));
+
+        service.upsertUser(kakao(SOCIAL_ID, providerName, null), Map.of("id", SOCIAL_ID));
+
+        assertThat(existing.getNickname()).isEqualTo("내가 고른 닉");
+    }
+
     private static OAuth2UserInfo kakao(String socialId, String nickname, String email) {
         Map<String, Object> attributes = new HashMap<>();
         if (socialId != null) {

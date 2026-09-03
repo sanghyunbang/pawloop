@@ -87,6 +87,47 @@ public class User {
      */
     public static final String UNKNOWN_DISPLAY_NAME = "알 수 없음";
 
+    /**
+     * 닉네임의 최대 글자 수 — 이슈 #229.
+     *
+     * <p><b>컬럼이 정한 수가 아니다.</b> {@code nickname} 은 {@code varchar(255)} 인데 그건
+     * 저장 한계이지 제품이 고른 수가 아니다. 앱의 프로필 편집 화면이 이미 20 으로 막고
+     * 있어서 그 수를 서버 쪽 정본으로 올린다.
+     *
+     * <p><b>이 값이 모든 도메인으로 번진다.</b> {@code post.handle}·{@code comment.handle} ·
+     * {@code chat_message.sender_name} 이 이것을 스냅샷하고, 가족 멤버 목록과 케어 기록이
+     * 이것을 표시한다. #170 에서 {@code post.handle} 이 {@code VARCHAR(50)} 이라 51자
+     * 닉네임을 가진 사람의 <b>모든 글쓰기가 영구히 500</b> 이 된 적이 있는데, 그 진짜 원인이
+     * 여기 상한이 없다는 것이었다.
+     *
+     * <p>2026-09-03 이전에는 가입·프로필 수정 어느 쪽에도 {@code @Size} 가 없었고
+     * {@code @Valid} 조차 없었다.
+     */
+    public static final int MAX_NICKNAME_LENGTH = 20;
+
+    /** 이름의 최대 글자 수. 닉네임이 비었을 때의 대체 표시값이라 같은 이유로 막는다(#229). */
+    public static final int MAX_NAME_LENGTH = 50;
+
+    /**
+     * 공급자가 준 표시 이름을 상한 안으로 자른다 — <b>거절하지 않는다.</b>
+     *
+     * <p>소셜 로그인은 앱을 안 지나므로 클라이언트 상한이 닿지 않는다. 여기서 400 을 주면
+     * <b>이름이 긴 사람은 로그인 자체가 안 된다</b> — 긴 닉네임보다 훨씬 나쁘다. 자른 뒤에는
+     * 사용자가 프로필에서 고칠 수 있다.
+     *
+     * @return {@code null} 이거나 공백뿐이면 {@code null}
+     */
+    public static String clamp(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.length() <= max ? trimmed : trimmed.substring(0, max);
+    }
+
     @Id // 이 필드가 엔티티의 기본 키임을 나타냄
     @GeneratedValue(strategy = GenerationType.IDENTITY) // 기본 키 생성 전략을 지정 (자동 증가)
     private Long id; // 사용자 ID(PK)

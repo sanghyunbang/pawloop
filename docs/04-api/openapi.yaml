@@ -2265,11 +2265,31 @@ components:
           type: [string, "null"]
           format: email
           description: 로그인 ID. 소셜 공급자가 이메일을 주지 않으면 null 일 수 있습니다.
-        name: { type: [string, "null"] }
+        name:
+          type: [string, "null"]
+          maxLength: 50
         nickname:
           type: [string, "null"]
+          maxLength: 20
           example: "보리아빠"
-          description: 소셜 가입 경로에서는 설정되지 않아 null 일 수 있습니다(#7).
+          description: |
+            소셜 가입 경로에서는 설정되지 않아 null 일 수 있습니다(#7).
+
+            **상한 20 은 컬럼이 정한 수가 아닙니다.** 컬럼은 `varchar(255)` 인데 그건 저장
+            한계이지 제품이 고른 수가 아닙니다. 앱의 프로필 편집 화면이 이미 20 으로 막고
+            있어서 그 수를 서버 쪽 정본으로 올렸습니다(#229).
+
+            **이 값이 모든 도메인으로 번집니다** — `post.handle`·`comment.handle`·
+            `chat_message.sender_name` 이 이것을 스냅샷하고, `GroupMember`·`CareDoer`·
+            `PersonRef` 가 이것을 표시합니다. 2026-09-03 이전에는 가입에도 프로필 수정에도
+            상한이 없었고(`@Valid` 조차 없어서 붙여도 안 걸렸습니다), 그래서 `post.handle`
+            이 `VARCHAR(50)` 이던 시절 51자 닉네임을 가진 사람의 **모든 글쓰기가 영구히
+            500** 이 됐습니다(#170).
+
+            **소셜 로그인은 자르고 거절하지 않습니다.** 그 경로는 앱을 안 지나므로 여기서
+            `400` 을 주면 이름이 긴 사람은 **로그인 자체가 안 됩니다** — 자른 뒤 사용자가
+            프로필에서 고칠 수 있습니다. 가입뿐 아니라 **매 로그인의 프로필 갱신에서도**
+            자릅니다.
         gender: { type: [string, "null"], enum: [MALE, FEMALE, OTHER, null] }
         age: { type: [integer, "null"] }
         travelType: { type: [string, "null"], description: 현재 스키마는 단일 문자열 }
@@ -2296,8 +2316,8 @@ components:
       properties:
         email: { type: string, format: email }
         password: { type: string, format: password, minLength: 8 }
-        nickname: { type: string }
-        name: { type: string }
+        nickname: { type: string, maxLength: 20 }
+        name: { type: string, maxLength: 50 }
         gender:
           type: string
           enum: [MALE, FEMALE, OTHER]
@@ -2332,8 +2352,8 @@ components:
       # 부분 수정 — 보낸 필드만 반영한다. 빈 객체는 의미가 없으므로 최소 1개를 요구한다.
       minProperties: 1
       properties:
-        name: { type: string }
-        nickname: { type: string }
+        name: { type: string, maxLength: 50 }
+        nickname: { type: string, maxLength: 20 }
         gender:
           type: string
           enum: [MALE, FEMALE, OTHER]
