@@ -23,9 +23,9 @@ public class BookmarkService {
     private final CollectionService collectionService;
     private final PlaceImgRepository placeImgRepository;
 
-    /** 내 북마크 전체 */
+    /** 내 북마크 전체. <b>최신순</b>이다 — 이유는 리포지터리 메서드 javadoc(#210). */
     public List<Bookmark> findAll(User user) {
-        return bookmarkRepository.findByUser(user);
+        return bookmarkRepository.findByUserOrderByCreatedAtDescIdDesc(user);
     }
 
     /** 북마크 추가 (중복 방지) + 선택적으로 컬렉션에도 추가 */
