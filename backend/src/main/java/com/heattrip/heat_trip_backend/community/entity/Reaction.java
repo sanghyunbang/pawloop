@@ -50,7 +50,7 @@ import java.time.LocalDateTime;
  *
  * <p>2026-09 이전에는 {@code POST .../reactions} 하나가 <b>토글</b>이었다. 요청에 의도가
  * 없어서 <b>네트워크 재시도 한 번이 사용자의 반응을 조용히 되돌렸다.</b> 모양은
- * {@code POST /api/chat/blocks} + {@code DELETE /api/chat/blocks/{userId}} 와 같다.
+ * {@code POST /api/blocks} + {@code DELETE /api/blocks/{userId}} 와 같다.
  *
  * <p>동시성으로 이 UNIQUE 가 깨지면 그것은 <b>"이미 눌렀다" 와 같은 뜻</b>이므로 삼키고
  * 최신 집계를 돌려준다. 그게 멱등의 정의다.

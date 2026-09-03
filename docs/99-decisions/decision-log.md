@@ -1610,8 +1610,8 @@ information-architecture.md:164-165
 복수는 **집합**이고, 집합 원소를 켜고 끄는 모양은 이 계약이 **이미 풀어 뒀다.**
 
 ```
-POST   /api/chat/blocks              → "이미 가려 뒀어도 201"
-DELETE /api/chat/blocks/{userId}     → "없던 것을 풀어도 204"
+POST   /api/blocks                   → "이미 가려 뒀어도 201"
+DELETE /api/blocks/{userId}          → "없던 것을 풀어도 204"
 ```
 
 반응도 그대로 쓴다.
@@ -1624,7 +1624,7 @@ DELETE /api/community/posts/{postId}/reactions/{type}   → 200 ReactionSummary 
 둘 다 **구조적으로 멱등**이다. 응답에 최신 집계를 실어 왕복을 한 번으로 줄인다.
 
 > **`POST` 가 멱등해도 되는가.** 된다. 이 계약에 이미 셋 있다 — `/auth/logout`(*"이미 폐기된 상태여도 204"*),
-> `POST /api/chat/blocks`, `POST /api/chat/invites/{code}/join`(*"두 번 들어와도 멤버 행도 usedCount 도
+> `POST /api/blocks`, `POST /api/chat/invites/{code}/join`(*"두 번 들어와도 멤버 행도 usedCount 도
 > 늘지 않고 200"*). 처음 근거에 *"이 계약에 멱등한 POST 는 한 자리도 없다"* 고 적었는데 **사실이 아니었다.**
 
 #### 표와 스키마

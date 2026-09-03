@@ -27,7 +27,7 @@ import java.time.LocalDateTime;
  * 조립할 때마다 <b>읽는 사람</b>을 알아야 한다.
  *
  * <p>본문을 지워서 내리지 않는다. 가려진 자리에 "보기" 가 있어서, 지워 내리면 그것을 누를
- * 때 요청이 한 번 더 필요해진다({@code ChatBlocks} javadoc).
+ * 때 요청이 한 번 더 필요해진다({@code Blocks} javadoc).
  *
  * @param deletedAt 소프트 삭제 시각. <b>{@code null} 이 아니어도 목록에서 빠지지 않는다</b> —
  *                  톰스톤이다. 본문을 가리는 것은 화면의 일이다(ADR-0011)

@@ -340,7 +340,7 @@ id 는 전역 시퀀스라 방 안에서 연속이 아니다. 그것을 커서�
 
       await repo.block(42);
 
-      expect(path, '/api/chat/blocks');
+      expect(path, '/api/blocks');
       expect(sent!['userId'], 42);
     });
 
@@ -356,7 +356,7 @@ id 는 전역 시퀀스라 방 안에서 연속이 아니다. 그것을 커서�
       await repo.unblock(42);
 
       expect(method, 'DELETE');
-      expect(path, '/api/chat/blocks/42');
+      expect(path, '/api/blocks/42');
     });
 
     test('가려진 메시지는 목록에서 빠지지 않고 본문도 온다', () async {

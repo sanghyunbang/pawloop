@@ -1,6 +1,6 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
-import com.heattrip.heat_trip_backend.chat.ChatBlocks;
+import com.heattrip.heat_trip_backend.moderation.Blocks;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.chat.ChatRoomSummaryView;
@@ -36,7 +36,7 @@ public class ChatRooms {
 
     private final ChatRoomService chatRooms;
     private final ChatSenderNames senderNames;
-    private final ChatBlocks blocks;
+    private final Blocks blocks;
 
     /** 내가 살아 있는 멤버로 있는 방들 — 참여 순서대로. 남의 방은 애초에 들어오지 않는다. */
     public List<ChatRoomResponse> of(long userId) {

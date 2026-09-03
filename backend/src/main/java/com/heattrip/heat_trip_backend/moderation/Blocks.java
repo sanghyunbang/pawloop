@@ -1,7 +1,7 @@
-package com.heattrip.heat_trip_backend.chat;
+package com.heattrip.heat_trip_backend.moderation;
 
-import com.heattrip.heat_trip_backend.chat.entity.ChatBlock;
-import com.heattrip.heat_trip_backend.chat.repository.ChatBlockRepository;
+import com.heattrip.heat_trip_backend.moderation.entity.Block;
+import com.heattrip.heat_trip_backend.moderation.repository.BlockRepository;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -37,12 +37,12 @@ import java.util.Set;
  */
 @Service
 @Transactional(readOnly = true)
-public class ChatBlocks {
+public class Blocks {
 
-    private final ChatBlockRepository blocks;
+    private final BlockRepository blocks;
     private final Clock clock;
 
-    public ChatBlocks(ChatBlockRepository blocks, Clock clock) {
+    public Blocks(BlockRepository blocks, Clock clock) {
         this.blocks = blocks;
         this.clock = clock;
     }
@@ -76,7 +76,7 @@ public class ChatBlocks {
         }
 
         try {
-            blocks.save(ChatBlock.builder()
+            blocks.save(Block.builder()
                     .blockerUserId(blockerUserId)
                     .blockedUserId(blockedUserId)
                     .createdAt(LocalDateTime.now(clock))

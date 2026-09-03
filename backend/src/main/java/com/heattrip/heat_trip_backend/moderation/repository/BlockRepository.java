@@ -1,6 +1,6 @@
-package com.heattrip.heat_trip_backend.chat.repository;
+package com.heattrip.heat_trip_backend.moderation.repository;
 
-import com.heattrip.heat_trip_backend.chat.entity.ChatBlock;
+import com.heattrip.heat_trip_backend.moderation.entity.Block;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -15,7 +15,7 @@ import java.util.List;
  * <p>{@code chat_block} 은 {@code chat} 경계 <b>안</b>이고 두 컬럼 다 불투명한 값이다.
  * 여기서 {@code users} 를 조인하지 않는다({@code ChatBoundaryArchitectureTest} 가 잠근다).
  */
-public interface ChatBlockRepository extends JpaRepository<ChatBlock, Long> {
+public interface BlockRepository extends JpaRepository<Block, Long> {
 
     /**
      * 내가 가린 사람들의 id.
@@ -23,7 +23,7 @@ public interface ChatBlockRepository extends JpaRepository<ChatBlock, Long> {
      * <p><b>엔티티가 아니라 id 만</b> 가져온다. 메시지 한 장을 그릴 때마다 부르는 조회라
      * 행을 영속성 컨텍스트에 올릴 이유가 없다.
      */
-    @Query("select b.blockedUserId from ChatBlock b where b.blockerUserId = :blockerUserId")
+    @Query("select b.blockedUserId from Block b where b.blockerUserId = :blockerUserId")
     List<Long> findBlockedIdsOf(@Param("blockerUserId") Long blockerUserId);
 
     boolean existsByBlockerUserIdAndBlockedUserId(Long blockerUserId, Long blockedUserId);
@@ -35,7 +35,7 @@ public interface ChatBlockRepository extends JpaRepository<ChatBlock, Long> {
      * 계약은 그 경우도 204 지만, 그것을 결정하는 것은 여기가 아니다.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("delete from ChatBlock b "
+    @Query("delete from Block b "
             + "where b.blockerUserId = :blockerUserId and b.blockedUserId = :blockedUserId")
     int deleteBlock(@Param("blockerUserId") Long blockerUserId,
                     @Param("blockedUserId") Long blockedUserId);

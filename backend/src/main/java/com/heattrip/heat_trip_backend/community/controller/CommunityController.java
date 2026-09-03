@@ -5,7 +5,7 @@ import com.heattrip.heat_trip_backend.community.dto.CommentPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.CommentResponse;
 import com.heattrip.heat_trip_backend.community.dto.PostPageResponse;
-import com.heattrip.heat_trip_backend.community.dto.PostPatchRequest;
+import com.heattrip.heat_trip_backend.community.dto.PostPatchRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostRequest;
 import com.heattrip.heat_trip_backend.community.dto.ReportRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostResponse;
@@ -22,7 +22,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -88,7 +88,7 @@ public class CommunityController {
     public CommentPageResponse comments(@PathVariable long postId,
                                         @RequestParam(required = false) String cursor,
                                         @RequestParam(required = false) Integer limit) {
-        return community.comments(postId, cursor, limit);
+        return community.comments(viewerId(), postId, cursor, limit);
     }
 
     // ─────────────────────────── 쓰기 (인증 필수) ───────────────────────────

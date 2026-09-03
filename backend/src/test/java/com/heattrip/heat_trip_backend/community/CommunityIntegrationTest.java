@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostRequest;
+import com.heattrip.heat_trip_backend.moderation.Blocks;
 import com.heattrip.heat_trip_backend.moderation.Reports;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
@@ -37,7 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -76,6 +77,9 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private Blocks blocks;
 
     // ─────────────────────────── 일곱 경로 ───────────────────────────
 
@@ -397,6 +401,74 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isCreated())).path("reportId").asLong();
 
         assertThat(memoOf(reportId)).hasSize(Reports.MAX_MEMO_LENGTH);
+    }
+
+    @Test
+    @DisplayName("가린 사람의 글은 hiddenByBlock 이 true 다 — 목록에서 빠지지는 않는다")
+    void blockedAuthorsPostsAreFlaggedNotRemoved() throws Exception {
+        Account author = account("가려질사람");
+        Account viewer = account("가리는사람");
+        long postId = newPost(author);
+
+        blocks.block(viewer.id(), author.id());
+
+        JsonNode item = itemById(body(feed(viewer, "").andExpect(status().isOk())), postId);
+        assertThat(item.path("hiddenByBlock").asBoolean())
+                .as("""
+                        빼면 커서가 그 글을 건너뛰어 페이지 경계가 어긋나고, 가린 자리에 '보기' 를 \
+                        두려면 본문이 이미 와 있어야 한다 — ChatMessageResponse 와 같은 규약이다.""")
+                .isTrue();
+        assertThat(item.path("body").asText())
+                .as("본문은 그대로 온다. 접는 것은 화면의 일이다")
+                .isEqualTo("본문");
+    }
+
+    @Test
+    @DisplayName("안 가린 사람에게는 false 다 — 읽는 사람마다 다른 값이다")
+    void hiddenByBlockIsPerViewer() throws Exception {
+        Account author = account("안가려질사람");
+        Account blocker = account("가린사람");
+        Account other = account("남의눈");
+        long postId = newPost(author);
+
+        blocks.block(blocker.id(), author.id());
+
+        assertThat(itemById(body(feed(blocker, "")), postId).path("hiddenByBlock").asBoolean())
+                .isTrue();
+        assertThat(itemById(body(feed(other, "")), postId).path("hiddenByBlock").asBoolean())
+                .as("가린 것은 blocker 의 화면 설정이지 글의 속성이 아니다")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("가린 사람의 댓글도 접힌다")
+    void blockedAuthorsCommentsAreFlagged() throws Exception {
+        Account author = account("댓글가려질");
+        Account viewer = account("댓글가리는");
+        long postId = newPost(author);
+        addComment(author, postId, "{\"body\":\"가려질 댓글\"}").andExpect(status().isCreated());
+
+        blocks.block(viewer.id(), author.id());
+
+        JsonNode page = body(mockMvc.perform(
+                        get("/api/community/posts/" + postId + "/comments")
+                                .header("Authorization", "Bearer " + viewer.token()))
+                .andExpect(status().isOk()));
+        assertThat(page.path("items").get(0).path("hiddenByBlock").asBoolean()).isTrue();
+    }
+
+    @Test
+    @DisplayName("게스트에게는 아무것도 안 접힌다 — 가린 사람이 없다")
+    void guestsSeeNothingFolded() throws Exception {
+        Account author = account("게스트대상");
+        Account blocker = account("게스트가리는");
+        long postId = newPost(author);
+        blocks.block(blocker.id(), author.id());
+
+        JsonNode item = itemById(
+                body(mockMvc.perform(get("/api/community/posts")).andExpect(status().isOk())),
+                postId);
+        assertThat(item.path("hiddenByBlock").asBoolean()).isFalse();
     }
 
     // ─────────────────── 글 수정 (#211) ───────────────────
@@ -998,18 +1070,18 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
         return jdbc.queryForObject("select memo from report where id = ?", String.class, reportId);
     }
 
-    private ResultActions patchPost(Account account, long postId, String json) throws Exception {
-        return mockMvc.perform(patch("/api/community/posts/" + postId)
-                .header("Authorization", "Bearer " + account.token())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json));
-    }
-
-    private ResultActions detail(Account account, long postId) throws Exception {
-        return mockMvc.perform(get("/api/community/posts/" + postId)
-                .header("Authorization", "Bearer " + account.token()));
-    }
-
+    private ResultActions patchPost(Account account, long postId, String json) throws Exception {
+        return mockMvc.perform(patch("/api/community/posts/" + postId)
+                .header("Authorization", "Bearer " + account.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json));
+    }
+
+    private ResultActions detail(Account account, long postId) throws Exception {
+        return mockMvc.perform(get("/api/community/posts/" + postId)
+                .header("Authorization", "Bearer " + account.token()));
+    }
+
     private long newPost(Account account) throws Exception {
         return body(createPost(account, "{\"board\":\"free\",\"title\":\"제목\",\"body\":\"본문\"}")
                 .andExpect(status().isCreated()))

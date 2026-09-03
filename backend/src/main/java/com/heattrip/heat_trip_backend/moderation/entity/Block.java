@@ -1,4 +1,4 @@
-package com.heattrip.heat_trip_backend.chat.entity;
+package com.heattrip.heat_trip_backend.moderation.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -30,7 +30,7 @@ import java.time.LocalDateTime;
  * "가리기" 와 같다.
  *
  * <h2>방이 아니라 사람 단위다</h2>
- * <p>계약의 경로가 {@code /api/chat/blocks} 이고 방 id 가 없다. 가족 방에서 가린 사람을
+ * <p>계약의 경로가 {@code /api/blocks} 이고 방 id 가 없다. 가족 방에서 가린 사람을
  * 반려동물 방에서는 봐야 할 이유가 없고, 방마다 따로 걸게 하면 방이 늘 때마다 사용자가
  * 같은 일을 다시 해야 한다.
  *
@@ -42,9 +42,9 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(
-        name = "chat_block",
+        name = "user_block",
         uniqueConstraints = @UniqueConstraint(
-                name = "uq_chat_block",
+                name = "uq_user_block",
                 columnNames = {"blocker_user_id", "blocked_user_id"})
 )
 @Getter
@@ -52,7 +52,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ChatBlock {
+public class Block {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

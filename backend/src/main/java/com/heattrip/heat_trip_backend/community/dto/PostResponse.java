@@ -19,6 +19,13 @@ import java.time.Instant;
  * <p><b>{@code handle} 을 싣지 않는다.</b> 그것은 작성 시점 스냅샷이고 표시는 현재값이다 —
  * {@link PersonRefResponse} javadoc 참조.
  *
+ * <h2>{@code hiddenByBlock} 은 <b>읽는 사람마다 다른 값</b>이다</h2>
+ * <p>읽는 사람이 이 작성자를 가렸는가(#166). <b>목록에서 빼지 않는 이유</b>는 채팅과 같다 —
+ * 빼면 커서가 그 글을 건너뛰어 페이지 경계가 어긋나고, 가린 자리에 "보기" 를 두려면 본문이
+ * 이미 와 있어야 한다. 접는 것은 화면의 일이다({@code ChatMessageResponse} 와 같은 규약).
+ *
+ * <p>게스트에게는 항상 {@code false} 다 — 가린 사람이 없다.
+ *
  * <h2>{@code updatedAt} 은 {@code null} 일 수 있다</h2>
  * <p><b>{@code null} 이 "한 번도 안 고쳤다" 이다</b>(#211). {@code createdAt} 을 복사해 채우지
  * 않는다 — 그러면 화면이 모든 글에 '수정됨' 을 붙인다. {@code Comment} 에는 없다. 댓글 수정
@@ -35,9 +42,16 @@ public record PostResponse(
         int commentCount,
         ReactionSummaryResponse reactions,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        boolean hiddenByBlock) {
 
+    /** 가리기와 무관한 자리 — 방금 내가 쓰거나 고친 글이다. */
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions) {
+        return of(post, commentCount, reactions, false);
+    }
+
+    public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
+                                  boolean hiddenByBlock) {
         return new PostResponse(
                 post.getId(),
                 PersonRefResponse.of(post.getUser()),
@@ -49,6 +63,7 @@ public record PostResponse(
                 commentCount,
                 reactions,
                 post.createdAtInstant(),
-                post.updatedAtInstant());
+                post.updatedAtInstant(),
+                hiddenByBlock);
     }
 }

@@ -1,4 +1,4 @@
-package com.heattrip.heat_trip_backend.chatweb;
+package com.heattrip.heat_trip_backend.moderationweb;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -8,7 +8,7 @@ import org.springframework.web.server.ResponseStatusException;
  *
  * @param userId 가릴 사람의 {@code users.id}
  */
-public record ChatBlockRequest(Long userId) {
+public record BlockRequest(Long userId) {
 
     /**
      * 없으면 400.

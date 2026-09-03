@@ -454,7 +454,7 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
         Room room = roomWith(reader, noisy);
         send(noisy, room.id(), "접힐 말", "blk-1").andExpect(status().isCreated());
 
-        mockMvc.perform(post("/api/chat/blocks")
+        mockMvc.perform(post("/api/blocks")
                         .header("Authorization", "Bearer " + reader.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + noisy.id() + "}"))
@@ -479,16 +479,16 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
         Account reader = account("푸는 사람");
         Account other = account("가린 적 없는 사람");
 
-        mockMvc.perform(delete("/api/chat/blocks/{userId}", other.id())
+        mockMvc.perform(delete("/api/blocks/{userId}", other.id())
                         .header("Authorization", "Bearer " + reader.token()))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(post("/api/chat/blocks")
+        mockMvc.perform(post("/api/blocks")
                         .header("Authorization", "Bearer " + reader.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":" + other.id() + "}"))
                 .andExpect(status().isCreated());
-        mockMvc.perform(delete("/api/chat/blocks/{userId}", other.id())
+        mockMvc.perform(delete("/api/blocks/{userId}", other.id())
                         .header("Authorization", "Bearer " + reader.token()))
                 .andExpect(status().isNoContent());
     }
@@ -498,7 +498,7 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
     void blockingWithoutAUserIdIsRejected() throws Exception {
         Account reader = account("본문을 빠뜨린 사람");
 
-        mockMvc.perform(post("/api/chat/blocks")
+        mockMvc.perform(post("/api/blocks")
                         .header("Authorization", "Bearer " + reader.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
