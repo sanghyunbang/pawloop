@@ -942,8 +942,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         color: Color(0xF0FFFFFF),
         border: Border(top: BorderSide(color: Color(0x22785AA0))),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 댓글도 게스트에게 보인다 — 커뮤니티 UGC 의 대부분이 댓글이다 (#253).
+          // 글쓰기 화면과 같은 사실을 같은 자리에서 말한다.
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 6),
+            child: Text('로그인하지 않은 사람에게도 보여요',
+                style: TextStyle(fontSize: 11, color: T.textMuted)),
+          ),
+          Row(children: [
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -982,6 +991,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               child: const Icon(Icons.send, color: Colors.white, size: 20),
             ),
           ),
+          ]),
         ],
       ),
     );
