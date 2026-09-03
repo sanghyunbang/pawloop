@@ -29,6 +29,9 @@ import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
+import 'package:heat_trip_flutter/v2/data/walk_sync.dart';
+import 'package:heat_trip_flutter/v2/data/walk_outbox.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _base = 'https://api.example.test';
 
@@ -218,6 +221,65 @@ void main() {
       expect(sent!['title'], '성수동 카페', reason: '글 자체는 그대로 써진다');
     });
   });
+
+    test('큐에 남아 있던 옛 초안도 경로 없이 올라간다 — 사용자 탭이 없는 경로다', () async {
+      // 이게 A5 다(#235). 저장에 실패한 초안이 shared_preferences 에 남아 다음 실행에서
+      // **사용자 탭 없이** 올라간다. 업데이트로 온디바이스 빌드를 받은 사람의 기기에는
+      // 옛 경로가 든 초안이 이미 들어 있다.
+      //
+      // 큐를 비우는 마이그레이션이 필요하다고 이슈에 적었는데, 확인해 보니 필요 없다 —
+      // 큐에서 네트워크로 가는 길이 WalkSync 의 saveWalk 하나뿐이고 거기서 정책이 죽인다.
+      // 기존 walk_outbox_test 는 저장소를 가짜로 갈아끼워서 이 자리를 못 잰다.
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        WalkOutbox.pendingKey: <String>[
+          jsonEncode({
+            'clientWalkId': 'old-draft-1',
+            'startedAt': '2026-09-01T00:00:00.000Z',
+            'endedAt': '2026-09-01T00:30:00.000Z',
+            'distanceM': 2400,
+            'durationS': 1800,
+            'path': [
+              [126.9780, 37.5665],
+              [126.9800, 37.5670],
+            ],
+            'pathT': [0, 60],
+          }),
+        ],
+      });
+
+      final bodies = <Map<String, Object?>>[];
+      final repo = WalkRepository(
+        baseUrl: _base,
+        client: AuthedClient(
+          inner: MockClient((request) async {
+            if (request.url.path == '/api/dogs') {
+              return _json(const [
+                {'id': 1, 'name': '보리', 'species': 'dog', 'size': 'small'},
+              ]);
+            }
+            bodies.add(jsonDecode(request.body) as Map<String, Object?>);
+            return _json({
+              'id': 1,
+              'dogId': 1,
+              'startedAt': '2026-09-01T00:00:00Z',
+              'distanceM': 2400,
+              'durationS': 1800,
+            }, status: 201);
+          }),
+          baseUrl: _base,
+          store: _FakeTokenStore(),
+        ),
+      );
+
+      final sync = WalkSync(repo, await WalkOutbox.open());
+      await sync.flush();
+
+      expect(bodies, hasLength(1), reason: '큐가 실제로 비워졌어야 이 단언이 뜻이 있다');
+      expect(bodies.single.containsKey('path'), isFalse,
+          reason: '기기에 남아 있던 옛 경로가 자동 재전송으로 올라가면 안 된다');
+      expect(bodies.single.containsKey('pathT'), isFalse);
+      expect(bodies.single['distanceM'], 2400, reason: '기록 자체는 올라간다');
+    });
 
   test('lib/ 안에서 테스트 창구를 부르는 코드가 없다', () {
     // setForTest 는 assert 안에서만 값을 바꾸므로 릴리스에서는 무해하다. 그래도
