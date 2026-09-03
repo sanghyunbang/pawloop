@@ -43,11 +43,21 @@ class KtoKeyLoggingTest {
     private static final String LEAKING = "org.springframework.web.reactive.function.client";
     private static final String EXCHANGE_FUNCTIONS = LEAKING + ".ExchangeFunctions";
 
+    /**
+     * <b>들어오는</b> 쪽에서 URL 을 통째로 찍는 로거. #192 가 놓친 자리다.
+     *
+     * <p>{@code PARENT} 를 DEBUG 로 올리면 이것도 함께 올라가고, 그러면 요청 URL 이
+     * 쿼리스트링째 로그에 남는다 — {@code ?lat=..&lng=..} 가 사용자의 현위치다.
+     * {@code parameters} 는 마스킹되는데 URL 은 안 된다.
+     */
+    private static final String INBOUND = "org.springframework.web.servlet.DispatcherServlet";
+
     @AfterEach
     void resetLevels() {
         LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
         context.getLogger(PARENT).setLevel(null);
         context.getLogger(LEAKING).setLevel(null);
+        context.getLogger(INBOUND).setLevel(null);
     }
 
     @Test
@@ -62,6 +72,14 @@ class KtoKeyLoggingTest {
                 .as("환경변수로 열어 두면 언젠가 올라간다")
                 .contains("logging.level." + LEAKING + "=INFO")
                 .contains("logging.level.reactor.netty.http.client=INFO");
+
+        assertThat(properties)
+                .as("""
+                        들어오는 쪽도 눌러야 한다. #192 는 나가는 호출만 막았고, 그 사이 \
+                        DispatcherServlet 이 GET "/api/places/nearby?lat=..&lng=.." 를 찍고 \
+                        있었다 — 실측이다. 새는 값이 키가 아니라 **사용자의 현위치**라 \
+                        위치정보법 쪽으로도 걸린다.""")
+                .contains("logging.level." + INBOUND + "=INFO");
     }
 
     @Test
@@ -73,6 +91,12 @@ class KtoKeyLoggingTest {
         context.getLogger(PARENT).setLevel(Level.DEBUG);
         // application.properties 가 하는 일.
         context.getLogger(LEAKING).setLevel(Level.INFO);
+
+        // 들어오는 쪽도 같은 자리에 있다 — PARENT 의 직계 자식이라 같은 성질을 딛는다.
+        context.getLogger(INBOUND).setLevel(Level.INFO);
+        assertThat(context.getLogger(INBOUND).getEffectiveLevel().isGreaterOrEqual(Level.INFO))
+                .as("자식이 안 이기면 .env 가 DEBUG 인 동안 요청 URL 이 쿼리스트링째 남는다")
+                .isTrue();
 
         Level effective = context.getLogger(EXCHANGE_FUNCTIONS).getEffectiveLevel();
 
