@@ -70,7 +70,6 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
       if (!mounted) return;
       Navigator.pop(context, result); // 수정된 객체 반환
     } catch (e) {
-      print('❌ Failed to update diary: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
