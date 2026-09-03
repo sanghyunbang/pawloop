@@ -8,6 +8,15 @@ import com.heattrip.heat_trip_backend.config.ClockConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import com.heattrip.heat_trip_backend.support.TestProjectPaths;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -100,5 +109,50 @@ class CareTimeZoneTest {
         assertThat(response.occurredAt())
                 .as("UTC 로 세우면 같은 문자열이 9시간 뒤의 순간이 된다")
                 .isNotEqualTo(EARLY_MORNING_KST.toInstant(ZoneOffset.UTC));
+    }
+
+    @Test
+    @DisplayName("케어 테스트가 JVM 기본 존으로 '오늘' 을 세지 않는다 — CI(UTC)에서만 하루가 밀린다")
+    void careTestsDoNotUseTheJvmDefaultZone() throws IOException {
+        // 2026-09-03 22:53 UTC 에 CI 가 이것으로 터졌다. CareSharingIntegrationTest 가
+        // LocalDate.now()(JVM 기본 존)로 "오늘" 창을 만드는데, 서버는
+        // LocalDate.now(clock)(Asia/Seoul)으로 센다(CareService.today). 컬럼에 담긴 값도
+        // 그 존의 벽시계다.
+        //
+        // **15:00~24:00 UTC 에 돌면 빨간불, 나머지 아홉 시간에는 초록이다.** 개발 기계가
+        // KST 라 로컬에서는 영원히 안 보인다. 그래서 소스를 본다.
+        List<String> offenders = new ArrayList<>();
+        Path dir = TestProjectPaths.requireDirectory(
+                "src/test/java/com/heattrip/heat_trip_backend/care");
+        Pattern zoneless = Pattern.compile("Local(Date|DateTime)\\s*\\.\\s*now\\s*\\(\\s*\\)");
+        int scanned = 0;
+
+        try (Stream<Path> walk = Files.walk(dir)) {
+            for (Path file : walk.filter(Files::isRegularFile)
+                    .filter(f -> f.getFileName().toString().endsWith(".java"))
+                    .toList()) {
+                scanned++;
+                // 주석은 걷는다 — 이 파일이 왜 안 되는지 설명하면서 그 이름을 적는다.
+                String source = Files.readString(file, StandardCharsets.UTF_8)
+                        .replaceAll("(?s)/\\*.*?\\*/|//[^\\n]*", "");
+                String[] rows = source.split("\\R", -1);
+                for (int i = 0; i < rows.length; i++) {
+                    if (zoneless.matcher(rows[i]).find()) {
+                        offenders.add("%s:%d  %s".formatted(
+                                file.getFileName(), i + 1, rows[i].strip()));
+                    }
+                }
+            }
+        }
+
+        assertThat(scanned)
+                .as("케어 테스트 소스를 하나도 못 읽었다면 이 검사는 아무것도 지키지 않는다")
+                .isGreaterThan(1);
+        assertThat(offenders)
+                .as("케어의 시각은 ClockConfig.SERVICE_ZONE 의 벽시계다. 테스트도 같은 존으로 세야"
+                        + " 한다 — LocalDate.now(ClockConfig.SERVICE_ZONE) 처럼. 인자 없는 now() 는"
+                        + " JVM 기본 존을 읽으므로 개발 기계(KST)에서는 통과하고 CI(UTC)에서는 하루"
+                        + " 걸러 터진다. 그런 검사는 없느니만 못하다.")
+                .isEmpty();
     }
 }

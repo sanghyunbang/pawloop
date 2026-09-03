@@ -3,6 +3,7 @@ package com.heattrip.heat_trip_backend.care;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
+import com.heattrip.heat_trip_backend.config.ClockConfig;
 import com.heattrip.heat_trip_backend.care.entity.CareLog;
 import com.heattrip.heat_trip_backend.care.entity.CareType;
 import com.heattrip.heat_trip_backend.care.repository.CareLogRepository;
@@ -189,7 +190,13 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
         }
 
         assertThat(careLogRepository.findDayOfGroup(family.groupId(),
-                LocalDate.now().atStartOfDay(), LocalDate.now().plusDays(1).atStartOfDay()))
+                // **서비스 존으로 센다.** 서버의 "오늘" 은 ClockConfig.SERVICE_ZONE 이고
+                // (CareService.today), 컬럼에 담긴 값도 그 존의 벽시계다. 여기서
+                // LocalDate.now()(JVM 기본 존)로 창을 만들면 **UTC 로 도는 CI 에서만**
+                // 하루가 어긋나 이 행이 창 밖으로 나간다 — 15:00~24:00 UTC 에 돌면 빨간불이고
+                // 나머지 시간에는 초록이다. 2026-09-03 22:53 UTC 에 실제로 그렇게 터졌다.
+                LocalDate.now(ClockConfig.SERVICE_ZONE).atStartOfDay(),
+                LocalDate.now(ClockConfig.SERVICE_ZONE).plusDays(1).atStartOfDay()))
                 .as("거절된 POST 가 행을 만들지 않았는지 — 403 인데 저장은 됐다면 그게 더 나쁘다")
                 .hasSize(1);
     }
@@ -320,7 +327,9 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
 
         JsonNode yesterday = body(mockMvc.perform(
                 get("/api/groups/{id}/care-logs", family.groupId())
-                        .param("date", LocalDate.now().minusDays(1).toString())
+                        // 서버가 세는 존과 같은 존으로 물어야 한다 — 위 주석 참조.
+                        .param("date",
+                                LocalDate.now(ClockConfig.SERVICE_ZONE).minusDays(1).toString())
                         .header("Authorization", "Bearer " + dad.token()))
                 .andExpect(status().isOk()));
 
@@ -543,7 +552,8 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                 .group(familyGroupRepository.findById(groupId).orElseThrow())
                 .type(CareType.WALK)
                 .doneBy(userRepository.findById(doer.id()).orElseThrow())
-                .occurredAt(LocalDateTime.now().minusDays(1))
+                // 컬럼 값은 서비스 존의 벽시계다 — JVM 기본 존으로 넣으면 CI 에서 하루가 밀린다.
+                .occurredAt(LocalDateTime.now(ClockConfig.SERVICE_ZONE).minusDays(1))
                 .memo(memo)
                 .build());
     }
@@ -560,7 +570,7 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
     private int stampRemovedAt(long roomId, long userId) {
         return jdbc.update(
                 "UPDATE chat_room_member SET removed_at = ? WHERE room_id = ? AND user_id = ?",
-                LocalDateTime.now(), roomId, userId);
+                LocalDateTime.now(ClockConfig.SERVICE_ZONE), roomId, userId);
     }
 
     private static JsonNode body(ResultActions actions) throws Exception {
