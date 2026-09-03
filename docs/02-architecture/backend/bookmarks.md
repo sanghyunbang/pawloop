@@ -186,6 +186,4 @@ ORDER BY b.created_at DESC
 7. **패키지/클래스명 충돌 회피 (재강조)**
    기존 `bookmark` 패키지에 `Bookmark`/`BookmarkController`/`BookmarkService`/`BookmarkRepository`가 **이미 있다**. 컴파일 충돌·라우팅 충돌(`/bookmarks` vs `/api/bookmarks`)을 피하려면 **새 하위 패키지(예: `bookmark.place` 또는 `pawloop.bookmark`)** 로 분리하거나, 기존을 리네임하는 리팩터를 선행. 문서상 클래스명은 예시이며 최종 네이밍은 팀 합의로 확정.
 
----
-
-완료: C:/Users/mm206/git_projects/heattrip/docs/02-architecture/backend/bookmarks.md
+---

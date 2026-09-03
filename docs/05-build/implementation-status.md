@@ -139,6 +139,4 @@
 6. ~~**커뮤니티 글쓰기**~~: 작성 화면(#172)·삭제·수정(#211)까지 실었다. 서버에 없는 것은 관리(#166)뿐이고, 앱에 없는 것은 편집 화면이다.
 7. **채팅 서버화**: 화면 셋(`chat_list_screen`·`family_chat_screen`·`family_screen`)이 이미 있고 탭 3번을 차지하는데 서버가 없다. 방·멤버십·메시지 3테이블 + 폴링 API(M2.5~M2.6). **여기서 `id` 커서를 쓰면 안 된다** — 이유는 [ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72).
 
-> 참조: [ERD](../03-database/erd.md), [외부 데이터 연동](../02-architecture/external-data.md) (경로는 문서 세트 기준, 없으면 생성 예정)
-
-완료: C:/Users/mm206/git_projects/heattrip/docs/05-build/implementation-status.md
+> 참조: [ERD](../03-database/erd.md), [외부 데이터 연동](../02-architecture/external-data.md) (경로는 문서 세트 기준, 없으면 생성 예정)

@@ -209,6 +209,4 @@
    - 기존 `tour.domain.Place`(테이블 `places`)와 **다른 테이블**(`place`)이다. 클래스명 `PetPlace`로 분리(§1). 리포지토리·서비스도 `place` 패키지에 격리해 `tour` 패키지와 섞지 말 것.
 
 8. **에러 바디 계약.**
-   - social의 `Map.of("error", msg)` 대신 openapi `Error` 스키마(`{error:{code,message,traceId}}`)를 따른다. 전역 `@RestControllerAdvice` 하나로 400/404/429 매핑 권장.
-
-완료: C:/Users/mm206/git_projects/heattrip/docs/02-architecture/backend/places.md
+   - social의 `Map.of("error", msg)` 대신 openapi `Error` 스키마(`{error:{code,message,traceId}}`)를 따른다. 전역 `@RestControllerAdvice` 하나로 400/404/429 매핑 권장.

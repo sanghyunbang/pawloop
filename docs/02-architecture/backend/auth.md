@@ -264,6 +264,4 @@
    > ⚠️ **이슈 #10 본문은 401 에도 `{"error":{"code":"UNAUTHORIZED"}}` 본문을 요구했다. 따르지 않았다.** 그 요구는 #5 보다 먼저 쓰였고, #5 가 그 뒤에 '401 은 본문 없음' 으로 확정하면서 계약과 두 테스트(`AuthContractSpecTest.unauthorizedResponse_declaresNoBody`, `GeneratedOpenApiSpecTest.generatedSpec_401NeverDeclaresABody`)가 그것을 잠갔다. 본문을 되붙이면 그 둘이 빨간불이 된다. 계약이 코드보다 우선이라는 규약(#4)을 그대로 따른 결과다.
 8. **트랜잭션** — `exchangeCode`(사용자 upsert + refresh 저장), `deleteMe`(사용자 + refresh 삭제)는 `@Transactional` 경계로 묶기. 외부 공급자 HTTP 호출은 트랜잭션 밖에서 수행 후, DB 쓰기만 트랜잭션 내부로(장시간 커넥션 점유 방지).
 9. **좌표/공간 무관** — Auth 리소스는 EPSG:5174→WGS84·`ST_Distance_Sphere` 등 공간 처리와 무관(그쪽 함정은 Places/Walks 문서에서 다룸).
-10. **테이블명 정합 — #15 에서 해소됐다.** 스키마 문서는 `app_user`, 코드 실체는 `users` 였다. `users` 로 수렴시켰고 `schema.md` §1 이 그 이름이 어디서 왔는지를 각주로 남긴다. `DocDriftTest` 가 `app_user` 가 정의로 되살아나면 빨간불을 낸다.
-
-완료: C:/Users/mm206/git_projects/heattrip/docs/02-architecture/backend/auth.md
+10. **테이블명 정합 — #15 에서 해소됐다.** 스키마 문서는 `app_user`, 코드 실체는 `users` 였다. `users` 로 수렴시켰고 `schema.md` §1 이 그 이름이 어디서 왔는지를 각주로 남긴다. `DocDriftTest` 가 `app_user` 가 정의로 되살아나면 빨간불을 낸다.
