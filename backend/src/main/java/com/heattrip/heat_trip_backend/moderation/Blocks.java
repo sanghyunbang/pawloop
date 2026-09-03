@@ -79,7 +79,7 @@ public class Blocks {
             blocks.save(Block.builder()
                     .blockerUserId(blockerUserId)
                     .blockedUserId(blockedUserId)
-                    .createdAt(LocalDateTime.now(clock))
+                    .createdAt(ModerationTime.nowUtc(clock))
                     .build());
             return true;
         } catch (DataIntegrityViolationException alreadyBlocked) {

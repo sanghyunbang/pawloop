@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -91,7 +90,7 @@ public class Reports {
                 .reportedUserId(reportedUserId)
                 .reason(reason.wireValue())
                 .memo(trimmedMemo(memo))
-                .createdAt(nowUtc())
+                .createdAt(ModerationTime.nowUtc(clock))
                 .build());
 
         List<ReportSnapshot> rows = new ArrayList<>(inputs.size());
@@ -109,19 +108,6 @@ public class Reports {
         snapshots.saveAll(rows);
 
         return new ReportReceipt(saved.getId(), saved.createdAtInstant());
-    }
-
-    /**
-     * 지금을 UTC 로. <b>마이크로초까지만</b> 자른다.
-     *
-     * <p>컬럼이 {@code DATETIME(6)} 이라 나노초는 DB 에서 잘린다. 안 자르고 넣으면 응답으로
-     * 돌려준 시각과 저장된 시각이 달라지고, 그 차이가 테스트에서만 보인다.
-     *
-     * <p>담긴 값이 UTC 인 것은 {@code Walk}·{@code Post} 가 #40 에서 정한 규약이다.
-     */
-    private LocalDateTime nowUtc() {
-        return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
-                .truncatedTo(ChronoUnit.MICROS);
     }
 
     /** 공백뿐이면 없는 것으로 본다. 넘치면 자른다. */

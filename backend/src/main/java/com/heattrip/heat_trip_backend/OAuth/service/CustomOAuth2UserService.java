@@ -22,6 +22,7 @@ import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.GoogleOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.KakaoOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.OAuth2UserInfo;
+import com.heattrip.heat_trip_backend.user.UserTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 
@@ -204,7 +205,9 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         // 글쓰기가 500 이 되던 것이 #170 이다.
         String displayName = User.clamp(userInfo.getName(), User.MAX_NAME_LENGTH);
         String initialNickname = User.clamp(userInfo.getName(), User.MAX_NICKNAME_LENGTH);
-        LocalDateTime now = LocalDateTime.now();
+        // 빌더가 값을 넣으면 User 의 @PrePersist 가드(null 일 때만 채운다)를 비켜 간다.
+        // 그래서 여기서 UTC 로 눕힌다 — 이 경로가 v2 앱의 유일한 가입 경로다 (#248).
+        LocalDateTime now = UserTime.nowUtc();
 
         User user = User.builder()
                 .username(legacyUsername(provider, socialId)) // 레거시 독자를 위해 계속 채운다
