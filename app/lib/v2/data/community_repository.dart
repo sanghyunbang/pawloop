@@ -34,6 +34,11 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+// 신고 사유는 채팅과 같은 어휘다 — 값이 두 벌이 되면 앱이 분기를 두 번 짜고
+// 운영자가 세는 숫자가 두 표에서 다른 뜻이 된다(#166). 계약도 ReportReason 을
+// 컴포넌트로 뽑아 두 경로가 함께 참조한다.
+import 'chat_repository.dart' show ChatReportReason;
+
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'location_upload_policy.dart';
@@ -514,6 +519,38 @@ class CommunityRepository {
     await _send(
       () => _authed.deleteJson(
         Uri.parse('$baseUrl/api/community/posts/$postId/comments/$commentId'),
+      ),
+    );
+  }
+
+
+  /// 글을 신고한다 — 이슈 #166.
+  ///
+  /// **내 글은 못 신고한다**(서버가 400). 화면이 먼저 막지만, 게스트나 상태가 어긋난
+  /// 경우에 대비해 서버도 막는다.
+  ///
+  /// **같은 글을 여러 번 신고할 수 있다.** 글이 수정되기 때문이다(#211) — 막으면 작성자가
+  /// 신고 뒤 본문을 더 나쁜 것으로 고쳤을 때 재신고가 안 된다.
+  Future<void> reportPost(int postId, ChatReportReason reason, {String? memo}) async {
+    await _send(
+      () => _authed.postJson(
+        Uri.parse('$baseUrl/api/community/posts/$postId/reports'),
+        body: {'reason': reason.wire, if (memo != null && memo.isNotEmpty) 'memo': memo},
+      ),
+    );
+  }
+
+  /// 댓글을 신고한다. **부모 글이 맥락으로 함께 저장된다** — 서버가 한다.
+  Future<void> reportComment(
+    int postId,
+    int commentId,
+    ChatReportReason reason, {
+    String? memo,
+  }) async {
+    await _send(
+      () => _authed.postJson(
+        Uri.parse('$baseUrl/api/community/posts/$postId/comments/$commentId/reports'),
+        body: {'reason': reason.wire, if (memo != null && memo.isNotEmpty) 'memo': memo},
       ),
     );
   }

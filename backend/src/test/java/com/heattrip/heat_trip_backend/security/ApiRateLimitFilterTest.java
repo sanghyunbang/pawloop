@@ -241,6 +241,44 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("신고는 커뮤니티 쓰기와 다른 버킷이다 — 글을 쏟아부어 신고를 막을 수 있으면 안 된다")
+    void communityReport_hasItsOwnBucket() throws Exception {
+        RateLimitProperties p = props(100);
+        p.setCommunityWriteMaxRequests(1);
+        p.setCommunityReportMaxRequests(2);
+        ApiRateLimitFilter f = new ApiRateLimitFilter(p, MAPPER);
+
+        // 쓰기를 통째로 소진시킨다.
+        assertThat(call(f, "POST", "/api/community/posts", "198.51.100.11").getStatus())
+                .isEqualTo(200);
+        assertThat(call(f, "POST", "/api/community/posts", "198.51.100.11").getStatus())
+                .isEqualTo(429);
+
+        assertThat(call(f, "POST", "/api/community/posts/7/reports", "198.51.100.11").getStatus())
+                .as("""
+                        쓰기가 바닥나도 신고는 살아 있어야 한다. 합쳐 두면 신고 수단을 없애는 \
+                        가장 값싼 방법이 '글을 쏟아붓기' 가 된다 — chat-report 가 같은 이유로 \
+                        채팅 쓰기와 갈라져 있다.""")
+                .isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("신고 경로가 쓰기 규칙보다 먼저 매칭된다 — 순서가 뒤집히면 그 줄이 영영 안 걸린다")
+    void communityReport_isMatchedBeforeTheWriteRule() throws Exception {
+        RateLimitProperties p = props(100);
+        p.setCommunityWriteMaxRequests(100000);
+        p.setCommunityReportMaxRequests(1);
+        ApiRateLimitFilter f = new ApiRateLimitFilter(p, MAPPER);
+
+        assertThat(call(f, "POST", "/api/community/posts/7/comments/9/reports", "198.51.100.12")
+                .getStatus()).isEqualTo(200);
+        assertThat(call(f, "POST", "/api/community/posts/7/comments/9/reports", "198.51.100.12")
+                .getStatus())
+                .as("쓰기 규칙이 먼저 걸리면 여기가 100000 한도가 되어 영원히 200 이다")
+                .isEqualTo(429);
+    }
+
+    @Test
     @DisplayName("읽기와 쓰기는 다른 버킷이다 — 목록을 새로고침하다 글을 못 쓰게 되면 안 된다")
     void communityReadAndWrite_areSeparateBuckets() throws Exception {
         ApiRateLimitFilter f = filterWithCommunityLimits(1, 1);

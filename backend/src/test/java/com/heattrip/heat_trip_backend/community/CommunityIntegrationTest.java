@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostRequest;
+import com.heattrip.heat_trip_backend.moderation.Reports;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -71,6 +73,9 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private JWTProvider jwtProvider;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     // ─────────────────────────── 일곱 경로 ───────────────────────────
 
@@ -247,6 +252,151 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/api/community/posts/" + postId + "/comments"))
                 .andExpect(status().isNotFound());
+    }
+
+    // ─────────────────── 신고 (#166) ───────────────────
+
+    @Test
+    @DisplayName("남의 글을 신고하면 접수 번호와 시각만 돌아온다 — 피신고자 id 는 안 준다")
+    void reportingSomeoneElsesPostReturnsOnlyAReceipt() throws Exception {
+        Account author = account("신고당함");
+        Account reporter = account("신고함");
+        long postId = newPost(author);
+
+        JsonNode receipt = body(report(reporter, "/api/community/posts/" + postId + "/reports",
+                "{\"reason\":\"spam\",\"memo\":\"광고예요\"}")
+                .andExpect(status().isCreated()));
+
+        assertThat(receipt.path("reportId").asLong()).isPositive();
+        assertThat(receipt.path("createdAt").asText())
+                .as("계약이 format: date-time 이라 오프셋이 붙어야 한다 (#209)")
+                .endsWith("Z");
+        assertThat(receipt.has("reportedUserId"))
+                .as("""
+                        신고자는 익명이고 피신고자에게는 알림이 안 간다. 응답에 무엇이 더 \
+                        실리면 그것으로 남의 상태를 물어볼 수 있게 된다.""")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("내가 쓴 글은 신고할 수 없다 — 신고 수를 부풀리는 자리다")
+    void reportingMyOwnPostIsRejected() throws Exception {
+        Account me = account("자기신고");
+        long postId = newPost(me);
+
+        report(me, "/api/community/posts/" + postId + "/reports", "{\"reason\":\"spam\"}")
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("모르는 사유는 400 이다 — other 로 눕히면 운영자가 세는 숫자가 틀어진다")
+    void unknownReasonIsRejected() throws Exception {
+        Account author = account("사유주인");
+        Account reporter = account("사유신고");
+        long postId = newPost(author);
+
+        report(reporter, "/api/community/posts/" + postId + "/reports", "{\"reason\":\"광고\"}")
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("같은 글을 두 번 신고할 수 있다 — 글이 수정되기 때문이다")
+    void thesameuserCanReportTheSamePostTwice() throws Exception {
+        Account author = account("두번주인");
+        Account reporter = account("두번신고");
+        long postId = newPost(author);
+        String path = "/api/community/posts/" + postId + "/reports";
+
+        long first = body(report(reporter, path, "{\"reason\":\"spam\"}")
+                .andExpect(status().isCreated())).path("reportId").asLong();
+        long second = body(report(reporter, path, "{\"reason\":\"abuse\"}")
+                .andExpect(status().isCreated())).path("reportId").asLong();
+
+        assertThat(second)
+                .as("""
+                        막으면 작성자가 신고 뒤 본문을 더 나쁜 것으로 고쳤을 때 재신고가 안 되고 \
+                        (#211 이 PATCH 를 열었다), 운영자에게 남는 기록은 고치기 전 본문뿐이다.""")
+                .isNotEqualTo(first);
+    }
+
+    @Test
+    @DisplayName("없는 글을 신고하면 404 다")
+    void reportingAMissingPostIsNotFound() throws Exception {
+        Account me = account("없는글신고");
+
+        report(me, "/api/community/posts/999999/reports", "{\"reason\":\"spam\"}")
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("로그인 없이 신고하면 401 이다")
+    void reportingWithoutAuthIsUnauthorized() throws Exception {
+        Account author = account("비로그인주인");
+        long postId = newPost(author);
+
+        mockMvc.perform(post("/api/community/posts/" + postId + "/reports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"spam\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("댓글 신고는 부모 글을 맥락으로 함께 벤다 — 댓글 한 줄만 남으면 판단이 안 된다")
+    void reportingACommentSnapshotsTheParentPost() throws Exception {
+        Account author = account("댓글주인");
+        Account reporter = account("댓글신고");
+        long postId = newPost(author);
+        long commentId = body(addComment(author, postId, "{\"body\":\"신고당할 댓글\"}")
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        long reportId = body(report(reporter,
+                "/api/community/posts/" + postId + "/comments/" + commentId + "/reports",
+                "{\"reason\":\"abuse\"}")
+                .andExpect(status().isCreated())).path("reportId").asLong();
+
+        assertThat(snapshotRoles(reportId))
+                .as("""
+                        글을 지우면 fk_comment_post 가 CASCADE 라 댓글이 함께 사라져 되짚을 수도 \
+                        없다. 그래서 부모 글을 함께 벤다 — 채팅이 앞뒤 roomSeq 를 남긴 이유와 같다.""")
+                .containsExactlyInAnyOrder("target", "context");
+    }
+
+    @Test
+    @DisplayName("신고 사본이 제목과 본문을 벤다 — 원본을 지워도 남는다")
+    void theSnapshotSurvivesDeletingTheOriginal() throws Exception {
+        Account author = account("사본주인");
+        Account reporter = account("사본신고");
+        long postId = newPost(author);
+
+        long reportId = body(report(reporter, "/api/community/posts/" + postId + "/reports",
+                "{\"reason\":\"spam\"}").andExpect(status().isCreated()))
+                .path("reportId").asLong();
+
+        mockMvc.perform(delete("/api/community/posts/" + postId)
+                        .header("Authorization", "Bearer " + author.token()))
+                .andExpect(status().isNoContent());
+
+        assertThat(snapshotBodies(reportId))
+                .as("참조만 남기면 작성자가 글을 지우는 순간 운영자가 판단할 것이 없다")
+                .containsExactly("본문");
+        assertThat(snapshotTitles(reportId))
+                .as("제목에 욕설·광고가 실린 신고가 정확히 그 자리다")
+                .containsExactly("제목");
+    }
+
+    @Test
+    @DisplayName("긴 메모는 400 이 아니라 잘린다 — 거절하면 쓴 신고가 통째로 사라진다")
+    void aLongMemoIsTruncated() throws Exception {
+        Account author = account("메모주인");
+        Account reporter = account("메모신고");
+        long postId = newPost(author);
+
+        String tooLong = "가".repeat(Reports.MAX_MEMO_LENGTH + 50);
+        long reportId = body(report(reporter, "/api/community/posts/" + postId + "/reports",
+                MAPPER.writeValueAsString(Map.of("reason", "spam", "memo", tooLong)))
+                .andExpect(status().isCreated())).path("reportId").asLong();
+
+        assertThat(memoOf(reportId)).hasSize(Reports.MAX_MEMO_LENGTH);
     }
 
     // ─────────────────── 글 수정 (#211) ───────────────────
@@ -811,6 +961,41 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
     private ResultActions feed(Account account, String query) throws Exception {
         return mockMvc.perform(get("/api/community/posts" + query)
                 .header("Authorization", "Bearer " + account.token()));
+    }
+
+    private ResultActions report(Account account, String path, String json) throws Exception {
+        return mockMvc.perform(post(path)
+                .header("Authorization", "Bearer " + account.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json));
+    }
+
+    /**
+     * 신고 사본의 {@code role} 들.
+     *
+     * <p><b>JDBC 로 직접 읽는다.</b> 신고를 읽는 API 가 아직 없고, 만들려면 관리자 인가를
+     * 함께 정해야 한다(#166 이 다음 조각으로 갖고 있다). 그 결정을 테스트가 앞질러 끌고 오지
+     * 않는다.
+     */
+    private List<String> snapshotRoles(long reportId) {
+        return jdbc.queryForList(
+                "select role from report_snapshot where report_id = ?", String.class, reportId);
+    }
+
+    private List<String> snapshotBodies(long reportId) {
+        return jdbc.queryForList(
+                "select body from report_snapshot where report_id = ? and role = 'target'",
+                String.class, reportId);
+    }
+
+    private List<String> snapshotTitles(long reportId) {
+        return jdbc.queryForList(
+                "select title from report_snapshot where report_id = ? and role = 'target'",
+                String.class, reportId);
+    }
+
+    private String memoOf(long reportId) {
+        return jdbc.queryForObject("select memo from report where id = ?", String.class, reportId);
     }
 
     private ResultActions patchPost(Account account, long postId, String json) throws Exception {

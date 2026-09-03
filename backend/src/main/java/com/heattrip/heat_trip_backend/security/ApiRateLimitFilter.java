@@ -244,6 +244,11 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         // 그것이 한도 없는 쓰기 경로가 될 뻔했다 — 표에 없으면 한도가 0 이 아니라 무한이다.
         // `!GET` 으로 뒤집지 않는 이유는 OPTIONS 다. CORS 예비 요청이 쓰기 버킷을 태우면
         // 사용자가 아무것도 안 썼는데 글쓰기가 막힌다.
+        // **신고를 쓰기보다 먼저 본다.** 순서를 뒤집으면 아래 community-write 가 먼저
+        // 걸려서 이 줄이 영영 안 잡히고, 글을 쏟아부어 신고를 막을 수 있게 된다 (#166).
+        if ("POST".equals(method) && path.startsWith("/api/community/") && path.endsWith("/reports")) {
+            return new Rule("community-report", rateLimitProperties.getCommunityReportMaxRequests());
+        }
         if (WRITE_METHODS.contains(method)
                 && path.startsWith("/api/community/")) {
             return new Rule("community-write", rateLimitProperties.getCommunityWriteMaxRequests());

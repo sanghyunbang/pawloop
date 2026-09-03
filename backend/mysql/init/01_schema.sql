@@ -583,6 +583,38 @@ CREATE TABLE `refresh_token` (
   KEY `idx_refresh_token_expires_at` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `report` (
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `reported_user_id` bigint DEFAULT NULL,
+  `reporter_user_id` bigint NOT NULL,
+  `target_id` bigint NOT NULL,
+  `reason` varchar(16) NOT NULL,
+  `target_type` varchar(24) NOT NULL,
+  `memo` varchar(500) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_report_target` (`target_type`,`target_id`),
+  KEY `idx_report_reported` (`reported_user_id`),
+  KEY `idx_report_reporter` (`reporter_user_id`),
+  CONSTRAINT `chk_report_reason` CHECK ((`reason` in (_utf8mb4'spam',_utf8mb4'abuse',_utf8mb4'sexual',_utf8mb4'fraud',_utf8mb4'other'))),
+  CONSTRAINT `chk_report_target_type` CHECK ((`target_type` in (_utf8mb4'community_post',_utf8mb4'community_comment')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `report_snapshot` (
+  `author_user_id` bigint DEFAULT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `occurred_at` datetime(6) NOT NULL,
+  `report_id` bigint NOT NULL,
+  `role` varchar(8) NOT NULL,
+  `title` varchar(200) DEFAULT NULL,
+  `author_name` varchar(255) DEFAULT NULL,
+  `body` text NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_report_snapshot_report` (`report_id`),
+  CONSTRAINT `fk_report_snapshot_report` FOREIGN KEY (`report_id`) REFERENCES `report` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `chk_report_snapshot_role` CHECK ((`role` in (_utf8mb4'target',_utf8mb4'context')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `schedule` (
   `date_from` date DEFAULT NULL,
   `date_to` date DEFAULT NULL,
