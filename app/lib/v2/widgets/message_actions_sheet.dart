@@ -147,9 +147,12 @@ class ReportSheet extends StatefulWidget {
 
   /// 가리기 체크박스를 보일 것인가.
   ///
-  /// **커뮤니티는 아직 false 다** — 가리기 경로가 커뮤니티에 없다(#166 의 다음 조각).
-  /// 받는 척하는 칸이 화면에 있으면 사용자가 그것을 믿는다. 채팅 신고가 같은 이유로
-  /// 예전 초안의 `alsoBlock` 을 계약에서 뺐다.
+  /// **지금은 채팅도 커뮤니티도 `true` 다.** #166 이 가리기를 chat 밖의 공용 모듈로
+  /// 올리면서 커뮤니티에도 붙였다(`post_detail_screen` 이 `canBlock: true` 를 넘긴다).
+  ///
+  /// 그래도 이 인자를 남겨 둔다 — 받는 척하는 칸이 화면에 있으면 사용자가 그것을
+  /// 믿는다. 가리기가 없는 자리가 다시 생기면 그 자리에서 `false` 를 넘겨야 한다.
+  /// 채팅 신고가 같은 이유로 예전 초안의 `alsoBlock` 을 계약에서 뺐다.
   final bool canBlock;
 
   static Future<ReportChoice?> show(

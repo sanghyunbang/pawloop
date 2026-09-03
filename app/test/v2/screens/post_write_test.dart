@@ -84,6 +84,59 @@ void main() {
   setUp(() => LocationUploadPolicy.setForTest(true));
   tearDown(LocationUploadPolicy.resetForTest);
 
+  // ─────────────────── 공개 범위 고지 (이슈 #253) ───────────────────
+
+  testWidgets('글쓰기 화면이 공개 범위를 상시로 말한다 — 창이 아니라 한 줄이다', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostWriteScreen(repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('로그인하지 않은 사람에게도 보여요'),
+      findsOneWidget,
+      reason: 'SecurityConfig 가 커뮤니티 GET 셋을 permitAll 로 엽니다. 이용자가 그것을 '
+          '모르고 쓰면, 로그인한 사람만 본다고 믿고 쓴 것이 게스트에게 나갑니다.',
+    );
+    expect(
+      find.textContaining('탈퇴해도 글은 남아요'),
+      findsOneWidget,
+      reason: 'post 의 user_id 가 ON DELETE SET NULL 이라 탈퇴해도 글이 남습니다.',
+    );
+  });
+
+  testWidgets('고치기로 들어와도 같은 한 줄을 본다 — 편집도 공개되는 것은 같다', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostWriteScreen(
+      repository: f.repo,
+      editing: CommunityPost.tryParse(_createdPost()),
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('로그인하지 않은 사람에게도 보여요'), findsOneWidget);
+  });
+
+  testWidgets('커뮤니티에는 동의 창을 띄우지 않는다 — 같은 사람에게 두 번 묻지 않는다', (tester) async {
+    // **이 단언은 결정을 잠근다** (#253). 이슈는 "커뮤니티에 게이트가 없다" 였는데,
+    // 실측하니 시점 요건은 이미 충족돼 있었다 — auth_redirect 가 로그인한 사람을 다른
+    // 어떤 규칙보다 먼저 /consent 로 붙잡고, 글쓰기는 로그인이 필요하다.
+    //
+    // 여기서 창을 하나 더 띄우면 ConsentScreen 에서 한 번, 여기서 또 한 번 묻는 것이
+    // 된다. 비어 있던 것은 "언제 물었나" 가 아니라 "무엇에 동의했나" 였고, 그것은
+    // 약관 제7조4·제7조의2·제9조2 로 갚았다.
+    //
+    // 정말로 창이 필요해지는 날 이 단언을 지우는 사람에게, 그것이 결정의 번복이라는
+    // 것을 이 문단이 말해 준다.
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostWriteScreen(repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
+
   testWidgets('게시판 선택지가 다섯이고 전체가 없다', (tester) async {
     final f = fixture();
 

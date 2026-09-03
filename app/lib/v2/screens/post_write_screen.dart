@@ -270,6 +270,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                   MediaQuery.of(context).viewInsets.bottom + 24,
                 ),
                 children: [
+                  _visibilityNotice(),
                   if (_placeName != null) ...[
                     _placeCard(),
                     const SizedBox(height: 14),
@@ -369,6 +370,32 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                     color: T.textMuted)),
         ]),
       );
+
+
+  /// 이 화면에서 쓴 것이 <b>어디까지 보이는지</b> 한 줄로 — 이슈 #253.
+  ///
+  /// ## 왜 창이 아니라 상시 고지인가
+  ///
+  /// 동의는 이미 받았다. 로그인한 사람은 예외 없이 `ConsentScreen` 을 지나고
+  /// (`auth_redirect.dart` 가 다른 어떤 규칙보다 먼저 붙잡는다), 이용약관 제7조4가
+  /// 공개 범위를 적는다. 여기서 창을 하나 더 띄우면 **같은 사람에게 두 번 묻는 것**이다.
+  ///
+  /// 대신 사실이 일어나는 자리에서 매번 말한다. 동의 창은 한 번 누르면 두 번째 글부터
+  /// 아무 말도 안 하는데, 게시물이 게스트에게도 보인다는 것은 **쓸 때마다** 알아야 하는
+  /// 사실이다.
+  Widget _visibilityNotice() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 14),
+      child: Text(
+        '여기 쓴 글과 댓글은 로그인하지 않은 사람에게도 보여요. 닉네임이 함께 표시되고, 탈퇴해도 글은 남아요.',
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.5,
+          color: T.textMuted,
+        ),
+      ),
+    );
+  }
 
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 7),

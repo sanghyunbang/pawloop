@@ -55,6 +55,9 @@ Map<String, Object?> _post(
         int commentCount = 0,
         String? updatedAt,
         bool hidden = false,
+        // 화면은 reactions.mine 이 null 인 것으로 게스트를 판정한다
+        // (post_detail_screen.dart 의 _isGuest).
+        bool guest = false,
         String? loc}) =>
     {
       'id': 12,
@@ -65,7 +68,12 @@ Map<String, Object?> _post(
       'title': '지울 수 있는 글',
       'body': '본문',
       'commentCount': commentCount,
-      'reactions': {'help': 0, 'cute': 0, 'empathy': 0, 'mine': <String>[]},
+      'reactions': {
+        'help': 0,
+        'cute': 0,
+        'empathy': 0,
+        'mine': guest ? null : <String>[],
+      },
       'createdAt': '2026-09-01T07:30:00Z',
       'updatedAt': updatedAt,
       'hiddenByBlock': hidden,
@@ -87,6 +95,7 @@ Map<String, Object?> _comment(int id, int authorId) => {
   int deleteStatus = 204,
   String? updatedAt,
   bool hiddenByBlock = false,
+  bool guest = false,
   String? loc,
   int patchStatus = 200,
 }) {
@@ -98,6 +107,7 @@ Map<String, Object?> _comment(int id, int authorId) => {
       commentCount: comments.length,
       updatedAt: updatedAt,
       hidden: hiddenByBlock,
+      guest: guest,
       loc: loc);
   final client = AuthedClient(
     inner: MockClient((request) async {
@@ -149,6 +159,50 @@ void main() {
   });
 
   tearDown(AuthState.resetForTest);
+
+  // ─────────────────── 공개 범위 고지 (이슈 #253) ───────────────────
+
+  testWidgets('댓글 입력칸도 공개 범위를 말한다 — 커뮤니티 UGC 의 대부분이 댓글이다', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('로그인하지 않은 사람에게도 보여요'),
+      findsOneWidget,
+      reason: 'SecurityConfig 가 /api/community/posts/*/comments 의 GET 을 permitAll 로 엽니다. '
+          '글쓰기 화면에만 적으면 댓글만 쓰는 사람은 그 사실을 한 번도 못 봅니다.',
+    );
+  });
+
+  testWidgets('게스트에게는 입력칸 대신 로그인 안내만 보인다 — 고지가 안내를 밀어내지 않는다',
+      (tester) async {
+    // 게스트는 애초에 댓글을 못 씁니다. 그 자리에 공개 범위 고지를 겹쳐 놓으면
+    // "로그인하면 쓸 수 있어요" 가 묻힙니다.
+    final f = fixture(guest: true);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('로그인하면 댓글과 반응을 남길 수 있어요'), findsOneWidget);
+    expect(find.text('로그인하지 않은 사람에게도 보여요'), findsNothing);
+  });
+
+  testWidgets('글 상세에도 동의 창을 띄우지 않는다 — 결정을 잠근다 (#253)', (tester) async {
+    // post_write_test 의 같은 이름 단언과 짝이다. 커뮤니티는 동의를 다시 받지 않고,
+    // 비어 있던 "무엇에 동의했나" 는 약관 제7조4·제7조의2·제9조2 로 갚았다.
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
 
   testWidgets('내 글에만 삭제가 보인다', (tester) async {
     final f = fixture();
