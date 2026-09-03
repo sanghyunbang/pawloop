@@ -186,6 +186,55 @@ public class CommunityService {
     // ─────────────────────────── 반응 ───────────────────────────
 
     /**
+     * 글을 지운다 — 이슈 #211.
+     *
+     * <h2>댓글과 반응이 함께 사라진다</h2>
+     * <p>{@code fk_comment_post}·{@code fk_reaction_post} 가 {@code ON DELETE CASCADE} 다.
+     * 그것이 {@code 14_community.sql} §D 가 적어 둔 결정이다 — <b>부모 없는 행을 남기지
+     * 않는다.</b> 남으면 어느 목록에도 안 뜨면서 자리만 차지하고, 나중에 세면 댓글 수가
+     * 맞지 않는데 왜 안 맞는지 아무도 모른다.
+     *
+     * <p>남의 댓글이 함께 사라지는 것은 의도다. 글이 없으면 그 댓글은 읽을 맥락이 없다.
+     * {@code users} 로 가는 FK 가 {@code SET NULL} 인 것과는 다른 판단인데, 거기서는
+     * <b>글이 남아 있고</b> 작성자만 사라지는 것이라 남의 댓글이 읽힐 자리가 있다.
+     *
+     * <h2>남의 글은 403 이다 — 404 가 아니다</h2>
+     * <p>{@code Dogs}·{@code Walks} 는 404 로 합친다("남의 것과 없는 것이 구별되지 않는다",
+     * ADR-0017 규약 3). 커뮤니티는 <b>반대다</b> — 글은 누구나 읽을 수 있어서 <b>존재가 이미
+     * 공개</b>다. 404 로 숨겨도 방금 GET 으로 본 것을 숨기는 것이라 아무것도 못 가리고,
+     * 대신 사용자가 "지웠는데 사라지지 않았다" 로 읽는다.
+     *
+     * @throws ResponseStatusException 404 — 그런 글이 없으면
+     * @throws ResponseStatusException 403 — 내 글이 아니면
+     */
+    @Transactional
+    public void deletePost(User me, long postId) {
+        Post post = requirePost(postId);
+        requireMine(post.getUser(), me.getId(), "글");
+        posts.delete(post);
+    }
+
+    /**
+     * 댓글을 지운다 — 이슈 #211.
+     *
+     * <p><b>글 주인이 남의 댓글을 지우지 못한다.</b> 그건 관리(moderation)이고 그 결정은
+     * #166 이 갖고 있다. 여기서 미리 열면 신고·차단 모양이 정해질 때 두 벌이 된다.
+     *
+     * <p>글이 그 댓글의 것이 맞는지 함께 본다. {@code /posts/1/comments/2} 에서 2번 댓글이
+     * 다른 글의 것이면 <b>404</b> 다 — 경로가 가리키는 것이 없다는 뜻이지 권한 문제가 아니다.
+     */
+    @Transactional
+    public void deleteComment(User me, long postId, long commentId) {
+        requirePost(postId);
+        Comment comment = comments.findById(commentId)
+                .filter(c -> c.getPost().getId() == postId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."));
+        requireMine(comment.getUser(), me.getId(), "댓글");
+        comments.delete(comment);
+    }
+
+    /**
      * 반응을 누른다. <b>멱등</b>이다 — 이미 눌러 뒀어도 200 이고 집계가 늘지 않는다.
      *
      * <p><b>동시 요청에서도 그렇다.</b> #170 은 {@code saveAndFlush} 뒤에
@@ -275,6 +324,24 @@ public class CommunityService {
             case "empathy" -> 2;
             default -> -1;
         };
+    }
+
+    /**
+     * 내가 쓴 것인가.
+     *
+     * <p><b>작성자가 {@code null} 이면 아무도 못 지운다.</b> 탈퇴한 사람의 글이다
+     * ({@code ON DELETE SET NULL}, ADR-0016 결정 5). 그 글의 주인은 이제 없고, 아무나
+     * 지울 수 있게 하면 그것이 곧 관리 권한이 된다 — 그건 #166 이 정할 일이다.
+     */
+    private static void requireMine(User owner, long meId, String what) {
+        if (owner == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "지울 수 없는 " + what + "입니다.");
+        }
+        if (!owner.getId().equals(meId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "내가 쓴 " + what + "만 지울 수 있습니다.");
+        }
     }
 
     private Post requirePost(long postId) {

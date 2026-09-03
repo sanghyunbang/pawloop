@@ -103,6 +103,27 @@ public class CommunityController {
         return community.addComment(me, postId, request);
     }
 
+    /**
+     * 내 글을 지운다 — 이슈 #211.
+     *
+     * <p><b>댓글과 반응이 함께 사라진다</b>(FK CASCADE). 남의 글이면 404 가 아니라
+     * <b>403</b> 이다 — 글은 누구나 읽을 수 있어서 존재가 이미 공개다. 이유는 서비스 javadoc.
+     */
+    @DeleteMapping("/posts/{postId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePost(@CurrentUser User me, @PathVariable long postId) {
+        community.deletePost(me, postId);
+    }
+
+    /** 내 댓글을 지운다. 글 주인이라도 남의 댓글은 못 지운다 — 관리는 #166 이 갖는다. */
+    @DeleteMapping("/posts/{postId}/comments/{commentId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteComment(@CurrentUser User me,
+                              @PathVariable long postId,
+                              @PathVariable long commentId) {
+        community.deleteComment(me, postId, commentId);
+    }
+
     /** 멱등이다 — 이미 눌러 뒀어도 200 이고 집계가 늘지 않는다. */
     @PostMapping("/posts/{postId}/reactions/{type}")
     public ReactionSummaryResponse addReaction(@CurrentUser User me,

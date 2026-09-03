@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../data/auth_state.dart';
 import '../data/community_repository.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -226,6 +227,93 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         reactions: reactions,
         createdAt: post.createdAt,
       );
+
+  /// 내가 쓴 것인가 — 이슈 #211.
+  ///
+  /// `PersonRef.userId` 와 내 id 를 견준다. ADR-0017 규약 5 가 `author` 를 `PersonRef` 로
+  /// 통일한 이유가 정확히 이것이다 — 그전에는 닉네임뿐이라 앱이 문자열 `'나'` 를 표식으로
+  /// 썼고, 닉네임이 '나' 인 사람이 오면 남의 댓글이 내 것으로 보였다.
+  ///
+  /// **틀려도 안전하다.** 여기서 잘못 보여 줘도 서버가 403 을 주고 화면이 그 이유를 말한다.
+  /// 이건 보여 줄지 말지의 판정이지 권한 판정이 아니다.
+  bool _isMine(PersonRef author) {
+    final me = AuthState.user?.id;
+    return me != null && !author.isWithdrawn && author.userId == me;
+  }
+
+  Widget _deleteButton({required VoidCallback onTap}) => GestureDetector(
+        onTap: _sending ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Text('삭제',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFD9534F))),
+        ),
+      );
+
+  /// 글 삭제. **되돌릴 수 없고 남의 댓글까지 사라지므로** 한 번 묻는다.
+  Future<void> _confirmDeletePost() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('이 글을 지울까요?'),
+        content: Text(
+          _post.commentCount > 0
+              ? '댓글 ${_post.commentCount}개도 함께 사라져요. 되돌릴 수 없어요.'
+              : '되돌릴 수 없어요.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('그대로 두기'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('지우기',
+                style: TextStyle(color: Color(0xFFD9534F))),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _sending = true);
+    try {
+      await _repo.deletePost(_post.id);
+      if (!mounted) return;
+      // 목록으로 돌아간다. 이 글은 이제 없으므로 상세에 머물 자리가 없다.
+      Navigator.of(context).pop(true);
+    } on CommunityFailure catch (failure) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _toast(failure.message);
+    }
+  }
+
+  /// 댓글 삭제. 남의 것을 지우지 않으므로 묻지 않는다 — 되돌릴 수 없다는 것은 같지만
+  /// 잃는 것이 내 한 줄이고, 확인 창이 매번 뜨면 그것이 더 성가시다.
+  Future<void> _confirmDeleteComment(CommunityComment comment) async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    try {
+      await _repo.deleteComment(_post.id, comment.id);
+      if (!mounted) return;
+      setState(() {
+        _comments = _comments.where((c) => c.id != comment.id).toList();
+        _post = _withCommentCount(
+            _post, _post.commentCount > 0 ? _post.commentCount - 1 : 0);
+        _sending = false;
+        _changed = true;
+      });
+    } on CommunityFailure catch (failure) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _toast(failure.message);
+    }
+  }
 
   void _toast(String message) {
     if (!mounted) return;
@@ -485,6 +573,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 _dateTime(post.createdAt),
                 style: const TextStyle(fontSize: 11.5, color: T.textMuted),
               ),
+              if (_isMine(post.author)) ...[
+                const SizedBox(width: 8),
+                _deleteButton(onTap: _confirmDeletePost),
+              ],
             ],
           ),
           const SizedBox(height: 14),
@@ -639,6 +731,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       ),
                     ),
                     const Spacer(),
+                    if (_isMine(comment.author)) ...[
+                      _deleteButton(onTap: () => _confirmDeleteComment(comment)),
+                      const SizedBox(width: 8),
+                    ],
                     Text(
                       _dateTime(comment.createdAt),
                       style: const TextStyle(

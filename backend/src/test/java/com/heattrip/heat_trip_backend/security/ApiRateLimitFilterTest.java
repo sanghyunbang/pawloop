@@ -61,6 +61,13 @@ class ApiRateLimitFilterTest {
     }
 
     /** 가족·채팅 쓰기 버킷({@code POST /api/groups}·초대 발급)의 한도를 지정한 필터. */
+    private static ApiRateLimitFilter filterWithCommunityLimits(int read, int write) {
+        RateLimitProperties p = props(100);
+        p.setCommunityReadMaxRequests(read);
+        p.setCommunityWriteMaxRequests(write);
+        return new ApiRateLimitFilter(p, MAPPER);
+    }
+
     private static ApiRateLimitFilter filterWithGroupWriteLimit(int groupWriteLimit) {
         RateLimitProperties p = props(100);
         p.setGroupWriteMaxRequests(groupWriteLimit);
@@ -160,6 +167,69 @@ class ApiRateLimitFilterTest {
         assertThat(call(f, "POST", "/auth/signup", "203.0.113.9").getStatus())
                 .as("로그인 1 + 가입 1 로 한도 2 를 이미 썼으므로 세 번째는 막혀야 한다")
                 .isEqualTo(429);
+    }
+
+    // ─────────────────── A''. 커뮤니티 (이슈 #170 · #211) ───────────────────
+    //
+    // 커뮤니티 읽기 셋은 **게스트에게 열려 있다**(ADR-0016 결정 3). 그 전까지 이 경로를
+    // 막고 있던 것은 anyRequest().authenticated() 였는데 그 방어선이 사라졌다 — 그리고
+    // resolveRule 의 표에 **없으면 한도가 0 이 아니라 무한**이다(null 을 주면 그대로 통과).
+    //
+    // 그래서 버킷 둘을 함께 넣었는데 **그것을 잠그는 필터 테스트가 없었다**(#211 에서 발견).
+    // application-test.properties 가 두 한도를 100000 으로 올리므로, 여기가 없으면
+    // 저장소 전체에서 커뮤니티 한도를 재는 곳이 0 이 된다.
+
+    @Test
+    @DisplayName("GET /api/community/posts 는 community-read 버킷이다 — 게스트가 부르는 경로다")
+    void communityFeed_isRateLimited() throws Exception {
+        MockHttpServletResponse blocked = exhaust(
+                filterWithCommunityLimits(2, 100), "GET", "/api/community/posts", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("글 id 가 숫자가 아니어도 읽기 버킷이 덮는다 — permitAll 과 같은 집합이어야 한다")
+    void communityDetail_withNonNumericId_isStillMetered() throws Exception {
+        // SecurityConfig 의 permitAll 은 "/api/community/posts/*" 라 임의의 한 세그먼트를
+        // 연다. 여기 패턴을 [0-9]+ 로 좁히면 GET /api/community/posts/abc 가
+        // **인증 없음 + 한도 무한**이 된다.
+        MockHttpServletResponse blocked = exhaust(
+                filterWithCommunityLimits(2, 100), "GET", "/api/community/posts/abc", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("글 작성·삭제·반응은 community-write 버킷을 나눠 쓴다 — 합쳐서 한도다")
+    void communityWrites_shareOneBucket() throws Exception {
+        ApiRateLimitFilter f = filterWithCommunityLimits(100, 2);
+
+        assertThat(call(f, "POST", "/api/community/posts", "198.51.100.7").getStatus())
+                .isEqualTo(200);
+        assertThat(call(f, "DELETE", "/api/community/posts/7", "198.51.100.7").getStatus())
+                .as("삭제가 이 버킷 밖이면 지우기를 무한히 부를 수 있다 (#211)")
+                .isEqualTo(200);
+
+        assertThat(call(f, "POST", "/api/community/posts/7/reactions/help", "198.51.100.7")
+                .getStatus())
+                .as("셋이 한 버킷이라 세 번째가 막힌다")
+                .isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("읽기와 쓰기는 다른 버킷이다 — 목록을 새로고침하다 글을 못 쓰게 되면 안 된다")
+    void communityReadAndWrite_areSeparateBuckets() throws Exception {
+        ApiRateLimitFilter f = filterWithCommunityLimits(1, 1);
+
+        assertThat(call(f, "GET", "/api/community/posts", "198.51.100.7").getStatus())
+                .isEqualTo(200);
+        assertThat(call(f, "GET", "/api/community/posts", "198.51.100.7").getStatus())
+                .isEqualTo(429);
+
+        assertThat(call(f, "POST", "/api/community/posts", "198.51.100.7").getStatus())
+                .as("읽기를 다 써도 쓰기는 남아 있어야 한다")
+                .isEqualTo(200);
     }
 
     // ─────────────────── A'. 가족·채팅 쓰기 경로 (이슈 #75 · 📌 #86 원칙 4) ───────────────────
