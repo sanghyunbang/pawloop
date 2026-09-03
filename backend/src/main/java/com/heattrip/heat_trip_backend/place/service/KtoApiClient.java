@@ -67,9 +67,6 @@ public class KtoApiClient {
     /** 호출 전체의 상한. 소켓 타임아웃(5s)보다 길어야 그쪽이 먼저 걸린다. */
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(6);
 
-    /** 계약의 {@code PlaceCategory} 가 아는 KTO 콘텐츠타입. 그 밖은 category 를 생략한다. */
-    private static final Set<String> KNOWN_CATEGORIES = Set.of("12", "14", "28", "32", "38", "39");
-
     private final WebClient petTour;
     private final WebClient serviceDetail;
     private final ObjectMapper objectMapper;
@@ -289,8 +286,9 @@ public class KtoApiClient {
                 contentId,
                 nullToEmpty(text(item, "title")),
                 PlaceDto.SOURCE_KTO,
-                // 계약의 닫힌 enum 밖이면 생략한다 — 위 KNOWN_CATEGORIES javadoc 참조.
-                contentTypeId != null && KNOWN_CATEGORIES.contains(contentTypeId) ? contentTypeId : null,
+                // 계약의 닫힌 enum 밖이면 생략한다 — PlaceDto.KNOWN_CATEGORIES javadoc 참조.
+                contentTypeId != null && PlaceDto.KNOWN_CATEGORIES.contains(contentTypeId)
+                        ? contentTypeId : null,
                 contentTypeId,
                 lat,
                 lng,

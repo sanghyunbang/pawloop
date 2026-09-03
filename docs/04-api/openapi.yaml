@@ -657,11 +657,18 @@ paths:
         - name: lat
           in: query
           required: true
-          schema: { type: number, format: double, example: 37.5665 }
+          description: |
+            위도. **범위를 벗어나면 `400` 입니다** — `radius`·`limit` 과 달리 자르지
+            않습니다. 좌표는 사용자가 지금 보고 있는 곳이라, 조용히 다른 지점의 답을
+            주면 그 사람은 자기 주변이 비어 있다고 읽습니다.
+
+            `NaN`·`Infinity` 도 `400` 입니다.
+          schema: { type: number, format: double, minimum: -90, maximum: 90, example: 37.5665 }
         - name: lng
           in: query
           required: true
-          schema: { type: number, format: double, example: 126.9816 }
+          description: 경도. `lat` 과 같은 규칙입니다 — 범위 밖이면 `400`.
+          schema: { type: number, format: double, minimum: -180, maximum: 180, example: 126.9816 }
         - name: radius
           in: query
           description: |
@@ -680,7 +687,16 @@ paths:
           schema: { $ref: '#/components/schemas/PlaceCategory' }
         - name: limit
           in: query
-          schema: { type: integer, default: 80, maximum: 200 }
+          description: |
+            **지도 전용 상한입니다** — 공통 파라미터 `Limit`(기본 20 / 최대 100)이 아니라
+            여기만의 인라인 스키마이고 수가 다릅니다. 지도는 화면 한 장에 핀을 다 뿌리므로
+            목록 한 쪽보다 큽니다.
+
+            **넘겨도 400 이 아니라 잘립니다**(`radius` 와 같은 규칙). 그리고 **잘렸다는
+            신호가 응답에 없습니다** — 응답이 벌거벗은 배열이라 실을 자리가 없습니다.
+            지도는 '이 반경 안 상위 N' 이라 커서가 필요 없다고 봤습니다. 잘림을 알려야
+            한다고 판단이 서면 응답을 봉투로 바꾸는 파괴적 변경이 됩니다.
+          schema: { type: integer, default: 80, maximum: 200, minimum: 1 }
       responses:
         '200':
           description: 장소 목록
@@ -689,6 +705,7 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Place' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /api/places/{contentId}:
@@ -708,6 +725,10 @@ paths:
 
         `detailIntro2` 는 **부르지 않습니다.** 앱이 그 응답에서 쓰던 것은 추가 이미지뿐인데,
         넣으면 상세 1건이 3콜이 되어 하루 상세가 75건에서 50건으로 줄기 때문입니다.
+
+        **`429` 는 목록과 다른 버킷입니다** — `places-detail` 이고 목록(`places`)보다 좁습니다.
+        상세 1건이 KTO 를 2콜 쓰기 때문입니다. 2026-09-03 이전에는 서버가 실제로 던지는데
+        계약에만 없었습니다(#210 `Places-medium-2`).
       security: []
       parameters:
         - name: contentId
@@ -721,6 +742,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/PlaceDetail' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   # ─────────────────────────── Walks ───────────────────────────
   /api/walks:
@@ -2480,7 +2502,23 @@ components:
             빼고 보냅니다 — 모르는 값을 실으면 계약을 깨고, 아무 값으로 눕히면 화면이
             엉뚱한 아이콘을 그립니다. 앱은 모르는 값을 "기타" 로 폴백합니다.
             원래 값은 `contentTypeId` 에 그대로 있습니다.
-        contentTypeId: { type: string, example: "12", description: "KTO 콘텐츠타입(12관광지/14문화/28레포츠/32숙박/38쇼핑/39음식점)" }
+
+            **앱은 이 필드를 안 읽습니다.** 아이콘도 필터도 `contentTypeId` 로 판단합니다.
+            남겨 둔 것은 이 필드가 "계약이 아는 값인가" 를 그 자체로 말해 주기 때문입니다 —
+            있으면 여섯 중 하나이고, 없으면 KTO 가 그 밖의 값을 준 것입니다. 두 필드가
+            같은 것을 두 가지로 말하지 않도록 여기 적어 둡니다(#210 `Places-high-3`).
+        contentTypeId:
+          type: [string, "null"]
+          example: "12"
+          description: |
+            KTO 콘텐츠타입(12관광지/14문화/28레포츠/32숙박/38쇼핑/39음식점).
+
+            **앱이 실제로 보는 필드가 이것입니다.** `category` 가 아닙니다 —
+            `category` 설명을 참고하세요.
+
+            **`kto` 가 아닌 출처에서는 `null` 입니다.** 오늘 서버가 만드는 출처는 `kto`
+            하나뿐이라 아직 그런 행이 없지만, `vet`/`shop`/`trail` 이 붙는 날 이 필드는
+            채울 값이 없습니다 — KTO 체계의 값이기 때문입니다.
         lat: { type: number, format: double, example: 37.5445 }
         lng: { type: number, format: double, example: 127.0374 }
         addr: { type: string, example: "서울특별시 성동구 뚝섬로 273" }
@@ -2498,6 +2536,9 @@ components:
             거리를 봅니다(최대 1.4km 틀립니다).
           example: 320
 
+    # 값의 출처가 둘이다 — 이 enum 과 PlaceDto.KNOWN_CATEGORIES.
+    # 갈리면 KTO 가 준 값을 서버가 실어 보내고 앱이 라벨을 못 찾는다.
+    # PlacesContractSpecTest 가 둘을 대조한다 (#210 Places-low-1).
     PlaceCategory:
       type: string
       description: 프론트 카테고리 키(KTO contentTypeId 또는 레이어 키)

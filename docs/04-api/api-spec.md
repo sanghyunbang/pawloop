@@ -358,11 +358,15 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 | `lng` | double | 필수 | 경도 |
 | `radius` | int | 8000 | 반경(m) |
 | `category` | string | - | 필터. `12/14/28/32/38/39`(KTO) 또는 `vet/shop/trail`(공공데이터 레이어) |
-| `limit` | int | 80 | 최대 100 |
+| `limit` | int | 80 | **최대 200.** 공통 파라미터 `Limit`(20/100)과 다른 지도 전용 상한이다 |
+
+**좌표는 범위 밖이면 `400` 이다** — `radius`·`limit` 과 태도가 다르다. 그 둘은 자르는데(`clamp`) 좌표는 거절한다. 조용히 다른 지점의 답을 주면 사용자는 자기 주변이 비어 있다고 읽는다. `NaN`·`Infinity` 도 `400` 이다.
+
+**`429` 가 난다** — `places` 버킷(기본 60/창). 상세는 별도의 더 좁은 버킷이다(4.3).
 
 동작: 백엔드가 KTO 를 호출·정규화하고 **0.02° 격자 스냅샷**에 캐시한다(공간 인덱스가 아니다 — [ADR-0013](../99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)). 일일 호출 예산은 `kto_call_budget` 표가 지킨다. LOCALDATA·두루누비는 아직 연동 전이라 **앱 안 더미 레이어**다.
 
-**응답은 봉투가 아니라 벌거벗은 배열이다** — 서버가 반경 안을 한 번에 주고 상한이 `limit` 으로 코드에 있다(ADR-0017 규약 2의 예외).
+**응답은 봉투가 아니라 벌거벗은 배열이다** — 서버가 반경 안을 한 번에 주고 상한이 `limit` 으로 코드에 있다(ADR-0017 규약 2의 예외). 그래서 **잘렸다는 신호를 실을 자리가 없다.**
 
 ```json
 // 200 OK — 계약의 Place[] 그대로
@@ -379,14 +383,13 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
     "lat": 37.5445,
     "lng": 127.0557,
     "distM": 320
-    }
-  ],
-  "count": 45,
-  "cachedAt": "2026-06-30T08:00:00+09:00"
-}
+  }
+]
 ```
 
-> 카테고리 SSOT: `app/lib/v2/domain/pet.dart` `kPetCategories`. `vet/shop/trail`은 별도 공공데이터 레이어(현재 앱 더미).
+> 2026-09-03 이전 이 예시는 배열을 열고 객체로 닫는 **깨진 JSON** 이었고, 계약에 없는 `count`·`cachedAt` 두 키를 달고 있었습니다. 봉투이던 시절의 잔해입니다.
+
+> `category` 는 **앱이 안 읽는다** — 아이콘도 필터도 `contentTypeId` 로 판단한다. 남겨 둔 이유는 계약의 그 필드 설명에 있다. 카테고리 라벨 SSOT 는 `app/lib/v2/domain/pet.dart` `kPetCategories`. `vet/shop/trail` 은 별도 공공데이터 레이어(현재 앱 더미).
 
 ### 4.3 장소 상세 — ✅ 구현(#40)
 
@@ -399,6 +402,8 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 **`distM` 은 없다** — 기준점이 없기 때문이다(같은 이유로 계약이 `Place.required` 에서 뺐다).
 
+**`429` 는 목록과 다른 버킷이다** — `places-detail` 이고 기본 30/창으로 목록(60)보다 좁다. 상세 1건이 KTO 를 2콜(`detailCommon2` + `detailPetTour2`) 쓰기 때문이다.
+
 ```json
 // 200 OK — 계약의 PlaceDetail (allOf: Place + overview·petInfo)
 {
@@ -406,6 +411,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   "title": "성수동 반려카페",
   "source": "kto",
   "category": "39",
+  "contentTypeId": "39",
   "addr": "서울 성동구 성수이로 ...",
   "tel": "02-000-0000",
   "image": "http://.../1.jpg",
@@ -413,15 +419,14 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   "lng": 127.0557,
   "overview": "…",                     // 아직 못 받았거나 예산이 없으면 null
   "petInfo": {                         // 객체 자체는 항상 있다. 안의 세 필드가 각각 null 일 수 있다
-    "acmpyPsblCpam": "가능",
-    "acmpyPsblCpam": "실내 동반 가능, 소형견 위주",
-    "petFacility": "물그릇 제공"
-  },
-  "homepage": "https://...",
-  "openHours": "10:00~21:00",
-  "updatedAt": "2026-06-30T08:00:00+09:00"
+    "acmpyPsblCpam": "소형견 위주",
+    "acmpyNeedMtr": "목줄 필수",
+    "etcAcmpyInfo": "실내 동반 가능"
+  }
 }
 ```
+
+> 2026-09-03 이전 이 예시는 `acmpyPsblCpam` 을 **두 번** 적고, 계약에 없는 `petFacility`·`homepage`·`openHours`·`updatedAt` 넷을 달고 있었습니다. 그대로 짜면 앱이 없는 필드를 읽습니다 — #167 이 §6 에서 찾은 것과 같은 종류입니다.
 
 원본 KTO 오퍼레이션: `detailCommon2` + `detailPetTour2`(반려 동반 상세).
 
