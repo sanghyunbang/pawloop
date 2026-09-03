@@ -1,6 +1,6 @@
 package com.heattrip.heat_trip_backend.group.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 가족 그룹 멤버 하나 — 계약({@code openapi.yaml})의 {@code GroupMember} 다.
@@ -8,6 +8,10 @@ import java.time.LocalDateTime;
  * <p><b>이 값은 {@code group_member} 표에서 오지 않는다. 그런 표는 없다.</b>
  * {@code chat_room_member} 한 줄을 가족 그룹의 언어로 다시 적은 것이다(ADR-0011 결정 1).
  * 계약이 예전에 그리던 {@code group_member} 를 이 이슈가 정리했다.
+ *
+ * <p><b>{@code joinedAt} 은 오프셋을 달고 나간다</b> — 값이 {@code chat_room_member} 에서
+ * 오므로 규약도 그 표의 것이다(UTC,
+ * {@link com.heattrip.heat_trip_backend.chat.ChatTime}). #248
  *
  * @param role     {@code OWNER} 또는 {@code MEMBER}. {@code chat_room_member.role} 그대로다 —
  *                 소문자 {@code owner}/{@code member} 로 다시 적으면 같은 값에 표기가 둘이 된다
@@ -18,5 +22,5 @@ public record GroupMemberResponse(
         long userId,
         String nickname,
         String role,
-        LocalDateTime joinedAt) {
+        Instant joinedAt) {
 }

@@ -1,10 +1,11 @@
 // DTO(UserResponse) 로 필요한 필드만 리턴 → 민감정보 차단, API 스펙 고정, 내부 스키마 변경 영향 최소화, 순환참조/지연로딩 문제 예방.
 package com.heattrip.heat_trip_backend.user.dto;
 
+import com.heattrip.heat_trip_backend.user.UserTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * {@code GET /auth/me} 응답. 계약(docs/04-api/openapi.yaml)의 {@code User} 스키마에 대응한다.
@@ -27,8 +28,10 @@ public class UserResponse {
     private String travelType; // 현재 스키마는 단일 문자열
     private String imageUrl;
     private String provider;   // "local" / "kakao" / "google" — 계약의 User.provider (naver 는 ADR-0010 에서 보류)
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    /** 가입 시각. <b>오프셋이 붙는다</b> — 컬럼 값은 UTC 다({@link UserTime}). #248 */
+    private Instant createdAt;
+    /** 마지막 수정 시각. 같은 규약이다. */
+    private Instant updatedAt;
 
     public static UserResponse from(User u) {
         return UserResponse.builder()
@@ -41,8 +44,8 @@ public class UserResponse {
                 .travelType(u.getTravelType())
                 .imageUrl(u.getImageUrl())
                 .provider(u.getProvider())
-                .createdAt(u.getCreatedAt())
-                .updatedAt(u.getUpdatedAt())
+                .createdAt(UserTime.toInstant(u.getCreatedAt()))
+                .updatedAt(UserTime.toInstant(u.getUpdatedAt()))
                 .build();
     }
 }

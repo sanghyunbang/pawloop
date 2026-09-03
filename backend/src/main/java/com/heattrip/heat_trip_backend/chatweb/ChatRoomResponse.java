@@ -3,8 +3,9 @@ package com.heattrip.heat_trip_backend.chatweb;
 import com.heattrip.heat_trip_backend.chat.ChatMemberView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomSummaryView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomView;
+import com.heattrip.heat_trip_backend.chat.ChatTime;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,6 +31,14 @@ import java.util.Set;
  * 조회(M2.6 의 다른 이슈)에만 실리고, {@code isDefault} 는 "가족방이 기본" 이라는 판단이라
  * chat 이 답할 수 없다({@code originKind} 를 해석하는 것은 chat 밖의 일이다 — ADR-0011).
  * 없는 필드를 0 이나 {@code false} 로 채우지 않는 것이 #75 가 정한 규칙이다.
+ *
+ * <h2>시각은 {@link java.time.Instant} 다 — 오프셋이 붙어야 계약이 성립한다</h2>
+ * <p>계약이 {@code format: date-time} 이라고 선언했고 그건 RFC3339 <b>오프셋</b>이 있어야
+ * 성립한다. {@code LocalDateTime} 을 그대로 실으면 잭슨이 {@code "2026-09-03T00:25:33.92"}
+ * 로 낸다 — 앱의 {@code DateTime.tryParse} 는 그것을 <b>기기 지역 시각</b>으로 읽으므로
+ * 해외에 있는 가족이 보면 그만큼 어긋난 시각이 그려진다(#248).
+ *
+ * <p>컬럼에 담긴 값은 UTC 다 — 이유는 {@link ChatTime}. 세우는 것도 그 클래스다.
  */
 public record ChatRoomResponse(
         long id,
@@ -43,7 +52,7 @@ public record ChatRoomResponse(
         int memberCount,
         String myRole,
         ChatMessageResponse lastMessage,
-        LocalDateTime createdAt) {
+        Instant createdAt) {
 
     /**
      * 방 목록 한 줄 — {@code GET /api/chat/rooms}.
@@ -63,7 +72,7 @@ public record ChatRoomResponse(
         return new ChatRoomResponse(room.id(), room.name(), room.tag(),
                 room.originKind(), room.originRef(), room.lastSeq(),
                 summary.lastReadSeq(), summary.unread(), summary.memberCount(),
-                summary.myRole(), preview, room.createdAt());
+                summary.myRole(), preview, ChatTime.toInstant(room.createdAt()));
     }
 
     /**
@@ -85,6 +94,6 @@ public record ChatRoomResponse(
         return new ChatRoomResponse(room.id(), room.name(), room.tag(),
                 room.originKind(), room.originRef(), room.lastSeq(),
                 lastReadSeq, room.lastSeq() - lastReadSeq, liveMembers.size(),
-                me == null ? null : me.role(), null, room.createdAt());
+                me == null ? null : me.role(), null, ChatTime.toInstant(room.createdAt()));
     }
 }

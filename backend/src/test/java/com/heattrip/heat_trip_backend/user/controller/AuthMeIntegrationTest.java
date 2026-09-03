@@ -147,6 +147,30 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /auth/me 의 createdAt·updatedAt 이 오프셋을 달고 나간다 (#248)")
+    void 내정보의_시각이_오프셋을_갖는다() throws Exception {
+        // 손으로 만든 매퍼로는 못 잰다 — 부트가 WRITE_DATES_AS_TIMESTAMPS 를 끄기 때문이다.
+        // 그래서 실제 응답 본문을 본다 (#247 에서 그 차이를 겪었다).
+        seedLocalUser("bori-offset@example.com", "test1234");
+        String token = tokenIssuedByPasswordLogin("bori-offset@example.com", "test1234");
+
+        MvcResult result = mockMvc.perform(
+                        get("/auth/me").header("Authorization", "Bearer " + token))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        String json = body(result);
+        for (String field : java.util.List.of("createdAt", "updatedAt")) {
+            // 오프셋이 없으면 앱의 DateTime.parse 가 이것을 기기 지역 시각으로 읽는다.
+            // 2026-09-03 이전에는 "2026-09-03T08:33:44.533941" 이 그대로 나갔다.
+            assertThat(json)
+                    .as("%s 에 오프셋이 없다 — 계약의 format: date-time 은 RFC3339 오프셋을 요구한다", field)
+                    .containsPattern("\"" + field + "\":\"\\d{4}-\\d{2}-\\d{2}T[\\d:.]+(Z|[+-]\\d{2}:\\d{2})\"");
+        }
+    }
+
+
+    @Test
     @DisplayName("소셜 계정 토큰으로 /auth/me 밖의 소비처인 GET /bookmarks 도 200 이다")
     void 소셜계정_토큰으로_북마크목록이_200이다() throws Exception {
         User kakao = seedKakaoUserWithoutEmail();

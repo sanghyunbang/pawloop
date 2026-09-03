@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
+import java.time.Instant;
+
 /**
  * 신고 접수 응답 — 이슈 #82.
  *
@@ -11,7 +13,9 @@ package com.heattrip.heat_trip_backend.chatweb;
  * <p>신고에 성공한 쪽은 이미 누구를 왜 신고했는지 안다. 서버가 그것을 되돌려 줄 이유가 없다.
  *
  * @param reportId  접수 번호. 앱이 "접수됐습니다" 뒤에 붙일 수 있고 문의 시 좌표가 된다
- * @param createdAt ISO-8601 문자열. 계약의 다른 시각 필드들과 같은 모양이다
+ * @param createdAt 접수 시각. <b>{@link Instant} 다</b> — 2026-09-03 이전에는
+ *                  {@code LocalDateTime.toString()} 이라 오프셋이 없었고, 그래서
+ *                  "계약의 다른 시각 필드들과 같은 모양" 이라는 이 줄이 거짓이었다(#248)
  */
-public record ChatReportResponse(long reportId, String createdAt) {
+public record ChatReportResponse(long reportId, Instant createdAt) {
 }

@@ -72,10 +72,17 @@ info:
         기록이기 때문입니다). 서버의 `ClockConfig.SERVICE_ZONE` 이 이 존을 **빈에 박습니다** —
         `systemDefaultZone()` 이면 배포의 `TZ` 환경변수 하나로 조용히 바뀌고, 그러면 KST
         00:00~08:59 의 케어 기록이 '어제' 가 되어 **이중 급여 방지 화면에서 사라집니다.**
-      - **아직 오프셋 없이 나가는 필드가 일곱 있습니다** — `ChatMessage.createdAt`·
-        `deletedAt`, `ChatRoom.createdAt`, `Group.createdAt`, `GroupMember.joinedAt`,
-        `User.createdAt`·`updatedAt`. 저장소에 `LocalDateTime.now()` 가 43곳이라 한 번에
-        옮기지 않았습니다. **오프셋을 갖는 것**: 커뮤니티·산책·케어 전부입니다.
+      - **이제 전부 오프셋을 답니다** (2026-09-03, 이슈 #248). 그전까지 열 필드가 오프셋 없이
+        나갔습니다 — `ChatMessage.createdAt`·`deletedAt`, `ChatRoom.createdAt`,
+        `Group.createdAt`, `GroupMember.joinedAt`, `User.createdAt`·`updatedAt`,
+        `ChatInvite.createdAt`·`expiresAt`, 그리고 채팅 신고 접수 응답의 `createdAt` 입니다.
+        (뒤의 셋은 이슈가 세던 일곱에 없었습니다 — 응답 DTO 가 아니라 뷰라서 목록에서
+        빠졌습니다.)
+      - **표에 담기는 값은 UTC 입니다.** `LocalDateTime.now()` 는 JVM 기본 존을 읽는데 개발
+        기계는 KST 고 배포 컨테이너는 UTC 라, 같은 코드가 환경마다 다른 값을 넣었습니다 —
+        dev DB 에 실제로 두 존이 섞여 있었습니다. 이제 `ChatTime`·`UserTime`·`CommunityTime`
+        이 UTC 로 눕혀 넣고, 응답에서 `Instant` 로 세웁니다. `DateTimeFieldsAreInstantTest`
+        가 **이 계약 파일을 목록의 출처로 삼아** 빠진 필드가 없는지 지킵니다.
     - 좌표: `lat`(위도), `lng`(경도). (관광공사 원본은 mapy=위도, mapx=경도)
     - 리네임 진행 중: 제품명은 Pawloop, 도메인·딥링크 스킴은 당분간 heattrip 을 유지합니다
       (`https://api.heattrip.link`, `heattrip://login-callback`).
@@ -2057,7 +2064,7 @@ paths:
                 required: [reportId, createdAt]
                 properties:
                   reportId: { type: integer, format: int64 }
-                  createdAt: { type: string }
+                  createdAt: { type: string, format: date-time }
         '400':
           description: |
             `REPORT_EMPTY` · `REPORT_MESSAGE_LIMIT` · `REPORT_MIXED_SENDERS` ·

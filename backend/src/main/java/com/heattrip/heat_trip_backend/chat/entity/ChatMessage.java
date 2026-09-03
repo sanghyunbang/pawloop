@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.chat.entity;
 
+import com.heattrip.heat_trip_backend.chat.ChatTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -215,7 +217,7 @@ public class ChatMessage {
     @PrePersist
     void fillCreatedAt() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = ChatTime.nowUtc();
         }
     }
 }

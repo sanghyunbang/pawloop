@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.chatweb;
 
 import com.heattrip.heat_trip_backend.chat.ChatReportService;
 import com.heattrip.heat_trip_backend.chat.ChatReportView;
+import com.heattrip.heat_trip_backend.chat.ChatTime;
 import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
@@ -66,6 +67,6 @@ public class ChatReportController {
                 roomId, me.getId(), request.roomSeqs(), request.reason(), request.memo());
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ChatReportResponse(report.id(), report.createdAt().toString()));
+                .body(new ChatReportResponse(report.id(), ChatTime.toInstant(report.createdAt())));
     }
 }
