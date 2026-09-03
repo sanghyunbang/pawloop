@@ -14,6 +14,7 @@ import com.heattrip.heat_trip_backend.community.entity.Post;
 import com.heattrip.heat_trip_backend.community.entity.Reaction;
 import com.heattrip.heat_trip_backend.community.repository.CommentRepository;
 import com.heattrip.heat_trip_backend.community.repository.PostRepository;
+import com.heattrip.heat_trip_backend.moderation.Blocks;
 import com.heattrip.heat_trip_backend.moderation.ReportReason;
 import com.heattrip.heat_trip_backend.moderation.ReportReceipt;
 import com.heattrip.heat_trip_backend.moderation.ReportSnapshotInput;
@@ -87,12 +88,22 @@ public class CommunityService {
      */
     private final Reports reports;
 
+    /**
+     * 가리기 — {@code moderation} 모듈의 공개 표면이다(#166).
+     *
+     * <p>가린 사람의 글을 <b>목록에서 빼지 않는다.</b> 빼면 커서가 그 글을 건너뛰어 페이지
+     * 경계가 어긋나고, 가린 자리에 "보기" 를 두려면 본문이 이미 와 있어야 한다. 접는 것은
+     * 화면의 일이다 — {@code ChatBlocks} javadoc 이 채팅에서 같은 판단을 적어 뒀다.
+     */
+    private final Blocks blocks;
+
     public CommunityService(PostRepository posts, CommentRepository comments,
-                            ReactionRepository reactions, Reports reports) {
+                            ReactionRepository reactions, Reports reports, Blocks blocks) {
         this.posts = posts;
         this.comments = comments;
         this.reactions = reactions;
         this.reports = reports;
+        this.blocks = blocks;
     }
 
     // ─────────────────────────── 글 ───────────────────────────
@@ -125,11 +136,16 @@ public class CommunityService {
         Map<Long, ReactionSummaryResponse> reactionsById = summarize(ids, viewerId);
         Map<Long, Integer> commentCounts = countComments(ids);
 
+        // 한 장에 한 번 묻는다. 글마다 "가렸나" 를 물으면 20건 조회에 쿼리가 21개다 —
+        // ChatMessages 가 같은 함정을 이미 피해 뒀다.
+        Set<Long> blocked = blockedBy(viewerId);
+
         List<PostResponse> items = new ArrayList<>(rows.size());
         for (Post p : rows) {
             items.add(PostResponse.of(p,
                     commentCounts.getOrDefault(p.getId(), 0),
-                    reactionsById.getOrDefault(p.getId(), emptySummary(viewerId))));
+                    reactionsById.getOrDefault(p.getId(), emptySummary(viewerId)),
+                    isBlocked(blocked, p.getUser())));
         }
 
         Post last = rows.get(rows.size() - 1);
@@ -142,7 +158,8 @@ public class CommunityService {
         Post post = posts.findDetail(postId).orElseThrow(CommunityService::notFound);
         return PostResponse.of(post,
                 countComments(List.of(postId)).getOrDefault(postId, 0),
-                summarizeOne(postId, viewerId));
+                summarizeOne(postId, viewerId),
+                isBlocked(blockedBy(viewerId), post.getUser()));
     }
 
     @Transactional
@@ -164,7 +181,7 @@ public class CommunityService {
 
     // ─────────────────────────── 댓글 ───────────────────────────
 
-    public CommentPageResponse comments(long postId, String cursor, Integer limit) {
+    public CommentPageResponse comments(Long viewerId, long postId, String cursor, Integer limit) {
         requirePost(postId);
         int size = clamp(limit);
         Limit fetch = Limit.of(size + 1);
@@ -181,9 +198,12 @@ public class CommunityService {
             return new CommentPageResponse(List.of(), null, false);
         }
 
+        Set<Long> blocked = blockedBy(viewerId);
         Comment last = rows.get(rows.size() - 1);
         return new CommentPageResponse(
-                rows.stream().map(CommentResponse::of).toList(),
+                rows.stream()
+                        .map(c -> CommentResponse.of(c, isBlocked(blocked, c.getUser())))
+                        .toList(),
                 hasMore ? CommunityCursor.of(last.getCreatedAt(), last.getId()) : null,
                 hasMore);
     }
@@ -548,6 +568,27 @@ public class CommunityService {
     }
 
     /** 저장할 스냅샷. 닉네임이 없으면 이름, 그것도 없으면 안 적는다. */
+    /**
+     * 이 사람이 가린 사람들 — 이슈 #166.
+     *
+     * <p><b>게스트에게는 빈 집합</b>이다. 가린 사람이 없으므로 아무것도 안 접힌다.
+     *
+     * <p>한 장에 한 번만 부른다. 글마다 물으면 20건 조회에 쿼리가 21개가 된다.
+     */
+    private Set<Long> blockedBy(Long viewerId) {
+        return viewerId == null ? Set.of() : blocks.blockedBy(viewerId);
+    }
+
+    /**
+     * 이 글·댓글을 접어야 하는가.
+     *
+     * <p><b>탈퇴한 작성자는 접지 않는다.</b> 가릴 대상이 이미 없고, 표시도 이미 '알 수 없음'
+     * 이다.
+     */
+    private static boolean isBlocked(Set<Long> blocked, User author) {
+        return author != null && blocked.contains(author.getId());
+    }
+
     private static String displayNameOf(User user) {
         if (user.getNickname() != null && !user.getNickname().isBlank()) {
             return user.getNickname();

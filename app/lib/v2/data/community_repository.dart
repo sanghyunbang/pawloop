@@ -188,6 +188,13 @@ class CommunityPost {
   final ReactionSummary reactions;
   final DateTime createdAt;
 
+  /// 읽는 사람이 이 작성자를 가렸는가 — 이슈 #166.
+  ///
+  /// **목록에서 빠지지 않는다.** 빼면 커서가 그 글을 건너뛰어 페이지 경계가 어긋나고,
+  /// 가린 자리에 '보기' 를 두려면 본문이 이미 와 있어야 한다. 접는 것은 화면의 일이다 —
+  /// 채팅의 `hiddenByBlock` 과 같은 규약이다.
+  final bool hiddenByBlock;
+
   /// 마지막 수정 시각. **`null` 이면 한 번도 안 고친 글이다**(#211).
   ///
   /// 서버가 `createdAt` 을 복사해 채우지 않는다 — 그러면 모든 글에 '수정됨' 이 붙는다.
@@ -205,6 +212,7 @@ class CommunityPost {
     required this.reactions,
     required this.createdAt,
     this.updatedAt,
+    this.hiddenByBlock = false,
     this.loc,
     this.contentId,
   });
@@ -228,6 +236,7 @@ class CommunityPost {
         reactions: reactions ?? this.reactions,
         createdAt: createdAt,
         updatedAt: updatedAt,
+        hiddenByBlock: hiddenByBlock,
       );
 
   /// 모양이 아니면 `null`. 한 건이 깨졌다고 목록 전체를 버리지 않는다.
@@ -254,6 +263,7 @@ class CommunityPost {
       reactions: ReactionSummary.parse(json['reactions']),
       createdAt: createdAt,
       updatedAt: _dateTime(json['updatedAt']),
+      hiddenByBlock: json['hiddenByBlock'] == true,
     );
   }
 }
@@ -265,11 +275,15 @@ class CommunityComment {
   final String body;
   final DateTime createdAt;
 
+  /// 읽는 사람이 이 작성자를 가렸는가 — #166. 규칙은 `CommunityPost.hiddenByBlock` 과 같다.
+  final bool hiddenByBlock;
+
   const CommunityComment({
     required this.id,
     required this.author,
     required this.body,
     required this.createdAt,
+    this.hiddenByBlock = false,
   });
 
   static CommunityComment? tryParse(Object? json) {
@@ -286,6 +300,7 @@ class CommunityComment {
       author: author,
       body: body,
       createdAt: createdAt,
+      hiddenByBlock: json['hiddenByBlock'] == true,
     );
   }
 }
@@ -537,6 +552,19 @@ class CommunityRepository {
         Uri.parse('$baseUrl/api/community/posts/$postId/reports'),
         body: {'reason': reason.wire, if (memo != null && memo.isNotEmpty) 'memo': memo},
       ),
+    );
+  }
+
+  /// 이 사람을 가린다 — 이슈 #166.
+  ///
+  /// **채팅과 같은 경로다**(`POST /api/blocks`). 가리기는 처음부터 사람 단위라 방도
+  /// 게시판도 안 가린다 — 커뮤니티에서 가린 사람은 채팅에서도 접힌다.
+  ///
+  /// **이미 가려 뒀어도 성공이다.** 없던 것과 있던 것을 나누면 앱이 두 갈래를 다뤄야
+  /// 하는데 사용자에게는 결과가 같다.
+  Future<void> blockUser(int userId) async {
+    await _send(
+      () => _authed.postJson(Uri.parse('$baseUrl/api/blocks'), body: {'userId': userId}),
     );
   }
 

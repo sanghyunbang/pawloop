@@ -703,7 +703,7 @@ DELETE /api/community/posts/{postId}/reactions/{type}   # 안 눌렀어도 200 (
 ```
 
 토글이 아닌 이유가 있습니다. 요청에 의도가 없으면 **네트워크 재시도 한 번이 사용자의 반응을
-조용히 되돌립니다.** 모양은 `POST /api/chat/blocks` + `DELETE /api/chat/blocks/{userId}` 와 같습니다.
+조용히 되돌립니다.** 모양은 `POST /api/blocks` + `DELETE /api/blocks/{userId}` 와 같습니다.
 
 ```json
 // 200 OK — 둘 다 최신 집계를 돌려줍니다
@@ -741,7 +741,7 @@ POST /api/community/posts/{postId}/comments/{commentId}/reports  # 201
 
 > **신고자는 익명이고 피신고자에게는 아무 알림도 가지 않습니다.** 피신고자 id 도 안 돌려줍니다 — 응답에 무엇이 더 실리면 그것으로 남의 상태를 물어볼 수 있게 됩니다.
 
-> **가리기(차단)는 아직 커뮤니티에 없습니다.** `chat_block` 이 이미 사람 단위라 새 표가 필요 없고, 옮길 것은 패키지 위치뿐입니다(ADR-0016). #166 의 다음 조각이고 **출품 배포 전에 들어갑니다** — Apple 1.2 와 Play UGC 가 신고와 차단을 함께 요구합니다.
+> **가리기(차단)도 함께 들어갔습니다.** 신고 시트의 체크박스로 켭니다. 가리기는 **사람 단위**라 커뮤니티에서 가린 사람은 채팅에서도 접힙니다 — `POST /api/blocks` 하나가 둘을 덮습니다. 가린 사람의 글은 **목록에서 빠지지 않고** `hiddenByBlock: true` 로 옵니다(접는 것은 화면의 일입니다).
 
 ---
 
@@ -770,7 +770,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `DELETE` | `/api/chat/messages/{messageId}` | 삭제 — **소프트**(`deleted_at`). 빈틈이 나면 델타가 깨진다 | M2.6 |
 | `POST` | `/api/chat/rooms/{roomId}/reports` | 신고(사유 코드 + 메모 + `room_seq` 구간). 서버가 본문 스냅샷을 남긴다 | M2.7 |
 | `DELETE` | `/api/chat/rooms/{roomId}/bans/{userId}` | 재입장 금지 해제 | M2.7 |
-| `POST`·`DELETE` | `/api/chat/blocks` · `/api/chat/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다 | M2.7 |
+| `POST`·`DELETE` | `/api/blocks` · `/api/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다. **2026-09-03 에 `/api/chat/blocks` 에서 옮겼습니다** — 처음부터 사람 단위였는데(경로에 방 id 가 없습니다) 커뮤니티가 같은 것을 쓰게 되면서 이름이 거짓이 됐습니다(#166) | M2.7 |
 
 - **✅ 표시는 구현됐다는 뜻이다**(이슈 #75 · #79). 나머지는 아직 계획이다.
 - 방 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 확인은 서비스 경계 한 곳이다 — 발급·회수는 `ChatRoomService.requireOwner(roomId, userId)`, 나머지는 `requireLiveMembership(roomId, userId)` 다. **`removed_at` 이 찍힌 사람도 403**이다(행을 지우지 않으므로 '행이 있는가' 로 묻는 검사는 강퇴된 사람을 통과시킨다). **404 가 아니라 403 인 것은 의도다**: 404 로 답하면 남의 방 id 를 훑어 있는 방과 없는 방을 가려낼 수 있다.

@@ -8,6 +8,7 @@ import com.heattrip.heat_trip_backend.chatweb.ChatMessageResponse;
 import com.heattrip.heat_trip_backend.chatweb.ChatMessages;
 import com.heattrip.heat_trip_backend.chatweb.ChatRoomResponse;
 import com.heattrip.heat_trip_backend.chatweb.ChatRooms;
+import com.heattrip.heat_trip_backend.moderation.Blocks;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
@@ -46,7 +47,7 @@ class ChatBlockIntegrationTest extends AbstractMySqlIntegrationTest {
     private static final AtomicLong SEQUENCE = new AtomicLong();
 
     @Autowired
-    private ChatBlocks blocks;
+    private Blocks blocks;
 
     @Autowired
     private ChatRoomService roomService;

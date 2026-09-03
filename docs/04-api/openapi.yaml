@@ -1260,7 +1260,7 @@ paths:
         2026-09 이전에는 `POST .../reactions` 하나가 **토글**이었습니다. 요청에 의도가 없어서
         **네트워크 재시도 한 번이 사용자의 반응을 조용히 되돌렸습니다.**
 
-        모양은 `POST /api/chat/blocks` + `DELETE /api/chat/blocks/{userId}` 와 같습니다 —
+        모양은 `POST /api/blocks` + `DELETE /api/blocks/{userId}` 와 같습니다 —
         집합 원소를 자원으로 켜고 끕니다.
 
         응답에 **최신 집계**를 실어 왕복을 한 번으로 줄입니다.
@@ -2024,7 +2024,7 @@ paths:
 
         **자동 차단하지 않습니다.** 예전 초안의 `alsoBlock` 은 뺐습니다 — 차단 경로가 아직
         없어서 받아도 아무 일이 일어나지 않고, 받는 척하는 필드가 계약에 있으면 앱이 그것을
-        믿습니다. 차단이 생기면 앱이 `POST /api/chat/blocks` 를 **따로** 부릅니다.
+        믿습니다. 차단이 생기면 앱이 `POST /api/blocks` 를 **따로** 부릅니다.
 
         한도: `chat-report` 버킷 분당 10회.
       requestBody:
@@ -2069,7 +2069,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
-  /api/chat/blocks:
+  /api/blocks:
     post:
       tags: [Chat]
       summary: 사용자 가리기
@@ -2104,7 +2104,7 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-  /api/chat/blocks/{userId}:
+  /api/blocks/{userId}:
     parameters:
       - name: userId
         in: path
@@ -3001,6 +3001,17 @@ components:
         commentCount: { type: integer, example: 4 }
         reactions: { $ref: '#/components/schemas/ReactionSummary' }
         createdAt: { type: string, format: date-time }
+        hiddenByBlock:
+          type: boolean
+          default: false
+          description: |
+            **읽는 사람이 이 작성자를 가렸는가**(#166). 읽는 사람마다 다른 값입니다.
+
+            **목록에서 빼지 않습니다.** 빼면 커서가 그 글을 건너뛰어 페이지 경계가
+            어긋나고, 가린 자리에 "보기" 를 두려면 본문이 이미 와 있어야 합니다 —
+            `ChatMessage.hiddenByBlock` 과 같은 규약입니다. **접는 것은 화면의 일입니다.**
+
+            게스트에게는 항상 `false` 입니다 — 가린 사람이 없습니다.
         updatedAt:
           type: [string, "null"]
           format: date-time
@@ -3084,6 +3095,12 @@ components:
             ADR-0017 규약 5 가 `PersonRef` 로 통일했습니다.
         body: { type: string }
         createdAt: { type: string, format: date-time }
+        hiddenByBlock:
+          type: boolean
+          default: false
+          description: |
+            **읽는 사람이 이 작성자를 가렸는가**(#166). 규칙은 `Post.hiddenByBlock` 과 같습니다 —
+            목록에서 빼지 않고 화면이 접습니다.
 
     GroupRole:
       type: string

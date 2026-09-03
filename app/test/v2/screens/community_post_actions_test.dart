@@ -51,7 +51,10 @@ http.Response _json(Object body, {int status = 200}) => http.Response(
     );
 
 Map<String, Object?> _post(
-        {int authorId = _meId, int commentCount = 0, String? updatedAt}) =>
+        {int authorId = _meId,
+        int commentCount = 0,
+        String? updatedAt,
+        bool hidden = false}) =>
     {
       'id': 12,
       'author': {'userId': authorId, 'nickname': authorId == _meId ? '나' : '남'},
@@ -64,6 +67,7 @@ Map<String, Object?> _post(
       'reactions': {'help': 0, 'cute': 0, 'empathy': 0, 'mine': <String>[]},
       'createdAt': '2026-09-01T07:30:00Z',
       'updatedAt': updatedAt,
+      'hiddenByBlock': hidden,
     };
 
 Map<String, Object?> _comment(int id, int authorId) => {
@@ -80,6 +84,7 @@ Map<String, Object?> _comment(int id, int authorId) => {
   List<Map<String, Object?>> comments = const [],
   int deleteStatus = 204,
   String? updatedAt,
+  bool hiddenByBlock = false,
 }) {
   final calls = <String>[];
   final client = AuthedClient(
@@ -89,6 +94,10 @@ Map<String, Object?> _comment(int id, int authorId) => {
         calls.add('POST $path');
         return _json({'reportId': 5, 'createdAt': '2026-09-03T01:00:00Z'},
             status: 201);
+      }
+      if (request.method == 'POST' && path == '/api/blocks') {
+        calls.add('POST $path');
+        return _json(const <String, Object?>{}, status: 201);
       }
       if (request.method == 'DELETE') {
         calls.add('DELETE $path');
@@ -101,7 +110,8 @@ Map<String, Object?> _comment(int id, int authorId) => {
       return _json(_post(
           authorId: postAuthor,
           commentCount: comments.length,
-          updatedAt: updatedAt));
+          updatedAt: updatedAt,
+          hidden: hiddenByBlock));
     }),
     baseUrl: _base,
     store: _FakeTokenStore(),
@@ -337,7 +347,7 @@ void main() {
     expect(find.text('신고'), findsNothing);
   });
 
-  testWidgets('사유를 고르고 신고하면 서버로 간다 — 가리기 칸은 없다', (tester) async {
+  testWidgets('사유를 고르고 신고하면 서버로 간다 — 가리기를 안 켜면 신고만 간다', (tester) async {
     final f = fixture(postAuthor: 99);
 
     await tester.pumpWidget(_host(PostDetailScreen(
@@ -347,15 +357,16 @@ void main() {
     await tester.tap(find.text('신고'));
     await tester.pumpAndSettle();
 
-    expect(find.text('이 사람의 메시지를 가리기'), findsNothing,
-        reason: '커뮤니티에 가리기 경로가 아직 없다 — 받는 척하는 칸이 있으면 사용자가 믿는다');
+    expect(find.text('이 사람의 메시지를 가리기'), findsOneWidget,
+        reason: '가리기는 사람 단위라 커뮤니티에서도 같은 경로를 쓴다');
 
     await tester.tap(find.text('광고 · 도배'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('신고하기'));
     await tester.pumpAndSettle();
 
-    expect(f.calls, ['POST /api/community/posts/12/reports']);
+    expect(f.calls, ['POST /api/community/posts/12/reports'],
+        reason: '가리기를 안 켰으면 /api/blocks 는 안 부른다');
     expect(find.textContaining('신고를 접수했어요'), findsOneWidget);
   });
 
@@ -387,6 +398,72 @@ void main() {
     // 글(남) + 댓글 1(남) 둘에 신고, 댓글 2(내 것)에는 삭제.
     expect(find.text('신고'), findsNWidgets(2));
     expect(find.text('삭제'), findsOneWidget);
+  });
+
+
+  // ─────────────────── 가리기 (#166) ───────────────────
+
+  testWidgets('가린 사람의 글은 접힌다 — 목록에서 빠지지는 않는다', (tester) async {
+    final f = fixture(postAuthor: 99, hiddenByBlock: true);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99, hidden: true))!,
+        repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('본문'), findsNothing);
+    expect(find.textContaining('가린 사람의 글입니다'), findsOneWidget);
+    expect(find.text('지울 수 있는 글'), findsOneWidget,
+        reason: '제목과 카드는 남는다 — 빼면 커서가 그 글을 건너뛰어 페이지 경계가 어긋난다');
+  });
+
+  testWidgets('접힌 본문을 누르면 펴진다', (tester) async {
+    final f = fixture(postAuthor: 99, hiddenByBlock: true);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99, hidden: true))!,
+        repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('가린 사람의 글입니다'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('본문'), findsOneWidget,
+        reason: '본문은 이미 와 있다 — 누를 때 요청이 한 번 더 필요하면 그 경로에 인가가 또 하나 생긴다');
+  });
+
+  testWidgets('안 가린 글은 그대로 보인다', (tester) async {
+    final f = fixture(postAuthor: 99);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99))!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('본문'), findsOneWidget);
+    expect(find.textContaining('가린 사람의 글입니다'), findsNothing);
+  });
+
+  testWidgets('신고하며 가리기를 켜면 신고 뒤에 가린다 — 순서가 반대면 접수 안 된 채 가려진다',
+      (tester) async {
+    final f = fixture(postAuthor: 99);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99))!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('신고'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('광고 · 도배'));
+    await tester.tap(find.text('이 사람의 메시지를 가리기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('신고하기'));
+    await tester.pumpAndSettle();
+
+    expect(f.calls, [
+      'POST /api/community/posts/12/reports',
+      'POST /api/blocks',
+    ], reason: '신고가 먼저다 — 실패하면 가리지 않는다');
+    expect(find.textContaining('가렸어요'), findsOneWidget);
   });
 
 }

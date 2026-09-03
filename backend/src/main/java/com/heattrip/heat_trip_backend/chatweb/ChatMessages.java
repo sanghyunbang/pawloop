@@ -1,6 +1,6 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
-import com.heattrip.heat_trip_backend.chat.ChatBlocks;
+import com.heattrip.heat_trip_backend.moderation.Blocks;
 import com.heattrip.heat_trip_backend.chat.ChatMessagePageView;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
@@ -41,7 +41,7 @@ public class ChatMessages {
 
     private final ChatRoomService chatRooms;
     private final ChatSenderNames senderNames;
-    private final ChatBlocks blocks;
+    private final Blocks blocks;
 
     /**
      * {@code afterSeq} 다음 메시지들 — {@code room_seq} 오름차순, 이름은 <b>지금</b> 값이다.

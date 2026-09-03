@@ -1,6 +1,6 @@
-package com.heattrip.heat_trip_backend.chatweb;
+package com.heattrip.heat_trip_backend.moderationweb;
 
-import com.heattrip.heat_trip_backend.chat.ChatBlocks;
+import com.heattrip.heat_trip_backend.moderation.Blocks;
 import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
@@ -16,9 +16,20 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 가리기 — 이슈 #82 완료 조건 3. 계약은 {@code /api/chat/blocks} 다.
+ * 가리기 — 이슈 #82 완료 조건 3. 계약은 {@code /api/blocks} 다.
  *
- * <p>이 클래스가 {@code chat} 패키지 밖에 있는 이유는 {@code chatweb/package-info} 에 있다.
+ * <h2>왜 채팅 밖으로 나왔나</h2>
+ * <p>2026-09-03 이전에는 {@code chatweb} 에 있었고 경로가 {@code /api/blocks} 였다.
+ * <b>가리기는 처음부터 사람 단위</b>였는데(경로에 방 id 가 없다) 커뮤니티가 같은 것을 쓰게
+ * 되면서 이름이 거짓이 됐다 — ADR-0016 이 "차단은 옮길 것이 표가 아니라 <b>패키지 위치</b>
+ * 뿐이다" 라고 진단해 둔 그대로다(#166).
+ *
+ * <p>경로를 바꾸는 것은 파괴적 변경인데 <b>지금이 유일하게 공짜인 시점</b>이다 — 배포된
+ * 클라이언트가 없고 {@code user_block} 이 0행이다(실측).
+ *
+ * <p>이 클래스가 {@code moderation} 패키지 <b>밖</b>에 있는 이유는 {@code chatweb} 과 같다 —
+ * 인증 주체 해석 때문이다. {@code moderation} 은 나가는 참조가 0이어야 하는데 여기는
+ * {@code @CurrentUser User} 가 필요하다.
  *
  * <h2>인가 (📌 #86 원칙 4)</h2>
  * <ul>
@@ -36,10 +47,10 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/chat/blocks")
-public class ChatBlockController {
+@RequestMapping("/api/blocks")
+public class BlockController {
 
-    private final ChatBlocks blocks;
+    private final Blocks blocks;
 
     /**
      * 이 사람을 가린다.
@@ -54,7 +65,7 @@ public class ChatBlockController {
      * 지점이 그것이다.
      */
     @PostMapping
-    public ResponseEntity<Void> block(@RequestBody ChatBlockRequest request,
+    public ResponseEntity<Void> block(@RequestBody BlockRequest request,
                                       @CurrentUser User me) {
         blocks.block(me.getId(), request.requireUserId());
         return ResponseEntity.status(HttpStatus.CREATED).build();

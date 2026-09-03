@@ -17,7 +17,7 @@ import '../theme/app_tokens.dart';
 /// 자동 차단이고 "신고 후에는 취소할 수 없습니다" 라는 경고까지 단다
 /// (https://cs.kakao.com/helps_html/1073199401) — 가족방에서 그건 되돌릴 수 없는 사고가 된다.
 ///
-/// 서버도 묶지 않는다. 켰으면 앱이 `POST /api/chat/blocks` 를 **따로** 부른다.
+/// 서버도 묶지 않는다. 켰으면 앱이 `POST /api/blocks` 를 **따로** 부른다.
 class MessageActionsSheet extends StatelessWidget {
   const MessageActionsSheet({
     super.key,

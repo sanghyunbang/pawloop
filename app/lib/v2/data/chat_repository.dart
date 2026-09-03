@@ -405,7 +405,7 @@ class ChatRepository {
   Future<void> block(int userId) async {
     await _send(
       () => _authed.postJson(
-        Uri.parse('$baseUrl/api/chat/blocks'),
+        Uri.parse('$baseUrl/api/blocks'),
         body: {'userId': userId},
       ),
     );
@@ -413,7 +413,7 @@ class ChatRepository {
 
   /// 가리기를 푼다. 가린 적 없어도 성공이다.
   Future<void> unblock(int userId) async {
-    await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/chat/blocks/$userId')));
+    await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/blocks/$userId')));
   }
 
   /// 이 사람을 방에서 내보낸다. **방장만.**

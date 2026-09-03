@@ -46,7 +46,7 @@
  */
 @ApplicationModule(
         displayName = "Chat Web Adapter",
-        allowedDependencies = { "chat", "user", "user :: entity" })
+        allowedDependencies = { "chat", "moderation", "user", "user :: entity" })
 package com.heattrip.heat_trip_backend.chatweb;
 
 import org.springframework.modulith.ApplicationModule;

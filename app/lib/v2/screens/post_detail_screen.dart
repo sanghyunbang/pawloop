@@ -285,75 +285,114 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
-  /// 신고 버튼 — 이슈 #166.
-  ///
-  /// **삭제와 반대 조건에 있다.** 삭제는 `_isMine` 안이고 신고는 밖이다 — 같은 칸에 두되
-  /// 조건이 반대라, 남의 글에는 신고가·내 글에는 삭제가 뜬다. 초안은 이것을 "삭제 버튼
-  /// 옆" 이라고만 적었는데 그대로 만들면 **자기 글에만 신고가 뜨는 앱**이 된다.
-  Widget _reportButton({required VoidCallback onTap}) => GestureDetector(
-        onTap: _sending ? null : onTap,
-        behavior: HitTestBehavior.opaque,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-          child: Text('신고',
-              style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: T.textMuted)),
-        ),
-      );
-
-  /// 신고할 수 있는가.
-  ///
-  /// **내 것이 아니어야 하고, 작성자가 살아 있어야 한다.** 탈퇴한 사람의 글은 신고해도
-  /// 조치할 대상이 없다 — 그 글을 내리는 것은 관리이고 #166 의 다음 조각이다.
-  ///
-  /// **게스트에게도 보인다.** 눌렀을 때 로그인을 안내한다 — 버튼을 숨기면 게스트는 이 앱에
-  /// 신고 수단이 있다는 것 자체를 모른다.
-  bool _canReport(PersonRef author) => !author.isWithdrawn && !_isMine(author);
-
-  Future<void> _reportPost() async {
-    final choice = await _askReport(_post.author.nickname, '이 글');
-    if (choice == null) return;
-    await _submitReport(
-        () => _repo.reportPost(_post.id, choice.reason, memo: choice.memo));
-  }
-
-  Future<void> _reportComment(CommunityComment comment) async {
-    final choice = await _askReport(comment.author.nickname, '이 댓글');
-    if (choice == null) return;
-    await _submitReport(() =>
-        _repo.reportComment(_post.id, comment.id, choice.reason, memo: choice.memo));
-  }
-
-  /// 사유를 묻는다. 채팅과 **같은 시트**를 쓴다 — 두 벌이면 문구도 사유 목록도 갈린다.
-  ///
-  /// 가리기 칸은 안 보인다(`canBlock: false`). 커뮤니티에 가리기 경로가 아직 없어서,
-  /// 받는 척하는 칸이 있으면 사용자가 그것을 믿는다.
-  Future<ReportChoice?> _askReport(String who, String subject) async {
-    if (_isGuest) {
-      _toast('로그인하면 신고할 수 있어요');
-      return null;
-    }
-    return ReportSheet.show(context,
-        senderName: who, subject: subject, canBlock: false);
-  }
-
-  Future<void> _submitReport(Future<void> Function() send) async {
-    if (_sending) return;
-    setState(() => _sending = true);
-    try {
-      await send();
-      if (!mounted) return;
-      setState(() => _sending = false);
-      _toast('신고를 접수했어요. 상대에게는 알리지 않습니다');
-    } on CommunityFailure catch (failure) {
-      if (!mounted) return;
-      setState(() => _sending = false);
-      _toast(failure.message);
-    }
-  }
-
+  /// 신고 버튼 — 이슈 #166.
+  ///
+  /// **삭제와 반대 조건에 있다.** 삭제는 `_isMine` 안이고 신고는 밖이다 — 같은 칸에 두되
+  /// 조건이 반대라, 남의 글에는 신고가·내 글에는 삭제가 뜬다. 초안은 이것을 "삭제 버튼
+  /// 옆" 이라고만 적었는데 그대로 만들면 **자기 글에만 신고가 뜨는 앱**이 된다.
+  Widget _reportButton({required VoidCallback onTap}) => GestureDetector(
+        onTap: _sending ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Text('신고',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: T.textMuted)),
+        ),
+      );
+
+  /// 신고할 수 있는가.
+  ///
+  /// **내 것이 아니어야 하고, 작성자가 살아 있어야 한다.** 탈퇴한 사람의 글은 신고해도
+  /// 조치할 대상이 없다 — 그 글을 내리는 것은 관리이고 #166 의 다음 조각이다.
+  ///
+  /// **게스트에게도 보인다.** 눌렀을 때 로그인을 안내한다 — 버튼을 숨기면 게스트는 이 앱에
+  /// 신고 수단이 있다는 것 자체를 모른다.
+  bool _canReport(PersonRef author) => !author.isWithdrawn && !_isMine(author);
+
+  Future<void> _reportPost() async {
+    final choice = await _askReport(_post.author.nickname, '이 글');
+    if (choice == null) return;
+    await _submitReport(
+        () => _repo.reportPost(_post.id, choice.reason, memo: choice.memo),
+        alsoBlock: choice.alsoBlock ? _post.author.userId : null);
+  }
+
+  Future<void> _reportComment(CommunityComment comment) async {
+    final choice = await _askReport(comment.author.nickname, '이 댓글');
+    if (choice == null) return;
+    await _submitReport(
+        () => _repo.reportComment(_post.id, comment.id, choice.reason, memo: choice.memo),
+        alsoBlock: choice.alsoBlock ? comment.author.userId : null);
+  }
+
+  /// 사유를 묻는다. 채팅과 **같은 시트**를 쓴다 — 두 벌이면 문구도 사유 목록도 갈린다.
+  ///
+  /// 가리기 칸이 함께 있다. 가리기는 **사람 단위**라, 가리면 그 사람의 글·댓글이
+  /// 커뮤니티와 채팅 **양쪽에서** 접힌다(`POST /api/blocks`, #166).
+  Future<ReportChoice?> _askReport(String who, String subject) async {
+    if (_isGuest) {
+      _toast('로그인하면 신고할 수 있어요');
+      return null;
+    }
+    return ReportSheet.show(context,
+        senderName: who, subject: subject, canBlock: true);
+  }
+
+  Future<void> _submitReport(Future<void> Function() send, {int? alsoBlock}) async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    try {
+      await send();
+      // **신고가 성공한 뒤에만 가린다.** 순서가 반대면 신고가 실패했을 때 "가려졌는데
+      // 접수는 안 된" 상태가 되고, 사용자는 접수됐다고 믿는다 — 채팅이 같은 순서다.
+      if (alsoBlock != null) {
+        await _repo.blockUser(alsoBlock);
+      }
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _toast(alsoBlock == null
+          ? '신고를 접수했어요. 상대에게는 알리지 않습니다'
+          : '신고를 접수하고 이 사람의 글을 가렸어요');
+      if (alsoBlock != null) {
+        await _refreshPost();
+      }
+    } on CommunityFailure catch (failure) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _toast(failure.message);
+    }
+  }
+
+  /// 가린 사람의 글·댓글을 접는다 — 이슈 #166.
+  ///
+  /// **본문은 이미 와 있다.** 서버가 목록에서 빼지 않는 이유는 계약에 적혀 있다 — 빼면
+  /// 커서가 건너뛰고, '보기' 를 누를 때 요청이 한 번 더 필요해진다. 그 요청은 가린 사람만
+  /// 부르는 경로가 되어 인가를 또 하나 만들어야 한다.
+  ///
+  /// **한계를 그대로 적는다.** 이것은 "안 보이게 하는 것" 이지 "안 받는 것" 이 아니다.
+  /// 앱을 뜯으면 가려진 본문을 읽을 수 있다 — `ChatBlocks` javadoc 이 같은 한계를 적었다.
+  String _bodyOf(String body, bool hidden, int key) =>
+      _folded(hidden, key) ? '가린 사람의 글입니다. 눌러서 보기' : body;
+
+  bool _folded(bool hidden, int key) => hidden && !_revealed.contains(key);
+
+  void _reveal(int key) {
+    if (_revealed.contains(key)) return;
+    setState(() => _revealed.add(key));
+  }
+
+  /// 이 화면에서 '보기' 를 눌러 편 것들. 글은 [_postKey], 댓글은 댓글 id 다.
+  ///
+  /// **화면을 나가면 다시 접힌다.** 가리기는 계속 유효한 설정이고, 편 것은 이번 한 번
+  /// 보겠다는 뜻이다.
+  final Set<int> _revealed = <int>{};
+
+  /// 글 본문의 접기 열쇠. 댓글 id 와 안 겹치게 음수를 쓴다.
+  static const int _postKey = -1;
+
   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -641,13 +680,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          // 본문
-          Text(
-            post.body,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.6,
-              color: Color(0xCC463C64),
+          // 본문 — 가린 사람의 글이면 접힌다(#166). 누르면 펴진다.
+          GestureDetector(
+            onTap: () => _reveal(_postKey),
+            behavior: HitTestBehavior.opaque,
+            child: Text(
+              _bodyOf(post.body, post.hiddenByBlock, _postKey),
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.6,
+                color: _folded(post.hiddenByBlock, _postKey)
+                    ? T.textMuted
+                    : const Color(0xCC463C64),
+                fontStyle: _folded(post.hiddenByBlock, _postKey)
+                    ? FontStyle.italic
+                    : FontStyle.normal,
+              ),
             ),
           ),
         ],
@@ -798,12 +846,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  comment.body,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    height: 1.45,
-                    color: Color(0xCC463C64),
+                GestureDetector(
+                  onTap: () => _reveal(comment.id),
+                  behavior: HitTestBehavior.opaque,
+                  child: Text(
+                    _bodyOf(comment.body, comment.hiddenByBlock, comment.id),
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.45,
+                      color: _folded(comment.hiddenByBlock, comment.id)
+                          ? T.textMuted
+                          : const Color(0xCC463C64),
+                      fontStyle: _folded(comment.hiddenByBlock, comment.id)
+                          ? FontStyle.italic
+                          : FontStyle.normal,
+                    ),
                   ),
                 ),
               ],
