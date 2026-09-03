@@ -7,9 +7,11 @@ import com.heattrip.heat_trip_backend.community.dto.CommentResponse;
 import com.heattrip.heat_trip_backend.community.dto.PostPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.PostPatchRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostRequest;
+import com.heattrip.heat_trip_backend.community.dto.ReportRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostResponse;
 import com.heattrip.heat_trip_backend.community.dto.ReactionSummaryResponse;
 import com.heattrip.heat_trip_backend.community.service.CommunityService;
+import com.heattrip.heat_trip_backend.moderation.ReportReceipt;
 import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
@@ -103,6 +105,41 @@ public class CommunityController {
                                       @PathVariable long postId,
                                       @Valid @RequestBody CommentRequest request) {
         return community.addComment(me, postId, request);
+    }
+
+    /**
+     * 글을 신고한다 — 이슈 #166.
+     *
+     * <h2>왜 커뮤니티에 있나</h2>
+     * <p>경로가 {@code /api/community/posts/{postId}/reports} 이고, 대상이 실재하는지·누가
+     * 썼는지를 아는 것이 이쪽이다. {@code moderation} 모듈은 그 사실들을 받아 적기만 한다.
+     *
+     * <h2>응답에는 접수 번호와 시각뿐이다</h2>
+     * <p><b>신고자는 익명이고 피신고자에게는 아무 알림도 가지 않는다.</b> 피신고자 id 도
+     * 안 돌려준다 — 응답에 무엇이 더 실리면 그것으로 남의 상태를 물어볼 수 있게 된다.
+     * 채팅 신고가 정한 규약이고 여기서도 같다.
+     */
+    @PostMapping("/posts/{postId}/reports")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ReportReceipt reportPost(@CurrentUser User me,
+                                    @PathVariable long postId,
+                                    @Valid @RequestBody ReportRequest request) {
+        return community.reportPost(me, postId, request.reason(), request.memo());
+    }
+
+    /**
+     * 댓글을 신고한다 — 이슈 #166.
+     *
+     * <p><b>부모 글이 맥락으로 함께 저장된다.</b> 댓글 한 줄만 남으면 운영자가 무슨 글에
+     * 달린 말인지 모른다.
+     */
+    @PostMapping("/posts/{postId}/comments/{commentId}/reports")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ReportReceipt reportComment(@CurrentUser User me,
+                                       @PathVariable long postId,
+                                       @PathVariable long commentId,
+                                       @Valid @RequestBody ReportRequest request) {
+        return community.reportComment(me, postId, commentId, request.reason(), request.memo());
     }
 
     /**

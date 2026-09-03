@@ -14,6 +14,11 @@ import com.heattrip.heat_trip_backend.community.entity.Post;
 import com.heattrip.heat_trip_backend.community.entity.Reaction;
 import com.heattrip.heat_trip_backend.community.repository.CommentRepository;
 import com.heattrip.heat_trip_backend.community.repository.PostRepository;
+import com.heattrip.heat_trip_backend.moderation.ReportReason;
+import com.heattrip.heat_trip_backend.moderation.ReportReceipt;
+import com.heattrip.heat_trip_backend.moderation.ReportSnapshotInput;
+import com.heattrip.heat_trip_backend.moderation.ReportTarget;
+import com.heattrip.heat_trip_backend.moderation.Reports;
 import com.heattrip.heat_trip_backend.community.repository.ReactionRepository;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
@@ -73,10 +78,21 @@ public class CommunityService {
     private final CommentRepository comments;
     private final ReactionRepository reactions;
 
-    public CommunityService(PostRepository posts, CommentRepository comments, ReactionRepository reactions) {
+    /**
+     * 신고 접수 — {@code moderation} 모듈의 공개 표면이다(#166).
+     *
+     * <p>화살표가 {@code community → moderation} 한 방향이다. 반대로 가면 순환이고, 그때
+     * 잡히는 것이 이 문장이 아니라 {@code ModuleCycleTest} 여야 한다 — 그쪽 패키지에
+     * {@code allowedDependencies = {}} 를 붙여 뒀다.
+     */
+    private final Reports reports;
+
+    public CommunityService(PostRepository posts, CommentRepository comments,
+                            ReactionRepository reactions, Reports reports) {
         this.posts = posts;
         this.comments = comments;
         this.reactions = reactions;
+        this.reports = reports;
     }
 
     // ─────────────────────────── 글 ───────────────────────────
@@ -182,6 +198,113 @@ public class CommunityService {
                 .handle(displayNameOf(me))
                 .build());
         return CommentResponse.of(saved);
+    }
+
+    // ─────────────────────────── 신고 ───────────────────────────
+
+    /**
+     * 글을 신고한다 — 이슈 #166.
+     *
+     * <h2>신고 시점 사본을 함께 넘긴다</h2>
+     * <p>{@code moderation} 은 아무 도메인도 안 부르므로, 무엇을 신고했는지는 여기서 읽어
+     * 값으로 넘긴다. <b>원본이 지워진 뒤에 읽는 기록</b>이라 제목·본문·작성자까지 벤다.
+     *
+     * <h2>내 글은 못 신고한다</h2>
+     * <p>채팅 신고가 같은 규칙이다({@code REPORT_SELF}). 자기 글을 신고하는 것은 실수이거나
+     * 신고 수를 부풀리는 것이고, 둘 다 운영자가 세는 숫자를 흐린다.
+     *
+     * <h2>중복을 막지 않는다</h2>
+     * <p>같은 글을 여러 번 신고할 수 있다. <b>글이 수정되기 때문이다</b>(#211) — 막으면
+     * 작성자가 신고 뒤 본문을 더 나쁜 것으로 고쳤을 때 재신고가 안 된다. 도배는
+     * 레이트리밋({@code report} 버킷 분당 10)이 막는다.
+     */
+    @Transactional
+    public ReportReceipt reportPost(User me, long postId, String reason, String memo) {
+        Post post = requirePost(postId);
+        requireNotMine(post.getUser(), me.getId());
+
+        return reports.file(
+                ReportTarget.post(postId),
+                me.getId(),
+                post.getUser() == null ? null : post.getUser().getId(),
+                requireReason(reason),
+                memo,
+                List.of(snapshotOf(post, ReportSnapshotInput.Role.TARGET)));
+    }
+
+    /**
+     * 댓글을 신고한다 — 이슈 #166.
+     *
+     * <p><b>부모 글을 맥락으로 함께 벤다.</b> 댓글 한 줄만 남으면 운영자가 무슨 글에 달린
+     * 말인지 모르고, 글을 지우면 {@code fk_comment_post} 가 CASCADE 라 댓글이 함께 사라져
+     * 되짚을 수도 없다.
+     */
+    @Transactional
+    public ReportReceipt reportComment(User me, long postId, long commentId,
+                                       String reason, String memo) {
+        Post post = requirePost(postId);
+        Comment comment = comments.findById(commentId)
+                .filter(c -> c.getPost().getId() == postId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."));
+        requireNotMine(comment.getUser(), me.getId());
+
+        return reports.file(
+                ReportTarget.comment(commentId),
+                me.getId(),
+                comment.getUser() == null ? null : comment.getUser().getId(),
+                requireReason(reason),
+                memo,
+                List.of(snapshotOf(comment), snapshotOf(post, ReportSnapshotInput.Role.CONTEXT)));
+    }
+
+    private static ReportSnapshotInput snapshotOf(Post post, ReportSnapshotInput.Role role) {
+        return new ReportSnapshotInput(
+                role,
+                post.getUser() == null ? null : post.getUser().getId(),
+                post.getHandle(),
+                post.getTitle(),
+                post.getBody(),
+                post.createdAtInstant());
+    }
+
+    private static ReportSnapshotInput snapshotOf(Comment comment) {
+        return ReportSnapshotInput.target(
+                comment.getUser() == null ? null : comment.getUser().getId(),
+                comment.getHandle(),
+                null, // 댓글에는 제목이 없다
+                comment.getBody(),
+                comment.createdAtInstant());
+    }
+
+    /**
+     * 내 것이면 400 이다.
+     *
+     * <p><b>탈퇴한 사람의 글은 신고할 수 있다.</b> {@code user} 가 {@code null} 이어도 글은
+     * 남아 있고, 그 글이 문제라는 사실은 작성자가 떠난 것과 무관하다.
+     */
+    private static void requireNotMine(User author, long meId) {
+        if (author != null && author.getId().equals(meId)) {
+            throw new IllegalArgumentException("내가 쓴 것은 신고할 수 없습니다.");
+        }
+    }
+
+    /**
+     * 계약의 {@code ReportReason} 으로 읽는다.
+     *
+     * <p><b>모르는 값을 {@code other} 로 눕히지 않는다.</b> 그러면 앱의 오타가 조용히
+     * 통과해서 운영자가 세는 숫자가 소리 없이 틀어진다 — 채팅 신고가 같은 판단을 했다.
+     */
+    private static ReportReason requireReason(String reason) {
+        return ReportReason.fromWire(reason).orElseThrow(() -> new IllegalArgumentException(
+                "신고 사유가 올바르지 않습니다. 가능한 값: " + sortedReasons()));
+    }
+
+    private static String sortedReasons() {
+        return java.util.Arrays.stream(ReportReason.values())
+                .map(ReportReason::wireValue)
+                .sorted()
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 
     // ─────────────────────────── 반응 ───────────────────────────

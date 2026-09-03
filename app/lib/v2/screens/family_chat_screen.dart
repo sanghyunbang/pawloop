@@ -603,7 +603,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     final choice = await ReportSheet.show(
       context,
       senderName: m.senderName,
-      messageCount: 1,
+      subject: '메시지 1개',
     );
     if (!mounted || choice == null) {
       return;

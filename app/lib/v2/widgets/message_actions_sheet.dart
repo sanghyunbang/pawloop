@@ -133,17 +133,30 @@ enum MessageAction { report, block, unblock, removeMember }
 ///
 /// 어휘의 출처는 계약이고([ChatReportReason]), 목록에 없는 값을 보내면 서버가 400 을 낸다.
 class ReportSheet extends StatefulWidget {
-  const ReportSheet({super.key, required this.senderName, required this.messageCount});
+  const ReportSheet({
+    super.key,
+    required this.senderName,
+    required this.subject,
+    this.canBlock = true,
+  });
 
   final String senderName;
 
-  /// 함께 신고할 메시지 수. **최대 3개** 이고 그 판정은 서버가 한다.
-  final int messageCount;
+  /// 무엇이 함께 접수되는지 한 줄로. 채팅은 "메시지 3개", 커뮤니티는 "이 글" 이다.
+  final String subject;
+
+  /// 가리기 체크박스를 보일 것인가.
+  ///
+  /// **커뮤니티는 아직 false 다** — 가리기 경로가 커뮤니티에 없다(#166 의 다음 조각).
+  /// 받는 척하는 칸이 화면에 있으면 사용자가 그것을 믿는다. 채팅 신고가 같은 이유로
+  /// 예전 초안의 `alsoBlock` 을 계약에서 뺐다.
+  final bool canBlock;
 
   static Future<ReportChoice?> show(
     BuildContext context, {
     required String senderName,
-    required int messageCount,
+    required String subject,
+    bool canBlock = true,
   }) {
     return showModalBottomSheet<ReportChoice>(
       context: context,
@@ -151,7 +164,8 @@ class ReportSheet extends StatefulWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: ReportSheet(senderName: senderName, messageCount: messageCount),
+        child: ReportSheet(
+            senderName: senderName, subject: subject, canBlock: canBlock),
       ),
     );
   }
@@ -194,7 +208,7 @@ class _ReportSheetState extends State<ReportSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            '메시지 ${widget.messageCount}개가 함께 접수됩니다. 신고한 사실은 상대에게 알리지 않습니다.',
+            '${widget.subject}이(가) 함께 접수됩니다. 신고한 사실은 상대에게 알리지 않습니다.',
             style: const TextStyle(fontSize: 12, height: 1.4, color: T.textSecondary),
           ),
           const SizedBox(height: 14),
@@ -222,16 +236,17 @@ class _ReportSheetState extends State<ReportSheet> {
             ),
             style: const TextStyle(fontSize: 13),
           ),
-          CheckboxListTile(
-            value: _alsoBlock,
-            onChanged: (v) => setState(() => _alsoBlock = v ?? false),
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('이 사람의 메시지를 가리기',
-                style: TextStyle(fontSize: 13, color: T.textPrimary)),
-            subtitle: const Text('내 화면에서만 접힙니다. 삭제가 아니에요',
-                style: TextStyle(fontSize: 11.5, color: T.textMuted)),
-          ),
+          if (widget.canBlock)
+            CheckboxListTile(
+              value: _alsoBlock,
+              onChanged: (v) => setState(() => _alsoBlock = v ?? false),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('이 사람의 메시지를 가리기',
+                  style: TextStyle(fontSize: 13, color: T.textPrimary)),
+              subtitle: const Text('내 화면에서만 접힙니다. 삭제가 아니에요',
+                  style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+            ),
           const SizedBox(height: 6),
           SizedBox(
             width: double.infinity,

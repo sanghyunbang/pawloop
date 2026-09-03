@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/auth_state.dart';
 import '../data/community_repository.dart';
+import '../widgets/message_actions_sheet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 
@@ -284,6 +285,75 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  /// 신고 버튼 — 이슈 #166.
+  ///
+  /// **삭제와 반대 조건에 있다.** 삭제는 `_isMine` 안이고 신고는 밖이다 — 같은 칸에 두되
+  /// 조건이 반대라, 남의 글에는 신고가·내 글에는 삭제가 뜬다. 초안은 이것을 "삭제 버튼
+  /// 옆" 이라고만 적었는데 그대로 만들면 **자기 글에만 신고가 뜨는 앱**이 된다.
+  Widget _reportButton({required VoidCallback onTap}) => GestureDetector(
+        onTap: _sending ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Text('신고',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: T.textMuted)),
+        ),
+      );
+
+  /// 신고할 수 있는가.
+  ///
+  /// **내 것이 아니어야 하고, 작성자가 살아 있어야 한다.** 탈퇴한 사람의 글은 신고해도
+  /// 조치할 대상이 없다 — 그 글을 내리는 것은 관리이고 #166 의 다음 조각이다.
+  ///
+  /// **게스트에게도 보인다.** 눌렀을 때 로그인을 안내한다 — 버튼을 숨기면 게스트는 이 앱에
+  /// 신고 수단이 있다는 것 자체를 모른다.
+  bool _canReport(PersonRef author) => !author.isWithdrawn && !_isMine(author);
+
+  Future<void> _reportPost() async {
+    final choice = await _askReport(_post.author.nickname, '이 글');
+    if (choice == null) return;
+    await _submitReport(
+        () => _repo.reportPost(_post.id, choice.reason, memo: choice.memo));
+  }
+
+  Future<void> _reportComment(CommunityComment comment) async {
+    final choice = await _askReport(comment.author.nickname, '이 댓글');
+    if (choice == null) return;
+    await _submitReport(() =>
+        _repo.reportComment(_post.id, comment.id, choice.reason, memo: choice.memo));
+  }
+
+  /// 사유를 묻는다. 채팅과 **같은 시트**를 쓴다 — 두 벌이면 문구도 사유 목록도 갈린다.
+  ///
+  /// 가리기 칸은 안 보인다(`canBlock: false`). 커뮤니티에 가리기 경로가 아직 없어서,
+  /// 받는 척하는 칸이 있으면 사용자가 그것을 믿는다.
+  Future<ReportChoice?> _askReport(String who, String subject) async {
+    if (_isGuest) {
+      _toast('로그인하면 신고할 수 있어요');
+      return null;
+    }
+    return ReportSheet.show(context,
+        senderName: who, subject: subject, canBlock: false);
+  }
+
+  Future<void> _submitReport(Future<void> Function() send) async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    try {
+      await send();
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _toast('신고를 접수했어요. 상대에게는 알리지 않습니다');
+    } on CommunityFailure catch (failure) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _toast(failure.message);
+    }
+  }
+
   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -553,6 +623,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               if (_isMine(post.author)) ...[
                 const SizedBox(width: 8),
                 _deleteButton(onTap: _confirmDeletePost),
+              ] else if (_canReport(post.author)) ...[
+                const SizedBox(width: 8),
+                _reportButton(onTap: _reportPost),
               ],
             ],
           ),
@@ -710,6 +783,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     const Spacer(),
                     if (_isMine(comment.author)) ...[
                       _deleteButton(onTap: () => _confirmDeleteComment(comment)),
+                      const SizedBox(width: 8),
+                    ] else if (_canReport(comment.author)) ...[
+                      _reportButton(onTap: () => _reportComment(comment)),
                       const SizedBox(width: 8),
                     ],
                     Text(

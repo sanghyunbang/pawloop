@@ -190,6 +190,19 @@ public class RateLimitProperties {
     private int chatReportMaxRequests = 10;
 
     /**
+     * 커뮤니티 신고 — 이슈 #166. 분당 10.
+     *
+     * <p><b>커뮤니티 쓰기(60)와 합치지 않는다.</b> 합치면 글·댓글·반응을 쏟아부어 <b>신고를
+     * 막을 수 있다</b> — 신고 수단을 없애는 가장 값싼 방법이 그것이다. {@code chat-report} 가
+     * 같은 이유로 채팅 쓰기와 갈라져 있다.
+     *
+     * <p>숫자가 채팅과 같은 것도 같은 근거다 — 신고는 "사람이 손으로 하는 드문 행동" 이다.
+     * 그리고 요청 하나가 <b>본문 사본 행</b>을 만드는 무거운 쓰기라, 글쓰기와 같은 한도를
+     * 주는 것이 헐겁다.
+     */
+    private int communityReportMaxRequests = 10;
+
+    /**
      * 주변 장소 버킷 — {@code GET /api/places/nearby}. (이슈 #40)
      *
      * <p>지도 화면이 부르는 경로다. 앱의 산책 화면은 위치가 5m 움직일 때마다 다시 묻고,

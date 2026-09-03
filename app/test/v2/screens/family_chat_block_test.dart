@@ -170,7 +170,7 @@ void main() {
       home: Scaffold(
         body: Builder(
           builder: (context) => TextButton(
-            onPressed: () => ReportSheet.show(context, senderName: '아무개', messageCount: 1),
+            onPressed: () => ReportSheet.show(context, senderName: '아무개', subject: '메시지 1개'),
             child: const Text('열기'),
           ),
         ),
@@ -192,7 +192,7 @@ void main() {
       home: Scaffold(
         body: Builder(
           builder: (context) => TextButton(
-            onPressed: () => ReportSheet.show(context, senderName: '아무개', messageCount: 1),
+            onPressed: () => ReportSheet.show(context, senderName: '아무개', subject: '메시지 1개'),
             child: const Text('열기'),
           ),
         ),

@@ -85,6 +85,11 @@ Map<String, Object?> _comment(int id, int authorId) => {
   final client = AuthedClient(
     inner: MockClient((request) async {
       final path = request.url.path;
+      if (request.method == 'POST' && path.endsWith('/reports')) {
+        calls.add('POST $path');
+        return _json({'reportId': 5, 'createdAt': '2026-09-03T01:00:00Z'},
+            status: 201);
+      }
       if (request.method == 'DELETE') {
         calls.add('DELETE $path');
         if (deleteStatus == 204) return http.Response('', 204);
@@ -295,4 +300,93 @@ void main() {
     expect(find.text('수정됨'), findsOneWidget,
         reason: '반응은 글 내용을 안 바꾼다 — 표시가 사라질 이유가 없다');
   });
+
+  // ─────────────────── 신고 (#166) ───────────────────
+
+  testWidgets('남의 글에 신고가 보인다 — 삭제와 반대 조건이다', (tester) async {
+    // 설계 초안이 "삭제 버튼 옆" 이라고만 적었는데, 그 자리는 `_isMine` 분기 **안**이라
+    // 그대로 만들면 자기 글에만 신고가 뜨는 앱이 된다. 이 테스트가 그것을 잠근다.
+    final f = fixture(postAuthor: 99);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99))!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('신고'), findsOneWidget);
+    expect(find.text('삭제'), findsNothing);
+  });
+
+  testWidgets('내 글에는 신고가 없다 — 신고 수를 부풀리는 자리다', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('신고'), findsNothing);
+    expect(find.text('삭제'), findsOneWidget);
+  });
+
+  testWidgets('탈퇴한 사람의 글에는 신고가 없다 — 조치할 대상이 없다', (tester) async {
+    final f = fixture(postAuthor: 0);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 0))!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('신고'), findsNothing);
+  });
+
+  testWidgets('사유를 고르고 신고하면 서버로 간다 — 가리기 칸은 없다', (tester) async {
+    final f = fixture(postAuthor: 99);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99))!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('신고'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('이 사람의 메시지를 가리기'), findsNothing,
+        reason: '커뮤니티에 가리기 경로가 아직 없다 — 받는 척하는 칸이 있으면 사용자가 믿는다');
+
+    await tester.tap(find.text('광고 · 도배'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('신고하기'));
+    await tester.pumpAndSettle();
+
+    expect(f.calls, ['POST /api/community/posts/12/reports']);
+    expect(find.textContaining('신고를 접수했어요'), findsOneWidget);
+  });
+
+  testWidgets('사유를 안 고르면 신고하기가 안 눌린다', (tester) async {
+    final f = fixture(postAuthor: 99);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99))!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('신고'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('신고하기'));
+    await tester.pumpAndSettle();
+
+    expect(f.calls, isEmpty,
+        reason: '서버도 400 으로 막지만, 눌러 보고서야 아는 것은 실패를 겪게 하는 것이다');
+  });
+
+  testWidgets('남의 댓글에 신고가 붙는다', (tester) async {
+    final f = fixture(
+        postAuthor: 99, comments: [_comment(1, 99), _comment(2, _meId)]);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99, commentCount: 2))!,
+        repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    // 글(남) + 댓글 1(남) 둘에 신고, 댓글 2(내 것)에는 삭제.
+    expect(find.text('신고'), findsNWidgets(2));
+    expect(find.text('삭제'), findsOneWidget);
+  });
+
 }
