@@ -318,6 +318,4 @@
 
 - 로컬: `flutter test` (필요 시 `flutter test --coverage` → `coverage/lcov.info`).
 - 초기 목표 커버리지: 도메인/파싱/파생 로직 위주로 시작(화면 픽셀보다 **로직 회귀 방지** 우선). 지도·네이버맵 위젯은 SDK 의존이 커 위젯 테스트에서 목킹/스텁하거나 제외.
-- 도입되면 [9. 회귀 체크](#9-회귀-체크-릴리스큰-변경-전)의 "정적/빌드 게이트"에 `flutter test`를 필수화하고, 향후 GitHub Actions 워크플로에 `analyze + test`를 연결.
-
-완료: C:/Users/mm206/git_projects/heattrip/docs/06-testing/test-checklist.md
+- 도입되면 [9. 회귀 체크](#9-회귀-체크-릴리스큰-변경-전)의 "정적/빌드 게이트"에 `flutter test`를 필수화하고, 향후 GitHub Actions 워크플로에 `analyze + test`를 연결.

@@ -253,6 +253,4 @@
 - **board 검증:** Board enum은 한글(`산책로 후기`/`동반장소`/`건강·병원`/`자유`/`자랑`). 공백/중점(·) 포함 문자열이므로 서비스 상수 `Set`으로 정확히 검증(오타 시 400). DB `board VARCHAR(20)` + `utf8mb4`.
 - **공간/좌표 무관:** 이 리소스는 `POINT`/`LINESTRING`, `ST_Distance_Sphere`, EPSG:5174→WGS84 변환과 **무관**하다(그건 Places/Walks 담당). 커뮤니티에 공간 쿼리를 넣지 말 것.
 - **외부 API 없음:** community는 공공데이터 프록시/캐싱(KTO·LOCALDATA)과 무관 — `TourApiClient`/`WebClientConfig` 패턴 불필요. 순수 RDB CRUD.
-- **에러 형식:** 검증 실패는 `IllegalArgumentException`→`Map.of("error", msg)` 400(social 방식) 또는 openapi `Error` 스키마(`{error:{code,message,traceId}}`)에 맞춘 공통 핸들러 사용. 프로젝트에 `observability/error` 글로벌 핸들러가 있으면 그쪽 포맷을 우선.
-
-완료: C:/Users/mm206/git_projects/heattrip/docs/02-architecture/backend/community.md
+- **에러 형식:** 검증 실패는 `IllegalArgumentException`→`Map.of("error", msg)` 400(social 방식) 또는 openapi `Error` 스키마(`{error:{code,message,traceId}}`)에 맞춘 공통 핸들러 사용. 프로젝트에 `observability/error` 글로벌 핸들러가 있으면 그쪽 포맷을 우선.

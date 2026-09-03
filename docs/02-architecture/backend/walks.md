@@ -183,6 +183,4 @@
 - **에러 패턴.** 계약의 `Error` 스키마(`{ error: { code, message, traceId } }`) 준수. `NOT_FOUND`(없는 walk), `FORBIDDEN`(타인 소유), `VALIDATION`(좌표<2, 필수 누락)으로 매핑한다. **`code` 를 직접 적지 마라** — `GlobalExceptionHandler.codeOf` 가 HTTP 상태에서 파생하고, 그 어휘는 계약의 `Error.code` enum 이 소유한다(#10). 예전 이 줄에 있던 `VALIDATION_ERROR` 는 그 enum 에 없는 값이다. **미인증은 `UNAUTHORIZED` 코드가 아니라 본문 없는 401** 이다(#5) — 401 에 본문을 실으면 `GeneratedOpenApiSpecTest` 가 빨간불을 낸다.
 - **좌표계 변환(참고).** `walk.path`는 앱에서 이미 WGS84(4326)로 들어오므로 EPSG:5174→WGS84 변환 불필요(그 변환은 `place`의 LOCALDATA 병원/펫샵 삽입 시에만 해당). Walks에서는 SRID를 4326으로 고정만 하면 된다.
 
----
-
-완료: C:/Users/mm206/git_projects/heattrip/docs/02-architecture/backend/walks.md
+---
