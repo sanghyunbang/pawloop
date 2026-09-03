@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/auth_state.dart';
 import '../data/community_repository.dart';
 import '../widgets/message_actions_sheet.dart';
+import 'post_write_screen.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 
@@ -283,6 +284,36 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       setState(() => _sending = false);
       _toast(failure.message);
     }
+  }
+
+  /// 수정 버튼 — 이슈 #243. <b>내 글에만</b> 뜬다(삭제와 같은 분기).
+  ///
+  /// 댓글에는 없다 — 계약에 댓글 수정 경로가 없다.
+  Widget _editButton({required VoidCallback onTap}) => GestureDetector(
+        onTap: _sending ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Text('수정',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: T.textSecondary)),
+        ),
+      );
+
+  /// 글쓰기 화면을 <b>편집 모드로 재사용</b>한다 — 두 벌이면 상한도 문구도 갈린다.
+  ///
+  /// 안 고치고 나오면 {@code null} 이 온다. 그때는 아무것도 안 바뀌었으므로 다시 그리지
+  /// 않는다 — `_changed` 도 안 세운다.
+  Future<void> _editPost() async {
+    final updated = await editPost(context, _post, repository: _repo);
+    if (!mounted || updated == null) return;
+    setState(() {
+      _post = updated;
+      _changed = true;
+    });
+    _toast('글을 고쳤어요');
   }
 
   /// 신고 버튼 — 이슈 #166.
@@ -660,6 +691,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     style: TextStyle(fontSize: 11.5, color: T.textMuted)),
               ],
               if (_isMine(post.author)) ...[
+                const SizedBox(width: 8),
+                _editButton(onTap: _editPost),
                 const SizedBox(width: 8),
                 _deleteButton(onTap: _confirmDeletePost),
               ] else if (_canReport(post.author)) ...[

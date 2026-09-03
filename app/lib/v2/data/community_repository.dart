@@ -338,7 +338,7 @@ enum CommunityFailureKind {
   /// 서버가 입력을 거절했다(400). **다시 눌러도 같다.**
   rejected,
 
-  /// 내 것이 아니다(403). 삭제에서만 난다.
+  /// 내 것이 아니다(403). 삭제와 수정에서 난다.
   ///
   /// **커뮤니티는 404 로 합치지 않는다.** `Dogs`·`Walks` 는 남의 것을 없는 것과 같게
   /// 보이지만(ADR-0017 규약 3) 글은 누구나 읽을 수 있어서 존재가 이미 공개다 — 404 로
@@ -363,7 +363,7 @@ extension CommunityFailureKindX on CommunityFailureKind {
         CommunityFailureKind.unauthorized => '로그인하면 쓸 수 있어요',
         CommunityFailureKind.rateLimited => '잠시 후 다시 시도해 주세요',
         CommunityFailureKind.rejected => '보낼 수 없는 내용이에요',
-        CommunityFailureKind.forbidden => '내가 쓴 것만 지울 수 있어요',
+        CommunityFailureKind.forbidden => '내가 쓴 것만 고치거나 지울 수 있어요',
         CommunityFailureKind.notFound => '글을 찾을 수 없어요',
       };
 
@@ -538,6 +538,41 @@ class CommunityRepository {
     );
   }
 
+
+  /// 글을 고친다 — 이슈 #243. **보낸 키만 바뀐다.**
+  ///
+  /// <b>안 바뀐 것은 안 보낸다.</b> 계약이 `PostPatch` 를 `minProperties: 1` 로 두었고,
+  /// `PostInput` 을 재사용하면 제목만 고치려는 사람도 본문을 다시 보내야 한다 — 그 사이
+  /// 다른 기기에서 고친 본문을 조용히 되돌린다(ADR-0017 규약 4).
+  ///
+  /// **`loc`·`contentId` 는 못 바꾼다.** 계약이 `PostPatch` 에서 뺐다 — 비우기와 안 바꿈을
+  /// 구별할 방법이 아직 없어서다. 화면이 그 칸을 잠근다.
+  ///
+  /// 셋 다 `null` 이면 **요청을 안 보낸다.** 서버가 400 을 주는데, 그건 사용자가 볼 이유가
+  /// 없는 실패다 — 아무것도 안 고친 것은 잘못이 아니다.
+  Future<CommunityPost?> updatePost(
+    int postId, {
+    CommunityBoard? board,
+    String? title,
+    String? body,
+  }) async {
+    final patch = <String, Object?>{
+      if (board != null) 'board': board.wire,
+      if (title != null) 'title': title,
+      if (body != null) 'body': body,
+    };
+    if (patch.isEmpty) return null;
+
+    final json = await _send(
+      () => _authed.patchJson(
+        Uri.parse('$baseUrl/api/community/posts/$postId'),
+        body: patch,
+      ),
+    );
+    final post = CommunityPost.tryParse(json);
+    if (post == null) throw const CommunityFailure(CommunityFailureKind.network);
+    return post;
+  }
 
   /// 글을 신고한다 — 이슈 #166.
   ///
