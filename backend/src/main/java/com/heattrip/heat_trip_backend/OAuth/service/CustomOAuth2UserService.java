@@ -197,7 +197,13 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
         // 공급자가 준 표시 이름. 카카오는 nickname(필수 동의라 보통 온다), 구글은 name.
         // 둘 다 없을 수 있고, 그래도 가입은 성공해야 한다.
-        String displayName = trimToNull(userInfo.getName());
+        //
+        // **자르되 거절하지 않는다** (#229). 이 경로는 앱을 안 지나므로 클라이언트 상한이
+        // 닿지 않는데, 여기서 400 을 주면 이름이 긴 사람은 **로그인 자체가 안 된다**.
+        // 자른 뒤에는 사용자가 프로필에서 고칠 수 있다. 상한이 없으면 그 사람의 모든
+        // 글쓰기가 500 이 되던 것이 #170 이다.
+        String displayName = User.clamp(userInfo.getName(), User.MAX_NAME_LENGTH);
+        String initialNickname = User.clamp(userInfo.getName(), User.MAX_NICKNAME_LENGTH);
         LocalDateTime now = LocalDateTime.now();
 
         User user = User.builder()
@@ -207,7 +213,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 .role(User.ROLE_USER)
                 .email(email)          // null 일 수 있다 — 그게 정상이다
                 .name(displayName)
-                .nickname(displayName) // 공급자 이름을 초기 닉네임으로 쓴다
+                .nickname(initialNickname) // 공급자 이름을 초기 닉네임으로 쓴다 — 상한까지 자른다
                 .gender(User.Gender.OTHER) // 기본값 설정 (필요시 수정 가능)
                 .travelType("default") // 기본 여행 타입 설정 (필요시 수정 가능)
                 .createdAt(now)
@@ -258,13 +264,22 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     private boolean applyProviderProfile(User user, OAuth2UserInfo userInfo) {
         boolean changed = false;
 
-        String displayName = trimToNull(userInfo.getName());
+        // 여기도 자른다 (#229). 가입에서만 자르면 **로그인할 때마다** 상한 밖 이름이
+        // 다시 들어온다 — 이 메서드가 매 로그인에 돈다.
+        String displayName = User.clamp(userInfo.getName(), User.MAX_NAME_LENGTH);
         if (displayName != null && !displayName.equals(user.getName())) {
             // 사용자가 우리 앱에서 직접 고친 닉네임은 덮지 않는다.
             // user.getName() 은 '지난 로그인에서 공급자가 준 이름'이므로,
-            // 닉네임이 아직 그 값 그대로면 사용자가 손대지 않았다는 뜻이다.
-            if (!StringUtils.hasText(user.getNickname()) || user.getNickname().equals(user.getName())) {
-                user.setNickname(displayName);
+            // 닉네임이 아직 그 값에서 나온 그대로면 사용자가 손대지 않았다는 뜻이다.
+            //
+            // **지난 이름을 닉네임 상한으로 다시 잘라서 견준다.** 두 상한이 달라서(50 vs 20)
+            // 긴 이름이면 name 과 nickname 이 애초에 같을 수 없다 — 그냥 견주면 그 사람의
+            // 닉네임만 영원히 '손댄 것' 으로 오인돼 갱신이 멈춘다. 짧은 이름에서는 자른
+            // 값이 원본과 같아서 이 줄이 있기 전과 동작이 같다.
+            String derivedFromPrevious = User.clamp(user.getName(), User.MAX_NICKNAME_LENGTH);
+            if (!StringUtils.hasText(user.getNickname())
+                    || user.getNickname().equals(derivedFromPrevious)) {
+                user.setNickname(User.clamp(userInfo.getName(), User.MAX_NICKNAME_LENGTH));
             }
             user.setName(displayName);
             changed = true;

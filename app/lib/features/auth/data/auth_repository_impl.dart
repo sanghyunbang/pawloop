@@ -263,6 +263,17 @@ class AuthRepositoryImpl {
     return false;
   }
 
+  /// 닉네임의 최대 글자 수. 계약의 `maxLength` 이자 서버의 `@Size` 와 같은 수다(#229).
+  ///
+  /// **컬럼이 정한 수가 아니다.** 컬럼은 `varchar(255)` 인데 그건 저장 한계이고, 이 수는
+  /// 이 화면이 먼저 쓰던 것을 서버가 정본으로 올린 것이다. 2026-09-03 이전에는 서버에
+  /// 상한이 아예 없어서 이 화면의 20 이 **저장소 전체의 유일한 방어선**이었다 — 소셜
+  /// 로그인은 이 화면을 아예 안 지나므로 그때도 방어가 아니었다.
+  static const int maxNicknameLength = 20;
+
+  /// 이름의 최대 글자 수. 닉네임이 비었을 때의 대체 표시값이라 같은 이유로 막는다.
+  static const int maxNameLength = 50;
+
   /// 사용자 정보 수정 — `PUT /auth/me`.
   Future<bool> updateMyProfile(UpdateProfileRequest req) async {
     final url = Uri.parse('$baseUrl/auth/me');

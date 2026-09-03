@@ -1,5 +1,9 @@
 package com.heattrip.heat_trip_backend.user.dto;
 
+import com.heattrip.heat_trip_backend.user.entity.User;
+
+import jakarta.validation.constraints.Size;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -8,7 +12,12 @@ import lombok.Setter;
 public class SignupRequest {
     private String email;
     private String password;
+    /** 상한은 {@link User#MAX_NICKNAME_LENGTH} — 이슈 #229. 가입도 무방비였다. */
+    @Size(max = User.MAX_NICKNAME_LENGTH,
+            message = "닉네임은 " + User.MAX_NICKNAME_LENGTH + "자를 넘을 수 없습니다.")
     private String nickname;
+
+    @Size(max = User.MAX_NAME_LENGTH, message = "이름은 " + User.MAX_NAME_LENGTH + "자를 넘을 수 없습니다.")
     private String name;
     private String gender;
 

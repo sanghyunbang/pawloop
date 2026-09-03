@@ -13,6 +13,8 @@ import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
 import com.heattrip.heat_trip_backend.user.service.UserService;
 
+import jakarta.validation.Valid;
+
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
@@ -47,7 +49,7 @@ public class AuthController implements AuthApiDoc{
      * 알 수 없었다. (이슈 #10)
      */
     @PostMapping("/signup")
-    public ResponseEntity<UserResponse> signup(@RequestBody SignupRequest request) {
+    public ResponseEntity<UserResponse> signup(@Valid @RequestBody SignupRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(UserResponse.from(userService.signup(request)));
     }
@@ -103,7 +105,8 @@ public class AuthController implements AuthApiDoc{
     @PutMapping("/me")
     public ResponseEntity<UserResponse> updateMe(
             @CurrentUser User me,
-            @RequestBody UpdateProfileRequest req) {
+            // @Valid 가 없으면 DTO 의 @Size 가 **붙어 있어도 안 걸린다** (#229).
+            @Valid @RequestBody UpdateProfileRequest req) {
 
         User updated = userService.updateProfile(me.getId(), req);
         return ResponseEntity.ok(UserResponse.from(updated));

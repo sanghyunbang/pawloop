@@ -285,7 +285,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           labelText: '닉네임',
                           border: OutlineInputBorder(),
                         ),
-                        maxLength: 20,
+                        maxLength: AuthRepositoryImpl.maxNicknameLength,
                         validator: (v) {
                           final s = v?.trim() ?? '';
                           if (s.isEmpty) return '닉네임을 입력하세요';
@@ -302,6 +302,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           labelText: '이름',
                           border: OutlineInputBorder(),
                         ),
+                        // 여기가 없으면 51자를 쓴 사람이 **저장을 누른 뒤에야** 400 을
+                        // 받는다 — create_screen 이 같은 이유를 적어 뒀다(#161).
+                        maxLength: AuthRepositoryImpl.maxNameLength,
                         validator: (v) {
                           final s = v?.trim() ?? '';
                           if (s.isEmpty) return '이름을 입력하세요';

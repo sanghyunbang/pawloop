@@ -324,8 +324,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               const SizedBox(height: 14),
 
                               _label('닉네임'),
+                              // 서버·계약과 같은 수다(#229). 없으면 21자를 쓴 사람이
+                              // 가입 버튼을 누른 뒤에야 400 을 받는다.
                               _filledField(
                                 controller: _nicknameController,
+                                maxLength: AuthRepositoryImpl.maxNicknameLength,
                                 hint: '닉네임을 입력하세요',
                                 fill: _fieldFill,
                                 validator: (value) =>
@@ -338,6 +341,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               _label('이름'),
                               _filledField(
                                 controller: _nameController,
+                                maxLength: AuthRepositoryImpl.maxNameLength,
                                 hint: '이름을 입력하세요',
                                 fill: _fieldFill,
                                 validator: (value) =>
@@ -527,12 +531,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
     String? Function(String?)? validator,
     bool obscureText = false,
     Widget? suffixIcon,
+    int? maxLength,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
       obscureText: obscureText,
+      maxLength: maxLength,
       decoration: InputDecoration(
         hintText: hint,
         filled: true,
