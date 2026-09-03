@@ -505,6 +505,47 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    // ─────────────────── 시각의 오프셋 (이슈 #248) ───────────────────
+
+    @Test
+    @DisplayName("방·메시지·초대·신고의 시각이 전부 오프셋을 달고 나간다 — 실제 HTTP 응답에서 잰다")
+    void everyTimestampOnTheWireCarriesAnOffset() throws Exception {
+        // **손으로 만든 ObjectMapper 로는 이걸 못 잰다.** 부트는 자동 구성으로
+        // WRITE_DATES_AS_TIMESTAMPS 를 끄는데 손으로 만든 매퍼는 켜져 있어 Instant 를 숫자로
+        // 낸다 — #247 에서 실제로 겪었다. 그래서 응답 본문 그대로를 본다.
+        Account owner = account("시각 보는 방장");
+        Account mate = account("시각 보는 멤버");
+        Room room = roomWith(owner, mate);
+        send(mate, room.id(), "시각이 붙는지 본다", "tz-1").andExpect(status().isCreated());
+
+        JsonNode receipt = body(mockMvc.perform(
+                post("/api/chat/rooms/{roomId}/reports", room.id())
+                        .header("Authorization", "Bearer " + owner.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roomSeqs\":[1],\"reason\":\"abuse\"}"))
+                .andExpect(status().isCreated()));
+        carriesOffset(receipt, "createdAt");
+
+        JsonNode invite = body(mockMvc.perform(
+                post("/api/chat/rooms/{roomId}/invites", room.id())
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isCreated()));
+        carriesOffset(invite, "createdAt");
+        carriesOffset(invite, "expiresAt");
+
+        // 톰스톤도 실린다 — deletedAt 이 null 이면 이 단언이 아무것도 안 본다.
+        softDelete(room.id(), 1);
+
+        JsonNode listed = roomInList(owner, room.id());
+        carriesOffset(listed, "createdAt");
+        carriesOffset(listed.path("lastMessage"), "createdAt");
+        carriesOffset(listed.path("lastMessage"), "deletedAt");
+
+        JsonNode first = messages(owner, room.id(), null, null).path("items").get(0);
+        carriesOffset(first, "createdAt");
+        carriesOffset(first, "deletedAt");
+    }
+
     // ─────────────────── 신고 (이슈 #82) ───────────────────
 
     @Test
@@ -874,6 +915,28 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
 
     // ─────────────────────────── 지그 ───────────────────────────
 
+    /**
+     * 이 필드가 <b>오프셋을 단 RFC3339 문자열</b>인가 — 이슈 #248.
+     *
+     * <p>계약이 {@code format: date-time} 이라고 선언했고 그건 오프셋이 있어야 성립한다.
+     * 2026-09-03 이전에는 {@code "2026-09-01T09:06:09.803089900"} 이 그대로 나갔고, 앱의
+     * {@code DateTime.parse} 는 그것을 <b>기기 지역 시각</b>으로 읽는다 — 해외에 있는 가족이
+     * 보면 그 차이만큼 어긋난 시각이 그려진다.
+     *
+     * <p>값이 없으면 실패한다. {@code null} 을 통과시키면 이 검사는 아무것도 안 지킨다.
+     */
+    private static void carriesOffset(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        assertThat(value.isTextual())
+                .as("%s 가 문자열이 아니다(%s) — 숫자면 매퍼가 타임스탬프로 낸 것이다", field, value)
+                .isTrue();
+        assertThat(value.asText())
+                .as("%s 에 오프셋이 없다 — 계약의 format: date-time 은 RFC3339 오프셋을 요구한다 (#248)",
+                        field)
+                .matches("\\d{4}-\\d{2}-\\d{2}T[\\d:.]+(Z|[+-]\\d{2}:\\d{2})");
+    }
+
+
     private record Account(long id, String token) { }
 
     private record Room(long id, String title) { }
@@ -966,7 +1029,7 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                 .findByRoomIdAndRoomSeqGreaterThanOrderByRoomSeqAsc(
                         roomId, roomSeq - 1, org.springframework.data.domain.Limit.of(1))
                 .get(0);
-        message.setDeletedAt(LocalDateTime.now());
+        message.setDeletedAt(com.heattrip.heat_trip_backend.chat.ChatTime.nowUtc());
         chatMessageRepository.saveAndFlush(message);
     }
 

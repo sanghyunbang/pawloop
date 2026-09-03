@@ -1,8 +1,9 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
+import com.heattrip.heat_trip_backend.chat.ChatTime;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 계약({@code openapi.yaml})의 {@code ChatMessage} 모양 — 이슈 #78.
@@ -29,6 +30,14 @@ import java.time.LocalDateTime;
  * <p>본문을 지워서 내리지 않는다. 가려진 자리에 "보기" 가 있어서, 지워 내리면 그것을 누를
  * 때 요청이 한 번 더 필요해진다({@code Blocks} javadoc).
  *
+ * <h2>시각은 {@link java.time.Instant} 다 — 오프셋이 붙어야 계약이 성립한다</h2>
+ * <p>계약이 {@code format: date-time} 이라고 선언했고 그건 RFC3339 <b>오프셋</b>이 있어야
+ * 성립한다. {@code LocalDateTime} 을 그대로 실으면 잭슨이 {@code "2026-09-03T00:25:33.92"}
+ * 로 낸다 — 앱의 {@code DateTime.tryParse} 는 그것을 <b>기기 지역 시각</b>으로 읽으므로
+ * 해외에 있는 가족이 보면 그만큼 어긋난 시각이 그려진다(#248).
+ *
+ * <p>컬럼에 담긴 값은 UTC 다 — 이유는 {@link ChatTime}. 세우는 것도 그 클래스다.
+ *
  * @param deletedAt 소프트 삭제 시각. <b>{@code null} 이 아니어도 목록에서 빠지지 않는다</b> —
  *                  톰스톤이다. 본문을 가리는 것은 화면의 일이다(ADR-0011)
  * @param hiddenByBlock 읽는 사람이 이 발신자를 가렸는가. <b>목록에서 빼지 않는 이유</b>는
@@ -43,8 +52,8 @@ public record ChatMessageResponse(
         String senderName,
         String contentType,
         String body,
-        LocalDateTime createdAt,
-        LocalDateTime deletedAt,
+        Instant createdAt,
+        Instant deletedAt,
         boolean hiddenByBlock) {
 
     static ChatMessageResponse of(ChatMessageView message, String senderName) {
@@ -55,6 +64,7 @@ public record ChatMessageResponse(
                                   boolean hiddenByBlock) {
         return new ChatMessageResponse(message.id(), message.roomId(), message.roomSeq(),
                 message.senderUserId(), senderName, message.contentType(), message.body(),
-                message.createdAt(), message.deletedAt(), hiddenByBlock);
+                ChatTime.toInstant(message.createdAt()),
+                ChatTime.toInstant(message.deletedAt()), hiddenByBlock);
     }
 }

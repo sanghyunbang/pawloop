@@ -125,7 +125,15 @@ public class ChatRoomService {
     private final ChatLimits limits;
     private final InviteCodeGenerator inviteCodes;
 
-    /** 만료 경계를 벽시계 없이 테스트로 고정하기 위한 주입점. {@code ClockConfig} 가 준다. */
+    /**
+     * 만료 경계를 벽시계 없이 테스트로 고정하기 위한 주입점. {@code ClockConfig} 가 준다.
+     *
+     * <p><b>이 시계의 존은 안 쓴다.</b> 빈이 주는 존은 {@code Asia/Seoul} 인데, 이 모듈이
+     * 표에 넣는 값은 전부 UTC 다({@link ChatTime}). 그래서 {@code LocalDateTime.now(clock)}
+     * 이 아니라 {@code ChatTime.nowUtc(clock)} 으로 읽는다 — 앞의 것을 쓰면 같은 표의
+     * {@code created_at}(엔티티가 UTC 로 찍는다)과 {@code expires_at} 이 9시간 어긋난다.
+     * 고정하는 것은 <b>순간</b>이라 {@code Clock.fixed} 는 그대로 동작한다.
+     */
     private final Clock clock;
 
     /** 이 저장소의 첫 커스텀 메트릭 셋 (#80). 이름 규약은 그쪽 javadoc 에 있다. */
@@ -312,7 +320,7 @@ public class ChatRoomService {
 
         ChatRoom room = rooms.findById(roomId)
                 .orElseThrow(() -> new NoSuchElementException("방을 찾을 수 없습니다."));
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = ChatTime.nowUtc(clock);
         Duration ttl = limits.inviteTtl(actorUserId);
 
         ChatRoomInvite invite = invites.saveAndFlush(ChatRoomInvite.builder()
@@ -347,7 +355,7 @@ public class ChatRoomService {
         ChatRoomInvite invite = invites.findByRoomIdAndCode(roomId, code)
                 .orElseThrow(() -> new NoSuchElementException("초대코드를 찾을 수 없습니다."));
 
-        invites.revokeIfLive(invite.getId(), LocalDateTime.now(clock));
+        invites.revokeIfLive(invite.getId(), ChatTime.nowUtc(clock));
     }
 
     /**
@@ -434,7 +442,7 @@ public class ChatRoomService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ChatJoinResult joinByInviteCode(String code, long userId,
                                            Set<String> allowedOriginKinds) {
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = ChatTime.nowUtc(clock);
 
         // ① 없음 — 404. 여기서 코드 값을 메시지에 싣지 않는다(#6).
         //    엔티티가 아니라 방 id 만 읽는다 — 이유는 findRoomIdByCode javadoc.
@@ -530,7 +538,7 @@ public class ChatRoomService {
         }
 
         // 0 은 오류가 아니라 "이미 나가 있다" 다. 두 번 눌러도 결과가 같다.
-        return members.kick(roomId, targetUserId, actorUserId, LocalDateTime.now(clock)) == 1;
+        return members.kick(roomId, targetUserId, actorUserId, ChatTime.nowUtc(clock)) == 1;
     }
 
     /**
@@ -1093,7 +1101,9 @@ public class ChatRoomService {
     }
 
     private static ChatInviteView viewOf(ChatRoomInvite invite, long roomId) {
-        return new ChatInviteView(invite.getCode(), roomId, invite.getExpiresAt(),
-                invite.getMaxUses(), invite.getUsedCount(), invite.getCreatedAt());
+        return new ChatInviteView(invite.getCode(), roomId,
+                ChatTime.toInstant(invite.getExpiresAt()),
+                invite.getMaxUses(), invite.getUsedCount(),
+                ChatTime.toInstant(invite.getCreatedAt()));
     }
 }

@@ -697,6 +697,45 @@ class FamilyGroupInviteIntegrationTest extends AbstractMySqlIntegrationTest {
 
     // ─────────────────────────── 지그 ───────────────────────────
 
+    @Test
+    @DisplayName("가족과 멤버의 시각이 오프셋을 달고 나간다 — 실제 HTTP 응답에서 잰다 (#248)")
+    void groupTimestampsCarryAnOffset() throws Exception {
+        Account owner = account("시각 보는 아빠");
+        Account joiner = account("시각 보는 엄마");
+
+        JsonNode created = createGroup(owner, "시각 보는 가족");
+        String code = issueInvite(owner, created.path("roomId").asLong());
+        join(joiner, code).andExpect(status().isOk());
+
+        JsonNode group = myGroup(owner);
+        carriesOffset(group, "createdAt");
+        assertThat(group.path("members")).hasSizeGreaterThan(1);
+        for (JsonNode member : group.path("members")) {
+            carriesOffset(member, "joinedAt");
+        }
+
+        // 생성 응답도 같은 모양이어야 한다 — 여기만 빠지면 가족을 막 만든 사람의 화면이 어긋난다.
+        carriesOffset(created, "createdAt");
+    }
+
+    /**
+     * 이 필드가 <b>오프셋을 단 RFC3339 문자열</b>인가 — 이슈 #248.
+     *
+     * <p>{@code Group.createdAt} 과 {@code GroupMember.joinedAt} 이 2026-09-03 이전에는
+     * 오프셋 없이 나갔다. 앱의 {@code DateTime.parse} 는 그런 문자열을 <b>기기 지역 시각</b>
+     * 으로 읽으므로, 해외에 있는 가족이 보면 그 차이만큼 어긋난다.
+     */
+    private static void carriesOffset(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        assertThat(value.isTextual())
+                .as("%s 가 문자열이 아니다(%s) — 숫자면 매퍼가 타임스탬프로 낸 것이다", field, value)
+                .isTrue();
+        assertThat(value.asText())
+                .as("%s 에 오프셋이 없다 — 계약의 format: date-time 은 RFC3339 오프셋을 요구한다", field)
+                .matches("\\d{4}-\\d{2}-\\d{2}T[\\d:.]+(Z|[+-]\\d{2}:\\d{2})");
+    }
+
+
     private record Account(long id, String token) { }
 
     private Account account(String nickname) {

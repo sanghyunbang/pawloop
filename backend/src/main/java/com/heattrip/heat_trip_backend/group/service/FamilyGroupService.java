@@ -3,6 +3,7 @@ package com.heattrip.heat_trip_backend.group.service;
 import com.heattrip.heat_trip_backend.chat.ChatMemberView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.chat.ChatRoomView;
+import com.heattrip.heat_trip_backend.chat.ChatTime;
 import com.heattrip.heat_trip_backend.group.dto.GroupMemberResponse;
 import com.heattrip.heat_trip_backend.group.dto.GroupResponse;
 import com.heattrip.heat_trip_backend.group.entity.FamilyGroup;
@@ -203,9 +204,9 @@ public class FamilyGroupService {
                                 member.userId(),
                                 nicknames.getOrDefault(member.userId(), WITHDRAWN_MEMBER),
                                 member.role(),
-                                member.joinedAt()))
+                                ChatTime.toInstant(member.joinedAt())))
                         .toList(),
-                group.getCreatedAt());
+                ChatTime.toInstant(group.getCreatedAt()));
     }
 
     /**

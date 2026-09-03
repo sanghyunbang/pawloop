@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.group.entity;
 
+import com.heattrip.heat_trip_backend.chat.ChatTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -70,11 +72,20 @@ public class FamilyGroup {
      *
      * <p>DB 기본값만으로는 부족하다 — Hibernate 는 INSERT 에 컬럼을 항상 실어 보내므로
      * 필드가 {@code null} 이면 NOT NULL 위반으로 죽는다. chat 세 표가 쓰는 것과 같은 방식이다.
+     *
+     * <h2>값은 UTC 다 — 그리고 {@link ChatTime} 을 쓴다</h2>
+     * <p>{@code LocalDateTime.now()} 는 <b>JVM 기본 존</b>이라 개발 기계(KST)와 배포
+     * 컨테이너(UTC)가 같은 코드로 다른 값을 넣었다(#248).
+     *
+     * <p>chat 의 것을 빌려 쓰는 이유는 <b>이 행과 방 행이 한 트랜잭션에서 함께 생기기</b>
+     * 때문이다. ADR-0011 이 정한 대로 이 그룹의 멤버십은 {@code chat_room_member} 에 있고
+     * {@code GroupMember.joinedAt} 은 그 표에서 온다 — 두 표의 시각 규약이 갈리면 같은
+     * 순간에 만들어진 그룹과 방이 다른 시각을 갖는다.
      */
     @PrePersist
     void fillCreatedAt() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = ChatTime.nowUtc();
         }
     }
 }

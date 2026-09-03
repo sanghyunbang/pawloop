@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.chat.entity;
 
+import com.heattrip.heat_trip_backend.chat.ChatTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -137,7 +139,7 @@ public class ChatRoomMember {
     @PrePersist
     void fillJoinedAt() {
         if (joinedAt == null) {
-            joinedAt = LocalDateTime.now();
+            joinedAt = ChatTime.nowUtc();
         }
     }
 }

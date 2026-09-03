@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.user.entity;
 
+import com.heattrip.heat_trip_backend.user.UserTime;
+
 import org.springframework.modulith.NamedInterface;
 
 import jakarta.persistence.*; // JPA 어노테이션 제공 (Entity, Id, Table 등)
@@ -248,8 +250,10 @@ public class User {
 //    }
     @PrePersist
     public void prePersist() {
-        this.createdAt = (this.createdAt == null) ? LocalDateTime.now() : this.createdAt;
-        this.updatedAt = LocalDateTime.now();
+        // UTC 로 눕혀 넣는다 — LocalDateTime.now() 는 JVM 기본 존이라 개발 기계(KST)와
+        // 배포 컨테이너(UTC)가 같은 코드로 다른 값을 넣었다. 이유는 UserTime. (#248)
+        this.createdAt = (this.createdAt == null) ? UserTime.nowUtc() : this.createdAt;
+        this.updatedAt = UserTime.nowUtc();
         // @Builder.Default 는 빌더 경로에서만 적용된다. new User() 로 만든 행도 권한이 비면 안 된다.
         if (this.role == null || this.role.isBlank()) {
             this.role = ROLE_USER;
@@ -258,7 +262,7 @@ public class User {
 
     @PreUpdate
     public void preUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = UserTime.nowUtc();
     }
 
     /**
