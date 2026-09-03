@@ -611,15 +611,27 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 ### 6.4 글 수정 — ⬜ 계약에 없다 (#211 Community-medium-4)
 
-**계약에 없습니다.** 만든다면 `PATCH /api/community/posts/{postId}` 이고, 남의 글은 `403` 이 아니라 **`404`** 입니다(ADR-0017 규약 3). 부분 수정이므로 전용 `*Patch` 스키마 + `minProperties: 1`(규약 4).
+**계약에 없습니다.** 만든다면 `PATCH /api/community/posts/{postId}` 이고, 부분 수정이므로 전용 `*Patch` 스키마 + `minProperties: 1`(ADR-0017 규약 4).
 
-### 6.5 글 삭제 — ⬜ 계약에 없다 (#211 Community-medium-4)
+남의 글은 **`403`** 입니다 — 삭제와 같은 이유입니다(6.5 참조). 2026-09 이전 이 줄은 `404` 라고 적었는데, 그건 ADR-0017 규약 3 의 표에서 `Dogs`·`Walks` 행만 보고 옮긴 것이었습니다.
 
-**계약에 없습니다.** 만든다면 `DELETE /api/community/posts/{postId}` · `204`. 사용자가 쓴 글을 지울 길이 없는 상태로 출시하지 않습니다(#211 `Community-medium-4`).
+### 6.5 글 삭제 — ✅ 구현(#211)
+
+```
+DELETE /api/community/posts/{postId}   # 204
+```
+
+**내가 쓴 글만 지웁니다.** 댓글과 반응이 함께 사라집니다 — `fk_comment_post`·`fk_reaction_post` 가 `ON DELETE CASCADE` 입니다. 부모 없는 행을 남기면 어느 목록에도 안 뜨면서 자리만 차지합니다(`14_community.sql` §D).
+
+**남의 글은 `404` 가 아니라 `403`** 입니다. `Dogs`·`Walks` 는 404 로 합치지만(ADR-0017 규약 3 — "남의 것과 없는 것이 구별되지 않는다") 커뮤니티는 반대입니다 — 글은 누구나 읽을 수 있어서 **존재가 이미 공개**라, 404 로 숨겨도 방금 `GET` 으로 본 것을 숨기는 셈이고 아무것도 못 가립니다. 대신 사용자가 "지웠는데 사라지지 않았다" 로 읽습니다.
+
+**탈퇴한 사람의 글은 아무도 못 지웁니다**(`author.userId == 0`). 주인 없는 글을 아무나 지우는 것은 관리(moderation)이고, 그 결정은 [#166](https://github.com/sanghyunbang/heattrip/issues/166) 이 갖고 있습니다.
 
 ### 6.6 댓글 목록 — ✅ 구현(#170) · **인증 선택** · 커서 봉투
 
-`GET /api/community/posts/{postId}/comments?limit=20&cursor=...` — **커서 봉투**(`items`/`nextCursor`/`hasMore`, ADR-0017 규약 2). **인증 선택**. 정렬 기준은 아직 계약에 없습니다(#211 `Community-low-4`).
+`GET /api/community/posts/{postId}/comments?limit=20&cursor=...` — **커서 봉투**(`items`/`nextCursor`/`hasMore`, ADR-0017 규약 2). **인증 선택**.
+
+**오래된 것부터입니다** — `(createdAt, id)` 오름차순. 글 목록(6.1)은 반대로 최신순인데 의도입니다: 피드는 새 글을 먼저 보고, 스레드는 위에서 아래로 읽습니다. 2026-09 이전에는 둘 다 계약에 없었습니다(#211).
 
 ```json
 // 200 OK
@@ -647,9 +659,19 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 // 201 Created → 6.6 항목 1건
 ```
 
-### 6.8 댓글 삭제 — ⬜ 계약에 없다 (#211 Community-medium-4)
+### 6.8 댓글 삭제 — ✅ 구현(#211)
 
-**계약에 없습니다.** 만든다면 `DELETE /api/community/comments/{commentId}` · `204`(#211 `Community-medium-4`).
+```
+DELETE /api/community/posts/{postId}/comments/{commentId}   # 204
+```
+
+**내가 쓴 댓글만 지웁니다.** 글 주인이라도 남의 댓글은 못 지웁니다 — 그건 관리이고 [#166](https://github.com/sanghyunbang/heattrip/issues/166) 이 갖는 결정입니다.
+
+`commentId` 가 그 글의 댓글이 아니면 **404** 입니다 — 경로가 가리키는 것이 없다는 뜻이지 권한 문제가 아닙니다.
+
+> 경로가 글 아래에 있습니다. 2026-09 이전 이 절은 `DELETE /api/community/comments/{commentId}` 를
+> 적었는데, 그러면 댓글이 어느 글의 것인지 서버만 알고 URL 은 모릅니다 — 목록 경로
+> (`.../posts/{postId}/comments`)와도 짝이 안 맞습니다.
 
 ### 6.9 반응 — ✅ 구현(#170) · 멱등 둘
 

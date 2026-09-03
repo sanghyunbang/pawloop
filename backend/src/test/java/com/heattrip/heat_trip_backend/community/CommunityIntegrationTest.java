@@ -224,6 +224,129 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
                 .isZero();
     }
 
+    // ─────────────────────────── 삭제 (#211) ───────────────────────────
+
+    @Test
+    @DisplayName("내 글을 지우면 댓글과 반응이 함께 사라진다 — 부모 없는 행을 남기지 않는다")
+    void deletingMyPostTakesEverythingWithIt() throws Exception {
+        Account me = account("글쓴이");
+        Account other = account("댓글쓴이");
+        long postId = newPost(me);
+
+        addComment(other, postId, "{\"body\":\"남의 댓글\"}")
+                .andExpect(status().isCreated());
+        react(me, postId, "help", true).andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/community/posts/" + postId)
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/community/posts/" + postId))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/community/posts/" + postId + "/comments"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("남의 글은 404 가 아니라 403 이다 — 글의 존재는 이미 공개다")
+    void deletingSomeoneElsesPostIsForbidden() throws Exception {
+        Account owner = account("주인");
+        Account stranger = account("남");
+        long postId = newPost(owner);
+
+        mockMvc.perform(delete("/api/community/posts/" + postId)
+                        .header("Authorization", "Bearer " + stranger.token()))
+                .andExpect(status().isForbidden());
+
+        assertThat(itemById(body(feed(stranger, "").andExpect(status().isOk())), postId))
+                .as("""
+                        Dogs·Walks 는 남의 것을 404 로 숨기지만(ADR-0017 규약 3) 커뮤니티는 \
+                        반대다 — 방금 목록에서 본 글을 삭제에서만 없다고 하면 아무것도 못 \
+                        가리면서 사용자는 '지웠는데 안 사라졌다' 로 읽는다.""")
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("없는 글을 지우면 404 다")
+    void deletingAMissingPostIsNotFound() throws Exception {
+        Account me = account("없는글삭제");
+
+        mockMvc.perform(delete("/api/community/posts/999999")
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("내 댓글만 지운다 — 글 주인이라도 남의 댓글은 못 지운다")
+    void onlyTheCommentAuthorCanDeleteIt() throws Exception {
+        Account owner = account("글주인");
+        Account commenter = account("댓글주인");
+        long postId = newPost(owner);
+
+        long commentId = body(addComment(commenter, postId,
+                "{\"body\":\"내 댓글\"}")
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        // 글 주인이 남의 댓글을 지우려 한다. 관리(moderation)는 #166 이 갖는 결정이라
+        // 여기서 미리 열지 않는다.
+        mockMvc.perform(delete("/api/community/posts/" + postId + "/comments/" + commentId)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/community/posts/" + postId + "/comments/" + commentId)
+                        .header("Authorization", "Bearer " + commenter.token()))
+                .andExpect(status().isNoContent());
+
+        JsonNode page = body(mockMvc.perform(
+                get("/api/community/posts/" + postId + "/comments")));
+        assertThat(page.path("items").size()).isZero();
+    }
+
+    @Test
+    @DisplayName("다른 글의 댓글 id 로 지우려 하면 404 다 — 권한 문제가 아니라 경로가 틀린 것이다")
+    void deletingACommentUnderTheWrongPostIsNotFound() throws Exception {
+        Account me = account("경로틀림");
+        long mine = newPost(me);
+        long another = newPost(me);
+
+        long commentId = body(addComment(me, mine,
+                "{\"body\":\"댓글\"}")
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        mockMvc.perform(delete("/api/community/posts/" + another + "/comments/" + commentId)
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("탈퇴한 사람의 글은 아무도 못 지운다 — 주인 없는 글을 지우는 것은 관리다")
+    void aWithdrawnAuthorsPostCannotBeDeletedByAnyone() throws Exception {
+        Account gone = account("떠날사람");
+        Account other = account("남은사람");
+        long postId = newPost(gone);
+
+        // 탈퇴하면 post.user_id 가 NULL 이 된다(ON DELETE SET NULL, ADR-0016 결정 5).
+        userRepository.deleteById(gone.id());
+
+        mockMvc.perform(delete("/api/community/posts/" + postId)
+                        .header("Authorization", "Bearer " + other.token()))
+                .andExpect(status().isForbidden());
+
+        assertThat(itemById(body(feed(other, "").andExpect(status().isOk())), postId)
+                .path("author").path("userId").asInt())
+                .as("글은 남아 있고 작성자만 알 수 없음이 된다")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("삭제는 로그인이 필요하다 — 게스트는 401 이다")
+    void deletingRequiresAuthentication() throws Exception {
+        Account me = account("게스트삭제");
+        long postId = newPost(me);
+
+        mockMvc.perform(delete("/api/community/posts/" + postId))
+                .andExpect(status().isUnauthorized());
+    }
     // ─────────────────────────── 검증 (완료 조건 6) ───────────────────────────
 
     @Test

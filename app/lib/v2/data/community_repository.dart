@@ -288,6 +288,16 @@ enum CommunityFailureKind {
   /// 서버가 입력을 거절했다(400). **다시 눌러도 같다.**
   rejected,
 
+  /// 내 것이 아니다(403). 삭제에서만 난다.
+  ///
+  /// **커뮤니티는 404 로 합치지 않는다.** `Dogs`·`Walks` 는 남의 것을 없는 것과 같게
+  /// 보이지만(ADR-0017 규약 3) 글은 누구나 읽을 수 있어서 존재가 이미 공개다 — 404 로
+  /// 숨겨도 방금 목록에서 본 것을 숨기는 셈이고, 사용자는 "지웠는데 안 사라졌다" 로 읽는다.
+  ///
+  /// [network] 로 뭉치면 "연결을 확인해 주세요" 가 뜬다. 연결은 멀쩡하고 다시 눌러도
+  /// 영원히 같다.
+  forbidden,
+
   /// 그 글이 없다(404). 남이 지웠거나 애초에 없던 id 다.
   notFound,
 }
@@ -303,6 +313,7 @@ extension CommunityFailureKindX on CommunityFailureKind {
         CommunityFailureKind.unauthorized => '로그인하면 쓸 수 있어요',
         CommunityFailureKind.rateLimited => '잠시 후 다시 시도해 주세요',
         CommunityFailureKind.rejected => '보낼 수 없는 내용이에요',
+        CommunityFailureKind.forbidden => '내가 쓴 것만 지울 수 있어요',
         CommunityFailureKind.notFound => '글을 찾을 수 없어요',
       };
 
@@ -312,6 +323,7 @@ extension CommunityFailureKindX on CommunityFailureKind {
         CommunityFailureKind.rateLimited => true,
         CommunityFailureKind.unauthorized => false,
         CommunityFailureKind.rejected => false,
+        CommunityFailureKind.forbidden => false,
         CommunityFailureKind.notFound => false,
       };
 }
@@ -454,6 +466,28 @@ class CommunityRepository {
     return comment;
   }
 
+  /// 내 글을 지운다 — 이슈 #211.
+  ///
+  /// **댓글과 반응이 함께 사라진다**(FK CASCADE). 남의 글이면 403 이다 — 404 가 아니다.
+  /// 글은 누구나 읽을 수 있어서 존재가 이미 공개라, 404 로 숨겨도 방금 목록에서 본 것을
+  /// 숨기는 셈이다.
+  ///
+  /// 탈퇴한 사람의 글도 403 이다 — 주인이 없는 글을 아무나 지우면 그게 관리 권한이다.
+  Future<void> deletePost(int postId) async {
+    await _send(
+      () => _authed.deleteJson(Uri.parse('$baseUrl/api/community/posts/$postId')),
+    );
+  }
+
+  /// 내 댓글을 지운다. **글 주인이라도 남의 댓글은 못 지운다** — 관리는 별도 결정이다.
+  Future<void> deleteComment(int postId, int commentId) async {
+    await _send(
+      () => _authed.deleteJson(
+        Uri.parse('$baseUrl/api/community/posts/$postId/comments/$commentId'),
+      ),
+    );
+  }
+
   /// 반응을 누른다. **멱등이다** — 이미 눌러 뒀어도 200 이고 집계가 안 늘어난다.
   ///
   /// 그래서 화면은 낙관적 갱신을 하지 않고 **응답의 집계를 그대로 그린다.** 로컬에서
@@ -518,6 +552,10 @@ class CommunityRepository {
       throw const CommunityFailure(CommunityFailureKind.network);
     }
 
+    // 204 는 본문이 없다(삭제). 여기가 없으면 아래 switch 의 `_ => network` 로 떨어져
+    // 성공한 삭제가 "연결을 확인해 주세요" 가 된다.
+    if (res.statusCode == 204) return null;
+
     if (res.statusCode == 200 || res.statusCode == 201) {
       if (res.bodyBytes.isEmpty) return null;
       try {
@@ -532,6 +570,7 @@ class CommunityRepository {
     throw CommunityFailure(switch (res.statusCode) {
       400 => CommunityFailureKind.rejected,
       401 => CommunityFailureKind.unauthorized,
+      403 => CommunityFailureKind.forbidden,
       404 => CommunityFailureKind.notFound,
       429 => CommunityFailureKind.rateLimited,
       _ => CommunityFailureKind.network,
