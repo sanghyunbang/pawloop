@@ -29,7 +29,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.yaml.snakeyaml.Yaml;
 
@@ -86,13 +88,13 @@ class CommunityContractSpecTest {
     // ─────────────────── A. 코드 ↔ 계약 ───────────────────
 
     @Test
-    @DisplayName("컨트롤러의 아홉 매핑이 전부 계약에 등재돼 있다 — 경로 목록은 코드에서 읽는다")
+    @DisplayName("컨트롤러의 열 매핑이 전부 계약에 등재돼 있다 — 경로 목록은 코드에서 읽는다")
     void everyImplementedEndpoint_isDeclaredInTheContract() {
         List<String> implemented = operationsOf(CommunityController.class);
 
         assertThat(implemented)
                 .as("컨트롤러에서 매핑을 하나도 못 읽었다면 이 검사는 아무것도 지키지 않는다")
-                .hasSize(9);
+                .hasSize(10);
         assertThat(declaredOperations())
                 .as("""
                         계약에 없는 경로는 앱이 존재를 모른다 — design-first 라 앱은 이 파일을 보고 \
@@ -152,15 +154,22 @@ class CommunityContractSpecTest {
     void apiSpecSection_doesNotUnderstateWhatTheContractHas() {
         List<String> disclaimed = endpointsMarkedAbsent();
 
-        assertThat(disclaimed)
-                .as("⬜ 절의 경로를 하나도 못 읽었다 — 수정·삭제 넷이 아직 계약 밖이다(#211)")
-                .isNotEmpty();
-        assertThat(declaredOperations())
+        // 여기 isNotEmpty 가 있었다. #211 이 수정·삭제 넷을 계약에 넣으면서 §6 의 ⬜ 가
+        // 0 이 됐고, 그 단언이 **의도대로** 빨간불이 됐다 — 그때 §6 을 함께 고쳤다.
+        //
+        // 다시 달지 않는다. 그 가드는 "스캐너가 조용히 아무것도 못 읽는" 경우를 잡으려던
+        // 것인데, 같은 스캐너를 바로 위 테스트가 ✅ 마커로 돌리면서 이미 증명한다. 여기에
+        // 다시 달면 "§6 에 미구현 절이 하나는 있어야 한다" 를 요구하는 셈이고, 전부 구현한
+        // 것이 빨간불이 된다.
+        //
+        // AssertJ 의 doesNotContainAnyElementsOf 는 **빈 인자를 거부한다** — 지금이 그
+        // 상태라 교집합으로 뒤집는다. 실패 메시지도 이쪽이 낫다: 어긋난 경로를 직접 짚는다.
+        Set<String> declared = declaredOperations();
+        assertThat(disclaimed.stream().filter(declared::contains).toList())
                 .as("""
-                        반대 방향도 잠근다. #211 이 수정·삭제를 계약에 넣는 날 이 단언이 빨간불이 \
-                        되고, 그때 §6 의 ⬜ 를 함께 고치게 된다. 이게 없으면 계약이 앞서갈 때 \
-                        문서만 조용히 낡는다.""")
-                .doesNotContainAnyElementsOf(disclaimed);
+                        반대 방향도 잠근다. 계약이 앞서갈 때 §6 의 ⬜ 가 조용히 낡는 것을 막는다 — \
+                        새 절을 ⬜ 로 적어 두고 계약에는 넣어 버리면 여기서 걸린다.""")
+                .isEmpty();
     }
 
     // ─────────────────── C. 값의 출처 셋 ───────────────────
@@ -406,6 +415,15 @@ class CommunityContractSpecTest {
             }
             if (method.isAnnotationPresent(DeleteMapping.class)) {
                 found.add("DELETE " + base + method.getAnnotation(DeleteMapping.class).value()[0]);
+            }
+            // PATCH·PUT 도 읽는다. #211 이 저장소 최초의 PATCH 를 열기 전까지 이 helper 는
+            // GET·POST·DELETE 만 봤고, 그래서 **새 PATCH 매핑이 이 검사에 아예 안 보였다** —
+            // 계약에 없는 채로 열어도 초록불이 났다. 안 쓰는 PUT 을 지금 넣는 이유도 같다.
+            if (method.isAnnotationPresent(PatchMapping.class)) {
+                found.add("PATCH " + base + method.getAnnotation(PatchMapping.class).value()[0]);
+            }
+            if (method.isAnnotationPresent(PutMapping.class)) {
+                found.add("PUT " + base + method.getAnnotation(PutMapping.class).value()[0]);
             }
         }
         return found;

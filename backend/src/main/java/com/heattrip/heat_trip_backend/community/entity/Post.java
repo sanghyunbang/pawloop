@@ -160,6 +160,23 @@ public class Post {
     private LocalDateTime createdAt;
 
     /**
+     * 마지막 수정 시각. <b>{@code null} 이면 한 번도 안 고쳤다</b> (#211).
+     *
+     * <p>{@code createdAt} 을 복사해 채우지 않는다. 그러면 "만들자마자 고쳐진 글" 과 구별이
+     * 안 되고 화면이 모든 글에 '수정됨' 을 붙인다.
+     *
+     * <p>글은 남이 읽고 댓글을 다는 <b>공개 글</b>이라 고친 글인지 읽는 사람이 알아야 한다 —
+     * 표시가 없으면 이미 달린 댓글이 무엇에 대한 말이었는지 되짚을 수 없다. {@code Comment}
+     * 에는 아직 없다. 댓글 수정 경로가 계약에 없어서다.
+     *
+     * <p>{@code createdAt} 과 같은 규약이다 — 담긴 값이 UTC 이고 컬럼 폭도 {@code DATETIME(6)}
+     * 로 같다. 한쪽만 마이크로초를 잃으면 같은 초에 쓰고 고친 글이 "고친 시각이 쓴 시각보다
+     * 앞" 으로 저장된다.
+     */
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    /**
      * DB 기본값에 기대지 않는다. {@code created_at} 이 커서의 첫 축이라, 서버 시계와 DB 시계가
      * 다르면 커서가 건너뛰거나 되돌아간다.
      */
@@ -173,5 +190,38 @@ public class Post {
     /** 저장된 값을 다시 시각으로 세운다. 응답이 오프셋을 갖게 하는 자리다. */
     public Instant createdAtInstant() {
         return CommunityTime.toInstant(createdAt);
+    }
+
+    /** 한 번도 안 고쳤으면 {@code null} 이다 — 응답의 {@code updatedAt} 도 그대로 없다. */
+    public Instant updatedAtInstant() {
+        return updatedAt == null ? null : CommunityTime.toInstant(updatedAt);
+    }
+
+    /**
+     * 본문 셋을 고친다. <b>{@code null} 은 "안 바꿈"</b> 이다 — 부분 수정이라 그렇다.
+     *
+     * <p>실제로 바뀐 것이 하나도 없으면 {@code updatedAt} 을 건드리지 않는다. 같은 값을 다시
+     * 보낸 것만으로 '수정됨' 이 붙으면, 그 표시는 읽는 사람에게 아무것도 말해 주지 않는다.
+     *
+     * @return 하나라도 바뀌었으면 {@code true}
+     */
+    public boolean edit(String newBoard, String newTitle, String newBody) {
+        boolean changed = false;
+        if (newBoard != null && !newBoard.equals(board)) {
+            board = newBoard;
+            changed = true;
+        }
+        if (newTitle != null && !newTitle.equals(title)) {
+            title = newTitle;
+            changed = true;
+        }
+        if (newBody != null && !newBody.equals(body)) {
+            body = newBody;
+            changed = true;
+        }
+        if (changed) {
+            updatedAt = CommunityTime.nowUtc();
+        }
+        return changed;
     }
 }

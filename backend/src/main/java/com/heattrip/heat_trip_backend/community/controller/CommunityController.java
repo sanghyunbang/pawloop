@@ -5,6 +5,7 @@ import com.heattrip.heat_trip_backend.community.dto.CommentPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.CommentResponse;
 import com.heattrip.heat_trip_backend.community.dto.PostPageResponse;
+import com.heattrip.heat_trip_backend.community.dto.PostPatchRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostResponse;
 import com.heattrip.heat_trip_backend.community.dto.ReactionSummaryResponse;
@@ -19,6 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -101,6 +103,24 @@ public class CommunityController {
                                       @PathVariable long postId,
                                       @Valid @RequestBody CommentRequest request) {
         return community.addComment(me, postId, request);
+    }
+
+    /**
+     * 내 글을 고친다 — 이슈 #211. <b>저장소 최초의 {@code PATCH} 다.</b>
+     *
+     * <p>{@code PostRequest} 를 재사용하지 않는다 — 그 스키마는 {@code required} 셋이라
+     * 제목만 고치려는 사람도 본문을 다시 보내야 하고, 그 사이 다른 기기에서 고친 본문을
+     * 조용히 되돌린다. 이유는 {@link PostPatchRequest} javadoc(ADR-0017 규약 4).
+     *
+     * <p><b>{@code ApiRateLimitFilter} 가 PATCH 를 쓰기 버킷에 넣는 것을 확인하고 열었다.</b>
+     * 그 표에 없으면 한도가 0 이 아니라 <b>무한</b>이다 — 여기만 열고 필터를 안 고치면
+     * 한도 없는 쓰기 경로가 하나 생긴다.
+     */
+    @PatchMapping("/posts/{postId}")
+    public PostResponse updatePost(@CurrentUser User me,
+                                   @PathVariable long postId,
+                                   @Valid @RequestBody PostPatchRequest request) {
+        return community.updatePost(me, postId, request);
     }
 
     /**

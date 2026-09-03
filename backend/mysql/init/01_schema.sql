@@ -541,6 +541,7 @@ CREATE TABLE `places` (
 CREATE TABLE `post` (
   `created_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
+  `updated_at` datetime(6) DEFAULT NULL,
   `user_id` bigint DEFAULT NULL,
   `board` varchar(20) NOT NULL,
   `content_id` varchar(64) DEFAULT NULL,

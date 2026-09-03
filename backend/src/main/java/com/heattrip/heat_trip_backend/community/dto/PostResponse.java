@@ -18,6 +18,11 @@ import java.time.Instant;
  *
  * <p><b>{@code handle} 을 싣지 않는다.</b> 그것은 작성 시점 스냅샷이고 표시는 현재값이다 —
  * {@link PersonRefResponse} javadoc 참조.
+ *
+ * <h2>{@code updatedAt} 은 {@code null} 일 수 있다</h2>
+ * <p><b>{@code null} 이 "한 번도 안 고쳤다" 이다</b>(#211). {@code createdAt} 을 복사해 채우지
+ * 않는다 — 그러면 화면이 모든 글에 '수정됨' 을 붙인다. {@code Comment} 에는 없다. 댓글 수정
+ * 경로가 계약에 없어서다.
  */
 public record PostResponse(
         long id,
@@ -29,7 +34,8 @@ public record PostResponse(
         String body,
         int commentCount,
         ReactionSummaryResponse reactions,
-        Instant createdAt) {
+        Instant createdAt,
+        Instant updatedAt) {
 
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions) {
         return new PostResponse(
@@ -42,6 +48,7 @@ public record PostResponse(
                 post.getBody(),
                 commentCount,
                 reactions,
-                post.createdAtInstant());
+                post.createdAtInstant(),
+                post.updatedAtInstant());
     }
 }

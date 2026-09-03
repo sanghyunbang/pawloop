@@ -5,6 +5,7 @@ import com.heattrip.heat_trip_backend.community.dto.CommentPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.CommentResponse;
 import com.heattrip.heat_trip_backend.community.dto.PostPageResponse;
+import com.heattrip.heat_trip_backend.community.dto.PostPatchRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostResponse;
 import com.heattrip.heat_trip_backend.community.dto.ReactionSummaryResponse;
@@ -207,6 +208,37 @@ public class CommunityService {
      * @throws ResponseStatusException 404 — 그런 글이 없으면
      * @throws ResponseStatusException 403 — 내 글이 아니면
      */
+    /**
+     * 글을 고친다 — 이슈 #211. <b>내가 쓴 글만.</b>
+     *
+     * <p>{@code null} 인 필드는 안 바꾼다. 셋 다 없으면 {@code 400} 이다 — 아무 일도 안 하면서
+     * 200 을 주면 그건 "고쳐졌다" 로 읽힌다(계약의 {@code minProperties: 1}).
+     *
+     * <p><b>실제로 바뀐 것이 없으면 {@code updatedAt} 을 안 건드린다.</b> 같은 값을 다시 보낸
+     * 것만으로 '수정됨' 이 붙으면 그 표시가 읽는 사람에게 아무것도 말해 주지 않는다.
+     * 판단은 {@link Post#edit} 안에 있다 — 무엇이 "바뀜" 인지는 엔티티가 안다.
+     */
+    @Transactional
+    public PostResponse updatePost(User me, long postId, PostPatchRequest request) {
+        if (request.isEmpty()) {
+            throw new IllegalArgumentException("고칠 내용이 없습니다. board·title·body 중 하나는 보내야 합니다.");
+        }
+        if (request.hasBlank()) {
+            throw new IllegalArgumentException("빈 값으로는 고칠 수 없습니다.");
+        }
+        if (request.board() != null) {
+            requireBoard(request.board());
+        }
+
+        Post post = requirePost(postId);
+        requireMine(post.getUser(), me.getId(), "글");
+        post.edit(request.board(), request.title(), request.body());
+
+        return PostResponse.of(post,
+                countComments(List.of(postId)).getOrDefault(postId, 0),
+                summarizeOne(postId, me.getId()));
+    }
+
     @Transactional
     public void deletePost(User me, long postId) {
         Post post = requirePost(postId);

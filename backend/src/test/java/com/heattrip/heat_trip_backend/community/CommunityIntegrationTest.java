@@ -28,13 +28,15 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -245,6 +247,139 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/api/community/posts/" + postId + "/comments"))
                 .andExpect(status().isNotFound());
+    }
+
+    // ─────────────────── 글 수정 (#211) ───────────────────
+
+    @Test
+    @DisplayName("보낸 키만 바뀐다 — 제목만 보내면 본문이 그대로다")
+    void patchChangesOnlyTheKeysSent() throws Exception {
+        Account me = account("부분수정");
+        long postId = newPost(me);
+
+        JsonNode updated = body(patchPost(me, postId, "{\"title\":\"고친 제목\"}")
+                .andExpect(status().isOk()));
+
+        assertThat(updated.path("title").asText()).isEqualTo("고친 제목");
+        assertThat(updated.path("body").asText())
+                .as("""
+                        PostInput 을 재사용하면 required 셋이라 본문을 다시 보내야 하고, 그 \
+                        사이 다른 기기에서 고친 본문을 조용히 되돌린다 (ADR-0017 규약 4).""")
+                .isEqualTo("본문");
+        assertThat(updated.path("board").asText()).isEqualTo("free");
+    }
+
+    @Test
+    @DisplayName("고치면 updatedAt 이 생긴다 — 그 전에는 null 이다")
+    void patchStampsUpdatedAt() throws Exception {
+        Account me = account("수정시각");
+        long postId = newPost(me);
+
+        assertThat(body(detail(me, postId).andExpect(status().isOk())).path("updatedAt").isNull())
+                .as("한 번도 안 고친 글에 '수정됨' 이 붙으면 안 된다")
+                .isTrue();
+
+        String stamped = body(patchPost(me, postId, "{\"body\":\"고친 본문\"}")
+                .andExpect(status().isOk()))
+                .path("updatedAt").asText();
+
+        assertThat(Instant.parse(stamped))
+                .as("createdAt 과 같은 규약이다 — 오프셋을 갖고 나가야 앱이 지역 시각으로 안 읽는다")
+                .isCloseTo(Instant.now(), within(2, ChronoUnit.MINUTES));
+    }
+
+    @Test
+    @DisplayName("같은 값을 다시 보내면 updatedAt 이 안 생긴다 — 안 바뀐 글에 '수정됨' 은 거짓말이다")
+    void patchWithTheSameValuesDoesNotStamp() throws Exception {
+        Account me = account("같은값");
+        long postId = newPost(me);
+
+        JsonNode same = body(patchPost(me, postId, "{\"title\":\"제목\",\"body\":\"본문\"}")
+                .andExpect(status().isOk()));
+
+        assertThat(same.path("updatedAt").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("board 를 바꾸면 글이 그 게시판으로 옮겨 간다 — 잘못 고른 게시판을 고치는 자리다")
+    void patchMovesThePostBetweenBoards() throws Exception {
+        Account me = account("게시판이동");
+        long postId = newPost(me);
+
+        patchPost(me, postId, "{\"board\":\"health\"}").andExpect(status().isOk());
+
+        assertThat(idsOf(body(feed(me, "?board=health"))))
+                .contains(postId);
+        assertThat(idsOf(body(feed(me, "?board=free"))))
+                .as("옮겼는데 원래 게시판에도 남아 있으면 한 글이 두 곳에서 읽힌다")
+                .doesNotContain(postId);
+    }
+
+    @Test
+    @DisplayName("고칠 것이 없으면 400 이다 — 아무 일도 안 하면서 200 이면 '고쳐졌다' 로 읽힌다")
+    void patchWithNothingToChangeIsRejected() throws Exception {
+        Account me = account("빈수정");
+        long postId = newPost(me);
+
+        patchPost(me, postId, "{}").andExpect(status().isBadRequest());
+        patchPost(me, postId, "{\"title\":\"   \"}")
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("없는 게시판으로는 못 옮긴다")
+    void patchWithAnUnknownBoardIsRejected() throws Exception {
+        Account me = account("없는게시판");
+        long postId = newPost(me);
+
+        patchPost(me, postId, "{\"board\":\"건강병원\"}")
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("남의 글은 못 고친다 — 삭제와 같은 이유로 404 가 아니라 403 이다")
+    void patchingSomeoneElsesPostIsForbidden() throws Exception {
+        Account owner = account("수정주인");
+        Account stranger = account("수정남");
+        long postId = newPost(owner);
+
+        patchPost(stranger, postId, "{\"title\":\"남이 고침\"}")
+                .andExpect(status().isForbidden());
+
+        assertThat(body(detail(owner, postId)).path("title").asText())
+                .as("403 을 주고도 값이 바뀌었으면 그게 더 나쁘다")
+                .isEqualTo("제목");
+    }
+
+    @Test
+    @DisplayName("없는 글을 고치면 404 다")
+    void patchingAMissingPostIsNotFound() throws Exception {
+        Account me = account("없는글수정");
+
+        patchPost(me, 999999, "{\"title\":\"x\"}").andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("본문 상한은 수정에도 걸린다 — 작성만 막으면 고치기로 우회된다")
+    void patchEnforcesTheBodyLimit() throws Exception {
+        Account me = account("수정상한");
+        long postId = newPost(me);
+
+        String tooLong = "가".repeat(PostRequest.MAX_BODY_LENGTH + 1);
+        patchPost(me, postId, MAPPER.writeValueAsString(Map.of("body", tooLong)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("로그인 없이 고치면 401 이다")
+    void patchingWithoutAuthIsUnauthorized() throws Exception {
+        Account me = account("비로그인수정");
+        long postId = newPost(me);
+
+        mockMvc.perform(patch("/api/community/posts/" + postId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"x\"}"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -678,6 +813,18 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
                 .header("Authorization", "Bearer " + account.token()));
     }
 
+    private ResultActions patchPost(Account account, long postId, String json) throws Exception {
+        return mockMvc.perform(patch("/api/community/posts/" + postId)
+                .header("Authorization", "Bearer " + account.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json));
+    }
+
+    private ResultActions detail(Account account, long postId) throws Exception {
+        return mockMvc.perform(get("/api/community/posts/" + postId)
+                .header("Authorization", "Bearer " + account.token()));
+    }
+
     private long newPost(Account account) throws Exception {
         return body(createPost(account, "{\"board\":\"free\",\"title\":\"제목\",\"body\":\"본문\"}")
                 .andExpect(status().isCreated()))
