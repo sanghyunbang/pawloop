@@ -1,5 +1,7 @@
 package com.heattrip.heat_trip_backend.moderation.entity;
 
+import com.heattrip.heat_trip_backend.moderation.ModerationTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -78,7 +80,7 @@ public class Block {
     @PrePersist
     void fillCreatedAt() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = ModerationTime.nowUtc();
         }
     }
 }

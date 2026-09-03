@@ -525,6 +525,8 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                         .content("{\"roomSeqs\":[1],\"reason\":\"abuse\"}"))
                 .andExpect(status().isCreated()));
         carriesOffset(receipt, "createdAt");
+        // 신고는 서비스가 **빌더로** 시각을 넣는다 — @PrePersist 가드를 비켜 가는 경로다.
+        isAboutNow(receipt, "createdAt");
 
         JsonNode invite = body(mockMvc.perform(
                 post("/api/chat/rooms/{roomId}/invites", room.id())
@@ -532,17 +534,23 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isCreated()));
         carriesOffset(invite, "createdAt");
         carriesOffset(invite, "expiresAt");
+        isAboutNow(invite, "createdAt");
+        assertThat(java.time.Instant.parse(invite.path("expiresAt").asText()))
+                .as("만료는 지금보다 뒤다 — 존이 갈리면 발급 순간 만료된 코드가 된다")
+                .isAfter(java.time.Instant.now());
 
         // 톰스톤도 실린다 — deletedAt 이 null 이면 이 단언이 아무것도 안 본다.
         softDelete(room.id(), 1);
 
         JsonNode listed = roomInList(owner, room.id());
         carriesOffset(listed, "createdAt");
+        isAboutNow(listed, "createdAt");
         carriesOffset(listed.path("lastMessage"), "createdAt");
         carriesOffset(listed.path("lastMessage"), "deletedAt");
 
         JsonNode first = messages(owner, room.id(), null, null).path("items").get(0);
         carriesOffset(first, "createdAt");
+        isAboutNow(first, "createdAt");
         carriesOffset(first, "deletedAt");
     }
 
@@ -925,6 +933,28 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
      *
      * <p>값이 없으면 실패한다. {@code null} 을 통과시키면 이 검사는 아무것도 안 지킨다.
      */
+    /**
+     * 이 시각이 <b>정말 지금</b>인가 — 이슈 #248.
+     *
+     * <p><b>오프셋이 붙었는지만 재면 9시간 오차를 못 잡는다.</b> 실제로 그렇게 샜다 —
+     * {@code ChatReportService} 가 {@code Asia/Seoul} 벽시계를 넣는데 응답이 그것을 UTC 로
+     * 세워서, 형식은 맞고 값은 9시간 뒤였다. 형식 검사는 그때도 초록불이었다.
+     *
+     * <p>빌더가 값을 넣는 경로는 엔티티의 {@code @PrePersist} 가드를 비켜 가므로
+     * ({@code if (createdAt == null)}), 훅만 재는 검사로도 안 잡힌다. 값을 재야 잡힌다.
+     */
+    private static void isAboutNow(JsonNode node, String field) {
+        java.time.Instant at = java.time.Instant.parse(node.path(field).asText());
+        java.time.Duration off =
+                java.time.Duration.between(at, java.time.Instant.now()).abs();
+
+        assertThat(off)
+                .as("%s 가 지금에서 %s 만큼 떨어져 있다 (%s). 존이 갈리면 딱 9시간이 난다",
+                        field, off, at)
+                .isLessThan(java.time.Duration.ofMinutes(5));
+    }
+
+
     private static void carriesOffset(JsonNode node, String field) {
         JsonNode value = node.path(field);
         assertThat(value.isTextual())

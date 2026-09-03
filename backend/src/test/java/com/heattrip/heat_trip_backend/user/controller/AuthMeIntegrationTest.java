@@ -167,6 +167,19 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
                     .as("%s 에 오프셋이 없다 — 계약의 format: date-time 은 RFC3339 오프셋을 요구한다", field)
                     .containsPattern("\"" + field + "\":\"\\d{4}-\\d{2}-\\d{2}T[\\d:.]+(Z|[+-]\\d{2}:\\d{2})\"");
         }
+
+        // **오프셋이 붙었는지만 재면 9시간 오차를 못 잡는다.** 형식은 맞고 값이 틀린 상태가
+        // 실제로 났다 — 다른 존의 벽시계를 UTC 로 세우면 그렇게 된다 (#248).
+        for (String field : java.util.List.of("createdAt", "updatedAt")) {
+            java.util.regex.Matcher at = java.util.regex.Pattern
+                    .compile("\"" + field + "\":\"([^\"]+)\"").matcher(json);
+            assertThat(at.find()).as("%s 를 응답에서 못 찾았다", field).isTrue();
+
+            java.time.Instant moment = java.time.Instant.parse(at.group(1));
+            assertThat(java.time.Duration.between(moment, java.time.Instant.now()).abs())
+                    .as("%s 가 지금에서 너무 멀다 (%s) — 존이 갈리면 딱 9시간이 난다", field, moment)
+                    .isLessThan(java.time.Duration.ofMinutes(5));
+        }
     }
 
 

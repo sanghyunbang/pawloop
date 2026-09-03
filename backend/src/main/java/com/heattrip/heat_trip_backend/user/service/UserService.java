@@ -13,6 +13,7 @@ import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
+import com.heattrip.heat_trip_backend.user.UserTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 
@@ -64,7 +65,8 @@ public class UserService {
         User.Gender gender = parseGender(request.getGender());
         User.AgeGroup ageGroup = parseAgeGroup(request.getAgeGroup());
 
-        LocalDateTime now = LocalDateTime.now();
+        // 빌더가 값을 넣으면 @PrePersist 가드를 비켜 간다 — UTC 로 눕힌다 (#248).
+        LocalDateTime now = UserTime.nowUtc();
         String tosVer = nvl(request.getTosVersion(), "v1.0");
         String prvVer = nvl(request.getPrivacyVersion(), "v1.0");
         String mktVer = nvl(request.getMarketingVersion(), "v1.0");
@@ -193,7 +195,7 @@ public class UserService {
             if (u.getAgreeMarketing() == null || u.getAgreeMarketing() != newVal) {
                 u.setAgreeMarketing(newVal);
                 u.setMarketingVersion(newVal ? nvl(u.getMarketingVersion(), "v1.0") : null);
-                u.setMarketingAgreedAt(newVal ? LocalDateTime.now() : null);
+                u.setMarketingAgreedAt(newVal ? UserTime.nowUtc() : null);
             }
         }
 

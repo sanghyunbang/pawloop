@@ -139,7 +139,11 @@ public class ChatReportService {
                 .contextToSeq(maxSeq + CONTEXT_RADIUS)
                 .reason(classified.wireValue())
                 .memo(trimmedMemo(memo))
-                .createdAt(LocalDateTime.now(clock))
+                // **UTC 로 넣는다.** 여기가 LocalDateTime.now(clock)(Asia/Seoul)이면
+                // ChatReportResponse 가 그것을 UTC 로 세우므로 9시간 뒤의 시각이 나간다.
+                // 엔티티의 @PrePersist 는 값이 null 일 때만 채우므로 여기를 안 고치면
+                // 그 가드가 안 걸린다 (#248).
+                .createdAt(ChatTime.nowUtc(clock))
                 .build();
 
         for (ChatMessage message : found) {

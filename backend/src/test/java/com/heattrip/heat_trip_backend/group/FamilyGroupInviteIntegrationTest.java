@@ -709,9 +709,11 @@ class FamilyGroupInviteIntegrationTest extends AbstractMySqlIntegrationTest {
 
         JsonNode group = myGroup(owner);
         carriesOffset(group, "createdAt");
+        isAboutNow(group, "createdAt");
         assertThat(group.path("members")).hasSizeGreaterThan(1);
         for (JsonNode member : group.path("members")) {
             carriesOffset(member, "joinedAt");
+            isAboutNow(member, "joinedAt");
         }
 
         // 생성 응답도 같은 모양이어야 한다 — 여기만 빠지면 가족을 막 만든 사람의 화면이 어긋난다.
@@ -725,6 +727,28 @@ class FamilyGroupInviteIntegrationTest extends AbstractMySqlIntegrationTest {
      * 오프셋 없이 나갔다. 앱의 {@code DateTime.parse} 는 그런 문자열을 <b>기기 지역 시각</b>
      * 으로 읽으므로, 해외에 있는 가족이 보면 그 차이만큼 어긋난다.
      */
+    /**
+     * 이 시각이 <b>정말 지금</b>인가 — 이슈 #248.
+     *
+     * <p><b>오프셋이 붙었는지만 재면 9시간 오차를 못 잡는다.</b> 실제로 그렇게 샜다 —
+     * {@code ChatReportService} 가 {@code Asia/Seoul} 벽시계를 넣는데 응답이 그것을 UTC 로
+     * 세워서, 형식은 맞고 값은 9시간 뒤였다. 형식 검사는 그때도 초록불이었다.
+     *
+     * <p>빌더가 값을 넣는 경로는 엔티티의 {@code @PrePersist} 가드를 비켜 가므로
+     * ({@code if (createdAt == null)}), 훅만 재는 검사로도 안 잡힌다. 값을 재야 잡힌다.
+     */
+    private static void isAboutNow(JsonNode node, String field) {
+        java.time.Instant at = java.time.Instant.parse(node.path(field).asText());
+        java.time.Duration off =
+                java.time.Duration.between(at, java.time.Instant.now()).abs();
+
+        assertThat(off)
+                .as("%s 가 지금에서 %s 만큼 떨어져 있다 (%s). 존이 갈리면 딱 9시간이 난다",
+                        field, off, at)
+                .isLessThan(java.time.Duration.ofMinutes(5));
+    }
+
+
     private static void carriesOffset(JsonNode node, String field) {
         JsonNode value = node.path(field);
         assertThat(value.isTextual())
