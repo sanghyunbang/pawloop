@@ -54,12 +54,13 @@ Map<String, Object?> _post(
         {int authorId = _meId,
         int commentCount = 0,
         String? updatedAt,
-        bool hidden = false}) =>
+        bool hidden = false,
+        String? loc}) =>
     {
       'id': 12,
       'author': {'userId': authorId, 'nickname': authorId == _meId ? '나' : '남'},
       'board': 'free',
-      'loc': null,
+      'loc': loc,
       'contentId': null,
       'title': '지울 수 있는 글',
       'body': '본문',
@@ -79,17 +80,38 @@ Map<String, Object?> _comment(int id, int authorId) => {
       'createdAt': '2026-09-01T08:00:00Z',
     };
 
-({CommunityRepository repo, List<String> calls}) fixture({
+({CommunityRepository repo, List<String> calls, List<Map<String, Object?>> bodies})
+    fixture({
   int postAuthor = _meId,
   List<Map<String, Object?>> comments = const [],
   int deleteStatus = 204,
   String? updatedAt,
   bool hiddenByBlock = false,
+  String? loc,
+  int patchStatus = 200,
 }) {
   final calls = <String>[];
+  final bodies = <Map<String, Object?>>[];
+  // 고쳐진 글을 그대로 돌려준다 — 서버는 값이 실제로 달라졌을 때만 updatedAt 을 만든다.
+  Map<String, Object?> current = _post(
+      authorId: postAuthor,
+      commentCount: comments.length,
+      updatedAt: updatedAt,
+      hidden: hiddenByBlock,
+      loc: loc);
   final client = AuthedClient(
     inner: MockClient((request) async {
       final path = request.url.path;
+      if (request.method == 'PATCH') {
+        calls.add('PATCH $path');
+        bodies.add(
+            (jsonDecode(request.body) as Map).cast<String, Object?>());
+        if (patchStatus != 200) return _json({'error': {}}, status: patchStatus);
+        current = Map<String, Object?>.from(current)
+          ..addAll(bodies.last)
+          ..['updatedAt'] = '2026-09-03T02:00:00Z';
+        return _json(current);
+      }
       if (request.method == 'POST' && path.endsWith('/reports')) {
         calls.add('POST $path');
         return _json({'reportId': 5, 'createdAt': '2026-09-03T01:00:00Z'},
@@ -107,16 +129,16 @@ Map<String, Object?> _comment(int id, int authorId) => {
       if (path.endsWith('/comments')) {
         return _json({'items': comments, 'nextCursor': null, 'hasMore': false});
       }
-      return _json(_post(
-          authorId: postAuthor,
-          commentCount: comments.length,
-          updatedAt: updatedAt,
-          hidden: hiddenByBlock));
+      return _json(current);
     }),
     baseUrl: _base,
     store: _FakeTokenStore(),
   );
-  return (repo: CommunityRepository(baseUrl: _base, client: client), calls: calls);
+  return (
+    repo: CommunityRepository(baseUrl: _base, client: client),
+    calls: calls,
+    bodies: bodies
+  );
 }
 
 Widget _host(Widget child) => MaterialApp(home: child);
@@ -464,6 +486,137 @@ void main() {
       'POST /api/blocks',
     ], reason: '신고가 먼저다 — 실패하면 가리지 않는다');
     expect(find.textContaining('가렸어요'), findsOneWidget);
+  });
+
+
+  // ─────────────────── 수정 (#243) ───────────────────
+
+  testWidgets('내 글에는 수정이 보인다', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수정'), findsOneWidget);
+  });
+
+  testWidgets('남의 글에는 수정이 없다 — 그 자리에 신고가 뜬다', (tester) async {
+    // 한 테스트에서 pumpWidget 을 두 번 하지 않는다. 같은 위치의 같은 타입이면
+    // Flutter 가 State 를 재사용해서 앞 글이 그대로 남는다 — 실제로 그렇게 헛초록이 났다.
+    final f = fixture(postAuthor: 99);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99))!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수정'), findsNothing);
+    expect(find.text('신고'), findsOneWidget);
+  });
+
+  testWidgets('댓글에는 수정이 없다 — 계약에 댓글 수정 경로가 없다', (tester) async {
+    final f = fixture(postAuthor: 99, comments: [_comment(1, _meId)]);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(authorId: 99, commentCount: 1))!,
+        repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수정'), findsNothing,
+        reason: '내 댓글이 있어도 수정은 안 뜬다 — 삭제만 있다');
+    expect(find.text('삭제'), findsOneWidget);
+  });
+
+  testWidgets('제목만 고치면 요청 본문에 body 키가 없다', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('수정'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '고친 제목');
+    await tester.tap(find.text('고치기'));
+    await tester.pumpAndSettle();
+
+    expect(f.calls, ['PATCH /api/community/posts/12']);
+    expect(f.bodies.single, {'title': '고친 제목'},
+        reason: '다 실으면 그 사이 다른 기기에서 고친 본문을 조용히 되돌린다 '
+            '(ADR-0017 규약 4)');
+  });
+
+  testWidgets('아무것도 안 고치고 저장하면 요청을 안 보낸다', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('수정'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('고치기'));
+    await tester.pumpAndSettle();
+
+    expect(f.calls, isEmpty,
+        reason: '서버가 400 을 주는데 그건 사용자가 볼 이유가 없는 실패다 — '
+            '아무것도 안 고친 것은 잘못이 아니다');
+  });
+
+  testWidgets('장소는 편집에서 못 바꾼다 — 계약이 PostPatch 에서 뺐다', (tester) async {
+    final f = fixture(loc: '서울숲');
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(loc: '서울숲'))!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('수정'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('서울숲'), findsOneWidget,
+        reason: '어느 장소의 글인지는 맥락이라 보여 준다');
+    await tester.enterText(find.byType(TextField).first, '고친 제목');
+    await tester.tap(find.text('고치기'));
+    await tester.pumpAndSettle();
+
+    expect(f.bodies.single.containsKey('loc'), isFalse);
+    expect(f.bodies.single.containsKey('contentId'), isFalse);
+  });
+
+  testWidgets('403 이면 수정 문구로 뜬다 — 삭제 문구가 아니다', (tester) async {
+    final f = fixture(patchStatus: 403);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('수정'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '고친 제목');
+    await tester.tap(find.text('고치기'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('고치거나'), findsOneWidget,
+        reason: "'지울 수 있어요' 는 수정을 시도한 사람에게 거짓이다");
+  });
+
+  testWidgets('고치고 나오면 새 값과 수정됨이 뜬다', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('수정'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '고친 제목');
+    await tester.tap(find.text('고치기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('고친 제목'), findsOneWidget);
+    expect(find.text('수정됨'), findsOneWidget,
+        reason: '서버가 값이 실제로 달라진 경우에만 updatedAt 을 만든다');
   });
 
 }

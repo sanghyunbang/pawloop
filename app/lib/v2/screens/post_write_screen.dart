@@ -81,6 +81,25 @@ Future<CommunityPost?> writePost(
   );
 }
 
+/// 글 고치기를 여는 문 — 이슈 #243.
+///
+/// **로그인을 다시 안 묻는다.** 고칠 글이 있다는 것은 이미 로그인했다는 뜻이고, 내 글인지는
+/// 부르는 쪽이 이미 `_isMine` 으로 가렸다. 진짜 판정은 서버가 403 으로 한다.
+///
+/// 고쳐진 글을 돌려준다. 부르는 쪽은 그것으로 화면을 다시 그리면 된다. **안 고치고
+/// 나왔으면 `null`** 이다 — 그때는 아무것도 안 바뀌었으므로 다시 그릴 이유도 없다.
+Future<CommunityPost?> editPost(
+  BuildContext context,
+  CommunityPost post, {
+  CommunityRepository? repository,
+}) {
+  return Navigator.of(context).push<CommunityPost>(
+    MaterialPageRoute(
+      builder: (_) => PostWriteScreen(repository: repository, editing: post),
+    ),
+  );
+}
+
 class PostWriteScreen extends StatefulWidget {
   /// 테스트가 가짜 서버를 넣는 자리. 앱에서는 부른 화면이 자기 것을 넘긴다.
   final CommunityRepository? repository;
@@ -94,13 +113,23 @@ class PostWriteScreen extends StatefulWidget {
   /// 장소에서 왔을 때의 `Place.contentId`. **지도의 진짜 장소일 때만 채워진다.**
   final String? contentId;
 
+  /// 고칠 글 — 이슈 #243. `null` 이면 새 글이다.
+  ///
+  /// **`loc`·`contentId` 는 편집에서 못 바꾼다.** 계약이 `PostPatch` 에서 그 둘을 뺐다 —
+  /// 비우기와 안 바꿈을 구별할 방법이 아직 없어서다. 화면은 그것을 <b>읽기 전용으로
+  /// 보여만 준다</b>(장소 카드).
+  final CommunityPost? editing;
+
   const PostWriteScreen({
     super.key,
     this.repository,
     this.initialBoard,
     this.loc,
     this.contentId,
+    this.editing,
   });
+
+  bool get isEditing => editing != null;
 
   @override
   State<PostWriteScreen> createState() => _PostWriteScreenState();
@@ -110,16 +139,17 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
   late final CommunityRepository _repo =
       widget.repository ?? CommunityRepository();
 
-  final _title = TextEditingController();
-  final _body = TextEditingController();
+  late final _title = TextEditingController(text: widget.editing?.title ?? '');
+  late final _body = TextEditingController(text: widget.editing?.body ?? '');
 
   /// 처음 고른 값. 장소에서 왔으면 동반장소, 아니면 부른 쪽이 준 것, 그것도 없으면 자유다.
   ///
   /// 미리 고르는 이유는 계약이 `board` 를 required 로 두기 때문이다. 안 고른 상태를
   /// 허용하면 다 쓰고 올리기를 누른 뒤에 "게시판을 골라 주세요" 를 만난다.
-  late CommunityBoard _board = widget.contentId != null || widget.loc != null
-      ? (widget.initialBoard ?? CommunityBoard.petPlace)
-      : (widget.initialBoard ?? CommunityBoard.free);
+  late CommunityBoard _board = widget.editing?.board ??
+      (widget.contentId != null || widget.loc != null
+          ? (widget.initialBoard ?? CommunityBoard.petPlace)
+          : (widget.initialBoard ?? CommunityBoard.free));
 
   bool _sending = false;
   String? _error;
@@ -135,6 +165,17 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
     _title.dispose();
     _body.dispose();
     super.dispose();
+  }
+
+  /// 장소 이름. 새 글이면 부른 쪽이 준 것, 편집이면 <b>글에 이미 붙어 있는 것</b>이다.
+  ///
+  /// 편집에서도 보여 주는 이유는 그 글이 어느 장소의 글인지가 맥락이기 때문이다.
+  /// <b>바꿀 수는 없다</b> — 계약이 `PostPatch` 에서 `loc`·`contentId` 를 뺐다.
+  String? get _placeName => widget.editing?.loc ?? widget.loc;
+
+  String get _submitLabel {
+    if (_sending) return widget.isEditing ? '고치는 중…' : '올리는 중…';
+    return widget.isEditing ? '고치기' : '올리기';
   }
 
   Future<void> _submit() async {
@@ -173,13 +214,15 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
     });
 
     try {
-      final post = await _repo.createPost(
-        board: _board,
-        title: title,
-        body: body,
-        loc: widget.loc,
-        contentId: widget.contentId,
-      );
+      final post = widget.isEditing
+          ? await _saveEdit(title, body)
+          : await _repo.createPost(
+              board: _board,
+              title: title,
+              body: body,
+              loc: widget.loc,
+              contentId: widget.contentId,
+            );
       if (!mounted) return;
       Navigator.of(context).pop(post);
     } on CommunityFailure catch (failure) {
@@ -190,6 +233,24 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
         _error = failure.message;
       });
     }
+  }
+
+  /// 고친 것만 보낸다 — 이슈 #243.
+  ///
+  /// **안 바뀐 키는 안 싣는다.** 계약이 `PostPatch` 를 `minProperties: 1` 로 두었고,
+  /// 다 실으면 그 사이 다른 기기에서 고친 값을 조용히 되돌린다(ADR-0017 규약 4).
+  ///
+  /// **하나도 안 고쳤으면 요청을 안 보내고 `null` 을 돌려준다.** 서버가 400 을 주는데,
+  /// 그건 사용자가 볼 이유가 없는 실패다 — 아무것도 안 고친 것은 잘못이 아니다.
+  /// 부르는 쪽은 `null` 을 "바뀐 것 없음" 으로 읽어 다시 그리지 않는다.
+  Future<CommunityPost?> _saveEdit(String title, String body) {
+    final original = widget.editing!;
+    return _repo.updatePost(
+      original.id,
+      board: _board == original.board ? null : _board,
+      title: title == original.title ? null : title,
+      body: body == original.body ? null : body,
+    );
   }
 
   @override
@@ -209,7 +270,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                   MediaQuery.of(context).viewInsets.bottom + 24,
                 ),
                 children: [
-                  if (widget.loc != null) ...[
+                  if (_placeName != null) ...[
                     _placeCard(),
                     const SizedBox(height: 14),
                   ],
@@ -274,8 +335,8 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
             ),
           ),
           const SizedBox(width: 14),
-          const Text('새 글',
-              style: TextStyle(
+          Text(widget.isEditing ? '글 고치기' : '새 글',
+              style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
                   color: T.textPrimary)),
@@ -291,7 +352,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              widget.loc!,
+              _placeName!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -381,7 +442,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
             ],
           ),
           // 스피너가 아니라 문구를 바꾼다 — pet_registration_sheet 가 같은 모양이다.
-          child: Text(_sending ? '올리는 중…' : '올리기',
+          child: Text(_submitLabel,
               style: const TextStyle(
                   fontSize: 15.5,
                   fontWeight: FontWeight.w800,
