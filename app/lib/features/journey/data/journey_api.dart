@@ -50,7 +50,6 @@ class RealJourneyApi implements JourneyApi {
       final schedules = response.map((e) => e.toSchedule()).toList();
       return schedules;
     } catch (e) {
-      print('❌ fetchSchedules 에러: $e');
       return [];
     }
   }
@@ -72,7 +71,6 @@ class RealJourneyApi implements JourneyApi {
       final response = await _jrepo.fetchDiaries(); // JourneyRepositoryImpl 호출
       return response;
     } catch (e) {
-      print('❌ fetchDiaries 에러: $e');
       return [];
     }
   }
@@ -85,13 +83,11 @@ class RealJourneyApi implements JourneyApi {
 
   @override
   Future<void> deleteDiary(int id) async {
-    print(" ㅡㅡㅡㅡㅡㅡㅡjourney api - [delete] diary 호출됨, 호출된 id : $id");
     await _jrepo.deleteDiary(id); // 실제 호출
   }
 
   @override
   Future<DiaryEntry> updateDiary(DiaryEntry entry) async {
-    print(" ㅡㅡㅡㅡㅡㅡㅡjourney api - [update] diary 호출됨, 호출된 entry : $entry ");
     return await _jrepo.updateDiary(entry);
   }
 }
