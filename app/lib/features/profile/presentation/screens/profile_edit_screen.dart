@@ -107,8 +107,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       }
 
       final data = await _authRepo.getMyProfile();
-      // ignore: avoid_print
-      print('[ProfileEdit] raw data: $data');
 
       if (data == null) {
         setState(() {

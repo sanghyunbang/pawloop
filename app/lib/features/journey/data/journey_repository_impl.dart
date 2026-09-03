@@ -48,7 +48,6 @@ class JourneyRepositoryImpl {
     final url = Uri.parse('$baseUrl/journeys/v2/entries');
     final response = await _client.getJson(url);
 
-    print('  ㅡㅡㅡㅡㅡㅡㅡjourney impl - 📦[fetchDiaries] body: ${response.body[0]}');
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
@@ -94,9 +93,6 @@ class JourneyRepositoryImpl {
     if (response.statusCode == 201) {
       return null;
     } else {
-      print(
-        '[JourneyRepositoryImpl] postTrip failed: ${response.statusCode} / ${response.body}',
-      );
       return '등록 실패 (${response.statusCode})';
     }
   }
@@ -111,7 +107,6 @@ class JourneyRepositoryImpl {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return null;
     } else {
-      print('Failed to post diary: ${response.statusCode} ${response.body}');
       return '등록 실패 (${response.statusCode})';
     }
   }
@@ -160,9 +155,6 @@ class JourneyRepositoryImpl {
           .map((item) => item['url'].toString())
           .toList(); // 🔁 서버 응답 형식에 맞게
     } else {
-      print(
-        '[uploadImages] ❌ Upload failed: ${response.statusCode} / ${response.body}',
-      );
       return null;
     }
   }
@@ -180,7 +172,6 @@ class JourneyRepositoryImpl {
   }
 
   Future<void> deleteDiary(int diaryId) async {
-    print("   journey impl - deleteDiary 진입, 들어온 diaryId : $diaryId");
     final url = Uri.parse('$baseUrl/journeys/v2/entries/$diaryId');
     final response = await _client.deleteJson(url);
 
@@ -190,9 +181,6 @@ class JourneyRepositoryImpl {
   }
 
   Future<DiaryEntry> updateDiary(DiaryEntry entry) async {
-    print(
-      "   ㅡㅡㅡㅡㅡㅡㅡjourney impl - updateDiary 진입, 진입한 값 : $entry \n entry id = ${entry.id}",
-    );
     if (entry.id == null) throw Exception('Diary ID is required for update');
 
     final Did = entry.id;
@@ -206,7 +194,6 @@ class JourneyRepositoryImpl {
       final data = jsonDecode(response.body);
       return DiaryEntry.fromJson(data);
     } else {
-      print('Failed to update diary: ${response.statusCode} ${response.body}');
       throw Exception('Failed to update diary');
     }
   }

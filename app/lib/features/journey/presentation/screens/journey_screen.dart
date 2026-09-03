@@ -32,7 +32,6 @@ class _JourneyScreenState extends State<JourneyScreen>
       final responses = await _scheduleRepo.fetchSchedules();
       return responses.map(mapToSchedule).toList();
     } catch (e) {
-      print('[JourneyScreen] 스케줄 불러오기 실패: $e');
       return [];
     }
   }
