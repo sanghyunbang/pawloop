@@ -183,6 +183,13 @@ class CommunityPost {
   final ReactionSummary reactions;
   final DateTime createdAt;
 
+  /// 마지막 수정 시각. **`null` 이면 한 번도 안 고친 글이다**(#211).
+  ///
+  /// 서버가 `createdAt` 을 복사해 채우지 않는다 — 그러면 모든 글에 '수정됨' 이 붙는다.
+  /// 같은 값을 다시 보낸 `PATCH` 도 이 값을 안 만든다. 즉 이 값이 있으면 **내용이
+  /// 실제로 달라졌다**는 뜻이고, 그래서 화면이 그것을 표시할 근거가 된다.
+  final DateTime? updatedAt;
+
   const CommunityPost({
     required this.id,
     required this.author,
@@ -192,9 +199,31 @@ class CommunityPost {
     required this.commentCount,
     required this.reactions,
     required this.createdAt,
+    this.updatedAt,
     this.loc,
     this.contentId,
   });
+
+  /// 한 자리만 바꾼 사본.
+  ///
+  /// **화면이 손으로 베끼지 않게 한다.** `post_detail_screen` 이 댓글 수와 반응을 각각
+  /// 베끼는 헬퍼 둘을 들고 있었는데, `updatedAt` 을 더하자 그중 하나가 그것을 조용히
+  /// 흘렸다 — 반응만 눌러도 '수정됨' 이 사라졌다. 필드가 늘 때 고칠 자리를 **선언 옆
+  /// 한 곳**으로 모은다.
+  CommunityPost copyWith({int? commentCount, ReactionSummary? reactions}) =>
+      CommunityPost(
+        id: id,
+        author: author,
+        board: board,
+        title: title,
+        body: body,
+        loc: loc,
+        contentId: contentId,
+        commentCount: commentCount ?? this.commentCount,
+        reactions: reactions ?? this.reactions,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
 
   /// 모양이 아니면 `null`. 한 건이 깨졌다고 목록 전체를 버리지 않는다.
   static CommunityPost? tryParse(Object? json) {
@@ -219,6 +248,7 @@ class CommunityPost {
       commentCount: ReactionSummary._int(json['commentCount']),
       reactions: ReactionSummary.parse(json['reactions']),
       createdAt: createdAt,
+      updatedAt: _dateTime(json['updatedAt']),
     );
   }
 }

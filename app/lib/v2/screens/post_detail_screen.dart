@@ -155,7 +155,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       setState(() {
         // 목록의 끝에 붙인다 — 댓글은 오래된 것부터라 새 것이 마지막이다.
         _comments = [..._comments, comment];
-        _post = _withCommentCount(_post, _post.commentCount + 1);
+        _post = _post.copyWith(commentCount: _post.commentCount + 1);
         _ctrl.clear();
         _sending = false;
         _changed = true;
@@ -186,7 +186,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           : await _repo.addReaction(_post.id, reaction);
       if (!mounted) return;
       setState(() {
-        _post = _withReactions(_post, summary);
+        _post = _post.copyWith(reactions: summary);
         _sending = false;
         _changed = true;
       });
@@ -196,37 +196,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       _toast(failure.message);
     }
   }
-
-  static CommunityPost _withCommentCount(CommunityPost post, int commentCount) =>
-      CommunityPost(
-        id: post.id,
-        author: post.author,
-        board: post.board,
-        title: post.title,
-        body: post.body,
-        loc: post.loc,
-        contentId: post.contentId,
-        commentCount: commentCount,
-        reactions: post.reactions,
-        createdAt: post.createdAt,
-      );
-
-  static CommunityPost _withReactions(
-    CommunityPost post,
-    ReactionSummary reactions,
-  ) =>
-      CommunityPost(
-        id: post.id,
-        author: post.author,
-        board: post.board,
-        title: post.title,
-        body: post.body,
-        loc: post.loc,
-        contentId: post.contentId,
-        commentCount: post.commentCount,
-        reactions: reactions,
-        createdAt: post.createdAt,
-      );
 
   /// 내가 쓴 것인가 — 이슈 #211.
   ///
@@ -303,8 +272,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (!mounted) return;
       setState(() {
         _comments = _comments.where((c) => c.id != comment.id).toList();
-        _post = _withCommentCount(
-            _post, _post.commentCount > 0 ? _post.commentCount - 1 : 0);
+        _post = _post.copyWith(
+            commentCount: _post.commentCount > 0 ? _post.commentCount - 1 : 0);
         _sending = false;
         _changed = true;
       });
@@ -573,6 +542,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 _dateTime(post.createdAt),
                 style: const TextStyle(fontSize: 11.5, color: T.textMuted),
               ),
+              // 고친 글인지 읽는 사람이 알아야 한다 — 이미 달린 댓글이 무엇에 대한
+              // 말이었는지 되짚을 수 있는 유일한 단서다. 서버는 **값이 실제로 달라진
+              // 경우에만** updatedAt 을 만든다(#211).
+              if (post.updatedAt != null) ...[
+                const SizedBox(width: 6),
+                const Text('수정됨',
+                    style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+              ],
               if (_isMine(post.author)) ...[
                 const SizedBox(width: 8),
                 _deleteButton(onTap: _confirmDeletePost),

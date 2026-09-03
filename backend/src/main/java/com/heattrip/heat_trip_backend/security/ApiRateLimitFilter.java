@@ -57,6 +57,10 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /** 커뮤니티에서 상태를 바꾸는 메서드 전부. 여기 빠진 메서드는 한도가 무한이 된다. */
+    private static final java.util.Set<String> WRITE_METHODS =
+            java.util.Set.of("POST", "PUT", "PATCH", "DELETE");
+
     private Rule resolveRule(HttpServletRequest request) {
         String method = request.getMethod();
         String path = request.getRequestURI();
@@ -232,10 +236,15 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
                     || path.matches("^/api/community/posts/[^/]+/comments$"))) {
             return new Rule("community-read", rateLimitProperties.getCommunityReadMaxRequests());
         }
-        // 쓰기 넷. 버킷을 나눈 이유는 목록을 새로고침하다 한도에 닿아 글을 못 쓰게
+        // 쓰기 전부. 버킷을 나눈 이유는 목록을 새로고침하다 한도에 닿아 글을 못 쓰게
         // 되면 안 되기 때문이다. 반응이 여기 있는 것도 의도다 — 멱등이라 행은 안 늘지만
         // 요청은 그대로 오고 매번 집계 쿼리가 돈다.
-        if (("POST".equals(method) || "DELETE".equals(method))
+        //
+        // **메서드를 열거한다.** 처음엔 POST·DELETE 둘만 적었는데, #211 이 PATCH 를 열면서
+        // 그것이 한도 없는 쓰기 경로가 될 뻔했다 — 표에 없으면 한도가 0 이 아니라 무한이다.
+        // `!GET` 으로 뒤집지 않는 이유는 OPTIONS 다. CORS 예비 요청이 쓰기 버킷을 태우면
+        // 사용자가 아무것도 안 썼는데 글쓰기가 막힌다.
+        if (WRITE_METHODS.contains(method)
                 && path.startsWith("/api/community/")) {
             return new Rule("community-write", rateLimitProperties.getCommunityWriteMaxRequests());
         }

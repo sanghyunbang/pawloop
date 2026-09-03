@@ -218,6 +218,29 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("PATCH 도 쓰기 버킷이다 — 이 표에 없으면 한도가 0 이 아니라 무한이다")
+    void communityPatch_isMetered() throws Exception {
+        // #211 이 저장소 최초의 PATCH 를 열 때 이 필터는 POST·DELETE 둘만 보고 있었다.
+        // 고치지 않았으면 한도 없는 쓰기 경로가 하나 생겼을 것이다.
+        MockHttpServletResponse blocked = exhaust(
+                filterWithCommunityLimits(100, 2), "PATCH", "/api/community/posts/7", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("커뮤니티 예비 요청(OPTIONS)은 쓰기 버킷을 안 태운다 — 안 쓴 사람의 글쓰기가 막힌다")
+    void communityPreflight_doesNotBurnTheWriteBucket() throws Exception {
+        ApiRateLimitFilter f = filterWithCommunityLimits(100, 1);
+
+        assertThat(call(f, "OPTIONS", "/api/community/posts", "198.51.100.9").getStatus())
+                .isEqualTo(200);
+        assertThat(call(f, "POST", "/api/community/posts", "198.51.100.9").getStatus())
+                .as("예비 요청이 한 칸을 먹었으면 여기서 429 가 난다")
+                .isEqualTo(200);
+    }
+
+    @Test
     @DisplayName("읽기와 쓰기는 다른 버킷이다 — 목록을 새로고침하다 글을 못 쓰게 되면 안 된다")
     void communityReadAndWrite_areSeparateBuckets() throws Exception {
         ApiRateLimitFilter f = filterWithCommunityLimits(1, 1);

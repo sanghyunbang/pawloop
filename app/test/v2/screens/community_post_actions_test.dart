@@ -1,16 +1,18 @@
-// 커뮤니티 글·댓글 삭제 — 이슈 #211.
+// 커뮤니티 상세에서 내 글에 할 수 있는 것들 — 이슈 #211.
 //
-// 지금까지 로그인한 사람이 자기가 쓴 글을 **지울 방법이 없었다.** 계약에도 코드에도
-// 오퍼레이션이 없었고, #172 가 "글 수정·삭제도 없습니다 — 계약에 그 오퍼레이션이 없습니다"
-// 로 계약을 이유 삼아 화면을 빼 놓은 상태였다.
+// 지금까지 로그인한 사람이 자기가 쓴 글을 **지울 방법도 고칠 방법도 없었다.** 계약에도
+// 코드에도 오퍼레이션이 없었고, #172 가 "글 수정·삭제도 없습니다 — 계약에 그 오퍼레이션이
+// 없습니다" 로 계약을 이유 삼아 화면을 빼 놓은 상태였다.
 //
-// 여기서 재는 것은 셋이다.
+// 여기서 재는 것은 넷이다.
 //
 //  1. **내 것에만 보인다.** `PersonRef.userId` 와 내 id 를 견준다 — ADR-0017 규약 5 가
 //     `author` 를 `PersonRef` 로 통일한 이유가 정확히 이것이다.
 //  2. **글 삭제는 한 번 묻는다.** 되돌릴 수 없고 남의 댓글까지 함께 사라진다.
 //  3. **403 이 그 뜻대로 뜬다.** network 로 뭉치면 "연결을 확인해 주세요" 가 되는데
 //     연결은 멀쩡하고 다시 눌러도 영원히 같다.
+//  4. **고친 글에 '수정됨' 이 붙는다.** 편집 화면은 아직 없지만 서버에 `PATCH` 가 있어서
+//     글은 실제로 바뀔 수 있다 — 읽는 사람에게는 지금 필요한 표시다.
 
 import 'dart:convert';
 
@@ -48,7 +50,9 @@ http.Response _json(Object body, {int status = 200}) => http.Response(
       headers: const {'content-type': 'application/json; charset=utf-8'},
     );
 
-Map<String, Object?> _post({int authorId = _meId, int commentCount = 0}) => {
+Map<String, Object?> _post(
+        {int authorId = _meId, int commentCount = 0, String? updatedAt}) =>
+    {
       'id': 12,
       'author': {'userId': authorId, 'nickname': authorId == _meId ? '나' : '남'},
       'board': 'free',
@@ -59,6 +63,7 @@ Map<String, Object?> _post({int authorId = _meId, int commentCount = 0}) => {
       'commentCount': commentCount,
       'reactions': {'help': 0, 'cute': 0, 'empathy': 0, 'mine': <String>[]},
       'createdAt': '2026-09-01T07:30:00Z',
+      'updatedAt': updatedAt,
     };
 
 Map<String, Object?> _comment(int id, int authorId) => {
@@ -74,6 +79,7 @@ Map<String, Object?> _comment(int id, int authorId) => {
   int postAuthor = _meId,
   List<Map<String, Object?>> comments = const [],
   int deleteStatus = 204,
+  String? updatedAt,
 }) {
   final calls = <String>[];
   final client = AuthedClient(
@@ -87,7 +93,10 @@ Map<String, Object?> _comment(int id, int authorId) => {
       if (path.endsWith('/comments')) {
         return _json({'items': comments, 'nextCursor': null, 'hasMore': false});
       }
-      return _json(_post(authorId: postAuthor, commentCount: comments.length));
+      return _json(_post(
+          authorId: postAuthor,
+          commentCount: comments.length,
+          updatedAt: updatedAt));
     }),
     baseUrl: _base,
     store: _FakeTokenStore(),
@@ -230,5 +239,60 @@ void main() {
     expect(find.text('2 번 줄'), findsOneWidget);
     expect(find.text('댓글 1'), findsOneWidget,
         reason: '헤더의 개수도 함께 줄어야 한다 — 목록과 숫자가 어긋나면 안 된다');
+  });
+  testWidgets('고친 글에는 수정됨이 붙는다 — 안 고친 글에는 없다', (tester) async {
+    const at = '2026-09-02T02:00:00Z';
+    final f = fixture(updatedAt: at);
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post(updatedAt: at))!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수정됨'), findsOneWidget,
+        reason: '이미 달린 댓글이 무엇에 대한 말이었는지 되짚을 유일한 단서다');
+  });
+
+  testWidgets('안 고친 글에는 수정됨이 없다 — createdAt 을 복사해 채우면 전부 붙는다',
+      (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(_post())!, repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수정됨'), findsNothing);
+  });
+
+  testWidgets('반응을 눌러도 수정됨이 안 사라진다 — 손으로 베끼는 사본이 필드를 흘렸다',
+      (tester) async {
+    // _withReactions 가 updatedAt 을 안 베껴서 반응 한 번에 표시가 사라졌다.
+    // copyWith 로 모은 뒤의 회귀 잠금이다.
+    final edited = _post(updatedAt: '2026-09-02T02:00:00Z');
+    final client = AuthedClient(
+      inner: MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.contains('/reactions/')) {
+          return _json({'help': 1, 'cute': 0, 'empathy': 0, 'mine': ['help']});
+        }
+        if (request.url.path.endsWith('/comments')) {
+          return _json({'items': [], 'nextCursor': null, 'hasMore': false});
+        }
+        return _json(edited);
+      }),
+      baseUrl: _base,
+      store: _FakeTokenStore(),
+    );
+
+    await tester.pumpWidget(_host(PostDetailScreen(
+        post: CommunityPost.tryParse(edited)!,
+        repository: CommunityRepository(baseUrl: _base, client: client))));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수정됨'), findsOneWidget);
+
+    await tester.tap(find.textContaining('도움돼요'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수정됨'), findsOneWidget,
+        reason: '반응은 글 내용을 안 바꾼다 — 표시가 사라질 이유가 없다');
   });
 }

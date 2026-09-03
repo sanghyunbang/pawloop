@@ -51,6 +51,15 @@
 --    이 값은 query 파라미터로 나가고 **이 컬럼에 들어간다.** 표시 문구를 저장하면
 --    게시판 이름을 다듬는 날 쌓인 행을 전부 고쳐야 한다. CareType 이 이미 같은 모양이다.
 --
+-- 6) post.updated_at 은 NULL 이 기본이고 "한 번도 안 고쳤다" 를 뜻한다 (#211).
+--
+--    글은 남이 읽고 댓글을 다는 공개 글이라, 고친 글인지 읽는 사람이 알 수 있어야 한다.
+--    created_at 을 복사해 채우면 "만들자마자 고쳐진 글" 과 구별이 안 되고 화면이 모든
+--    글에 '수정됨' 을 붙인다.
+--
+--    comment 에는 안 넣는다 — 댓글 수정 경로가 계약에 없다. 만드는 날 같은 모양으로
+--    더한다.
+--
 -- 3) 장소 참조는 content_id VARCHAR(64) 이고 **FK 를 걸지 않는다.**
 --
 --    계약의 Post.contentId 는 string 이고 Place.contentId 와 같은 키다(ADR-0017).
@@ -110,9 +119,18 @@
 -- E-4. emotion_card·card_comment·card_reaction 을 지우거나 옮기지 않는다.
 --      #94 의 레거시 셸 결정이 소유한다.
 --
--- E-5. 글·댓글 수정/삭제용 컬럼(updated_at·deleted_at)을 넣지 않는다.
---      계약에 그 오퍼레이션이 없고(#211 Community-medium-4), **넣는 날은 컬럼 추가가
---      아니라 삭제 정책 결정이다** — 지운 글의 댓글을 어떻게 할지가 먼저다.
+-- E-5. deleted_at 은 여전히 안 넣는다. updated_at 은 [B-7] 에서 들어왔다.
+--
+--      원래 이 항목은 둘 다 안 넣는다였고 이유가 둘이었다 — 계약에 오퍼레이션이 없다,
+--      그리고 **넣는 날은 컬럼 추가가 아니라 삭제 정책 결정이다**(지운 글의 댓글을
+--      어떻게 할지가 먼저다). 둘 다 #211 에서 풀렸다.
+--
+--      삭제 정책은 **물리 삭제 + CASCADE** 로 정해졌다. 글이 없으면 그 댓글은 읽을
+--      맥락이 없다. 즉 deleted_at 은 "아직 안 정했다" 라서 없는 것이 아니라 **정한
+--      결과 필요 없는** 컬럼이다. 소프트 삭제로 돌아서는 날은 컬럼 하나가 아니라
+--      모든 읽기 쿼리에 필터가 붙는 변경이다.
+--
+--      updated_at 은 반대로 필요해졌다 — 결정 6.
 -- ============================================================================
 
 -- 이 파일은 UTF-8 이고 중단 메시지가 한글이다. **세션 문자셋을 먼저 고정한다.**
@@ -188,6 +206,7 @@ CREATE TABLE IF NOT EXISTS post (
   loc         VARCHAR(100) NULL COMMENT '표시용 장소 이름. content_id 와 별개다',
   handle      VARCHAR(255) NULL COMMENT '작성 시점 닉네임 스냅샷. 폭은 users.nickname 과 같다 — 좁히면 긴 닉네임이 글쓰기를 영구히 막는다',
   created_at  DATETIME(6)  NOT NULL,
+  updated_at  DATETIME(6)  NULL COMMENT '마지막 수정 시각(UTC). NULL 이면 한 번도 안 고쳤다 — 결정 6',
   PRIMARY KEY (id),
   KEY idx_post_user (user_id),
   CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
@@ -377,6 +396,32 @@ PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 SELECT '[B-6] handle 폭' AS section, @narrow AS was_narrow;
 
+-- [B-7] post.updated_at 을 더한다 (이슈 #211 — 글 수정).
+--
+--      **고친 글인지 읽는 사람이 알 수 있어야 한다.** 글은 남이 읽고 댓글을 다는
+--      공개 글이다. 작성자가 나중에 본문을 바꿔도 표시가 없으면, 이미 달린 댓글이
+--      무엇에 대한 말이었는지 아무도 되짚을 수 없다. 댓글은 그 반대라 아직 안 넣는다 —
+--      수정 경로 자체가 계약에 없다.
+--
+--      NULL 이 "한 번도 안 고쳤다" 이다. created_at 을 복사해 채우지 않는다. 그러면
+--      "만들자마자 고쳐진 글" 과 구별이 안 되고, 화면이 모든 글에 '수정됨' 을 붙인다.
+--
+--      created_at 과 같은 DATETIME(6) 이다. 폭을 맞추는 이유가 있다 — 한쪽만 마이크로초를
+--      잃으면 같은 초에 쓰고 고친 글이 "고친 시각이 쓴 시각보다 앞" 으로 저장된다.
+--      저장은 UTC 다. 이유는 12_walk.sql 과 Walk 엔티티가 이미 적어 뒀고(#40),
+--      CommunityTime 이 그것을 그대로 따른다.
+SET @has_updated_at := (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'post' AND column_name = 'updated_at');
+
+SET @stmt := IF(@has_updated_at = 0,
+    'ALTER TABLE post ADD COLUMN updated_at DATETIME(6) NULL COMMENT ''마지막 수정 시각(UTC). NULL 이면 한 번도 안 고쳤다 (#211)'' AFTER created_at',
+    'DO 0');
+PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SELECT '[B-7] post.updated_at' AS section,
+       IF(@has_updated_at = 0, '더함', '이미 있음 — 건너뜀') AS result;
+
 -- ── D. 사후 검증 ───────────────────────────────────────────────────────────
 -- 여기까지 왔는데 숫자가 다르면 **반쯤 적용된 것**이다. 성공처럼 끝내지 않는다.
 
@@ -433,11 +478,11 @@ SET @d_handles := (
       AND character_maximum_length >= 255);
 
 SELECT '[D] 사후 검증' AS section,
-       @d_tables AS tables_3, @d_post_cols AS post_cols_9, @d_uq_cols AS uq_cols_3,
+       @d_tables AS tables_3, @d_post_cols AS post_cols_10, @d_uq_cols AS uq_cols_3,
        @d_cascade AS cascade_2, @d_user_set_null AS user_setnull_3, @d_idx AS idx_5,
        @d_checks AS checks_2, @d_handles AS handles_2;
 
-SET @stmt := IF(@d_tables = 3 AND @d_post_cols = 9 AND @d_uq_cols = 3
+SET @stmt := IF(@d_tables = 3 AND @d_post_cols = 10 AND @d_uq_cols = 3
                 AND @d_cascade = 2 AND @d_user_set_null = 3 AND @d_idx = 5
                 AND @d_checks = 2 AND @d_handles = 2,
     'SELECT ''[D] 통과'' AS message',
