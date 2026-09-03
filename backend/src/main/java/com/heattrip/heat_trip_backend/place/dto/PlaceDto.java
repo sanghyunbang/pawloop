@@ -2,6 +2,8 @@ package com.heattrip.heat_trip_backend.place.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
+import java.util.Set;
+
 /**
  * 계약({@code openapi.yaml})의 {@code Place} 모양 — 이슈 #40.
  *
@@ -37,6 +39,21 @@ public record PlaceDto(
 
     /** 이 프록시가 내보내는 유일한 출처. {@code vet}/{@code shop}/{@code trail} 은 미구현이다. */
     public static final String SOURCE_KTO = "kto";
+
+    /**
+     * 계약의 {@code PlaceCategory} 가 아는 KTO 콘텐츠타입 — 이슈 #210({@code Places-low-1}).
+     *
+     * <p><b>이 목록 밖의 값이 오면 {@code category} 를 생략한다.</b> 필드를 빼면
+     * {@code @JsonInclude(NON_NULL)} 이 통째로 지우므로 닫힌 enum 을 위반하지 않는다.
+     * 원래 값은 {@code contentTypeId} 에 그대로 남는다. KTO 체계에는 15·25 도 있지만
+     * 이 앱의 필터 칩에 없어서 뺐다.
+     *
+     * <p><b>사본이 셋이었다.</b> {@code KtoApiClient}·{@code PlaceDetailService} 가 각자 들고
+     * 계약이 또 들고 있었다. 여기로 모으고, 계약과 같은 집합인지는
+     * {@code PlacesContractSpecTest} 가 잰다 — 셋이 갈리면 KTO 가 준 값을 서버가 실어
+     * 보내고 앱이 라벨을 못 찾는다.
+     */
+    public static final Set<String> KNOWN_CATEGORIES = Set.of("12", "14", "28", "32", "38", "39");
 
     /** 거리를 채운 사본. 캐시에서 꺼낸 뒤 서빙 직전에 부른다. */
     public PlaceDto withDistance(double meters) {

@@ -50,10 +50,6 @@ public class PlaceDetailService {
     /** 상세 1건이 내는 아웃바운드 호출 수. {@code detailCommon2 + detailPetTour2}. */
     static final int CALLS_PER_DETAIL = 2;
 
-    /** 계약의 {@code PlaceCategory} 가 아는 KTO 콘텐츠타입. 그 밖은 category 를 생략한다. */
-    private static final java.util.Set<String> KNOWN_CATEGORIES =
-            java.util.Set.of("12", "14", "28", "32", "38", "39");
-
     private final PetPlaceDetailRepository details;
     private final KtoApiClient kto;
     private final KtoCallBudget budget;
@@ -140,7 +136,8 @@ public class PlaceDetailService {
                 row.getContentId(),
                 pick(row.getTitle(), fallback == null ? null : fallback.title(), ""),
                 PlaceDto.SOURCE_KTO,
-                contentTypeId != null && KNOWN_CATEGORIES.contains(contentTypeId) ? contentTypeId : null,
+                contentTypeId != null && PlaceDto.KNOWN_CATEGORIES.contains(contentTypeId)
+                        ? contentTypeId : null,
                 contentTypeId,
                 row.getLat() != null ? row.getLat() : (fallback == null ? 0 : fallback.lat()),
                 row.getLng() != null ? row.getLng() : (fallback == null ? 0 : fallback.lng()),
