@@ -94,6 +94,12 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/oauth2/authorization/")) {
             return new Rule("auth", rateLimitProperties.getAuthMaxRequests());
         }
+        // 소셜 공급자가 돌려보내는 자리 (#232). SecurityConfig 가 "/login/**" 로 열어 두는데
+        // 표에 없었다 — 여기가 무한이면 코드 교환을 무한히 시도할 수 있다.
+        // /auth/oauth/{provider}/callback 과 같은 일을 하므로 같은 버킷이다.
+        if (path.startsWith("/login/oauth2/code/")) {
+            return new Rule("auth", rateLimitProperties.getAuthMaxRequests());
+        }
         // ── 가족·채팅 쓰기 버킷 (이슈 #75 · 📌 #86 원칙 4) ─────────────────────
         //
         // 요청 한 건이 **행을 만드는** 두 경로다. `POST /api/groups` 하나가
@@ -213,6 +219,18 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         }
         if ("GET".equals(method) && "/api/explore/places/search".equals(path)) {
             return new Rule("search", rateLimitProperties.getSearchMaxRequests());
+        }
+        // explore 읽기 다섯 — 목록·스크롤·상세·features·emotional-reviews (#232).
+        //
+        // **SecurityConfig 가 "/api/explore/**" 로 통째로 열어 둔 자리다.** 인증이 없으므로
+        // 남은 방어선이 이 줄 하나뿐인데, 2026-09-03 이전에는 이 줄이 없어서 다섯이 전부
+        // 무한이었다 — 표에 없으면 한도가 0 이 아니라 무한이다.
+        //
+        // 패턴이 [^/]+ 인 것은 permitAll 과 **같은 집합을 덮기 위해서**다. [0-9]+ 로 좁히면
+        // GET /api/explore/places/abc 가 인증 없음 + 한도 무한으로 남는다 — places 가 같은
+        // 함정을 이미 겪었다.
+        if ("GET".equals(method) && path.startsWith("/api/explore/places")) {
+            return new Rule("explore-read", rateLimitProperties.getExploreReadMaxRequests());
         }
         if ("POST".equals(method) && "/feedback".equals(path)) {
             return new Rule("feedback", rateLimitProperties.getFeedbackMaxRequests());
