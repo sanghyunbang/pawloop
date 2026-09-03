@@ -39,6 +39,55 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    /**
+     * 인증 없이 열리는 경로 — 이슈 #23-D. <b>정본은 계약의 Auth 태그 설명</b>이다.
+     *
+     * <h2>왜 상수로 꺼냈나</h2>
+     * <p>여기 있는 경로는 <b>인증이라는 방어선이 없는</b> 것들이라, 남은 방어선이 레이트리밋
+     * 하나뿐이다. 그런데 {@code ApiRateLimitFilter} 의 표에 <b>없으면 한도가 0 이 아니라
+     * 무한</b>이다 — 즉 여기 한 줄을 더하면서 그쪽을 안 고치면 <b>인증도 한도도 없는
+     * 경로</b>가 조용히 생긴다. 실제로 {@code /api/explore/**} 가 그 상태였다(#232).
+     *
+     * <p>메서드 지역 변수였을 때는 그것을 세는 검사를 쓸 수 없었다. 꺼내 두면
+     * {@code PublicPathsAreRateLimitedTest} 가 전체를 돈다.
+     */
+    static final List<String> PUBLIC_MATCHERS = List.of(
+            "/",
+            "/oauth2/**",
+            "/login/**",
+            "/auth/signup",
+            "/auth/login",
+            "/auth/oauth/**",
+            "/auth/token/refresh",
+            "/error",
+            "/actuator/health/**",
+            "/actuator/info",
+            "/actuator/prometheus",
+            "/api/explore/**",
+            // 관광공사 프록시(#40). 계약이 security: [] 로 선언했다 — 지도는 로그인
+            // 전에도 보여야 한다.
+            //
+            // "/api/places/**" 로 안 쓴 것은 의도다. 와일드카드로 열면 rate limit 의
+            // 경로 분기가 못 덮는 자리(/api/places/a/b 같은)가 **인증 없음 + 한도 무한**
+            // 이 된다. 여는 것은 실제로 있는 두 경로뿐이다.
+            "/api/places/nearby",
+            "/api/places/*"
+    );
+
+    /**
+     * {@code app.security.docs-public} 이 켜졌을 때만 열리는 경로 — 이슈 #232.
+     *
+     * <p><b>따로 둔 이유가 있다.</b> 조건부라 {@link #PUBLIC_MATCHERS} 에 못 넣는데, 그렇다고
+     * 메서드 안에 두면 "공개되는 경로" 를 세는 검사가 이 셋을 못 본다 —
+     * {@code PublicPathsAreRateLimitedTest} 가 둘을 함께 읽는다.
+     */
+    static final List<String> DOCS_MATCHERS = List.of(
+            "/v3/api-docs/**",
+            "/swagger-ui.html",
+            "/swagger-ui/**");
+
+
+
     private final JWTProvider jwtProvider;
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
@@ -76,28 +125,7 @@ public class SecurityConfig {
         //
         // 그래서 비인증이어야 하는 경로만 열거한다. 나머지 /auth/* 는
         // anyRequest().authenticated() 로 떨어져 토큰 없이는 401 이 된다.
-        var publicMatchers = new ArrayList<>(List.of(
-                "/",
-                "/oauth2/**",
-                "/login/**",
-                "/auth/signup",
-                "/auth/login",
-                "/auth/oauth/**",
-                "/auth/token/refresh",
-                "/error",
-                "/actuator/health/**",
-                "/actuator/info",
-                "/actuator/prometheus",
-                "/api/explore/**",
-                // 관광공사 프록시(#40). 계약이 security: [] 로 선언했다 — 지도는 로그인
-                // 전에도 보여야 한다.
-                //
-                // "/api/places/**" 로 안 쓴 것은 의도다. 와일드카드로 열면 rate limit 의
-                // 경로 분기가 못 덮는 자리(/api/places/a/b 같은)가 **인증 없음 + 한도 무한**
-                // 이 된다. 여는 것은 실제로 있는 두 경로뿐이다.
-                "/api/places/nearby",
-                "/api/places/*"
-        ));
+        var publicMatchers = new ArrayList<>(PUBLIC_MATCHERS);
 
         if (publicSecurityProperties.isDocsPublic()) {
             publicMatchers.add("/v3/api-docs/**");
