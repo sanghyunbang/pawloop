@@ -8,6 +8,7 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
 import '../domain/pet.dart';
 import '../data/location_service.dart';
+import '../data/location_upload_policy.dart';
 import '../data/pet_places_repository.dart';
 import '../data/walk_outbox.dart';
 import 'create_screen.dart';
@@ -169,6 +170,15 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
 
   // ───────────── 주변 장소 ─────────────
   Future<void> _loadNearbyPlaces(NLatLng center) async {
+    // 정책이 꺼져 있으면 묻지 않는다(#235). 저장소도 막지만 **여기서 멈춰야** 한다 —
+    // 위치 스트림이 5m 마다 `if (!_poisLoaded)` 를 보고 다시 부르는데, 응답이 항상
+    // 비면 _poisLoaded 가 영영 안 서서 산책 내내 헛일을 반복한다. 그 반복이 원래
+    // 좌표를 서버로 흘리던 자리였다.
+    if (!LocationUploadPolicy.canQueryNearbyPlaces) {
+      _poisLoaded = true;
+      return;
+    }
+
     final places = await PetPlacesRepository().fetchNearby(
       lat: center.latitude,
       lng: center.longitude,

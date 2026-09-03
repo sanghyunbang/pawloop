@@ -24,6 +24,7 @@ import 'package:http/testing.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
+import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 
 const _base = 'https://api.example.test';
@@ -96,6 +97,12 @@ Map<String, Object?> walkJson({
     };
 
 void main() {
+  // 이 파일의 단언들은 **서버 전송이 켜진 빌드**를 잰다 — 좌표 순서·키 이름·charset 같은
+  // 것들은 정책과 무관한 계약이고, 정책이 꺼져 있으면 요청 자체가 안 나가서 잴 수 없다.
+  // 꺼진 쪽은 location_upload_policy_test.dart 가 잰다. (#235)
+  setUp(() => LocationUploadPolicy.setForTest(true));
+  tearDown(LocationUploadPolicy.resetForTest);
+
   group('저장 요청', () {
     test('좌표를 [경도, 위도] 로 보낸다 — 뒤집으면 서버가 400 을 준다', () async {
       final r = repositoryThatAnswers((_) => _json(walkJson(), status: 201));

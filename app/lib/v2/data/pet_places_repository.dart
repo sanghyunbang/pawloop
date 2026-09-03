@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+
+import 'location_upload_policy.dart';
 import '../../core/config/env.dart';
 import '../domain/pet.dart';
 
@@ -94,6 +96,14 @@ class PetPlacesRepository {
     int numOfRows = 80,
     String? contentTypeId,
   }) async {
+    // 좌표가 기기를 떠나는 자리다. 정책이 꺼져 있으면 **요청 자체를 안 만든다**(#235).
+    // 빈 목록은 이 저장소가 실패에서도 주는 값이라 부르는 쪽이 이미 다룬다.
+    //
+    // 이 경로는 제품이 필요해서가 아니라 관광공사 서비스키를 앱에서 숨기려고 생겼다(#40).
+    // 그래서 끄면 장소 목록이 빈다 — 좌표를 격자 셀로 접어 보내는 절충안은 셀이
+    // 개인위치정보인지부터 정해야 해서(#235 §5) 지금은 통째로 끈다.
+    if (!LocationUploadPolicy.canQueryNearbyPlaces) return const [];
+
     final uri = Uri.parse('$_baseUrl/api/places/nearby').replace(queryParameters: {
       'lat': '$lat',
       'lng': '$lng',

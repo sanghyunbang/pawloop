@@ -21,6 +21,7 @@ import 'package:http/testing.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
+import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 
 const _base = 'https://api.test';
@@ -74,6 +75,12 @@ Map<String, Object?> _post({Object? mine = const <String>[]}) => {
     };
 
 void main() {
+  // 이 파일의 단언들은 **서버 전송이 켜진 빌드**를 잰다 — 좌표 순서·키 이름·charset 같은
+  // 것들은 정책과 무관한 계약이고, 정책이 꺼져 있으면 요청 자체가 안 나가서 잴 수 없다.
+  // 꺼진 쪽은 location_upload_policy_test.dart 가 잰다. (#235)
+  setUp(() => LocationUploadPolicy.setForTest(true));
+  tearDown(LocationUploadPolicy.resetForTest);
+
   test('글 목록의 키는 items 다 — posts 를 읽으면 목록이 언제나 빈다', () async {
     final repo = _repo(MockClient((_) async => _json({
           'items': [_post()],
