@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -27,6 +28,12 @@ PetPlacesRepository _repo(MockClient inner) =>
     PetPlacesRepository(client: inner, baseUrl: _base);
 
 void main() {
+  // 이 파일의 단언들은 **서버 전송이 켜진 빌드**를 잰다 — 좌표 순서·키 이름·charset 같은
+  // 것들은 정책과 무관한 계약이고, 정책이 꺼져 있으면 요청 자체가 안 나가서 잴 수 없다.
+  // 꺼진 쪽은 location_upload_policy_test.dart 가 잰다. (#235)
+  setUp(() => LocationUploadPolicy.setForTest(true));
+  tearDown(LocationUploadPolicy.resetForTest);
+
   test('우리 백엔드를 부른다 — 관광공사가 아니다', () async {
     Uri? called;
     final repo = _repo(MockClient((req) async {

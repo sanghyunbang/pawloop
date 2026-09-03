@@ -27,6 +27,8 @@ import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
+import 'location_upload_policy.dart';
+
 /// 반려동물의 종 — 계약의 `PetSpecies`.
 ///
 /// `pet.dart` 의 `PetSpecies` 와 이름이 겹치지만 그쪽은 화면 안에서만 사는 더미
@@ -379,6 +381,9 @@ class WalkRepository {
     String? memo,
     String? weather,
   }) async {
+    final uploadPath = LocationUploadPolicy.pathForUpload(path);
+    final uploadPathT = LocationUploadPolicy.pathTimesForUpload(pathT);
+
     final json = await _send(
       () => _authed.postJson(
         Uri.parse('$baseUrl/api/walks'),
@@ -391,11 +396,17 @@ class WalkRepository {
           if (endedAt != null) 'endedAt': endedAt.toUtc().toIso8601String(),
           'distanceM': distanceM,
           'durationS': durationS,
-          if (path != null && path.length >= 2) 'path': path,
+          // 좌표가 기기를 떠나도 되는지는 **여기서 안 정한다** — 정책 한 곳이 정한다(#235).
+          // 꺼져 있으면 null 이 되어 아래 조건이 통째로 거짓이 되고, 산책은 경로 없이
+          // 저장된다(서버가 path 를 optional 로 받는다).
+          if (uploadPath != null && uploadPath.length >= 2) 'path': uploadPath,
           // path 를 실을 때만 함께 싣는다. 길이가 다르면 서버가 400 이고, path 를 뺀
           // 채로 pathT 만 보내도 400 이다 — 경로 없는 시각은 뜻이 없다. (#155)
-          if (path != null && path.length >= 2 && pathT != null && pathT.length == path.length)
-            'pathT': pathT,
+          if (uploadPath != null &&
+              uploadPath.length >= 2 &&
+              uploadPathT != null &&
+              uploadPathT.length == uploadPath.length)
+            'pathT': uploadPathT,
           if (memo != null && memo.isNotEmpty) 'memo': memo,
           if (weather != null && weather.isNotEmpty) 'weather': weather,
         },

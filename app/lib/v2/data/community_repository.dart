@@ -36,6 +36,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
+import 'location_upload_policy.dart';
 
 /// 게시판 — 계약의 `Board`.
 ///
@@ -416,6 +417,9 @@ class CommunityRepository {
     String? loc,
     String? contentId,
   }) async {
+    final uploadLoc = LocationUploadPolicy.placeNameForUpload(loc);
+    final uploadContentId = LocationUploadPolicy.placeIdForUpload(contentId);
+
     final json = await _send(
       () => _authed.postJson(
         Uri.parse('$baseUrl/api/community/posts'),
@@ -423,8 +427,11 @@ class CommunityRepository {
           'board': board.wire,
           'title': title,
           'body': body,
-          if (loc != null && loc.isNotEmpty) 'loc': loc,
-          if (contentId != null && contentId.isNotEmpty) 'contentId': contentId,
+          // 장소는 정책을 지난다(#235). 사용자가 탭한 공개 장소의 이름·id 지만, 그
+          // 목록 자체가 현위치 반경 조회의 결과라 "이 근처에 있었다" 를 함의할 수 있다.
+          if (uploadLoc != null && uploadLoc.isNotEmpty) 'loc': uploadLoc,
+          if (uploadContentId != null && uploadContentId.isNotEmpty)
+            'contentId': uploadContentId,
         },
       ),
     );

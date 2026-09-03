@@ -3,5 +3,8 @@
 
   "API_BASE_URL": "https://api.heattrip.link",
 
-  "NAVER_MAP_CLIENT_ID": ""
+  "NAVER_MAP_CLIENT_ID": "",
+
+  "_UPLOAD_LOCATION": "좌표를 서버로 보낼지. 기본은 false 이고 그것이 안전한 쪽이다 — 위치기반서비스사업 신고(위치정보법 제9조)를 마치기 전에는 켜면 안 된다. 신고 전 배포본은 이 값을 넣지 않는다. 자세한 이유는 lib/v2/data/location_upload_policy.dart 와 이슈 #235.",
+  "UPLOAD_LOCATION": "false"
 }

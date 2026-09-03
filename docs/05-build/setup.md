@@ -96,6 +96,7 @@ flutter run --dart-define-from-file=dart-define.json
 | `API_BASE` | `Env.apiBase` | (없음) | 로컬/스테이징 전환용 override. `API_BASE_URL`보다 **우선**한다. |
 | `API_BASE_URL` | `Env.apiBase` | (없음) | 백엔드 베이스 URL. 운영은 `https://api.heattrip.link`. |
 | `NAVER_MAP_CLIENT_ID` | `Env.naverMapClientId` | `''` | 네이버 지도 SDK 초기화(`FlutterNaverMap().init`). 비어 있으면 지도 탭이 비활성(안내문)만 표시된다. |
+| `UPLOAD_LOCATION` | `LocationUploadPolicy` | `false` | **좌표를 서버로 보낼지.** 기본이 안전한 쪽이다 — 켜려면 명시해야 한다. 위치기반서비스사업 신고 전에는 켜면 안 된다([#235](https://github.com/sanghyunbang/heattrip/issues/235)). |
 
 > `Env.apiBase` 우선순위: **(1)** `--dart-define=API_BASE=...` → **(2)** `--dart-define=API_BASE_URL=...` → **(3)** `http://10.0.2.2:8080`.
 
@@ -103,6 +104,26 @@ flutter run --dart-define-from-file=dart-define.json
 > **관광공사 서비스키는 이제 앱에 없다**([#40](https://github.com/sanghyunbang/heattrip/issues/40)). 호출 자체를 백엔드로 옮겼고, 키는 서버 환경변수 `TOUR_API_SECRET` 으로만 존재한다.
 >
 > `--dart-define` 은 완화였을 뿐이다 — 값이 컴파일 타임에 코드로 박히고 문자열은 바이너리에 남아 `strings` 한 번이면 나온다. **여기에 그 키를 다시 넣지 말 것.**
+
+### 3.3 신고 전 배포본 — 좌표를 안 보내는 빌드
+
+위치기반서비스사업 신고(위치정보법 제9조)는 사업자등록이 있어야 할 수 있다. 그것이 없는 동안 배포하는 빌드는 **좌표가 단말을 떠나지 않아야 한다**([#235](https://github.com/sanghyunbang/heattrip/issues/235) · `docs/00-product/legal-lbs-compliance.md`).
+
+그 빌드는 **아무것도 더 하지 않는 것**으로 만들어진다 — 기본값이 이미 안전한 쪽이다.
+
+```bash
+# 좌표를 안 보내는 빌드. UPLOAD_LOCATION 과 NAVER_MAP_CLIENT_ID 를 **주지 않는다.**
+flutter build apk --release --dart-define=API_BASE_URL=https://api.heattrip.link
+```
+
+| 무엇이 | 왜 |
+| --- | --- |
+| `UPLOAD_LOCATION` 을 안 준다 | `LocationUploadPolicy` 가 산책 경로·주변 장소 조회·커뮤니티 장소를 전부 죽인다 |
+| `NAVER_MAP_CLIENT_ID` 를 안 준다 | 지도 SDK 에 카메라 중심(= 사용자 좌표)이 안 넘어간다. `Env.hasNaverMap` 이 false 라 세 지도 화면이 `MapUnavailable` 로 떨어진다 |
+
+**확인은 테스트가 한다.** `app/test/v2/data/location_upload_policy_test.dart` 가 소스를 훑어 정책을 안 지나는 전송 경로가 있는지 세고, 진짜 저장소에 목을 꽂아 값이 실제로 죽는지 본다.
+
+신고를 마친 뒤에는 `--dart-define=UPLOAD_LOCATION=true` 를 붙이면 된다. **코드를 되돌릴 필요가 없다** — 그 하나를 위해 정책 객체를 둔 것이다.
 >
 > ⚠️ **아직 남은 일**: 이미 배포된 빌드에는 그 키가 들어 있으므로 **유출된 것으로 보고 폐기·재발급**해야 한다. 순서는 프록시 배포 → 앱 업데이트 배포 → 구 키 폐기다.
 
