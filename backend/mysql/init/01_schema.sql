@@ -579,16 +579,12 @@ CREATE TABLE `report` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `reported_user_id` bigint DEFAULT NULL,
   `reporter_user_id` bigint NOT NULL,
-  `target_id` bigint NOT NULL,
   `reason` varchar(16) NOT NULL,
-  `target_type` varchar(24) NOT NULL,
   `memo` varchar(500) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_report_target` (`target_type`,`target_id`),
   KEY `idx_report_reported` (`reported_user_id`),
   KEY `idx_report_reporter` (`reporter_user_id`),
-  CONSTRAINT `chk_report_reason` CHECK ((`reason` in (_utf8mb4'spam',_utf8mb4'abuse',_utf8mb4'sexual',_utf8mb4'fraud',_utf8mb4'other'))),
-  CONSTRAINT `chk_report_target_type` CHECK ((`target_type` in (_utf8mb4'community_post',_utf8mb4'community_comment')))
+  CONSTRAINT `chk_report_reason` CHECK ((`reason` in (_utf8mb4'spam',_utf8mb4'abuse',_utf8mb4'sexual',_utf8mb4'fraud',_utf8mb4'other')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `report_snapshot` (
@@ -597,13 +593,20 @@ CREATE TABLE `report_snapshot` (
   `occurred_at` datetime(6) NOT NULL,
   `report_id` bigint NOT NULL,
   `role` varchar(8) NOT NULL,
+  `target_id` bigint NOT NULL,
+  `target_ordinal` bigint DEFAULT NULL,
+  `content_type` varchar(16) DEFAULT NULL,
+  `target_type` varchar(24) NOT NULL,
   `title` varchar(200) DEFAULT NULL,
   `author_name` varchar(255) DEFAULT NULL,
-  `body` text NOT NULL,
+  `body` text,
   PRIMARY KEY (`id`),
   KEY `idx_report_snapshot_report` (`report_id`),
+  KEY `idx_report_snapshot_target` (`target_type`,`target_id`),
   CONSTRAINT `fk_report_snapshot_report` FOREIGN KEY (`report_id`) REFERENCES `report` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `chk_report_snapshot_role` CHECK ((`role` in (_utf8mb4'target',_utf8mb4'context')))
+  CONSTRAINT `chk_report_snapshot_role` CHECK ((`role` in (_utf8mb4'target',_utf8mb4'context'))),
+  CONSTRAINT `chk_report_snapshot_target_has_body` CHECK (((`role` <> _utf8mb4'target') or (`body` is not null))),
+  CONSTRAINT `chk_report_snapshot_target_type` CHECK ((`target_type` in (_utf8mb4'community_post',_utf8mb4'community_comment',_utf8mb4'chat_message',_utf8mb4'chat_room')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `schedule` (

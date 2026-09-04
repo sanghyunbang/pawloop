@@ -44,12 +44,23 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "report_snapshot", indexes = {
         @Index(name = "idx_report_snapshot_report", columnList = "report_id"),
+        // report 에서 내려온 인덱스다 (#254). "이 글이 몇 번 신고당했나" 를 세던 자리가
+        // 부모에서 자식으로 옮겨졌으므로 인덱스도 함께 옮긴다.
+        @Index(name = "idx_report_snapshot_target", columnList = "target_type, target_id"),
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder
 @Check(name = "chk_report_snapshot_role", constraints = "role in ('target','context')")
+@Check(name = "chk_report_snapshot_target_type",
+        constraints = "target_type in ('community_post','community_comment',"
+                + "'chat_message','chat_room')")
+// **대상 줄에는 본문이 있어야 한다.** 좌표만 남은 대상은 원본이 지워지면 아무것도 못
+// 말하는데, 그것이 이 표가 존재하는 이유다. 맥락 줄은 좌표만일 수 있다 — 채팅의 방이
+// 그렇다(신고당하지 않은 사람의 말을 한 줄도 안 베면서 방 id 만 남긴다).
+@Check(name = "chk_report_snapshot_target_has_body",
+        constraints = "role <> 'target' or body is not null")
 public class ReportSnapshot {
 
     @Id
@@ -65,6 +76,28 @@ public class ReportSnapshot {
     /** {@code target} 또는 {@code context}. */
     @Column(name = "role", nullable = false, length = 8)
     private String role;
+
+    /**
+     * 무엇을 가리키나 — 이슈 #254 로 {@code report} 부모에서 내려왔다.
+     *
+     * <p>채팅 신고가 한 건에 메시지 셋까지라 부모 한 칸으로는 안 담겼다. 맥락 줄도 좌표를
+     * 든다 — 좌표 없는 사본은 "어느 글의 무엇이었나" 를 못 말한다.
+     */
+    @Column(name = "target_type", nullable = false, length = 24)
+    private String targetType;
+
+    /** 그 도메인 안의 id. <b>FK 는 없다</b> — 원본이 지워져도 신고는 남아야 한다. */
+    @Column(name = "target_id", nullable = false)
+    private long targetId;
+
+    /**
+     * 그 도메인 안의 순번. 채팅은 {@code room_seq}, 커뮤니티는 {@code null} 이다.
+     *
+     * <p><b>맥락 범위를 이 값으로 다시 센다.</b> 채팅의 {@code context_from/to_seq} 는
+     * 대상들의 {@code room_seq} 와 반경 상수에서 완전히 유도되는 파생값이라 따로 안 담는다.
+     */
+    @Column(name = "target_ordinal")
+    private Long targetOrdinal;
 
     /** 그 글·댓글을 쓴 사람. 탈퇴했으면 {@code null}. */
     @Column(name = "author_user_id")
@@ -84,9 +117,26 @@ public class ReportSnapshot {
     @Column(name = "title", length = 200)
     private String title;
 
+    /**
+     * 신고 시점 본문.
+     *
+     * <p><b>대상 줄은 반드시 있다</b> — {@code chk_report_snapshot_target_has_body} 가
+     * DB 에서 막는다. 좌표만 담는 맥락 줄(채팅의 방)은 {@code null} 이라 컬럼 자체는
+     * nullable 이다.
+     */
     @Lob
-    @Column(name = "body", nullable = false, columnDefinition = "text")
+    @Column(name = "body", columnDefinition = "text")
     private String body;
+
+    /**
+     * 본문의 종류. 채팅만 채운다 — 커뮤니티는 {@code null} 이다.
+     *
+     * <p>이미지 신고와 글 신고가 구분되지 않으면 운영자가 무엇을 봐야 하는지 모른다.
+     * 오늘 앱은 {@code text} 만 보내지만, 값이 하나라서 안 담는 것과 담을 자리가 없어서
+     * 못 담는 것은 다르다 — 신고는 증거이고, 증거는 나중에 늘릴 수 없다.
+     */
+    @Column(name = "content_type", length = 16)
+    private String contentType;
 
     /** 그 글·댓글이 쓰인 시각. 담긴 값이 UTC 다. */
     @Column(name = "occurred_at", nullable = false)

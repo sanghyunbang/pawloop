@@ -41,6 +41,9 @@ class ReportSchemaMigrationExecutionTest {
 
     private static final String SCRIPT = "mysql/post-start/15_report.sql";
 
+    /** 좌표를 부모에서 자식으로 내리는 스크립트 — 이슈 #254. 15 다음이다. */
+    private static final String ABSORB = "mysql/post-start/17_report_target_to_snapshot.sql";
+
     /** 데이터베이스 이름 충돌을 피하기 위한 카운터. 컨테이너 하나를 여러 테스트가 공유한다. */
     private static int dbCounter = 0;
 
@@ -204,6 +207,118 @@ class ReportSchemaMigrationExecutionTest {
                     .hasSize(3);
         }
     }
+    // ─────────────────── 좌표를 자식으로 (이슈 #254) ───────────────────
+
+    @Test
+    @DisplayName("좌표가 부모에서 자식으로 내려간다 — 채팅 신고는 대상이 셋까지라 부모 한 칸으로는 안 담긴다")
+    void theTargetAxisMovesToTheChild() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+            db.runAbsorb();
+
+            assertThat(db.columns("report"))
+                    .as("""
+                            부모는 "누가·누구를·왜·언제" 만 든다. ADR-0016 은 이 축을 부모에 \
+                            두면 채팅 흡수가 INSERT ... SELECT 라고 적었는데, 채팅 신고가 한 \
+                            건에 메시지 셋까지라 그 산정이 성립하지 않았다.""")
+                    .doesNotContain("target_type", "target_id");
+            assertThat(db.columns("report_snapshot"))
+                    .contains("target_type", "target_id", "target_ordinal", "content_type");
+        }
+    }
+
+    @Test
+    @DisplayName("대상 줄에 본문이 없으면 DB 가 막는다 — 좌표만 남은 대상은 아무것도 못 말한다")
+    void aTargetRowMustCarryItsBody() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+            db.runAbsorb();
+            db.exec("INSERT INTO users (id, role) VALUES (1, 'USER')");
+            db.exec("INSERT INTO report (reporter_user_id, reason, created_at) "
+                    + "VALUES (1, 'spam', NOW(6))");
+
+            assertThatThrownBy(() -> db.exec(
+                    "INSERT INTO report_snapshot "
+                            + "(report_id, role, target_type, target_id, occurred_at) "
+                            + "VALUES (1, 'target', 'chat_message', 7, NOW(6))"))
+                    .as("""
+                            사본이 없는 대상은 원본이 지워지면 아무것도 못 말한다 — 그것이 이 \
+                            표가 존재하는 이유다. 맥락 줄은 좌표만일 수 있다(채팅의 방).""")
+                    .isInstanceOf(SQLException.class);
+
+            db.exec("INSERT INTO report_snapshot "
+                    + "(report_id, role, target_type, target_id, occurred_at) "
+                    + "VALUES (1, 'context', 'chat_room', 9, NOW(6))");
+            assertThat(db.count("report_snapshot"))
+                    .as("좌표만 담는 맥락 줄은 통과해야 한다 — 방 좌표가 그 모양이다")
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("모르는 대상 종류는 DB 가 막는다 — 어휘가 넷이다")
+    void unknownTargetTypesAreRejected() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+            db.runAbsorb();
+            db.exec("INSERT INTO users (id, role) VALUES (1, 'USER')");
+            db.exec("INSERT INTO report (reporter_user_id, reason, created_at) "
+                    + "VALUES (1, 'spam', NOW(6))");
+
+            assertThatThrownBy(() -> db.exec(
+                    "INSERT INTO report_snapshot "
+                            + "(report_id, role, target_type, target_id, body, occurred_at) "
+                            + "VALUES (1, 'target', 'emotion_card', 7, '본문', NOW(6))"))
+                    .as("서비스 상수만 있고 DB 가 비어 있으면 그 상수를 안 거치는 경로가 무방비다")
+                    .isInstanceOf(SQLException.class);
+
+            db.exec("INSERT INTO report_snapshot "
+                    + "(report_id, role, target_type, target_id, body, occurred_at) "
+                    + "VALUES (1, 'target', 'chat_message', 7, '본문', NOW(6))");
+            assertThat(db.count("report_snapshot"))
+                    .as("채팅은 열려 있어야 한다 — 이 마이그레이션이 여는 것이 그것이다")
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("chat_report 에 행이 있으면 17 이 스스로 멈춘다 — 신고는 다시 만들 수 없다")
+    void theAbsorbAbortsWhenChatReportHasRows() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+            db.exec("CREATE TABLE chat_report (id BIGINT PRIMARY KEY, room_id BIGINT NOT NULL)");
+            db.exec("INSERT INTO chat_report (id, room_id) VALUES (1, 1)");
+
+            assertThatThrownBy(db::runAbsorb)
+                    .as("""
+                            신고는 사용자가 우리에게 맡긴 기록이라 다시 만들 수 없다. 옮길 \
+                            방법은 사람이 정해야 한다 — 15_report.sql 이 같은 문장을 적어 뒀다.""")
+                    .isInstanceOf(SQLException.class);
+
+            assertThat(db.columns("report"))
+                    .as("멈췄으면 스키마는 한 글자도 안 바뀌어야 한다")
+                    .contains("target_type", "target_id");
+        }
+    }
+
+    @Test
+    @DisplayName("17 을 두 번 돌려도 같은 상태로 끝난다")
+    void theAbsorbIsIdempotent() throws Exception {
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+            db.runAbsorb();
+            db.runAbsorb();
+
+            assertThat(db.columns("report_snapshot")).contains("target_type", "target_ordinal");
+            assertThat(db.columns("report")).doesNotContain("target_type");
+        }
+    }
+
     @Test
     @DisplayName("users 가 없으면 한 글자도 안 바꾸고 멈춘다")
     void migrationAbortsWithoutUsers() throws Exception {
@@ -269,8 +384,17 @@ class ReportSchemaMigrationExecutionTest {
 
         /** 저장소의 운영 스크립트를 그대로 한 커넥션에서 순서대로 실행한다. */
         void runMigration() throws Exception {
+            run(SCRIPT);
+        }
+
+        /** 좌표를 자식으로 내린다 (#254). */
+        void runAbsorb() throws Exception {
+            run(ABSORB);
+        }
+
+        private void run(String script) throws Exception {
             String sql = Files.readString(
-                    TestProjectPaths.requireFile(SCRIPT), StandardCharsets.UTF_8);
+                    TestProjectPaths.requireFile(script), StandardCharsets.UTF_8);
             try (Statement st = connection.createStatement()) {
                 for (String statement : splitStatements(sql)) {
                     st.execute(statement);
@@ -290,6 +414,13 @@ class ReportSchemaMigrationExecutionTest {
                     WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'
                     ORDER BY table_name
                     """);
+        }
+
+        /** 그 표의 컬럼 이름들. 이름으로 재야 컬럼이 늘어도 안 깨진다 (#267). */
+        List<String> columns(String table) throws SQLException {
+            return query("SELECT column_name FROM information_schema.columns "
+                    + "WHERE table_schema = DATABASE() AND table_name = '" + table + "' "
+                    + "ORDER BY column_name");
         }
 
         List<String> foreignKeys() throws SQLException {

@@ -44,7 +44,6 @@ import java.time.ZoneOffset;
  */
 @Entity
 @Table(name = "report", indexes = {
-        @Index(name = "idx_report_target", columnList = "target_type, target_id"),
         @Index(name = "idx_report_reported", columnList = "reported_user_id"),
         @Index(name = "idx_report_reporter", columnList = "reporter_user_id"),
 })
@@ -52,8 +51,6 @@ import java.time.ZoneOffset;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder
-@Check(name = "chk_report_target_type",
-        constraints = "target_type in ('community_post','community_comment')")
 @Check(name = "chk_report_reason",
         constraints = "reason in ('spam','abuse','sexual','fraud','other')")
 public class Report {
@@ -62,18 +59,12 @@ public class Report {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * 무엇을 신고했나. 지금 값 둘은 커뮤니티 것이다.
-     *
-     * <p>이 축이 있어야 채팅 신고를 합치는 것이 재설계가 아니라 {@code INSERT ... SELECT} 다
-     * (ADR-0016).
-     */
-    @Column(name = "target_type", nullable = false, length = 24)
-    private String targetType;
-
-    /** 그 도메인 안의 id. <b>FK 는 없다</b> — 원본이 지워져도 신고는 남아야 한다. */
-    @Column(name = "target_id", nullable = false)
-    private long targetId;
+    // 무엇을 신고했나 — **좌표는 여기 없다.** report_snapshot 이 든다 (#254).
+    //
+    // ADR-0016 은 target_type 축을 부모에 두면 채팅 흡수가 INSERT ... SELECT 라고 적었는데,
+    // 채팅 신고가 한 건에 메시지 셋까지라 부모 한 칸으로는 안 담겼다. 그 산정이 틀렸다.
+    //
+    // 부모는 "누가·누구를·왜·언제" 만 든다. "무엇을" 은 사본마다 붙는다.
 
     @Column(name = "reporter_user_id", nullable = false)
     private long reporterUserId;

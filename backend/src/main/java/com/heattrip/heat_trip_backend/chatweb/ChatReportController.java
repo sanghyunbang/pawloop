@@ -1,8 +1,6 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
-import com.heattrip.heat_trip_backend.chat.ChatReportService;
-import com.heattrip.heat_trip_backend.chat.ChatReportView;
-import com.heattrip.heat_trip_backend.chat.ChatTime;
+import com.heattrip.heat_trip_backend.moderation.ReportReceipt;
 import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
@@ -47,7 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/chat")
 public class ChatReportController {
 
-    private final ChatReportService reportService;
+    private final ChatReports chatReports;
 
     /**
      * 이 방의 메시지 몇 개를 신고한다.
@@ -63,10 +61,12 @@ public class ChatReportController {
     public ResponseEntity<ChatReportResponse> report(@PathVariable("roomId") long roomId,
                                                      @RequestBody ChatReportRequest request,
                                                      @CurrentUser User me) {
-        ChatReportView report = reportService.report(
+        // 접수는 moderation 이 한다 — 신고 표가 하나다 (#254). 응답의 모양은 그대로다:
+        // 계약의 인라인 스키마가 {reportId, createdAt} 둘이고 앱이 그것을 읽는다.
+        ReportReceipt receipt = chatReports.file(
                 roomId, me.getId(), request.roomSeqs(), request.reason(), request.memo());
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ChatReportResponse(report.id(), ChatTime.toInstant(report.createdAt())));
+                .body(new ChatReportResponse(receipt.reportId(), receipt.createdAt()));
     }
 }

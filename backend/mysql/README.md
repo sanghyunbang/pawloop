@@ -41,6 +41,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\14_community.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\15_report.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\16_user_block.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\17_report_target_to_snapshot.sql
 ```
 
 | 파일 | 무엇을 |
@@ -61,6 +62,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `14_community.sql` | 커뮤니티 표 셋 — `post`·`comment`·`reaction` 생성. `users` 로의 FK 셋(**CASCADE 아님** — 탈퇴가 남의 글에서 대화를 끊지 않는다)·`post` 로의 FK 둘(CASCADE)·`uq_reaction(post_id, user_id, type)`(**사용자당 글마다 여러 반응** — ADR-0016 결정 2)·인덱스 둘. **04 가 먼저입니다.** `board` 는 ASCII 키이고 장소 참조는 `content_id VARCHAR(64)` 이며 FK 가 없습니다 (장소는 캐시라 행이 없을 수 있습니다) (이슈 #169) |
 | `15_report.sql` | 신고 표 둘 — `report`·`report_snapshot` 생성. `users` 로의 **FK 를 안 겁니다** (신고는 값으로만 사람을 가리킵니다 — 탈퇴가 신고 기록을 지우면 안 됩니다) · `target_type`·`reason`·`role` 셋에 CHECK · 인덱스 셋. **UNIQUE 가 없습니다** — 글은 편집되므로 같은 사람이 같은 글을 다시 신고하는 것을 DB 가 막으면 안 됩니다 (이슈 #166 · ADR-0016) |
 | `16_user_block.sql` | `chat_block` → `user_block` **이름 변경**(인덱스 `uq_chat_block` → `uq_user_block` 포함). 가리기는 처음부터 사람 단위였고, 채팅 안에 있었던 것은 채팅이 그것을 처음 필요로 했기 때문입니다. 커뮤니티가 같은 가리기를 쓰면서 그 이름이 거짓이 됐습니다. **행이 0일 때만 공짜입니다** — 두 표가 다 있으면 어느 쪽이 정본인지 사람이 정하도록 멈춥니다 (이슈 #166 · ADR-0016) |
+| `17_report_target_to_snapshot.sql` | 신고의 좌표를 `report` 부모에서 `report_snapshot` 자식으로 내립니다 — `target_type`·`target_id`·`target_ordinal`·`content_type` 추가, 부모의 `target_*`·인덱스·CHECK 제거, 자식에 CHECK 둘과 인덱스 하나. 채팅 신고가 한 건에 메시지 셋까지라 부모 한 칸으로는 안 담겼습니다. **15 가 먼저입니다.** `chat_report` 에 행이 있으면 멈춥니다 — 신고는 다시 만들 수 없는 기록이라 이관을 사람이 정해야 합니다 (이슈 #254 · ADR-0016) |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
