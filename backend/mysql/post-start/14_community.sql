@@ -429,9 +429,16 @@ SET @d_tables := (
     SELECT COUNT(*) FROM information_schema.tables
     WHERE table_schema = DATABASE() AND table_name IN ('post', 'comment', 'reaction'));
 
+-- **이름으로 센다. 개수로 세면 안 된다.** 전체 컬럼 수를 리터럴과 견주면, 다음
+-- 마이그레이션이 post 에 컬럼을 하나 더하는 순간 이 스크립트를 다시 못 돌린다 —
+-- 런북이 "전부 멱등" 이라고 약속한 성질이 그날로 깨진다 (#267).
+--
+-- 이름으로 세는 것이 더 강하기도 하다. 개수만 맞고 이름이 틀린 경우도 걸린다.
 SET @d_post_cols := (
     SELECT COUNT(*) FROM information_schema.columns
-    WHERE table_schema = DATABASE() AND table_name = 'post');
+    WHERE table_schema = DATABASE() AND table_name = 'post'
+      AND column_name IN ('id', 'user_id', 'board', 'content_id', 'loc',
+                          'title', 'body', 'handle', 'created_at', 'updated_at'));
 
 SET @d_uq_cols := (
     SELECT COUNT(*) FROM information_schema.statistics
