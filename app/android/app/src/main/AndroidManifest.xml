@@ -9,9 +9,26 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     
+    <!-- 백업으로 좌표가 나가지 않는다 — 이슈 #270.
+
+         allowBackup 을 안 적으면 기본값이 true 다. 그러면 Auto Backup 이
+         shared_preferences 를 사용자의 구글 드라이브로 올리는데, 거기에 아직 못 올린
+         산책 초안이 있고 그 안에 원시 GPS 경로가 평문으로 들어 있다
+         (walk_outbox.dart 의 'path': [[경도, 위도], ...]).
+
+         legal-lbs-compliance.md 의 A안은 "좌표가 단말을 떠나지 않는다" 가 전제다.
+         LocationUploadPolicy 가 우리 서버로 가는 길을 전부 막아도, OS 가 그 뒤로
+         들고 나가면 그 전제가 깨진다 — 우리 코드에 전송이 한 줄도 없어도 좌표는
+         구글 서버에 있다.
+
+         API 31+ 는 기기 간 전송이 따로라 dataExtractionRules 가 함께 있어야 한다.
+         AndroidBackupIsOffTest 가 이 둘을 잠근다 — 매니페스트는 손으로 고치는
+         파일이라 조용히 되돌아간다. -->
     <application
         android:label="Pawloop"
         android:name="${applicationName}"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">

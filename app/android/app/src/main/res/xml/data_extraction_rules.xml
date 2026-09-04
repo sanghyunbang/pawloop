@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  이 앱의 데이터는 기기 밖으로 나가지 않는다 — 이슈 #270.
+
+  왜 필요한가
+
+  `android:allowBackup="false"` 는 **클라우드 백업만** 끈다. API 31(Android 12)부터
+  기기 간 전송(device-to-device)이 따로 생겼고, 그것은 이 파일이 정한다. 둘을 다 막지
+  않으면 새 폰으로 옮길 때 데이터가 그 경로로 나간다.
+
+  무엇이 들어 있길래
+
+  `shared_preferences` 에 아직 못 올린 산책 초안이 남는다. 그 안에 **원시 GPS 경로**가
+  평문으로 들어 있다 — `walk_outbox.dart` 의 `'path': path` 는 [경도, 위도] 쌍의 배열이고,
+  집에서 나가 걷고 돌아온 선을 그대로 그린다.
+
+  `legal-lbs-compliance.md` 의 A안은 "좌표가 단말을 떠나지 않는다" 가 전제다.
+  `LocationUploadPolicy` 가 우리 서버로 가는 길을 전부 막아도, **OS 가 그 뒤로 들고
+  나가면** 그 전제가 깨진다.
+
+  왜 통째로 막나 — 골라내지 않고
+
+  예외를 두면 "무엇이 안전한가" 를 매번 판단해야 하고, 새 저장 키가 생기는 날 아무도
+  이 파일을 안 본다. 지금 이 앱이 기기에 남기는 것은 초안 큐·동의 여부·토큰뿐이고,
+  **어느 것도 백업될 이유가 없다.**
+
+  되돌리려면
+
+  위치기반서비스사업 신고를 마치고(#200) 서버 전송을 켜는 날에도 이 파일은 그대로 둔다.
+  백업은 전송과 다른 문제다 — 우리가 안 보내기로 한 것을 OS 가 보내는 자리다.
+-->
+<data-extraction-rules>
+    <!-- 클라우드 백업(구글 드라이브)으로 나가는 것 — 아무것도 없다. -->
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+
+    <!-- 새 기기로 옮길 때 나가는 것 — 역시 아무것도 없다. -->
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>
