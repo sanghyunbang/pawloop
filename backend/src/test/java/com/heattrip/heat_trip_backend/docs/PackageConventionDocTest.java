@@ -63,7 +63,10 @@ class PackageConventionDocTest {
      */
     private static final List<String> EXPECTED_UNUSED_ROOT_TYPES =
             List.of("ChatErrorCode", "ChatLimits", "FixedChatLimits", "InviteCodeGenerator",
-                    "ChatReportedMessageView", "ChatReportReason");
+                    // #254 로 접수가 moderation 으로 옮겨가면서 밖에서 부르는 곳이 없어졌다.
+                    // 지우지 않는 것은 chat_report 표를 지울지 말지가 아직 사람의 판단이기
+                    // 때문이다 — 표가 남아 있는 동안 그것을 읽는 모양도 남겨 둔다.
+                    "ChatReportedMessageView", "ChatReportReason", "ChatReportView");
 
     private static String guide;
 

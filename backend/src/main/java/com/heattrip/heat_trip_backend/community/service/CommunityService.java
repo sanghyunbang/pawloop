@@ -244,11 +244,11 @@ public class CommunityService {
         requireNotMine(post.getUser(), me.getId());
 
         return reports.file(
-                ReportTarget.post(postId),
                 me.getId(),
                 post.getUser() == null ? null : post.getUser().getId(),
                 requireReason(reason),
                 memo,
+                // 좌표가 사본에 붙는다 — 부모는 "누가·누구를·왜·언제" 만 든다 (#254).
                 List.of(snapshotOf(post, ReportSnapshotInput.Role.TARGET)));
     }
 
@@ -270,26 +270,31 @@ public class CommunityService {
         requireNotMine(comment.getUser(), me.getId());
 
         return reports.file(
-                ReportTarget.comment(commentId),
                 me.getId(),
                 comment.getUser() == null ? null : comment.getUser().getId(),
                 requireReason(reason),
                 memo,
+                // 부모 글은 맥락이고, 그 줄도 자기 좌표를 든다 — 글이 지워진 뒤에도
+                // "어느 글에 달린 댓글이었나" 를 말할 수 있어야 한다 (#254).
                 List.of(snapshotOf(comment), snapshotOf(post, ReportSnapshotInput.Role.CONTEXT)));
     }
 
     private static ReportSnapshotInput snapshotOf(Post post, ReportSnapshotInput.Role role) {
         return new ReportSnapshotInput(
                 role,
+                ReportTarget.post(post.getId()),
+                null, // 커뮤니티에는 순번이 없다 — 채팅의 room_seq 자리다
                 post.getUser() == null ? null : post.getUser().getId(),
                 post.getHandle(),
                 post.getTitle(),
                 post.getBody(),
+                null, // 종류도 채팅 것이다
                 post.createdAtInstant());
     }
 
     private static ReportSnapshotInput snapshotOf(Comment comment) {
         return ReportSnapshotInput.target(
+                ReportTarget.comment(comment.getId()),
                 comment.getUser() == null ? null : comment.getUser().getId(),
                 comment.getHandle(),
                 null, // 댓글에는 제목이 없다

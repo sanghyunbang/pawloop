@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.heattrip.heat_trip_backend.chat.entity.ChatMessage;
 import com.heattrip.heat_trip_backend.chat.repository.ChatMessageRepository;
+import com.heattrip.heat_trip_backend.chatweb.ChatReports;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
@@ -55,6 +56,16 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
     @Autowired
     private ChatReportService reportService;
 
+    /**
+     * 접수는 {@code moderation} 이 한다 — 신고 표가 하나다 (#254).
+     *
+     * <p>{@code chat} 은 {@code moderation} 을 못 부르므로 조립이 {@code chatweb} 에 있다.
+     * 판정만 재는 테스트는 {@link ChatReportService#draft} 를 그대로 부르고, 저장까지 재는
+     * 테스트만 이쪽을 부른다.
+     */
+    @Autowired
+    private ChatReports chatReports;
+
     @Autowired
     private ChatRoomService roomService;
 
@@ -75,26 +86,23 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         Fixture f = fixture();
         long badSeq = send(f, f.troll, "여기서 하면 안 되는 말");
 
-        long reportId = reportService
-                .report(f.roomId, f.reporter.getId(), List.of(badSeq), "abuse", "욕설입니다").id();
+        long reportId = chatReports
+                .file(f.roomId, f.reporter.getId(), List.of(badSeq), "abuse", "욕설입니다").reportId();
 
         // 신고당한 사람이 지운다 — 이 도메인의 삭제는 소프트이고 본문을 비운다.
         jdbc.update("update chat_message set body = '', deleted_at = now(6) "
                 + "where room_id = ? and room_seq = ?", f.roomId, badSeq);
 
-        ChatReportView report = reportService.findReport(reportId).orElseThrow();
-
-        assertThat(report.messages()).singleElement()
-                .satisfies(snapshot -> {
-                    assertThat(snapshot.body())
-                            .as("""
-                                    원본을 참조만 하면 여기가 빈 문자열이 된다. 그 상태로는 무엇이
-                                    신고됐는지 알 수 없어서 판단이 불가능하다.
-                                    """)
-                            .isEqualTo("여기서 하면 안 되는 말");
-                    assertThat(snapshot.senderUserId()).isEqualTo(f.troll.getId());
-                    assertThat(snapshot.roomSeq()).isEqualTo(badSeq);
-                });
+        assertThat(targetBodies(reportId))
+                .as("""
+                        원본을 참조만 하면 여기가 빈 문자열이 된다. 그 상태로는 무엇이
+                        신고됐는지 알 수 없어서 판단이 불가능하다.
+                        """)
+                .containsExactly("여기서 하면 안 되는 말");
+        assertThat(targetAuthors(reportId)).containsExactly(f.troll.getId());
+        assertThat(targetOrdinals(reportId))
+                .as("room_seq 가 target_ordinal 로 남는다 — 맥락 범위를 이 값으로 다시 센다 (#254)")
+                .containsExactly(badSeq);
 
         assertThat(messages.findByRoomIdAndRoomSeqIn(f.roomId, List.of(badSeq)))
                 .as("원본은 실제로 비워져 있어야 한다 — 아니면 이 테스트가 아무것도 안 잡는다")
@@ -109,49 +117,64 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         Fixture f = fixture();
         long badSeq = send(f, f.troll, "방과 함께 사라지면 안 되는 말");
 
-        long reportId = reportService
-                .report(f.roomId, f.reporter.getId(), List.of(badSeq), "abuse", null).id();
+        long reportId = chatReports
+                .file(f.roomId, f.reporter.getId(), List.of(badSeq), "abuse", null).reportId();
 
         jdbc.update("delete from chat_room where id = ?", f.roomId);
 
-        assertThat(reportService.findReport(reportId))
+        assertThat(targetBodies(reportId))
                 .as("""
                         chat_message 는 ON DELETE CASCADE 라 방과 함께 사라진다.
-                        chat_report 까지 방에 FK 로 묶으면 방 삭제 한 번에 신고 기록이 지워진다.
+                        신고를 방에 FK 로 묶으면 방 삭제 한 번에 신고 기록이 지워진다.
                         """)
-                .get()
-                .extracting(view -> view.messages().get(0).body())
-                .isEqualTo("방과 함께 사라지면 안 되는 말");
+                .containsExactly("방과 함께 사라지면 안 되는 말");
+        assertThat(roomCoordinate(reportId))
+                .as("""
+                        방 좌표가 맥락 한 줄로 남는다 (#254). 이 값이 없으면 target_ordinal 에
+                        담긴 room_seq 가 어느 방의 번호인지 알 수 없다 — chat_report.room_id 가
+                        있던 자리다.
+                        """)
+                .isEqualTo(f.roomId);
     }
 
     @Test
-    @DisplayName("앞뒤 5개 범위가 함께 남는다")
-    void theContextRangeIsRecorded() {
+    @DisplayName("맥락 범위를 다시 셀 수 있다 — room_seq 가 사본에 남는다")
+    void theContextRangeCanBeRecomputed() {
         Fixture f = fixture();
         for (int i = 0; i < 12; i++) {
             send(f, f.troll, "메시지 " + i);
         }
         long picked = send(f, f.troll, "고른 것");
 
-        ChatReportView report = reportService
-                .report(f.roomId, f.reporter.getId(), List.of(picked), "spam", null);
+        long reportId = chatReports
+                .file(f.roomId, f.reporter.getId(), List.of(picked), "spam", null).reportId();
 
-        assertThat(report.contextFromSeq())
+        // #254 이전에는 context_from_seq·context_to_seq 두 수를 따로 저장했다. 그 둘은
+        // 대상들의 room_seq 와 CONTEXT_RADIUS 에서 **완전히 유도되는 파생값**이라, 순번을
+        // 남기면 언제든 다시 센다. 대신 반경을 바꾸는 날 과거 신고의 범위가 소급해서
+        // 바뀐다 — 그 값을 치르고 공용 표에 채팅 전용 칸 둘을 안 만든다.
+        List<Long> ordinals = targetOrdinals(reportId);
+        assertThat(ordinals)
                 .as("한 줄만 보면 판단이 안 된다. 어디를 봐야 하는지가 함께 남아야 한다")
-                .isEqualTo(picked - ChatReportService.CONTEXT_RADIUS);
-        assertThat(report.contextToSeq()).isEqualTo(picked + ChatReportService.CONTEXT_RADIUS);
+                .containsExactly(picked);
+
+        long from = Math.max(1L, ordinals.get(0) - ChatReportService.CONTEXT_RADIUS);
+        long to = ordinals.get(0) + ChatReportService.CONTEXT_RADIUS;
+        assertThat(from).isEqualTo(picked - ChatReportService.CONTEXT_RADIUS);
+        assertThat(to).isEqualTo(picked + ChatReportService.CONTEXT_RADIUS);
     }
 
     @Test
-    @DisplayName("방 첫 메시지를 신고해도 범위가 0 이나 음수로 내려가지 않는다")
+    @DisplayName("방 첫 메시지를 신고해도 다시 센 범위가 0 이나 음수로 안 내려간다")
     void theContextRangeNeverGoesBelowOne() {
         Fixture f = fixture();
         long first = send(f, f.troll, "방의 첫 줄");
 
-        ChatReportView report = reportService
-                .report(f.roomId, f.reporter.getId(), List.of(first), "spam", null);
+        long reportId = chatReports
+                .file(f.roomId, f.reporter.getId(), List.of(first), "spam", null).reportId();
 
-        assertThat(report.contextFromSeq())
+        long ordinal = targetOrdinals(reportId).get(0);
+        assertThat(Math.max(1L, ordinal - ChatReportService.CONTEXT_RADIUS))
                 .as("room_seq 는 1부터다. 0 이나 음수를 남기면 그 범위를 읽는 쪽이 헛돈다")
                 .isEqualTo(1L);
     }
@@ -161,7 +184,7 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
     @Test
     @DisplayName("밖으로 나가는 모양에 신고자가 없다 — 문서가 아니라 타입이 막는다")
     void theViewCannotCarryTheReporter() {
-        assertThat(ChatReportView.class.getRecordComponents())
+        assertThat(ChatReportDraft.class.getRecordComponents())
                 .as("""
                         record 에 필드가 없으면 어떤 응답도 그것을 실을 수 없다.
                         "싣지 마세요" 라고 문서에 적는 것과 실을 수 없게 만드는 것은 다르다.
@@ -178,7 +201,7 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         int before = roomService.myRooms(f.troll.getId()).size();
         long unreadBefore = unreadOf(f.roomId, f.troll.getId());
 
-        reportService.report(f.roomId, f.reporter.getId(), List.of(badSeq), "abuse", "사유");
+        reportService.draft(f.roomId, f.reporter.getId(), List.of(badSeq), "abuse", "사유");
 
         assertThat(roomService.myRooms(f.troll.getId()))
                 .as("방이 늘거나 줄면 그 자체가 통지다")
@@ -198,7 +221,7 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
                 send(f, f.troll, "1"), send(f, f.troll, "2"),
                 send(f, f.troll, "3"), send(f, f.troll, "4"));
 
-        assertThatThrownBy(() -> reportService.report(f.roomId, f.reporter.getId(), four, "spam", null))
+        assertThatThrownBy(() -> reportService.draft(f.roomId, f.reporter.getId(), four, "spam", null))
                 .isInstanceOf(ChatLimitViolationException.class)
                 .extracting(e -> ((ChatLimitViolationException) e).errorCode())
                 .isEqualTo(ChatErrorCode.REPORT_MESSAGE_LIMIT);
@@ -210,10 +233,10 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         Fixture f = fixture();
         long seq = send(f, f.troll, "한 줄");
 
-        ChatReportView report = reportService.report(
+        ChatReportDraft draft = reportService.draft(
                 f.roomId, f.reporter.getId(), List.of(seq, seq, seq), "spam", null);
 
-        assertThat(report.messages())
+        assertThat(draft.targets())
                 .as("중복을 그대로 세면 앱이 같은 항목을 반복해 보내는 것만으로 상한을 우회한다")
                 .hasSize(1);
     }
@@ -223,7 +246,7 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
     void atLeastOneMessage() {
         Fixture f = fixture();
 
-        assertThatThrownBy(() -> reportService.report(f.roomId, f.reporter.getId(), List.of(), "spam", null))
+        assertThatThrownBy(() -> reportService.draft(f.roomId, f.reporter.getId(), List.of(), "spam", null))
                 .isInstanceOf(ChatLimitViolationException.class)
                 .extracting(e -> ((ChatLimitViolationException) e).errorCode())
                 .isEqualTo(ChatErrorCode.REPORT_EMPTY);
@@ -235,7 +258,7 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         Fixture f = fixture();
         List<Long> mixed = List.of(send(f, f.troll, "저쪽"), send(f, f.reporter, "이쪽"));
 
-        assertThatThrownBy(() -> reportService.report(f.roomId, f.reporter.getId(), mixed, "abuse", null))
+        assertThatThrownBy(() -> reportService.draft(f.roomId, f.reporter.getId(), mixed, "abuse", null))
                 .isInstanceOf(ChatLimitViolationException.class)
                 .extracting(e -> ((ChatLimitViolationException) e).errorCode())
                 .isEqualTo(ChatErrorCode.REPORT_MIXED_SENDERS);
@@ -247,7 +270,7 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         Fixture f = fixture();
         long mine = send(f, f.reporter, "내가 쓴 것");
 
-        assertThatThrownBy(() -> reportService.report(f.roomId, f.reporter.getId(), List.of(mine), "spam", null))
+        assertThatThrownBy(() -> reportService.draft(f.roomId, f.reporter.getId(), List.of(mine), "spam", null))
                 .isInstanceOf(ChatLimitViolationException.class)
                 .extracting(e -> ((ChatLimitViolationException) e).errorCode())
                 .isEqualTo(ChatErrorCode.REPORT_SELF);
@@ -260,7 +283,7 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         send(f, f.troll, "하나뿐");
 
         assertThatThrownBy(() ->
-                reportService.report(f.roomId, f.reporter.getId(), List.of(9_999L), "spam", null))
+                reportService.draft(f.roomId, f.reporter.getId(), List.of(9_999L), "spam", null))
                 .isInstanceOf(ChatLimitViolationException.class)
                 .extracting(e -> ((ChatLimitViolationException) e).errorCode())
                 .isEqualTo(ChatErrorCode.REPORT_MESSAGE_NOT_FOUND);
@@ -274,7 +297,7 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         User outsider = signUp("바깥사람");
 
         assertThatThrownBy(() ->
-                reportService.report(f.roomId, outsider.getId(), List.of(badSeq), "spam", null))
+                reportService.draft(f.roomId, outsider.getId(), List.of(badSeq), "spam", null))
                 .as("없는 방과 남의 방이 같은 답(403)이어야 방 id 를 훑어 존재를 가려낼 수 없다")
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
@@ -287,10 +310,10 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         Fixture f = fixture();
         long badSeq = send(f, f.troll, "말");
 
-        ChatReportView report = reportService.report(
-                f.roomId, f.reporter.getId(), List.of(badSeq), "other", "가".repeat(900));
+        long reportId = chatReports.file(
+                f.roomId, f.reporter.getId(), List.of(badSeq), "other", "가".repeat(900)).reportId();
 
-        assertThat(report.memo()).hasSize(500);
+        assertThat(memoOf(reportId)).hasSize(500);
     }
 
     @Test
@@ -299,7 +322,7 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         Fixture f = fixture();
         long badSeq = send(f, f.troll, "말");
 
-        assertThatThrownBy(() -> reportService.report(
+        assertThatThrownBy(() -> reportService.draft(
                 f.roomId, f.reporter.getId(), List.of(badSeq), "harrassment", null))
                 .as("""
                         앱의 오타를 OTHER 로 받아 주면 운영자가 세는 숫자가 소리 없이 틀어진다.
@@ -316,10 +339,10 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
         Fixture f = fixture();
         long badSeq = send(f, f.troll, "말");
 
-        ChatReportView report = reportService.report(
-                f.roomId, f.reporter.getId(), List.of(badSeq), "SEXUAL", null);
+        long reportId = chatReports.file(
+                f.roomId, f.reporter.getId(), List.of(badSeq), "SEXUAL", null).reportId();
 
-        assertThat(report.reason())
+        assertThat(reasonOf(reportId))
                 .as("대소문자를 가리지 않고 받되 저장은 계약의 wire 값 하나로 고정한다")
                 .isEqualTo("sexual");
     }
@@ -357,6 +380,47 @@ class ChatReportIntegrationTest extends AbstractMySqlIntegrationTest {
     private long send(Fixture f, User sender, String body) {
         return roomService.postMessage(
                 f.roomId, sender.getId(), sender.getNickname(), body, "text", null).roomSeq();
+    }
+
+    /**
+     * 그 신고의 <b>대상</b> 사본 본문들. 순번 순이다.
+     *
+     * <p>SQL 로 읽는 이유는 {@code moderation} 이 읽기 표면을 안 내주기 때문이다 —
+     * {@code Reports} 의 공개 메서드는 {@code file} 하나다. 읽기를 내주면 그것이 곧
+     * 관리자 조회 경로의 씨앗이고, 그 결정은 이 이슈보다 크다.
+     */
+    private List<String> targetBodies(long reportId) {
+        return jdbc.queryForList(
+                "select body from report_snapshot where report_id = ? and role = 'target' "
+                        + "order by target_ordinal", String.class, reportId);
+    }
+
+    private List<Long> targetAuthors(long reportId) {
+        return jdbc.queryForList(
+                "select author_user_id from report_snapshot where report_id = ? and role = 'target' "
+                        + "order by target_ordinal", Long.class, reportId);
+    }
+
+    /** 대상들의 {@code room_seq}. 맥락 범위를 이 값으로 다시 센다. */
+    private List<Long> targetOrdinals(long reportId) {
+        return jdbc.queryForList(
+                "select target_ordinal from report_snapshot where report_id = ? and role = 'target' "
+                        + "order by target_ordinal", Long.class, reportId);
+    }
+
+    /** 맥락 줄에 남은 방 id. {@code chat_report.room_id} 가 있던 자리다. */
+    private Long roomCoordinate(long reportId) {
+        return jdbc.queryForObject(
+                "select target_id from report_snapshot "
+                        + "where report_id = ? and target_type = 'chat_room'", Long.class, reportId);
+    }
+
+    private String memoOf(long reportId) {
+        return jdbc.queryForObject("select memo from report where id = ?", String.class, reportId);
+    }
+
+    private String reasonOf(long reportId) {
+        return jdbc.queryForObject("select reason from report where id = ?", String.class, reportId);
     }
 
     private long unreadOf(long roomId, long userId) {

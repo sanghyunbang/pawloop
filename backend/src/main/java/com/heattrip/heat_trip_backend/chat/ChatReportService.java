@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -82,10 +83,18 @@ public class ChatReportService {
     }
 
     /**
-     * 신고 한 건을 남긴다.
+     * 신고 한 건을 <b>접수 직전까지</b> 만든다 — 이슈 #254.
      *
-     * <p>고른 메시지를 <b>베껴서</b> 저장한다. 참조만 남기면 원본이 지워졌을 때 판단이
-     * 불가능하다({@link ChatReport} javadoc).
+     * <h2>저장은 여기서 안 한다</h2>
+     * <p>예전에는 이 메서드가 {@code chat_report} 에 저장했다. 신고 표가 둘이라 운영자가 두
+     * 군데를 봐야 했고, 그것을 합치면서 <b>판정은 여기 남고 저장만 나갔다.</b>
+     *
+     * <p>{@code chat} 은 {@code moderation} 을 못 부른다 — 둘 다
+     * {@code allowedDependencies = &#123;&#125;} 이고 {@code ChatBoundaryArchitectureTest} §B 가
+     * 막는다. 그래서 값으로 내보내고, {@code chatweb} 이 그것을 옮겨 접수한다.
+     *
+     * <p>돌려주는 것이 <b>본문 사본</b>이라 접수까지 한 트랜잭션일 필요가 없다. 그 사이에
+     * 원본이 바뀌어도 저장되는 것은 읽은 순간의 사본이고, 그게 사본이 있는 이유다.
      *
      * @param roomId         신고가 일어난 방
      * @param reporterUserId 신고한 사람. <b>살아 있는 멤버여야 한다</b>
@@ -93,12 +102,12 @@ public class ChatReportService {
      *                       1개 이상 {@value #MAX_MESSAGES_PER_REPORT} 개 이하
      * @param reason         분류. 계약이 정한 닫힌 목록({@link ChatReportReason})이고 필수다
      * @param memo           덧붙이는 말. 비워도 된다
-     * @return 남긴 신고. <b>신고자는 들어 있지 않다</b>
+     * @return 접수할 값. <b>신고자는 들어 있지 않다</b>
      * @throws org.springframework.web.server.ResponseStatusException 그 방의 멤버가 아닐 때(403)
      * @throws ChatLimitViolationException 고른 것이 규칙에 안 맞을 때
      */
-    @Transactional
-    public ChatReportView report(long roomId, long reporterUserId,
+    @Transactional(readOnly = true)
+    public ChatReportDraft draft(long roomId, long reporterUserId,
                                  Collection<Long> roomSeqs, String reason, String memo) {
         // 없는 방과 남의 방이 같은 답(403)인 것은 ChatRoomService 와 같은 이유다 —
         // 방 존재 여부는 그 방 멤버에게만 의미가 있다.
@@ -127,30 +136,23 @@ public class ChatReportService {
             throw new ChatLimitViolationException(ChatErrorCode.REPORT_SELF);
         }
 
-        long minSeq = found.stream().mapToLong(ChatMessage::getRoomSeq).min().orElseThrow();
-        long maxSeq = found.stream().mapToLong(ChatMessage::getRoomSeq).max().orElseThrow();
-
-        ChatReport report = ChatReport.builder()
-                .reporterUserId(reporterUserId)
-                .reportedUserId(reportedUserId)
-                .roomId(roomId)
-                // room_seq 는 1부터라 0 이나 음수로 내려가지 않게 자른다.
-                .contextFromSeq(Math.max(1L, minSeq - CONTEXT_RADIUS))
-                .contextToSeq(maxSeq + CONTEXT_RADIUS)
-                .reason(classified.wireValue())
-                .memo(trimmedMemo(memo))
-                // **UTC 로 넣는다.** 여기가 LocalDateTime.now(clock)(Asia/Seoul)이면
-                // ChatReportResponse 가 그것을 UTC 로 세우므로 9시간 뒤의 시각이 나간다.
-                // 엔티티의 @PrePersist 는 값이 null 일 때만 채우므로 여기를 안 고치면
-                // 그 가드가 안 걸린다 (#248).
-                .createdAt(ChatTime.nowUtc(clock))
-                .build();
-
+        // 맥락 범위(min-5 ~ max+5)를 여기서 안 만든다. 그 두 수는 대상들의 room_seq 와
+        // CONTEXT_RADIUS 에서 완전히 유도되는 파생값이라, room_seq 를 사본에 남기면
+        // 언제든 다시 셀 수 있다 (#254).
+        List<ChatReportDraft.Target> targets = new ArrayList<>(found.size());
         for (ChatMessage message : found) {
-            report.addMessage(snapshotOf(message));
+            targets.add(new ChatReportDraft.Target(
+                    message.getId(),
+                    message.getRoomSeq(),
+                    message.getSenderUserId(),
+                    message.getSenderName(),
+                    message.getBody(),
+                    message.getContentType(),
+                    ChatTime.toInstant(message.getCreatedAt())));
         }
 
-        return viewOf(reports.save(report));
+        return new ChatReportDraft(roomId, reportedUserId,
+                classified.wireValue(), trimmedMemo(memo), List.copyOf(targets));
     }
 
     /**
