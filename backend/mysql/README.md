@@ -39,6 +39,8 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\12_walk.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\13_walk_path_t.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\14_community.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\15_report.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\16_user_block.sql
 ```
 
 | 파일 | 무엇을 |
@@ -57,6 +59,8 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `12_walk.sql` | 산책 기록 — `walk` 생성, `dog` 로의 FK 하나(`ON DELETE CASCADE`)·`uq_walk_client(dog_id, client_walk_id)`(재전송 멱등)·인덱스 둘. **`11` 이 먼저입니다.** `path` 는 `LINESTRING SRID 4326` 이고 **NULL 을 허용합니다** — `SPATIAL INDEX` 를 만들지 않는 이유와 함께 [ADR-0015](../../docs/99-decisions/decision-log.md) 에 있습니다. **SRID 검증은 이 파일의 사후 검증에서만 됩니다** — `information_schema.columns.column_type` 이 `linestring` 뿐이라 `SchemaDdlDriftTest` 는 SRID 가 빠진 스키마를 같다고 봅니다(실측) (이슈 #145) |
 | `13_walk_path_t.sql` | 산책 경로의 **점별 시각** — `walk.path_t JSON NULL` 추가. `path` 와 길이가 같아야 하지만 **DB 에 CHECK 를 걸지 않았습니다** — 검사는 `WalkPath.toPathTimes` 가 유일한 방어선이고 그 사실을 이 스크립트 §B-1 이 적어 뒀습니다. **12 가 먼저입니다** (이슈 #155) |
 | `14_community.sql` | 커뮤니티 표 셋 — `post`·`comment`·`reaction` 생성. `users` 로의 FK 셋(**CASCADE 아님** — 탈퇴가 남의 글에서 대화를 끊지 않는다)·`post` 로의 FK 둘(CASCADE)·`uq_reaction(post_id, user_id, type)`(**사용자당 글마다 여러 반응** — ADR-0016 결정 2)·인덱스 둘. **04 가 먼저입니다.** `board` 는 ASCII 키이고 장소 참조는 `content_id VARCHAR(64)` 이며 FK 가 없습니다 (장소는 캐시라 행이 없을 수 있습니다) (이슈 #169) |
+| `15_report.sql` | 신고 표 둘 — `report`·`report_snapshot` 생성. `users` 로의 **FK 를 안 겁니다** (신고는 값으로만 사람을 가리킵니다 — 탈퇴가 신고 기록을 지우면 안 됩니다) · `target_type`·`reason`·`role` 셋에 CHECK · 인덱스 셋. **UNIQUE 가 없습니다** — 글은 편집되므로 같은 사람이 같은 글을 다시 신고하는 것을 DB 가 막으면 안 됩니다 (이슈 #166 · ADR-0016) |
+| `16_user_block.sql` | `chat_block` → `user_block` **이름 변경**(인덱스 `uq_chat_block` → `uq_user_block` 포함). 가리기는 처음부터 사람 단위였고, 채팅 안에 있었던 것은 채팅이 그것을 처음 필요로 했기 때문입니다. 커뮤니티가 같은 가리기를 쓰면서 그 이름이 거짓이 됐습니다. **행이 0일 때만 공짜입니다** — 두 표가 다 있으면 어느 쪽이 정본인지 사람이 정하도록 멈춥니다 (이슈 #166 · ADR-0016) |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
