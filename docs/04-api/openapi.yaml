@@ -729,6 +729,77 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /api/places/catalog:
+    get:
+      tags: [Places]
+      summary: 전국 장소 한 벌
+      description: |
+        전국의 반려동반 가능 장소를 **한 번에 전부** 반환합니다 (이슈 #273 · #235 A4).
+
+        **요청에 아무것도 실리지 않습니다.** 좌표도 지역 코드도 없습니다.
+        `GET /api/places/nearby` 는 현위치를 쿼리로 받는데, 완전 온디바이스 빌드는
+        좌표를 서버로 보내지 않으므로 그 경로를 쓸 수 없고 그러면 **지도의 장소 목록이
+        빕니다.** 이 경로가 그 자리를 채웁니다.
+
+        거리 정렬·반경 필터·카테고리 필터는 **앱이 기기에서** 합니다. 응답의 `distM` 은
+        항상 생략됩니다 — 서버가 그 값을 계산할 좌표를 갖고 있지 않습니다.
+
+        ## 크기와 `ETag`
+
+        전국이 9,684곳이고 응답이 2.83MB, gzip 으로 **0.44MB** 입니다(실측 2026-09-04).
+        시군구 249개로 쪼개지 않은 이유가 이 숫자입니다 — 쪼개면 요청에 지역이 실리고
+        (행정구역이지만 0 은 아닙니다) 한 벌 데우는 KTO 콜이 10 에서 249 로 늘어납니다.
+
+        앱은 이 한 벌을 기기에 두고 `If-None-Match` 로 갱신만 확인합니다. 맞으면 **304**
+        이고 본문이 나가지 않습니다. `ETag` 는 갱신 시각이 아니라 **내용 해시**라,
+        KTO 데이터가 그대로인 날은 서버가 갱신해도 304 입니다.
+
+        ## 한 벌이 없으면 빈 배열입니다
+
+        `nearby` 와 같은 규칙입니다. KTO 가 죽었거나 하루 호출 예산이 소진되면 **200** 에
+        `[]` 를 줍니다(오류가 아닙니다). 그때는 `ETag` 를 **붙이지 않습니다** — 붙이면
+        앱이 빈 목록을 캐시하고, 서버가 회복한 뒤에도 304 를 받아 계속 빈 지도를 봅니다.
+
+        ## `429` 는 목록·상세와 또 다른 버킷입니다
+
+        `places-catalog` 이고 분당 5 입니다. 이 경로만 응답이 MB 단위라, `places-detail`
+        의 분당 30 을 그대로 주면 한 IP 가 분당 85MB 를 뽑아 갑니다. 앱은 하루 한 번쯤
+        부르므로 5 로 충분하고, `429` 를 받아도 기기에 있는 한 벌을 계속 쓰면 됩니다.
+      security: []
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: |
+            앱이 갖고 있는 한 벌의 `ETag`. 서버의 것과 같으면 **304** 입니다.
+
+            콤마로 여럿을 보낼 수 있고 `*` 도 됩니다. 프록시가 붙이는 약한 검증자
+            접두사(`W/`)도 받습니다.
+          schema: { type: string, example: '"3f1c8a90b2e64d17c5a0f88e12b47d63"' }
+      responses:
+        '200':
+          description: |
+            전국 장소 목록. `ETag` 헤더가 함께 옵니다 — 단, 한 벌이 없어 `[]` 를 줄 때는
+            붙지 않습니다.
+          headers:
+            ETag:
+              description: 본문의 내용 해시. 다음 요청의 `If-None-Match` 에 그대로 실으면 됩니다.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Place' }
+        '304':
+          description: |
+            `If-None-Match` 가 서버의 `ETag` 와 같습니다. **본문이 없습니다.**
+            앱은 기기에 있는 한 벌을 그대로 씁니다.
+          headers:
+            ETag:
+              description: 서버가 갖고 있는 한 벌의 해시. 요청에 실어 보낸 것과 같습니다.
+              schema: { type: string }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /api/places/{contentId}:
     get:
       tags: [Places]

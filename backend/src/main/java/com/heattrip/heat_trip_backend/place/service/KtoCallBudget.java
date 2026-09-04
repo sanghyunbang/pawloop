@@ -121,6 +121,7 @@ public class KtoCallBudget {
     private int capOf(KtoPool pool) {
         return switch (pool) {
             case NEARBY -> properties.getNearbyMaxCallsPerDay();
+            case CATALOG -> properties.getCatalogMaxCallsPerDay();
             case DETAIL -> properties.getDetailMaxCallsPerDay();
         };
     }

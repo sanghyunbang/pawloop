@@ -127,6 +127,50 @@ public class KtoApiClient {
         });
     }
 
+    /**
+     * <b>전국 반려동반 장소 한 페이지</b> — 이슈 #273.
+     *
+     * <h2>왜 좌표를 안 받는 길이 필요한가</h2>
+     * <p>{@link #fetchNearby} 는 좌표를 받는다. A안 빌드(완전 온디바이스)는 좌표를 서버로
+     * 안 보내므로 그 길을 못 쓴다 — 그러면 지도의 장소 목록이 빈다.
+     *
+     * <p>이 오퍼레이션은 <b>아무 지역 필터도 안 건다.</b> 요청에 좌표도 지역 코드도 없다.
+     * 앱은 한 벌을 받아 기기에 두고, 거리 정렬을 기기에서 한다.
+     *
+     * <h2>왜 시군구로 안 쪼개는가 (실측 2026-09-04)</h2>
+     * <p>전국이 <b>9,684곳</b>이고 우리 {@code Place} 계약 모양으로 직렬화하면 2.83MB,
+     * <b>gzip 0.44MB</b> 다. 쪼개서 아끼는 것이 그 정도인데, 쪼개면 요청에 시군구가 실리고
+     * (행정구역이지만 0 은 아니다) 한 벌 데우는 콜이 10 에서 249 로 는다.
+     *
+     * <h2>{@code areaCode} 를 안 쓰는 이유</h2>
+     * <p>반려동반 데이터의 {@code areacode}·{@code sigungucode} 는 <b>빈 문자열</b>이다.
+     * 살아 있는 것은 {@code lDongRegnCd}·{@code lDongSignguCd}(법정동) 쪽이다.
+     * {@code areaCode=1}(서울)로 물으면 3,170곳이 아니라 <b>52곳</b>이 오고,
+     * {@code sigunguCode} 까지 붙이면 <b>0곳</b>이 온다 — 실측이다.
+     *
+     * <p>그 값이 그대로 캐시에 들어가면 <b>200 으로 조용히 빈 지도</b>가 된다.
+     * 지금은 필터를 아예 안 걸어서 그 함정 자체가 없다.
+     *
+     * @param pageNo 1부터. {@code totalCount} 를 넘어서면 빈 목록이 온다
+     */
+    public Result<List<PlaceDto>> fetchCatalogPage(int pageNo) {
+        String query = "serviceKey=" + serviceKey
+                + "&MobileOS=ETC&MobileApp=heattrip&_type=json"
+                + "&numOfRows=" + numOfRows + "&pageNo=" + pageNo
+                + "&arrange=A";
+
+        return call(petTour, "/areaBasedList2?" + query, "catalog", body -> {
+            List<PlaceDto> places = new ArrayList<>();
+            for (JsonNode item : items(body)) {
+                PlaceDto place = toPlace(item);
+                if (place != null) {
+                    places.add(place);
+                }
+            }
+            return places;
+        });
+    }
+
     /** 장소 개요. {@code KorService2} 다 — 반려동반 서비스에는 이 오퍼레이션이 없다. */
     public Result<String> fetchOverview(String contentId) {
         String query = "serviceKey=" + serviceKey

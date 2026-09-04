@@ -640,6 +640,29 @@ class ApiRateLimitFilterTest {
                 .isEqualTo(200);
     }
 
+    @Test
+    @DisplayName("카탈로그가 상세보다 먼저 걸린다 — /api/places/catalog 은 상세 패턴에도 맞는다")
+    void placesCatalog_hasItsOwnBucket() throws Exception {
+        RateLimitProperties p = props(100);
+        p.setPlacesDetailMaxRequests(5);
+        p.setPlacesCatalogMaxRequests(1);
+        ApiRateLimitFilter filter = new ApiRateLimitFilter(p, MAPPER);
+
+        assertThat(call(filter, "GET", "/api/places/catalog", "203.0.113.42").getStatus())
+                .isEqualTo(200);
+        assertThat(call(filter, "GET", "/api/places/catalog", "203.0.113.42").getStatus())
+                .as("""
+                        카탈로그 규칙이 상세 규칙보다 **뒤에** 오면 ^/api/places/[^/]+$ 가 먼저
+                        잡아서, 응답 2.83MB 짜리가 상세와 같은 분당 30 을 받는다 — 한 IP 가
+                        분당 85MB 를 뽑아 갈 수 있다.
+                        """)
+                .isEqualTo(429);
+
+        assertThat(call(filter, "GET", "/api/places/123", "203.0.113.42").getStatus())
+                .as("카탈로그 버킷이 찼다고 상세가 함께 막히면 안 된다")
+                .isEqualTo(200);
+    }
+
     // ─────────────────── D. 스위치가 실제로 끈다 ───────────────────
 
     @Test

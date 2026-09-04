@@ -384,6 +384,19 @@ CREATE TABLE `pet_place_detail` (
   PRIMARY KEY (`content_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `place_catalog` (
+  `fail_streak` int NOT NULL,
+  `id` int NOT NULL,
+  `item_count` int NOT NULL,
+  `total_count` int NOT NULL,
+  `failed_at` datetime(6) DEFAULT NULL,
+  `fetched_at` datetime(6) NOT NULL,
+  `etag` varchar(64) NOT NULL,
+  `payload` longtext NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `chk_place_catalog_singleton` CHECK ((`id` = 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `place_cell` (
   `fail_streak` int NOT NULL,
   `item_count` int NOT NULL,

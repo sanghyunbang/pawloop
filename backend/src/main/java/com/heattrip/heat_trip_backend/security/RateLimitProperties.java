@@ -242,6 +242,23 @@ public class RateLimitProperties {
     private int placesDetailMaxRequests = 30;
 
     /**
+     * 전국 카탈로그 버킷 — {@code GET /api/places/catalog}. (이슈 #273)
+     *
+     * <p><b>이 경로만 응답이 메가바이트 단위다.</b> 전국 한 벌이 2.83MB, gzip 0.44MB 다
+     * (실측 2026-09-04). 다른 버킷과 같은 숫자를 주면 안 되는 이유가 그것이다 —
+     * {@code places-detail} 의 30 을 그대로 받으면 한 IP 가 분당 85MB 를 뽑아 간다.
+     *
+     * <p>5 인 이유: 앱은 이 경로를 <b>하루에 한 번쯤</b> 부른다. 기기에 한 벌을 두고
+     * {@code If-None-Match} 로 갱신만 확인하기 때문이다. 분당 5 는 앱을 껐다 켜기를
+     * 반복해도 남는 여유이고, 그보다 잦게 부르는 것은 정상 사용이 아니다.
+     *
+     * <p><b>304 도 이 한도를 쓴다.</b> 본문이 안 나가도 요청은 왔고, 그 판정을 하려면
+     * 서버가 행을 읽어야 한다. 429 를 받은 앱은 기기에 있는 한 벌을 계속 쓰면 된다 —
+     * 지도가 죽지 않는다.
+     */
+    private int placesCatalogMaxRequests = 5;
+
+    /**
      * 커뮤니티 읽기 버킷 — {@code GET /api/community/posts} 계열 셋. (이슈 #170)
      *
      * <p><b>이 버킷이 없으면 한도가 0 이 아니라 무한이다.</b> 표에 없는 경로는

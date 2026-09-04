@@ -214,6 +214,12 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("GET".equals(method) && "/api/places/nearby".equals(path)) {
             return new Rule("places", rateLimitProperties.getPlacesMaxRequests());
         }
+        // 카탈로그(#273)는 **아래 상세 줄보다 먼저** 와야 한다. /api/places/catalog 이
+        // ^/api/places/[^/]+$ 에 걸리기 때문이다. 그대로 두면 응답 2.83MB 짜리가
+        // 상세와 같은 분당 30 을 받고, 한 IP 가 분당 85MB 를 뽑아 갈 수 있다.
+        if ("GET".equals(method) && "/api/places/catalog".equals(path)) {
+            return new Rule("places-catalog", rateLimitProperties.getPlacesCatalogMaxRequests());
+        }
         if ("GET".equals(method) && path.matches("^/api/places/[^/]+$")) {
             return new Rule("places-detail", rateLimitProperties.getPlacesDetailMaxRequests());
         }

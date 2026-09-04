@@ -1,7 +1,7 @@
 package com.heattrip.heat_trip_backend.place.service;
 
 /**
- * 호출 예산을 나눠 갖는 두 자리 — 이슈 #40.
+ * 호출 예산을 나눠 갖는 세 자리 — 이슈 #40.
  *
  * <h2>왜 하나로 안 세는가</h2>
  * <p>상세 조회가 예산을 다 태우면 <b>지도가 함께 죽는다.</b> 둘은 사용자에게 다른 화면이고
@@ -13,6 +13,19 @@ public enum KtoPool {
 
     /** {@code locationBasedList2} — 셀 하나의 스냅샷. 1건 = 1콜. */
     NEARBY("nearby"),
+
+    /**
+     * {@code areaBasedList2} — <b>전국 목록 한 벌</b>. 1페이지 = 1콜. 이슈 #273.
+     *
+     * <p><b>{@code NEARBY} 와 나누는 이유가 있다.</b> 카탈로그는 좌표를 <b>안 받는</b>
+     * 길이고(A안 빌드가 쓴다), 셀 조회는 좌표를 받는 길이다. 한쪽이 예산을 다 태우면
+     * 다른 쪽이 함께 죽는데, 그 둘은 <b>서로 다른 빌드가 쓰는 경로</b>라 같이 조여질
+     * 이유가 없다.
+     *
+     * <p>한 번 데우는 데 드는 콜이 적다. 전국이 9,684곳이고 {@code numOfRows} 가
+     * 1000 이라 <b>10콜</b>이면 한 벌이 다 온다(실측 2026-09-04).
+     */
+    CATALOG("catalog"),
 
     /**
      * {@code detailCommon2} + {@code detailPetTour2} — 장소 하나의 상세.
