@@ -55,7 +55,19 @@ http.Response _json(Object body, {int status = 200}) => http.Response(
       headers: const {'content-type': 'application/json; charset=utf-8'},
     );
 
-/// `app/lib/v2` 아래 모든 `.dart` 를 읽는다.
+/// `app/lib` 아래 **전부**를 읽는다 — 이슈 #235.
+///
+/// ## 왜 `lib/v2` 가 아닌가
+///
+/// 예전에는 `lib/v2` 만 훑었다. 그런데 레거시 셸이 아직 좌표를 보낸다 —
+/// `emotion_map_repository.dart` 가 현위치를 쿼리로 싣고,
+/// `foryou_repository_impl.dart` 가 `userLat`·`userLng` 를 본문에 싣는다.
+///
+/// v2 화면에서 그리로 가는 길은 없다(`legacy_shell_reachability_test.dart` 가 잠근다).
+/// **그래도 APK 에는 컴파일돼 들어간다.** 이슈 본문이 그것을 이렇게 적었다 —
+/// 사용자는 못 밟지만 「코드에 없다」 는 거짓입니다.
+///
+/// 그래서 범위를 넓히고, 레거시는 [_exempt] 에 **이유와 함께** 적는다.
 ///
 /// **HTTP 를 부르는 파일만 대상이다.** 좌표 키가 있다고 다 전송이 아니다 —
 /// `walk_outbox.dart` 는 `'path': path` 를 쓰지만 그건 `shared_preferences` 로
@@ -64,8 +76,8 @@ http.Response _json(Object body, {int status = 200}) => http.Response(
 ///
 /// 이 구분이 없으면 검사가 로컬 저장까지 잡아서, 사람이 예외 목록에 파일 이름을
 /// 하나씩 적기 시작한다 — 그러면 진짜 전송이 생겨도 그 목록에 숨는다.
-List<({String path, String source})> _v2Sources() {
-  final root = Directory('lib/v2');
+List<({String path, String source})> _libSources() {
+  final root = Directory('lib');
   expect(root.existsSync(), isTrue,
       reason: '트리를 옮겼다면 이 테스트도 함께 고친다. skip 하지 않는다');
 
@@ -80,22 +92,61 @@ List<({String path, String source})> _v2Sources() {
       .toList();
 }
 
-/// 이 파일이 실제로 요청을 내보내는가.
-bool _sendsHttp(String source) =>
-    source.contains('package:http') || source.contains('AuthedClient');
+/// 이 파일이 요청을 만드는가.
+///
+/// ## `package:http` 만 보면 새어 나간다
+///
+/// `foryou_repository_impl.dart` 는 `api.postJson(...)` 이라는 **래퍼**를 쓴다.
+/// 그 파일에는 `package:http` 도 `AuthedClient` 도 없어서 예전 검사가 통째로
+/// 놓쳤다 — 좌표를 본문에 싣는데도.
+///
+/// 그래서 **경로 문자열**도 본다. 이 저장소에서 요청은 전부 `'/api/...'` 를 적어
+/// 만든다. 래퍼가 몇 겹이든 그 문자열은 부르는 쪽에 남는다.
+bool _makesRequest(String source) =>
+    RegExp(r"""['\"]/api/""").hasMatch(source) ||
+    source.contains('package:http') ||
+    source.contains('AuthedClient');
+
+/// 좌표를 **싣는** 모양. 읽는 것(`j['lat']`)은 들어오는 값이라 안 센다.
+///
+/// 셋을 본다 — `'lat': v` · `params['lat'] = v` · 쿼리 조립. 가운데 것이
+/// `emotion_map_repository.dart` 의 모양이고, 예전 정규식은 그것을 놓쳤다.
+final _writesCoordinate = RegExp(
+    r"""['\"](lat|lng|latitude|longitude|userLat|userLng)['\"]\s*:"""
+    r"""|\[\s*['\"](lat|lng|latitude|longitude)['\"]\s*\]\s*="""
+    r"""|(lat|lng)=\$""",
+    caseSensitive: false);
+
+/// 정책을 안 지나도 되는 파일 — **이유와 함께** 적는다.
+///
+/// 이유를 적게 하는 것이 이 목록의 요점이다. 파일 이름만 늘어나는 목록은 다음 사람이
+/// 그냥 한 줄 더 적고 지나간다.
+///
+/// 여기 있는 것은 전부 `lib/features/` 의 **레거시 셸**이다. v2 화면 어디에서도 그리로
+/// 가지 않는 것을 `legacy_shell_reachability_test.dart` 가 따로 잠근다 — 그 잠금이
+/// 풀리면 이 예외의 근거도 함께 사라진다.
+const Map<String, String> _exempt = {
+  'lib/features/emotion_map/data/emotion_map_repository.dart':
+      '감정 지도의 주변 조회·검색. GET /api/curation/places/* 에 현위치를 쿼리로 싣는다. '
+          'v2 에서 도달 불가이고, 이 셸의 처분은 #174 가 정한다 — 지금 정책을 끼워 넣으면 '
+          '버릴지도 모르는 코드에 손을 대는 것이다.',
+  'lib/features/foryou_v2/data/foryou_repository_impl.dart':
+      '감정 추천. POST /api/curation/recommend 본문에 userLat·userLng 를 싣는다. '
+          '위와 같은 셸이고 같은 이유다.',
+};
 
 void main() {
   group('소스 — 좌표를 보내는 자리가 정책을 지난다', () {
-    test('요청에 lat/lng 를 싣는 파일은 정책 파일 하나뿐이 아니라 정책을 부른다', () {
+    test('요청에 좌표를 싣는 파일은 정책을 부른다 — lib 전체를 본다', () {
       final offenders = <String>[];
 
-      for (final f in _v2Sources()) {
+      for (final f in _libSources()) {
         if (f.path.endsWith('location_upload_policy.dart')) continue;
-        if (!_sendsHttp(f.source)) continue;
+        if (_exempt.containsKey(f.path)) continue;
+        if (!_makesRequest(f.source)) continue;
 
         // 쿼리·본문에 좌표 키를 싣는 모양. 파싱(`j['lat']`)은 들어오는 값이라 제외한다.
-        final sends = RegExp(r"""['"]lat['"]\s*:|['"]lng['"]\s*:""").hasMatch(f.source);
-        if (!sends) continue;
+        if (!_writesCoordinate.hasMatch(f.source)) continue;
 
         if (!f.source.contains('LocationUploadPolicy')) {
           offenders.add(f.path);
@@ -111,9 +162,10 @@ void main() {
     test('산책 경로를 싣는 자리도 정책을 지난다', () {
       final offenders = <String>[];
 
-      for (final f in _v2Sources()) {
+      for (final f in _libSources()) {
         if (f.path.endsWith('location_upload_policy.dart')) continue;
-        if (!_sendsHttp(f.source)) continue;
+        if (_exempt.containsKey(f.path)) continue;
+        if (!_makesRequest(f.source)) continue;
         if (!RegExp(r"""['"]path['"]\s*:|['"]pathT['"]\s*:""").hasMatch(f.source)) {
           continue;
         }
@@ -122,6 +174,39 @@ void main() {
 
       expect(offenders, isEmpty,
           reason: 'path·pathT 는 산책 전 구간의 원시 좌표열이다 — 집과 직장을 그대로 그린다');
+    });
+
+    test('예외 목록에 죽은 항목이 없다 — 남으면 그 파일이 규칙 밖에 영원히 남는다', () {
+      final sources = {for (final f in _libSources()) f.path: f.source};
+      final dead = <String>[];
+
+      _exempt.forEach((path, reason) {
+        final source = sources[path];
+        if (source == null) {
+          dead.add('$path (파일이 없다)');
+          return;
+        }
+        if (!_makesRequest(source) || !_writesCoordinate.hasMatch(source)) {
+          dead.add('$path (더 이상 좌표를 안 싣는다 — 예외를 지워라)');
+        }
+      });
+
+      expect(dead, isEmpty,
+          reason: '예외가 죽은 채 남으면, 그 파일에 새 전송이 생겨도 검사가 눈감아 준다');
+    });
+
+    test('예외는 레거시 셸뿐이고 이유가 적혀 있다 — v2 에는 예외가 없다', () {
+      _exempt.forEach((path, reason) {
+        expect(path, startsWith('lib/features/'),
+            reason: 'v2 에 예외를 두면 그 순간 이 검사가 뜻을 잃는다. 살아 있는 화면의 '
+                '전송은 정책을 지나야 한다');
+        expect(reason.length, greaterThan(40),
+            reason: '「괜찮음」 은 이유가 아니다. 무엇과 무엇을 견줘서 괜찮은지 적어라');
+      });
+
+      expect(File('test/app/legacy_shell_reachability_test.dart').existsSync(), isTrue,
+          reason: '예외의 근거가 「v2 에서 도달 불가」 다. 그것을 잠그는 검사가 사라지면 '
+              '이 예외들도 함께 다시 봐야 한다');
     });
   });
 
@@ -285,7 +370,7 @@ void main() {
     // setForTest 는 assert 안에서만 값을 바꾸므로 릴리스에서는 무해하다. 그래도
     // 운영 코드가 그것을 부르기 시작하면 정책이 런타임 토글이 되고, 이 파일이 적어 둔
     // "배포본에는 갈아끼우는 갈래가 없다" 가 거짓이 된다.
-    final offenders = _v2Sources()
+    final offenders = _libSources()
         .where((f) => !f.path.endsWith('location_upload_policy.dart'))
         // 이름만 보면 AuthState.resetForTest 같은 남의 창구까지 잡는다 — 정책 것만 본다.
         .where((f) =>
