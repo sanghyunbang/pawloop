@@ -2,13 +2,18 @@ package com.heattrip.heat_trip_backend.place.controller;
 
 import com.heattrip.heat_trip_backend.place.dto.PlaceDetailDto;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
+import com.heattrip.heat_trip_backend.place.entity.PlaceCatalog;
 import com.heattrip.heat_trip_backend.place.service.GridCell;
+import com.heattrip.heat_trip_backend.place.service.PlaceCatalogService;
 import com.heattrip.heat_trip_backend.place.service.PlaceDetailService;
 import com.heattrip.heat_trip_backend.place.service.PlaceQueryService;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 관광공사(KTO) 프록시 — 이슈 #40. 계약은 {@code openapi.yaml} 의 {@code /api/places/**} 다.
@@ -31,9 +37,11 @@ import java.util.List;
  * <ul>
  *   <li><b>인증 없음.</b> 계약이 {@code security: []} 로 선언했다 — 지도는 로그인 전에도
  *       보여야 한다. {@code SecurityConfig} 의 {@code publicMatchers} 에 두 경로를
- *       <b>각각</b> 등재했다({@code /api/places/**} 같은 와일드카드가 아니다 — 아래 참조).</li>
- *   <li><b>rate limit</b> — {@code places} · {@code places-detail} 두 버킷에 등재했다.
- *       표에 없는 경로는 한도가 0 이 아니라 <b>무한</b>이다.</li>
+ *       <b>각각</b> 등재했다({@code /api/places/**} 같은 와일드카드가 아니다 — 아래 참조).
+ *       {@code /api/places/catalog} 은 {@code /api/places/*} 가 이미 덮는다.</li>
+ *   <li><b>rate limit</b> — {@code places} · {@code places-catalog} · {@code places-detail}
+ *       세 버킷에 등재했다. 표에 없는 경로는 한도가 0 이 아니라 <b>무한</b>이다.
+ *       카탈로그가 따로인 이유: 그것만 응답이 MB 단위다.</li>
  *   <li><b>호출 예산</b> — IP 한도와 별개로, KTO 로 나가는 호출 자체가 하루 상한을 갖는다
  *       ({@code KtoCallBudget}). 그게 없으면 인증 없는 경로 하나가 우리 쿼터를 태울 수 있다.</li>
  * </ul>
@@ -62,6 +70,7 @@ public class PlaceController {
 
     private final PlaceQueryService places;
     private final PlaceDetailService details;
+    private final PlaceCatalogService catalog;
 
     /**
      * 내 주변 반려동반 장소 — 거리순.
@@ -103,6 +112,62 @@ public class PlaceController {
 
         return places.nearby(lat, lng, effectiveRadius,
                 category == null || category.isBlank() ? null : category, effectiveLimit);
+    }
+
+    /**
+     * <b>전국 반려동반 장소 한 벌</b> — 이슈 #273.
+     *
+     * <h2>요청에 아무것도 안 실린다</h2>
+     * <p>{@link #nearby} 는 좌표를 받는다. A안 빌드(완전 온디바이스)는 좌표를 서버로 안
+     * 보내므로 그 길을 못 쓰고, 그러면 지도의 장소 목록이 빈다(#235 A4).
+     *
+     * <p>여기는 좌표도 지역 코드도 안 받는다. 거리 정렬·반경 필터·카테고리 필터는 앱이
+     * 자기 좌표로 <b>기기에서</b> 한다. 서버가 아는 것은 "누가 지도를 열었다" 까지다.
+     *
+     * <h2>왜 시군구로 안 쪼개는가 (실측 2026-09-04)</h2>
+     * <p>전국이 9,684곳이고 2.83MB, gzip 으로 <b>0.44MB</b> 다. 쪼개면 요청에 시군구가
+     * 실리고(행정구역이지만 0 은 아니다) 한 벌 데우는 콜이 10 에서 249 로 는다.
+     * 아끼는 것보다 잃는 것이 크다.
+     *
+     * <p>압축은 {@code server.compression.*} 이 건다. <b>그 설정이 없으면 2.83MB 가
+     * 그대로 나간다</b> — 스프링 부트의 기본값이 꺼짐이다.
+     *
+     * <h2>{@code ETag} 가 이 경로의 핵심이다</h2>
+     * <p>앱은 한 벌을 기기에 두고 하루 한 번쯤 갱신만 확인한다. {@code If-None-Match} 가
+     * 맞으면 <b>304</b> 로 끝나고 본문이 안 나간다. ETag 는 {@code fetchedAt} 이 아니라
+     * <b>내용 해시</b>라, KTO 데이터가 그대로인 날은 갱신해도 304 다.
+     *
+     * <p><b>304 를 우리가 만들지 않는다.</b> {@code ResponseEntity} 에 ETag 가 붙어 있으면
+     * 스프링의 {@code HttpEntityMethodProcessor} 가 {@code If-None-Match} 를 스스로 보고
+     * 304 로 바꾼다. 처음에는 여기서 손으로 비교했는데, <b>그 코드를 통짜 문자열 비교로
+     * 망가뜨려도 테스트가 초록불이었다</b> — 스프링이 이미 하고 있었다는 뜻이다.
+     * 직접 쓰면 콤마 목록·{@code W/} 접두사·{@code *} 를 우리가 다시 구현해야 하고,
+     * 틀리면 304 가 영영 안 나가서 이 경로의 요점이 사라진다.
+     *
+     * <h2>{@code String} 을 그대로 돌려준다</h2>
+     * <p>{@code List<PlaceDto>} 로 돌려주면 저장된 JSON 을 객체로 파싱했다가 다시
+     * 직렬화한다 — 요청마다 2.83MB 를 두 번 훑는다. 저장할 때 만든 문자열이 곧 본문이다.
+     *
+     * <h2>한 벌이 없으면 빈 배열이다</h2>
+     * <p>{@link #nearby} 와 같은 규칙이다. KTO 가 죽었거나 예산이 소진되면 200 에 {@code []}
+     * 를 준다 — 앱이 실패를 빈 목록으로 다루므로 화면이 깨지지 않는다.
+     * <b>그래서 사용자에게는 "한도 초과" 와 "장소 없음" 이 똑같이 보인다.</b>
+     */
+    @GetMapping(value = "/catalog", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> catalog() {
+        Optional<PlaceCatalog> row = catalog.catalog();
+
+        if (row.isEmpty()) {
+            // ETag 를 안 붙인다. 붙이면 앱이 빈 목록을 캐시하고, 그 뒤 서버가 회복해도
+            // 304 를 받아 계속 빈 지도를 본다.
+            return ResponseEntity.ok()
+                    .cacheControl(CacheControl.noStore())
+                    .body("[]");
+        }
+
+        return ResponseEntity.ok()
+                .eTag("\"" + row.get().getEtag() + "\"")
+                .body(row.get().getPayload());
     }
 
     /**

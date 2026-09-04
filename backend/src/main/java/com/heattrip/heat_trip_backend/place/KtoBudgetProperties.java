@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
  * <p><b>이것이 이 설계가 지불한 가장 큰 대가다.</b> 리셋 시각이 확인되면 800 까지 올릴 수
  * 있고, 그때 바꿔야 할 것은 이 프로퍼티 둘뿐이다 — 재배포로만 바꿀 수 있는 값이 아니다.
  *
- * <h2>300 / 150 / 예비 50 인 근거</h2>
+ * <h2>300 / 50 / 150 인 근거</h2>
  * <table>
  *   <caption>일 배분</caption>
  *   <tr><th>풀</th><th>상한</th><th>무엇을 사는가</th></tr>
@@ -34,9 +34,17 @@ import org.springframework.stereotype.Component;
  *           상한을 만드는 것이 사람 수가 아니라 땅 넓이다({@link
  *           com.heattrip.heat_trip_backend.place.service.GridCell})</td></tr>
  *   <tr><td>{@code detail}</td><td>150</td>
- *       <td>1건이 2콜이므로 콜드 기준 하루 <b>75건</b>. TTL 30일이라 정상 상태의 갱신 수요는
- *           2N/30 콜/일이고, N(전국 반려동반 장소 수)을 <b>모른다</b> — N=2,250 이 손익분기다</td></tr>
- *   <tr><td>예비</td><td>50</td><td>코드가 도달하지 못한다. 수동 확인용 여유</td></tr>
+ *       <td>1건이 2콜이므로 콜드 기준 하루 <b>75건</b>. TTL 30일이라 <b>전부</b> 캐시된
+ *           상태의 갱신 수요는 2N/30 콜/일이고, N=2,250 이 손익분기다.
+ *           <b>N 을 이제 안다 — 9,684곳이다</b>(실측 2026-09-04). 그 손익분기의 4.3배다.
+ *           그래도 150 을 안 올린다: 상세는 <b>사용자가 연 장소만</b> 채워지므로 실제
+ *           수요는 2N/30 이 아니라 2×(연 장소 수)/30 이다. 전부 캐시되는 날이 오면
+ *           그때는 상한이 아니라 TTL 을 늘리는 것이 답이다</td></tr>
+ *   <tr><td>{@code catalog}</td><td>50</td>
+ *       <td>전국 한 벌이 <b>10콜</b>이다(9,684곳 ÷ numOfRows 1000, 실측 2026-09-04).
+ *           하루 한 번 데우면 10콜이고, 데이터가 다섯 배로 늘어도 들어온다.
+ *           예비 50 에서 가져왔다 — 아래 참조</td></tr>
+ *   <tr><td>예비</td><td>0</td><td>{@code catalog} 가 가져갔다. 300+50+150 = 500</td></tr>
  * </table>
  *
  * <p><b>모르는 값을 가정으로 덮지 않았다.</b> 예상 DAU 도 전국 장소 수 N 도 모른다.
@@ -56,6 +64,18 @@ public class KtoBudgetProperties {
 
     /** {@code locationBasedList2} 의 하루 상한. 1건 = 1콜. */
     private int nearbyMaxCallsPerDay = 300;
+
+    /**
+     * {@code areaBasedList2} 의 하루 상한. <b>1페이지 = 1콜</b>. 이슈 #273.
+     *
+     * <p>전국이 9,684곳이고 {@code numOfRows} 가 1000 이라 한 벌이 <b>10콜</b>이다
+     * (실측 2026-09-04). 하루 한 번 데우므로 정상 운영에서 쓰는 것은 10콜이다.
+     *
+     * <p>50 인 이유: 데이터가 지금의 다섯 배로 늘어도(48,000곳) 한 벌이 들어온다.
+     * 그보다 크게 잡을 이유가 없다 — 이 풀이 태울 수 있는 최대가 곧 다른 풀에서
+     * 빼앗을 수 있는 최대이기 때문이다.
+     */
+    private int catalogMaxCallsPerDay = 50;
 
     /** 상세의 하루 상한. <b>1건이 2콜</b>이므로 하루 75건이다. */
     private int detailMaxCallsPerDay = 150;
