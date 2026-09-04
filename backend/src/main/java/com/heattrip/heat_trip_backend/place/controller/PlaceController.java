@@ -68,6 +68,29 @@ public class PlaceController {
     /** 계약의 {@code radius} 기본값(m). */
     private static final int DEFAULT_RADIUS_M = 8_000;
 
+    /**
+     * ETag 의 <b>약한 검증자</b> 표시. 이 두 글자가 빠지면 응답이 압축되지 않는다.
+     *
+     * <p><b>실측 2026-09-04.</b> 톰캣의 {@code CompressionConfig} 는 <b>강한 ETag 가 붙은
+     * 응답을 압축하지 않는다.</b> gzip 은 바이트열을 바꾸는데 강한 검증자는 바이트열이
+     * 같다는 뜻이라, 압축하면 그 약속이 깨지기 때문이다.
+     *
+     * <p>그래서 이 경로만 압축이 안 걸리고 있었다 — 같은 서버의 {@code /api/places/nearby}
+     * 와 {@code /v3/api-docs} 는 {@code Content-Encoding: gzip} 으로 나가는데 여기만
+     * 2.97MB 가 그대로 나갔다. <b>이 설계의 근거가 「gzip 0.44MB」 였으므로, 그 두 글자가
+     * 없으면 설계의 전제가 통째로 거짓이 된다.</b>
+     *
+     * <p>약한 검증자로 낮추는 것이 맞다. 우리가 재는 것은 "이 목록이 그 목록과 같은가"
+     * 이지 "바이트가 같은가" 가 아니다 — 압축본과 원본은 <b>같은 목록의 다른 표현</b>이고,
+     * 그것을 같다고 말할 수 있는 것이 약한 검증자다(RFC 9110 §8.8.1).
+     * {@code If-None-Match} 의 비교도 약한 비교라 304 는 그대로 나온다.
+     *
+     * <p><b>MockMvc 로는 이 사실을 못 잰다.</b> 진짜 커넥터가 없어서 톰캣의 압축 밸브를
+     * 지나지 않는다 — 그래서 단위 테스트 16개가 전부 초록인 채로 이 버그가 살아 있었다.
+     * {@code PlaceCatalogCompressionTest} 가 실제 포트로 그것을 잰다.
+     */
+    private static final String WEAK_PREFIX = "W/";
+
     private final PlaceQueryService places;
     private final PlaceDetailService details;
     private final PlaceCatalogService catalog;
@@ -137,6 +160,9 @@ public class PlaceController {
      * 맞으면 <b>304</b> 로 끝나고 본문이 안 나간다. ETag 는 {@code fetchedAt} 이 아니라
      * <b>내용 해시</b>라, KTO 데이터가 그대로인 날은 갱신해도 304 다.
      *
+     * <p><b>ETag 가 약한 검증자({@code W/})다.</b> 강한 것으로 두면 톰캣이 이 응답만
+     * 압축하지 않는다 — 이유는 {@link #WEAK_PREFIX} 에 적었다.
+     *
      * <p><b>304 를 우리가 만들지 않는다.</b> {@code ResponseEntity} 에 ETag 가 붙어 있으면
      * 스프링의 {@code HttpEntityMethodProcessor} 가 {@code If-None-Match} 를 스스로 보고
      * 304 로 바꾼다. 처음에는 여기서 손으로 비교했는데, <b>그 코드를 통짜 문자열 비교로
@@ -166,7 +192,7 @@ public class PlaceController {
         }
 
         return ResponseEntity.ok()
-                .eTag("\"" + row.get().getEtag() + "\"")
+                .eTag(WEAK_PREFIX + "\"" + row.get().getEtag() + "\"")
                 .body(row.get().getPayload());
     }
 
