@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'location_upload_policy.dart';
+import 'place_catalog_repository.dart';
 import '../../core/config/env.dart';
 import '../domain/pet.dart';
 
@@ -35,6 +36,22 @@ class PetPlace {
   });
 
   PetCategory get category => petCatByType(contentTypeId);
+
+  /// 거리를 채운 사본. **기기에서 잰 값을 담는 자리다** (이슈 #273).
+  ///
+  /// 서버의 `PlaceDto.withDistance` 와 짝이다. 카탈로그 응답에는 `distM` 이 아예 없다 —
+  /// 서버가 그 값을 계산할 좌표를 갖고 있지 않기 때문이다.
+  PetPlace withDistance(double meters) => PetPlace(
+        contentId: contentId,
+        title: title,
+        contentTypeId: contentTypeId,
+        addr: addr,
+        image: image,
+        tel: tel,
+        lat: lat,
+        lng: lng,
+        distM: meters,
+      );
 
   String get distLabel =>
       distM <= 0 ? '' : (distM < 1000 ? '${distM.round()}m' : '${(distM / 1000).toStringAsFixed(1)}km');
@@ -78,12 +95,23 @@ class PetPlace {
 /// "한도 초과" 와 "이 주변에 장소가 없음" 이 같게 보인다. **한계를 그대로 적는다** —
 /// 그 둘을 구분해 보여 주는 것은 별건이고, 그전까지 오류 신호는 서버 지표에만 있다.
 class PetPlacesRepository {
-  PetPlacesRepository({http.Client? client, String? baseUrl})
-      : _client = client ?? http.Client(),
-        _baseUrl = baseUrl ?? Env.apiBase;
+  PetPlacesRepository({
+    http.Client? client,
+    String? baseUrl,
+    PlaceCatalogRepository? catalog,
+  })  : _client = client ?? http.Client(),
+        _baseUrl = baseUrl ?? Env.apiBase,
+        _catalog = catalog ?? PlaceCatalogRepository.instance;
 
   final http.Client _client;
   final String _baseUrl;
+
+  /// A안 빌드가 쓰는 길 (이슈 #273).
+  ///
+  /// 기본값이 [PlaceCatalogRepository.instance] 인 것은 화면들이 **같은 한 벌**을 봐야
+  /// 하기 때문이다 — 화면이 `PetPlacesRepository()` 를 호출마다 새로 만든다.
+  /// 주입을 열어 두는 것은 테스트가 진짜 네트워크와 플러그인에 닿지 않게 하려는 것이다.
+  final PlaceCatalogRepository _catalog;
 
   /// 내 주변 반려동반 가능 장소(거리순).
   ///
@@ -97,12 +125,21 @@ class PetPlacesRepository {
     String? contentTypeId,
   }) async {
     // 좌표가 기기를 떠나는 자리다. 정책이 꺼져 있으면 **요청 자체를 안 만든다**(#235).
-    // 빈 목록은 이 저장소가 실패에서도 주는 값이라 부르는 쪽이 이미 다룬다.
     //
-    // 이 경로는 제품이 필요해서가 아니라 관광공사 서비스키를 앱에서 숨기려고 생겼다(#40).
-    // 그래서 끄면 장소 목록이 빈다 — 좌표를 격자 셀로 접어 보내는 절충안은 셀이
-    // 개인위치정보인지부터 정해야 해서(#235 §5) 지금은 통째로 끈다.
-    if (!LocationUploadPolicy.canQueryNearbyPlaces) return const [];
+    // 예전에는 여기서 빈 목록을 줬고, 그래서 A안 빌드는 **지도의 장소 목록이 빈 채로**
+    // 돌았다. 지금은 좌표를 안 보내는 다른 길이 있다 — 전국 한 벌을 받아 두고 거리를
+    // 기기에서 재는 [PlaceCatalogRepository] 다(#273 · #274).
+    //
+    // 두 길이 같은 답을 준다. 다른 것은 **거리를 누가 재는가** 뿐이다.
+    if (!LocationUploadPolicy.canQueryNearbyPlaces) {
+      return _catalog.nearby(
+        lat: lat,
+        lng: lng,
+        radius: radius,
+        limit: numOfRows,
+        contentTypeId: contentTypeId,
+      );
+    }
 
     final uri = Uri.parse('$_baseUrl/api/places/nearby').replace(queryParameters: {
       'lat': '$lat',
