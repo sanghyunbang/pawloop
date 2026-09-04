@@ -146,13 +146,20 @@ SET @d_tables := (
     SELECT COUNT(*) FROM information_schema.tables
     WHERE table_schema = DATABASE() AND table_name IN ('report', 'report_snapshot'));
 
+-- **이름으로 센다.** 전체 컬럼 수를 리터럴과 견주면 다음 마이그레이션이 컬럼을 하나
+-- 더하는 순간 이 스크립트를 다시 못 돌린다. #254(chat_report 흡수)가 정확히
+-- report_snapshot 에 컬럼을 더하는 작업이다 (#267).
 SET @d_report_cols := (
     SELECT COUNT(*) FROM information_schema.columns
-    WHERE table_schema = DATABASE() AND table_name = 'report');
+    WHERE table_schema = DATABASE() AND table_name = 'report'
+      AND column_name IN ('id', 'target_type', 'target_id', 'reporter_user_id',
+                          'reported_user_id', 'reason', 'memo', 'created_at'));
 
 SET @d_snapshot_cols := (
     SELECT COUNT(*) FROM information_schema.columns
-    WHERE table_schema = DATABASE() AND table_name = 'report_snapshot');
+    WHERE table_schema = DATABASE() AND table_name = 'report_snapshot'
+      AND column_name IN ('id', 'report_id', 'role', 'author_user_id',
+                          'author_name', 'title', 'body', 'occurred_at'));
 
 -- 스냅샷은 신고가 사라지면 함께 사라져야 한다. 부모 없는 사본이 남으면 어느 신고의
 -- 것인지 모르는 채 본문만 쌓인다.

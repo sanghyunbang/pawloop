@@ -180,6 +180,31 @@ class ReportSchemaMigrationExecutionTest {
     }
 
     @Test
+    @DisplayName("나중에 컬럼이 늘어도 다시 돌아간다 — 사후 검증이 개수가 아니라 이름을 센다")
+    void migrationStaysRerunnableAfterAColumnIsAdded() throws Exception {
+        // 런북이 "전부 멱등이라 이미 적용된 항목은 아무 변경 없이 메시지만 출력합니다" 라고
+        // 약속한다(mysql/README.md). 그런데 사후 검증이 표의 **전체 컬럼 수**를 리터럴과
+        // 견주면, 다음 마이그레이션이 컬럼을 하나 더하는 순간 그 약속이 깨진다 — 그 뒤로
+        // 이 스크립트가 ABORT 한다.
+        //
+        // #254(chat_report 흡수)가 정확히 report_snapshot 에 컬럼을 더하는 작업이라,
+        // 그날 이 자리가 터진다. 여기서 그 미래를 흉내 내 재 둔다 (#267).
+        try (Fixture db = fixture()) {
+            db.createParents();
+            db.runMigration();
+
+            db.exec("ALTER TABLE report_snapshot ADD COLUMN target_ordinal BIGINT NULL");
+            db.exec("ALTER TABLE report ADD COLUMN handled_at DATETIME(6) NULL");
+
+            db.runMigration();
+
+            assertThat(db.tables()).contains("report", "report_snapshot");
+            assertThat(db.checks())
+                    .as("재실행이 제약을 건드리지 않는다")
+                    .hasSize(3);
+        }
+    }
+    @Test
     @DisplayName("users 가 없으면 한 글자도 안 바꾸고 멈춘다")
     void migrationAbortsWithoutUsers() throws Exception {
         try (Fixture db = fixture()) {
