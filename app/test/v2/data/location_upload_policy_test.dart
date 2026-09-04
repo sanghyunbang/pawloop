@@ -28,6 +28,7 @@ import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
+import 'package:heat_trip_flutter/v2/data/place_catalog_repository.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/data/walk_sync.dart';
 import 'package:heat_trip_flutter/v2/data/walk_outbox.dart';
@@ -253,20 +254,63 @@ void main() {
           reason: '거리·시간은 온디바이스 계산이라 그대로 간다. 산책 기록 자체는 살아야 한다');
     });
 
-    test('기본 빌드는 주변 장소를 묻지 않는다 — 요청 자체가 안 나간다', () async {
-      var calls = 0;
+    test('기본 빌드는 좌표를 실은 주변 조회를 안 한다 — 그 요청 자체가 안 나간다', () async {
+      // **이 검사의 이름이 2026-09-04 에 바뀌었다** (이슈 #273).
+      //
+      // 예전 이름은 "주변 장소를 묻지 않는다" 였고, 실제로 빈 목록을 돌려줬다.
+      // 그래서 A안 빌드는 **지도의 장소 목록이 빈 채로** 돌았다.
+      //
+      // 지금은 묻는다. 다만 **좌표를 안 싣고** 묻는다 — 전국 한 벌을 받아 두고 거리를
+      // 기기에서 잰다. 그러니 여기서 재야 할 것은 "요청이 0건인가" 가 아니라
+      // **"좌표가 실린 요청이 0건인가"** 다. 그 둘을 헷갈리면, 정책이 지키려던 것
+      // (좌표가 기기를 떠나지 않는다)과 무관하게 기능만 죽인다.
+      // **프리퍼런스를 목으로 깔아 둔다.** 안 깔면 카탈로그가 ETag 를 읽다가 실패하고
+      // 요청을 아예 안 만든다 — 그러면 아래 「쿼리가 비어 있다」 검사가 0건을 훑으며
+      // 초록불이 된다(실측 — 좌표를 몰래 실어도 안 걸렸다).
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+
+      final urls = <Uri>[];
       final repo = PetPlacesRepository(
         baseUrl: _base,
-        client: MockClient((_) async {
-          calls++;
+        client: MockClient((request) async {
+          urls.add(request.url);
           return _json(const []);
         }),
+        // 기본값은 전역 인스턴스라 진짜 네트워크·플러그인에 닿는다. 여기서는
+        // 좌표가 나가는지만 보므로 카탈로그도 같은 목 클라이언트를 쓰게 한다.
+        catalog: PlaceCatalogRepository(
+          baseUrl: _base,
+          client: MockClient((request) async {
+            urls.add(request.url);
+            return _json(const []);
+          }),
+          cacheDirectory: () async =>
+              Directory.systemTemp.createTemp('policy_catalog_test'),
+        ),
       );
 
       final places = await repo.fetchNearby(lat: 37.5665, lng: 126.9780);
 
-      expect(calls, 0, reason: '좌표가 쿼리스트링에 실려 나가는 자리다');
-      expect(places, isEmpty, reason: '실패와 같은 값이라 부르는 쪽이 이미 다룬다');
+      expect(
+        urls,
+        isNotEmpty,
+        reason: '''
+요청이 0건이면 아래 검사가 아무것도 안 잰다. A안 빌드도 카탈로그는 부르므로,
+0건은 「안 보냈다」 가 아니라 「이 테스트가 고장났다」 는 뜻이다.''',
+      );
+      expect(
+        urls.where((u) => u.path.endsWith('/api/places/nearby')),
+        isEmpty,
+        reason: '좌표가 쿼리스트링에 실려 나가는 자리다',
+      );
+      for (final url in urls) {
+        expect(
+          url.queryParameters,
+          isEmpty,
+          reason: '카탈로그 경로는 쿼리가 비어 있어야 한다 — 좌표든 지역이든 실리면 안 된다',
+        );
+      }
+      expect(places, isEmpty, reason: '서버가 빈 배열을 줬으니 빈 목록이다');
     });
 
     test('기본 빌드는 커뮤니티 글에 장소를 안 싣는다', () async {

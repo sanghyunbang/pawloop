@@ -8,7 +8,6 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
 import '../domain/pet.dart';
 import '../data/location_service.dart';
-import '../data/location_upload_policy.dart';
 import '../data/pet_places_repository.dart';
 import '../data/walk_outbox.dart';
 import 'create_screen.dart';
@@ -170,15 +169,17 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
 
   // ───────────── 주변 장소 ─────────────
   Future<void> _loadNearbyPlaces(NLatLng center) async {
-    // 정책이 꺼져 있으면 묻지 않는다(#235). 저장소도 막지만 **여기서 멈춰야** 한다 —
-    // 위치 스트림이 5m 마다 `if (!_poisLoaded)` 를 보고 다시 부르는데, 응답이 항상
-    // 비면 _poisLoaded 가 영영 안 서서 산책 내내 헛일을 반복한다. 그 반복이 원래
-    // 좌표를 서버로 흘리던 자리였다.
-    if (!LocationUploadPolicy.canQueryNearbyPlaces) {
-      _poisLoaded = true;
-      return;
-    }
-
+    // **여기서 멈추지 않는다** (이슈 #273).
+    //
+    // 예전에는 정책이 꺼져 있으면 `_poisLoaded = true` 로 두고 돌아섰다. 저장소가
+    // 어차피 빈 목록을 줬고, 위치 스트림이 5m 마다 다시 부르면 산책 내내 헛일을
+    // 반복하기 때문이었다.
+    //
+    // 지금은 좌표를 안 보내고도 답이 나온다 — 저장소가 전국 한 벌에서 기기 안으로
+    // 거른다(`PlaceCatalogRepository`). 여기서 멈추면 그 길이 영영 안 불린다.
+    //
+    // 헛일 걱정은 그대로 없다: 두 번째부터는 메모리에 있는 목록을 훑을 뿐이고
+    // 네트워크가 안 나간다.
     final places = await PetPlacesRepository().fetchNearby(
       lat: center.latitude,
       lng: center.longitude,
