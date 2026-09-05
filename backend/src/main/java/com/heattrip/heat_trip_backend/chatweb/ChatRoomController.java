@@ -153,6 +153,8 @@ public class ChatRoomController {
         if (afterSeq != null
                 && etagOf(roomId, room.lastSeq()).equals(ifNoneMatch)
                 && afterSeq >= room.lastSeq()) {
+            // 빈 폴링의 대부분이 여기서 끝난다 — 세지 않으면 chat.poll 의 empty 비율이 거짓이 된다(#197).
+            chatRooms.notModifiedPoll();
             return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
                     .eTag(etagOf(roomId, room.lastSeq()))
                     .build();
