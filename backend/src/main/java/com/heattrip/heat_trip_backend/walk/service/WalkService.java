@@ -263,6 +263,8 @@ public class WalkService {
         WalkTotals all = walks.sumAllTime(userId, dogId);
 
         return new WalkStatsResponse(
+                weekStart.toLocalDate(),
+                weekStart.toLocalDate().plusDays(6),
                 weekKm,
                 round(totalKm),
                 walkCount,

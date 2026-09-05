@@ -341,6 +341,13 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
                         .header("Authorization", "Bearer " + me.token()))
                 .andExpect(status().isOk()));
 
+        String monday = thisWeek.atZone(KST).toLocalDate().toString();
+        assertThat(stats.path("weekStart").asText())
+                .as("응답이 스스로 기간을 말한다 — 월요일(KST) 이다(#209 Walks-medium-2)")
+                .isEqualTo(monday);
+        assertThat(stats.path("weekEnd").asText())
+                .as("일요일(포함) = weekStart + 6일")
+                .isEqualTo(thisWeek.atZone(KST).toLocalDate().plusDays(6).toString());
         assertThat(stats.path("weekKm").size())
                 .as("계약이 '월~일 길이 7' 이라고 선언했다")
                 .isEqualTo(7);
@@ -474,6 +481,24 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
 
         assertThat(after.path("memo").isNull())
                 .as("빈 문자열로 두면 \"안 썼다\" 가 두 모양이 되어 화면이 한쪽을 빠뜨린다")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("{} 도 지운다 — 서버가 {} 와 {\"memo\":null} 을 구분하지 않으므로 계약도 그렇게 말한다")
+    void emptyObjectClearsIt() throws Exception {
+        Account me = account("빈본문으로지우는이");
+        long dogId = dog(me, "감자");
+        long walkId = savedWalk(me, dogId, "\"지울 글\"");
+
+        JsonNode after = body(memo(me, walkId, "{}")
+                .andExpect(status().isOk()));
+
+        assertThat(after.path("memo").isNull())
+                .as("""
+                        2026-09-05 까지 계약은 memo 를 필수라 했지만 레코드 바인딩은 {} 와 \
+                        {"memo":null} 을 같은 null 로 받는다. 코드가 못 지키는 required 를 \
+                        계약에서 뗐다(#209 Walks-medium-3) — 이 테스트가 그 행동을 잠근다.""")
                 .isTrue();
     }
 

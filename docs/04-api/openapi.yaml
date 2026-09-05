@@ -84,6 +84,13 @@ info:
         이 UTC 로 눕혀 넣고, 응답에서 `Instant` 로 세웁니다. `DateTimeFieldsAreInstantTest`
         가 **이 계약 파일을 목록의 출처로 삼아** 빠진 필드가 없는지 지킵니다.
     - 좌표: `lat`(위도), `lng`(경도). (관광공사 원본은 mapy=위도, mapx=경도)
+    - **거리 단위** (#209 `Walks-medium-5`): 저장·전송은 **미터 정수**(`Walk.distanceM`), 통계만
+      **km 실수, 소수 둘째 자리에서 반올림**(`WalkStats` 의 `*Km`). 목록 합계와 통계가 어긋나면
+      통계(서버 반올림)가 정본입니다. `Place.distM` 은 성격이 다릅니다 — 기준점으로부터의 거리라
+      미터 실수이고 `/nearby` 에서만 채워집니다.
+    - **201 에 `Location` 헤더를 붙이지 않습니다** (#209 `Dogs-low-1`). 만든 것의 id 는 응답 본문에
+      있고 앱은 그것을 씁니다(`POST /api/dogs`·`/api/walks`·`/api/groups`·케어 기록·게시글 전부 같습니다).
+      인증 리다이렉트의 `Location` 은 302 의 것이라 별개입니다.
     - 리네임 진행 중: 제품명은 Pawloop, 도메인·딥링크 스킴은 당분간 heattrip 을 유지합니다
       (`https://api.heattrip.link`, `heattrip://login-callback`).
     - `미구현` 이라고 적힌 오퍼레이션은 계약만 있고 백엔드 핸들러가 없습니다(2026-08 기준).
@@ -1080,6 +1087,10 @@ paths:
         엔드포인트를 나누면 화면 하나가 두 번 부르고 요청 제한 항목도 하나 늘어납니다.
 
         경로 이름에 `weekly` 가 남아 있는 것은 이미 쓰이고 있어서입니다.
+
+        **이번 주 고정입니다** — 지난 주를 고르는 파라미터는 없습니다(화면 요구가 없어 두지
+        않았습니다, #209 `Walks-medium-2`). 대신 응답의 `weekStart`·`weekEnd` 가 어느 주인지
+        말합니다 — 앱이 "서버가 이번 주를 줬겠지" 라고 가정하고 축 라벨을 그리지 않아도 됩니다.
       parameters:
         - name: dogId
           in: query
@@ -2798,7 +2809,13 @@ components:
             **입력에는 없습니다.** `DogInput` 은 `birth` 만 받습니다 — 개월 수를 받으면
             내일은 그 값이 틀립니다.
         neutered: { type: boolean }
-        avatarUrl: { type: [string, "null"] }
+        avatarUrl:
+          type: [string, "null"]
+          description: |
+            **아직 항상 `null` 입니다** — 업로드 경로가 없습니다(#145 는 컬럼만 뒀습니다).
+            입력(`DogInput`)에 대응 필드가 없는 비대칭은 **의도**입니다: 채우는 날 입력은 S3
+            objectKey(`avatarFileId`)를 받고, `avatarUrl` 은 응답 전용 파생값으로 남깁니다 —
+            완성된 URL 을 저장하면 버킷·CDN 을 옮길 때 행마다 고쳐야 합니다(#209 `Dogs-medium-2`).
 
     DogInput:
       type: object
@@ -2858,6 +2875,17 @@ components:
         nickname:
           type: string
           description: 탈퇴한 계정이면 `알 수 없음` 입니다.
+
+    PlaceRef:
+      type: object
+      description: |
+        장소 **참조** — `Place` 의 식별자 셋만. 통계처럼 장소를 세기만 하는 자리에서 씁니다.
+        `source`+`contentId` 로 `GET /api/places/{contentId}` 에 닿습니다.
+      required: [source, contentId, title]
+      properties:
+        source: { type: string, enum: [kto, vet, shop, trail], example: kto }
+        contentId: { type: string, example: "2733967" }
+        title: { type: string, example: "서울숲" }
 
     Place:
       type: object
@@ -2990,7 +3018,13 @@ components:
             저장된 것인지** 맞춰 볼 수 있어야 하기 때문입니다.
           example: "6d2f8b1a-3c4e-4a7f-9b0d-1e2f3a4b5c6d"
         startedAt: { type: string, format: date-time }
-        endedAt: { type: [string, "null"], format: date-time }
+        endedAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            **`null` 은 옛 앱이 안 보낸 행이지 "진행 중" 이 아닙니다.** 서버에 진행 중인 산책은
+            없습니다 — `POST /api/walks` 는 끝난 산책만 받고, 지금 앱은 `endedAt` 을 항상
+            채웁니다(`WalkDraft.endedAt`). 그래서 종료·수정 오퍼레이션이 없습니다(#209 `Walks-medium-3`).
         distanceM: { type: integer, example: 2400 }
         durationS: { type: integer, example: 2280 }
         path:
@@ -3010,16 +3044,24 @@ components:
             maxItems: 2
           example: [[127.0374, 37.5445], [127.0402, 37.5455]]
         memo: { type: [string, "null"] }
-        weather: { type: [string, "null"], example: "맑음 24°C" }
+        weather:
+          type: [string, "null"]
+          example: "맑음 24°C"
+          description: |
+            **표시용 문자열**입니다 — 앱이 산책 시작 시점에 넣은 것을 서버가 그대로 돌려줍니다.
+            해석하지 않으므로 집계·검색의 근거가 아니고, 온도 단위·형식도 정해진 것이 없습니다.
+            **지금 앱은 채우지 않습니다**(항상 `null`). 구조화(`{condition, tempC}`)는 쓰는 화면이
+            생길 때 합니다(#209 `Walks-low-3`).
 
     WalkMemoInput:
       type: object
-      required: [memo]
       description: |
         `PUT /api/walks/{walkId}/memo` 의 본문. 필드가 하나뿐입니다.
 
-        `memo` 를 **필수로 둔 것은 의도입니다.** 선택으로 두면 `{}` 가 "안 바꾼다" 인지
-        "지운다" 인지 계약이 말해 주지 않습니다. 지울 때는 `""` 또는 `null` 을 보냅니다.
+        **`{}` 도 지웁니다.** 서버가 `{}` 와 `{"memo": null}` 을 구분하지 않습니다(레코드 바인딩).
+        이 경로에 "안 바꾼다" 는 없습니다 — 안 바꿀 거면 부르지 않습니다. 지울 때는 `""`·`null`·`{}`
+        셋 다 같은 뜻입니다. 2026-09-05 까지 `required: [memo]` 였는데 코드가 그것을 지키지
+        못했습니다(#209 `Walks-medium-3`) — 계약을 코드에 맞췄습니다.
       properties:
         memo:
           type: string
@@ -3055,7 +3097,10 @@ components:
         endedAt:
           type: string
           format: date-time
-          description: 주면 `startedAt` 보다 뒤여야 합니다.
+          description: |
+            주면 `startedAt` 보다 뒤여야 합니다. **끝난 산책만 저장합니다** — 앱은 트래킹이 끝난 뒤
+            한 번 보내고 이 값을 항상 채웁니다. 생략은 옛 클라이언트 호환으로만 남아 있고, 그렇게
+            저장된 행은 "진행 중" 이 아닙니다(`Walk.endedAt`).
         distanceM:
           type: integer
           minimum: 0
@@ -3111,7 +3156,11 @@ components:
           items: { type: integer, minimum: 0 }
           example: [0, 3, 7]
         memo: { type: string, maxLength: 500 }
-        weather: { type: string, maxLength: 30 }
+        weather:
+          type: string
+          maxLength: 30
+          example: "맑음 24°C"
+          description: 표시용 문자열. 서버는 해석하지 않고 그대로 저장합니다 — `Walk.weather` 참조. 지금 앱은 보내지 않습니다.
 
     WalkStats:
       type: object
@@ -3119,16 +3168,30 @@ components:
         **두 기간이 한 응답에 들어 있습니다.** `week*` 는 이번 주(월~일), `allTime*` 는 전체
         기간입니다. 주 경계는 **KST 월요일 00:00** 입니다 — 서버 타임존이 아니라 한국 시각으로
         자릅니다.
-      required: [weekKm, totalKm, walkCount, avgKm, allTimeKm, allTimeCount, allTimeMinutes]
+      required: [weekStart, weekEnd, weekKm, totalKm, walkCount, avgKm, allTimeKm, allTimeCount, allTimeMinutes]
       properties:
+        weekStart:
+          type: string
+          format: date
+          description: |
+            이번 주의 **월요일**(KST 날짜). `weekKm[0]` 이 이 날입니다. 응답이 스스로 기간을
+            말합니다(#209 `Walks-medium-2`).
+          example: "2026-08-31"
+        weekEnd:
+          type: string
+          format: date
+          description: 이번 주의 **일요일**(KST 날짜, 포함). 항상 `weekStart + 6일` 입니다.
+          example: "2026-09-06"
         weekKm:
           type: array
-          description: 이번 주 요일별 거리(km). **월요일부터** 길이 7. 산책이 없는 요일은 0.
+          description: |
+            이번 주 요일별 거리(km). **월요일부터** 길이 7. 산책이 없는 요일은 0.
+            **소수 둘째 자리에서 반올림**합니다 — 거리 단위 규약은 `info.description`.
           minItems: 7
           maxItems: 7
           items: { type: number, format: double }
           example: [2.1, 2.9, 1.2, 0, 1.8, 3.1, 2.4]
-        totalKm: { type: number, format: double, description: 이번 주 합계 거리(km), example: 13.5 }
+        totalKm: { type: number, format: double, description: 이번 주 합계 거리(km). 반올림 전 합계를 소수 둘째 자리에서 반올림합니다 — `weekKm` 을 더한 값과 마지막 자리가 다를 수 있습니다, example: 13.5 }
         walkCount:
           type: integer
           description: |
@@ -3140,21 +3203,27 @@ components:
           format: double
           description: '`totalKm / walkCount`. 건수가 0 이면 0 입니다(나눗셈을 하지 않습니다).'
           example: 2.3
-        allTimeKm: { type: number, format: double, description: 전체 기간 누적 거리(km), example: 128.4 }
+        allTimeKm: { type: number, format: double, description: 전체 기간 누적 거리(km). 소수 둘째 자리에서 반올림, example: 128.4 }
         allTimeCount: { type: integer, description: 전체 기간 산책 건수, example: 57 }
         allTimeMinutes: { type: integer, description: 전체 기간 누적 시간(분), example: 2310 }
         topPlaces:
           type: array
           description: |
-            자주 간 곳 상위.
+            자주 간 곳 상위 **5개**, `count` 내림차순.
 
             **지금은 항상 빈 배열입니다.** `Walk` 에 장소 축이 없어서 셀 근거가 없습니다.
             산책과 장소를 잇는 결정이 나오기 전까지 채우지 않습니다 — 그럴듯한 값을 만들어
             넣으면 화면이 거짓말을 합니다.
+
+            항목의 `place` 가 문자열이 아니라 `PlaceRef` 인 것은 #209 `Walks-low-1` 이 고친
+            것입니다 — 이름만 주면 `Place.contentId` 와 이어지지 않아 화면이 그 장소로 갈 수
+            없습니다. 항상 빈 배열인 지금이 모양을 바꾸는 데 비용이 0 인 유일한 시점이었습니다.
+          maxItems: 5
           items:
             type: object
+            required: [place, count]
             properties:
-              place: { type: string, example: "서울숲" }
+              place: { $ref: '#/components/schemas/PlaceRef' }
               count: { type: integer, example: 3 }
 
     Board:
@@ -3454,7 +3523,14 @@ components:
             FK 로 이어졌지만, 이 경로가 아직 `dogId` 를 받지 않습니다. 받으려면 "가족 구성원이
             남의 반려동물 id 를 알 수 있는가" 가 먼저 정해져야 합니다(#209 Dogs-high-3). 필드를
             미리 두는 것은 그날 앱이 스키마를 바꾸지 않아도 되게 하려는 것입니다.
-        groupId: { type: [integer, "null"], format: int64, description: 가족 그룹(개인 기록이면 null) }
+        groupId:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            가족 그룹. **그룹 경로(`GET`/`POST /api/groups/{groupId}/care-logs`)의 응답에서는 항상
+            그 `groupId` 입니다** — 그 그룹의 행만 돌려줍니다. `null` 은 가족을 해산한 뒤 개인
+            기록으로 남은 행(`ON DELETE SET NULL`)이고, 그 행을 돌려주는 경로는 아직 없습니다.
+            스키마를 둘로 가르지 않는 이유입니다(#209 `Groups-medium-2`).
         type: { $ref: '#/components/schemas/CareType' }
         doneBy: { $ref: '#/components/schemas/CareDoer' }
         occurredAt:
