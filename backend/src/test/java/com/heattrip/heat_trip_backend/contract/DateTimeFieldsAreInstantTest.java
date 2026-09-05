@@ -55,6 +55,7 @@ class DateTimeFieldsAreInstantTest {
             Map.entry("ChatInvite", com.heattrip.heat_trip_backend.chat.ChatInviteView.class),
             Map.entry("ChatMessage", com.heattrip.heat_trip_backend.chatweb.ChatMessageResponse.class),
             Map.entry("ChatRoom", com.heattrip.heat_trip_backend.chatweb.ChatRoomResponse.class),
+            Map.entry("Consent", com.heattrip.heat_trip_backend.consent.dto.ConsentResponse.class),
             Map.entry("Comment", com.heattrip.heat_trip_backend.community.dto.CommentResponse.class),
             Map.entry("Post", com.heattrip.heat_trip_backend.community.dto.PostResponse.class),
             Map.entry("Group", com.heattrip.heat_trip_backend.group.dto.GroupResponse.class),

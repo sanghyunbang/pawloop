@@ -663,6 +663,22 @@ class ApiRateLimitFilterTest {
                 .isEqualTo(200);
     }
 
+    @Test
+    @DisplayName("약관 동의 쓰기(PUT /api/consents)는 group-write 버킷이다 — 요청 한 건이 행을 만든다")
+    void consentsPut_isMetered() throws Exception {
+        RateLimitProperties p = props(100);
+        p.setGroupWriteMaxRequests(1);
+        ApiRateLimitFilter filter = new ApiRateLimitFilter(p, MAPPER);
+
+        assertThat(call(filter, "PUT", "/api/consents", "203.0.113.43").getStatus()).isEqualTo(200);
+        assertThat(call(filter, "PUT", "/api/consents", "203.0.113.43").getStatus())
+                .as("표에 없는 경로는 한도가 0 이 아니라 무한이다 (📌 #86 원칙 4)")
+                .isEqualTo(429);
+        assertThat(call(filter, "GET", "/api/consents", "203.0.113.43").getStatus())
+                .as("읽기는 버킷이 없다 — 로그인 때 한 번이다")
+                .isEqualTo(200);
+    }
+
     // ─────────────────── D. 스위치가 실제로 끈다 ───────────────────
 
     @Test

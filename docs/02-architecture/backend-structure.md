@@ -48,6 +48,7 @@ com.heattrip.heat_trip_backend
 ├─ chatweb/                        # 채팅 HTTP 표면(컨트롤러·요청/응답)      (ADR-0011, #72)
 ├─ place/                          # KTO 프록시 · 격자 캐시 · 호출 예산      (ADR-0013, #40)
 ├─ community/                      # 커뮤니티 글·댓글·반응·신고             (#169·#170·#211·#166)
+├─ consent/                        # 약관 동의 이력 — 서버 정본, 재동의는 앱이  (#190, ADR-0020)
 ├─ moderation/                     # 신고·가리기 — 도메인 공용             (#166, ADR-0016)
 ├─ moderationweb/                  # 가리기의 HTTP 표면                    (#166)
 │
