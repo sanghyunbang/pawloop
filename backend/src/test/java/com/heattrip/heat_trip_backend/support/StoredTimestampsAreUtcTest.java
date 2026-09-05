@@ -19,7 +19,6 @@ import java.util.stream.Stream;
 
 import com.heattrip.heat_trip_backend.chat.ChatTime;
 import com.heattrip.heat_trip_backend.chat.entity.ChatMessage;
-import com.heattrip.heat_trip_backend.chat.entity.ChatReport;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoom;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoomInvite;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoomMember;
@@ -69,7 +68,7 @@ class StoredTimestampsAreUtcTest {
      */
     private static final List<Class<?>> WRITERS = List.of(
             ChatMessage.class, ChatRoom.class, ChatRoomMember.class,
-            ChatRoomInvite.class, ChatReport.class,
+            ChatRoomInvite.class,
             FamilyGroup.class, User.class);
 
     /** 되돌리면 값이 이만큼 움직인다. DST 가 없어 사시사철 같다. */

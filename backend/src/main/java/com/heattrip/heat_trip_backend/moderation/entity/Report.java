@@ -24,7 +24,7 @@ import java.time.ZoneOffset;
  * 신고 한 건 — 이슈 #166. 결정의 근거는 {@code mysql/post-start/15_report.sql} 머리에 있다.
  *
  * <h2>사용자 id 로 FK 를 안 건다</h2>
- * <p>{@code chat_report} 와 같은 모양이다. 이 모듈이 <b>아무 도메인도 안 부른다</b>는 것이
+ * <p>옛 {@code chat_report}(#281 로 지웠다)와 같은 모양이다. 이 모듈이 <b>아무 도메인도 안 부른다</b>는 것이
  * 설계의 불변식이고(package-info), FK 를 걸려면 {@code @ManyToOne User} 가 필요해 그것이
  * 깨진다.
  *

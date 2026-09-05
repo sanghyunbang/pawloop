@@ -109,15 +109,15 @@ package com.heattrip.heat_trip_backend.care.api;
 
 ### 2.4 `chat` 에 2단을 적용할 때의 조건
 
-`chat` 은 지금 2단 구조가 **아니다** — 루트에 21개 + `entity/` + `repository/` + `metrics/` 다. 그런데 **그 모양이 구조 검사의 기본형과 정확히 일치해서** 켜자마자 위반 0건이다.
+`chat` 은 지금 2단 구조가 **아니다** — 루트에 19개 + `entity/` + `repository/` + `metrics/` 다. 그런데 **그 모양이 구조 검사의 기본형과 정확히 일치해서** 켜자마자 위반 0건이다.
 
-2단으로 옮기면 그 0건이 깨질 수 있다. 옮길 때 `api` 에 이름을 붙여야 하고, **무엇을 `api` 에 넣을지는 이미 정해져 있다.** 2026-08-31 실측으로 루트 21개가 이렇게 갈린다.
+2단으로 옮기면 그 0건이 깨질 수 있다. 옮길 때 `api` 에 이름을 붙여야 하고, **무엇을 `api` 에 넣을지는 이미 정해져 있다.** 2026-09-05 실측으로 루트 19개가 이렇게 갈린다(#281 로 옛 신고 뷰 둘이 빠졌다).
 
-| 밖에서 실제로 부름 → `api/` 로 (16) | 밖에서 이름이 안 보임 (7) |
+| 밖에서 실제로 부름 → `api/` 로 (14) | 밖에서 이름이 안 보임 (5) |
 |:---|:---|
-| `ChatRoomService` · `ChatRoomView` · `ChatMessageView` · `ChatRoomSummaryView` · `ChatMessagePageView` · `ChatMemberView` · `ChatLimitViolationException` · `ChatReadView` · `ChatMessageSender` · `ChatMessageSendResult` · `ChatJoinResult` · `ChatInviteView` · `ChatReportService` · `ChatReportDraft` · `ChatBlocks` · `ChatTime` | `ChatErrorCode` · `ChatLimits` · `FixedChatLimits` · `InviteCodeGenerator` · `ChatReportedMessageView` · `ChatReportReason` · `ChatReportView` |
+| `ChatRoomService` · `ChatRoomView` · `ChatMessageView` · `ChatRoomSummaryView` · `ChatMessagePageView` · `ChatMemberView` · `ChatLimitViolationException` · `ChatReadView` · `ChatMessageSender` · `ChatMessageSendResult` · `ChatJoinResult` · `ChatInviteView` · `ChatReportService` · `ChatReportDraft` · `ChatBlocks` · `ChatTime` | `ChatErrorCode` · `ChatLimits` · `FixedChatLimits` · `InviteCodeGenerator` · `ChatReportReason` |
 
-**오른쪽 칸의 이름이 "내부로 옮겨도 된다" 는 뜻은 아니다.** 세는 방식이 **밖의 소스에 그 이름이 적혀 있는가** 라서 맹점이 하나 있다 — `ChatReportedMessageView` 는 밖 어디에도 안 적혀 있지만 `ChatReportView` 가 들고 있는 리스트의 원소 타입이라, 내부로 내리면 **공개 record 의 시그니처가 깨진다**(#82).
+**오른쪽 칸의 이름이 "내부로 옮겨도 된다" 는 뜻은 아니다.** 세는 방식이 **밖의 소스에 그 이름이 적혀 있는가** 라서 맹점이 있다 — 공개 record 가 들고 있는 리스트의 원소 타입은 밖 어디에도 안 적혀 있지만, 내부로 내리면 **공개 record 의 시그니처가 깨진다.** `ChatReportedMessageView`(`ChatReportView` 의 원소)가 그 예였고, 둘 다 옛 신고 표와 함께 #281 로 사라졌다.
 
 `ChatReportReason` 은 사정이 다르다 — 밖으로 나가는 것은 그 enum 이 아니라 `wireValue()` 문자열이라 **진짜로 내부다.** 같은 칸에 있어도 이유가 다르다.
 

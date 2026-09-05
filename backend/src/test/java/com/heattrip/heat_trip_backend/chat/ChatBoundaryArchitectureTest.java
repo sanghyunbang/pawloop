@@ -342,16 +342,14 @@ class ChatBoundaryArchitectureTest {
                             파일 텍스트가 아니라 **적용한 결과**를 읽는 이유는 정규식이 \
                             ALTER TABLE ... ADD CONSTRAINT 를 못 봤기 때문이다 — 손으로 고치는 사람이 \
                             가장 자연스럽게 쓰는 문법이 그것이다.
-                            넷보다 적으면 경계 안쪽 FK 까지 끊어진 것이고, 다른 이름이 끼면 \
+                            셋보다 적으면 경계 안쪽 FK 까지 끊어진 것이고, 다른 이름이 끼면 \
                             users·family_group·dog 로 나간 것이다 (ADR-0011 결정 4).
                             chat_message → users 가 여기 끼는 것이 #78 완료 조건 6 이 막는 것이다 — \
                             ON DELETE CASCADE 면 탈퇴 한 번에 그 사람이 방에 쓴 말이 전부 사라진다.
-                            chat_reported_message 는 #82 가 더한 것이고 여전히 chat 안쪽이다.
-                            반대로 chat_report 가 이 목록에 없는 것도 의도다 — chat_room 으로
-                            FK 를 내면 방을 지우는 것으로 신고 기록을 지울 수 있게 된다.""")
+                            chat_report·chat_reported_message 는 #281 로 사라졌다 — 채팅 신고는 moderation 의 report 표에 
+                            적히고, 그쪽은 chat 으로 FK 를 내지 않는다.""")
                     .containsExactlyInAnyOrder(
                             "chat_message → chat_room",
-                            "chat_reported_message → chat_report",
                             "chat_room_invite → chat_room",
                             "chat_room_member → chat_room");
         }
