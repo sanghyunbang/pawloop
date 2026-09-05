@@ -189,11 +189,18 @@ class PlaceCatalogRepository {
       final prefs = await SharedPreferences.getInstance();
       final etag = prefs.getString(_etagKey);
 
+      // **갖고 있는 것이 있을 때만** ETag 를 댄다. 같으면 304 로 끝나고 2.83MB 가
+      // 안 온다 — 이 헤더가 이 경로의 요점이다.
+      //
+      // 메모리가 비었는데 ETag 를 대면 **304 에 본문이 없어서 영원히 빈 채로 남는다.**
+      // 파일 캐시는 OS 가 지울 수 있고(안드로이드 「캐시 삭제」 도 그렇다) 그때
+      // SharedPreferences 의 ETag 는 남는다. 그 상태로 304 를 받으면 채울 것이 없고,
+      // "다시 시도" 를 눌러도 또 304 다 — 서버 내용이 바뀔 때까지 사용자가 할 수 있는
+      // 일이 없다. #283 검토에서 잡았다.
+      final canRevalidate = _memory != null && etag != null && etag.isNotEmpty;
       final res = await _client.get(
         Uri.parse('$_baseUrl/api/places/catalog'),
-        // 갖고 있는 것이 있으면 그것을 대고 묻는다. 같으면 304 로 끝나고
-        // 2.83MB 가 안 온다 — 이 헤더가 이 경로의 요점이다.
-        headers: {if (etag != null && etag.isNotEmpty) 'If-None-Match': etag},
+        headers: {if (canRevalidate) 'If-None-Match': etag},
       ).timeout(const Duration(seconds: 30));
 
       if (res.statusCode == 304) {

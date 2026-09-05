@@ -197,6 +197,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
       !LocationUploadPolicy.canQueryNearbyPlaces && !PlaceCatalogRepository.instance.hasCatalog;
 
   Future<void> _retryCatalog() async {
+    // 누르는 즉시 스피너로 바꾼다. 안 그러면 `retry()` 가 타임아웃(30초)까지 기다리는
+    // 동안 빈 카드와 살아 있는 버튼이 그대로라 사람이 여러 번 누른다 — 요청은
+    // `_inFlight` 로 합쳐지지만 끝난 뒤 `_load()` 가 누른 수만큼 돈다. #283 검토.
+    if (_loading) return;
+    setState(() => _loading = true);
     await PlaceCatalogRepository.instance.retry();
     if (mounted) await _load();
   }
@@ -225,7 +230,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
         const SizedBox(height: 10),
         const Text('이 지역엔 등록된 곳이 없어요', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textPrimary)),
         const SizedBox(height: 4),
-        const Text('지도를 움직이거나 필터를 바꿔보세요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
+        // "지도를 움직여 보세요" 라고 하지 않는다 — 지도를 움직여도 다시 읽지 않는다
+        // (`_load` 는 `_boot` 에서 한 번만 불린다). 시킨 대로 해도 소용없는 안내는 거짓이다.
+        const Text('현위치 8km 안을 봤어요 · 필터를 바꿔보세요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
       ]),
     );
   }
@@ -441,6 +448,17 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ]),
           const SizedBox(height: 8),
           SizedBox(height: 40, child: _catChips()),
+          // 지도 뷰에는 출처를 밝히는 자리가 시트 배지뿐이었다. 성수동 밖 사용자가
+          // 병원 칩을 누르면 마커 없는 빈 지도만 보고, 왜 비었는지 알 길이 없었다.
+          if (_isLayer) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(color: const Color(0xF2FFFFFF), borderRadius: BorderRadius.circular(10)),
+              child: const Text('예시 데이터 · 서울 성수동 근처에만 있어요',
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: T.textMuted)),
+            ),
+          ],
         ]),
       ),
       Positioned(left: 16, bottom: 128, child: _legend()),
@@ -495,7 +513,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (_catFilter == 'trail') {
       await c.addOverlay(NPolylineOverlay(id: 'trail', coords: _trailCoords, color: const Color(0xFF2FB89B), width: 6));
       await c.addOverlay(NMarker(id: 'trail-start', position: _trailCoords.first, icon: await _markerIcon(petCatByType('trail'))));
-      await c.updateCamera(NCameraUpdate.withParams(target: const NLatLng(37.5436, 127.0456), zoom: 14));
+      // 산책로 더미도 카메라를 안 옮긴다 — 아래 병원/펫샵과 같은 이유다(#283 검토가 잡았다).
       return;
     }
     final markers = <NAddableOverlay>{};

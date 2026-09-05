@@ -156,6 +156,28 @@ void main() {
       );
     });
 
+    test('갖고 있는 것이 없으면 ETag 를 안 댄다 — 대면 304 에 본문이 없어 영원히 빈 채로 남는다', () async {
+      // 파일 캐시는 지워졌는데(OS 청소·「캐시 삭제」) SharedPreferences 의 ETag 는 남은 상태.
+      SharedPreferences.setMockInitialValues({
+        'place_catalog_etag_v1': '"abc123"',
+        'place_catalog_checked_at_v1': DateTime.now().millisecondsSinceEpoch,
+      });
+      final server = fakeServer();
+
+      final places = await repo(server.client).all();
+
+      expect(server.requests, hasLength(1));
+      expect(
+        server.requests.single.headers.containsKey('If-None-Match'),
+        isFalse,
+        reason: '''
+메모리가 비었는데 ETag 를 대면 서버가 304 를 주고, 304 에는 본문이 없어 채울 것이 없다.
+"다시 시도" 를 눌러도 또 304 라 서버 내용이 바뀔 때까지 사용자가 할 수 있는 일이 없다 —
+#283 검토가 실측으로 잡았다.''',
+      );
+      expect(places, hasLength(3), reason: 'ETag 없이 물었으니 200 에 본문이 와야 한다');
+    });
+
     test('304 를 받으면 갖고 있던 것을 그대로 쓴다', () async {
       final first = fakeServer();
       final subject = repo(first.client);
