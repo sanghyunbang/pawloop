@@ -133,8 +133,8 @@ public class CareService {
 
         CareLog saved = careLogs.saveAndFlush(CareLog.builder()
                 // dogId 는 요청에서 읽지 않는다 — 이 경로는 그룹 단위 기록이라 대상 개체를
-                // 아직 받지 않는다(CareLog javadoc). dog 표는 #145 가 만들었으므로
-                // "표가 없어서" 가 아니다.
+                // 아직 받지 않는다(CareLog javadoc). FK 는 #154 에서 걸렸고, 받는 날의 전제
+                // (가족 구성원이 남의 반려동물 id 를 알 수 있는가)는 #209 Dogs-high-3 이 정한다.
                 .group(group)
                 .type(request.type())
                 .doneBy(actor)

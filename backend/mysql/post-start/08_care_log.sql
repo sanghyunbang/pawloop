@@ -42,25 +42,18 @@
 -- 이 스크립트를 CASCADE 시절에 이미 돌린 DB 가 있으므로 §B 가 그것을 고친다.
 --
 -- ─────────────────────────────────────────────────────────────────────────────
--- ⚠️ care_log.dog_id 에 FK 가 없다
+-- care_log.dog_id 의 FK 는 22_care_log_dog_fk.sql 이 건다 (#154) — 이 스크립트는 걸지 않는다
 --
--- **2026-09-01 에 이 절의 전제가 바뀌었다.** 여기 적혀 있던 이유는 "dog 표가 정본 스키마에
--- 없다" 였는데, #145 가 그 표를 만들었다 — mysql/init/01_schema.sql 에 CREATE TABLE `dog`
--- 가 있고 fk_dog_user·ck_dog_size·ck_dog_species 까지 붙어 있다. 앱도 POST /api/dogs 로
--- 서버에 등록한다(pet_sync.dart). **"없는 표에는 FK 를 걸 수 없다" 는 더 이상 이유가 아니다.**
---
--- 지금 안 거는 이유는 다른 것이다. 01_schema.sql 은 살아 있는 DB 에서 SHOW CREATE TABLE 로
--- **뽑은** 파일이고, CareLog 가 dog_id 를 스칼라 Long 으로 들고 있어서 **Hibernate 가 그 FK 를
--- 만들지 않는다.** 여기서 ALTER 로 더하면 운영 DB 에는 있고 커밋된 스키마에는 없는 제약이
--- 생겨 다음 재생성 때 조용히 사라진다.
---
--- 제대로 걸려면 CareLog 가 @ManyToOne Dog 를 들어야 하고, 그건 care 가 dog 모듈을 참조한다는
--- 뜻이라 별도 판단이다 — **이슈 #154 가 소유한다.** 지금 dog_id 가 항상 NULL 이라 무결성
--- 위험은 없다. 잇는 날 idx_carelog_dog(dog_id, occurred_at) 도 함께 넣는다.
+-- 2026-09-05 까지 여기는 "FK 가 없다" 절이었다. #145 가 dog 표를 만든 뒤에도 못 건 이유는
+-- CareLog 가 dog_id 를 스칼라 Long 으로 들고 있어서 Hibernate 가 FK 를 만들지 않았기 때문이다 —
+-- 여기서 ALTER 로 더하면 운영 DB 에는 있고 커밋된 스키마(01_schema.sql — 엔티티로 만든 DB 에서
+-- 뽑은 파일)에는 없는 제약이 되어 다음 재생성 때 조용히 사라진다. #154 가 매핑을 @ManyToOne Dog
+-- 로 바꿔 그 문제를 풀었고, 이미 있는 DB 에는 22 가 fk_carelog_dog(ON DELETE SET NULL) 과
+-- idx_carelog_dog(dog_id, occurred_at) 을 건다. 이 스크립트는 그대로 컬럼만 NULL 허용으로
+-- 만들고, §D 의 경계 검증은 dog 로 가는 FK 를 세지 않는다 — 22 뒤에 다시 돌려도 멈추지 않아야 한다.
 --
 -- **#9 의 '일부러 FK 를 안 걸었다' 와 다르다.** #9(refresh_token)는 users 표가 있는데도 걸지
--- 않은 **판단**이다(탈퇴 경로가 DB 삭제 순서에 묶이는 것을 피했다). 여기는 **매핑의 결과**이지
--- 안 걸기로 정한 것이 아니다. #154 가 그 매핑을 바꾸는 날 여기는 걸고 #9 는 안 건다.
+-- 않은 **판단**이고 지금도 안 건다. 여기는 매핑의 결과였고, 매핑을 바꾼 날 걸었다.
 --
 -- ─────────────────────────────────────────────────────────────────────────────
 -- walk_note 는 **그룹당 한 장**이다 — 문서 셋이 반대말을 하고 있었다
@@ -115,8 +108,9 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- 0-1. care_log 가 문서의 옛 계획대로 이미 만들어져 있는지.
---      옛 계획은 dog_id BIGINT NOT NULL + fk_carelog_dog 였다. dog 표가 없으므로 그 모양이면
---      이 앱은 어차피 못 쓴다(엔티티는 dog_id 를 nullable 로 요구한다).
+--      옛 계획은 dog_id BIGINT NOT NULL + fk_carelog_dog 였다. NOT NULL 이면 이 앱은 못 쓴다
+--      (엔티티는 dog_id 를 nullable 로 요구하고, 값은 아직 항상 NULL 이다). FK 쪽은 #154 가
+--      22 에서 SET NULL 로 걸었으니 이미 있어도 괜찮다.
 SET @carelog_exists := (
     SELECT COUNT(*) FROM information_schema.tables
     WHERE table_schema = DATABASE() AND table_name = 'care_log');
@@ -155,7 +149,7 @@ SELECT '[0] 사전 점검' AS section,
        @walknote_legacy      AS walk_note_created_at_expect_0,
        @walknote_columns     AS walk_note_columns_expect_0_or_5;
 
-SET @abort_msg := 'ABORT: care_log.dog_id 가 NOT NULL 이다. dog 표가 없어 채울 수 없다 — NULL 허용으로 바꿔라.';
+SET @abort_msg := 'ABORT: care_log.dog_id 가 NOT NULL 이다. 앱은 이 값을 아직 안 넣는다(#154) — NULL 허용으로 바꿔라.';
 SET @stmt := IF(@carelog_dog_not_null > 0,
     'CALL heattrip_migration_abort(@abort_msg)',
     'SELECT ''[0-1] care_log 옛 dog_id 모양 없음'' AS message');
@@ -359,7 +353,9 @@ SET @walknote_unique := (
     WHERE table_schema = DATABASE() AND table_name = 'walk_note'
       AND index_name = 'uq_walknote_group' AND non_unique = 0);
 
--- 경계 ①: dog 로 가는 FK. dog 표가 없으니 **0이어야 한다.**
+-- 경계 ①(옛): dog 로 가는 FK. 2026-09-05 까지는 "dog 표가 없으니 0" 이었다. #154 부터는
+-- 22_care_log_dog_fk.sql 이 fk_carelog_dog 를 걸므로 0(22 전)과 1(22 뒤) 둘 다 정상이다.
+-- 참고로만 찍고 실패시키지 않는다 — 22 뒤에 이 스크립트를 다시 돌려도 멈추면 안 된다.
 SET @dog_fks := (
     SELECT COUNT(*) FROM information_schema.referential_constraints
     WHERE constraint_schema = DATABASE() AND referenced_table_name = 'dog');
@@ -379,7 +375,7 @@ SELECT '[D] 사후 검증' AS section,
        @walknote_columns AS walk_note_columns_expect_5,
        @fks              AS foreign_keys_expect_4,
        @walknote_unique  AS walk_note_unique_expect_1,
-       @dog_fks          AS fks_to_dog_expect_0,
+       @dog_fks          AS fks_to_dog_0_before_22_or_1_after,
        @chat_fks         AS fks_between_care_and_chat_expect_0;
 
 SET @abort_msg := CONCAT(
@@ -413,11 +409,10 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 SET @abort_msg := CONCAT(
-    'ABORT: 경계 위반 — dog 로 가는 FK ', @dog_fks, '개, care-chat FK ',
-    @chat_fks, '개. 둘 다 0이어야 한다.');
-SET @stmt := IF(@dog_fks > 0 OR @chat_fks > 0,
+    'ABORT: 경계 위반 — care-chat FK ', @chat_fks, '개. 0이어야 한다 (ADR-0011 결정 4).');
+SET @stmt := IF(@chat_fks > 0,
     'CALL heattrip_migration_abort(@abort_msg)',
-    'SELECT ''[D] 경계 검증 통과 — dog·chat 으로 가는 FK 0개'' AS message');
+    'SELECT ''[D] 경계 검증 통과 — care 두 표와 chat 사이 FK 0개'' AS message');
 PREPARE stmt FROM @stmt;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;

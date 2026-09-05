@@ -46,6 +46,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\19_user_consent.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\20_drop_chat_report.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\21_users_drop_consent_columns.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\22_care_log_dog_fk.sql
 ```
 
 | 파일 | 무엇을 |
@@ -71,6 +72,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `19_user_consent.sql` | 약관 동의의 **이력** — `user_consent` 생성. **덧붙이기만 합니다** — 동의도 철회도 새 행이고 "지금 상태" 는 계정·문서별 마지막 행입니다. `users` 의 `agree_*` 아홉 컬럼은 덮어쓰는 칸이라 철회 시각이 사라지는데, 위치정보법 제24조가 철회 **전** 제공분은 그대로라 하므로 그 경계가 남아야 합니다. **FK 0개** — `report` 와 같은 이유로 탈퇴가 증빙을 지우면 안 됩니다. `kind` CHECK 넷 · `(user_id, id)` 인덱스. 서버는 문서 버전을 모릅니다 — 앱이 보낸 문자열을 그대로 적습니다 (이슈 #190 · ADR-0020) |
 | `20_drop_chat_report.sql` | 옛 채팅 신고 표 둘(`chat_report`·`chat_reported_message`)을 **지웁니다** — #281. 채팅 신고는 #254 부터 `report`·`report_snapshot` 에 적혀서 두 표에는 아무것도 안 씁니다. **행이 하나라도 있으면 한 글자도 안 바꾸고 멈춥니다** — 신고는 다시 만들 수 없는 기록이라 이관 방법은 사람이 정합니다. **순서가 반대입니다** — 새 앱(엔티티가 사라진 것)을 먼저 배포하고 그 다음 이 스크립트를 돌립니다. 새 신고 표가 없으면 시작하지 않습니다. 되돌리는 SQL 은 없습니다 — 표만 되살려도 읽을 코드가 없고, 행은 어차피 0이었습니다. |
 | `21_users_drop_consent_columns.sql` | `users` 의 옛 동의 컬럼 아홉(`agree_*` · `*_version` · `*_agreed_at`)을 **`user_consent` 로 옮긴 뒤 지웁니다** — #190 후속. 동의한 사람의 버전·시각이 그대로 옮겨지고(버전이 비면 옛 기본값 `v1.0`, 시각이 비면 가입 시각), 동의 안 한 칸은 안 옮깁니다. 이미 있는 행은 다시 안 만듭니다. **순서가 반대입니다** — 새 앱을 먼저 배포하고 돌립니다. `user_consent` 가 없으면(19 미실행) 시작하지 않고, 컬럼이 일부만 남아 있어도 멈춥니다. 되돌리는 SQL 은 헤더에 있지만 값은 `user_consent` 에서 다시 채워야 합니다. |
+| `22_care_log_dog_fk.sql` | `care_log.dog_id` 를 `dog` 에 **잇습니다** — #154. `fk_carelog_dog`(`ON DELETE SET NULL`)과 `idx_carelog_dog(dog_id, occurred_at)`. 08 은 컬럼만 만들었고, FK 는 `CareLog` 가 `@ManyToOne Dog` 를 들게 된 날 겁니다 — 그래야 `01_schema.sql` 재생성에도 살아남습니다. `SET NULL` 인 이유: 케어는 "누가 언제 무엇을 했는가" 의 기록이라 반려동물이 지워져도 남아야 합니다(`group_id`·`done_by` 와 같은 답). `dog` 에 없는 id 를 든 행이 있으면 지우지 않고 멈춥니다. 08·11 뒤에, 앱 배포 전·후 어느 쪽이든 됩니다(`validate` 는 FK 를 안 봅니다). |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
@@ -119,11 +121,11 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 
 `08_care_log.sql`이 만드는 `care_log`·`walk_note`는 `family_group(id)`과 `users(id)`로 **FK를 정상적으로 겁니다.** "chat 밖으로 나가는 FK 0개"는 `chat_*` 세 표에만 걸리는 규칙입니다([ADR-0011](../../docs/99-decisions/decision-log.md) 결정 4). 부모 표가 없으면 `CREATE`가 `errno 150`으로 죽는데 그 메시지는 무엇이 없는지 안 알려주므로, 스크립트가 **먼저 사람 말로 멈춥니다**.
 
-- **사전 점검**: `care_log.dog_id`가 `NOT NULL`이면 중단합니다. `dog` 표가 정본 스키마에 없어서(`docs/03-database/schema.md §3`은 계획입니다) 그 값을 채울 수 없고, 그 모양의 표에는 이 앱이 한 행도 못 넣습니다. `walk_note`에 `created_at`이 있어도 중단합니다 — 그룹당 여러 장이던 옛 모양이고, 지금은 `updated_by`·`updated_at`을 든 **한 장**입니다.
+- **사전 점검**: `care_log.dog_id`가 `NOT NULL`이면 중단합니다. 앱이 아직 그 값을 넣지 않아서(#154 — FK 는 `22_care_log_dog_fk.sql` 이 걸었지만 쓰기 경로가 `dogId` 를 안 받습니다) 그 모양의 표에는 이 앱이 한 행도 못 넣습니다. `walk_note`에 `created_at`이 있어도 중단합니다 — 그룹당 여러 장이던 옛 모양이고, 지금은 `updated_by`·`updated_at`을 든 **한 장**입니다.
 - **사후 검증**: 표 2개·컬럼(8/5)과 함께 **FK 4개**·`walk_note`의 `UNIQUE(group_id)`를 봅니다. `ddl-auto=validate`도 `SchemaDdlDriftTest`도 FK·UNIQUE·CHECK를 보지 않으므로 여기서 안 보면 아무도 안 알려줍니다.
-- **경계 검증**: `dog`로 가는 FK 0개(표 자체가 없습니다), 그리고 케어 두 표와 `chat_*` 사이의 FK가 **양방향 모두 0개**인지 봅니다. 케어는 그룹 단위로 공유되고 방에서는 **인가만** 받습니다 — 표끼리 묶으면 방 삭제가 케어 기록 삭제 순서에 묶입니다.
+- **경계 검증**: 케어 두 표와 `chat_*` 사이의 FK가 **양방향 모두 0개**인지 봅니다(`dog` 로 가는 FK 는 세지 않습니다 — `22_care_log_dog_fk.sql` 이 걸고, 그 뒤에 08 을 다시 돌려도 멈추지 않아야 합니다). 케어는 그룹 단위로 공유되고 방에서는 **인가만** 받습니다 — 표끼리 묶으면 방 삭제가 케어 기록 삭제 순서에 묶입니다.
 
-`care_log.dog_id`에 FK가 없는 것을 **#9의 "일부러 FK를 안 걸었다"와 같은 것으로 읽으면 안 됩니다.** #9(`refresh_token.user_id`)는 `users` 표가 있는데도 걸지 않은 판단이고, 여기는 참조할 표가 아직 없는 것입니다. `dog` 표가 생기는 날 여기는 FK를 걸고 #9는 안 겁니다.
+`care_log.dog_id` 의 FK 는 **`22_care_log_dog_fk.sql` 이 겁니다**(#154). 08 이 안 건 것은 `CareLog` 가 `dog_id` 를 스칼라로 들어 Hibernate 가 FK 를 만들지 않던 매핑의 결과였고, #9(`refresh_token.user_id`)의 "일부러 안 걸었다" 와는 다릅니다 — #9 는 지금도 안 겁니다.
 
 되돌리는 SQL(DOWN)은 `08_care_log.sql` 헤더 주석에 있습니다. 되돌려도 **그룹·방·대화는 남습니다** — 화살표가 이쪽에서 저쪽으로만 가기 때문입니다.
 

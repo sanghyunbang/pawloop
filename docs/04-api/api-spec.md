@@ -315,7 +315,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 { "name": "보리", "neutered": true, "size": "medium" }
 ```
 
-### 3.5 강아지 삭제 — ⬜ 미구현 (계약 `x-status: planned`. 산책이 매달린 반려동물을 지우는 규칙 #154 가 먼저)
+### 3.5 강아지 삭제 — ⬜ 미구현 (계약 `x-status: planned`. 소프트 삭제로 만든다 — #156. 케어 기록 쪽 규칙은 #154 가 `SET NULL` 로 정했다)
 
 `DELETE /api/dogs/{dogId}` — `204 No Content`.
 

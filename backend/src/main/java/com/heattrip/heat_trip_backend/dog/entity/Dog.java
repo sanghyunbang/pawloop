@@ -36,8 +36,8 @@ import java.time.LocalDateTime;
  *
  * <h2>이 표가 없어서 막혀 있던 것들</h2>
  * <p>계약의 {@code WalkInput.dogId} 가 <b>필수</b>라 이 표 없이는 산책을 저장할 수 없었다.
- * {@code care_log.dog_id} 도 "표가 생기는 날 FK 를 건다" 는 상태로 컬럼만 있고 값은 항상
- * {@code null} 이었다({@code CareLog} javadoc).
+ * {@code care_log.dog_id} 도 "표가 생기는 날 FK 를 건다" 는 상태로 컬럼만 있었다 — FK 는
+ * #154 에서 걸었고({@code ON DELETE SET NULL}) 값은 아직 항상 {@code null} 이다({@code CareLog} javadoc).
  *
  * <h2>표 이름이 {@code dog} 인데 고양이도 들어온다</h2>
  * <p>{@link PetSpecies} 참조. 이름을 옮기지 않은 이유가 거기 적혀 있다.

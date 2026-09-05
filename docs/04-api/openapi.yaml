@@ -700,7 +700,8 @@ paths:
     delete:
       x-status: planned
       x-status-note: |
-        삭제는 아직 없다. 산책 기록이 매달린 반려동물을 지울 때의 규칙(#154)이 먼저다.
+        삭제는 아직 없다. 소프트 삭제(deleted_at)로 만든다 — #156. 케어 기록 쪽 규칙은 #154 가
+        정했다(care_log.dog_id 는 ON DELETE SET NULL — 반려동물이 지워져도 기록은 남는다).
       tags: [Dogs]
       summary: 반려견 삭제
       description: |
@@ -3400,10 +3401,10 @@ components:
           type: [integer, "null"]
           format: int64
           description: |
-            대상 강아지. **지금은 항상 `null` 입니다** — `dog` 표가 정본 스키마에 없어서
-            (`docs/03-database/schema.md §3` 은 계획입니다) 서버가 검증할 수 있는 강아지 id 가
-            존재하지 않습니다. 필드를 미리 두는 것은 그 표가 생기는 날 앱이 스키마를 바꾸지
-            않아도 되게 하려는 것입니다.
+            대상 반려동물(`dog.id`). **지금은 항상 `null` 입니다** — 컬럼은 #154 에서 `dog` 에
+            FK 로 이어졌지만, 이 경로가 아직 `dogId` 를 받지 않습니다. 받으려면 "가족 구성원이
+            남의 반려동물 id 를 알 수 있는가" 가 먼저 정해져야 합니다(#209 Dogs-high-3). 필드를
+            미리 두는 것은 그날 앱이 스키마를 바꾸지 않아도 되게 하려는 것입니다.
         groupId: { type: [integer, "null"], format: int64, description: 가족 그룹(개인 기록이면 null) }
         type: { $ref: '#/components/schemas/CareType' }
         doneBy: { $ref: '#/components/schemas/CareDoer' }
@@ -3422,7 +3423,7 @@ components:
     CareLogInput:
       type: object
       description: |
-        필드가 둘뿐입니다. `dogId` 는 확인할 표가 없어서(위 `CareLog.dogId` 참조) 필수로 두면
+        필드가 둘뿐입니다. `dogId` 는 아직 받지 않습니다(위 `CareLog.dogId` 참조) — 필수로 두면
         앱이 더미 id 를 지어내야 하고, `occurredAt`·`doneBy` 는 서버가 정합니다 — 그 둘이 곧
         "오늘 누가 했는지" 를 가르는 기준이라 클라이언트가 정하면 화면의 문구를 믿을 수 없게
         됩니다. 지난 일을 나중에 적는 화면은 M4 입니다.

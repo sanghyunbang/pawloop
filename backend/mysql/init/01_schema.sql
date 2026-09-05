@@ -78,6 +78,8 @@ CREATE TABLE `care_log` (
   PRIMARY KEY (`id`),
   KEY `idx_carelog_group` (`group_id`,`occurred_at`),
   KEY `idx_carelog_doneby` (`done_by`),
+  KEY `idx_carelog_dog` (`dog_id`,`occurred_at`),
+  CONSTRAINT `fk_carelog_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_carelog_doneby` FOREIGN KEY (`done_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_carelog_group` FOREIGN KEY (`group_id`) REFERENCES `family_group` (`id`) ON DELETE SET NULL,
   CONSTRAINT `ck_carelog_type` CHECK ((`type` in (_utf8mb4'water',_utf8mb4'meal',_utf8mb4'walk',_utf8mb4'med',_utf8mb4'vet')))

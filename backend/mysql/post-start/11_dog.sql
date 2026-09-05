@@ -210,7 +210,8 @@ DROP PROCEDURE IF EXISTS heattrip_migration_abort;
 --    그 스키마는 required: [name, size] 라 **계약대로면 부분 수정이 불가능**하다.
 --    DogPatch 를 나누는 것은 이슈 #24 가 소유한다.
 --
--- 3. **care_log.dog_id 에 FK 를 걸지 않는다.** CareLog 의 javadoc 이 "dog 표가 생기는 날
+-- 3. **care_log.dog_id 에 FK 를 걸지 않는다.** (→ 그 뒤 #154 가 22_care_log_dog_fk.sql 에서
+--    SET NULL 로 걸었다. 아래는 이 스크립트를 쓸 때의 판단이다.) CareLog 의 javadoc 이 "dog 표가 생기는 날
 --    그 자리에 FK 를 건다" 고 적어 뒀지만, 지금 거는 것이 오히려 나쁘다.
 --
 --    init/01_schema.sql 은 살아 있는 DB 에서 SHOW CREATE TABLE 로 **뽑은** 파일이고, 그 DB 는
