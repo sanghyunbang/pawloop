@@ -1,6 +1,5 @@
 package com.heattrip.heat_trip_backend.community.controller;
 
-import com.heattrip.heat_trip_backend.OAuth.principal.AuthenticatedUser;
 import com.heattrip.heat_trip_backend.community.dto.CommentPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.CommentResponse;
@@ -14,12 +13,11 @@ import com.heattrip.heat_trip_backend.community.service.CommunityService;
 import com.heattrip.heat_trip_backend.moderation.ReportReceipt;
 import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.user.entity.User;
+import com.heattrip.heat_trip_backend.user.ViewerId;
 
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -39,13 +37,15 @@ import org.springframework.web.bind.annotation.RestController;
  * 401 이고 그 판정은 {@code CurrentUserArgumentResolver} 한 곳뿐이다(#5).
  *
  * <p><b>읽기 셋</b>은 <b>인증이 선택</b>이라 {@code @CurrentUser} 를 <b>쓸 수 없다</b> — 그것은
- * 실패를 401 로 만드는 것이 설계라 게스트를 못 받는다. 대신 {@link #viewerId()} 가 필터가 채운
- * {@code SecurityContext} 에서 직접 읽는다.
+ * 실패를 401 로 만드는 것이 설계라 게스트를 못 받는다. 대신 {@code @ViewerId Long viewerId} 로
+ * 받는다 — 로그인했으면 id, 게스트면 {@code null}(ADR-0021, #223).
  *
- * <p>새 애노테이션도 새 리졸버도 만들지 않았다(ADR-0016 결정 3). {@code @CurrentUser} 는
- * 스스로 <b>"{@code required=false} 같은 것을 두면 '인증이 선택인 엔드포인트' 라는 개념이
- * 되살아난다"</b> 고 적어 뒀고, 새 애노테이션은 springdoc 무시 등록을 함께 해야 하는데
- * 빠뜨리면 생성 계약이 조용히 오염된다.
+ * <p>처음(#170)에는 새 애노테이션 없이 이 클래스의 {@code viewerId()} 가 {@code SecurityContext}
+ * 의 principal 을 직접 읽었다. 그것이 다른 모듈의 비공개 타입을 부르는 유일한 자리라 모듈 경계
+ * 위반 둘로 남아 있었다. 열어야 하는 것은 그 타입이 아니라 <b>"보는 사람의 id 를 주는 자리"</b>
+ * 였다 — ADR-0016 결정 3 의 "새 애노테이션을 만들지 않는다" 는 ADR-0021 이 그 부분만 대체한다.
+ * springdoc 무시 등록은 {@code CurrentUserWebMvcConfig} 가 하고 {@code GeneratedOpenApiSpecTest}
+ * 가 잠근다.
  *
  * <p>이 클래스는 {@code Authorization} 헤더를 <b>다시 읽지 않는다</b> —
  * {@code AuthSubjectContractSpecTest} 가 소스 스캔으로 막는 자리다.
@@ -73,22 +73,24 @@ public class CommunityController {
     // ─────────────────────────── 읽기 (인증 선택) ───────────────────────────
 
     @GetMapping("/posts")
-    public PostPageResponse feed(@RequestParam(required = false) String board,
+    public PostPageResponse feed(@ViewerId Long viewerId,
+                                 @RequestParam(required = false) String board,
                                  @RequestParam(required = false) String cursor,
                                  @RequestParam(required = false) Integer limit) {
-        return community.page(viewerId(), board, cursor, limit);
+        return community.page(viewerId, board, cursor, limit);
     }
 
     @GetMapping("/posts/{postId}")
-    public PostResponse detail(@PathVariable long postId) {
-        return community.detail(viewerId(), postId);
+    public PostResponse detail(@ViewerId Long viewerId, @PathVariable long postId) {
+        return community.detail(viewerId, postId);
     }
 
     @GetMapping("/posts/{postId}/comments")
-    public CommentPageResponse comments(@PathVariable long postId,
+    public CommentPageResponse comments(@ViewerId Long viewerId,
+                                        @PathVariable long postId,
                                         @RequestParam(required = false) String cursor,
                                         @RequestParam(required = false) Integer limit) {
-        return community.comments(viewerId(), postId, cursor, limit);
+        return community.comments(viewerId, postId, cursor, limit);
     }
 
     // ─────────────────────────── 쓰기 (인증 필수) ───────────────────────────
@@ -198,28 +200,4 @@ public class CommunityController {
     }
 
     // ─────────────────────────── 지그 ───────────────────────────
-
-    /**
-     * 보는 사람의 id. <b>토큰이 없거나 깨졌으면 {@code null}</b> 이고 그것이 게스트다.
-     *
-     * <p>{@code JWTAuthenticationFilter} 는 permitAll 경로에도 전부 걸리고, 토큰이 유효할 때만
-     * principal 을 {@link AuthenticatedUser} 로 채운다. 아니면 {@code SecurityContext} 를
-     * 비운 채 통과시킨다 — 여기가 그 두 상태를 가르는 유일한 자리다.
-     *
-     * <p><b>만료 토큰도 게스트로 떨어진다.</b> 필터가 깨진 토큰을 조용히 무시하므로 401 이
-     * 아니라 200 + {@code mine: null} 이 나가고, 앱은 401 에서만 토큰을 갱신한다. 창은
-     * "앱을 켠 뒤 커뮤니티 읽기만 만지는 한 세션" 이다 — 다시 켜면 {@code GET /auth/me} 가
-     * 반드시 401 을 준다(ADR-0016 결정 3의 결과 절).
-     *
-     * <p>DB 를 읽지 않는다. 필요한 것이 id 뿐이라 사용자 행을 올릴 이유가 없다 —
-     * {@code AuthenticatedUser} javadoc 이 같은 이유로 그 타입을 DB 와 떼어 놨다.
-     */
-    private static Long viewerId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null
-                || !(authentication.getPrincipal() instanceof AuthenticatedUser principal)) {
-            return null;
-        }
-        return principal.id();
-    }
 }

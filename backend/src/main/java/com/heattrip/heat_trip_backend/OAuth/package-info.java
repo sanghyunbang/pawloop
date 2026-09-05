@@ -19,11 +19,12 @@
  * 둘뿐이었다. 나머지 셋({@code AuthenticatedUser} · {@code CurrentUserArgumentResolver} ·
  * {@code CurrentUserWebMvcConfig})은 이 모듈 안의 배선이라 열 이유가 없었다.
  *
- * <p><b>그 중 {@code AuthenticatedUser} 는 이제 밖에서 부른다.</b> (#170) 커뮤니티 읽기
- * 셋이 <b>인증이 선택</b>이라 {@code CurrentUser} 로는 못 받고 principal 을 직접 읽는다 —
- * {@code community.controller.CommunityController.viewerId()} 한 자리, 참조 2건이다.
- * 열지 않았으므로 <b>그 둘은 위반으로 남아 있고</b> 기준선이 232 에서 234 로 올라갔다.
- * 덮지 않고 남겨 두는 것이 #104 의 방식이다. 열지 말지는 #223 에서 정한다.
+ * <p><b>{@code AuthenticatedUser} 는 여전히 닫혀 있다.</b> #170 에서 커뮤니티 읽기 셋(인증이
+ * 선택)이 그것을 직접 읽어 위반 둘이 생겼는데, #223(ADR-0021)에서 타입을 여는 대신
+ * <b>"보는 사람의 id 를 주는 자리"</b>를 만들었다 — {@code user.ViewerId} 애노테이션과 이
+ * 패키지의 {@code ViewerIdArgumentResolver}. 인증이 선택인 핸들러는 {@code @ViewerId Long}
+ * 으로 받고, 이 타입을 밖에서 부르는 자리는 다시 0 이다. 리졸버 둘({@code CurrentUser} 는
+ * 401, {@code ViewerId} 는 {@code null})이 같은 principal 을 읽는 유일한 자리다.
  *
  * <p>{@code jwt} · {@code handler} · {@code code} · {@code state} · {@code service} 는
  * <b>열지 않는다.</b> 지금 그것들을 부르는 곳이 있고 그건 위반으로 남아 있다 — 덮지 않고

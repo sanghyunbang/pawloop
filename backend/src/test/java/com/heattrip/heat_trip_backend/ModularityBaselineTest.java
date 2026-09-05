@@ -120,9 +120,15 @@ class ModularityBaselineTest {
      * <p><b>{@code @NamedInterface("principal")} 로 열면 이 둘은 사라진다.</b> 그렇게 안 한
      * 이유는 그게 {@code OAuth} 의 공개 표면을 바꾸는 일이고, 그 표면은 #104 가 정했기
      * 때문이다. 커뮤니티 API 를 붙이는 PR 이 조용히 뒤집을 자리가 아니다. 제안은 #223 으로
-     * 따로 냈다 — 거기서 열기로 하면 이 수는 232 로 내려간다.
+     * 따로 냈다.
+     *
+     * <p><b>234 에서 232 로 내렸다 — 타입을 연 것이 아니라 자리를 만들었다.</b> (#223, ADR-0021)
+     * {@code user.ViewerId} 애노테이션과 {@code OAuth.principal.ViewerIdArgumentResolver} 가
+     * "보는 사람의 id" 를 주고, 커뮤니티는 {@code @ViewerId Long viewerId} 로 받는다.
+     * {@code AuthenticatedUser} 를 밖에서 부르는 자리가 0 이 됐고 그 타입은 여전히 닫혀 있다.
+     * 위반 목록을 떠서 사라진 둘이 정확히 그 둘인지 확인했다.
      */
-    private static final int BASELINE_VIOLATIONS = 234;
+    private static final int BASELINE_VIOLATIONS = 232;
 
     private static final char NL = (char) 10;
 

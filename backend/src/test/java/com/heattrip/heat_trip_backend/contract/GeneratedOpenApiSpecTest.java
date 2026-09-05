@@ -54,7 +54,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class GeneratedOpenApiSpecTest extends AbstractMySqlIntegrationTest {
 
     /** 인증 주체를 주입받는 컨트롤러 파라미터의 이름들. 이 이름이 계약에 파라미터로 나타나면 회귀다. */
-    private static final List<String> PRINCIPAL_PARAMETER_NAMES = List.of("me", "user");
+    private static final List<String> PRINCIPAL_PARAMETER_NAMES = List.of("me", "user", "viewerId");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
