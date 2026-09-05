@@ -1,23 +1,17 @@
 package com.heattrip.heat_trip_backend.chat;
 
 import com.heattrip.heat_trip_backend.chat.entity.ChatMessage;
-import com.heattrip.heat_trip_backend.chat.entity.ChatReport;
-import com.heattrip.heat_trip_backend.chat.entity.ChatReportedMessage;
 import com.heattrip.heat_trip_backend.chat.repository.ChatMessageRepository;
-import com.heattrip.heat_trip_backend.chat.repository.ChatReportRepository;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Clock;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -26,6 +20,12 @@ import java.util.Set;
  * <h2>왜 {@link ChatRoomService} 에 넣지 않았나</h2>
  * <p>그 클래스가 이미 방·초대·멤버십·메시지 넷을 들고 있고, 신고는 그 넷 어디에도 안 걸리는
  * 다섯 번째다. 겹치는 것은 <b>멤버십 판정 하나</b>뿐이라 그것만 빌려 쓴다.
+ *
+ * <h2>저장하지 않는다</h2>
+ * <p>여기서 만드는 것은 {@link ChatReportDraft} — 검증을 통과한 신고의 <b>내용</b>이다. 그것을
+ * 신고 표에 적는 것은 {@code chatweb.ChatReports} 가 moderation 에 넘겨서 한다(#254). 예전에는
+ * 이 서비스가 {@code chat_report}·{@code chat_reported_message} 에 직접 적고 읽었는데, 그 표와
+ * 경로는 #281 로 지웠다 — 신고 표가 둘이면 운영자가 볼 곳도 둘이 된다.
  *
  * <h2>이 서비스가 하지 않는 것</h2>
  * <ul>
@@ -64,22 +64,16 @@ public class ChatReportService {
      */
     public static final int CONTEXT_RADIUS = 5;
 
-    /** 메모 칸의 폭. {@code chat_report.memo} 와 같은 수다. */
+    /** 메모 칸의 폭. {@code report.memo} 와 같은 수다(15_report.sql). */
     private static final int MAX_MEMO_LENGTH = 500;
 
-    private final ChatReportRepository reports;
     private final ChatMessageRepository messages;
     private final ChatRoomService roomService;
-    private final Clock clock;
 
-    public ChatReportService(ChatReportRepository reports,
-                             ChatMessageRepository messages,
-                             ChatRoomService roomService,
-                             Clock clock) {
-        this.reports = reports;
+    public ChatReportService(ChatMessageRepository messages,
+                             ChatRoomService roomService) {
         this.messages = messages;
         this.roomService = roomService;
-        this.clock = clock;
     }
 
     /**
@@ -156,20 +150,6 @@ public class ChatReportService {
     }
 
     /**
-     * 남은 신고 하나를 읽는다.
-     *
-     * <p><b>HTTP 로 열지 않았다.</b> 이것을 읽어야 하는 사람은 운영자인데 관리자 인증이
-     * 아직 없고, 그것 없이 경로를 열면 <b>신고 내용이 누구에게나 보인다</b>. 이슈 #82 의
-     * "어디" 표에도 운영자 화면은 없다.
-     *
-     * <p>그러면 왜 지금 있는가 — <b>스냅샷이 원본과 무관하게 살아 있다는 것을 확인할 수
-     * 있어야</b> 하기 때문이다(#82 완료 조건 1). 확인할 방법이 없는 보존은 보존이 아니다.
-     */
-    public Optional<ChatReportView> findReport(long reportId) {
-        return reports.findById(reportId).map(ChatReportService::viewOf);
-    }
-
-    /**
      * 그 방의 살아 있는 멤버인가.
      *
      * <p><b>403 이다.</b> 처음에 404 로 냈다가 고쳤다 — {@code ChatRoomService#postMessage} 를
@@ -208,19 +188,6 @@ public class ChatReportService {
         return sender;
     }
 
-    private static ChatReportedMessage snapshotOf(ChatMessage message) {
-        return ChatReportedMessage.builder()
-                .messageId(message.getId())
-                .roomSeq(message.getRoomSeq())
-                .senderUserId(message.getSenderUserId())
-                .senderName(message.getSenderName())
-                // 본문을 여기서 자르거나 다듬지 않는다. 신고는 "실제로 무슨 말이 있었나" 다.
-                .body(message.getBody())
-                .contentType(message.getContentType())
-                .sentAt(message.getCreatedAt())
-                .build();
-    }
-
     private static String trimmedMemo(String memo) {
         if (memo == null || memo.isBlank()) {
             return null;
@@ -231,24 +198,5 @@ public class ChatReportService {
         return trimmed.length() > MAX_MEMO_LENGTH
                 ? trimmed.substring(0, MAX_MEMO_LENGTH)
                 : trimmed;
-    }
-
-    private static ChatReportView viewOf(ChatReport report) {
-        List<ChatReportedMessageView> snapshots = report.getMessages().stream()
-                .map(m -> new ChatReportedMessageView(
-                        m.getRoomSeq(), m.getSenderUserId(), m.getSenderName(),
-                        m.getBody(), m.getContentType(), m.getSentAt()))
-                .toList();
-
-        return new ChatReportView(
-                report.getId(),
-                report.getReportedUserId(),
-                report.getRoomId(),
-                report.getContextFromSeq(),
-                report.getContextToSeq(),
-                report.getReason(),
-                report.getMemo(),
-                report.getCreatedAt(),
-                snapshots);
     }
 }

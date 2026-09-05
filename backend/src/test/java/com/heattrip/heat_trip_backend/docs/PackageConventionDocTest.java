@@ -51,22 +51,19 @@ class PackageConventionDocTest {
             "backend/src/test/java/com/heattrip/heat_trip_backend/chat/ChatBoundaryArchitectureTest.java");
 
     /**
-     * 2026-08-31 실측 — chat 루트에서 <b>밖의 소스에 이름이 안 적힌</b> 여섯.
+     * 2026-09-05 실측 — chat 루트에서 <b>밖의 소스에 이름이 안 적힌</b> 다섯.
      *
      * <p><b>"내부로 옮겨도 된다" 는 목록이 아니다.</b> 세는 방식이 "밖에 이름이 적혀 있는가"
-     * 라서 맹점이 하나 있다 — {@code ChatReportedMessageView} 는 밖 어디에도 안 적혀 있지만
-     * {@code ChatReportView} 가 들고 있는 리스트의 원소 타입이라, 내부로 내리면 공개 record 의
-     * 시그니처가 깨진다(#82). 그 사실을 문서 2.4 절에도 적어 뒀다.
+     * 라서 맹점이 있다 — 공개 record 가 들고 있는 리스트의 원소 타입은 밖에 이름이 안 적혀도
+     * 내부로 내리면 시그니처가 깨진다. {@code ChatReportView}·{@code ChatReportedMessageView}
+     * 가 그 예였고 #281 로 사라졌다(옛 신고 표와 함께). 그 사실을 문서 2.4 절에도 적어 뒀다.
      *
-     * <p>{@code ChatReportReason} 은 사정이 다르다 — 밖으로 나가는 것은 그 enum 이 아니라
-     * {@code wireValue()} 문자열이라 <b>진짜로 내부다</b>. 같은 칸에 있어도 이유가 다르다.
+     * <p>{@code ChatReportReason} 은 밖으로 나가는 것이 그 enum 이 아니라 {@code wireValue()}
+     * 문자열이라 <b>진짜로 내부다</b>. {@code draft()} 가 아직 쓰므로 남는다.
      */
     private static final List<String> EXPECTED_UNUSED_ROOT_TYPES =
             List.of("ChatErrorCode", "ChatLimits", "FixedChatLimits", "InviteCodeGenerator",
-                    // #254 로 접수가 moderation 으로 옮겨가면서 밖에서 부르는 곳이 없어졌다.
-                    // 지우지 않는 것은 chat_report 표를 지울지 말지가 아직 사람의 판단이기
-                    // 때문이다 — 표가 남아 있는 동안 그것을 읽는 모양도 남겨 둔다.
-                    "ChatReportedMessageView", "ChatReportReason", "ChatReportView");
+                    "ChatReportReason");
 
     private static String guide;
 
