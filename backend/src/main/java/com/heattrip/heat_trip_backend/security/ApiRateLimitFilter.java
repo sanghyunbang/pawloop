@@ -177,6 +177,12 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("PUT".equals(method) && path.matches("^/api/groups/\\d+/walk-notes$")) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
+        // 케어 기록 삭제(#209)도 같은 버킷이다 — 잘못 찍은 것을 지우는 일은 찍는 일과 같은
+        // 빈도로 일어난다(산책 삭제가 walk-write 인 것과 같은 판단). 본인 기록만 지우므로
+        // 한 계정이 찍을 수 있는 것보다 많이 부를 이유가 없다.
+        if ("DELETE".equals(method) && path.matches("^/api/groups/\\d+/care-logs/\\d+$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         // ── 반려동물 등록 (이슈 #145) ─────────────────────────
         //
         // 요청 한 건이 행을 만든다. `POST /api/groups` 와 성격이 같아 버킷을 새로 만들지

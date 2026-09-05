@@ -60,15 +60,20 @@ Map<String, Object?> _log({
     };
 
 /// 오늘 14:20 에 아빠가 밥을 준 가족 하나.
-({FamilyRepository repo, List<http.Request> posts}) fixture({
+({FamilyRepository repo, List<http.Request> posts, List<http.Request> deletes}) fixture({
   List<Map<String, Object?>>? logs,
   int careLogsStatus = 200,
 }) {
   final posts = <http.Request>[];
+  final deletes = <http.Request>[];
   final client = AuthedClient(
     inner: MockClient((request) async {
       if (request.url.path == '/api/groups/me') {
         return _json({'id': 3, 'name': '보리네', 'roomId': 9, 'members': []});
+      }
+      if (request.method == 'DELETE') {
+        deletes.add(request);
+        return http.Response('', 204);
       }
       if (request.method == 'POST') {
         posts.add(request);
@@ -85,12 +90,16 @@ Map<String, Object?> _log({
     baseUrl: _base,
     store: _FakeTokenStore(),
   );
-  return (repo: FamilyRepository(baseUrl: _base, client: client), posts: posts);
+  return (
+    repo: FamilyRepository(baseUrl: _base, client: client),
+    posts: posts,
+    deletes: deletes,
+  );
 }
 
-Future<void> pumpCard(WidgetTester tester, FamilyRepository repo) async {
+Future<void> pumpCard(WidgetTester tester, FamilyRepository repo, {int? myUserId}) async {
   await tester.pumpWidget(MaterialApp(
-    home: Scaffold(body: TodayCareCard(repository: repo)),
+    home: Scaffold(body: TodayCareCard(repository: repo, myUserId: myUserId)),
   ));
   await tester.pumpAndSettle();
 }
@@ -170,6 +179,60 @@ void main() {
 
     expect(find.text('엄마 · 07:05'), findsOneWidget);
     expect(find.text('아직'), findsNWidgets(4), reason: '다섯 칸 중 넷은 아직이다');
+  });
+
+  // ── 잘못 찍은 내 기록 지우기 (#209 Groups-medium-1) ──────────────────────
+
+  testWidgets('내 기록이 있는 칸을 길게 누르면 지울지 묻고, "지우기" 를 누르면 DELETE 를 보낸다',
+      (tester) async {
+    final f = fixture(logs: [
+      _log(id: 7, type: 'meal', who: '나', at: '2026-08-30T14:20:00'),
+    ]);
+    await pumpCard(tester, f.repo, myUserId: 11); // _log 의 doneBy.userId 가 11 이다
+
+    await tester.longPress(find.text('밥'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('기록을 지울까요?'), findsOneWidget);
+    expect(find.text('14:20 에 남긴 밥 기록을 지웁니다. 가족 화면에서도 사라져요.'), findsOneWidget,
+        reason: '칸에는 최근 하나만 보이므로 무엇을 지우는지 문구가 말해야 한다');
+    expect(f.deletes, isEmpty, reason: '확인 전에는 보내지 않는다');
+
+    await tester.tap(find.text('지우기'));
+    await tester.pumpAndSettle();
+
+    expect(f.deletes, hasLength(1));
+    expect(f.deletes.single.url.path, '/api/groups/3/care-logs/7');
+    expect(f.posts, isEmpty, reason: '길게 누르는 것은 기록이 아니다');
+  });
+
+  testWidgets('취소하면 지우지 않는다', (tester) async {
+    final f = fixture(logs: [
+      _log(id: 7, type: 'meal', who: '나', at: '2026-08-30T14:20:00'),
+    ]);
+    await pumpCard(tester, f.repo, myUserId: 11);
+
+    await tester.longPress(find.text('밥'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('취소'));
+    await tester.pumpAndSettle();
+
+    expect(f.deletes, isEmpty);
+  });
+
+  testWidgets('남의 기록은 길게 눌러도 묻지 않고 안내만 한다 — 지울 수 있으면 산책 누락이 그 자리에서 생긴다',
+      (tester) async {
+    final f = fixture(logs: [
+      _log(id: 7, type: 'walk', who: '엄마', at: '2026-08-30T07:05:00'),
+    ]);
+    await pumpCard(tester, f.repo, myUserId: 22); // 엄마(11)가 아니다
+
+    await tester.longPress(find.text('산책'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('기록을 지울까요?'), findsNothing);
+    expect(find.text('내가 남긴 기록만 지울 수 있어요'), findsOneWidget);
+    expect(f.deletes, isEmpty, reason: '서버도 403 이지만 보내기 전에 여기서 멈춘다');
   });
 
   testWidgets('네트워크가 없으면 빈 카드가 아니라 실패 문구와 다시 시도를 그린다',

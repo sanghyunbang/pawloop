@@ -26,6 +26,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../data/auth_state.dart';
 import '../data/family_repository.dart';
 import '../domain/pet.dart' show careColor, careIcon, CareType;
 import '../theme/app_tokens.dart';
@@ -46,7 +47,16 @@ class TodayCareCard extends StatefulWidget {
   /// 테스트가 가짜 저장소를 꽂는 자리. 운영 경로에서는 null 이다.
   final FamilyRepository? repository;
 
-  const TodayCareCard({super.key, this.onOpenFamily, this.repository});
+  /// "내 기록인가" 를 가르는 id. 운영 경로에서는 null 이고 [AuthState.user] 를 읽는다 —
+  /// 테스트가 로그인 상태를 만들지 않고도 본인/남 두 경우를 그리게 하려는 자리다.
+  final int? myUserId;
+
+  const TodayCareCard({
+    super.key,
+    this.onOpenFamily,
+    this.repository,
+    this.myUserId,
+  });
 
   @override
   State<TodayCareCard> createState() => _TodayCareCardState();
@@ -175,6 +185,75 @@ class _TodayCareCardState extends State<TodayCareCard> {
     return answer ?? false;
   }
 
+  /// 칸을 길게 누르면 그 종류의 가장 최근 기록을 지운다 — **내 기록일 때만**(#209).
+  ///
+  /// 잘못 찍은 "밥 줌" 을 되돌리는 문이다. 서버는 두 번째 기록을 막지 않으므로(위 주석)
+  /// 되돌릴 길이 없으면 사용자는 이 카드를 안 믿는다. 남의 기록은 서버도 403 으로 거절하지만
+  /// 여기서 먼저 안내한다 — 지울 수 있으면 엄마가 실제로 다녀온 산책을 아빠가 "실수겠지"
+  /// 하고 지우는, 이 카드가 막으려던 산책 누락이 그 자리에서 생긴다.
+  Future<void> _deleteLatest(ServerCareType type) async {
+    final group = _group;
+    if (group == null || _sending != null) return;
+    final latest = _latestOf(type);
+    if (latest == null) return;
+
+    final me = widget.myUserId ?? AuthState.user?.id;
+    if (me == null || latest.doneByUserId != me) {
+      _showMessage('내가 남긴 기록만 지울 수 있어요');
+      return;
+    }
+
+    final ok = await _confirmDelete(latest);
+    if (!mounted || !ok) return;
+
+    setState(() => _sending = type);
+    try {
+      await _repo.deleteCareLog(group.id, latest.id);
+      if (!mounted) return;
+      setState(() => _sending = null);
+      kServerCareRev.value++;
+    } on FamilyFailure catch (e) {
+      if (!mounted) return;
+      setState(() => _sending = null);
+      _showMessage(e.message);
+      // 벌써 지워진 기록이면 화면이 낡은 것이다 — 다시 읽으면 칸이 맞아진다.
+      if (e.kind == FamilyFailureKind.gone) kServerCareRev.value++;
+    }
+  }
+
+  /// "14:20 에 남긴 밥 기록을 지웁니다. 가족 화면에서도 사라져요."
+  Future<bool> _confirmDelete(CareLogEntry entry) async {
+    final answer = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFFFCFAFF),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          '기록을 지울까요?',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
+        ),
+        content: Text(
+          deleteWarning(entry),
+          style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('취소', style: TextStyle(color: T.textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text(
+              '지우기',
+              style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFE07A4E)),
+            ),
+          ),
+        ],
+      ),
+    );
+    return answer ?? false;
+  }
+
   void _showMessage(String message) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(SnackBar(content: Text(message)));
@@ -284,6 +363,8 @@ class _TodayCareCardState extends State<TodayCareCard> {
 
     return GestureDetector(
       onTap: busy ? null : () => _tap(type),
+      // 길게 누르면 내 기록을 지운다(#209). 짧게 누르는 기록과 같은 칸이라 화면이 안 늘어난다.
+      onLongPress: busy ? null : () => _deleteLatest(type),
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
@@ -325,6 +406,13 @@ class _TodayCareCardState extends State<TodayCareCard> {
         ServerCareType.vet => CareType.etc,
       };
 }
+
+/// "14:20 에 남긴 밥 기록을 지웁니다. 가족 화면에서도 사라져요."
+///
+/// 무엇을 지우는지(종류·시각)를 문구에 넣는다 — 칸에는 가장 최근 하나만 보이므로 사용자가
+/// 어느 기록인지 확인할 수 있어야 한다.
+String deleteWarning(CareLogEntry entry) =>
+    '${entry.timeLabel} 에 남긴 ${entry.type.label} 기록을 지웁니다. 가족 화면에서도 사라져요.';
 
 /// "오늘 14:20 아빠가 밥을 줬습니다. 그래도 기록할까요?"
 ///
