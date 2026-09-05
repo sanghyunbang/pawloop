@@ -57,14 +57,17 @@ import java.time.LocalDateTime;
  * 가 {@code users} 행을 <b>물리 삭제</b>하기 때문이다 — {@code RESTRICT} 로 두면 반려동물을
  * 한 번이라도 등록한 사람은 <b>영구히 탈퇴 불가</b>가 된다(MySQL 1451).
  *
- * <h2>⚠️ {@code DELETE /api/dogs} 를 만드는 날 반드시 소프트 삭제여야 한다</h2>
+ * <h2>삭제는 소프트 삭제다 — {@code deleted_at} (#156)</h2>
  * <p>{@code walk.fk_walk_dog} 도 {@code CASCADE} 다. 그래서 이 행을 물리 삭제하면
  * <b>그 반려동물의 산책 이력 전부가 조용히 함께 사라진다.</b> 되돌릴 수 없고, 사용자는
- * "프로필만 지웠다" 고 생각한다.
+ * "프로필만 지웠다" 고 생각한다. FK 를 {@code RESTRICT} 로 바꾸는 것은 답이 아니다 — 위의
+ * 탈퇴 문제가 되돌아온다. 안전은 FK 가 아니라 {@link #deletedAt} 으로 산다.
  *
- * <p>FK 를 {@code RESTRICT} 로 바꾸는 것은 답이 아니다 — 위의 탈퇴 문제가 되돌아온다.
- * 안전은 FK 가 아니라 {@code dog.deleted_at} 으로 사야 한다. <b>#145 는 삭제를 구현하지
- * 않는다.</b>
+ * <p>{@code DELETE /api/dogs/{dogId}} 는 그 값을 찍고 행을 남긴다. <b>모든 조회가
+ * {@code deleted_at is null} 을 건다</b>({@code DogRepository} 의 세 쿼리 전부) — 하나만
+ * 빠져도 지운 아이가 어딘가에서 되살아난다. 산책 목록·통계는 이 컬럼을 보지 않는다 —
+ * 그 아이와 걸은 거리는 걸은 것이다("계속 센다", #156 4번). {@code ?dogId=} 로 그 아이를
+ * 지목하면 404 다 — 지운 아이는 어느 조회에도 없다.
  */
 @Entity
 @Table(
@@ -149,10 +152,27 @@ public class Dog {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * 소프트 삭제 시각(<b>UTC</b>). {@code null} 이면 살아 있다 — 클래스 javadoc 의 삭제 절.
+     * {@code DogService.delete} 가 서비스 {@code Clock} 으로 찍는다.
+     */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
+        }
+    }
+
+    /**
+     * 소프트 삭제. 두 번째 호출은 첫 시각을 지킨다 — 부르는 쪽은 그 전에 이미 404 를 냈어야
+     * 한다({@code findMineById} 가 지운 행을 안 돌려준다).
+     */
+    public void markDeleted(LocalDateTime nowUtc) {
+        if (deletedAt == null) {
+            deletedAt = nowUtc;
         }
     }
 

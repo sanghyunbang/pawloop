@@ -15,12 +15,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -59,6 +61,9 @@ class DogIntegrationTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private JWTProvider jwtProvider;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     // ─────────────────── 완료 조건 4 — 개와 고양이를 둘 다 등록할 수 있다 ───────────────────
 
@@ -218,6 +223,104 @@ class DogIntegrationTest extends AbstractMySqlIntegrationTest {
                 """).andExpect(status().isConflict());
     }
 
+    // ─────────────────── 소프트 삭제 (이슈 #156) ───────────────────
+
+    @Test
+    @DisplayName("지우면 목록에서 빠지고 상세는 404 다 — 행은 deleted_at 이 찍힌 채 남는다")
+    void deletingHidesTheDogEverywhere() throws Exception {
+        Account me = account("보내준 사람");
+        long dogId = body(register(me, """
+                {"name":"보리","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        remove(me, dogId).andExpect(status().isNoContent());
+
+        assertThat(list(me).size())
+                .as("""
+                        세 쿼리 전부 deleted_at is null 을 건다 — 하나만 빠져도 지운 아이가 어딘가에서 \
+                        되살아난다(완료 조건 1).""")
+                .isZero();
+        detail(me, dogId).andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject(
+                "select count(*) from dog where id = ? and deleted_at is not null", Integer.class, dogId))
+                .as("""
+                        물리 삭제가 아니다. walk.fk_walk_dog 가 CASCADE 라 행을 지우면 그 아이의 산책 \
+                        이력 전부가 조용히 함께 사라진다 — 사용자는 '프로필만 지웠다' 고 생각한다.""")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("두 번째 삭제는 404 다 — 지운 것은 없는 것과 같다")
+    void secondDeleteIsNotFound() throws Exception {
+        Account me = account("두번지우는이");
+        long dogId = body(register(me, """
+                {"name":"탄이","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        remove(me, dogId).andExpect(status().isNoContent());
+        remove(me, dogId).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("남의 반려동물 삭제는 없는 것과 같은 404 이고, 주인에게는 그대로 있다")
+    void othersDogCannotBeDeleted() throws Exception {
+        Account owner = account("주인");
+        Account stranger = account("남");
+        long dogId = body(register(owner, """
+                {"name":"구름","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        String othersDog = remove(stranger, dogId)
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+        String missingDog = remove(stranger, 999_999_999L)
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(withoutTraceId(othersDog)).isEqualTo(withoutTraceId(missingDog));
+        detail(owner, dogId).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("지운 아이는 상한에 안 센다 — 20마리를 채운 뒤 하나를 보내면 한 마리 더 들일 수 있다")
+    void deletedDogsDoNotCountTowardTheCap() throws Exception {
+        Account me = account("다견가정");
+        long first = body(register(me, """
+                {"name":"0호","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+        for (int i = 1; i < DogService.MAX_PETS; i++) {
+            register(me, """
+                    {"name":"%d호","size":"small"}
+                    """.formatted(i)).andExpect(status().isCreated());
+        }
+        register(me, """
+                {"name":"한마리더","size":"small"}
+                """).andExpect(status().isConflict());
+
+        remove(me, first).andExpect(status().isNoContent());
+
+        register(me, """
+                {"name":"한마리더","size":"small"}
+                """).andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("소프트 삭제된 아이가 있어도 탈퇴는 된다 — 완료 조건 4. fk_dog_user 의 CASCADE 가 그 행도 지운다")
+    void withdrawalStillWorksWithASoftDeletedDog() throws Exception {
+        Account me = account("떠나는 사람");
+        long dogId = body(register(me, """
+                {"name":"감자","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+        remove(me, dogId).andExpect(status().isNoContent());
+
+        mockMvc.perform(delete("/auth/me").header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isNoContent());
+
+        assertThat(jdbc.queryForObject("select count(*) from dog where id = ?", Integer.class, dogId))
+                .as("탈퇴는 users 하드 삭제다 — 소프트 삭제된 행도 CASCADE 로 따라 지워진다")
+                .isZero();
+    }
+
     // ─────────────────── 파생값 ───────────────────
 
     @Test
@@ -257,6 +360,17 @@ class DogIntegrationTest extends AbstractMySqlIntegrationTest {
     private ResultActions detail(Account account, long dogId) throws Exception {
         return mockMvc.perform(get("/api/dogs/{dogId}", dogId)
                 .header("Authorization", "Bearer " + account.token()));
+    }
+
+    private ResultActions remove(Account account, long dogId) throws Exception {
+        return mockMvc.perform(delete("/api/dogs/{dogId}", dogId)
+                .header("Authorization", "Bearer " + account.token()));
+    }
+
+    private JsonNode list(Account account) throws Exception {
+        return body(mockMvc.perform(get("/api/dogs")
+                        .header("Authorization", "Bearer " + account.token()))
+                .andExpect(status().isOk()));
     }
 
     private static JsonNode body(ResultActions actions) throws Exception {

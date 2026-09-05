@@ -315,9 +315,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 { "name": "보리", "neutered": true, "size": "medium" }
 ```
 
-### 3.5 강아지 삭제 — ⬜ 미구현 (계약 `x-status: planned`. 소프트 삭제로 만든다 — #156. 케어 기록 쪽 규칙은 #154 가 `SET NULL` 로 정했다)
+### 3.5 강아지 삭제 — ✅ 구현(#156, 소프트 삭제)
 
-`DELETE /api/dogs/{dogId}` — `204 No Content`.
+`DELETE /api/dogs/{dogId}` — `204 No Content`. `dog.deleted_at` 을 찍고 행은 남긴다 — 물리 삭제하면 `walk.fk_walk_dog` 의 CASCADE 로 그 아이의 산책 이력이 통째로 사라진다. 지운 뒤에는 어느 조회에도 안 나온다(목록·상세·산책의 `dogId` 전부 404). **산책은 남고 통계에도 계속 센다**(`dogId` 로 좁힐 때만 그 아이가 빠진다). 되살리기는 없다. 케어 기록은 #154 가 `care_log.dog_id` 를 `SET NULL` 로 정했다. `group-write` 버킷.
 
 ### 3.6 아바타 업로드 — ⚪ post-MVP
 

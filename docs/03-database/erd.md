@@ -77,6 +77,7 @@ erDiagram
         DATE     birth
         BOOLEAN  neutered
         VARCHAR  avatar
+        DATETIME deleted_at "nullable - 소프트 삭제(#156). 산책은 남는다"
     }
 
     walk {
