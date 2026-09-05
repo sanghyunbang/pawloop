@@ -4,7 +4,7 @@ import com.heattrip.heat_trip_backend.S3.UploadCategory;
 import com.heattrip.heat_trip_backend.S3.media.dto.MediaItemResponse;
 import com.heattrip.heat_trip_backend.S3.media.dto.UrlResponse;
 import com.heattrip.heat_trip_backend.user.CurrentUser;
-import com.heattrip.heat_trip_backend.S3.media.error.GlobalExceptionHandler.ErrorResponse; // [①] 에러 스키마 참조
+import com.heattrip.heat_trip_backend.error.GlobalExceptionHandler.ErrorResponse; // [①] 에러 스키마 참조
 import com.heattrip.heat_trip_backend.user.entity.User;
 
 import io.swagger.v3.oas.annotations.Operation;

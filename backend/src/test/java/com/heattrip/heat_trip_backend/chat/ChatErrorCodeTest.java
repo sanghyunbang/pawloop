@@ -1,6 +1,6 @@
 package com.heattrip.heat_trip_backend.chat;
 
-import com.heattrip.heat_trip_backend.S3.media.error.GlobalExceptionHandler;
+import com.heattrip.heat_trip_backend.error.GlobalExceptionHandler;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

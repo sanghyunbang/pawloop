@@ -163,7 +163,13 @@ web/Controller → service(도메인 유스케이스) → port(인터페이스) 
 | `bookmark` | 북마크(`Bookmark`) + 컬렉션(`Collection`/`CollectionItem`) CRUD | 재사용(장소 저장) |
 | `feedback` | 일반 피드백(`Feedback`) | 재사용/축소 |
 | `schedules` | 여정(`Journey`, `JourneyController`/`_v2`)·일정(`Schedule`) | 감정여행 코스, 제거 대상 |
-| `S3` | `S3/media/*` 이미지 업로드(presigned/direct), 에러 처리 | 재사용(강아지·게시글 사진) |
+| `S3` | `S3/media/*` 이미지 업로드(presigned/direct) | 재사용(강아지·게시글 사진) |
+
+### 4.7 `error` — 전역 예외 처리 (계약의 오류 봉투)
+
+- `error/GlobalExceptionHandler` — 유일한 `@RestControllerAdvice`. 4xx·5xx 본문을 계약의 `Error`(`{ error: { code, message, traceId } }` — 정확한 모양은 `openapi.yaml`) 하나로 만든다(#10). 401 만 본문이 없다.
+- **2026-09-06 까지 `S3/media/error/` 에 있었다** — 외부 서비스 패키지 밑 3단계에 전 애플리케이션의 에러 계약이 있어 `security` 가 `S3` 내부를 참조했고, 그것이 모듈 경계 위반 둘이었다. #114 에서 최상위 `error` 로 옮겼다(모듈 루트 타입이라 누가 불러도 위반이 아니다). 쪼개지 않았다 — 핸들러가 한 클래스 안에 있어야 advice 빈 순서 문제가 없다(그 클래스 javadoc).
+- 필터 계층(`security/ErrorBodyWriter`)은 MVC 밖이라 이 advice 를 못 타므로 같은 `ErrorResponse` 를 직접 써서 같은 모양을 낸다.
 
 ---
 

@@ -1017,7 +1017,7 @@ config -> security -> config
 
 쌍이 아니라 **경로**입니다. 소스로 셌을 때 양방향 쌍 3개(`OAuth↔config` · `OAuth↔user` · `config↔security`)로 보인 것을 도구는 경로로 펼쳐 5개로 셉니다. 같은 사실의 다른 표현입니다.
 
-그중 `security → S3` 가 낀 것은 예상 밖이었습니다. `security/ApiRateLimitFilter.java:281` 이 429 본문을 만들려고 `S3.media.error.GlobalExceptionHandler$ErrorResponse` 를 부릅니다. #95 §10 에 "전역 예외 처리기가 S3 밑 3단계에 있다" 를 **자리가 이상하다**는 정도로 적어 뒀는데, 실제로는 순환으로 얽혀 있었습니다.
+그중 `security → S3` 가 낀 것은 예상 밖이었습니다. `security/ApiRateLimitFilter.java:281` 이 429 본문을 만들려고 `S3.media.error.GlobalExceptionHandler$ErrorResponse` 를 부릅니다. #95 §10 에 "전역 예외 처리기가 S3 밑 3단계에 있다" 를 **자리가 이상하다**는 정도로 적어 뒀는데, 실제로는 순환으로 얽혀 있었습니다. (→ 순환은 #106·#107 로 먼저 사라졌고, 2026-09-06 #114 에서 그 클래스를 최상위 `error/` 로 옮겨 남아 있던 위반 둘도 없앴습니다 — 기준선 232 → 230.)
 
 그리고 **메인 패키지 직속인 `BootstrapRunner.java` 도 검사 대상입니다.** 문서에 명시가 없어 몰랐는데 돌려 보니 `root:com.heattrip.heat_trip_backend → tour` 8건으로 잡힙니다.
 

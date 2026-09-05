@@ -78,6 +78,12 @@ class ModularityBaselineTest {
      *
      * <p>이 참조 자체를 없애는 것은 #114 다 — 전 애플리케이션의 에러 계약이 외부 서비스 패키지
      * 밑 3단계에 있는 것이 원인이고, 그것을 옮기면 이 두 줄이 함께 사라진다.
+     * <b>→ 2026-09-06 에 옮겼다(#114). 232 에서 230 으로 내렸다.</b> {@code GlobalExceptionHandler} 가
+     * {@code S3.media.error} 에서 최상위 {@code error} 모듈로 갔다 — 모듈 루트 타입이라 공개 표면이고,
+     * {@code security}·{@code S3} 가 부르는 것은 위반이 아니다. 실측 230 이고 사라진 둘이
+     * 정확히 {@code security -> S3.media.error.GlobalExceptionHandler$ErrorResponse(+$ErrorBody)} 다.
+     * 순환은 이미 0 이었다(#106·#107) — 이슈가 적은 "순환 둘" 은 그 전에 사라졌고, 남아 있던 것은
+     * 이 두 줄과 자리였다.
      *
      * <p>반면 열지 않은 {@code OAuth.jwt}(14) · {@code handler}(6) · {@code state}(5) ·
      * {@code code}(4) · {@code service}(3)는 <b>그대로 위반으로 남아 있다.</b> 이게
@@ -135,7 +141,7 @@ class ModularityBaselineTest {
      * 위반 목록을 떠서 확인했다 — {@code care} 의 위반 22건은 전부 {@code group.entity.FamilyGroup}
      * 로 가는 것이고(#120 이 소유), {@code dog} 로 가는 것은 0 이다.
      */
-    private static final int BASELINE_VIOLATIONS = 232;
+    private static final int BASELINE_VIOLATIONS = 230;
 
     private static final char NL = (char) 10;
 
