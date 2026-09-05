@@ -2900,7 +2900,10 @@ components:
 
     PlaceCategory:
       type: string
-      description: 프론트 카테고리 키(KTO contentTypeId 또는 레이어 키)
+      description: >
+        프론트 카테고리 키. 숫자는 KTO contentTypeId. `vet`·`shop`·`trail` 은 공공데이터
+        레이어 자리인데 **아직 데이터가 없습니다** — 서버는 그 값에 빈 목록을 주고, 앱은
+        #282 부터 그 칩을 보여 주지 않습니다. 실데이터(LOCALDATA·두루누비)가 붙는 날 돌아옵니다.
       enum: ['12', '14', '28', '32', '38', '39', 'vet', 'shop', 'trail']
 
     PlaceDetail:

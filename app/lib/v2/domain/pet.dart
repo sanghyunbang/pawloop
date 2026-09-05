@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 /// 반려(강아지) 도메인 모델. 감정 도메인을 대체한다.
 ///
 /// 지도/커뮤니티/필터에서 공유하는 장소 카테고리 SSOT.
-/// - 동반가능 장소(카페·식당·공원)는 관광공사 반려동물 동반여행 API,
-/// - 병원·펫샵은 공공데이터(인허가), 산책로는 두루누비(걷기여행길)로 채운다.
+/// - 동반가능 장소(카페·식당·공원)는 관광공사 반려동물 동반여행 API 로 채운다.
+/// - 병원·펫샵·산책로는 실데이터가 없어 목록에서 뺐다(#282). 공공데이터(인허가)와
+///   두루누비(걷기여행길)를 붙이는 날 돌아온다. 계약의 `PlaceCategory` 에는 남아 있다.
 class PetCategory {
   final String key;
   final String label;
@@ -13,8 +14,7 @@ class PetCategory {
   const PetCategory(this.key, this.label, this.color, this.icon);
 }
 
-/// 지도 카테고리. KTO(관광공사) 반려동반은 contenttypeid(숫자 key),
-/// 병원/펫샵/산책로는 별도 공공데이터 레이어(문자 key — 현재 더미).
+/// 지도 카테고리. 전부 KTO(관광공사) 반려동반의 contenttypeid(숫자 key)다.
 const List<PetCategory> kPetCategories = [
   PetCategory('12', '여행지', Color(0xFF57C98A), Icons.park_rounded),
   PetCategory('39', '카페·식당', Color(0xFFFF7E6B), Icons.restaurant_rounded),
@@ -22,13 +22,7 @@ const List<PetCategory> kPetCategories = [
   PetCategory('32', '숙박', Color(0xFF5B8DEF), Icons.hotel_rounded),
   PetCategory('38', '쇼핑', Color(0xFF9B7BFF), Icons.storefront_rounded),
   PetCategory('14', '문화', Color(0xFFEFA13C), Icons.museum_rounded),
-  PetCategory('vet', '병원', Color(0xFF4C9AFF), Icons.local_hospital_rounded),
-  PetCategory('shop', '펫샵', Color(0xFFB07BFF), Icons.pets_rounded),
-  PetCategory('trail', '산책로', Color(0xFF2FB89B), Icons.route_rounded),
 ];
-
-/// KTO 외 별도 레이어(공공데이터 예정) key.
-const Set<String> kLayerKeys = {'vet', 'shop', 'trail'};
 
 /// contenttypeid → 카테고리. 미지정/기타는 여행지로.
 PetCategory petCatByType(String? contentTypeId) => kPetCategories.firstWhere(

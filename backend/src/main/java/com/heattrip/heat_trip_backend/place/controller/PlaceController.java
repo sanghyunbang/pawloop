@@ -110,7 +110,7 @@ public class PlaceController {
      * <h2>{@code source} 필터를 안 받는다</h2>
      * <p>계약의 {@code category} enum 에 {@code vet}/{@code shop}/{@code trail} 이 있지만
      * 그 셋은 <b>미구현</b>이다(LOCALDATA·두루누비는 좌표변환과 대량 적재가 필요하다).
-     * 지금 앱에서도 셋은 더미라 회귀가 아니다. 그 값이 오면 빈 목록이다.
+     * 앱은 #282 부터 그 칩을 보여 주지 않는다. 그 값이 오면 빈 목록이다.
      */
     @GetMapping("/nearby")
     public List<PlaceDto> nearby(@RequestParam("lat") double lat,
