@@ -135,17 +135,19 @@ web/Controller → service(도메인 유스케이스) → port(인터페이스) 
 - `service/KakaoLinkBackfillService` + `runner/KakaoLinkBackfillRunner`: 장소를 카카오 place와 매칭해 링크(`PlaceKakaoLink`) 백필. `service/GeoUtils` 좌표 유틸.
 - **Pawloop 활용**: 동물병원/펫샵 좌표 보강 및 상세 링크(길찾기)에 재사용 후보.
 
-### 4.3 `explore` — 장소 탐색/검색 (재사용, 감정 필드 제거)
+### 4.3 `explore` — 장소 탐색/검색 (재사용 · 감정 필드는 격리)
 
 - `web/ExploreController` `@RequestMapping("/api/explore/places")`: 상세(`/{id}`), 목록(`GET`), 무한스크롤(`/scroll`, 커서 페이지네이션 `CursorPageResponse`), 특성(`/{contentId}/features`), 감정리뷰(`/{contentId}/emotional-reviews`), 피드백(`POST /{contentId}/feedback`), 검색(`/search`).
 - `service/ExploreService`, `service/ExploreEmotionService` / 포트 `ExploreSearchPort` + `adapter/jpa/ExploreSearchJpaAdapter`.
-- **보안 예외**: `/api/explore/**`는 `permitAll`(공개). Pawloop 지도/장소 검색의 공개 조회 경로로 자연스럽게 이어진다. `emotional-reviews`/`EmotionReviewEntity` 등 감정 필드는 제거·중립화 대상.
+- **보안 예외**: `/api/explore/**`는 `permitAll`(공개). Pawloop 지도/장소 검색의 공개 조회 경로로 자연스럽게 이어진다.
+- **감정 필드(`emotional-reviews`/`EmotionReviewEntity`·`emotion_reviews`)는 지우지 않고 격리한다** — 2026-09-03 결정([#174](https://github.com/sanghyunbang/heattrip/issues/174)). 표도 데이터도 읽기 경로도 그대로 두고 **v2 앱이 안 닿게 한다.** 근거: **쓰기 경로가 저장소 전체에 0건**이다 — `reviewRepo.` 는 `ExploreEmotionService.java:32` 한 줄(읽기)뿐이고 main·test 어디에도 쓰기가 없어 데이터가 더 늘지 않는다. 가만두는 비용이 거의 0 이고, 지우면 되돌릴 수 없다. 앱 쪽 진입은 `emotion_api.dart` → `explore_detail_screen.dart` 이고, 그 길을 끊는 자리는 레거시 셸 처분([#94](https://github.com/sanghyunbang/heattrip/issues/94))이 정한다.
 
-### 4.4 `social` — 커뮤니티 (감정카드 → Pawloop 게시판으로 대체)
+### 4.4 `social` — 감정카드 (격리 · 반려 커뮤니티는 §4.8 `community` 가 따로다)
 
 - `controller/SocialController` `@RequestMapping("/api/social")`: 카드 생성(`POST /cards`), 목록(`GET /cards`), 반응(`POST /cards/{id}/reactions`), 댓글(`POST /cards/{id}/comments`, `GET /cards/{id}/comments`).
 - 엔티티 `EmotionCard`/`CardComment`/`CardReaction`.
-- **Pawloop 대체**: 도메인만 감정카드 → `post`(게시판: 산책로후기/동반장소/건강·병원/자유/자랑) + `comment` + `reaction`(도움돼요/귀여워요/공감)으로 치환. 카드↔반응↔댓글 3자 구조와 API 형태는 그대로 이식 가능.
+- **반려 커뮤니티는 이것을 고쳐 쓴 것이 아니라 따로 만든 것이다** — `post`(게시판: 산책로후기/동반장소/건강·병원/자유/자랑) + `comment` + `reaction`(도움돼요/귀여워요/공감), 표도 코드도 별개다(#169). **"커뮤니티" 라는 말은 이제 그쪽을 뜻한다** — 이 절의 감정카드를 커뮤니티라 부르면 다음 사람이 잘못 지운다(#174).
+- **감정카드 3표(`emotion_card`·`card_comment`·`card_reaction`)는 지우지 않고 격리한다** — 2026-09-03 결정([#174](https://github.com/sanghyunbang/heattrip/issues/174)). 표·데이터·`SocialController` 는 그대로, **v2 앱이 안 닿게 한다.** 근거는 §4.3 과 같다 — 쓰기 경로가 v2 에 없고(`social_repository.dart` 의 소비자는 레거시 셸의 `feed_screen.dart`·`together_feed.dart` 뿐), 가만두는 비용이 거의 0 이다. 앱에서 끊는 자리는 레거시 셸 처분([#94](https://github.com/sanghyunbang/heattrip/issues/94))이 정한다.
 
 ### 4.5 `curation` — 감정 추천 (★ Pawloop 제거 대상)
 
