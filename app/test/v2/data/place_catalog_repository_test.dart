@@ -257,6 +257,50 @@ void main() {
       expect(await repo(client).all(), isEmpty);
     });
 
+    test('hasCatalog 가 「못 받음」 과 「없음」 을 가른다 — 둘 다 nearby 는 빈 목록이다', () async {
+      final dead = MockClient((_) async => throw const SocketException('끊김'));
+      final subject = repo(dead);
+
+      expect(subject.hasCatalog, isFalse, reason: '아직 아무것도 안 받았다');
+      await subject.all();
+      expect(
+        subject.hasCatalog,
+        isFalse,
+        reason: '''
+실패했는데 true 면 지도 화면이 "이 지역엔 등록된 곳이 없어요, 지도를 움직여 보세요" 라고
+말한다 — 네트워크가 끊긴 사람에게 시킨 대로 해도 소용없는 안내다.''',
+      );
+
+      final alive = fakeServer();
+      final second = repo(alive.client);
+      await second.all();
+      expect(second.hasCatalog, isTrue);
+    });
+
+    test('retry() 는 백오프를 건너뛴다 — 버튼을 눌렀는데 5분을 기다리라고 하면 버튼이 거짓말이다',
+        () async {
+      var calls = 0;
+      var failing = true;
+      final client = MockClient((_) async {
+        calls++;
+        if (failing) throw const SocketException('끊김');
+        return http.Response.bytes(utf8.encode(jsonEncode(catalogJson())), 200,
+            headers: {'etag': '"abc"', 'content-type': 'application/json'});
+      });
+      final subject = repo(client);
+
+      await subject.all();
+      await subject.all();
+      expect(calls, 1, reason: '전제 — 자동 재호출은 백오프에 막힌다');
+
+      failing = false;
+      await subject.retry();
+
+      expect(calls, 2, reason: '사람이 누른 재시도는 막히면 안 된다');
+      expect(subject.hasCatalog, isTrue);
+      expect(await subject.all(), hasLength(3));
+    });
+
     test('실패한 뒤에는 곧바로 다시 부르지 않는다 — 산책 중 5m 마다 재시도가 돈다', () async {
       var calls = 0;
       final client = MockClient((_) async {

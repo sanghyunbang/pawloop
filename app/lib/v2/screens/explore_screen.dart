@@ -7,6 +7,8 @@ import '../theme/app_tokens.dart';
 import 'post_write_screen.dart';
 import '../domain/pet.dart';
 import '../data/pet_places_repository.dart';
+import '../data/place_catalog_repository.dart';
+import '../data/location_upload_policy.dart';
 import '../data/location_service.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
@@ -70,14 +72,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
   // ── 병원/펫샵/산책로 더미 레이어 (실제론 LOCALDATA·두루누비 공공데이터) ──
   List<PetPlace> _dummyLayer(String k) => k == 'vet' ? _dummyVet : _dummyShop;
 
+  //
+  // **거리를 안 싣는다** (`distM` 기본값 0 → `distLabel` 이 빈 문자열). 예전에는
+  // 320·900·1600 을 박아 두어서 부산 사용자에게도 "320m 동물병원" 이 떴다 — 더미가
+  // 측정값처럼 읽히는 순간 더미였을 때보다 나쁘다(`insight_screen.dart` 가 #160 때
+  // 같은 판단을 적어 뒀다). 전화번호도 뺀다 — `02-000-0000` 은 누르면 엉뚱한 데로 간다.
   static const List<PetPlace> _dummyVet = [
-    PetPlace(contentId: 'v1', title: '서울숲동물병원', contentTypeId: 'vet', addr: '서울 성동구 왕십리로 66', image: '', tel: '02-000-0000', lat: 37.5462, lng: 127.0388, distM: 320),
-    PetPlace(contentId: 'v2', title: '성수24시동물의료센터', contentTypeId: 'vet', addr: '서울 성동구 성수이로 118', image: '', tel: '02-000-0001', lat: 37.5445, lng: 127.0559, distM: 900),
-    PetPlace(contentId: 'v3', title: '한강동물병원', contentTypeId: 'vet', addr: '서울 광진구 자양로 12', image: '', tel: '02-000-0002', lat: 37.5348, lng: 127.0663, distM: 1600),
+    PetPlace(contentId: 'v1', title: '서울숲동물병원', contentTypeId: 'vet', addr: '서울 성동구 왕십리로 66', image: '', tel: '', lat: 37.5462, lng: 127.0388),
+    PetPlace(contentId: 'v2', title: '성수24시동물의료센터', contentTypeId: 'vet', addr: '서울 성동구 성수이로 118', image: '', tel: '', lat: 37.5445, lng: 127.0559),
+    PetPlace(contentId: 'v3', title: '한강동물병원', contentTypeId: 'vet', addr: '서울 광진구 자양로 12', image: '', tel: '', lat: 37.5348, lng: 127.0663),
   ];
   static const List<PetPlace> _dummyShop = [
-    PetPlace(contentId: 's1', title: '멍냥마트 성수점', contentTypeId: 'shop', addr: '서울 성동구 연무장길 33', image: '', tel: '', lat: 37.5423, lng: 127.0555, distM: 850),
-    PetPlace(contentId: 's2', title: '보리네 펫살롱', contentTypeId: 'shop', addr: '서울 성동구 서울숲2길 18', image: '', tel: '', lat: 37.5471, lng: 127.0413, distM: 400),
+    PetPlace(contentId: 's1', title: '멍냥마트 성수점', contentTypeId: 'shop', addr: '서울 성동구 연무장길 33', image: '', tel: '', lat: 37.5423, lng: 127.0555),
+    PetPlace(contentId: 's2', title: '보리네 펫살롱', contentTypeId: 'shop', addr: '서울 성동구 서울숲2길 18', image: '', tel: '', lat: 37.5471, lng: 127.0413),
   ];
 
   // 더미 산책로(서울숲 강변 코스).
@@ -182,16 +189,46 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  Widget _emptyBox() => GlassCard(
+  /// 한 벌을 **아예 못 받은** 상태인가 — "이 지역에 없음" 과 다르다 (이슈 #275).
+  ///
+  /// A안 빌드만 가를 수 있다. 서버 조회(B안)는 실패도 빈 목록으로 오고 그 구분은
+  /// 저장소 계약이 일부러 안 한다("실패를 빈 목록으로 다룬다"). 그쪽은 그대로 둔다.
+  bool get _catalogUnavailable =>
+      !LocationUploadPolicy.canQueryNearbyPlaces && !PlaceCatalogRepository.instance.hasCatalog;
+
+  Future<void> _retryCatalog() async {
+    await PlaceCatalogRepository.instance.retry();
+    if (mounted) await _load();
+  }
+
+  Widget _emptyBox() {
+    // 못 받은 것을 "없다" 고 말하면 안 된다. "지도를 움직여 보세요" 는 그 사람이 시킨
+    // 대로 해도 소용이 없는 안내고, 5분 백오프 때문에 움직여도 다시 안 받는다.
+    if (_catalogUnavailable) {
+      return GlassCard(
         padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 18),
         child: Column(children: [
-          Image.asset('assets/emoji/paw.png', width: 40, height: 40),
+          const Icon(Icons.cloud_off_outlined, size: 36, color: T.textMuted),
           const SizedBox(height: 10),
-          const Text('이 지역엔 등록된 곳이 없어요', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textPrimary)),
+          const Text('장소 목록을 아직 못 받았어요', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textPrimary)),
           const SizedBox(height: 4),
-          const Text('지도를 움직이거나 필터를 바꿔보세요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
+          const Text('네트워크를 확인하고 다시 시도해 주세요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
+          const SizedBox(height: 12),
+          TextButton(onPressed: _retryCatalog, child: const Text('다시 시도')),
         ]),
       );
+    }
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 18),
+      child: Column(children: [
+        Image.asset('assets/emoji/paw.png', width: 40, height: 40),
+        const SizedBox(height: 10),
+        const Text('이 지역엔 등록된 곳이 없어요', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textPrimary)),
+        const SizedBox(height: 4),
+        const Text('지도를 움직이거나 필터를 바꿔보세요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
+      ]),
+    );
+  }
 
   // 산책로 레이어 카드(더미 — 실제론 두루누비 걷기여행길).
   Widget _trailCard() {
@@ -469,11 +506,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
       markers.add(m);
     }
     if (markers.isNotEmpty) await c.addOverlayAll(markers);
-    // 병원/펫샵 레이어 선택 시 해당 위치로 카메라 이동(더미 데이터가 있는 곳).
-    if (_isLayer && _filtered.isNotEmpty) {
-      final f = _filtered.first;
-      await c.updateCamera(NCameraUpdate.withParams(target: NLatLng(f.lat, f.lng), zoom: 14));
-    }
+    // **레이어를 골라도 카메라를 옮기지 않는다.** 예전에는 더미가 있는 성수동으로
+    // 날아갔다 — 부산 사용자가 병원 칩을 누르면 지도가 서울로 갔다. 더미는 사용자가
+    // 보고 있는 곳에 없는 것이 정상이고, 그 사실을 감추려고 화면을 움직이면 안 된다.
   }
 
   /// 카테고리색 핀(플랫폼 통일 — Flutter 위젯 렌더).
@@ -593,10 +628,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ]),
           ],
           const SizedBox(height: 8),
-          const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.pets, size: 13, color: Color(0xFFFF8F63)),
-            SizedBox(width: 5),
-            Text('반려동물 동반 가능 (관광공사)', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+          // 출처 배지. **더미에 관광공사를 붙이지 않는다** — 리스트 헤더(`_listView`)는
+          // 레이어일 때 '공공데이터 (더미)' 라고 밝히는데, 이 시트가 그것을 뒤집고
+          // 있었다. 하드코딩 "서울숲동물병원"(전화 02-000-0000)이 공공데이터 배지를 달고
+          // 나갔다. `_writeAboutPlace` 가 이미 같은 판정(`kLayerKeys`)을 한다.
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(kLayerKeys.contains(p.contentTypeId) ? Icons.science_outlined : Icons.pets,
+                size: 13, color: const Color(0xFFFF8F63)),
+            const SizedBox(width: 5),
+            Text(
+              kLayerKeys.contains(p.contentTypeId)
+                  ? '예시 데이터 · 실제 업체가 아니에요'
+                  : '반려동물 동반 가능 (관광공사)',
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E)),
+            ),
           ]),
           const SizedBox(height: 14),
           _writeAboutPlace(sheetCtx, p),

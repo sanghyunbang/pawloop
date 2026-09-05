@@ -87,6 +87,23 @@ class PlaceCatalogRepository {
   /// 기다리게 할 이유가 없다.
   DateTime? _lastFailure;
 
+  /// 한 벌을 하나라도 갖고 있는가.
+  ///
+  /// 화면이 **"이 지역에 없음"** 과 **"아직 못 받음"** 을 가르는 데 쓴다. 둘 다
+  /// [nearby] 가 빈 목록을 주므로 그것만 보면 구분이 안 되고, 그러면 네트워크가 끊긴
+  /// 사용자에게 "이 지역엔 등록된 곳이 없어요, 지도를 움직여 보세요" 라고 말하게 된다 —
+  /// 시킨 대로 해도 소용이 없는 안내다.
+  bool get hasCatalog => _memory != null && _memory!.isNotEmpty;
+
+  /// 사람이 "다시 시도" 를 눌렀다. **백오프를 건너뛰고** 한 번 받아 본다.
+  ///
+  /// [failureBackoff] 는 산책 화면의 자동 재호출을 막으려는 것이지 사람의 손을 막으려는
+  /// 것이 아니다. 버튼을 눌렀는데 5분을 기다리라고 하면 버튼이 거짓말이 된다.
+  Future<void> retry() {
+    _lastFailure = null;
+    return _refresh();
+  }
+
   /// 전국 한 벌. 메모리 → 파일 → 네트워크 순으로 찾는다.
   Future<List<PetPlace>> all() async {
     _memory ??= await _readFile();

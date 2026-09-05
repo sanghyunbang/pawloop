@@ -50,6 +50,13 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   bool _follow = true; // 카메라 자동 따라가기(제스처 시 해제)
   bool _statsExpanded = false; // 스탯 패널 펼침 여부(기본 접힘)
   bool _poisLoaded = false;
+
+  /// 주변 장소를 받는 중인가.
+  ///
+  /// 이게 없으면 받는 동안 검색바가 '주변 반려 장소 찾기' 로 남고 시트를 열면
+  /// '조건에 맞는 곳이 없어요' 라고 한다 — **기다리는 중인데 없다고 말한다.**
+  /// 카탈로그는 첫 실행에 2.83MB 를 받으므로 그 창이 몇 초는 된다(이슈 #275).
+  bool _poisLoading = false;
   int _seconds = 0;
   double _km = 0;
 
@@ -180,12 +187,18 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
     //
     // 헛일 걱정은 그대로 없다: 두 번째부터는 메모리에 있는 목록을 훑을 뿐이고
     // 네트워크가 안 나간다.
-    final places = await PetPlacesRepository().fetchNearby(
-      lat: center.latitude,
-      lng: center.longitude,
-      radius: 3000,
-      numOfRows: 40,
-    );
+    if (mounted) setState(() => _poisLoading = true);
+    final List<PetPlace> places;
+    try {
+      places = await PetPlacesRepository().fetchNearby(
+        lat: center.latitude,
+        lng: center.longitude,
+        radius: 3000,
+        numOfRows: 40,
+      );
+    } finally {
+      if (mounted) setState(() => _poisLoading = false);
+    }
     if (!mounted || _ctrl == null || places.isEmpty) return;
     // setState 없이 필드만 바꾸면 검색바가 계속 '주변 반려 장소 찾기' 로 남는다 —
     // 찾아 놓고 못 찾은 척한다.
@@ -403,11 +416,21 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
                 const SizedBox(height: 8),
                 Expanded(
                   child: list.isEmpty
-                      ? const Center(
-                          child: Text(
-                            '조건에 맞는 곳이 없어요',
-                            style: TextStyle(fontSize: 13, color: T.textMuted),
-                          ),
+                      ? Center(
+                          child: _poisLoading && _places.isEmpty
+                              ? const Column(mainAxisSize: MainAxisSize.min, children: [
+                                  SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFFFF8F63))),
+                                  SizedBox(height: 10),
+                                  Text('주변 장소를 불러오는 중이에요',
+                                      style: TextStyle(fontSize: 13, color: T.textMuted)),
+                                ])
+                              : const Text(
+                                  '조건에 맞는 곳이 없어요',
+                                  style: TextStyle(fontSize: 13, color: T.textMuted),
+                                ),
                         )
                       : ListView.builder(
                           itemCount: list.length,
@@ -815,7 +838,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
                               const SizedBox(width: 8),
                               Text(
                                 _places.isEmpty
-                                    ? '주변 반려 장소 찾기'
+                                    ? (_poisLoading ? '주변 장소를 불러오는 중…' : '주변 반려 장소 찾기')
                                     : '주변 반려 장소 ${_places.length}곳 보기',
                                 style: const TextStyle(
                                   fontSize: 13.5,
