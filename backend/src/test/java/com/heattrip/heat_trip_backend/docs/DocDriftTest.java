@@ -1,9 +1,17 @@
 package com.heattrip.heat_trip_backend.docs;
 
+import com.heattrip.heat_trip_backend.support.TestProjectPaths;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -446,5 +454,140 @@ class DocDriftTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError(
                         "users 정의에 email 컬럼 줄이 없다 — nullable 여부를 확인할 수 없다"));
+    }
+
+    // ───────────────── E. 정본의 표 집합 ↔ 절 제목 ↔ 부록 ↔ ERD (#176) ─────────────────
+    //
+    // 정본(01_schema.sql)에 표가 46개인데 03-database 문서는 열넷만 실재라 하고 있었다 —
+    // 감정 커뮤니티 3표는 절이 0개였고, erd.md 는 "지금 DB 에 있는 것은 … 아홉이다" 라고
+    // DB 를 직접 단정했다. 사람이 세는 목록은 낡는다. 여기서 넷을 대조한다:
+    //   정본 CREATE TABLE 집합 == schema.md 부록 A 의 표 집합
+    //   schema.md 의 **실재** 절 ⊆ 정본, 부록 A 의 `실재 §N` 과 절 번호가 같다
+    //   erd.md 엔티티 설명 표의 "실재" 집합 == schema.md 의 실재 절 집합
+    //   erd.md 다이어그램에서 계획 엔티티가 낀 관계선에는 전부 '계획' 꼬리표
+
+    @Test
+    @DisplayName("schema.md 부록 A 가 정본의 CREATE TABLE 집합과 정확히 같다 — 표가 생기거나 사라지면 여기가 빨간불이다")
+    void appendixListsExactlyTheCommittedTables() throws IOException {
+        Set<String> committed = committedTables();
+        assertThat(committed).as("정본에서 CREATE TABLE 을 하나도 못 읽었다면 이 검사는 헛돈다").hasSizeGreaterThan(20);
+        assertThat(appendixRows().keySet())
+                .as("""
+                        부록 A 는 정본의 표 전부를 한 줄씩 적는다. 정본에 표를 더했으면 부록에도 한 줄을, \
+                        정본에서 지웠으면 부록에서도 지워라 — 어느 쪽이든 문서가 DB 를 모르는 채로 두지 않는다.""")
+                .containsExactlyInAnyOrderElementsOf(committed);
+    }
+
+    @Test
+    @DisplayName("실재 절의 표는 전부 정본에 있고, 부록 A 도 같은 절 번호로 실재라 한다")
+    void realitySectionsAgreeWithTheAppendixAndTheSchema() throws IOException {
+        Map<String, String> sections = schemaRealityTables();
+        assertThat(sections).as("schema.md 에 **실재** 표시가 붙은 절이 없다 — 파서가 깨졌거나 표시 규약이 바뀌었다").isNotEmpty();
+        Set<String> committed = committedTables();
+        Map<String, String> appendix = appendixRows();
+
+        List<String> broken = new ArrayList<>();
+        sections.forEach((table, number) -> {
+            if (!committed.contains(table)) {
+                broken.add("§" + number + " " + table + " 은 실재라는데 정본에 CREATE TABLE 이 없다");
+            }
+            String status = appendix.get(table);
+            if (!("실재 §" + number).equals(status)) {
+                broken.add(table + " 의 부록 상태가 '실재 §" + number + "' 이 아니라 '" + status + "' 다");
+            }
+        });
+        appendix.forEach((table, status) -> {
+            if (status.startsWith("실재") && !sections.containsKey(table)) {
+                broken.add(table + " 은 부록에서 실재인데 **실재** 표시가 붙은 절이 없다");
+            }
+        });
+        assertThat(broken).as("절 제목·부록·정본이 서로 다른 말을 한다").isEmpty();
+    }
+
+    @Test
+    @DisplayName("ERD 의 실재 엔티티 집합이 schema.md 의 실재 절 집합과 같다 — 두 문서가 다른 목록을 들지 않는다")
+    void erdRealityMatchesTheSchemaSections() {
+        assertThat(erdRealEntities())
+                .as("erd.md 엔티티 설명 표의 '실재' 열과 schema.md 절 제목의 **실재** 표시가 같은 집합이어야 한다")
+                .containsExactlyInAnyOrderElementsOf(schemaRealityTables().keySet());
+    }
+
+    @Test
+    @DisplayName("ERD 다이어그램에서 계획 엔티티가 낀 관계선에는 전부 '계획' 꼬리표가 있다 — 실재끼리의 선에는 없다")
+    void plannedRelationsAreTaggedAndRealOnesAreNot() {
+        Set<String> real = erdRealEntities();
+        assertThat(real).isNotEmpty();
+        int begin = erd.indexOf("erDiagram");
+        int end = erd.indexOf("```", begin);
+        assertThat(begin).as("erd.md 에 erDiagram 이 없다").isNotNegative();
+        Matcher matcher = Pattern.compile("(?m)^\\s+([a-z_]+)\\s+[|o}{\\-]{2,}\\s+([a-z_]+)\\s*:\\s*\"([^\"]*)\"")
+                .matcher(erd.substring(begin, end));
+        List<String> broken = new ArrayList<>();
+        int relations = 0;
+        while (matcher.find()) {
+            relations++;
+            boolean planned = !real.contains(matcher.group(1)) || !real.contains(matcher.group(2));
+            boolean tagged = matcher.group(3).contains("계획");
+            if (planned && !tagged) {
+                broken.add(matcher.group().strip() + "  ← 계획 엔티티가 꼈는데 꼬리표가 없다");
+            }
+            if (!planned && tagged) {
+                broken.add(matcher.group().strip() + "  ← 실재끼리인데 계획이라 한다");
+            }
+        }
+        assertThat(relations).as("관계선을 하나도 못 읽었다 — 파서가 깨졌다").isGreaterThan(10);
+        assertThat(broken)
+                .as("계획인 표를 있는 것처럼 그리면 그 표에 쿼리를 짜는 사람이 생긴다(#176)")
+                .isEmpty();
+    }
+
+    /** 정본 {@code 01_schema.sql} 의 {@code CREATE TABLE} 이름 집합. */
+    private static Set<String> committedTables() throws IOException {
+        String sql = Files.readString(
+                TestProjectPaths.requireFile("mysql/init/01_schema.sql"), StandardCharsets.UTF_8);
+        Set<String> names = new TreeSet<>();
+        Matcher matcher = Pattern.compile("(?m)^CREATE TABLE `([a-z0-9_]+)`").matcher(sql);
+        while (matcher.find()) {
+            names.add(matcher.group(1));
+        }
+        return names;
+    }
+
+    /** schema.md 의 {@code ## N. `table` — … (**실재** …)} → 표 이름 → 절 번호. */
+    private static Map<String, String> schemaRealityTables() {
+        Map<String, String> out = new LinkedHashMap<>();
+        Matcher matcher = Pattern.compile("(?m)^## (\\d+)\\. `([a-z0-9_]+)`[^\\n]*\\*\\*실재\\*\\*").matcher(schema);
+        while (matcher.find()) {
+            out.put(matcher.group(2), matcher.group(1));
+        }
+        return out;
+    }
+
+    /** schema.md 부록 A 의 행 — 표 이름 → 상태 칸({@code 실재 §N} 또는 {@code 레거시}). */
+    private static Map<String, String> appendixRows() {
+        int start = schema.indexOf("## 부록 A.");
+        assertThat(start).as("schema.md 에 부록 A 가 없다 — 정본의 표 46개를 적는 자리다(#176)").isNotNegative();
+        Map<String, String> out = new LinkedHashMap<>();
+        Matcher matcher = Pattern.compile("(?m)^\\| `([a-z0-9_]+)` \\| ([^|]*) \\|").matcher(schema.substring(start));
+        while (matcher.find()) {
+            out.put(matcher.group(1), matcher.group(2).strip());
+        }
+        return out;
+    }
+
+    /** erd.md 엔티티 설명 표에서 "실재" 열이 실재인 엔티티. */
+    private static Set<String> erdRealEntities() {
+        int start = erd.indexOf("## 엔티티 설명");
+        int end = erd.indexOf("## 공간(Spatial)", start);
+        assertThat(start).as("erd.md 에 엔티티 설명 표가 없다").isNotNegative();
+        assertThat(end).as("erd.md 의 엔티티 설명 표 뒤에 공간 컬럼 요약이 없다").isNotNegative();
+        Matcher matcher = Pattern.compile("(?m)^\\| `([a-z0-9_]+)` \\| ([^|]*) \\|").matcher(erd.substring(start, end));
+        Set<String> real = new TreeSet<>();
+        while (matcher.find()) {
+            if (matcher.group(2).strip().startsWith("실재")) {
+                real.add(matcher.group(1));
+            }
+        }
+        return real;
     }
 }
