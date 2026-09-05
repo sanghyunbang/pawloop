@@ -37,6 +37,9 @@
 	     UIBackgroundModes 를 함께 판단한다. -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>산책 경로와 이동 거리를 기록하고, 주변의 반려동물 동반 장소를 보여드리기 위해 위치를 사용해요.</string>
+	<!-- 경로 사진을 사진 앱에 저장한다 (이슈 #310). 추가만 하고 읽지 않으므로 Add 키 하나다. -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>산책 경로를 그린 사진을 사진 앱에 저장하기 위해 필요해요. 사진을 읽지는 않아요.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
