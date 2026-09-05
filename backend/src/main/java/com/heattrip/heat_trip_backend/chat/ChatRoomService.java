@@ -690,6 +690,20 @@ public class ChatRoomService {
     }
 
     /**
+     * ETag 가 맞아 304 로 끝난 폴링을 "빈 폴링" 으로 센다 — 이슈 #197 (2).
+     *
+     * <p>컨트롤러가 {@code If-None-Match} 를 보고 서비스에 안 들어오고 304 를 내는데, 그 경로가
+     * <b>가만히 있는 방의 폴링 거의 전부</b>다. 안 세면 {@code chat.poll} 의 empty 비율이 실제보다
+     * 낮게 나오고, #84(소켓 전환)의 착수 기준이 그 비율이라 판단이 틀어진다. 실측(2026-09-05,
+     * 에뮬레이터 1대·빈 방)에서 카운터가 0·0 인 채 요청만 쌓이는 것으로 드러났다.
+     *
+     * <p>메트릭 빈은 이 모듈 안에 있고 {@code chatweb} 은 서비스만 부를 수 있어서 여기 한 줄로 연다.
+     */
+    public void notModifiedPoll() {
+        metrics.pollEmpty();
+    }
+
+    /**
      * 내가 보낸 메시지를 지운다 — 이슈 #197.
      *
      * <p><b>행은 남고 본문만 비운다.</b> 행을 지우면 그 {@code roomSeq} 가 델타 폴링에서 빠져 읽음
@@ -794,6 +808,7 @@ public class ChatRoomService {
 
         // 폴링일 때만 센다 (#80). 뒤로 읽는 것은 과거 페이지 로드라 성격이 다르고, 그것까지
         // 세면 empty 비율이 희석되어 "간격을 늘릴지" 의 근거가 사라진다.
+        // 304(ETag) 로 끝나는 폴링은 여기까지 안 온다 — 그쪽은 {@link #notModifiedPoll()} 이 센다.
         if (readFromTheFront) {
             if (rows.isEmpty()) {
                 metrics.pollEmpty();
