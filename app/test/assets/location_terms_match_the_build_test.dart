@@ -88,8 +88,8 @@ void main() {
     });
 
     test('버전과 시행일이 적혀 있다 — 개정 이력이 없으면 어느 것에 동의했는지 모른다', () {
-      expect(_read(), contains('버전: v1.1'));
-      expect(_read(), contains('시행일: 2026-09-11'));
+      expect(_read(), contains('버전: v1.2'));
+      expect(_read(), contains('시행일: 2026-09-12'));
     });
   });
 }
