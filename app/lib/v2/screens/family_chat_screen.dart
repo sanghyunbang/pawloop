@@ -573,15 +573,17 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   ///
   /// **내 메시지에는 안 뜬다** — 자기 메시지는 신고도 가리기도 뜻이 없다.
   Future<void> _openMessageActions(ChatMessageItem m) async {
-    if (_myUserId != null && m.senderUserId == _myUserId) {
-      return;
+    final mine = _myUserId != null && m.senderUserId == _myUserId;
+    if (mine && m.deleted) {
+      return; // 이미 지운 자리 — 할 수 있는 것이 없다.
     }
 
     final action = await MessageActionsSheet.show(
       context,
-      senderName: m.senderName,
+      senderName: mine ? '내 메시지' : m.senderName,
       hiddenByBlock: m.hiddenByBlock,
       canRemoveMember: widget.isOwner,
+      isMine: mine,
     );
     if (!mounted || action == null) {
       return;
@@ -596,6 +598,62 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         await _unblock(m.senderUserId, m.senderName);
       case MessageAction.removeMember:
         await _removeMember(m.senderUserId, m.senderName);
+      case MessageAction.delete:
+        await _deleteMine(m);
+    }
+  }
+
+  /// 내 메시지를 지운다 — 이슈 #197.
+  ///
+  /// 서버가 204 를 주면 목록의 그 자리를 **지운 모양으로 바꾼다.** 델타 폴링은 새 번호만
+  /// 가져오므로 옛 번호의 변화는 스스로 반영해야 한다 — 안 그러면 다음에 방을 다시 열 때까지
+  /// 지운 말이 그대로 보인다.
+  Future<void> _deleteMine(ChatMessageItem m) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('이 메시지를 삭제할까요?'),
+        content: const Text(
+          '상대방 화면에서도 내용이 사라지고 "삭제된 메시지" 자리만 남아요.'
+          '\n되돌릴 수 없어요.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('삭제', style: TextStyle(color: Color(0xFFD64545))),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || ok != true) {
+      return;
+    }
+    try {
+      await _repo.deleteMessage(m.id);
+      if (!mounted) return;
+      setState(() {
+        final i = _messages.indexWhere((x) => x.roomSeq == m.roomSeq);
+        if (i >= 0) {
+          _messages[i] = ChatMessageItem(
+            id: m.id,
+            roomSeq: m.roomSeq,
+            senderUserId: m.senderUserId,
+            senderName: m.senderName,
+            body: '',
+            createdAt: m.createdAt,
+            deleted: true,
+            hiddenByBlock: m.hiddenByBlock,
+          );
+        }
+      });
+      _toast('메시지를 삭제했어요');
+    } on ChatFailure catch (e) {
+      _toast(e.message);
     }
   }
 

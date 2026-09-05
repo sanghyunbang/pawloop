@@ -24,6 +24,7 @@ class MessageActionsSheet extends StatelessWidget {
     required this.senderName,
     required this.hiddenByBlock,
     required this.canRemoveMember,
+    this.isMine = false,
   });
 
   final String senderName;
@@ -34,11 +35,15 @@ class MessageActionsSheet extends StatelessWidget {
   /// 내가 이 방의 방장인가. 강퇴는 방장만 할 수 있다.
   final bool canRemoveMember;
 
+  /// 내가 보낸 메시지인가. 그러면 신고·가리기·내보내기는 뜻이 없고 **삭제** 하나뿐이다(#197).
+  final bool isMine;
+
   static Future<MessageAction?> show(
     BuildContext context, {
     required String senderName,
     required bool hiddenByBlock,
     required bool canRemoveMember,
+    bool isMine = false,
   }) {
     return showModalBottomSheet<MessageAction>(
       context: context,
@@ -47,6 +52,7 @@ class MessageActionsSheet extends StatelessWidget {
         senderName: senderName,
         hiddenByBlock: hiddenByBlock,
         canRemoveMember: canRemoveMember,
+        isMine: isMine,
       ),
     );
   }
@@ -78,26 +84,36 @@ class MessageActionsSheet extends StatelessWidget {
               ),
             ]),
           ),
-          _tile(
-            context,
-            icon: Icons.flag_outlined,
-            label: '신고하기',
-            value: MessageAction.report,
-          ),
-          _tile(
-            context,
-            icon: hiddenByBlock ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-            label: hiddenByBlock ? '가리기 해제' : '이 사람 가리기',
-            value: hiddenByBlock ? MessageAction.unblock : MessageAction.block,
-          ),
-          if (canRemoveMember)
+          if (isMine)
             _tile(
               context,
-              icon: Icons.person_remove_outlined,
-              label: '방에서 내보내기',
-              value: MessageAction.removeMember,
+              icon: Icons.delete_outline,
+              label: '이 메시지 삭제',
+              value: MessageAction.delete,
               danger: true,
+            )
+          else ...[
+            _tile(
+              context,
+              icon: Icons.flag_outlined,
+              label: '신고하기',
+              value: MessageAction.report,
             ),
+            _tile(
+              context,
+              icon: hiddenByBlock ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              label: hiddenByBlock ? '가리기 해제' : '이 사람 가리기',
+              value: hiddenByBlock ? MessageAction.unblock : MessageAction.block,
+            ),
+            if (canRemoveMember)
+              _tile(
+                context,
+                icon: Icons.person_remove_outlined,
+                label: '방에서 내보내기',
+                value: MessageAction.removeMember,
+                danger: true,
+              ),
+          ],
           const SizedBox(height: 6),
         ]),
         ),
@@ -122,7 +138,7 @@ class MessageActionsSheet extends StatelessWidget {
 }
 
 /// 시트에서 고른 것.
-enum MessageAction { report, block, unblock, removeMember }
+enum MessageAction { report, block, unblock, removeMember, delete }
 
 /// 신고 사유를 고르는 화면 — 이슈 #82.
 ///

@@ -690,6 +690,39 @@ public class ChatRoomService {
     }
 
     /**
+     * 내가 보낸 메시지를 지운다 — 이슈 #197.
+     *
+     * <p><b>행은 남고 본문만 비운다.</b> 행을 지우면 그 {@code roomSeq} 가 델타 폴링에서 빠져 읽음
+     * 커서가 그 번호를 못 넘는다(ADR-0011, {@code ChatEndpointsIntegrationTest} 의 톰스톤 검사).
+     * 그리고 탈퇴 정책(privacy_ko.md §3)이 이미 "보낸 메시지는 받은 사람의 대화방에 남는다" 는
+     * 모양을 정했다 — 삭제도 그 모양이다: 자리는 남고 내용은 사라진다. 앱은 {@code deletedAt} 을
+     * 보고 "삭제된 메시지예요" 를 그린다.
+     *
+     * <p><b>보낸 사람만.</b> 방장도 남의 메시지는 못 지운다 — 그건 삭제가 아니라 관리이고,
+     * 신고(#82)가 그 자리다. 이미 지워진 것은 그대로 204 다 — 두 번 눌러도, 재시도해도 같다.
+     * 첫 삭제 시각을 덮지 않는다.
+     *
+     * <p>신고 사본({@code report_snapshot})은 이 삭제와 무관하게 남는다 — 신고를 지우려고
+     * 메시지를 지우는 길은 없다.
+     *
+     * @throws ResponseStatusException 404 없는 메시지 · 403 보낸 사람이 아님
+     */
+    @Transactional
+    public void deleteMessage(long messageId, long userId) {
+        ChatMessage message = messages.findById(messageId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "메시지를 찾을 수 없습니다."));
+        if (!message.getSenderUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "보낸 사람만 지울 수 있습니다.");
+        }
+        if (message.getDeletedAt() != null) {
+            return;
+        }
+        message.setBody("");
+        message.setDeletedAt(ChatTime.nowUtc(clock));
+        messages.save(message);
+    }
+
+    /**
      * {@code afterSeq} 다음 메시지들 — {@code room_seq} 오름차순.
      *
      * <p>이 이슈에서는 완료 조건 3·4 를 확인하는 데 쓰고, HTTP 로 나가는 것은 #79 다.

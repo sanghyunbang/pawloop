@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -61,6 +62,10 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
 
     /** 이메일이 UNIQUE 라 테스트끼리 겹치지 않게 번호를 준다. */
     private static final AtomicLong ACCOUNT_SEQUENCE = new AtomicLong();
+
+    /** 삭제 검사(#197)가 DB 의 본문·시각을 직접 본다 — 응답에서만 가리면 다른 경로로 샌다. */
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Autowired
     private MockMvc mockMvc;
@@ -503,6 +508,93 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ─────────────────── 메시지 삭제 (이슈 #197) ───────────────────
+
+    @Test
+    @DisplayName("내 메시지를 지우면 204 고, 자리는 남고 본문만 빈다 — 델타에 톰스톤으로 계속 온다")
+    void deletingMyMessageLeavesATombstone() throws Exception {
+        Account owner = account("지우는 사람");
+        Account mate = account("보는 사람");
+        Room room = roomWith(owner, mate);
+        send(owner, room.id(), "남는 말", "del-1").andExpect(status().isCreated());
+        long messageId = body(send(owner, room.id(), "지울 말", "del-2").andExpect(status().isCreated()))
+                .path("id").asLong();
+        send(owner, room.id(), "그 뒤의 말", "del-3").andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/chat/messages/{messageId}", messageId)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNoContent());
+
+        JsonNode delta = messages(mate, room.id(), 0L, null);
+        assertThat(seqs(delta))
+                .as("행을 지우면 roomSeq 2 가 사라져 읽음 커서가 그 번호를 못 넘는다")
+                .containsExactly(1L, 2L, 3L);
+        JsonNode deleted = delta.path("items").get(1);
+        assertThat(deleted.path("deletedAt").isNull()).as("앱이 이걸 보고 자리를 가린다").isFalse();
+        assertThat(deleted.path("body").asText()).as("본문은 서버에서도 사라진다 — 가리기가 아니다").isEmpty();
+        assertThat(jdbc.queryForObject("SELECT body FROM chat_message WHERE id = ?", String.class, messageId))
+                .as("DB 의 본문도 빈다 — 응답에서만 가리면 다른 경로로 샌다")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("남의 메시지는 방장이라도 못 지운다 — 403 이고 한 글자도 안 바뀐다")
+    void othersCannotDeleteEvenTheOwner() throws Exception {
+        Account owner = account("방장");
+        Account mate = account("멤버");
+        Account outsider = account("남");
+        Room room = roomWith(owner, mate);
+        long messageId = body(send(mate, room.id(), "멤버의 말", "keep-1").andExpect(status().isCreated()))
+                .path("id").asLong();
+
+        mockMvc.perform(delete("/api/chat/messages/{messageId}", messageId)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/chat/messages/{messageId}", messageId)
+                        .header("Authorization", "Bearer " + outsider.token()))
+                .andExpect(status().isForbidden());
+
+        assertThat(jdbc.queryForObject("SELECT body FROM chat_message WHERE id = ?", String.class, messageId))
+                .isEqualTo("멤버의 말");
+        assertThat(jdbc.queryForObject("SELECT deleted_at FROM chat_message WHERE id = ?", String.class, messageId))
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("두 번 지워도 204 고 첫 삭제 시각이 그대로다 — 재시도가 안전하다")
+    void deletingTwiceIsIdempotent() throws Exception {
+        Account owner = account("두 번 누르는 사람");
+        Room room = roomWith(owner);
+        long messageId = body(send(owner, room.id(), "지울 말", "twice-1").andExpect(status().isCreated()))
+                .path("id").asLong();
+
+        mockMvc.perform(delete("/api/chat/messages/{messageId}", messageId)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNoContent());
+        String firstDeletedAt = jdbc.queryForObject(
+                "SELECT deleted_at FROM chat_message WHERE id = ?", String.class, messageId);
+        Thread.sleep(20);
+        mockMvc.perform(delete("/api/chat/messages/{messageId}", messageId)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNoContent());
+
+        assertThat(jdbc.queryForObject("SELECT deleted_at FROM chat_message WHERE id = ?", String.class, messageId))
+                .as("두 번째 삭제가 시각을 덮으면 '언제 지웠나' 가 거짓이 된다")
+                .isEqualTo(firstDeletedAt);
+    }
+
+    @Test
+    @DisplayName("없는 메시지는 404 고, 토큰이 없으면 401 이다")
+    void deleteOfUnknownOrUnauthenticated() throws Exception {
+        Account owner = account("아무나");
+
+        mockMvc.perform(delete("/api/chat/messages/{messageId}", 999_999_999L)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/chat/messages/{messageId}", 1L))
+                .andExpect(status().isUnauthorized());
     }
 
     // ─────────────────── 시각의 오프셋 (이슈 #248) ───────────────────

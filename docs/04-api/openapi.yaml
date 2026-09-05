@@ -2134,19 +2134,24 @@ paths:
         required: true
         schema: { type: integer, format: int64 }
     delete:
-      x-status: planned
-      x-status-note: |
-        메시지 삭제는 아직 없다. 지운 자리를 목록·커서에서 어떻게 다루는지가 먼저 정해져야 한다.
       tags: [Chat]
-      summary: 메시지 삭제
+      summary: 내 메시지 삭제
       description: |
-        **소프트 삭제**입니다(`deletedAt`). 행을 실제로 지우면 뺀 자리가 `roomSeq` 빈틈이 되어
-        델타 폴링이 깨집니다.
+        **소프트 삭제**입니다(#197). 행은 남고 본문만 비며 `deletedAt` 이 찍힙니다 — 행을 실제로
+        지우면 뺀 자리가 `roomSeq` 빈틈이 되어 델타 폴링과 읽음 커서가 깨집니다. 앱은 `deletedAt`
+        을 보고 "삭제된 메시지" 자리를 그립니다.
+
+        **보낸 사람만** 지울 수 있습니다. 방장도 남의 메시지는 못 지웁니다 — 그건 신고(`/reports`)의
+        자리입니다. 이미 지워진 메시지에 다시 부르면 그대로 **204** 입니다(첫 삭제 시각을 덮지 않음).
+        신고 사본(`report_snapshot`)은 이 삭제와 무관하게 남습니다.
+
+        rate limit 표에 없습니다(429 없음) — 초대 회수와 같은 판단으로, 반복해도 새로 생기는 것이
+        없습니다.
       responses:
-        '204': { description: 삭제됨 }
+        '204': { description: 삭제됨 (이미 지워진 것도 같다) }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
 
   /api/chat/rooms/{roomId}/reports:
     parameters:

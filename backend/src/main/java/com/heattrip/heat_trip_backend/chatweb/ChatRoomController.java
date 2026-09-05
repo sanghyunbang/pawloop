@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -207,6 +208,19 @@ public class ChatRoomController {
         return ResponseEntity
                 .status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(ChatMessageResponse.of(result.message(), user.displayName()));
+    }
+
+    /**
+     * 내 메시지 삭제 — 이슈 #197. 소프트 삭제라 자리는 남는다({@code ChatRoomService#deleteMessage}).
+     *
+     * <p>경로가 방이 아니라 메시지 id 인 이유: 계약이 처음부터 그렇게 적어 두었고(2026-08-31,
+     * {@code x-status: planned}), 메시지 id 는 전역 유일이라 방을 따로 받을 필요가 없다.
+     * 한도 표에는 넣지 않는다 — 초대 회수와 같은 판단이다. 반복해도 새로 생기는 것이 없다.
+     */
+    @DeleteMapping("/messages/{messageId}")
+    public ResponseEntity<Void> deleteMessage(@CurrentUser User user, @PathVariable long messageId) {
+        chatRooms.deleteMessage(messageId, user.getId());
+        return ResponseEntity.noContent().build();
     }
 
     /**

@@ -151,6 +151,8 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         }
         // 회수(DELETE .../invites/{code})는 넣지 않는다. 자기 방의 코드를 죽이는 것뿐이라
         // 반복해도 새로 생기는 것이 없고, 유출 대응을 한도로 막으면 그게 더 나쁘다.
+        // 메시지 삭제(DELETE /api/chat/messages/{id}, #197)도 같은 판단이다 — 내 메시지의 본문을
+        // 비우는 것뿐이고, 두 번째부터는 아무것도 안 바뀐다(멱등).
         //
         // **참여 경로(`POST /api/chat/invites/{code}/join`)는 여전히 표에 없다 — 즉 무제한이다.**
         // #75 의 NOTE 가 "코드 추측 공격을 견디는지는 M2.6 의 rate limit 이슈에서 참여 경로에
