@@ -162,6 +162,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 목적 | 강아지 정보 수정 |
 | 필드 | 이름 · 견종 · 크기(`DogSize` 세그먼트: 소형/중형/대형) · 나이(개월, 숫자) · 중성화 토글 · 프로필 테두리 색(`kAvatarBorders`) |
 | 저장 | `_save()` → `kMyDog.value = copyWith(...)`. **세션 내 즉시 반영**(홈/프로필 갱신). 앱 재시작 시 초기값 복귀(미영속) |
+| 삭제 | 화면 아래 "프로필 지우기" → 확인("산책 기록은 그대로 남고 통계에도 계속 세요. 프로필은 되돌릴 수 없어요") → `DELETE /api/dogs/{dogId}`(소프트 삭제, #156) → 목록에서 빠지고 남은 아이가 선택된다 |
 | 데이터 모델 | `DogProfile{name, breed, size, ageMonths, neutered, avatarAsset}` + 파생 `ageLabel` |
 
 > 목표: `dog` 테이블(user_id FK) 연동. 현재는 로그인/유저 개념 없이 단일 반려견 전역 상태.

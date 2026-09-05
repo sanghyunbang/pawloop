@@ -20,6 +20,10 @@ import java.util.Optional;
  */
 public interface DogRepository extends JpaRepository<Dog, Long> {
 
+    // 세 쿼리 전부 `deletedAt is null` 을 건다(#156). 하나만 빠져도 지운 아이가 어딘가에서
+    // 되살아난다 — 목록에는 없는데 상세는 열리거나, 상세는 404 인데 산책은 저장되는 식으로.
+    // DogIntegrationTest 가 세 경로(목록·상세·소유권)를 각각 잰다.
+
     /**
      * 내 반려동물 목록. 등록순이다 — 앱이 첫 마리를 기본 선택으로 쓴다.
      *
@@ -30,6 +34,7 @@ public interface DogRepository extends JpaRepository<Dog, Long> {
             select d from Dog d
               join fetch d.user
              where d.user.id = :userId
+               and d.deletedAt is null
              order by d.id asc
             """)
     List<Dog> findMine(@Param("userId") long userId);
@@ -38,6 +43,7 @@ public interface DogRepository extends JpaRepository<Dog, Long> {
             select d from Dog d
               join fetch d.user
              where d.id = :dogId and d.user.id = :userId
+               and d.deletedAt is null
             """)
     Optional<Dog> findMineById(@Param("dogId") long dogId, @Param("userId") long userId);
 
@@ -45,6 +51,6 @@ public interface DogRepository extends JpaRepository<Dog, Long> {
      * 그 사용자의 반려동물인가. 산책 저장이 {@code dogId} 를 받을 때 쓴다 — 행 전체를
      * 끌어올 이유가 없다.
      */
-    @Query("select count(d) > 0 from Dog d where d.id = :dogId and d.user.id = :userId")
+    @Query("select count(d) > 0 from Dog d where d.id = :dogId and d.user.id = :userId and d.deletedAt is null")
     boolean isMine(@Param("dogId") long dogId, @Param("userId") long userId);
 }

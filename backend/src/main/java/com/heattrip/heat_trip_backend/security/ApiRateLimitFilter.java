@@ -197,6 +197,11 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && "/api/dogs".equals(path)) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
+        // 삭제(#156)도 같은 버킷이다. 소프트 삭제라 지운 행은 상한(MAX_PETS)에 안 세므로,
+        // 등록·삭제를 반복하면 행이 계속 쌓인다 — 등록과 같은 속도 한도가 그 자리를 막는다.
+        if ("DELETE".equals(method) && path.matches("^/api/dogs/\\d+$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         // ── 산책 쓰기 (이슈 #145) ──────────────────────────────
         //
         // group-write 에 얹지 않고 버킷을 새로 만든다. 산책 저장은 **오프라인 큐가 한 번에

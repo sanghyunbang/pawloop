@@ -11,6 +11,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -84,5 +86,15 @@ public class DogController {
     @GetMapping("/{dogId}")
     public DogResponse detail(@CurrentUser User user, @PathVariable long dogId) {
         return dogService.one(user.getId(), dogId);
+    }
+
+    /**
+     * 소프트 삭제, 204. 남의 것·없는 것·이미 지운 것은 같은 404 — {@code DogService.delete}.
+     * 한도 표에서는 등록과 같은 {@code group-write} 다.
+     */
+    @DeleteMapping("/{dogId}")
+    public ResponseEntity<Void> delete(@CurrentUser User user, @PathVariable long dogId) {
+        dogService.delete(user.getId(), dogId);
+        return ResponseEntity.noContent().build();
     }
 }

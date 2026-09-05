@@ -450,6 +450,12 @@ class WalkRepository {
     return walk;
   }
 
+  /// 반려동물 프로필을 지운다 — 서버는 **소프트 삭제**라 산책 기록은 남는다(#156).
+  /// 성공은 본문 없는 204. 이미 지웠거나 내 것이 아니면 404 → [WalkFailureKind.notFound].
+  Future<void> deletePet(int dogId) async {
+    await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/dogs/$dogId')));
+  }
+
   Future<void> deleteWalk(int walkId) async {
     await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/walks/$walkId')));
   }

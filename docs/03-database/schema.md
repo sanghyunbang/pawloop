@@ -125,6 +125,7 @@ CREATE TABLE dog (
   neutered BOOLEAN     NOT NULL DEFAULT FALSE,
   avatar   VARCHAR(255) NULL COMMENT '아바타 에셋/이미지 경로',
   created_at DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at DATETIME(6) NULL COMMENT '소프트 삭제 시각(UTC). NULL 이면 살아 있다 — #156',
   PRIMARY KEY (id),
   KEY idx_dog_user (user_id),
   CONSTRAINT fk_dog_user FOREIGN KEY (user_id)
@@ -145,6 +146,9 @@ CREATE TABLE dog (
 | `birth` | `DATE` | NULL | 생일(나이 산출) |
 | `neutered` | `BOOLEAN` | NOT NULL 기본 FALSE | 중성화 여부 |
 | `avatar` | `VARCHAR(255)` | NULL | 아바타 경로 |
+| `deleted_at` | `DATETIME(6)` | NULL | **소프트 삭제**(#156). `DELETE /api/dogs/{dogId}` 가 찍고 행은 남긴다. 모든 조회가 `deleted_at IS NULL` 을 건다 |
+
+> **삭제는 소프트 삭제다 (#156).** `walk.fk_walk_dog` 가 `CASCADE` 라 행을 지우면 그 아이의 산책 이력 전부가 조용히 함께 사라진다. FK 를 `RESTRICT` 로 바꾸면 탈퇴(`users` 하드 삭제)가 막힌다. 그래서 안전은 FK 가 아니라 `deleted_at` 으로 산다 — `DogRepository` 의 세 쿼리 전부가 `deleted_at IS NULL` 을 걸고, 산책 목록·통계는 이 컬럼을 보지 않는다("계속 센다"). 지운 아이는 상한(20마리)에 세지 않는다. 이미 있는 DB 는 `23_dog_deleted_at.sql`.
 
 ---
 
