@@ -34,14 +34,14 @@ import java.util.Optional;
  * <p><b>만료가 없다.</b> {@code fetchedAt} 은 "갱신을 시도해도 되는가" 만 정한다.
  * 만료를 두면 KTO 가 며칠 아플 때 지도가 <b>영구히 빈 화면</b>이 된다.
  *
- * <h2>첫 요청이 비싸다 — 알고 넣는다</h2>
- * <p>한 벌이 없거나 낡았을 때, <b>그 요청을 한 사람이</b> 10번의 KTO 호출을 기다린다
- * (10~20초). {@link UpstreamGate} 가 단일화하므로 그 사이 다른 사람은 기다리지 않고
- * 옛 한 벌을 받지만, 처음 한 사람은 기다린다.
+ * <h2>첫 요청이 비쌌다 — 새벽에 미리 받는다</h2>
+ * <p>한 벌이 없거나 낡았을 때, <b>그 요청을 한 사람이</b> 10번의 KTO 호출을 기다렸다
+ * (실측 16초). {@link UpstreamGate} 가 단일화하므로 그 사이 다른 사람은 옛 한 벌을 바로
+ * 받지만, 처음 한 사람은 기다렸다 — 24시간마다 한 명씩, 매일.
  *
- * <p>{@code nearby} 도 같은 모양이고(한 사람이 셀 하나를 데운다) 다만 이쪽은 10배 길다.
- * 부팅 시 예열이나 스케줄 갱신으로 없앨 수 있는데, 그건 이 이슈의 범위가 아니라
- * <b>별건으로 남긴다</b> — 여기서 붙이면 테스트·CI 가 뜰 때마다 KTO 를 부른다.
+ * <p>그래서 {@link PlaceCatalogWarmupScheduler} 가 매일 새벽에 {@link #warmUp()} 을 부른다
+ * (#279). 서버가 켜질 때 받는 것으로는 안 된다 — 그건 배포한 날만 해결하고, 서버가 며칠
+ * 안 꺼지면 다음 날부터 또 첫 사람이 기다린다. 테스트·CI 에서는 프로퍼티로 꺼져 있다.
  */
 @Service
 public class PlaceCatalogService {
@@ -79,6 +79,25 @@ public class PlaceCatalogService {
         this.gate = gate;
         this.properties = properties;
         this.clock = clock;
+    }
+
+    /**
+     * 사용자가 오기 전에 한 벌을 데운다 — {@link PlaceCatalogWarmupScheduler} 가 새벽에 부른다.
+     *
+     * <p>{@link #catalog()} 와 같은 길을 지난다. 낡지 않았으면 아무것도 안 하고, 낡았으면
+     * 받아서 저장한다. 같은 예산 풀({@link KtoPool#CATALOG})과 같은 백오프를 쓴다 — 예열이
+     * 사용자 요청보다 특권을 갖지 않는다.
+     *
+     * <p>결과를 <b>로그로만</b> 남긴다. 실패해도 던지지 않는다 — 스케줄 잡이 예외로 죽으면
+     * 다음 날 아무도 그 사실을 모른다.
+     */
+    public void warmUp() {
+        Optional<PlaceCatalog> row = catalog();
+        if (row.isEmpty()) {
+            log.warn("카탈로그 예열 실패 — 한 벌이 없다. 다음 사용자 요청이 다시 시도한다.");
+            return;
+        }
+        log.info("카탈로그 예열 — {}곳, fetchedAt={}", row.get().getItemCount(), row.get().getFetchedAt());
     }
 
     /**
