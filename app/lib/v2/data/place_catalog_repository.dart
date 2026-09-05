@@ -99,10 +99,11 @@ class PlaceCatalogRepository {
   ///
   /// [failureBackoff] 는 산책 화면의 자동 재호출을 막으려는 것이지 사람의 손을 막으려는
   /// 것이 아니다. 버튼을 눌렀는데 5분을 기다리라고 하면 버튼이 거짓말이 된다.
-  Future<void> retry() {
-    _lastFailure = null;
-    return _refresh();
-  }
+  ///
+  /// 백오프 판정은 [all] 에만 있고 [_refresh] 에는 없다 — 그래서 여기서 따로 지울 것이
+  /// 없다. 처음에는 `_lastFailure = null` 을 앞에 두었는데, 그 줄을 지워도 검사가
+  /// 초록이었다(실측). 있으나 없으나 같은 줄은 없는 편이 읽는 사람에게 정직하다.
+  Future<void> retry() => _refresh();
 
   /// 전국 한 벌. 메모리 → 파일 → 네트워크 순으로 찾는다.
   Future<List<PetPlace>> all() async {
