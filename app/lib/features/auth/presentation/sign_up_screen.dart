@@ -1,4 +1,5 @@
 // lib/features/auth/presentation/sign_up_screen.dart
+import 'package:heat_trip_flutter/v2/screens/settings/legal_document_screen.dart' show LegalDocument;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/app/auth_redirect.dart';
@@ -17,7 +18,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
   static const Color _startBg = Color(0xFFF8F2E7);
   static const Color _fieldFill = Color(0xFFF2F4F7);
   static const Color _accent = Color(0xFFEB9C64);
-  static const String kTermsVersion = 'v1.0';
+  // 문서별 실제 버전. 예전에는 'v1.0' 하나로 셋을 뭉갰다 — 서버에 적히는 버전이
+  // 문서와 달랐다(#190). 지금 버전은 LegalDocument 한 곳에만 있다.
+  static String get _tosVersion => LegalDocument.terms.version;
+  static String get _privacyVersion => LegalDocument.privacy.version;
+  static String get _marketingVersion => LegalDocument.marketing.version;
 
   // ===== Form / State =====
   final _formKey = GlobalKey<FormState>();
@@ -167,9 +172,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       agreeTos: _agreeTos,
       agreePrivacy: _agreePrivacy,
       agreeMarketing: _agreeMarketing,
-      tosVersion: kTermsVersion,
-      privacyVersion: kTermsVersion,
-      marketingVersion: _agreeMarketing ? kTermsVersion : null,
+      tosVersion: _tosVersion,
+      privacyVersion: _privacyVersion,
+      marketingVersion: _agreeMarketing ? _marketingVersion : null,
     );
 
     // (선택) 디버그: 실제 전송 바디 확인

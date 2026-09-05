@@ -19,6 +19,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/v2/data/consent_gate.dart';
+import 'package:heat_trip_flutter/v2/data/consent_repository.dart';
+import 'package:heat_trip_flutter/v2/screens/settings/legal_document_screen.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
@@ -95,6 +97,16 @@ _FakeTokenStore _install(
     ),
   );
   return store;
+}
+
+/// 서버를 못 부르는 상황. 동의 게이트가 캐시로 떨어지게 한다.
+class _DeadConsentServer implements ConsentRepository {
+  @override
+  Future<List<ServerConsent>> fetch() async => throw const ConsentFailure();
+  @override
+  Future<List<ServerConsent>> record(List<ConsentEntry> entries) async => throw const ConsentFailure();
+  @override
+  dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
 }
 
 void main() {
@@ -302,14 +314,21 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       _install((req) async => http.Response('', 204));
       AuthState.signInForTest(const AuthUser(id: 11, nickname: '탈퇴자'));
-      await const ConsentGate().markAgreed(11, marketing: true);
-      expect(await const ConsentGate().hasAgreed(11), isTrue);
+      // 동의는 서버가 정본이고 기기는 캐시다(#190). 여기서 재는 것은 "탈퇴가 **캐시**를
+      // 지우는가" 이므로, 캐시를 직접 심고 서버가 죽은 게이트로 읽는다 — 서버가 살아
+      // 있으면 캐시와 무관하게 서버 답을 쓰기 때문이다.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(ConsentGate.keyFor(11),
+          '{"TERMS":"${LegalDocument.terms.version}","PRIVACY":"${LegalDocument.privacy.version}","LOCATION":"${LegalDocument.location.version}"}');
+      await prefs.setBool(ConsentGate.marketingKeyFor(11), true);
+      final offline = ConsentGate(repository: _DeadConsentServer());
+      expect(await offline.hasAgreed(11), isTrue);
 
       await AuthState.clearLocalSession();
 
-      expect(await const ConsentGate().hasAgreed(11), isFalse,
+      expect(await offline.hasAgreed(11), isFalse,
           reason: '남으면 그 사람은 약관을 본 적이 없는데 동의한 것이 된다');
-      expect(await const ConsentGate().marketingOptIn(11), isFalse);
+      expect(await offline.marketingOptIn(11), isFalse);
     });
 
     test('상태도 함께 내린다 — 이게 없으면 로그인 화면이 홈으로 되튕긴다', () async {
