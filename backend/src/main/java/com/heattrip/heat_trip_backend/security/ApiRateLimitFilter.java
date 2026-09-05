@@ -143,6 +143,12 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.matches("^/api/chat/rooms/\\d+/invites$")) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
+        // 약관 동의(#190). 요청 한 건이 행을 만들고, 앱이 동의 화면에서 한 번 부른다 —
+        // POST /api/dogs 와 같은 판단으로 버킷을 새로 만들지 않는다. GET 은 로그인 때 한 번이라
+        // 다른 인증 읽기와 같이 버킷이 없다.
+        if ("PUT".equals(method) && "/api/consents".equals(path)) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         // 회수(DELETE .../invites/{code})는 넣지 않는다. 자기 방의 코드를 죽이는 것뿐이라
         // 반복해도 새로 생기는 것이 없고, 유출 대응을 한도로 막으면 그게 더 나쁘다.
         //

@@ -645,6 +645,18 @@ CREATE TABLE `user_block` (
   UNIQUE KEY `uq_user_block` (`blocker_user_id`,`blocked_user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `user_consent` (
+  `agreed` bit(1) NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `kind` varchar(16) NOT NULL,
+  `version` varchar(16) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_consent_user` (`user_id`,`id`),
+  CONSTRAINT `chk_user_consent_kind` CHECK ((`kind` in (_utf8mb4'TERMS',_utf8mb4'PRIVACY',_utf8mb4'LOCATION',_utf8mb4'MARKETING')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `users` (
   `age` int DEFAULT NULL,
   `agree_marketing` bit(1) DEFAULT NULL,
