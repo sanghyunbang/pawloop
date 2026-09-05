@@ -34,6 +34,5 @@ public class UpdateProfileRequest {
     private String travelType;  // null 이면 미수정
     private String imageUrl;    // null 이면 미수정 (S3 URL)
 
-    // ✅ 선택: 마케팅 동의 변경
-    private Boolean agreeMarketing;
+    // 마케팅 동의 변경은 여기 없다 — PUT /api/consents 에 MARKETING 행을 적는다(#190).
 }

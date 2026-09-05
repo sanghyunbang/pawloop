@@ -186,7 +186,7 @@ class NicknameLimitIntegrationTest extends AbstractMySqlIntegrationTest {
         long serial = SEQUENCE.incrementAndGet();
         String body = """
                 {"email":"nick-%d-%d@example.com","password":"password123",
-                 "nickname":"%s","name":"%s","agreeTos":true,"agreePrivacy":true}
+                 "nickname":"%s","name":"%s"}
                 """.formatted(System.nanoTime(), serial, nickname, name);
         return mockMvc.perform(post("/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)

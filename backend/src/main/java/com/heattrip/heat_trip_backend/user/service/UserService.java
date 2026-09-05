@@ -52,12 +52,6 @@ public class UserService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.");
         }
 
-        // ✅ 필수 동의 체크 (나이와 무관)
-        if (Boolean.FALSE.equals(request.getAgreeTos()) || Boolean.FALSE.equals(request.getAgreePrivacy())
-            || request.getAgreeTos() == null || request.getAgreePrivacy() == null) {
-            throw new IllegalArgumentException("필수 동의(이용약관/개인정보)에 동의해 주세요.");
-        }
-
         // 안 보내면 null 로 저장한다 — 계약(openapi.yaml 의 User.gender)이 null 을 허용한다.
         // 예전에는 switch 의 default 가 OTHER 라, 미지정을 '기타'로 조용히 바꿔 저장했다.
         // 그리고 safeLower(null) 이 null 을 그대로 돌려줘 switch 가 NPE 를 냈다 — 이메일
@@ -67,10 +61,6 @@ public class UserService {
 
         // 빌더가 값을 넣으면 @PrePersist 가드를 비켜 간다 — UTC 로 눕힌다 (#248).
         LocalDateTime now = UserTime.nowUtc();
-        String tosVer = nvl(request.getTosVersion(), "v1.0");
-        String prvVer = nvl(request.getPrivacyVersion(), "v1.0");
-        String mktVer = nvl(request.getMarketingVersion(), "v1.0");
-
         User user = User.builder()
                 // 이메일/비밀번호 가입은 provider = "local". 소셜 가입자와 같은 표에 살면서도
                 // 계약(openapi.yaml)의 User.provider 로 구분된다. social_id 는 null 이다. (이슈 #7)
@@ -83,17 +73,6 @@ public class UserService {
                 .gender(gender)
                 .ageGroup(ageGroup)
 
-                .agreeTos(true)
-                .agreePrivacy(true)
-                .agreeMarketing(Boolean.TRUE.equals(request.getAgreeMarketing()))
-
-                .tosVersion(tosVer)
-                .privacyVersion(prvVer)
-                .marketingVersion(Boolean.TRUE.equals(request.getAgreeMarketing()) ? mktVer : null)
-
-                .tosAgreedAt(now)
-                .privacyAgreedAt(now)
-                .marketingAgreedAt(Boolean.TRUE.equals(request.getAgreeMarketing()) ? now : null)
 
                 .createdAt(now)
                 .build();
@@ -187,16 +166,6 @@ public class UserService {
         }
         if (req.getImageUrl() != null) {
             u.setImageUrl(req.getImageUrl());
-        }
-
-        // ✅ 선택: 마케팅 동의 토글 처리
-        if (req.getAgreeMarketing() != null) {
-            boolean newVal = req.getAgreeMarketing();
-            if (u.getAgreeMarketing() == null || u.getAgreeMarketing() != newVal) {
-                u.setAgreeMarketing(newVal);
-                u.setMarketingVersion(newVal ? nvl(u.getMarketingVersion(), "v1.0") : null);
-                u.setMarketingAgreedAt(newVal ? UserTime.nowUtc() : null);
-            }
         }
 
         // @PreUpdate가 updatedAt 갱신
@@ -298,5 +267,4 @@ public class UserService {
         };
     }
 
-    private static String nvl(String s, String d) { return (s == null || s.isBlank()) ? d : s; }
 }

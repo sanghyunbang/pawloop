@@ -1,9 +1,7 @@
 // lib/features/auth/presentation/sign_up_screen.dart
-import 'package:heat_trip_flutter/v2/screens/settings/legal_document_screen.dart' show LegalDocument;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/app/auth_redirect.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/register_request.dart';
 
@@ -18,11 +16,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   static const Color _startBg = Color(0xFFF8F2E7);
   static const Color _fieldFill = Color(0xFFF2F4F7);
   static const Color _accent = Color(0xFFEB9C64);
-  // 문서별 실제 버전. 예전에는 'v1.0' 하나로 셋을 뭉갰다 — 서버에 적히는 버전이
-  // 문서와 달랐다(#190). 지금 버전은 LegalDocument 한 곳에만 있다.
-  static String get _tosVersion => LegalDocument.terms.version;
-  static String get _privacyVersion => LegalDocument.privacy.version;
-  static String get _marketingVersion => LegalDocument.marketing.version;
+  // 약관 동의는 이 화면에 없다. 가입 뒤 첫 로그인에서 동의 화면(ConsentScreen)이 한 번
+  // 받고 서버(user_consent)에 적는다(#190). 예전에는 여기서도 받고 로그인 뒤에 또 받았다 —
+  // 같은 사람에게 두 번 묻는 화면이었다.
 
   // ===== Form / State =====
   final _formKey = GlobalKey<FormState>();
@@ -37,12 +33,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _isLoading = false;
   bool _obscurePw = true;
 
-  // Consents
-  bool _agreeAll = false;
-  bool _agreeTos = false; // 필수
-  bool _agreePrivacy = false; // 필수
-  bool _agreeMarketing = false; // 선택
-
   final _authRepository = AuthRepositoryImpl();
 
   // ===== Lifecycle =====
@@ -56,106 +46,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   // ===== Helpers =====
-  void _toggleAgreeAll(bool? v) {
-    final next = v ?? false;
-    setState(() {
-      _agreeAll = next;
-      _agreeTos = next;
-      _agreePrivacy = next;
-      _agreeMarketing = next;
-    });
-  }
-
-  void _syncAgreeAllFromChildren() {
-    setState(() {
-      _agreeAll = _agreeTos && _agreePrivacy && _agreeMarketing;
-    });
-  }
-
-  Future<void> _openTermsFromAsset(String title, String assetPath) async {
-    final body = await rootBundle.loadString(assetPath);
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        maxChildSize: 0.9,
-        minChildSize: 0.4,
-        builder: (context, controller) => Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.black12,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: controller,
-                  child: Text(
-                    body,
-                    style: const TextStyle(
-                      fontSize: 13.5,
-                      height: 1.45,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accent,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('확인'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _submitForm() async {
-    // 프런트 검증: 필수 동의 2개
-    if (!_agreeTos || !_agreePrivacy) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('필수 동의 항목(이용약관/개인정보)을 확인해 주세요.')),
-      );
-      return;
-    }
-
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
@@ -167,14 +58,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       nickname: _nicknameController.text.trim(),
       name: _nameController.text.trim(),
       gender: _gender, // 'male' | 'female' | 'other'
-      // 아래 필드가 RegisterRequest에 반드시 존재해야 함
       ageGroup: _ageGroup, // 'over14' | 'under14'
-      agreeTos: _agreeTos,
-      agreePrivacy: _agreePrivacy,
-      agreeMarketing: _agreeMarketing,
-      tosVersion: _tosVersion,
-      privacyVersion: _privacyVersion,
-      marketingVersion: _agreeMarketing ? _marketingVersion : null,
     );
 
     // (선택) 디버그: 실제 전송 바디 확인
@@ -411,74 +295,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                               const SizedBox(height: 20),
 
-                              // 약관 동의
-                              _label('약관 동의'),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF9FAFB),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: const Color(0xFFE5E7EB),
-                                  ),
-                                ),
-                                child: Column(
-                                  children: [
-                                    CheckboxListTile(
-                                      value: _agreeAll,
-                                      onChanged: _toggleAgreeAll,
-                                      title: const Text(
-                                        '전체 동의',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      controlAffinity:
-                                          ListTileControlAffinity.leading,
-                                    ),
-                                    const Divider(height: 1),
-
-                                    _consentRow(
-                                      value: _agreeTos,
-                                      onChanged: (v) {
-                                        setState(() => _agreeTos = v ?? false);
-                                        _syncAgreeAllFromChildren();
-                                      },
-                                      label: '이용약관 동의 (필수)',
-                                      onView: () => _openTermsFromAsset(
-                                        '이용약관',
-                                        'assets/terms/terms_ko.md',
-                                      ),
-                                    ),
-                                    _consentRow(
-                                      value: _agreePrivacy,
-                                      onChanged: (v) {
-                                        setState(
-                                          () => _agreePrivacy = v ?? false,
-                                        );
-                                        _syncAgreeAllFromChildren();
-                                      },
-                                      label: '개인정보 처리방침 동의 (필수)',
-                                      onView: () => _openTermsFromAsset(
-                                        '개인정보처리방침',
-                                        'assets/terms/privacy_ko.md',
-                                      ),
-                                    ),
-                                    _consentRow(
-                                      value: _agreeMarketing,
-                                      onChanged: (v) {
-                                        setState(
-                                          () => _agreeMarketing = v ?? false,
-                                        );
-                                        _syncAgreeAllFromChildren();
-                                      },
-                                      label: '마케팅 정보 수신 동의 (선택)',
-                                      onView: () => _openTermsFromAsset(
-                                        '마케팅 정보 수신 동의',
-                                        'assets/terms/marketing_ko.md',
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              const Text(
+                                '약관 동의는 가입 뒤 첫 로그인에서 받아요.',
+                                style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                               ),
 
                               const SizedBox(height: 20),
@@ -588,32 +407,4 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  Widget _consentRow({
-    required bool value,
-    required ValueChanged<bool?> onChanged,
-    required String label,
-    VoidCallback? onView,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(
-        children: [
-          Checkbox(
-            value: value,
-            onChanged: onChanged,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          Expanded(child: Text(label)),
-          if (onView != null)
-            TextButton(
-              onPressed: onView,
-              child: const Text(
-                '보기',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }

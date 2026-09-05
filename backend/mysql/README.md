@@ -45,6 +45,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\18_place_catalog.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\19_user_consent.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\20_drop_chat_report.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\21_users_drop_consent_columns.sql
 ```
 
 | 파일 | 무엇을 |
@@ -69,6 +70,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `18_place_catalog.sql` | 전국 반려동반 장소 **한 벌** — `place_catalog` 생성. **행이 하나입니다** (`PRIMARY KEY (id)` + `CHECK (id = 1)`) — `place_cell` 이 좌표를 격자로 접은 키를 갖는 것과 달리 이 표에는 키가 없습니다. 그래서 **요청에 좌표도 지역도 실려 오지 않습니다**(A안 빌드가 쓰는 길). FK 0개 · `payload` 는 응답 본문 그대로인 `LONGTEXT`(2.83MB, 9,684곳 — 실측 2026-09-04) · `etag` 는 그 내용의 해시라 KTO 데이터가 안 바뀐 날은 304 로 끝납니다. **10 이 먼저인 편이 낫습니다** — 이 표를 채우는 코드가 `pet_place_detail` 에 허용목록을 함께 적습니다 (이슈 #273 · #235 A4) |
 | `19_user_consent.sql` | 약관 동의의 **이력** — `user_consent` 생성. **덧붙이기만 합니다** — 동의도 철회도 새 행이고 "지금 상태" 는 계정·문서별 마지막 행입니다. `users` 의 `agree_*` 아홉 컬럼은 덮어쓰는 칸이라 철회 시각이 사라지는데, 위치정보법 제24조가 철회 **전** 제공분은 그대로라 하므로 그 경계가 남아야 합니다. **FK 0개** — `report` 와 같은 이유로 탈퇴가 증빙을 지우면 안 됩니다. `kind` CHECK 넷 · `(user_id, id)` 인덱스. 서버는 문서 버전을 모릅니다 — 앱이 보낸 문자열을 그대로 적습니다 (이슈 #190 · ADR-0020) |
 | `20_drop_chat_report.sql` | 옛 채팅 신고 표 둘(`chat_report`·`chat_reported_message`)을 **지웁니다** — #281. 채팅 신고는 #254 부터 `report`·`report_snapshot` 에 적혀서 두 표에는 아무것도 안 씁니다. **행이 하나라도 있으면 한 글자도 안 바꾸고 멈춥니다** — 신고는 다시 만들 수 없는 기록이라 이관 방법은 사람이 정합니다. **순서가 반대입니다** — 새 앱(엔티티가 사라진 것)을 먼저 배포하고 그 다음 이 스크립트를 돌립니다. 새 신고 표가 없으면 시작하지 않습니다. 되돌리는 SQL 은 없습니다 — 표만 되살려도 읽을 코드가 없고, 행은 어차피 0이었습니다. |
+| `21_users_drop_consent_columns.sql` | `users` 의 옛 동의 컬럼 아홉(`agree_*` · `*_version` · `*_agreed_at`)을 **`user_consent` 로 옮긴 뒤 지웁니다** — #190 후속. 동의한 사람의 버전·시각이 그대로 옮겨지고(버전이 비면 옛 기본값 `v1.0`, 시각이 비면 가입 시각), 동의 안 한 칸은 안 옮깁니다. 이미 있는 행은 다시 안 만듭니다. **순서가 반대입니다** — 새 앱을 먼저 배포하고 돌립니다. `user_consent` 가 없으면(19 미실행) 시작하지 않고, 컬럼이 일부만 남아 있어도 멈춥니다. 되돌리는 SQL 은 헤더에 있지만 값은 `user_consent` 에서 다시 채워야 합니다. |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
