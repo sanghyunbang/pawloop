@@ -197,6 +197,7 @@ CREATE TABLE `dog` (
   `birth` date DEFAULT NULL,
   `neutered` bit(1) NOT NULL DEFAULT b'0',
   `created_at` datetime(6) NOT NULL,
+  `deleted_at` datetime(6) DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `user_id` bigint NOT NULL,
   `size` varchar(10) NOT NULL DEFAULT 'small',

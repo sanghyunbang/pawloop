@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_tokens.dart';
 import '../theme/themes.dart';
+import '../data/pet_sync.dart';
+import '../data/walk_repository.dart' show WalkFailure, WalkFailureKindX;
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 
@@ -14,7 +16,10 @@ class EditScreen extends StatefulWidget {
   /// 생기지 않는다.
   final DogProfile pet;
 
-  const EditScreen({super.key, required this.pet});
+  /// 테스트가 가짜 서버를 꽂는 자리. 운영 경로에서는 null 이다.
+  final PetSync? sync;
+
+  const EditScreen({super.key, required this.pet, this.sync});
   @override
   State<EditScreen> createState() => _EditScreenState();
 }
@@ -33,6 +38,9 @@ class _EditScreenState extends State<EditScreen> {
     colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)],
   );
   static const _coral = Color(0xFFFF7A59);
+
+  late final PetSync _sync = widget.sync ?? PetSync();
+  bool _deleting = false;
 
   @override
   void initState() {
@@ -86,6 +94,58 @@ class _EditScreenState extends State<EditScreen> {
     Navigator.of(context).maybePop();
   }
 
+  /// 프로필 지우기 — 서버는 소프트 삭제다(#156). 산책 기록은 남고 통계에도 계속 센다.
+  ///
+  /// 되살리기가 없어서 확인 문구가 그 두 가지를 분명히 말한다: 기록은 남는다, 프로필은
+  /// 못 되돌린다. 실패하면 목록을 건드리지 않고 이유만 보여 준다.
+  Future<void> _confirmAndDelete() async {
+    if (_deleting) return;
+    final pet = widget.pet;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFFFCFAFF),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          '${pet.name} 프로필을 지울까요?',
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
+        ),
+        content: const Text(
+          '산책 기록은 그대로 남고 통계에도 계속 세요. 프로필은 되돌릴 수 없어요.',
+          style: TextStyle(fontSize: 13.5, color: T.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('취소', style: TextStyle(color: T.textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text(
+              '지우기',
+              style: TextStyle(fontWeight: FontWeight.w800, color: _coral),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || ok != true) return;
+
+    setState(() => _deleting = true);
+    try {
+      await _sync.remove(pet);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${pet.name} 프로필을 지웠어요 · 산책 기록은 남아 있어요')),
+      );
+      Navigator.of(context).maybePop();
+    } on WalkFailure catch (e) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.kind.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -122,6 +182,8 @@ class _EditScreenState extends State<EditScreen> {
                     _neuterToggle(),
                     const SizedBox(height: 26),
                     _saveButton(),
+                    const SizedBox(height: 14),
+                    _deleteButton(),
                   ],
                 ),
               ),
@@ -531,6 +593,19 @@ class _EditScreenState extends State<EditScreen> {
               offset: Offset(0, 1),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// 저장 버튼 아래의 조용한 글자 버튼 — 눌러서 지워지는 것이 아니라 묻는다.
+  Widget _deleteButton() {
+    return Center(
+      child: TextButton(
+        onPressed: _deleting ? null : _confirmAndDelete,
+        child: const Text(
+          '프로필 지우기',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textMuted),
         ),
       ),
     );

@@ -364,6 +364,16 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("DELETE /api/dogs/{dogId} 는 group-write 버킷이다 — 소프트 삭제라 지운 행이 상한에 안 센다")
+    void dogDeletion_isRateLimited() throws Exception {
+        // 등록·삭제를 반복하면 행이 계속 쌓인다(#156). 등록과 같은 속도 한도가 그 자리를 막는다.
+        MockHttpServletResponse blocked = exhaust(
+                filterWithGroupWriteLimit(2), "DELETE", "/api/dogs/7", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
     @DisplayName("산책 쓰기 셋이 모두 walk-write 버킷이다 — 저장·삭제·회고 글")
     void walkWrites_shareTheSameBucket() throws Exception {
         // 표에 없으면 한도가 0 이 아니라 무한이다. resolveRule 에서 이 분기 중 하나를

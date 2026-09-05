@@ -383,6 +383,54 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(stats.path("weekKm").size()).isEqualTo(7);
     }
 
+    // ─────────────────── 지운 반려동물의 산책 (이슈 #156) ───────────────────
+
+    @Test
+    @DisplayName("지운 아이의 산책은 사라지지 않고 계속 센다 — 그 아이로 좁히면 404 다")
+    void walksOfADeletedDogRemainAndKeepCounting() throws Exception {
+        Account me = account("추모");
+        long dogId = dog(me, "보리");
+        save(me, walkJson(dogId, thisWeekMondayOnePm(), 3000, 1800)).andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/dogs/{dogId}", dogId)
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isNoContent());
+
+        JsonNode page = body(mockMvc.perform(get("/api/walks")
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk()));
+        assertThat(page.path("items").size())
+                .as("""
+                        소프트 삭제라 walk 행이 CASCADE 로 따라 지워지지 않는다(완료 조건 2). \
+                        무지개다리를 건넌 아이의 기록을 빼면 총 거리가 줄어 상실을 한 번 더 겪게 \
+                        한다 — 기본은 '계속 센다' 다(#156 4번).""")
+                .isEqualTo(1);
+
+        JsonNode stats = body(mockMvc.perform(get("/api/walks/stats/weekly")
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk()));
+        assertThat(stats.path("allTimeCount").asInt()).isEqualTo(1);
+        assertThat(stats.path("allTimeKm").asDouble()).isEqualTo(3.0);
+
+        mockMvc.perform(get("/api/walks/stats/weekly")
+                        .param("dogId", String.valueOf(dogId))
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("지운 dogId 로 산책을 저장하면 404 다 — 완료 조건 3")
+    void savingAWalkForADeletedDogIsNotFound() throws Exception {
+        Account me = account("옛 아이");
+        long dogId = dog(me, "탄이");
+        mockMvc.perform(delete("/api/dogs/{dogId}", dogId)
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isNoContent());
+
+        save(me, walkJson(dogId, thisWeekMondayOnePm(), 1000, 600))
+                .andExpect(status().isNotFound());
+    }
+
     @Test
     @DisplayName("토큰이 없으면 본문 없는 401 이다")
     void requiresAuthentication() throws Exception {

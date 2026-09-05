@@ -171,6 +171,35 @@ void main() {
     expect(kMyPets.value, isEmpty, reason: '실패한 등록이 목록에 남으면 안 된다');
   });
 
+  test('한 마리를 보내면 DELETE 를 부르고 목록에서 빠지며 남은 아이가 선택된다 (#156)', () async {
+    final s = syncThatAnswers((req) => req.method == 'DELETE'
+        ? http.Response('', 204)
+        : _json([dogJson(id: 1, name: '보리'), dogJson(id: 2, name: '탄이')]));
+    await s.sync.load();
+    expect(kMyPets.value, hasLength(2));
+
+    await s.sync.remove(kMyPets.value.first);
+
+    expect(s.seen.last.method, 'DELETE');
+    expect(s.seen.last.url.path, '/api/dogs/1');
+    expect(kMyPets.value.map((p) => p.name), ['탄이']);
+    expect(kMyDog.value?.name, '탄이', reason: '보낸 아이가 선택된 채 남아 있으면 안 된다');
+  });
+
+  test('보내기에 실패하면 던지고 목록은 그대로다 — 실패했는데 사라지면 지워진 줄 안다', () async {
+    final s = syncThatAnswers((req) => req.method == 'DELETE'
+        ? _json({'error': {}}, status: 404)
+        : _json([dogJson(id: 1, name: '보리')]));
+    await s.sync.load();
+
+    await expectLater(
+      s.sync.remove(kMyPets.value.first),
+      throwsA(isA<WalkFailure>()
+          .having((f) => f.kind, 'kind', WalkFailureKind.notFound)),
+    );
+    expect(kMyPets.value.map((p) => p.name), ['보리']);
+  });
+
   test('로그아웃하면 지운다 — 다음 사람이 앞사람의 아이를 보면 안 된다', () async {
     final r = syncThatAnswers((_) => _json([dogJson(id: 7)]));
     await r.sync.load();

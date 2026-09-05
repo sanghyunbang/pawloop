@@ -70,6 +70,25 @@ class PetSync {
     return profile;
   }
 
+  /// 한 마리를 보낸다 — 서버는 소프트 삭제라 **산책 기록은 남고 통계에도 계속 센다**(#156).
+  ///
+  /// 성공하면 목록에서 빠지고 선택은 남은 아이 중 하나로 옮긴다([replacePets] 가 한다).
+  /// **되살리기는 없다** — 그래서 부르는 쪽의 확인 문구가 그만큼 분명해야 한다.
+  /// 서버가 모르는 아이(`serverId` 가 null)는 화면에서만 뺀다.
+  ///
+  /// @throws WalkFailure 서버가 거절했거나 연결이 없을 때. 목록은 그대로다 — 실패했는데
+  ///         화면에서 사라지면 사용자는 지워진 줄 안다
+  Future<void> remove(DogProfile pet) async {
+    final id = pet.serverId;
+    if (id != null) {
+      await _repo.deletePet(id);
+    }
+    replacePets(
+      kMyPets.value.where((p) => id == null ? !identical(p, pet) : p.serverId != id).toList(),
+    );
+    notifyPetsChanged();
+  }
+
   /// 로그아웃했다. **화면에서 지운다** — 다음 사람이 남의 아이를 보면 안 된다.
   static void clear() => replacePets(const []);
 

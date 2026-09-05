@@ -16,7 +16,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 /**
@@ -35,6 +38,12 @@ import java.util.List;
  * <p>한 계정이 등록할 수 있는 수를 {@value #MAX_PETS} 로 막는다. 없으면 인증만 통과하면
  * 행을 무한히 만들 수 있고, rate limit 은 <b>속도</b>를 재지 <b>총량</b>을 재지 않는다 —
  * 하루에 조금씩 넣으면 한도에 안 걸린다.
+ *
+ * <h2>삭제는 소프트 삭제다 (#156)</h2>
+ * <p>{@link #delete} 는 {@code deleted_at} 을 찍을 뿐 행을 지우지 않는다 — 이유는 {@link Dog} 의
+ * javadoc(산책 CASCADE). 지운 뒤에는 세 조회 전부에서 사라지고, 같은 id 로 다시 부르면 404 다.
+ * 지운 아이는 {@value #MAX_PETS} 상한에 세지 않는다 — 보낸 아이 때문에 새 아이를 못 들이면
+ * 안 된다. 되살리기는 두지 않는다 — 그래서 앱의 확인 문구가 그만큼 분명해야 한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -50,6 +59,9 @@ public class DogService implements DogOwnership {
     public static final int MAX_PETS = 20;
 
     private final DogRepository dogs;
+
+    /** 삭제 시각. 빈은 {@code Asia/Seoul} 이지만 저장값은 UTC 로 눕힌다(계약: 표에 담기는 값은 UTC). */
+    private final Clock clock;
 
     public List<DogResponse> mine(Long userId) {
         return dogs.findMine(userId).stream().map(DogResponse::of).toList();
@@ -85,6 +97,18 @@ public class DogService implements DogOwnership {
                 .build();
 
         return DogResponse.of(dogs.save(dog));
+    }
+
+    /**
+     * 소프트 삭제 — 클래스 javadoc. 남의 것·없는 것·이미 지운 것은 전부 같은 404 다
+     * ({@code findMineById} 가 셋을 구분하지 않는다).
+     *
+     * @throws ResponseStatusException 404
+     */
+    @Transactional
+    public void delete(Long userId, long dogId) {
+        Dog dog = require(userId, dogId);
+        dog.markDeleted(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
     }
 
     /**

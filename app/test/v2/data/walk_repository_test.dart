@@ -327,6 +327,15 @@ void main() {
       );
     });
 
+    test('반려동물 삭제는 DELETE /api/dogs/{id} 이고 본문 없는 204 다 (#156)', () async {
+      final r = repositoryThatAnswers((_) => http.Response('', 204));
+
+      await r.repo.deletePet(3);
+
+      expect(r.seen.single.method, 'DELETE');
+      expect(r.seen.single.url.path, '/api/dogs/3');
+    });
+
     test('삭제는 본문 없는 204 다', () async {
       final r = repositoryThatAnswers((_) => http.Response('', 204));
 
