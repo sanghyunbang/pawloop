@@ -716,7 +716,7 @@ CREATE TABLE walk_note (
 ```sql
 CREATE TABLE care_log (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
-  dog_id      BIGINT       NULL COMMENT '대상 강아지. dog 표는 있지만(#145) CareLog 가 스칼라로 들어 FK 가 없고 항상 NULL 이다 — 잇는 것은 #154 (#76)',
+  dog_id      BIGINT       NULL COMMENT '대상 반려동물(dog.id). FK 는 #154 에서 걸었다 — 값은 아직 항상 NULL 이다(쓰기 경로가 dogId 를 안 받는다, #209 Dogs-high-3)',
   group_id    BIGINT       NULL COMMENT '가족 그룹 공유(nullable — 미소속 시 개인 기록)',
   type        VARCHAR(10)  NOT NULL COMMENT 'water|meal|walk|med|vet',
   done_by     BIGINT       NULL COMMENT '수행자(users.id) — 토큰의 사용자다. 탈퇴하면 NULL 이다',
@@ -726,10 +726,13 @@ CREATE TABLE care_log (
   PRIMARY KEY (id),
   KEY idx_carelog_group (group_id, occurred_at),
   KEY idx_carelog_doneby (done_by),
+  KEY idx_carelog_dog (dog_id, occurred_at),
   CONSTRAINT fk_carelog_group FOREIGN KEY (group_id)
     REFERENCES family_group (id) ON DELETE SET NULL,
   CONSTRAINT fk_carelog_doneby FOREIGN KEY (done_by)
     REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT fk_carelog_dog FOREIGN KEY (dog_id)
+    REFERENCES dog (id) ON DELETE SET NULL,
   CONSTRAINT ck_carelog_type CHECK (type IN ('water','meal','walk','med','vet'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
@@ -737,7 +740,7 @@ CREATE TABLE care_log (
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `dog_id` | `BIGINT` | **NULL, FK 없음** | 대상 강아지. 아래 경고 참조 — 오늘은 항상 `NULL` 이다 |
+| `dog_id` | `BIGINT` | FK→`dog.id` nullable, **ON DELETE SET NULL**, INDEX(dog,occurred_at) | 대상 반려동물. FK 는 #154 에서 걸었다(`22_care_log_dog_fk.sql`). 값은 아직 항상 `NULL` — 아래 참조 |
 | `group_id` | `BIGINT` | FK→`family_group.id` nullable, ON DELETE SET NULL, INDEX(group,occurred_at) | 공유 대상 가족 그룹 |
 | `type` | `VARCHAR(10)` | NOT NULL, CHECK | `water`(물)/`meal`(밥)/`walk`(산책)/`med`(투약)/`vet`(병원). **소문자다** |
 | `done_by` | `BIGINT` | FK→`users.id` nullable, **ON DELETE SET NULL**, INDEX | 수행자. 토큰의 사용자이지 요청 본문의 값이 아니다. 그 사람이 탈퇴하면 `NULL` — §16 의 경고와 같은 판단이다 |
@@ -745,15 +748,17 @@ CREATE TABLE care_log (
 | `memo` | `VARCHAR(500)` | NULL | 메모 |
 | `created_at` | `DATETIME(6)` | NOT NULL, 기본 now | 행 생성 시각 |
 
-> ### ⚠️ `dog_id` 에 FK 가 없는 이유 — #9 의 "일부러 안 걸었다" 와 **다른 이유**다
+> ### `dog_id` 의 FK 는 #154 에서 걸었다 — `ON DELETE SET NULL`, 값은 아직 항상 `NULL`
 >
-> **2026-09-01 에 이 절의 전제가 바뀌었다.** 예전 이유는 "`dog` 표가 정본 스키마에 없다" 였는데, #145 가 그 표를 만들었다(위 [§3](#3-dog--반려동물-프로필-실재)은 이제 **실재**다). 앱도 `POST /api/dogs` 로 서버에 등록한다. **"없는 표에는 FK 를 걸 수 없다" 는 더 이상 이유가 아니다.**
+> 2026-09-05 까지 이 절은 "FK 가 없는 이유" 였다. #145 가 `dog` 표를 만든 뒤에도 못 건 이유는 `CareLog` 가 `dog_id` 를 스칼라 `Long` 으로 들고 있어서 **Hibernate 가 FK 를 만들지 않았기** 때문이다 — `01_schema.sql` 은 엔티티로 만든 DB 에서 뽑은 파일이라, 마이그레이션에서 `ALTER` 로 더하면 운영 DB 에는 있고 커밋된 스키마에는 없는 제약이 되어 다음 재생성 때 조용히 사라졌다.
 >
-> 지금 안 거는 이유는 다른 것이다. `01_schema.sql` 은 살아 있는 DB 에서 `SHOW CREATE TABLE` 로 **뽑은** 파일이고, `CareLog` 가 `dog_id` 를 스칼라 `Long` 으로 들고 있어서 **Hibernate 가 그 FK 를 만들지 않는다.** 마이그레이션에서 `ALTER` 로 더하면 운영 DB 에는 있고 커밋된 스키마에는 없는 제약이 생겨 다음 재생성 때 조용히 사라진다.
+> #154 가 매핑을 `@ManyToOne Dog` 로 바꿨다. FK 가 엔티티에서 나오므로 재생성에 살아남고, 이미 있는 DB 에는 `22_care_log_dog_fk.sql` 이 같은 모양(`fk_carelog_dog` · `idx_carelog_dog(dog_id, occurred_at)`)으로 건다. 모듈 경계는 `Dog` 의 `@NamedInterface("entity")` 가 열고 `walk` 가 같은 길로 참조한다 — `ModularityBaselineTest` 는 232 그대로다.
 >
-> 제대로 걸려면 `CareLog` 가 `@ManyToOne Dog` 를 들어야 하고, 그건 `care` 가 `dog` 모듈을 참조한다는 뜻이라 별도 판단이다 — **이슈 #154 가 소유한다.** 지금 `dog_id` 가 항상 `NULL` 이라 무결성 위험은 없다. 잇는 날 `idx_carelog_dog(dog_id, occurred_at)` 도 함께 넣는다.
+> **`SET NULL` 인 이유.** 케어는 "누가 언제 무엇을 했는가" 의 기록이라 반려동물이 지워져도 그 사실은 남아야 한다 — `group_id`(가족 해산)·`done_by`(탈퇴)가 같은 질문에 같은 답을 했다. `walk.dog_id` 가 `CASCADE` 인 것과 다른 이유는 산책은 그 개의 기록이고 케어는 가족의 기록이기 때문이다. 사용자 탈퇴(`users` 하드 삭제)는 `fk_dog_user` 로 `dog` 을 `CASCADE` 로 지우고, 그 삭제가 여기를 `SET NULL` 로 훑는다 — `idx_carelog_dog` 가 그 자리다. `RESTRICT` 면 케어 기록이 있는 사람은 탈퇴를 못 한다.
 >
-> **#9(`refresh_token.user_id`)와 같은 것으로 읽으면 안 된다.** #9 는 탈퇴 경로가 DB 삭제 순서에 묶이는 것을 피한 **판단**이다. 여기는 **매핑의 결과**다 — `CareLog` 가 `dog_id` 를 스칼라로 들기 때문이지 안 걸기로 정한 것이 아니다. #154 가 그 매핑을 바꾸는 날 여기는 FK 를 걸고 #9 는 안 건다.
+> **값이 아직 `NULL` 인 이유.** `POST /api/groups/{groupId}/care-logs` 가 `dogId` 를 받지 않는다. 받으려면 "가족 구성원이 남의 반려동물 id 를 알 수 있는가" 가 먼저 정해져야 하고, 그것은 #209 의 `Dogs-high-3`(가족 공유 가시성)이 소유한다. 그때까지 FK 는 "잘못된 id 는 못 들어간다" 만 지킨다.
+>
+> **#9(`refresh_token.user_id`)와 같은 것으로 읽으면 안 된다.** #9 는 탈퇴 경로가 DB 삭제 순서에 묶이는 것을 피한 **판단**이고 지금도 안 건다. 여기는 매핑의 결과였고, 매핑을 바꾼 날 걸었다.
 
 > **`group_id` 가 `NULL` 인 행은 지금 0건이다.** 이 이슈가 여는 경로는 `/api/groups/{groupId}/care-logs` 뿐이라 여기서 만들어지는 행은 전부 그룹을 든다. 개인 기록을 만드는 경로(`POST /api/dogs/{dogId}/care-logs`, M4)는 아직 없고, 조회 필터가 `group_id = :groupId` 라서 만약 `NULL` 행이 생겨도 **어떤 조회에도 나오지 않는다** — 의도다. 컬럼을 nullable 로 두는 것은 그 경로가 생길 자리를 비워 두는 것이고, 그때 개인 기록 조회도 함께 온다.
 
@@ -796,5 +801,6 @@ CREATE TABLE care_log (
 | `walk_note` | `uq_walknote_group(group_id)` | UNIQUE | 그룹당 주의사항 한 장 |
 | `care_log` | `idx_carelog_group(group_id, occurred_at)` | 보조 | 그룹별 "오늘의 케어" 조회 |
 | `care_log` | `idx_carelog_doneby(done_by)` | 보조 | 사용자 삭제 시 `SET NULL` 이 훑는 자리 |
+| `care_log` | `idx_carelog_dog(dog_id, occurred_at)` | 보조 | `dog` 삭제 시 `SET NULL` 이 훑는 자리 · 반려동물별 케어 기록(#154) |
 
 > 공간 컬럼(`walk.path`, `place.geom`, `trail.path`)은 모두 `SRID 4326` + `NOT NULL` + `SPATIAL INDEX`. 초기에는 MySQL 공간형 단일 저장소로 운영하고, 대량 GPS 시계열·장소검색(ES/Redis)은 규모 확장 시 옵션이다. 관계 개요는 [ERD](./erd.md) 참조.

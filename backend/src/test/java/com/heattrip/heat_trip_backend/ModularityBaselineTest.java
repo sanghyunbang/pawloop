@@ -127,6 +127,13 @@ class ModularityBaselineTest {
      * "보는 사람의 id" 를 주고, 커뮤니티는 {@code @ViewerId Long viewerId} 로 받는다.
      * {@code AuthenticatedUser} 를 밖에서 부르는 자리가 0 이 됐고 그 타입은 여전히 닫혀 있다.
      * 위반 목록을 떠서 사라진 둘이 정확히 그 둘인지 확인했다.
+     *
+     * <p><b>232 그대로 — {@code care -> dog.entity.Dog} 참조를 더했는데 위반이 0 이다.</b> (#154)
+     * {@code CareLog} 가 {@code @ManyToOne Dog} 를 들게 됐다. {@code Dog} 는
+     * {@code @NamedInterface("entity")} 로 열려 있고 {@code care} 는 {@code allowedDependencies}
+     * 를 선언하지 않아, 열린 표면으로의 참조는 위반이 아니다({@code walk} 가 같은 길이다).
+     * 위반 목록을 떠서 확인했다 — {@code care} 의 위반 22건은 전부 {@code group.entity.FamilyGroup}
+     * 로 가는 것이고(#120 이 소유), {@code dog} 로 가는 것은 0 이다.
      */
     private static final int BASELINE_VIOLATIONS = 232;
 

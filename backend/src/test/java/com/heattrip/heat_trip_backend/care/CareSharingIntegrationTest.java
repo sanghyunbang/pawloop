@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -104,8 +106,8 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                 .isEqualTo(dad.id());
         assertThat(created.path("dogId").isNull())
                 .as("""
-                        dog 표는 #145 에서 생겼지만 care_log 를 아직 안 이었다 — 이 컬럼은 \
-                        여전히 항상 null 이다. 잇는 것은 #154 다(CareLog javadoc).""")
+                        FK 는 #154 에서 걸렸지만 쓰기 경로가 아직 dogId 를 안 받는다 — 응답은 \
+                        여전히 항상 null 이다. 받는 날의 전제는 #209 Dogs-high-3 (CareLog javadoc).""")
                 .isTrue();
 
         JsonNode seenByMom = careLogs(mom, family.groupId(), null);
@@ -459,6 +461,49 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                         가리킬 사람이 없으면 id 도 없다. 0 은 어떤 users.id 와도 같지 않아서 앱의 \
                         '내가 했는가' 판정(doneBy.userId == 내 id)이 조용히 참이 되는 일이 없다.""")
                 .isZero();
+    }
+
+    // ─────────────────── #154 완료 조건 4 — 반려동물이 지워져도 케어 기록은 남는다 ───────────────────
+
+    @Test
+    @DisplayName("반려동물을 지워도 케어 기록은 남는다 — dogId 만 null 로 떨어진다 (엔티티가 건 FK 의 SET NULL)")
+    void whenTheDogIsDeleted_theCareRecordSurvivesWithoutIt() throws Exception {
+        Account dad = account("아빠");
+        Account mom = account("엄마");
+        Family family = family(dad, "반려동물을 잃은 집", mom);
+        long careLogId = body(postCare(dad, family.groupId(), "meal", "초코 아침밥")
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        // 쓰기 경로가 아직 dogId 를 안 받으므로(#209 Dogs-high-3) DB 에 직접 잇는다. 이 DB 는
+        // 엔티티가 만든 것이라, 여기서 재는 것은 22_care_log_dog_fk.sql 이 아니라 CareLog 의
+        // @OnDelete 가 실제로 내는 제약이다 — 마이그레이션 실행 테스트와 짝이다.
+        jdbc.update("INSERT INTO dog (user_id, name, size, species, neutered, created_at) "
+                + "VALUES (?, '초코', 'small', 'dog', 0, UTC_TIMESTAMP(6))", dad.id());
+        long dogId = jdbc.queryForObject(
+                "SELECT MAX(id) FROM dog WHERE user_id = ?", Long.class, dad.id());
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE care_log SET dog_id = ? WHERE id = ?", dogId + 1_000_000, careLogId))
+                .as("fk_carelog_dog — 없는 반려동물 id 는 못 들어간다. FK 가 안 걸렸으면 여기가 통과한다")
+                .isInstanceOf(DataIntegrityViolationException.class);
+        jdbc.update("UPDATE care_log SET dog_id = ? WHERE id = ?", dogId, careLogId);
+
+        JsonNode before = careLogs(mom, family.groupId(), null);
+        assertThat(before.get(0).path("dogId").asLong())
+                .as("응답의 dogId 는 dog.id 다 — 늘 null 만 내려온다면 이 단언이 그것을 잡는다")
+                .isEqualTo(dogId);
+
+        jdbc.update("DELETE FROM dog WHERE id = ?", dogId);
+
+        JsonNode after = careLogs(mom, family.groupId(), null);
+        assertThat(memos(after))
+                .as("""
+                        케어는 "누가 언제 무엇을 했는가" 의 기록이다. 반려동물이 지워졌다고 '오늘 \
+                        아빠가 밥을 줬다' 가 엄마 화면에서 사라지면 이중 급여가 바로 그 자리에서 \
+                        생긴다 — group_id·done_by 와 같은 이유로 SET NULL 이다. CASCADE 면 빈 목록이다.""")
+                .containsExactly("초코 아침밥");
+        assertThat(after.get(0).path("dogId").isNull())
+                .as("가리킬 반려동물이 없으면 id 도 없다")
+                .isTrue();
     }
 
     // ─────────────────────────── 지그 ───────────────────────────

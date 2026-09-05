@@ -82,7 +82,7 @@ class CareSchemaMigrationExecutionTest {
     }
 
     @Test
-    @DisplayName("care_log.dog_id 는 nullable 이고 dog 로 가는 FK 가 없다 — 참조할 표 자체가 없다")
+    @DisplayName("08 은 care_log.dog_id 를 nullable 로만 만들고 dog 로 가는 FK 는 걸지 않는다 — 그건 22 가 건다")
     void dogId_isNullableAndUnreferenced() throws Exception {
         try (Fixture db = fixture()) {
             db.createParents();
@@ -94,9 +94,9 @@ class CareSchemaMigrationExecutionTest {
                       AND column_name = 'dog_id'
                     """))
                     .as("""
-                            NOT NULL 로 두면 이 앱은 이 표에 한 행도 못 넣는다 — 채울 값이 없기 \
-                            때문이다. dog 표는 #145 에서 생겼지만 care_log 를 아직 안 이어서 \
-                            이 컬럼은 여전히 항상 NULL 이다 (#76 · 잇는 것은 #154).""")
+                            NOT NULL 로 두면 이 앱은 이 표에 한 행도 못 넣는다 — 쓰기 경로가 아직 \
+                            dogId 를 안 받아서 값이 항상 NULL 이기 때문이다(#154 · 받는 날의 전제는 \
+                            #209 Dogs-high-3). 22 의 SET NULL FK 도 NULL 허용 컬럼에만 걸 수 있다.""")
                     .containsExactly("YES");
 
             assertThat(db.query("""
@@ -104,9 +104,10 @@ class CareSchemaMigrationExecutionTest {
                     WHERE constraint_schema = DATABASE() AND referenced_table_name = 'dog'
                     """))
                     .as("""
-                            없는 표에는 FK 를 걸 수 없다. 이것을 #9 의 '일부러 FK 를 안 걸었다' 와 \
-                            같은 것으로 읽으면 안 된다 — #9 는 users 표가 있는데도 걸지 않은 판단이고 \
-                            여기는 참조할 표가 아직 없는 것이다. dog 표가 생기는 날 여기는 건다.""")
+                            08 은 dog FK 를 걸지 않는다 — CareLog 가 스칼라 Long 이던 때 Hibernate 가 \
+                            안 만들던 제약이었고, #154 가 매핑을 바꾼 뒤 22_care_log_dog_fk.sql 이 \
+                            건다(CareLogDogFkMigrationExecutionTest). 08 혼자 돌린 DB 에 FK 가 \
+                            생기면 22 와 겹친다.""")
                     .isEmpty();
         }
     }

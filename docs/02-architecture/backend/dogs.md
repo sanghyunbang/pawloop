@@ -36,7 +36,7 @@
 | `POST /api/dogs` | `register(@CurrentUser User user, @Valid @RequestBody DogRequest request)` | `DogResponse` (201) | 필요 | `/api/dogs` post |
 | `GET /api/dogs/{dogId}` | `detail(@CurrentUser User user, long dogId)` | `DogResponse` (200 / 404) | 필요\* | `/api/dogs/{dogId}` get |
 | ~~`PATCH /api/dogs/{dogId}`~~ | **아직 없다.** 계약은 전용 `DogPatch` 로 정해졌다(ADR-0017 규약 4) — 자바 쪽 이름은 구현할 때 정한다 | — | — | `x-status: planned` |
-| ~~`DELETE /api/dogs/{dogId}`~~ | **아직 없다.** 산책 기록이 매달린 반려동물을 지울 때의 규칙(#154)이 먼저다 | — | — | `x-status: planned` |
+| ~~`DELETE /api/dogs/{dogId}`~~ | **아직 없다.** 소프트 삭제(`deleted_at`)로 만든다 — #156. 케어 기록은 #154 가 `care_log.dog_id` 를 `ON DELETE SET NULL` 로 정했다 | — | — | `x-status: planned` |
 | ~~`POST /api/dogs/{dogId}/avatar`~~ | **아직 없다.** 계약에도 없다 | — | — | (계약 미기재) |
 
 - openapi `Dog` 스펙상 CRUD 응답은 순수 `Dog` 객체(커서 페이지네이션 대상 아님 — 목록은 배열 그대로). 따라서 `Page`/`nextCursor` 미적용.

@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.care.entity;
 
+import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.group.entity.FamilyGroup;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
@@ -39,30 +40,31 @@ import java.time.LocalDateTime;
  * <b>지우지 않는 사건 기록</b>이다 — 같은 종류를 하루에 두 번 찍어도 두 행이 남는다.
  * 두 번째를 막지 않는 이유는 {@code CareService.record} 에 있다.
  *
- * <h2>⚠️ {@code dog_id} 에는 FK 가 없고, 값도 <b>항상 {@code null}</b> 이다</h2>
+ * <h2>{@code dog_id} — FK 는 걸려 있고({@code fk_carelog_dog}, #154), 값은 아직 <b>항상 {@code null}</b> 이다</h2>
  *
- * <p><b>2026-09-01 에 이 절의 전제가 바뀌었다.</b> 예전에는 "{@code dog} 표가 정본 스키마에
- * 없다" 가 이유였는데, #145 가 그 표를 만들었다({@code 01_schema.sql} 의
- * {@code CREATE TABLE dog}, {@code docs/03-database/schema.md §3} 은 이제 <b>실재</b>다).
- * 앱도 {@code POST /api/dogs} 로 서버에 반려동물을 등록한다.
+ * <p>2026-09-06(#154)에 이 필드가 스칼라 {@code Long} 에서 {@code @ManyToOne Dog} 로 바뀌었다.
+ * 그 전에는 Hibernate 가 FK 를 만들지 않아서, 마이그레이션에서 {@code ALTER} 로 더하면
+ * 운영 DB 에는 있고 커밋된 스키마({@code 01_schema.sql} — 엔티티로 만든 DB 에서 뽑은 파일)에는
+ * 없는 제약이 되어 다음 재생성 때 조용히 사라졌다. 이제는 엔티티에서 나오므로 재생성에
+ * 살아남고, 이미 있는 DB 에는 {@code 22_care_log_dog_fk.sql} 이 같은 모양으로 건다.
  *
- * <p>그래서 <b>"없는 표에는 FK 를 걸 수 없다" 는 더 이상 이유가 아니다.</b> 지금 안 거는
- * 이유는 다른 것이다.
+ * <p>모듈 경계는 {@code Dog} 에 붙은 {@code @NamedInterface("entity")} 가 열고, {@code walk} 가
+ * 같은 길로 참조한다. {@code ModularityBaselineTest} 는 이 참조로 움직이지 않았다 —
+ * 실측 232 → 232 (#154 PR 에 위반 목록 대조를 적었다).
  *
- * <p>{@code mysql/init/01_schema.sql} 은 살아 있는 DB 에서 {@code SHOW CREATE TABLE} 로
- * <b>뽑은</b> 파일이고, 그 DB 는 Hibernate 가 엔티티로 만든 것이다. 이 클래스가
- * {@code dogId} 를 스칼라 {@code Long} 으로 들고 있어서 <b>Hibernate 가 그 FK 를 만들지
- * 않는다.</b> 마이그레이션에서 {@code ALTER} 로 더하면 운영 DB 에는 있고 커밋된 스키마에는
- * 없는 제약이 생기고, 다음 재생성 때 조용히 사라진다.
+ * <p><b>{@code ON DELETE SET NULL} 이다.</b> 케어는 "누가 언제 무엇을 했는가" 의 기록이라
+ * 반려동물이 지워져도 그 사실은 남아야 한다 — {@code group_id}·{@code done_by} 가 같은 질문에
+ * 같은 답을 했다. {@code walk.dog_id} 가 CASCADE 인 것과 다른 이유는 산책은 그 개의 기록이고
+ * 케어는 가족의 기록이기 때문이다. 사용자 탈퇴({@code users} 하드 삭제)는 {@code dog} 을
+ * CASCADE 로 지우고 그 삭제가 여기를 SET NULL 로 훑는다 — {@code idx_carelog_dog} 가 그 자리다.
  *
- * <p>제대로 걸려면 이 클래스가 {@code @ManyToOne Dog} 를 들어야 하고, 그건 {@code care} 가
- * {@code dog} 모듈을 참조한다는 뜻이라 별도 판단이다. <b>지금 {@code dog_id} 가 항상
- * {@code null} 이라 무결성 위험은 없다</b> — 미룬 것이 안전한 드문 경우다.
- * <b>그 판단은 이슈 #154 가 소유한다.</b>
+ * <p><b>값이 아직 {@code null} 인 이유는 쓰기 경로가 {@code dogId} 를 안 받아서다.</b>
+ * 받으려면 "가족 구성원이 남의 반려동물 id 를 알 수 있는가" 가 먼저 정해져야 하고, 그것은
+ * #209 의 {@code Dogs-high-3}(가족 공유 가시성)이 소유한다. 그날 {@code CareService.record} 가
+ * 대상 개체를 검증해 여기에 넣는다. 그때까지 FK 는 "잘못된 id 는 못 들어간다" 만 지킨다.
  *
  * <p><b>#9 와 헷갈리지 말 것.</b> #9({@code refresh_token})는 탈퇴 경로가 DB 삭제 순서에
- * 묶이는 것을 피하려고 <b>일부러</b> 안 걸었다. 여기는 "매핑을 안 바꿔서 못 거는" 것이라
- * 성격이 다르다 — 그날이 오면 여기는 FK 를 걸고 #9 는 안 건다.
+ * 묶이는 것을 피하려고 <b>일부러</b> 안 걸었고 지금도 안 건다. 여기는 걸었다.
  *
  * <h2>여기는 chat 경계 밖이라 나머지 FK 는 정상적으로 건다</h2>
  * <p>"chat 밖으로 나가는 FK 0개"(ADR-0011 결정 4)는 {@code chat_*} 세 표에만 걸리는 규칙이다.
@@ -76,7 +78,10 @@ import java.time.LocalDateTime;
                 // "오늘의 케어" 조회가 이 인덱스 하나로 그룹·당일 범위를 훑는다.
                 @Index(name = "idx_carelog_group", columnList = "group_id, occurred_at"),
                 // 사용자 탈퇴 시 SET NULL 이 훑는 자리. 없으면 users 삭제가 이 표 전체 스캔이다.
-                @Index(name = "idx_carelog_doneby", columnList = "done_by")
+                @Index(name = "idx_carelog_doneby", columnList = "done_by"),
+                // dog 삭제 시 SET NULL 이 훑는 자리이자, 언젠가 "이 반려동물의 케어 기록" 을
+                // 기간으로 훑을 자리(#154). idx_carelog_group 과 같은 모양이다.
+                @Index(name = "idx_carelog_dog", columnList = "dog_id, occurred_at")
         })
 // DB 가 마지막 방어선이다 (📌 #86 원칙 5). 애플리케이션의 CareType 검증이 뚫리거나
 // 누가 손으로 INSERT 해도 여섯 번째 종류는 들어가지 못한다.
@@ -92,14 +97,18 @@ public class CareLog {
     private Long id;
 
     /**
-     * 대상 강아지. <b>오늘은 항상 {@code null} 이고 FK 도 없다</b> — 이유는 클래스 javadoc.
+     * 대상 반려동물. FK 는 있고({@code fk_carelog_dog}, {@code ON DELETE SET NULL}) 값은 아직
+     * <b>항상 {@code null}</b> 이다 — 클래스 javadoc 의 {@code dog_id} 절.
      *
      * <p>{@code CareService.record} 가 요청 본문의 {@code dogId} 를 <b>읽지 않는다.</b>
-     * 이 경로가 <b>그룹 단위 기록</b>이라 대상 개체를 아직 받지 않기 때문이다 — 표가 없어서가
-     * 아니다({@code dog} 는 #145 가 만들었다). FK 를 안 거는 진짜 이유는 위 클래스 javadoc 에 있다.
+     * 이 경로가 <b>그룹 단위 기록</b>이라 대상 개체를 아직 받지 않기 때문이고, 받는 날의
+     * 전제(가족 공유 가시성)는 #209 {@code Dogs-high-3} 이 정한다.
      */
-    @Column(name = "dog_id")
-    private Long dogId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "dog_id",
+            foreignKey = @ForeignKey(name = "fk_carelog_dog"))
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private Dog dog;
 
     /**
      * 공유 대상 가족 그룹. <b>nullable</b> 이다 — 그룹에 속하지 않은 1인 사용자도 자기 기록을
@@ -191,5 +200,10 @@ public class CareLog {
     /** 그룹 id. 연관을 밖으로 흘리지 않기 위한 좁은 창이다(개인 기록이면 {@code null}). */
     public Long groupId() {
         return group == null ? null : group.getId();
+    }
+
+    /** 대상 반려동물 id. {@link #groupId()} 와 같은 좁은 창이다 — 아직은 항상 {@code null}. */
+    public Long dogId() {
+        return dog == null ? null : dog.getId();
     }
 }
