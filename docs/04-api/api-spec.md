@@ -809,15 +809,17 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `GET` | `/api/groups/me` | 내 그룹 + 멤버 목록(없으면 `404`). 멤버 목록의 출처는 `chat_room_member` 다 |
 | `GET` | `/api/groups/{groupId}/care-logs?date&type` | 오늘의 케어 조회 — 누가·언제 물/밥/산책을 했는지. `date` 생략 시 오늘 |
 | `POST` | `/api/groups/{groupId}/care-logs` | 케어 기록 `{ "type": "meal", "memo": "" }`. **`done_by`·`occurredAt` 은 서버가 정한다** |
+| `DELETE` | `/api/groups/{groupId}/care-logs/{careLogId}` | 잘못 찍은 기록 삭제 — **본인 기록만**(남의 것은 403, 그 그룹에 없는 id 는 404). 물리 삭제라 두 번째는 404. #209 |
 | `GET` | `/api/groups/{groupId}/walk-notes` | 산책 시 주의사항 한 장. 아직 없으면 404 가 아니라 `body: ""` |
 | `PUT` | `/api/groups/{groupId}/walk-notes` | 주의사항 전체 교체 `{ "body": "..." }` |
 
-- **여섯 경로 모두 구현됐다** — `POST /api/groups`·`GET /api/groups/me` 는 이슈 #75, 케어 넷은 이슈 #76.
+- **일곱 경로 모두 구현됐다** — `POST /api/groups`·`GET /api/groups/me` 는 이슈 #75, 케어 넷은 이슈 #76, 케어 기록 삭제는 #209.
 - 그룹 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. **없는 `groupId` 도 404 가 아니라 403 이다** — 404 로 답하면 id 를 훑어 "있는 가족/없는 가족" 을 가려낼 수 있다. 초대코드로 들어오는 경로는 7장(`POST /api/chat/invites/{code}/join`)이다.
 - 멤버십 판정의 원본은 **`chat_room_member` 하나**다. `care` 패키지는 `ChatRoomService` 의 공개 표면(`findRoom`·`isLiveMember`)으로만 묻는다 — chat 밖에서 `chat.repository` 를 부르는 것은 `ChatBoundaryArchitectureTest §E` 가 막는다.
 - **인가와 조회 필터는 서로 다른 방어다.** 인가는 요청을 통째로 막고, `care_log.group_id = :groupId` 필터는 통과한 요청이 어느 행을 보는지를 정한다. 한 사람이 여러 방에 속하는 것은 정상이라(초대코드로 들어오면 그렇게 된다) 인가만 있으면 가족 A 의 멤버가 가족 B 의 기록을 함께 본다.
 - **같은 종류를 하루에 두 번 찍어도 서버는 막지 않는다.** 둘 다 남고, 확인 문구는 앱이 `GET` 응답을 보고 만든다 — 그 목록에 답이 이미 들어 있는데 응답에 "이미 있음" 필드를 더하면 같은 사실의 출처가 둘이 된다.
-- **쓰기 둘(`POST care-logs`·`PUT walk-notes`)은 `group-write` 버킷**(rate limit)이다. 읽기 둘은 표 밖이라 **한도가 무한**이다 — 미룬 것이고 M2.6 에서 앱의 폴링 주기와 함께 정한다.
+- **잘못 찍은 기록은 본인만 지운다.** 남의 기록을 지울 수 있으면 엄마가 실제로 다녀온 산책을 아빠가 "실수겠지" 하고 지우는, 이 기능이 막으려던 산책 누락이 그 자리에서 생긴다. 탈퇴한 사람의 기록(`done_by` NULL)은 아무도 못 지운다. 메모 수정은 두지 않는다 — 지우고 다시 찍는다.
+- **쓰기 셋(`POST care-logs`·`DELETE care-logs/{id}`·`PUT walk-notes`)은 `group-write` 버킷**(rate limit)이다. 읽기 둘은 표 밖이라 **한도가 무한**이다 — 미룬 것이고 M2.6 에서 앱의 폴링 주기와 함께 정한다.
 - **`POST /api/groups/join` 은 없다.** 예전 계약에 있던 그 경로는 초대코드가 `family_group.invite_code` 컬럼이던 시절의 것이고, [ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다) 이후로는 7장의 참여 경로 하나다. 이슈 #75 가 계약에서 걷어냈다.
 - **post-MVP:** 친구 추가(가족 외), 케어 알림/리마인더, 케어 히스토리 통계.
 

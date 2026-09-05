@@ -229,6 +229,10 @@ enum FamilyFailureKind {
   /// 요청이 너무 잦다(429).
   rateLimited,
 
+  /// 지우려는 기록이 이미 없다(`DELETE …/care-logs/{id}` 404) — 벌써 지웠거나 이 그룹의
+  /// 것이 아니다. **다시 시도할 일이 아니다** — 목록을 다시 읽으면 된다.
+  gone,
+
   /// 네트워크·타임아웃·서버 오류. **다시 시도하면 될 수 있다.**
   network,
 }
@@ -250,6 +254,7 @@ class FamilyFailure implements Exception {
         FamilyFailureKind.invalid =>
           '메모는 모두 합쳐 ${FamilyRepository.maxTextLength}자까지 쓸 수 있어요',
         FamilyFailureKind.rateLimited => '잠시 후 다시 시도해 주세요',
+        FamilyFailureKind.gone => '이미 지워진 기록이에요',
         FamilyFailureKind.network => '연결이 불안정해요 · 다시 시도',
       };
 
@@ -338,6 +343,18 @@ class FamilyRepository {
     return parsed;
   }
 
+  /// 내가 남긴 케어 기록 하나를 지운다(#209). **본인 기록만** — 남의 것은 서버가 403 이라
+  /// [FamilyFailureKind.forbidden] 이고, 벌써 지워졌거나 이 그룹에 없는 id 는 404 라
+  /// [FamilyFailureKind.gone] 이다. 성공은 204 라 돌려줄 것이 없다.
+  Future<void> deleteCareLog(int groupId, int careLogId) async {
+    await _send(
+      () => _authed.deleteJson(
+        Uri.parse('$baseUrl/api/groups/$groupId/care-logs/$careLogId'),
+      ),
+      notFoundIs: FamilyFailureKind.gone,
+    );
+  }
+
   /// 초대코드를 하나 발급한다. **방장만** 부를 수 있고 아니면 403 이다.
   ///
   /// 경로가 `/api/groups` 가 아니라 `/api/chat/rooms/{roomId}/invites` 인 것은
@@ -410,6 +427,8 @@ class FamilyRepository {
         );
       }
     }
+    // 204 는 본문이 없다 — 삭제가 그렇다. 위 분기로 보내면 빈 본문의 jsonDecode 가 죽는다.
+    if (res.statusCode == 204) return null;
 
     final kind = switch (res.statusCode) {
       // 서버가 입력을 거절했다. 여기가 없으면 `_ => network` 로 떨어져 화면이

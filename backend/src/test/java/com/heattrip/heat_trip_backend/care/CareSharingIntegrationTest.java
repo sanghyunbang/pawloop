@@ -506,6 +506,85 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                 .isTrue();
     }
 
+    // ─────────────────── #209 Groups-medium-1 — 잘못 찍은 기록은 본인이 지운다 ───────────────────
+
+    @Test
+    @DisplayName("내가 찍은 기록은 지울 수 있고, 지우면 가족의 다음 조회에서 사라진다 — 204, 두 번째는 404")
+    void myOwnRecord_canBeDeleted_andDisappearsForTheFamily() throws Exception {
+        Account dad = account("아빠");
+        Account mom = account("엄마");
+        Family family = family(dad, "실수로 두 번 찍은 집", mom);
+        postCare(dad, family.groupId(), "meal", "아침").andExpect(status().isCreated());
+        long mistaken = body(postCare(dad, family.groupId(), "meal", "실수")
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        deleteCare(dad, family.groupId(), mistaken).andExpect(status().isNoContent());
+
+        assertThat(memos(careLogs(mom, family.groupId(), null)))
+                .as("""
+                        서버는 두 번째 밥을 거절하지 않는다(완료 조건 2). 그래서 되돌릴 문이 있어야 \
+                        한다 — 없으면 엄마 화면의 '오늘 아빠가 밥을 두 번 줬다' 가 영원히 남고, \
+                        사용자는 그 카드를 안 믿는다(#209 Groups-medium-1).""")
+                .containsExactly("아침");
+        deleteCare(dad, family.groupId(), mistaken)
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("남의 기록은 403 이고 그대로 남는다 — 지울 수 있으면 산책 누락이 그 자리에서 생긴다")
+    void someoneElsesRecord_isForbidden_andStays() throws Exception {
+        Account dad = account("아빠");
+        Account mom = account("엄마");
+        Family family = family(dad, "남의 기록을 지우려는 집", mom);
+        long momsWalk = body(postCare(mom, family.groupId(), "walk", "엄마가 간 산책")
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        deleteCare(dad, family.groupId(), momsWalk).andExpect(status().isForbidden());
+
+        assertThat(memos(careLogs(dad, family.groupId(), null)))
+                .as("엄마가 실제로 다녀온 산책을 아빠가 '실수겠지' 하고 지우면 그게 곧 산책 누락이다")
+                .containsExactly("엄마가 간 산책");
+    }
+
+    @Test
+    @DisplayName("다른 가족의 기록 id 는 403 이 아니라 404 다 — id 를 훑어 남의 가족 기록 수를 셀 수 없다")
+    void aRecordOfAnotherFamily_isNotFound_notForbidden() throws Exception {
+        Account dad = account("아빠");
+        Account mom = account("엄마");
+        Account neighbor = account("옆집");
+        Account neighborsSpouse = account("옆집 배우자");
+        Family ours = family(dad, "우리 집", mom);
+        Family theirs = family(neighbor, "옆집", neighborsSpouse);
+        long theirRecord = body(postCare(neighbor, theirs.groupId(), "meal", "옆집 밥")
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        // 내 그룹 경로로 남의 기록 id 를 찍는다 — 내 그룹의 멤버라 인가는 통과한다
+        deleteCare(dad, ours.groupId(), theirRecord)
+                .andExpect(status().isNotFound());
+        // 남의 그룹 경로는 멤버가 아니라 403 — 기록 존재 여부 이전에 막힌다
+        deleteCare(dad, theirs.groupId(), theirRecord)
+                .andExpect(status().isForbidden());
+        assertThat(memos(careLogs(neighbor, theirs.groupId(), null))).containsExactly("옆집 밥");
+    }
+
+    @Test
+    @DisplayName("탈퇴한 사람의 기록은 아무도 못 지운다 — 본인 판정이 불가능하면 남는 쪽이 안전하다")
+    void aWithdrawnMembersRecord_cannotBeDeletedByAnyone() throws Exception {
+        Account dad = account("아빠");
+        Account mom = account("엄마");
+        Family family = family(dad, "한 명이 탈퇴한 집", mom);
+        long momsMeal = body(postCare(mom, family.groupId(), "meal", "엄마가 준 밥")
+                .andExpect(status().isCreated())).path("id").asLong();
+        mockMvc.perform(delete("/auth/me").header("Authorization", "Bearer " + mom.token()))
+                .andExpect(status().isNoContent());
+
+        deleteCare(dad, family.groupId(), momsMeal).andExpect(status().isForbidden());
+
+        assertThat(memos(careLogs(dad, family.groupId(), null)))
+                .as("done_by 가 SET NULL 로 비어도 '오늘 누군가 밥을 줬다' 는 사실은 남는다")
+                .containsExactly("엄마가 준 밥");
+    }
+
     // ─────────────────────────── 지그 ───────────────────────────
 
     private record Account(long id, String token) { }
@@ -560,6 +639,11 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                 .header("Authorization", "Bearer " + account.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json));
+    }
+
+    private ResultActions deleteCare(Account account, long groupId, long careLogId) throws Exception {
+        return mockMvc.perform(delete("/api/groups/{id}/care-logs/{careLogId}", groupId, careLogId)
+                .header("Authorization", "Bearer " + account.token()));
     }
 
     private JsonNode careLogs(Account account, long groupId, String type) throws Exception {

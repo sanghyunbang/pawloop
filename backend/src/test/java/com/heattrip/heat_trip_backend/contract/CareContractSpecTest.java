@@ -9,6 +9,7 @@ import com.heattrip.heat_trip_backend.support.TestProjectPaths;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -68,13 +69,13 @@ class CareContractSpecTest {
     // ─────────────────── A. 코드 ↔ 계약 ───────────────────
 
     @Test
-    @DisplayName("이 이슈가 연 네 경로가 계약에 그대로 등재돼 있다 — 경로 목록은 컨트롤러에서 읽는다")
+    @DisplayName("이 이슈가 연 네 경로와 #209 의 삭제가 계약에 그대로 등재돼 있다 — 경로 목록은 컨트롤러에서 읽는다")
     void everyEndpointThisIssueOpened_isDeclaredInTheContract() {
         List<String> implemented = operationsOf(CareController.class);
 
         assertThat(implemented)
                 .as("컨트롤러에서 매핑을 하나도 못 읽었다면 이 검사는 아무것도 지키지 않는다")
-                .hasSize(4);
+                .hasSize(5);
         assertThat(declaredOperations())
                 .as("""
                         계약에 없는 경로는 앱이 존재를 모른다 — design-first 라 앱은 이 파일을 보고 만든다.
@@ -159,10 +160,13 @@ class CareContractSpecTest {
     }
 
     @Test
-    @DisplayName("쓰기 둘만 429 를 선언한다 — 읽기는 rate limit 표 밖이라는 것을 계약도 말한다")
+    @DisplayName("쓰기 셋만 429 를 선언한다 — 읽기는 rate limit 표 밖이라는 것을 계약도 말한다")
     void onlyTheWritePathsDeclareRateLimiting() {
         assertThat(statusCodesOf("/api/groups/{groupId}/care-logs", "post")).contains("429");
         assertThat(statusCodesOf("/api/groups/{groupId}/walk-notes", "put")).contains("429");
+        assertThat(statusCodesOf("/api/groups/{groupId}/care-logs/{careLogId}", "delete"))
+                .as("삭제도 group-write 다(#209) — ApiRateLimitFilterTest 가 필터 쪽을 잰다")
+                .contains("429");
 
         assertThat(statusCodesOf("/api/groups/{groupId}/care-logs", "get"))
                 .as("""
@@ -175,9 +179,10 @@ class CareContractSpecTest {
     }
 
     @Test
-    @DisplayName("네 경로 모두 403 을 선언한다 — 인가가 이 이슈의 핵심이다")
+    @DisplayName("다섯 경로 모두 403 을 선언한다 — 인가가 이 이슈의 핵심이다")
     void allFourPathsDeclareForbidden() {
         for (String path : List.of("/api/groups/{groupId}/care-logs",
+                "/api/groups/{groupId}/care-logs/{careLogId}",
                 "/api/groups/{groupId}/walk-notes")) {
             for (String method : methodsOf(path)) {
                 assertThat(statusCodesOf(path, method))
@@ -264,6 +269,9 @@ class CareContractSpecTest {
             }
             if (method.isAnnotationPresent(PutMapping.class)) {
                 found.add("PUT " + base + method.getAnnotation(PutMapping.class).value()[0]);
+            }
+            if (method.isAnnotationPresent(DeleteMapping.class)) {
+                found.add("DELETE " + base + method.getAnnotation(DeleteMapping.class).value()[0]);
             }
         }
         return found;

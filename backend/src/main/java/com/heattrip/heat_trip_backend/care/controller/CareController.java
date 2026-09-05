@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -99,6 +101,18 @@ public class CareController {
                                   @PathVariable long groupId,
                                   @RequestBody CareLogRequest request) {
         return care.record(groupId, request, user);
+    }
+
+    /**
+     * 케어 기록 하나 삭제 — <b>본인 기록만</b>, 204. 규칙은 {@code CareService.deleteLog} 의 javadoc.
+     * 한도 표에서는 {@code group-write} 다 — 잘못 찍은 것을 지우는 일은 찍는 일과 같은 빈도로 일어난다.
+     */
+    @DeleteMapping("/care-logs/{careLogId}")
+    public ResponseEntity<Void> deleteCareLog(@CurrentUser User user,
+                                              @PathVariable long groupId,
+                                              @PathVariable long careLogId) {
+        care.deleteLog(groupId, careLogId, user.getId());
+        return ResponseEntity.noContent().build();
     }
 
     /** 산책 주의사항 한 장. 아직 없으면 빈 본문이다 — 404 가 아니다. */

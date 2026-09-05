@@ -31,7 +31,7 @@ import java.util.List;
  * 오늘의 케어 공유와 산책 주의사항 — 이슈 #76.
  *
  * <h2>인가가 이 클래스의 절반이다</h2>
- * <p>네 경로 모두 {@link #requireMemberGroup} 로 시작한다. 그 메서드가 답하는 질문은 하나다 —
+ * <p>다섯 경로 모두 {@link #requireMemberGroup} 로 시작한다. 그 메서드가 답하는 질문은 하나다 —
  * <b>"요청자가 이 그룹의 방 멤버인가."</b> 아니면 403 이고, 그 뒤로는 아무 행도 읽지 않는다
  * (완료 조건 3 · 6).
  *
@@ -143,6 +143,40 @@ public class CareService {
                 .build());
 
         return CareLogResponse.of(saved);
+    }
+
+    /**
+     * 케어 기록 하나를 지운다 — #209 {@code Groups-medium-1}. 잘못 찍은 "밥 줌" 을 되돌리는 문이다.
+     * 서버가 같은 종류의 두 번째 기록을 거절하지 않으므로({@link #record}) 되돌릴 문이 있어야 한다.
+     *
+     * <p><b>본인 기록만이다.</b> 남의 기록을 지울 수 있으면 이 표가 막으려던 산책 누락이 바로
+     * 그 자리에서 생긴다 — 엄마가 실제로 다녀온 산책을 아빠가 "실수겠지" 하고 지운다.
+     * 채팅 메시지 삭제(보낸 사람만, #197)와 같은 답이다. 탈퇴한 사람의 기록({@code done_by} 가
+     * {@code NULL})은 누구도 못 지운다 — 본인 판정이 불가능하고, 그 사실은 남는 쪽이 안전하다.
+     *
+     * <p><b>다른 그룹의 기록 id 는 404 다.</b> 403 을 주면 "그 id 는 존재한다" 를 알려 주는
+     * 셈이라 id 를 훑어 남의 가족이 하루에 몇 건을 찍는지 셀 수 있다. 없는 id 와 같은 답이다
+     * ({@code DogService} 가 남의 반려동물에 같은 규칙을 쓴다).
+     *
+     * <p><b>물리 삭제다.</b> 이 표는 "지우지 않는 사건 기록" 이지만 잘못 찍은 것은 사건이
+     * 아니다. 지운 뒤 같은 id 로 다시 부르면 404 다 — 채팅 메시지와 달리 행을 남기지 않는다.
+     * 메모 수정은 두지 않는다 — 잘못 적었으면 지우고 다시 찍는 쪽이 "누가 언제" 를 거짓 없이 남긴다.
+     *
+     * @throws ResponseStatusException 403 — 그 그룹의 방 멤버가 아니거나 내 기록이 아니면 ·
+     *                                 404 — 그 그룹에 그 id 의 기록이 없으면
+     */
+    @Transactional
+    public void deleteLog(long groupId, long careLogId, long actorUserId) {
+        requireMemberGroup(groupId, actorUserId);
+
+        CareLog log = careLogs.findById(careLogId)
+                .filter(found -> found.groupId() != null && found.groupId() == groupId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "케어 기록을 찾을 수 없습니다."));
+        if (log.getDoneBy() == null || log.getDoneBy().getId() != actorUserId) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "내가 남긴 기록만 지울 수 있습니다.");
+        }
+        careLogs.delete(log);
     }
 
     // ─────────────────────────── 산책 주의사항 ───────────────────────────

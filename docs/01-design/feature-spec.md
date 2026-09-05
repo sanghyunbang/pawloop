@@ -213,9 +213,9 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 |---|---|
 | 목적 | 물 갈아주기/밥/산책을 **누가·언제** 했는지 가족이 공유 — 이중 급여·산책 누락 방지 |
 | 진입 | 홈 "오늘의 케어" 카드 / 가족 화면 케어 현황 |
-| 동작 | 오늘의 케어 항목(물/밥/산책) 체크 + 수행자·시각 표시. 기록 시 그룹에 공유 |
+| 동작 | 오늘의 케어 항목(물/밥/산책) 체크 + 수행자·시각 표시. 기록 시 그룹에 공유. 잘못 찍은 **내** 기록은 칸을 길게 눌러 지운다 — 남의 기록은 못 지운다(#209) |
 | 데이터 | 기존 care_log 계획 확장: `care_log(id, dog_id FK, group_id FK nullable, type[water/meal/walk/med/vet], done_by(user_id), occurred_at, memo)`. 더미: `CareType`/`CareTask`/`kCareToday` |
-| API | `GET/POST /api/groups/{groupId}/care-logs`(오늘 케어 조회/기록) |
+| API | `GET/POST /api/groups/{groupId}/care-logs`(오늘 케어 조회/기록) · `DELETE …/care-logs/{careLogId}`(본인 기록 삭제, #209) |
 | 상태 | ✅ **서버 연동됨** (M2.5·M2.6) |
 
 ### 6.3 산책 시 주의사항 (MVP)

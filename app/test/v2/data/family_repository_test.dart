@@ -175,6 +175,15 @@ void main() {
       );
     });
 
+    test('DELETE /api/groups/{id}/care-logs/{careLogId} — 204 면 조용히 끝난다 (#209)', () async {
+      final f = repositoryThatAnswers((_) => http.Response('', 204));
+
+      await f.repo.deleteCareLog(3, 42);
+
+      expect(f.seen.single.method, 'DELETE');
+      expect(f.seen.single.url.path, '/api/groups/3/care-logs/42');
+    });
+
     test('PUT walk-notes 는 {notes:[...]} 가 아니라 {body:"..."} 다', () async {
       final f = repositoryThatAnswers((_) => _json({'groupId': 3, 'body': 'a\nb'}));
 
@@ -255,6 +264,26 @@ void main() {
         () => f.repo.careLogs(3),
         throwsA(isA<FamilyFailure>()
             .having((e) => e.kind, 'kind', FamilyFailureKind.forbidden)),
+      );
+    });
+
+    test('내 기록이 아닌 것을 지우면 403 — forbidden 이다', () async {
+      final f = repositoryThatAnswers((_) => _json({'error': {}}, status: 403));
+
+      expect(
+        () => f.repo.deleteCareLog(3, 42),
+        throwsA(isA<FamilyFailure>()
+            .having((e) => e.kind, 'kind', FamilyFailureKind.forbidden)),
+      );
+    });
+
+    test('벌써 지워진 기록의 404 는 network 가 아니라 gone 이다 — 다시 시도할 일이 아니다', () async {
+      final f = repositoryThatAnswers((_) => _json({'error': {}}, status: 404));
+
+      expect(
+        () => f.repo.deleteCareLog(3, 42),
+        throwsA(isA<FamilyFailure>()
+            .having((e) => e.kind, 'kind', FamilyFailureKind.gone)),
       );
     });
 

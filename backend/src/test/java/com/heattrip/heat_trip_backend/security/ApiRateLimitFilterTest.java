@@ -344,6 +344,16 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("DELETE /api/groups/{id}/care-logs/{careLogId} 도 group-write 버킷이다 — 한도+1 번째에서 429")
+    void careLogDeletion_isRateLimited() throws Exception {
+        // 산책 삭제가 walk-write 인 것과 같은 판단 — 지우는 일은 찍는 일과 같은 빈도로 일어난다(#209).
+        MockHttpServletResponse blocked = exhaust(
+                filterWithGroupWriteLimit(2), "DELETE", "/api/groups/12/care-logs/7", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
     @DisplayName("PUT /api/groups/{id}/walk-notes 도 group-write 버킷이다 — 한도+1 번째에서 429")
     void walkNoteRewriting_isRateLimited() throws Exception {
         // 주의사항은 그룹당 한 장이라 PUT 한 번이 **가족 모두가 보는 문서를 통째로** 바꾼다.

@@ -108,7 +108,18 @@ tags:
       `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 **반드시 bearerAuth 검증을 거쳐야 합니다.**
       (구현 참조: `SecurityConfig` 의 permitAll 목록에 `/auth/**` 를 통째로 넣지 말 것 — 이슈 #23)
   - name: Dogs
-    description: 반려견 프로필
+    description: |
+      반려견 프로필. **주인은 등록한 계정 하나**이고(`dog.user_id`), 목록·상세·수정·삭제가 전부 그
+      사람의 것만 봅니다.
+
+      **남의 반려동물과 없는 반려동물은 바이트까지 같은 `404`** 입니다(ADR-0017 규약 3). `403` 을 주면
+      "그 id 는 존재한다" 를 알려 주는 셈이라, id 를 훑으면 남이 몇 마리를 키우는지 셀 수 있습니다.
+      그래서 Dogs 오퍼레이션에는 `403` 이 없습니다.
+
+      **가족 공유 가시성은 아직 정하지 않았습니다** (#209 `Dogs-high-3`). 초대받아 들어온 가족은
+      서로의 반려동물을 이 API 로 볼 수 없고, `Group` 에도 반려동물이 없습니다. 정하는 날
+      `GET /api/groups/{groupId}/dogs`(그룹 구성원의 반려동물)를 열고, 케어 기록이 `dogId` 를 받기
+      시작합니다(`CareLogInput` — #154 가 FK 만 먼저 걸어 뒀습니다). 그 전까지 `CareLog.dogId` 는 항상 `null` 입니다.
   - name: Consents
     description: |
       약관 동의의 기록 (이슈 #190). 서버는 "누가 어느 문서의 어느 버전에 언제 동의(철회)했는가" 만
@@ -625,6 +636,9 @@ paths:
     get:
       tags: [Dogs]
       summary: 내 반려견 목록
+      description: |
+        **내가 등록한 것만** 입니다. 초대받아 들어온 가족의 반려동물은 여기 없습니다 — 가족 공유
+        가시성은 아직 정하지 않았습니다(태그 설명 · #209 `Dogs-high-3`).
       responses:
         '200':
           description: 반려견 목록
@@ -1662,6 +1676,41 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/groups/{groupId}/care-logs/{careLogId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+      - name: careLogId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      tags: [Groups]
+      summary: 케어 기록 삭제(본인 기록만)
+      description: |
+        잘못 찍은 기록을 지웁니다 — 서버가 같은 종류의 두 번째 기록을 거절하지 않으므로(위 `POST`)
+        되돌릴 문이 있어야 합니다(#209).
+
+        **본인이 남긴 기록만 지울 수 있습니다.** 남의 기록은 403 이고 그대로 남습니다 — 지울 수
+        있으면 엄마가 실제로 다녀온 산책을 아빠가 "실수겠지" 하고 지우는, 이 기능이 막으려던
+        산책 누락이 그 자리에서 생깁니다. 채팅 메시지 삭제(보낸 사람만)와 같은 답입니다. 탈퇴한
+        사람의 기록(`doneBy.userId` 가 0)은 누구도 못 지웁니다 — 본인 판정이 불가능하면 남는 쪽이
+        안전합니다.
+
+        **그 그룹에 없는 기록 id 는 404 입니다** — 다른 가족의 기록도, 없는 기록도 같은 404 입니다.
+        403 을 주면 "그 id 는 존재한다" 를 알려 주는 셈이라 id 를 훑어 남의 가족이 하루에 몇 건을
+        찍는지 셀 수 있습니다. 요청자가 그 그룹의 방 멤버가 아니면 기록 존재 여부와 무관하게 403 입니다.
+
+        **물리 삭제라 같은 id 로 다시 부르면 404 입니다.** 메모 수정(`PATCH`)은 두지 않습니다 —
+        메모는 기록의 부속이고, 잘못 적었으면 지우고 다시 찍는 쪽이 "누가 언제" 를 거짓 없이 남깁니다.
+
+        `group-write` 버킷(rate limit)에 등록된 경로입니다 — 지우는 일은 찍는 일과 같은 빈도로 일어납니다.
+      responses:
+        '204': { description: 지워짐 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /api/groups/{groupId}/walk-notes:
