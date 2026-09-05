@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.dog.service;
 
+import com.heattrip.heat_trip_backend.dog.DogTime;
 import com.heattrip.heat_trip_backend.dog.DogOwnership;
 import com.heattrip.heat_trip_backend.dog.dto.DogRequest;
 import com.heattrip.heat_trip_backend.dog.dto.DogResponse;
@@ -18,8 +19,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 
 /**
@@ -108,7 +107,7 @@ public class DogService implements DogOwnership {
     @Transactional
     public void delete(Long userId, long dogId) {
         Dog dog = require(userId, dogId);
-        dog.markDeleted(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+        dog.markDeleted(DogTime.nowUtc(clock));
     }
 
     /**

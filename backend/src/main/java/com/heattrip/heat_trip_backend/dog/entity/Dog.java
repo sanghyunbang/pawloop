@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.dog.entity;
 
+import com.heattrip.heat_trip_backend.dog.DogTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
 import jakarta.persistence.Column;
@@ -149,6 +150,11 @@ public class Dog {
     @Column(name = "avatar", length = 255)
     private String avatar;
 
+    /**
+     * 생성 시각(<b>UTC</b>) — {@link DogTime}. #306 까지 {@code LocalDateTime.now()}(JVM 존)였다.
+     * 응답에는 안 나가는 값이라 화면이 틀린 적은 없지만, 개발 기계(KST)와 배포 컨테이너(UTC)가
+     * 같은 표에 두 존을 섞어 넣는 것은 같다.
+     */
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -162,7 +168,7 @@ public class Dog {
     @PrePersist
     void onCreate() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = DogTime.nowUtc();
         }
     }
 
