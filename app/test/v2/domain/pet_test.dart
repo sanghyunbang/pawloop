@@ -71,10 +71,12 @@ void main() {
       expect(petCatByType('32').label, '숙박');
     });
 
-    test('KTO 외 레이어 key도 해석한다', () {
-      expect(petCatByType('vet').label, '병원');
-      expect(petCatByType('shop').label, '펫샵');
-      expect(petCatByType('trail').label, '산책로');
+    test('병원·펫샵·산책로 key 는 카테고리에 없다 — 실데이터가 없는 칩은 안 보인다(#282)', () {
+      for (final k in ['vet', 'shop', 'trail']) {
+        expect(petCatByType(k).label, '기타',
+            reason: '$k 가 목록에 돌아왔다면 실데이터가 붙은 것이어야 한다');
+        expect(kPetCategories.map((c) => c.key), isNot(contains(k)));
+      }
     });
 
     test('모르는 값과 null은 기타로 떨어진다', () {
@@ -83,12 +85,10 @@ void main() {
       expect(petCatByType('').label, '기타');
     });
 
-    test('kLayerKeys는 KTO 숫자 key와 겹치지 않는다', () {
-      final ktoKeys = kPetCategories
-          .map((c) => c.key)
-          .where((k) => int.tryParse(k) != null)
-          .toSet();
-      expect(kLayerKeys.intersection(ktoKeys), isEmpty);
+    test('카테고리 key 는 전부 KTO contenttypeid(숫자)다', () {
+      for (final c in kPetCategories) {
+        expect(int.tryParse(c.key), isNotNull, reason: '${c.key} 는 KTO 가 모르는 key 다');
+      }
     });
   });
 

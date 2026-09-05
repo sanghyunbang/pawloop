@@ -15,6 +15,11 @@ import '../widgets/profile_avatar.dart';
 
 /// 지도 — 관광공사 반려동물 동반여행(KTO) 기반 "우리 아이랑 갈 수 있는 곳".
 /// 리스트/지도 토글 + 카테고리 필터.
+///
+/// 병원·펫샵·산책로 칩은 없다 — 이슈 #282. 실데이터가 없어서 성수동 근처의 가짜 5곳과
+/// 선 하나를 "예시" 라며 보여 주고 있었고, 부산 사용자가 병원 칩을 누르면 성수동의 가짜
+/// 병원이 떴다. 실데이터(LOCALDATA·두루누비)를 붙이는 날 칩도 돌아온다. 계약의
+/// `PlaceCategory` 에는 셋이 남아 있고, 서버는 그 값에 빈 목록을 준다.
 class ExploreScreen extends StatefulWidget {
   final String initialView; // 'list' | 'map'
   const ExploreScreen({super.key, this.initialView = 'list'});
@@ -61,38 +66,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   List<PetPlace> get _filtered {
-    if (_catFilter == 'trail') return const []; // 산책로는 선(폴리라인)으로 표시
-    if (_catFilter == 'vet' || _catFilter == 'shop') return _dummyLayer(_catFilter!);
     if (_catFilter == null) return _places;
     return _places.where((p) => p.contentTypeId == _catFilter).toList();
   }
-
-  bool get _isLayer => _catFilter != null && kLayerKeys.contains(_catFilter);
-
-  // ── 병원/펫샵/산책로 더미 레이어 (실제론 LOCALDATA·두루누비 공공데이터) ──
-  List<PetPlace> _dummyLayer(String k) => k == 'vet' ? _dummyVet : _dummyShop;
-
-  //
-  // **거리를 안 싣는다** (`distM` 기본값 0 → `distLabel` 이 빈 문자열). 예전에는
-  // 320·900·1600 을 박아 두어서 부산 사용자에게도 "320m 동물병원" 이 떴다 — 더미가
-  // 측정값처럼 읽히는 순간 더미였을 때보다 나쁘다(`insight_screen.dart` 가 #160 때
-  // 같은 판단을 적어 뒀다). 전화번호도 뺀다 — `02-000-0000` 은 누르면 엉뚱한 데로 간다.
-  static const List<PetPlace> _dummyVet = [
-    PetPlace(contentId: 'v1', title: '서울숲동물병원', contentTypeId: 'vet', addr: '서울 성동구 왕십리로 66', image: '', tel: '', lat: 37.5462, lng: 127.0388),
-    PetPlace(contentId: 'v2', title: '성수24시동물의료센터', contentTypeId: 'vet', addr: '서울 성동구 성수이로 118', image: '', tel: '', lat: 37.5445, lng: 127.0559),
-    PetPlace(contentId: 'v3', title: '한강동물병원', contentTypeId: 'vet', addr: '서울 광진구 자양로 12', image: '', tel: '', lat: 37.5348, lng: 127.0663),
-  ];
-  static const List<PetPlace> _dummyShop = [
-    PetPlace(contentId: 's1', title: '멍냥마트 성수점', contentTypeId: 'shop', addr: '서울 성동구 연무장길 33', image: '', tel: '', lat: 37.5423, lng: 127.0555),
-    PetPlace(contentId: 's2', title: '보리네 펫살롱', contentTypeId: 'shop', addr: '서울 성동구 서울숲2길 18', image: '', tel: '', lat: 37.5471, lng: 127.0413),
-  ];
-
-  // 더미 산책로(서울숲 강변 코스).
-  static const List<NLatLng> _trailCoords = [
-    NLatLng(37.5448, 127.0374), NLatLng(37.5455, 127.0402), NLatLng(37.5451, 127.0435),
-    NLatLng(37.5432, 127.0461), NLatLng(37.5418, 127.0492), NLatLng(37.5427, 127.0521),
-    NLatLng(37.5446, 127.0538),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -124,20 +100,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
         const SizedBox(height: 10),
         _catChips(),
         const SizedBox(height: 14),
-        if (_loading && !_isLayer)
+        if (_loading)
           const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator(color: Color(0xFFFF8F63))))
-        else if (_catFilter == 'trail')
-          _trailCard()
         else if (_filtered.isEmpty)
           _emptyBox()
         else ...[
           Row(children: [
-            Icon(_isLayer ? petCatByType(_catFilter).icon : Icons.pets, size: 15, color: _isLayer ? petCatByType(_catFilter).color : const Color(0xFFFF8F63)),
+            const Icon(Icons.pets, size: 15, color: Color(0xFFFF8F63)),
             const SizedBox(width: 5),
-            Text('${_isLayer ? petCatByType(_catFilter).label : "반려동반 가능"} · ${_filtered.length}곳',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _isLayer ? petCatByType(_catFilter).color : const Color(0xFFE07A4E))),
+            Text('반려동반 가능 · ${_filtered.length}곳',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
             const Spacer(),
-            Text(_isLayer ? '공공데이터 (더미)' : '관광공사', style: const TextStyle(fontSize: 10.5, color: T.textMuted)),
+            const Text('관광공사', style: TextStyle(fontSize: 10.5, color: T.textMuted)),
           ]),
           const SizedBox(height: 10),
           for (int i = 0; i < _filtered.length; i++) ...[
@@ -235,52 +209,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
         const Text('현위치 8km 안을 봤어요 · 필터를 바꿔보세요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
       ]),
     );
-  }
-
-  // 산책로 레이어 카드(더미 — 실제론 두루누비 걷기여행길).
-  Widget _trailCard() {
-    const trailColor = Color(0xFF2FB89B);
-    Widget item(String name, String len, String tag) => GestureDetector(
-          onTap: () => setState(() => view = 'map'),
-          child: GlassCard(
-            padding: const EdgeInsets.all(14),
-            child: Row(children: [
-              Container(
-                width: 46, height: 46, alignment: Alignment.center,
-                decoration: BoxDecoration(color: trailColor.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(13)),
-                child: const Icon(Icons.route_rounded, color: trailColor, size: 24),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                  const SizedBox(height: 5),
-                  Row(children: [
-                    const Icon(Icons.straighten, size: 12, color: T.textMuted),
-                    const SizedBox(width: 3),
-                    Text(len, style: const TextStyle(fontSize: 12, color: T.textMuted)),
-                    const SizedBox(width: 10),
-                    Text(tag, style: const TextStyle(fontSize: 12, color: trailColor, fontWeight: FontWeight.w700)),
-                  ]),
-                ]),
-              ),
-              const Icon(Icons.chevron_right, size: 20, color: Color(0xFFCABFDC)),
-            ]),
-          ),
-        );
-    return Column(children: [
-      Row(children: [
-        const Icon(Icons.route_rounded, size: 15, color: trailColor),
-        const SizedBox(width: 5),
-        const Text('산책로 · 2곳', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: trailColor)),
-        const Spacer(),
-        const Text('공공데이터 (더미)', style: TextStyle(fontSize: 10.5, color: T.textMuted)),
-      ]),
-      const SizedBox(height: 10),
-      item('서울숲 강변 산책 코스', '2.6km', '반려동반 · 완만'),
-      const SizedBox(height: 12),
-      item('중랑천 물길 산책로', '4.1km', '반려동반 · 평지'),
-    ]);
   }
 
   Widget _imgFallback(PetCategory cat) => Container(
@@ -448,17 +376,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ]),
           const SizedBox(height: 8),
           SizedBox(height: 40, child: _catChips()),
-          // 지도 뷰에는 출처를 밝히는 자리가 시트 배지뿐이었다. 성수동 밖 사용자가
-          // 병원 칩을 누르면 마커 없는 빈 지도만 보고, 왜 비었는지 알 길이 없었다.
-          if (_isLayer) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(color: const Color(0xF2FFFFFF), borderRadius: BorderRadius.circular(10)),
-              child: const Text('예시 데이터 · 서울 성수동 근처에만 있어요',
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: T.textMuted)),
-            ),
-          ],
         ]),
       ),
       Positioned(left: 16, bottom: 128, child: _legend()),
@@ -510,12 +427,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final c = _mapCtrl;
     if (c == null || !mounted) return;
     await c.clearOverlays();
-    if (_catFilter == 'trail') {
-      await c.addOverlay(NPolylineOverlay(id: 'trail', coords: _trailCoords, color: const Color(0xFF2FB89B), width: 6));
-      await c.addOverlay(NMarker(id: 'trail-start', position: _trailCoords.first, icon: await _markerIcon(petCatByType('trail'))));
-      // 산책로 더미도 카메라를 안 옮긴다 — 아래 병원/펫샵과 같은 이유다(#283 검토가 잡았다).
-      return;
-    }
     final markers = <NAddableOverlay>{};
     for (final p in _filtered) {
       final icon = await _markerIcon(p.category);
@@ -524,9 +435,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       markers.add(m);
     }
     if (markers.isNotEmpty) await c.addOverlayAll(markers);
-    // **레이어를 골라도 카메라를 옮기지 않는다.** 예전에는 더미가 있는 성수동으로
-    // 날아갔다 — 부산 사용자가 병원 칩을 누르면 지도가 서울로 갔다. 더미는 사용자가
-    // 보고 있는 곳에 없는 것이 정상이고, 그 사실을 감추려고 화면을 움직이면 안 된다.
+    // 필터를 바꿔도 카메라는 안 옮긴다 — 사용자가 보고 있는 곳이 기준이다.
   }
 
   /// 카테고리색 핀(플랫폼 통일 — Flutter 위젯 렌더).
@@ -556,15 +465,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// **장소 단위 UGC 가 차별화 논리다**(`market-competition.md:87`). 나중에 붙이면 이미
   /// 쌓인 글에는 영영 장소가 없다. 그래서 처음부터 `contentId` 를 싣는다.
   ///
-  /// <b>단, 더미 레이어에서는 안 싣는다.</b> 병원·펫샵은 아직 공공데이터가 아니라
-  /// `_dummyVet`·`_dummyShop` 의 하드코딩이고 `contentId` 가 `'v1'`·`'s1'` 이다. 서버가
-  /// 본 적 없는 값이라, 실으면 나중에 진짜 데이터가 들어왔을 때 아무 장소와도 안 이어지는
-  /// 글이 남는다. 이름(`loc`)만 들고 간다 — 그 필드가 정확히 그 자리다.
+  /// `contentId` 가 비어 있으면 안 싣는다 — 서버가 모르는 장소를 글에 묶으면 아무
+  /// 장소와도 안 이어지는 글이 남는다. 그때는 이름(`loc`)만 들고 간다.
   ///
   /// 시트를 먼저 닫는다. 그리고 `sheetCtx` 가 아니라 화면의 `context` 로 민다 —
   /// 닫힌 시트의 컨텍스트는 죽어 있다.
   Widget _writeAboutPlace(BuildContext sheetCtx, PetPlace p) {
-    final linkable = p.contentId.isNotEmpty && !kLayerKeys.contains(p.contentTypeId);
+    final linkable = p.contentId.isNotEmpty;
     return GestureDetector(
       onTap: () {
         Navigator.pop(sheetCtx);
@@ -646,20 +553,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ]),
           ],
           const SizedBox(height: 8),
-          // 출처 배지. **더미에 관광공사를 붙이지 않는다** — 리스트 헤더(`_listView`)는
-          // 레이어일 때 '공공데이터 (더미)' 라고 밝히는데, 이 시트가 그것을 뒤집고
-          // 있었다. 하드코딩 "서울숲동물병원"(전화 02-000-0000)이 공공데이터 배지를 달고
-          // 나갔다. `_writeAboutPlace` 가 이미 같은 판정(`kLayerKeys`)을 한다.
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(kLayerKeys.contains(p.contentTypeId) ? Icons.science_outlined : Icons.pets,
-                size: 13, color: const Color(0xFFFF8F63)),
-            const SizedBox(width: 5),
-            Text(
-              kLayerKeys.contains(p.contentTypeId)
-                  ? '예시 데이터 · 실제 업체가 아니에요'
-                  : '반려동물 동반 가능 (관광공사)',
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E)),
-            ),
+          // 출처 배지. 목록의 전부가 관광공사 데이터다 — 더미 레이어는 #282 로 사라졌다.
+          const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.pets, size: 13, color: Color(0xFFFF8F63)),
+            SizedBox(width: 5),
+            Text('반려동물 동반 가능 (관광공사)',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
           ]),
           const SizedBox(height: 14),
           _writeAboutPlace(sheetCtx, p),
