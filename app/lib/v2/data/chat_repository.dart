@@ -416,6 +416,14 @@ class ChatRepository {
     await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/blocks/$userId')));
   }
 
+  /// 내 메시지를 지운다 — 이슈 #197.
+  ///
+  /// 소프트 삭제다. 자리는 남고 본문만 비며, 다음 응답부터 `deletedAt` 이 실린다. 이미 지운
+  /// 메시지에 다시 불러도 성공(204)이다. 남의 메시지는 403 이라 [ChatFailure] 다.
+  Future<void> deleteMessage(int messageId) async {
+    await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/chat/messages/$messageId')));
+  }
+
   /// 이 사람을 방에서 내보낸다. **방장만.**
   ///
   /// 멤버 행은 남고 재입장이 금지된다 — 유효한 초대코드로도 못 들어온다. 그 사람이 쓴
