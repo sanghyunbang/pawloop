@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.OAuth.principal;
 
 import com.heattrip.heat_trip_backend.user.CurrentUser;
+import com.heattrip.heat_trip_backend.user.ViewerId;
 
 import java.util.List;
 
@@ -34,6 +35,8 @@ public class CurrentUserWebMvcConfig implements WebMvcConfigurer {
         // 정적 초기화인 이유: @Bean 메서드로 두면 springdoc 이 스캔을 시작한 뒤에 실행될 수 있다.
         // 잠그는 테스트: GeneratedOpenApiSpecTest.
         org.springdoc.core.utils.SpringDocUtils.getConfig().addAnnotationsToIgnore(CurrentUser.class);
+        // @ViewerId 도 같다(#223). 빠뜨리면 인증이 선택인 핸들러마다 `viewerId` query 파라미터가 생긴다.
+        org.springdoc.core.utils.SpringDocUtils.getConfig().addAnnotationsToIgnore(ViewerId.class);
     }
 
     private final UserRepository userRepository;
@@ -45,5 +48,6 @@ public class CurrentUserWebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
         resolvers.add(new CurrentUserArgumentResolver(userRepository));
+        resolvers.add(new ViewerIdArgumentResolver());
     }
 }

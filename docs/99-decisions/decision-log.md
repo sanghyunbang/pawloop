@@ -30,6 +30,7 @@
 | [0018](#adr-0018--좌표가-기기를-떠나는-것은-컴파일-타임에-정한다--전송-경로를-정책-하나로-모은다) | 좌표가 기기를 떠나는 것은 컴파일 타임에 정한다 — 전송 경로를 정책 하나로 모은다 | 채택 (Accepted) | 2026-09 |
 | [0019](#adr-0019--커뮤니티에-동의-창을-만들지-않는다--비어-있던-것은-시점이-아니라-내용이다) | 커뮤니티에 동의 창을 만들지 않는다 — 비어 있던 것은 시점이 아니라 내용이다 | 채택 (Accepted) | 2026-09 |
 | [0020](#adr-0020--동의는-이력으로-남긴다--서버는-문서-버전을-모르고-재동의는-앱이-정한다) | 동의는 이력으로 남긴다 — 서버는 문서 버전을 모르고 재동의는 앱이 정한다 | 2026-09-05 | 채택 |
+| [0021](#adr-0021--인증이-선택인-핸들러는-보는-사람의-id-를-받는다--principal-타입은-열지-않는다) | 인증이 선택인 핸들러는 "보는 사람의 id" 를 받는다 — principal 타입은 열지 않는다 | 2026-09-05 | 채택 |
 
 > 상태 범례: **채택(Accepted)** = 현재 유효 · **임시(Accepted, 임시)** = 채택했으나 대체 계획 존재 · (필요 시) 폐기(Superseded)/거절(Rejected).
 
@@ -2193,3 +2194,65 @@ B안으로 전환하는 이슈에서 `legal-lbs-compliance.md` §4.1 의 `locati
   그 버전이 문서 파일 머리와 같은지 테스트가 잠급니다.
 - `sign_up_screen.dart` 의 `kTermsVersion = 'v1.0'` 하나로 문서 셋을 뭉개던 것을 문서별 버전으로.
 
+## ADR-0021 — 인증이 선택인 핸들러는 "보는 사람의 id" 를 받는다 — principal 타입은 열지 않는다
+
+- **상태**: 채택 (Accepted)
+- **날짜**: 2026-09-05
+- **이슈**: [#223](https://github.com/sanghyunbang/heattrip/issues/223) · 참조 이슈 [#296](https://github.com/sanghyunbang/heattrip/issues/296)
+- **관련**: [#170](https://github.com/sanghyunbang/heattrip/issues/170) 커뮤니티 읽기(인증 선택) ·
+  [#104](https://github.com/sanghyunbang/heattrip/issues/104) `OAuth` 공개 표면 ·
+  [#5](https://github.com/sanghyunbang/heattrip/issues/5) principal 을 `Long id` 로 ·
+  [ADR-0016](#adr-0016--커뮤니티는-신고와-차단을-moderation-으로-올린다) 결정 3 (이 문서가 그 중 "새 애노테이션을 만들지 않는다" 를 대체한다)
+
+### 맥락
+
+커뮤니티 읽기 셋(`GET /api/community/posts` 등)은 **인증이 선택**입니다. 게스트도 읽고, 로그인했으면
+자기가 누른 반응이 `mine` 에 실립니다. `@CurrentUser` 는 주입 실패를 401 로 만드는 것이 설계라 게스트를
+못 받습니다. 그래서 #170 은 컨트롤러 안의 `viewerId()` 가 `SecurityContext` 의 principal
+(`OAuth.principal.AuthenticatedUser`)을 직접 읽게 했고, 그 타입은 `OAuth` 모듈 밖에 열려 있지 않아
+모듈 경계 위반이 232 에서 234 로 늘었습니다. #223 은 "타입을 열지, 두 번째 사용처가 생길 때 정하자"
+로 남겼습니다.
+
+### 검토한 것
+
+**1. `AuthenticatedUser` 에 `@NamedInterface("principal")` 을 붙인다.** 한 줄이고 위반 둘이 사라집니다.
+대신 인증 주체의 표현(record 의 모양)이 다른 모듈의 컴파일 의존이 됩니다 — 필드를 하나 더하거나
+이름을 바꾸면 커뮤니티가 같이 바뀝니다. 그리고 컨트롤러마다 `viewerId()` 를 복사하게 됩니다.
+
+**2. 문자열 principal 에서 id 를 파싱한다** (`security.ChatRateLimitFilter` 가 쓰는 우회). #5 의 버그로
+돌아가는 길입니다 — `AuthenticatedUser` javadoc 이 "principal 을 문자열로 두면 그 한 줄이 이 이슈의
+버그였다" 고 못박아 둔 방향이라 제외합니다.
+
+**3. "보는 사람의 id 를 주는 자리" 를 만든다** — `@ViewerId Long viewerId`. Spring Security 가 권하는
+모양이 이것입니다: 컨트롤러가 `SecurityContextHolder` 를 직접 읽지 않고 `@AuthenticationPrincipal`
+계열 메타 애노테이션으로 받고, 익명이면 `null` 을 받습니다(Spring Security 레퍼런스 "Method
+Arguments — @AuthenticationPrincipal", `errorOnInvalidType`/메타 애노테이션 절). 우리는 그 자리에
+자체 리졸버를 둡니다 — principal 이 우리 record 라 `id` 가 `Long` 인 것을 리졸버 한 곳이 보장하고,
+Spring Modulith 의 "named interface 는 최소로" 도 지킵니다(타입이 아니라 애노테이션 하나만 공개).
+
+### 결정
+
+**1. `@ViewerId Long` 을 둔다.** 애노테이션은 `user` 루트(`@CurrentUser` 옆 — 부르는 쪽의 어휘, #107),
+리졸버는 `OAuth.principal`(principal 을 읽는 유일한 자리). 로그인했으면 `users.id`, 아니면 `null`.
+인증 없음 · 익명 토큰 · principal 타입 불일치 셋 다 `null` 입니다 — `@CurrentUser` 가 셋 다 401 인 것과
+정확히 반대이고, 그래서 한 애노테이션의 속성으로 합치지 않습니다.
+
+**2. `AuthenticatedUser` 는 열지 않는다.** 밖에서 부르는 자리가 0 이 되었으므로 기준선은 232 로
+내려갑니다. 열어야 할 것은 타입이 아니라 자리였습니다.
+
+**3. 인증이 선택인 엔드포인트는 `@ViewerId` 가 붙은 자리로만 존재한다.** 어느 핸들러가 게스트를
+받는지 `grep @ViewerId` 로 셉니다. `@CurrentUser` 에 `required=false` 를 두지 않는 이유(인가 경계는
+`SecurityConfig.publicMatchers` 가 정한다)는 그대로입니다 — `@ViewerId` 는 그 경계를 바꾸지 않고,
+이미 permitAll 인 경로에서 "누구인가" 만 읽습니다.
+
+**4. springdoc 무시 등록을 함께 한다.** 빠뜨리면 생성 계약에 `viewerId` query 파라미터가 새어
+나옵니다 — `CurrentUserWebMvcConfig` 가 등록하고 `GeneratedOpenApiSpecTest` 가 `me`·`user` 와 같이
+잠급니다.
+
+### 결과
+
+- 위반 234 → 232. `ModularityBaselineTest` 가 내려간 수를 기준선으로 잠급니다.
+- `CommunityController` 의 `viewerId()` 와 `SecurityContextHolder` 참조가 사라집니다.
+- 다음에 인증이 선택인 엔드포인트(장소 상세, 산책 공개 피드)가 생기면 파라미터 하나로 끝납니다.
+- 만료 토큰이 게스트로 떨어지는 성질(ADR-0016 결정 3의 결과 절)은 그대로입니다 — 리졸버가
+  필터의 판정을 바꾸지 않습니다.
