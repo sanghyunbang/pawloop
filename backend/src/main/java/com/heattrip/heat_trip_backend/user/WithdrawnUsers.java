@@ -10,9 +10,11 @@ import org.springframework.stereotype.Component;
  * 탈퇴한 사용자를 가려내는 것. <b>{@code user} 모듈의 공개 표면이다.</b> (이슈 #82)
  *
  * <h2>왜 이 타입이 있어야 하는가</h2>
- * <p>{@code social} 이 커뮤니티 카드·댓글을 그릴 때 <b>작성 시점의 {@code handle} 스냅샷</b>을
- * 그대로 응답에 싣고 있었다. 그래서 <b>탈퇴해도 그 사람 닉네임이 계속 떴다.</b> 탈퇴 화면은
- * "복구할 수 없습니다" 라고 말하는데 커뮤니티에는 남아 있는 상태였다.
+ * <p>{@code social} 이 <b>감정카드</b>({@code emotion_card}·{@code card_comment} — 감정 여행 시절의
+ * 것이고, 반려 커뮤니티 {@code post}·{@code comment}·{@code reaction} 과는 다른 표다, #174)를 그릴 때
+ * <b>작성 시점의 {@code handle} 스냅샷</b>을 그대로 응답에 싣고 있었다. 그래서 <b>탈퇴해도 그 사람
+ * 닉네임이 계속 떴다.</b> 탈퇴 화면은 "복구할 수 없습니다" 라고 말하는데 카드에는 남아 있는 상태였다.
+ * (반려 커뮤니티는 {@code community} 모듈이 같은 표면으로 같은 답을 쓴다.)
  *
  * <p>고치려면 "이 id 가 아직 있는가" 를 물어야 하는데, {@code social} 이
  * {@code user.repository.UserRepository} 를 직접 부르면 안 된다 — 규약이 이렇게 적어 뒀다
