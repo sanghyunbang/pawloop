@@ -1,7 +1,7 @@
 package com.heattrip.heat_trip_backend.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.heattrip.heat_trip_backend.S3.media.error.GlobalExceptionHandler;
+import com.heattrip.heat_trip_backend.error.GlobalExceptionHandler;
 import com.heattrip.heat_trip_backend.observability.logging.CorrelationIdFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;

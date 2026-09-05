@@ -1,4 +1,4 @@
-package com.heattrip.heat_trip_backend.S3.media.error;
+package com.heattrip.heat_trip_backend.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

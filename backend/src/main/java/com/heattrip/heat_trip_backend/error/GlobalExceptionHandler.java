@@ -1,4 +1,4 @@
-package com.heattrip.heat_trip_backend.S3.media.error;
+package com.heattrip.heat_trip_backend.error;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.http.HttpStatus;
@@ -23,6 +23,17 @@ import java.util.NoSuchElementException;
  * 돌려준다(#5·#6). 계약의 {@code components/responses/Unauthorized} 도 그렇게 선언하고,
  * {@code GeneratedOpenApiSpecTest} 가 생성 문서에 401 본문 스키마가 생기면 빨간불을 낸다.
  * 그래서 아래 {@code handleUnauthenticated} 는 {@code ResponseEntity<Void>} 다.
+ *
+ * <h2>왜 최상위 {@code error} 패키지인가 (이슈 #114)</h2>
+ * <p>2026-09-06 까지 이 클래스는 {@code S3/media/error/} 에 있었다 — 외부 서비스 패키지 밑
+ * 3단계. 전 애플리케이션의 4xx/5xx 본문을 정하는 클래스가 그 자리에 있어서 {@code security}
+ * 가 429 본문을 만들려고 {@code S3} 모듈 내부를 참조했고, 그것이 모듈 경계 위반 둘이었다
+ * ({@code ModularityBaselineTest} 232 → 230). 어느 도메인의 것도 아닌 <b>계약의 오류 봉투</b>라
+ * 도메인 모듈 밑이 아니라 자기 모듈이 맞고, 모듈 루트 타입이라 누가 불러도 위반이 아니다.
+ *
+ * <p><b>옮긴 것이지 쪼갠 것이 아니다.</b> 아래 핸들러들은 반드시 한 클래스 안에 있어야 한다
+ * — 별도 {@code @ControllerAdvice} 로 나누면 advice 빈 순서로 승자가 정해져 500 이 나간다
+ * (아래 javadoc 의 실측). {@code @RestControllerAdvice} 는 여전히 하나다.
  */
 @RestControllerAdvice // [A] 전역 @Controller/~를 가로채 JSON 응답으로 바꿔줌
 public class GlobalExceptionHandler {
