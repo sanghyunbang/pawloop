@@ -87,6 +87,24 @@ class PlaceCatalogRepository {
   /// 기다리게 할 이유가 없다.
   DateTime? _lastFailure;
 
+  /// 한 벌을 하나라도 갖고 있는가.
+  ///
+  /// 화면이 **"이 지역에 없음"** 과 **"아직 못 받음"** 을 가르는 데 쓴다. 둘 다
+  /// [nearby] 가 빈 목록을 주므로 그것만 보면 구분이 안 되고, 그러면 네트워크가 끊긴
+  /// 사용자에게 "이 지역엔 등록된 곳이 없어요, 지도를 움직여 보세요" 라고 말하게 된다 —
+  /// 시킨 대로 해도 소용이 없는 안내다.
+  bool get hasCatalog => _memory != null && _memory!.isNotEmpty;
+
+  /// 사람이 "다시 시도" 를 눌렀다. **백오프를 건너뛰고** 한 번 받아 본다.
+  ///
+  /// [failureBackoff] 는 산책 화면의 자동 재호출을 막으려는 것이지 사람의 손을 막으려는
+  /// 것이 아니다. 버튼을 눌렀는데 5분을 기다리라고 하면 버튼이 거짓말이 된다.
+  ///
+  /// 백오프 판정은 [all] 에만 있고 [_refresh] 에는 없다 — 그래서 여기서 따로 지울 것이
+  /// 없다. 처음에는 `_lastFailure = null` 을 앞에 두었는데, 그 줄을 지워도 검사가
+  /// 초록이었다(실측). 있으나 없으나 같은 줄은 없는 편이 읽는 사람에게 정직하다.
+  Future<void> retry() => _refresh();
+
   /// 전국 한 벌. 메모리 → 파일 → 네트워크 순으로 찾는다.
   Future<List<PetPlace>> all() async {
     _memory ??= await _readFile();
@@ -171,11 +189,18 @@ class PlaceCatalogRepository {
       final prefs = await SharedPreferences.getInstance();
       final etag = prefs.getString(_etagKey);
 
+      // **갖고 있는 것이 있을 때만** ETag 를 댄다. 같으면 304 로 끝나고 2.83MB 가
+      // 안 온다 — 이 헤더가 이 경로의 요점이다.
+      //
+      // 메모리가 비었는데 ETag 를 대면 **304 에 본문이 없어서 영원히 빈 채로 남는다.**
+      // 파일 캐시는 OS 가 지울 수 있고(안드로이드 「캐시 삭제」 도 그렇다) 그때
+      // SharedPreferences 의 ETag 는 남는다. 그 상태로 304 를 받으면 채울 것이 없고,
+      // "다시 시도" 를 눌러도 또 304 다 — 서버 내용이 바뀔 때까지 사용자가 할 수 있는
+      // 일이 없다. #283 검토에서 잡았다.
+      final canRevalidate = _memory != null && etag != null && etag.isNotEmpty;
       final res = await _client.get(
         Uri.parse('$_baseUrl/api/places/catalog'),
-        // 갖고 있는 것이 있으면 그것을 대고 묻는다. 같으면 304 로 끝나고
-        // 2.83MB 가 안 온다 — 이 헤더가 이 경로의 요점이다.
-        headers: {if (etag != null && etag.isNotEmpty) 'If-None-Match': etag},
+        headers: {if (canRevalidate) 'If-None-Match': etag},
       ).timeout(const Duration(seconds: 30));
 
       if (res.statusCode == 304) {

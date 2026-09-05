@@ -8,7 +8,9 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
 import '../domain/pet.dart';
 import '../data/location_service.dart';
+import '../data/location_upload_policy.dart';
 import '../data/pet_places_repository.dart';
+import '../data/place_catalog_repository.dart';
 import '../data/walk_outbox.dart';
 import 'create_screen.dart';
 
@@ -50,6 +52,21 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   bool _follow = true; // 카메라 자동 따라가기(제스처 시 해제)
   bool _statsExpanded = false; // 스탯 패널 펼침 여부(기본 접힘)
   bool _poisLoaded = false;
+
+  /// 주변 장소를 받는 중인가.
+  ///
+  /// 이게 없으면 받는 동안 검색바가 '주변 반려 장소 찾기' 로 남고 시트를 열면
+  /// '조건에 맞는 곳이 없어요' 라고 한다 — **기다리는 중인데 없다고 말한다.**
+  /// 카탈로그는 첫 실행에 2.83MB 를 받으므로 그 창이 몇 초는 된다(이슈 #275).
+  bool _poisLoading = false;
+
+  /// 열려 있는 주변 장소 시트를 다시 그리는 손잡이. 닫히면 `null`.
+  ///
+  /// **부모의 `setState` 는 모달 시트를 다시 그리지 않는다.** 시트는 별도 라우트라
+  /// `_poisLoading`·`_places` 가 바뀌어도 그대로다 — 받는 중에 열어 두면 로딩이
+  /// 끝나도 스피너가 영원히 돈다(#283 검토, 프레임워크 소스로 확인). 그래서
+  /// `StatefulBuilder` 의 `setSheet` 를 잡아 두고 값이 바뀔 때 직접 부른다.
+  StateSetter? _sheetRefresh;
   int _seconds = 0;
   double _km = 0;
 
@@ -180,16 +197,26 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
     //
     // 헛일 걱정은 그대로 없다: 두 번째부터는 메모리에 있는 목록을 훑을 뿐이고
     // 네트워크가 안 나간다.
-    final places = await PetPlacesRepository().fetchNearby(
-      lat: center.latitude,
-      lng: center.longitude,
-      radius: 3000,
-      numOfRows: 40,
-    );
+    if (mounted) setState(() => _poisLoading = true);
+    _sheetRefresh?.call(() {});
+    final List<PetPlace> places;
+    try {
+      places = await PetPlacesRepository().fetchNearby(
+        lat: center.latitude,
+        lng: center.longitude,
+        radius: 3000,
+        numOfRows: 40,
+      );
+    } finally {
+      if (mounted) setState(() => _poisLoading = false);
+      // 시트가 열려 있으면 그것도 다시 그린다 — 안 그러면 스피너가 안 사라진다.
+      _sheetRefresh?.call(() {});
+    }
     if (!mounted || _ctrl == null || places.isEmpty) return;
     // setState 없이 필드만 바꾸면 검색바가 계속 '주변 반려 장소 찾기' 로 남는다 —
     // 찾아 놓고 못 찾은 척한다.
     setState(() => _places = places);
+    _sheetRefresh?.call(() {});
     final markers = <NAddableOverlay>{};
     for (final p in places) {
       final m = NMarker(
@@ -319,6 +346,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
       isScrollControlled: true,
       builder: (sheetCtx) => StatefulBuilder(
         builder: (sheetCtx, setSheet) {
+          _sheetRefresh = setSheet;
           final cats = kPetCategories
               .where((c) => _places.any((p) => p.contentTypeId == c.key))
               .toList();
@@ -349,7 +377,10 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  '주변 반려 장소 ${_places.length}곳',
+                  // 아직 세지 않은 것을 0 이라 적지 않는다 — 검색바와 같은 분기다.
+                  _poisLoading && _places.isEmpty
+                      ? '주변 장소를 불러오는 중…'
+                      : '주변 반려 장소 ${_places.length}곳',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -403,11 +434,27 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
                 const SizedBox(height: 8),
                 Expanded(
                   child: list.isEmpty
-                      ? const Center(
-                          child: Text(
-                            '조건에 맞는 곳이 없어요',
-                            style: TextStyle(fontSize: 13, color: T.textMuted),
-                          ),
+                      ? Center(
+                          child: _poisLoading && _places.isEmpty
+                              ? const Column(mainAxisSize: MainAxisSize.min, children: [
+                                  SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFFFF8F63))),
+                                  SizedBox(height: 10),
+                                  Text('주변 장소를 불러오는 중이에요',
+                                      style: TextStyle(fontSize: 13, color: T.textMuted)),
+                                ])
+                              : Text(
+                                  // 한 벌을 못 받은 것을 "없다" 고 말하지 않는다 —
+                                  // 탐색 화면의 `_catalogUnavailable` 과 같은 판정.
+                                  _places.isEmpty &&
+                                          !LocationUploadPolicy.canQueryNearbyPlaces &&
+                                          !PlaceCatalogRepository.instance.hasCatalog
+                                      ? '장소 목록을 아직 못 받았어요'
+                                      : '조건에 맞는 곳이 없어요',
+                                  style: const TextStyle(fontSize: 13, color: T.textMuted),
+                                ),
                         )
                       : ListView.builder(
                           itemCount: list.length,
@@ -484,7 +531,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
           );
         },
       ),
-    );
+    ).whenComplete(() => _sheetRefresh = null); // 닫히면 손잡이를 놓는다 — 죽은 시트를 다시 그리지 않는다
   }
 
   Widget _catChip(
@@ -815,7 +862,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
                               const SizedBox(width: 8),
                               Text(
                                 _places.isEmpty
-                                    ? '주변 반려 장소 찾기'
+                                    ? (_poisLoading ? '주변 장소를 불러오는 중…' : '주변 반려 장소 찾기')
                                     : '주변 반려 장소 ${_places.length}곳 보기',
                                 style: const TextStyle(
                                   fontSize: 13.5,

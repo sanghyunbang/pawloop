@@ -156,6 +156,28 @@ void main() {
       );
     });
 
+    test('갖고 있는 것이 없으면 ETag 를 안 댄다 — 대면 304 에 본문이 없어 영원히 빈 채로 남는다', () async {
+      // 파일 캐시는 지워졌는데(OS 청소·「캐시 삭제」) SharedPreferences 의 ETag 는 남은 상태.
+      SharedPreferences.setMockInitialValues({
+        'place_catalog_etag_v1': '"abc123"',
+        'place_catalog_checked_at_v1': DateTime.now().millisecondsSinceEpoch,
+      });
+      final server = fakeServer();
+
+      final places = await repo(server.client).all();
+
+      expect(server.requests, hasLength(1));
+      expect(
+        server.requests.single.headers.containsKey('If-None-Match'),
+        isFalse,
+        reason: '''
+메모리가 비었는데 ETag 를 대면 서버가 304 를 주고, 304 에는 본문이 없어 채울 것이 없다.
+"다시 시도" 를 눌러도 또 304 라 서버 내용이 바뀔 때까지 사용자가 할 수 있는 일이 없다 —
+#283 검토가 실측으로 잡았다.''',
+      );
+      expect(places, hasLength(3), reason: 'ETag 없이 물었으니 200 에 본문이 와야 한다');
+    });
+
     test('304 를 받으면 갖고 있던 것을 그대로 쓴다', () async {
       final first = fakeServer();
       final subject = repo(first.client);
@@ -255,6 +277,50 @@ void main() {
       final client = MockClient((_) async => throw const SocketException('끊김'));
 
       expect(await repo(client).all(), isEmpty);
+    });
+
+    test('hasCatalog 가 「못 받음」 과 「없음」 을 가른다 — 둘 다 nearby 는 빈 목록이다', () async {
+      final dead = MockClient((_) async => throw const SocketException('끊김'));
+      final subject = repo(dead);
+
+      expect(subject.hasCatalog, isFalse, reason: '아직 아무것도 안 받았다');
+      await subject.all();
+      expect(
+        subject.hasCatalog,
+        isFalse,
+        reason: '''
+실패했는데 true 면 지도 화면이 "이 지역엔 등록된 곳이 없어요, 지도를 움직여 보세요" 라고
+말한다 — 네트워크가 끊긴 사람에게 시킨 대로 해도 소용없는 안내다.''',
+      );
+
+      final alive = fakeServer();
+      final second = repo(alive.client);
+      await second.all();
+      expect(second.hasCatalog, isTrue);
+    });
+
+    test('retry() 는 백오프를 건너뛴다 — 버튼을 눌렀는데 5분을 기다리라고 하면 버튼이 거짓말이다',
+        () async {
+      var calls = 0;
+      var failing = true;
+      final client = MockClient((_) async {
+        calls++;
+        if (failing) throw const SocketException('끊김');
+        return http.Response.bytes(utf8.encode(jsonEncode(catalogJson())), 200,
+            headers: {'etag': '"abc"', 'content-type': 'application/json'});
+      });
+      final subject = repo(client);
+
+      await subject.all();
+      await subject.all();
+      expect(calls, 1, reason: '전제 — 자동 재호출은 백오프에 막힌다');
+
+      failing = false;
+      await subject.retry();
+
+      expect(calls, 2, reason: '사람이 누른 재시도는 막히면 안 된다');
+      expect(subject.hasCatalog, isTrue);
+      expect(await subject.all(), hasLength(3));
     });
 
     test('실패한 뒤에는 곧바로 다시 부르지 않는다 — 산책 중 5m 마다 재시도가 돈다', () async {
