@@ -148,6 +148,8 @@ CREATE TABLE dog (
 | `avatar` | `VARCHAR(255)` | NULL | 아바타 경로 |
 | `deleted_at` | `DATETIME(6)` | NULL | **소프트 삭제**(#156). `DELETE /api/dogs/{dogId}` 가 찍고 행은 남긴다. 모든 조회가 `deleted_at IS NULL` 을 건다 |
 
+> **`created_at`·`deleted_at` 은 UTC 다 (#306).** `Dog` 의 `@PrePersist` 가 `LocalDateTime.now()`(JVM 존)를 찍고 있었다 — 개발 기계(KST)와 배포 컨테이너(UTC)가 같은 표에 두 존을 섞는다. `DogTime.nowUtc()` 로 맞췄고, `StoredTimestampsAreUtcTest` 가 이제 모든 엔티티 패키지를 훑는다(그 검사가 `chat`·`group`·`user` 만 보고 있어서 못 잡았다). 응답에 안 나가는 값이라 이미 들어간 KST 행은 그대로 둔다.
+>
 > **삭제는 소프트 삭제다 (#156).** `walk.fk_walk_dog` 가 `CASCADE` 라 행을 지우면 그 아이의 산책 이력 전부가 조용히 함께 사라진다. FK 를 `RESTRICT` 로 바꾸면 탈퇴(`users` 하드 삭제)가 막힌다. 그래서 안전은 FK 가 아니라 `deleted_at` 으로 산다 — `DogRepository` 의 세 쿼리 전부가 `deleted_at IS NULL` 을 걸고, 산책 목록·통계는 이 컬럼을 보지 않는다("계속 센다"). 지운 아이는 상한(20마리)에 세지 않는다. 이미 있는 DB 는 `23_dog_deleted_at.sql`.
 
 ---

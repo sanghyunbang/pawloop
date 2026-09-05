@@ -14,10 +14,23 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.TimeZone;
 import java.util.stream.Stream;
 
+import com.heattrip.heat_trip_backend.care.CareTime;
+import com.heattrip.heat_trip_backend.care.entity.CareLog;
 import com.heattrip.heat_trip_backend.chat.ChatTime;
+import com.heattrip.heat_trip_backend.community.CommunityTime;
+import com.heattrip.heat_trip_backend.community.entity.Comment;
+import com.heattrip.heat_trip_backend.community.entity.Post;
+import com.heattrip.heat_trip_backend.community.entity.Reaction;
+import com.heattrip.heat_trip_backend.dog.DogTime;
+import com.heattrip.heat_trip_backend.dog.entity.Dog;
+import com.heattrip.heat_trip_backend.moderation.ModerationTime;
+import com.heattrip.heat_trip_backend.moderation.entity.Block;
+import com.heattrip.heat_trip_backend.walk.entity.Walk;
 import com.heattrip.heat_trip_backend.chat.entity.ChatMessage;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoom;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoomInvite;
@@ -69,7 +82,33 @@ class StoredTimestampsAreUtcTest {
     private static final List<Class<?>> WRITERS = List.of(
             ChatMessage.class, ChatRoom.class, ChatRoomMember.class,
             ChatRoomInvite.class,
-            FamilyGroup.class, User.class);
+            FamilyGroup.class, User.class,
+            // #306 — 훑는 범위를 chat·group·user 에서 전체로 넓히면서 들어온 반려 축 엔티티.
+            Dog.class, CareLog.class, Walk.class,
+            Post.class, Comment.class, Reaction.class, Block.class);
+
+    /**
+     * 훅이 있는데 <b>일부러 목록에 안 넣는</b> 엔티티. 이름을 여기 적는 이유는 "몰라서 빠진 것"
+     * 과 "알고 뺀 것" 을 가르기 위해서다 — {@code theWriterListCoversEveryEntityWithALifecycleHook}
+     * 가 이 둘 밖의 엔티티를 잡는다(#306).
+     *
+     * <ul>
+     *   <li>감정 여행·관광 수집 시절의 레거시 — 지우지 않고 격리한다(#174 · #94). v2 에 쓰기 경로가
+     *       없어 새 행이 안 생기고, 손대면 그쪽으로 사람을 이끈다. {@code LocalDateTime.now()} 인 채로
+     *       둔다는 것을 <b>알고</b> 둔다.</li>
+     *   <li>{@code Place}(tour) 의 훅은 시각이 아니라 문자열 정리다.</li>
+     * </ul>
+     */
+    /** 소스에서 훅 <b>애노테이션</b> 줄만 찾는다 — 본문·javadoc 의 언급은 세지 않는다. */
+    private static final Pattern LIFECYCLE_ANNOTATION =
+            Pattern.compile("(?m)^\\s*@(PrePersist|PreUpdate)\\b");
+
+    private static final Set<String> KNOWN_JVM_ZONE_LEGACY = Set.of(
+            "Bookmark", "Collection", "CollectionItem",     // bookmark
+            "Feedback",                                      // feedback
+            "Journey", "Schedule",                           // schedules
+            "EmotionCard", "CardComment", "CardReaction",    // social — #174 격리
+            "Place");                                        // tour — 훅이 시각을 안 찍는다
 
     /** 되돌리면 값이 이만큼 움직인다. DST 가 없어 사시사철 같다. */
     private static final ZoneId FORCED = ZoneId.of("Asia/Seoul");
@@ -82,9 +121,16 @@ class StoredTimestampsAreUtcTest {
     @DisplayName("nowUtc() 는 JVM 기본 존이 Asia/Seoul 이어도 UTC 를 준다 — 안 그러면 9시간 어긋난다")
     void nowUtc_ignoresTheJvmDefaultZone() {
         withDefaultZone(FORCED, () -> {
-            for (String label : List.of("ChatTime", "UserTime")) {
-                LocalDateTime written = "ChatTime".equals(label)
-                        ? ChatTime.nowUtc() : UserTime.nowUtc();
+            for (String label : List.of("ChatTime", "UserTime", "DogTime", "CareTime",
+                    "CommunityTime", "ModerationTime")) {
+                LocalDateTime written = switch (label) {
+                    case "ChatTime" -> ChatTime.nowUtc();
+                    case "UserTime" -> UserTime.nowUtc();
+                    case "DogTime" -> DogTime.nowUtc();
+                    case "CareTime" -> CareTime.nowUtc();
+                    case "CommunityTime" -> CommunityTime.nowUtc();
+                    default -> ModerationTime.nowUtc();
+                };
 
                 // 기본 존의 벽시계와 정확히 9시간 벌어져 있어야 한다. "지금과 가깝다" 로 재면
                 // CI(UTC)에서 되돌려도 통과한다 — 그게 이 단언이 차이를 재는 이유다.
@@ -109,6 +155,11 @@ class StoredTimestampsAreUtcTest {
                 .isEqualTo(LocalDateTime.of(2026, 9, 3, 0, 30));
         assertThat(ChatTime.nowUtc(seoulClock))
                 .isNotEqualTo(LocalDateTime.now(seoulClock));
+        assertThat(DogTime.nowUtc(seoulClock))
+                .as("DogService.delete 가 이 시계로 deleted_at 을 찍는다(#156) — 존을 따라가면 9시간 어긋난다")
+                .isEqualTo(LocalDateTime.of(2026, 9, 3, 0, 30));
+        assertThat(ModerationTime.nowUtc(seoulClock))
+                .isEqualTo(LocalDateTime.of(2026, 9, 3, 0, 30));
     }
 
     @Test
@@ -169,16 +220,20 @@ class StoredTimestampsAreUtcTest {
             String source = read(file);
             String name = file.getFileName().toString().replace(".java", "");
             boolean isEntity = source.contains("@Entity");
-            boolean stamps = source.contains("@PrePersist") || source.contains("@PreUpdate");
-            if (isEntity && stamps && !covered.contains(name)) {
+            // 애노테이션 줄만 센다 — javadoc 이 "@PrePersist 를 안 두는 이유" 를 적은 UserConsent 가 잡혔다.
+            boolean stamps = LIFECYCLE_ANNOTATION.matcher(source).find();
+            if (isEntity && stamps && !covered.contains(name)
+                    && !KNOWN_JVM_ZONE_LEGACY.contains(name)) {
                 missing.add(name + "  (" + file.getParent().getFileName() + ")");
             }
         }
 
         assertThat(missing)
                 .as("""
-                        chat·group·user 아래에 시각을 찍는 엔티티가 새로 생겼는데 WRITERS 에 \
-                        없다. 목록을 안 늘리면 그 표만 JVM 존으로 남는다.""")
+                        시각을 찍는 엔티티가 있는데 WRITERS 에도 KNOWN_JVM_ZONE_LEGACY 에도 없다. \
+                        목록을 안 늘리면 그 표만 JVM 존으로 남는다 — Dog 가 정확히 그렇게 빠져 있었다(#306). \
+                        새 엔티티면 WRITERS 에 넣고 UTC 헬퍼를 쓰게 하라. 레거시면 이유와 함께 \
+                        KNOWN_JVM_ZONE_LEGACY 에 적어라.""")
                 .isEmpty();
         assertThat(covered).hasSize(WRITERS.size());
     }
@@ -223,7 +278,9 @@ class StoredTimestampsAreUtcTest {
      */
     private static LocalDateTime invokeAndReadTheStamp(Class<?> type, Method hook) {
         try {
-            Object entity = type.getDeclaredConstructor().newInstance();
+            var constructor = type.getDeclaredConstructor();
+            constructor.setAccessible(true); // 대부분 @NoArgsConstructor(PROTECTED) 다
+            Object entity = constructor.newInstance();
             hook.invoke(entity);
 
             LocalDateTime latest = null;
@@ -244,19 +301,24 @@ class StoredTimestampsAreUtcTest {
         }
     }
 
-    /** {@code chat}·{@code group}·{@code user} 의 엔티티 소스. */
+    /**
+     * <b>모든</b> 모듈의 엔티티 소스 — {@code entity}·{@code domain} 디렉터리 아래의 자바 파일.
+     * #306 까지 {@code chat}·{@code group}·{@code user} 셋만 훑었고, 그래서 {@code Dog} 가 JVM 존을
+     * 찍는 것을 이 검사가 못 봤다. 범위를 목록으로 적으면 새 모듈이 조용히 밖에 남는다.
+     */
     private static List<Path> entitySourceFiles() {
         List<Path> found = new ArrayList<>();
-        for (String module : List.of("chat", "group", "user")) {
-            Path dir = TestProjectPaths.requireDirectory(
-                    "src/main/java/com/heattrip/heat_trip_backend/" + module + "/entity");
-            try (Stream<Path> walk = Files.walk(dir)) {
-                walk.filter(Files::isRegularFile)
-                        .filter(p -> p.getFileName().toString().endsWith(".java"))
-                        .forEach(found::add);
-            } catch (IOException e) {
-                throw new UncheckedIOException(dir + " 를 훑지 못했다", e);
-            }
+        Path base = TestProjectPaths.requireDirectory("src/main/java/com/heattrip/heat_trip_backend");
+        try (Stream<Path> walk = Files.walk(base)) {
+            walk.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".java"))
+                    .filter(p -> {
+                        String parent = p.getParent().getFileName().toString();
+                        return parent.equals("entity") || parent.equals("domain");
+                    })
+                    .forEach(found::add);
+        } catch (IOException e) {
+            throw new UncheckedIOException(base + " 를 훑지 못했다", e);
         }
         assertThat(found)
                 .as("엔티티 소스를 하나도 못 읽었다면 이 검사는 아무것도 지키지 않는다")

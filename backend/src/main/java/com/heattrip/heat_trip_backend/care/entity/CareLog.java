@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.care.entity;
 
+import com.heattrip.heat_trip_backend.care.CareTime;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.group.entity.FamilyGroup;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -184,7 +185,8 @@ public class CareLog {
     private LocalDateTime createdAt;
 
     /**
-     * 애플리케이션이 값을 안 넣어도 행이 만들어지게 한다.
+     * 애플리케이션이 값을 안 넣어도 행이 만들어지게 한다. 값은 <b>UTC</b> 다({@link CareTime}, #306) —
+     * {@code occurred_at} 이 서비스 존인 것과 다르다.
      *
      * <p>DB 기본값만으로는 부족하다 — Hibernate 는 INSERT 에 컬럼을 항상 실어 보내므로
      * 필드가 {@code null} 이면 NOT NULL 위반으로 죽는다. {@code family_group}·chat 세 표가
@@ -193,7 +195,7 @@ public class CareLog {
     @PrePersist
     void fillCreatedAt() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = CareTime.nowUtc();
         }
     }
 
