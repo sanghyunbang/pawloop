@@ -522,27 +522,22 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 `GET /api/walks/stats/weekly?dogId={id}` — 통계 차트(`fl_chart`)용 집계. **`period` 파라미터는 없다.** 이번 주(KST 월~일)와 전체 기간을 한 응답에 함께 담아 화면 둘을 채운다. 2026-08 이전에는 이 절이 `/api/walks/stats` 에 `period ∈ {week, month}` 라고 적혀 있었고, 그대로 짜면 404 였다(#201).
 
 ```json
-// 200 OK
+// 200 OK — 계약의 WalkStats 그대로 (2026-09-05 까지 이 예시는 계약에 없는 period·range·daily·summary 모양이었다)
 {
-  "period": "week",
-  "range": { "from": "2026-06-24", "to": "2026-06-30" },
-  "daily": [                            // 계약의 WalkStats.weekKm 대응 (월~일, KST)
-    { "day": "월", "date": "2026-06-24", "distanceKm": 2.1, "count": 1 },
-    { "day": "화", "date": "2026-06-25", "distanceKm": 2.9, "count": 1 },
-    { "day": "수", "date": "2026-06-26", "distanceKm": 1.2, "count": 1 },
-    { "day": "목", "date": "2026-06-27", "distanceKm": 0.0, "count": 0 },
-    { "day": "금", "date": "2026-06-28", "distanceKm": 1.8, "count": 1 },
-    { "day": "토", "date": "2026-06-29", "distanceKm": 3.1, "count": 1 },
-    { "day": "일", "date": "2026-06-30", "distanceKm": 2.4, "count": 1 }
-  ],
-  "summary": {
-    "totalKm": 13.5,
-    "totalWalks": 6,
-    "avgPaceSecPerKm": 980,
-    "topPlaces": ["서울숲", "남산 둘레길", "한강공원(뚝섬)"]
-  }
+  "weekStart": "2026-06-24",            // 이번 주 월요일(KST). weekKm[0] 이 이 날
+  "weekEnd": "2026-06-30",              // 일요일(포함) = weekStart + 6일
+  "weekKm": [2.1, 2.9, 1.2, 0, 1.8, 3.1, 2.4],   // 월~일, km, 소수 둘째 자리 반올림
+  "totalKm": 13.5,
+  "walkCount": 6,                       // 건수다 — 날 수가 아니다
+  "avgKm": 2.25,
+  "allTimeKm": 128.4,
+  "allTimeCount": 57,
+  "allTimeMinutes": 2310,
+  "topPlaces": []                       // 항상 빈 배열. 채우는 날 [{ place: PlaceRef, count }] 상위 5
 }
 ```
+
+이번 주 고정이다 — 지난 주를 고르는 파라미터는 없고, 응답의 `weekStart`·`weekEnd` 가 어느 주인지 말한다(#209 `Walks-medium-2`). 거리 단위 규약(미터 정수 저장 · 통계만 km 반올림)은 계약의 `info.description` 에 있다.
 
 ---
 

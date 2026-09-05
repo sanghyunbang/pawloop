@@ -104,6 +104,9 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(created.path("doneBy").path("userId").asLong())
                 .as("수행자는 토큰의 사용자다 — 본문으로 받으면 남의 이름으로 기록을 남길 수 있다")
                 .isEqualTo(dad.id());
+        assertThat(created.path("groupId").asLong())
+                .as("그룹 경로의 응답에서 groupId 는 항상 그 경로의 그룹이다 — 계약이 nullable 인 것은 해산 뒤의 행 때문이다(#209 Groups-medium-2)")
+                .isEqualTo(family.groupId());
         assertThat(created.path("dogId").isNull())
                 .as("""
                         FK 는 #154 에서 걸렸지만 쓰기 경로가 아직 dogId 를 안 받는다 — 응답은 \
