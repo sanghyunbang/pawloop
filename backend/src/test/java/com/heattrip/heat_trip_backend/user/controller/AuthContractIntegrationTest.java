@@ -307,8 +307,7 @@ class AuthContractIntegrationTest extends AbstractMySqlIntegrationTest {
 
     private MockHttpServletResponse signupRequest(String email) throws Exception {
         String body = """
-                {"email":"%s","password":"%s","nickname":"보리아빠","name":"보리아빠",
-                 "agreeTos":true,"agreePrivacy":true}
+                {"email":"%s","password":"%s","nickname":"보리아빠","name":"보리아빠"}
                 """.formatted(email, PASSWORD);
 
         return mockMvc.perform(post("/auth/signup")

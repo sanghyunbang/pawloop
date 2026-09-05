@@ -65,8 +65,6 @@ class UserServiceTest {
         request.setName("보리아빠");
         request.setGender("male");
         request.setAgeGroup("over14");
-        request.setAgreeTos(true);
-        request.setAgreePrivacy(true);
 
         when(userRepository.findByEmail("bori@example.com")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("test1234")).thenReturn("encoded-password");
@@ -95,8 +93,6 @@ class UserServiceTest {
         request.setName("보리아빠");
         request.setGender(gender);
         request.setAgeGroup(ageGroup);
-        request.setAgreeTos(true);
-        request.setAgreePrivacy(true);
         return request;
     }
 
@@ -342,45 +338,6 @@ class UserServiceTest {
         assertThat(updated.getName())
                 .as("요청에 없는 필드는 건드리지 않는다")
                 .isEqualTo("옛이름");
-    }
-
-    @Test
-    @DisplayName("프로필 수정에서 마케팅 동의를 켜면 동의 버전과 동의 시각이 함께 채워진다")
-    void updateProfile_turningOnMarketingConsentStampsVersionAndTime() {
-        User existing = User.builder().id(7L).agreeMarketing(false).build();
-        when(userRepository.findById(7L)).thenReturn(Optional.of(existing));
-        when(userRepository.save(existing)).thenReturn(existing);
-
-        UpdateProfileRequest req = new UpdateProfileRequest();
-        req.setAgreeMarketing(true);
-
-        User updated = userService.updateProfile(7L, req);
-
-        assertThat(updated.getAgreeMarketing()).isTrue();
-        assertThat(updated.getMarketingVersion()).isEqualTo("v1.0");
-        assertThat(updated.getMarketingAgreedAt()).isNotNull();
-    }
-
-    @Test
-    @DisplayName("프로필 수정에서 마케팅 동의를 끄면 동의 버전과 동의 시각이 지워진다")
-    void updateProfile_turningOffMarketingConsentClearsVersionAndTime() {
-        User existing = User.builder()
-                .id(7L)
-                .agreeMarketing(true)
-                .marketingVersion("v1.0")
-                .marketingAgreedAt(LocalDateTime.now())
-                .build();
-        when(userRepository.findById(7L)).thenReturn(Optional.of(existing));
-        when(userRepository.save(existing)).thenReturn(existing);
-
-        UpdateProfileRequest req = new UpdateProfileRequest();
-        req.setAgreeMarketing(false);
-
-        User updated = userService.updateProfile(7L, req);
-
-        assertThat(updated.getAgreeMarketing()).isFalse();
-        assertThat(updated.getMarketingVersion()).isNull();
-        assertThat(updated.getMarketingAgreedAt()).isNull();
     }
 
     @Test

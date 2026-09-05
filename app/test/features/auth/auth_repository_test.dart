@@ -101,12 +101,6 @@ void main() {
       name: '방상현',
       gender: 'male',
       ageGroup: 'over14',
-      agreeTos: true,
-      agreePrivacy: true,
-      agreeMarketing: false,
-      tosVersion: 'v1',
-      privacyVersion: 'v1',
-      marketingVersion: null,
     );
 
     test('성공은 201 이다 — 200 만 성공으로 보던 옛 코드는 여기서 걸린다', () async {

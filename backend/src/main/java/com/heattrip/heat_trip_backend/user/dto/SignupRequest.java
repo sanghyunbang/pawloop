@@ -21,14 +21,9 @@ public class SignupRequest {
     private String name;
     private String gender;
 
-    // ✅ 추가
     private String ageGroup;       // "over14" | "under14"
-    private Boolean agreeTos;      // 필수
-    private Boolean agreePrivacy;  // 필수
-    private Boolean agreeMarketing;// 선택
 
-    // ✅ 문서 버전 (프런트에서 보내거나, 서버 기본값 적용)
-    private String tosVersion;        // 예: "v1.0"
-    private String privacyVersion;    // 예: "v1.0"
-    private String marketingVersion;  // 예: "v1.0"
+    // 약관 동의 필드는 없다. 동의는 로그인 뒤 PUT /api/consents 로 적는다(#190) — 가입 화면과
+    // 동의 화면이 두 번 묻던 것을 한 번으로 줄였다. 옛 클라이언트가 agreeTos 같은 필드를
+    // 보내도 무시된다(Jackson 이 모르는 필드를 버린다).
 }

@@ -230,18 +230,9 @@ public class User {
     @Enumerated(EnumType.STRING)
     private AgeGroup ageGroup;    // OVER14 / UNDER14
 
-    // ✅ 동의 플래그
-    private Boolean agreeTos;         // 필수
-    private Boolean agreePrivacy;     // 필수
-    private Boolean agreeMarketing;   // 선택
-
-    // ✅ 동의 버전 및 시각
-    private String tosVersion;
-    private String privacyVersion;
-    private String marketingVersion;
-    private LocalDateTime tosAgreedAt;
-    private LocalDateTime privacyAgreedAt;
-    private LocalDateTime marketingAgreedAt;
+    // 약관 동의는 여기 없다. consent 모듈의 user_consent 가 이력으로 든다(#190, ADR-0020).
+    // 예전의 agree_*/*_version/*_agreed_at 아홉 컬럼은 21_users_drop_consent_columns.sql 로
+    // 값을 옮긴 뒤 지웠다.
 
 //    // 엔티티가 수정되기 전 자동으로 실행
 //    @PrePersist // 엔티티가 처음 저장되기 전에 실행

@@ -1,19 +1,14 @@
 // lib/features/auth/data/dto/register_request.dart
+//
+// 약관 동의 필드가 없다. 동의는 가입이 아니라 첫 로그인 뒤 동의 화면이 받아서
+// `PUT /api/consents` 로 적는다(#190). 계약(`openapi.yaml` 의 `SignupInput`)도 같다.
 class RegisterRequest {
   final String email;
   final String password;
   final String nickname;
   final String name;
   final String gender;
-
-  // ⬇️ 추가
-  final String ageGroup;           // 'over14' | 'under14'
-  final bool agreeTos;             // 필수
-  final bool agreePrivacy;         // 필수
-  final bool agreeMarketing;       // 선택
-  final String tosVersion;         // 예: 'v1.0'
-  final String privacyVersion;     // 예: 'v1.0'
-  final String? marketingVersion;  // 동의했을 때만 'v1.0', 아니면 null
+  final String ageGroup; // 'over14' | 'under14'
 
   RegisterRequest({
     required this.email,
@@ -22,12 +17,6 @@ class RegisterRequest {
     required this.name,
     required this.gender,
     required this.ageGroup,
-    required this.agreeTos,
-    required this.agreePrivacy,
-    required this.agreeMarketing,
-    required this.tosVersion,
-    required this.privacyVersion,
-    this.marketingVersion,
   });
 
   Map<String, dynamic> toJson() => {
@@ -37,11 +26,5 @@ class RegisterRequest {
         'name': name,
         'gender': gender,
         'ageGroup': ageGroup,
-        'agreeTos': agreeTos,
-        'agreePrivacy': agreePrivacy,
-        'agreeMarketing': agreeMarketing,
-        'tosVersion': tosVersion,
-        'privacyVersion': privacyVersion,
-        'marketingVersion': marketingVersion,
       };
 }

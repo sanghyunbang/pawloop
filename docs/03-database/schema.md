@@ -54,16 +54,8 @@ CREATE TABLE users (
   image_url           VARCHAR(255) NULL,
   travel_type         VARCHAR(255) NULL COMMENT '감정여행(heattrip) 시절 잔재 — ADR-0001',
 
-  -- 약관 동의
-  agree_tos           BIT(1)       NULL,
-  agree_privacy       BIT(1)       NULL,
-  agree_marketing     BIT(1)       NULL,
-  tos_version         VARCHAR(255) NULL,
-  privacy_version     VARCHAR(255) NULL,
-  marketing_version   VARCHAR(255) NULL,
-  tos_agreed_at       DATETIME(6)  NULL,
-  privacy_agreed_at   DATETIME(6)  NULL,
-  marketing_agreed_at DATETIME(6)  NULL,
+  -- 약관 동의 컬럼은 없다. `user_consent` 표(19_user_consent.sql, #190)가 문서별·버전별 이력으로 든다.
+  -- 옛 아홉 컬럼(agree_* / *_version / *_agreed_at)은 21 번 스크립트가 값을 옮긴 뒤 지웠다.
 
   created_at          DATETIME(6)  NULL,
   updated_at          DATETIME(6)  NULL,

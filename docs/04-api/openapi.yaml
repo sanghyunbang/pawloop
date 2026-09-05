@@ -2580,7 +2580,11 @@ components:
 
     SignupInput:
       type: object
-      required: [email, password, nickname, agreeTos, agreePrivacy]
+      description: >
+        **약관 동의 필드가 없습니다.** 동의는 가입이 아니라 첫 로그인 뒤 `PUT /api/consents` 로
+        적습니다(#190) — 가입 화면과 동의 화면이 두 번 묻던 것을 한 번으로 줄였습니다. 예전 필드
+        (`agreeTos`·`agreePrivacy`·`agreeMarketing`·`*Version`)를 보내도 서버는 무시합니다.
+      required: [email, password, nickname]
       properties:
         email: { type: string, format: email }
         password: { type: string, format: password, minLength: 8 }
@@ -2601,12 +2605,6 @@ components:
             선택. 안 보내면 `over14` 입니다. 대소문자를 가리지 않습니다.
             목록에 없는 값은 **400** 입니다 — `over14` 로 떨어뜨리면 미성년자를
             성인으로 취급하게 됩니다(#42).
-        agreeTos: { type: boolean, description: 필수 — false/null 이면 400 }
-        agreePrivacy: { type: boolean, description: 필수 — false/null 이면 400 }
-        agreeMarketing: { type: boolean, description: 선택 }
-        tosVersion: { type: string, default: "v1.0" }
-        privacyVersion: { type: string, default: "v1.0" }
-        marketingVersion: { type: string, default: "v1.0" }
 
     LoginInput:
       type: object
@@ -2631,7 +2629,6 @@ components:
         age: { type: integer }
         travelType: { type: string }
         imageUrl: { type: string, format: uri }
-        agreeMarketing: { type: boolean }
 
     DogSize:
       type: string
