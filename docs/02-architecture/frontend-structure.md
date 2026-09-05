@@ -31,7 +31,8 @@ lib/
    ├─ domain/pet.dart      # 도메인 모델 + 샘플 데이터 + 전역 상태(kMyDog 등)
    ├─ data/                # 레포지토리 (외부 API 호출)
    │  └─ pet_places_repository.dart
-   ├─ widgets/             # 공용 위젯 (배경/카드/아바타)
+   ├─ widgets/             # 공용 위젯 (배경/카드/아바타/산책 완료 시트)
+   ├─ walk/                # 경로 그림·갤러리 저장 (#310) — 네트워크 없음
    └─ theme/               # 디자인 토큰 + 배경 테마
 ```
 
@@ -99,6 +100,13 @@ lib/
   - `AuroraBackground` — 파스텔 오라 그라데이션 배경. 전역 `AppThemeCtl.index`를 구독해 테마 변경이 앱 전체에 반영됨.
   - `GlassCard` — `BackdropFilter` blur 기반 반투명 글래스 카드.
 - `profile_avatar.dart` — 강아지 프로필 아바타(테두리색 선택 반영).
+- `walk_finish_sheet.dart` — 산책 완료 바텀시트(`WalkFinishSheet`, #310). 요약 셋 + **경로 미리보기** + "경로 사진 저장" + 기록 저장/저장 안 함. 트래킹 화면이 geolocator·네이버 지도를 물고 있어 위젯 테스트로 못 띄우므로 시트를 밖으로 꺼냈다.
+- `today_care_card.dart` · `message_actions_sheet.dart` 등 — 각 화면 문서 참조.
+
+### 2.4-1 `walk/` — 경로 그림과 갤러리 저장 (#310)
+
+- `route_image.dart` — `RouteProjection.fit`(경도·위도 → 상자 안 점, 등방 확대) · `RouteCanvasPainter`(단색+격자 배경, 폴리라인, 시작/끝, 거리·시간·날짜) · `RouteImage.renderPng`(`dart:ui` 로 위젯 트리 없이 PNG). **타일을 쓰지 않는다** — 네이버 지도 위에 그리면 카메라 궤적이 곧 경로라 좌표가 네이버에 간다(#235 C1).
+- `route_photo_saver.dart` — `gal` 로 기기 갤러리 앨범 Pawloop 에 넣는다. 업로드 경로 없음. `route_photo_no_network_test` 가 이 두 파일과 시트에 네트워크 import 가 없는 것을 소스로 잠근다.
 
 ### 2.5 `theme/` — 디자인 토큰 + 배경 테마
 

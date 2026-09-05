@@ -46,7 +46,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 목적 | 산책 중 경로·거리·시간·페이스를 실시간으로 보여주고, 종료 시 기록으로 저장 유도 |
 | 진입 | 홈 "산책 시작" CTA / 바텀네비 가운데 FAB |
 | 동작 | 네이버 지도 위 라이브 스탯 패널(km·시간·페이스), 경로 폴리라인 + 헤드 마커, 카메라 추적. 일시정지/재개, 종료 |
-| 종료 흐름 | 바텀시트(시간·거리·페이스 요약) → "기록 저장하기"(→ `CreateScreen(prefillPlace:'오늘 산책')`) / "저장 안 함" |
+| 종료 흐름 | 바텀시트(`WalkFinishSheet` — 시간·거리·페이스 요약 + **경로 미리보기**) → "기록 저장하기"(→ `CreateScreen(prefillPlace:'오늘 산책')`) / "저장 안 함" / **"경로 사진 저장"**(#310): 타일 없이 로컬 캔버스에 그린 PNG 를 기기 갤러리 앨범 Pawloop 에만 넣는다 — 네트워크 0, 업로드 경로 없음. A안 빌드(지도 키 없음)에서도 "내가 걸은 길" 이 보이는 자리다 |
 | 데이터 | **실 GPS**: `LocationService.locate()` 로 첫 점을 잡고 `Geolocator.getPositionStream`(5m)을 구독. Haversine `_dist()`로 누적 거리. 위치를 못 쓰면 `WalkLocationDeniedScreen` 이 이유를 말하고 직접 입력으로 보낸다 — 가짜 경로를 그리지 않는다(#160) |
 | 상태 | `_seconds`, `_km`, `_paused`, `_path`(진행 경로), `_pathT`(점별 델타 초, `_path` 와 길이 동일), `_denial`(위치 판정 — `null` 이면 판정 전이라 지도를 만들지 않는다). `NaverMapController _ctrl` |
 | 남은 것 | 백그라운드 트래킹(화면을 끄면 스트림이 끊긴다). 경로 자체는 `POST /api/walks` 로 `walk.path`(LINESTRING SRID 4326)에 저장된다 |

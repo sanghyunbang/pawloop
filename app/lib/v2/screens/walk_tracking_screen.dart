@@ -12,6 +12,9 @@ import '../data/location_upload_policy.dart';
 import '../data/pet_places_repository.dart';
 import '../data/place_catalog_repository.dart';
 import '../data/walk_outbox.dart';
+import '../walk/route_image.dart';
+import '../walk/route_photo_saver.dart';
+import '../widgets/walk_finish_sheet.dart';
 import 'create_screen.dart';
 
 /// 실시간 산책 트래킹 — "기록계"가 아니라 걷는 동안 주변을 탐색하는 지도.
@@ -648,105 +651,51 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
     );
   }
 
+  /// 산책 완료 시트 — 몸통은 `WalkFinishSheet`(#310) 다. 이 화면은 geolocator·네이버 지도를
+  /// 물고 있어 위젯 테스트로 못 띄우므로, 시트의 동작(경로 미리보기 · 사진 저장 · 두 버튼)은
+  /// 그 위젯의 테스트가 잰다. 여기서는 메모리에 든 좌표를 그대로 건넨다 — 새로 GPS 를 켜지 않는다.
   void _finish() {
     _timer?.cancel();
     _posSub?.cancel();
+    final walkedAt = _startedAt ?? DateTime.now();
+    final distanceLabel = '${_km.toStringAsFixed(2)}km';
+    final art = RouteArt(
+      // 계약·초안 큐와 같은 [경도, 위도] 순서 — `_draft()` 와 같다.
+      lngLat: [for (final p in _path) [p.longitude, p.latitude]],
+      distanceLabel: distanceLabel,
+      timeLabel: _timeLabel,
+      dateLabel: WalkFinishSheet.dateLabel(walkedAt),
+    );
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          20,
-          18,
-          20,
-          18 + MediaQuery.of(sheetCtx).padding.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              '산책 완료! 🐾',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: T.textPrimary,
+      builder: (sheetCtx) => WalkFinishSheet(
+        timeLabel: _timeLabel,
+        distanceLabel: distanceLabel,
+        paceLabel: _pace,
+        art: art,
+        walkedAt: walkedAt,
+        saver: RoutePhotoSaver.gallery(),
+        warm: _warm,
+        onSave: () {
+          Navigator.pop(sheetCtx);
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CreateScreen(
+                prefillPlace: '오늘 산책',
+                draft: _draft(),
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _sumCell(_timeLabel, '시간'),
-                _sumCell('${_km.toStringAsFixed(2)}km', '거리'),
-                _sumCell(_pace, '페이스'),
-              ],
-            ),
-            const SizedBox(height: 20),
-            GestureDetector(
-              onTap: () {
-                Navigator.pop(sheetCtx);
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CreateScreen(
-                      prefillPlace: '오늘 산책',
-                      draft: _draft(),
-                    ),
-                  ),
-                );
-              },
-              child: Container(
-                height: 52,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: _warm,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Text(
-                  '기록 저장하기',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(sheetCtx);
-                Navigator.pop(context);
-              },
-              child: const Text('저장 안 함', style: TextStyle(color: T.textMuted)),
-            ),
-          ],
-        ),
+          );
+        },
+        onDiscard: () {
+          Navigator.pop(sheetCtx);
+          Navigator.pop(context);
+        },
       ),
     );
   }
-
-  Widget _sumCell(String v, String label) => Column(
-    children: [
-      Text(
-        v,
-        style: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w800,
-          color: T.textPrimary,
-        ),
-      ),
-      const SizedBox(height: 3),
-      Text(
-        label,
-        style: const TextStyle(fontSize: 12, color: Color(0x9E463C64)),
-      ),
-    ],
-  );
 
   // ───────────── UI ─────────────
   @override

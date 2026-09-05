@@ -8,6 +8,10 @@
     <!-- 위치 권한(포그라운드) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+    <!-- 경로 사진을 갤러리에 넣는다 (이슈 #310). API 29 이하만 필요하다 — 30+ 는 MediaStore 라
+         권한 없이 들어간다(gal). 읽기 권한은 요청하지 않는다. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
     
     <!-- 백업으로 좌표가 나가지 않는다 — 이슈 #270.
 

@@ -122,6 +122,7 @@
 
 ### 완료 바텀시트 (`_finish`)
 - `산책 완료! 🐾` + 3-스탯(시간/거리/페이스).
+- 경로 미리보기(타일 없이 `RouteCanvasPainter` 가 그린다) + `경로 사진 저장` → PNG 를 갤러리 앨범 Pawloop 에만 저장(#310). 점이 둘 미만이면 "경로가 짧아 그림은 못 만들었어요".
 - `기록 저장하기`(warm) → `CreateScreen(prefillPlace: '오늘 산책')`로 `pushReplacement`.
 - `저장 안 함` → 시트 + 화면 pop.
 
