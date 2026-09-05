@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
@@ -66,6 +67,10 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
     /** 삭제 검사(#197)가 DB 의 본문·시각을 직접 본다 — 응답에서만 가리면 다른 경로로 샌다. */
     @Autowired
     private JdbcTemplate jdbc;
+
+    /** 폴링 카운터 검사(#197)가 실제 레지스트리의 값을 읽는다. */
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     @Autowired
     private MockMvc mockMvc;
@@ -508,6 +513,49 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ─────────────────── 폴링 카운터 (이슈 #197 · #84) ───────────────────
+
+    private double pollCount(String result) {
+        return meterRegistry.get("chat.poll").tag("result", result).counter().count();
+    }
+
+    @Test
+    @DisplayName("ETag 로 304 가 난 폴링도 chat.poll{empty} 로 센다 — 가만히 있는 방의 폴링은 거의 전부 이 경로다")
+    void notModifiedPollsCountAsEmpty() throws Exception {
+        Account owner = account("폴링하는 사람");
+        Room room = roomWith(owner);
+        send(owner, room.id(), "한 마디", "poll-1").andExpect(status().isCreated());
+
+        double hitBefore = pollCount("hit");
+        double emptyBefore = pollCount("empty");
+
+        // 델타 폴링 1: 새 메시지가 있다 → 200, hit
+        MockHttpServletResponse first = mockMvc.perform(
+                get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .param("afterSeq", "0")
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse();
+        String etag = first.getHeader("ETag");
+        assertThat(etag).as("델타가 lastSeq 까지 다 왔으면 ETag 가 붙는다").isNotNull();
+        assertThat(pollCount("hit") - hitBefore).isEqualTo(1.0);
+
+        // 델타 폴링 2: 같은 ETag → 304. 서비스에 안 들어오는 경로인데도 empty 로 세어야 한다
+        mockMvc.perform(get("/api/chat/rooms/{roomId}/messages", room.id())
+                        .param("afterSeq", "1")
+                        .header("If-None-Match", etag)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNotModified());
+
+        assertThat(pollCount("empty") - emptyBefore)
+                .as("""
+                        304 를 안 세면 empty 비율이 실제보다 낮게 나온다. #84(소켓 전환)의 착수 기준이 \
+                        그 비율이라, 세지 않으면 판단이 틀어진다 — 2026-09-05 에뮬레이터 실측에서 \
+                        요청은 쌓이는데 카운터가 0·0 인 것으로 드러났다.""")
+                .isEqualTo(1.0);
+        assertThat(pollCount("hit") - hitBefore).as("304 는 hit 이 아니다").isEqualTo(1.0);
     }
 
     // ─────────────────── 메시지 삭제 (이슈 #197) ───────────────────
