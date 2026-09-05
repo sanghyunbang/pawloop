@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.place;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -9,7 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.heattrip.heat_trip_backend.place.dto.PetInfoDto;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
+import com.heattrip.heat_trip_backend.place.repository.PlaceCatalogRepository;
 import com.heattrip.heat_trip_backend.place.service.KtoApiClient;
+import com.heattrip.heat_trip_backend.place.service.PlaceCatalogService;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +29,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -121,6 +127,15 @@ class PlaceCatalogIntegrationTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private PlaceCatalogService service;
+
+    @Autowired
+    private PlaceCatalogRepository catalogRows;
+
+    @Autowired
+    private Clock clock;
 
     @BeforeEach
     void reset() {
@@ -343,5 +358,87 @@ class PlaceCatalogIntegrationTest extends AbstractMySqlIntegrationTest {
 
         mockMvc.perform(get("/api/places/999999999"))
                 .andExpect(status().isNotFound());
+    }
+
+    // ─────────────────────────── 예열 (#279) ───────────────────────────
+    //
+    // 새벽 cron 이 부르는 warmUp() 이 사용자 요청과 같은 길을 지나는지 잰다. 시각(cron)은
+    // PlaceCatalogWarmupSchedulerTest·PlaceCatalogWarmupWiringTest 가 재고, 여기서는
+    // "무엇을 하는가" 만 본다.
+
+    @Test
+    @DisplayName("예열은 한 벌이 없으면 받아서 저장한다 — 그 뒤 첫 사용자 요청은 KTO 를 안 부른다")
+    void warmUp_fetchesAndTheFirstUserRequestCostsNothing() throws Exception {
+        service.warmUp();
+
+        int afterWarmUp = kto.pageCalls.get();
+        assertThat(afterWarmUp).as("3곳을 2곳씩 두 페이지로 받는다").isEqualTo(2);
+        Integer stored = jdbc.queryForObject(
+                "select item_count from place_catalog where id = 1", Integer.class);
+        assertThat(stored).isEqualTo(3);
+
+        mockMvc.perform(get(PATH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3));
+
+        assertThat(kto.pageCalls.get())
+                .as("이것이 #279 의 목적이다 — 첫 사람이 16초를 기다리지 않는다")
+                .isEqualTo(afterWarmUp);
+    }
+
+    @Test
+    @DisplayName("예열은 낡지 않은 한 벌을 다시 받지 않는다 — 서버가 여러 대여도 예산이 안 샌다")
+    void warmUp_doesNothingWhenTheCatalogIsFresh() {
+        service.warmUp();
+        int after = kto.pageCalls.get();
+
+        service.warmUp();
+
+        assertThat(kto.pageCalls.get()).isEqualTo(after);
+    }
+
+    @Test
+    @DisplayName("예열은 낡은 한 벌을 갈아 끼운다 — 사용자 요청과 같은 기준으로")
+    void warmUp_refreshesAStaleCatalog() {
+        service.warmUp();
+        jdbc.update("update place_catalog set fetched_at = fetched_at - interval 10 day");
+        int before = kto.pageCalls.get();
+
+        service.warmUp();
+
+        assertThat(kto.pageCalls.get()).isGreaterThan(before);
+        // fetched_at 은 서비스 존(Asia/Seoul)의 벽시계다 — PlaceCatalog 의 필드 설명 그대로.
+        // 그래서 SQL 의 utc_timestamp() 와 견주면 9시간이 어긋난다(첫 판이 그렇게 빨갰다).
+        // 서비스가 쓰는 바로 그 Clock 으로 "방금" 을 만든다.
+        LocalDateTime fetchedAt = catalogRows.findById(1).orElseThrow().getFetchedAt();
+        assertThat(Duration.between(fetchedAt, LocalDateTime.now(clock)).abs())
+                .as("fetched_at 이 방금으로 돌아와야 한다 — 열흘 전 그대로면 예열이 저장을 안 한 것이다")
+                .isLessThan(Duration.ofMinutes(1));
+    }
+
+    @Test
+    @DisplayName("예열은 카탈로그 예산 풀을 쓴다 — 사용자 요청과 같은 상한이다")
+    void warmUp_spendsTheCatalogPool() {
+        service.warmUp();
+
+        Integer catalogUsed = jdbc.queryForObject(
+                "select used from kto_call_budget where pool = 'catalog'", Integer.class);
+        Integer otherPools = jdbc.queryForObject(
+                "select count(*) from kto_call_budget where pool <> 'catalog'", Integer.class);
+
+        assertThat(catalogUsed).isNotNull().isPositive();
+        assertThat(otherPools).as("예열이 다른 풀을 쓰면 상한이 둘이 된다").isZero();
+    }
+
+    @Test
+    @DisplayName("예열은 KTO 가 죽어도 던지지 않는다 — 잡이 예외로 죽으면 다음 날 아무도 모른다")
+    void warmUp_swallowsAnUpstreamFailure() {
+        kto.failFromPage.set(1);
+
+        assertThatCode(service::warmUp).doesNotThrowAnyException();
+
+        Integer rows = jdbc.queryForObject(
+                "select count(*) from place_catalog where item_count > 0", Integer.class);
+        assertThat(rows).as("실패는 저장하지 않는다 — 빈 한 벌이 굳으면 지도가 빈다").isZero();
     }
 }
