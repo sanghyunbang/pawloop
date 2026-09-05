@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 지금 DB 에 있는 것은 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · **`§7 post` · `§8 comment` · `§9 reaction`** · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` 열넷이다 — 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다. 나머지(`§5 place` 등)는 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다.
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **46개** 있다(전체 목록은 [부록 A](#부록-a-정본의-표-46개--어디에-적혀-있나)). 이 문서에 절이 있는 실재 표는 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§7 post` · `§8 comment` · `§9 reaction` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` · `§18 emotion_card` · `§19 card_comment` · `§20 card_reaction` · `§21 kto_call_budget` · `§22 place_cell` · `§23 pet_place_detail` · `§24 place_catalog` · `§25 report` · `§26 report_snapshot` · `§27 user_block` · `§28 user_consent` 스물다섯이다. 나머지 절(`§5 place` · `§6 trail` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 절이 없는 21개는 감정 여행·관광 수집 시절의 표라 부록 A 에만 적었다 — 지우지 않고 격리한다(#174). 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -662,7 +662,7 @@ CREATE TABLE chat_message (
 
 ---
 
-## 16. `walk_note` — 산책 주의사항 (가족 공유 메모)
+## 16. `walk_note` — 산책 주의사항 (가족 공유 메모) (**실재**)
 
 산책 시 주의사항을 가족이 공유하는 메모. **그룹당 한 장**이다 (`GET|PUT /api/groups/{groupId}/walk-notes`). 이슈 [#76](https://github.com/sanghyunbang/heattrip/issues/76).
 
@@ -705,7 +705,7 @@ CREATE TABLE walk_note (
 
 ---
 
-## 17. `care_log` — 케어 로그 (가족 케어 공유)
+## 17. `care_log` — 케어 로그 (가족 케어 공유) (**실재**)
 
 물/밥/산책/투약/병원 다섯 종류의 케어를 누가(`done_by`)·언제(`occurred_at`) 했는지 기록해 가족 그룹(`group_id`)에 공유한다. **이중 급여와 산책 누락을 막는 것**이 이 표의 목적이다. 이슈 [#76](https://github.com/sanghyunbang/heattrip/issues/76).
 
@@ -770,6 +770,235 @@ CREATE TABLE care_log (
 
 ---
 
+## 18. `emotion_card` — 감정카드 (**실재** · 격리)
+
+감정 여행 시절의 표다. **반려 커뮤니티(§7~9 `post`·`comment`·`reaction`)와 다른 것**이다 — 같은 "커뮤니티" 라는 말로 부르면 다음 사람이 잘못 지운다(#174). 2026-09-03 결정([#174](https://github.com/sanghyunbang/heattrip/issues/174))으로 **지우지 않고 격리한다** — 표·데이터·`SocialController`(`/api/social`)는 그대로 두고 v2 앱이 닿지 않게 한다. 쓰기 경로가 v2 에 없어 데이터가 늘지 않는다(소비자는 레거시 셸의 `feed_screen.dart`·`together_feed.dart` 뿐). 앱에서 끊는 자리는 레거시 셸 처분([#94](https://github.com/sanghyunbang/heattrip/issues/94))이 정한다.
+
+`users` 로 가는 FK 는 없고 `user_id` 값과 작성 시점의 `handle` 스냅샷을 든다 — 탈퇴자의 이름은 `WithdrawnUsers`(#82)가 응답에서 가린다.
+
+```sql
+CREATE TABLE `emotion_card` (
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `place_id` bigint DEFAULT NULL,
+  `user_id` bigint NOT NULL,
+  `body` varchar(280) DEFAULT NULL,
+  `handle` varchar(255) DEFAULT NULL,
+  `mood_key` varchar(255) NOT NULL,
+  `place_name` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 19. `card_comment` — 감정카드 댓글 (**실재** · 격리)
+
+§18 `emotion_card` 의 댓글. `card_id` 로 카드를 가리키지만 FK 는 없다(감정 여행 시절 표는 셋 다 FK 가 없다). 처분은 §18 과 같다 — 격리(#174).
+
+```sql
+CREATE TABLE `card_comment` (
+  `card_id` bigint NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `body` varchar(280) NOT NULL,
+  `handle` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 20. `card_reaction` — 감정카드 반응 (**실재** · 격리)
+
+§18 `emotion_card` 의 반응. `UNIQUE (card_id, user_id, reaction_type)` 이 한 사람이 같은 카드에 같은 반응을 두 번 남기는 것을 막는다 — 이 셋 중 유일한 제약이다. 처분은 §18 과 같다 — 격리(#174).
+
+```sql
+CREATE TABLE `card_reaction` (
+  `card_id` bigint NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `reaction_type` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_card_reaction_card_user_type` (`card_id`,`user_id`,`reaction_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 21. `kto_call_budget` — KTO 일 호출 예산 (**실재**)
+
+관광공사(KTO) 프록시의 호출 예산 — [`10_place_cache.sql`](../../backend/mysql/post-start/10_place_cache.sql)(#40). `PRIMARY KEY (day, pool)` 이 **KTO 일 1,000콜 한도를 지키는 유일한 장치**이고, 그 판정은 조건부 `UPDATE` 한 문장이다. FK 는 없다.
+
+```sql
+CREATE TABLE `kto_call_budget` (
+  `day` date NOT NULL,
+  `used` int NOT NULL,
+  `pool` varchar(16) NOT NULL,
+  PRIMARY KEY (`day`,`pool`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 22. `place_cell` — 주변 장소 셀 스냅샷 (**실재**)
+
+`GET /api/places/nearby` 가 좌표를 **0.02° 격자로 접은 셀**(`lat_idx`, `lng_idx`) 단위로 KTO 응답을 통째로(`payload`) 보관한다 — 같은 셀의 두 번째 요청부터는 KTO 를 부르지 않는다(#40). `fail_streak`·`failed_at` 이 실패한 셀의 재시도를 늦춘다. FK 는 없다.
+
+```sql
+CREATE TABLE `place_cell` (
+  `fail_streak` int NOT NULL,
+  `item_count` int NOT NULL,
+  `lat_idx` int NOT NULL,
+  `lng_idx` int NOT NULL,
+  `total_count` int NOT NULL,
+  `failed_at` datetime(6) DEFAULT NULL,
+  `fetched_at` datetime(6) NOT NULL,
+  `payload` longtext NOT NULL,
+  PRIMARY KEY (`lat_idx`,`lng_idx`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 23. `pet_place_detail` — 반려동반 장소 상세 캐시 (**실재**)
+
+장소 상세(`GET /api/places/{contentId}`)의 KTO 응답 캐시. `content_id` 가 키이고 공통 정보(`common_fetched_at`)와 반려 동반 정보(`pet_fetched_at`)를 따로 받은 시각을 든다. `not_found_at` 은 KTO 가 모른다고 한 id 를 다시 묻지 않게 한다. FK 는 없다.
+
+```sql
+CREATE TABLE `pet_place_detail` (
+  `lat` double DEFAULT NULL,
+  `lng` double DEFAULT NULL,
+  `common_fetched_at` datetime(6) DEFAULT NULL,
+  `not_found_at` datetime(6) DEFAULT NULL,
+  `pet_fetched_at` datetime(6) DEFAULT NULL,
+  `content_type_id` varchar(16) DEFAULT NULL,
+  `content_id` varchar(64) NOT NULL,
+  `tel` varchar(64) DEFAULT NULL,
+  `image` varchar(512) DEFAULT NULL,
+  `acmpy_need_mtr` text,
+  `acmpy_psbl_cpam` text,
+  `addr` varchar(255) DEFAULT NULL,
+  `etc_acmpy_info` text,
+  `title` varchar(255) DEFAULT NULL,
+  `overview` longtext,
+  PRIMARY KEY (`content_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 24. `place_catalog` — 전국 반려동반 장소 한 벌 (**실재**)
+
+전국 반려동반 장소 목록 **한 벌** — [`18_place_catalog.sql`](../../backend/mysql/post-start/18_place_catalog.sql). **행이 하나다** (`PRIMARY KEY (id)` + `CHECK (id = 1)`) — §22 `place_cell` 이 좌표를 접은 키를 갖는 것과 달리 이 표에는 키가 없고, 그래서 요청에 좌표도 지역도 실려 오지 않는다. `etag` 로 앱이 304 를 받고, 매일 04:40(KST) 예열 스케줄러가 갱신한다(#279). `fetched_at` 은 **서비스 존(Asia/Seoul) 벽시계**다 — 다른 표의 UTC 와 다르다. FK 는 없다.
+
+```sql
+CREATE TABLE `place_catalog` (
+  `fail_streak` int NOT NULL,
+  `id` int NOT NULL,
+  `item_count` int NOT NULL,
+  `total_count` int NOT NULL,
+  `failed_at` datetime(6) DEFAULT NULL,
+  `fetched_at` datetime(6) NOT NULL,
+  `etag` varchar(64) NOT NULL,
+  `payload` longtext NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `chk_place_catalog_singleton` CHECK ((`id` = 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 25. `report` — 신고 (**실재**)
+
+신고 한 건 — [`15_report.sql`](../../backend/mysql/post-start/15_report.sql). **`users` 로의 FK 를 안 건다** — 신고는 값으로만 사람을 가리킨다. 탈퇴가 신고 기록을 지우면 안 되기 때문이다. `reason` 에 CHECK. **UNIQUE 가 없다** — 같은 사람이 같은 글을 두 번 신고할 수 있고, 그것을 세는 것은 운영의 일이다. 신고 대상의 좌표는 §26 `report_snapshot` 이 든다(17).
+
+```sql
+CREATE TABLE `report` (
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `reported_user_id` bigint DEFAULT NULL,
+  `reporter_user_id` bigint NOT NULL,
+  `reason` varchar(16) NOT NULL,
+  `memo` varchar(500) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_report_reported` (`reported_user_id`),
+  KEY `idx_report_reporter` (`reporter_user_id`),
+  CONSTRAINT `chk_report_reason` CHECK ((`reason` in (_utf8mb4'spam',_utf8mb4'abuse',_utf8mb4'sexual',_utf8mb4'fraud',_utf8mb4'other')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 26. `report_snapshot` — 신고 대상 스냅샷 (**실재**)
+
+신고 시점의 대상(글·댓글·메시지·방)을 **본문째 복사**해 둔 것 — 대상이 지워지거나 고쳐져도 신고는 그때 모양을 본다. `role` 이 `target`(신고 대상 그 자체)·`context`(주변 메시지)를 가르고, `target` 행은 `body` 가 비면 안 된다(CHECK). `fk_report_snapshot_report … ON DELETE CASCADE` — 스냅샷은 신고 없이 존재할 이유가 없다. 이 저장소에서 `users` 밖으로 가는 FK 를 가진 채팅 쪽 표는 없고, 여기도 `chat_message` 로 가는 FK 는 없다(ADR-0011 결정 4).
+
+```sql
+CREATE TABLE `report_snapshot` (
+  `author_user_id` bigint DEFAULT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `occurred_at` datetime(6) NOT NULL,
+  `report_id` bigint NOT NULL,
+  `role` varchar(8) NOT NULL,
+  `target_id` bigint NOT NULL,
+  `target_ordinal` bigint DEFAULT NULL,
+  `content_type` varchar(16) DEFAULT NULL,
+  `target_type` varchar(24) NOT NULL,
+  `title` varchar(200) DEFAULT NULL,
+  `author_name` varchar(255) DEFAULT NULL,
+  `body` text,
+  PRIMARY KEY (`id`),
+  KEY `idx_report_snapshot_report` (`report_id`),
+  KEY `idx_report_snapshot_target` (`target_type`,`target_id`),
+  CONSTRAINT `fk_report_snapshot_report` FOREIGN KEY (`report_id`) REFERENCES `report` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `chk_report_snapshot_role` CHECK ((`role` in (_utf8mb4'target',_utf8mb4'context'))),
+  CONSTRAINT `chk_report_snapshot_target_has_body` CHECK (((`role` <> _utf8mb4'target') or (`body` is not null))),
+  CONSTRAINT `chk_report_snapshot_target_type` CHECK ((`target_type` in (_utf8mb4'community_post',_utf8mb4'community_comment',_utf8mb4'chat_message',_utf8mb4'chat_room')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 27. `user_block` — 가리기 (**실재**)
+
+한 사람이 다른 사람을 가린 기록 — `chat_block` 에서 이름을 바꿨다([`16_user_block.sql`](../../backend/mysql/post-start/16_user_block.sql)). 가리기는 처음부터 사람 단위였고 채팅 안에 있었던 것은 채팅이 그것을 처음 필요로 했기 때문이다; 커뮤니티가 같은 가리기를 쓰면서 이름을 옮겼다. `UNIQUE (blocker_user_id, blocked_user_id)`. `users` 로의 FK 는 없다.
+
+```sql
+CREATE TABLE `user_block` (
+  `blocked_user_id` bigint NOT NULL,
+  `blocker_user_id` bigint NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_block` (`blocker_user_id`,`blocked_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 28. `user_consent` — 약관 동의 이력 (**실재**)
+
+약관·개인정보·위치·마케팅 동의의 **이력** — [`19_user_consent.sql`](../../backend/mysql/post-start/19_user_consent.sql)(#190 · ADR-0020). **덧붙이기만 한다** — 동의도 철회도 새 행이고 "지금 상태" 는 계정·문서(`kind`)별 마지막 행이다. `users` 의 옛 `agree_*` 아홉 컬럼은 [`21_users_drop_consent_columns.sql`](../../backend/mysql/post-start/21_users_drop_consent_columns.sql) 이 여기로 옮기고 지웠다. `created_at` 은 UTC 다. `users` 로의 FK 는 없다 — 탈퇴한 사람의 동의 증빙을 남긴다.
+
+```sql
+CREATE TABLE `user_consent` (
+  `agreed` bit(1) NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `kind` varchar(16) NOT NULL,
+  `version` varchar(16) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_consent_user` (`user_id`,`id`),
+  CONSTRAINT `chk_user_consent_kind` CHECK ((`kind` in (_utf8mb4'TERMS',_utf8mb4'PRIVACY',_utf8mb4'LOCATION',_utf8mb4'MARKETING')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
 ## 인덱스 · 공간 인덱스 요약
 
 | 테이블 | 인덱스 | 종류 | 목적 |
@@ -804,3 +1033,58 @@ CREATE TABLE care_log (
 | `care_log` | `idx_carelog_dog(dog_id, occurred_at)` | 보조 | `dog` 삭제 시 `SET NULL` 이 훑는 자리 · 반려동물별 케어 기록(#154) |
 
 > 공간 컬럼(`walk.path`, `place.geom`, `trail.path`)은 모두 `SRID 4326` + `NOT NULL` + `SPATIAL INDEX`. 초기에는 MySQL 공간형 단일 저장소로 운영하고, 대량 GPS 시계열·장소검색(ES/Redis)은 규모 확장 시 옵션이다. 관계 개요는 [ERD](./erd.md) 참조.
+
+---
+
+## 부록 A. 정본의 표 46개 — 어디에 적혀 있나
+
+`01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**가 `실재 §N` 이면 그 절이 정의이고, `레거시` 면 감정 여행·관광 수집 시절의 표라 이 문서에 절이 없다 — 반려 축에서 쓰지 않고, 지우지 않고 격리한다(#174 · 앱에서 끊는 자리는 #94). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
+
+| 표 | 상태 | 모듈 | 한 줄 |
+| --- | --- | --- | --- |
+| `bookmarks` | 레거시 | `bookmark` | v1 장소 저장. 계획 §10 `bookmark` 와 **다른 표**다 |
+| `card_comment` | 실재 §19 | `social` | 감정카드 댓글 — **격리** #174 |
+| `card_reaction` | 실재 §20 | `social` | 감정카드 반응 — **격리** #174 |
+| `care_log` | 실재 §17 | `care` | 케어 로그 |
+| `cat3_category_mapping` | 레거시 | `curation` | KTO 소분류(cat3) → 감정 카테고리 매핑 |
+| `chat_message` | 실재 §15 | `chat` | 채팅 메시지 |
+| `chat_room` | 실재 §12 | `chat` | 채팅방(범용) |
+| `chat_room_invite` | 실재 §14 | `chat` | 초대코드 |
+| `chat_room_member` | 실재 §13 | `chat` | 방 멤버십 |
+| `collection_items` | 레거시 | `bookmark` | v1 컬렉션 항목 |
+| `collections` | 레거시 | `bookmark` | v1 저장 컬렉션 |
+| `comment` | 실재 §8 | `community` | 게시글 댓글 |
+| `dog` | 실재 §3 | `dog` | 반려동물 프로필(소프트 삭제 `deleted_at`) |
+| `emotion_card` | 실재 §18 | `social` | 감정카드 — **격리** #174 |
+| `emotion_categories` | 레거시 | `curation` | 감정 카테고리 사전 |
+| `emotion_feedbacks` | 레거시 | `explore` | 감정 피드백(`POST …/feedback`) |
+| `emotion_reviews` | 레거시 | `explore` | 감정 리뷰(`…/emotional-reviews` 읽기만). **격리** — #174 |
+| `family_group` | 실재 §11 | `group` | 가족 케어 그룹 |
+| `feedback` | 레거시 | `feedback` | 앱 피드백 전송 |
+| `journey` | 레거시 | `schedules` | 감정 여행 일정 |
+| `journey_photos` | 레거시 | `schedules` | 일정 사진 목록 |
+| `kto_call_budget` | 실재 §21 | `place` | KTO 일 호출 예산 |
+| `media_objects` | 레거시 | `S3` | 업로드 객체 원장(S3 objectKey) |
+| `pet_place_detail` | 실재 §23 | `place` | 장소 상세 캐시 |
+| `place_catalog` | 실재 §24 | `place` | 전국 반려동반 장소 한 벌(행 하나) |
+| `place_cell` | 실재 §22 | `place` | 주변 장소 셀 스냅샷 |
+| `place_descriptions` | 레거시 | `tour` | KTO 수집 — 장소 설명 |
+| `place_features` | 레거시 | `curation · explore` | 장소 특성. 두 모듈이 같은 표를 매핑한다 |
+| `place_hashtags` | 레거시 | `tour` | KTO 수집 — 해시태그 |
+| `place_kakao_links` | 레거시 | `kakao` | 카카오 로컬 장소 매핑 |
+| `place_simple_tags` | 레거시 | `tour` | KTO 수집 — 단순 태그 |
+| `place_star_ratings` | 레거시 | `curation` | 장소 별점 집계 |
+| `place_trait_snapshots` | 레거시 | `tour` | KTO 수집 — 성향 스냅샷 |
+| `place_traits` | 레거시 | `curation` | 장소 성향 태그 |
+| `places` | 레거시 | `curation · tour` | KTO 원본 장소 캐시(감정 여행 시절). 계획 §5 `place` 와 **다른 표**다 |
+| `post` | 실재 §7 | `community` | 커뮤니티 게시글 |
+| `reaction` | 실재 §9 | `community` | 게시글 반응 |
+| `refresh_token` | 실재 §2 | `user` | refresh 토큰 원장 |
+| `report` | 실재 §25 | `moderation` | 신고 |
+| `report_snapshot` | 실재 §26 | `moderation` | 신고 대상 스냅샷 |
+| `schedule` | 레거시 | `schedules` | 일정 항목 |
+| `user_block` | 실재 §27 | `moderation` | 가리기 |
+| `user_consent` | 실재 §28 | `consent` | 약관 동의 이력 |
+| `users` | 실재 §1 | `user` | 앱 사용자 계정 |
+| `walk` | 실재 §4 | `walk` | 산책 기록(GPS 경로) |
+| `walk_note` | 실재 §16 | `care` | 산책 주의사항(그룹당 한 장) |
