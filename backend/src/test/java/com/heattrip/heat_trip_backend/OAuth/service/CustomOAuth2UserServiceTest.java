@@ -348,9 +348,18 @@ class CustomOAuth2UserServiceTest {
     }
 
     @Test
-    @DisplayName("모르는 공급자는 예외로 거절한다")
+    @DisplayName("모르는 공급자는 예외로 거절한다 — apple 은 #301 부터 아는 공급자다")
     void toUserInfo_rejectsUnknownProvider() {
-        assertThatThrownBy(() -> CustomOAuth2UserService.toUserInfo("apple", Map.of()))
+        // 2026-09-06 이전에는 여기서 "apple" 이 모르는 공급자의 예였다. 이제 id_token 클레임을
+        // AppleOAuth2User 로 옮긴다(#301) — 이름은 없고 sub 가 열쇠다.
+        assertThat(CustomOAuth2UserService.toUserInfo("apple", Map.of("sub", "001234.abc", "email", "a@privaterelay.appleid.com")))
+                .satisfies(info -> {
+                    assertThat(info.getProvider()).isEqualTo("apple");
+                    assertThat(info.getProviderId()).isEqualTo("001234.abc");
+                    assertThat(info.getEmail()).isEqualTo("a@privaterelay.appleid.com");
+                    assertThat(info.getName()).isNull();
+                });
+        assertThatThrownBy(() -> CustomOAuth2UserService.toUserInfo("facebook", Map.of()))
                 .isInstanceOf(OAuth2AuthenticationException.class);
         assertThatThrownBy(() -> CustomOAuth2UserService.toUserInfo(null, Map.of()))
                 .isInstanceOf(OAuth2AuthenticationException.class);

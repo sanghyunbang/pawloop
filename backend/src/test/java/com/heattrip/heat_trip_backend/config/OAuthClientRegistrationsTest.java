@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OAuthClientRegistrationsTest {
 
     /** ADR-0010 이 정한 집합. 늘리려면 ADR 을 먼저 고쳐라. */
-    private static final Set<String> ALLOWED = Set.of("kakao", "google");
+    private static final Set<String> ALLOWED = Set.of("kakao", "google", "apple");
 
     /** {@code spring.security.oauth2.client.registration.<이름>.<속성>} 의 접두사. */
     private static final String REGISTRATION_PREFIX =
@@ -50,7 +50,7 @@ class OAuthClientRegistrationsTest {
             "application-dev.properties", "application-prod.properties");
 
     @Test
-    @DisplayName("등록된 소셜 공급자는 ADR-0010 이 정한 kakao·google 뿐이다 — 되살리면 여기가 빨간불이다")
+    @DisplayName("등록된 소셜 공급자는 ADR-0010 의 kakao·google 과 ADR-0022 의 apple 뿐이다 — naver 를 되살리면 여기가 빨간불이다")
     void registeredProviders_matchAdr0010() throws IOException {
         for (String profile : PROFILES) {
             Path file = TestProjectPaths.backendDir().resolve("src/main/resources").resolve(profile);

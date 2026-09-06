@@ -201,7 +201,7 @@ class AuthContractIntegrationTest extends AbstractMySqlIntegrationTest {
         // naver 는 여기 있었다. ADR-0010 이 보류로 확정하면서 계약 enum 과
         // AuthController.SUPPORTED_PROVIDERS 에서 함께 빠졌다(#15). 아래
         // 화이트리스트_밖_공급자는_400_이다 가 그 자리를 이어받는다.
-        for (String provider : new String[] {"kakao", "google"}) {
+        for (String provider : new String[] {"kakao", "google", "apple"}) {
             MockHttpServletResponse response = mockMvc.perform(get("/auth/oauth/" + provider))
                     .andReturn().getResponse();
 

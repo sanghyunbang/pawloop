@@ -115,7 +115,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ### 2.1 소셜 로그인 시작 — ✅ 구현
 
-`GET /oauth2/authorization/{provider}` — `provider ∈ {kakao, google}` (naver 보류)
+`GET /oauth2/authorization/{provider}` — `provider ∈ {kakao, google, apple}` (naver 보류 · apple 은 #301, iOS 심사 지침 4.8)
+
+> **Apple** 은 같은 흐름이되 서버 안이 다르다: Apple 에는 사용자 정보 엔드포인트가 없어 `openid` scope 로 받은 `id_token` 의 `sub`·`email` 로 계정을 만든다(`AppleOidcUserService`). `client_secret` 은 고정값이 아니라 개발자 키(.p8)로 서명한 10분짜리 JWT 다(`AppleClientSecret`). Apple 은 `email` 을 요청하면 콜백을 **POST**(`response_mode=form_post`)로 보내므로 운영 세션 쿠키가 `SameSite=None; Secure` 다. 키 셋(`APPLE_TEAM_ID`·`APPLE_KEY_ID`·`APPLE_PRIVATE_KEY`)이 비면 딥링크가 `error=apple_not_configured` 로 돌아온다 — 카카오·구글은 그대로다. Return URL 이 https 여야 해서 로컬 http 로는 시험할 수 없다.
 
 앱(`flutter_web_auth_2`)이 실제로 여는 URL. 소셜 인증 화면으로 302 리다이렉트되고, 성공 시 백엔드가 앱 딥링크 `heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 로 되돌린다(#14).
 

@@ -95,10 +95,10 @@ public class CustomOAuth2User implements OAuth2User {
     }
 
     /**
-     * getUserInfo()
+     * getProviderInfo() — 공급자가 준 프로필. OidcUser.getUserInfo() 와 이름이 겹쳐 #301 에서 바꿨다.
      * 커스텀 OAuth2UserInfo 객체 반환 (provider, id, email 등에 접근 가능)
      */
-    public OAuth2UserInfo getUserInfo() {
+    public OAuth2UserInfo getProviderInfo() {
         return userInfo;
     }
 

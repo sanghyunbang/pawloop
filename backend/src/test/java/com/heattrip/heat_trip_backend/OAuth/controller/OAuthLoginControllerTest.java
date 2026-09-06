@@ -36,7 +36,7 @@ class OAuthLoginControllerTest {
     void startOAuth_redirectsToTheSpringEntryPoint() {
         // naver 는 ADR-0010 이 보류로 확정하면서 계약 enum 과 SUPPORTED_PROVIDERS 에서
         // 함께 빠졌다(#15). 이제 이 래퍼에서 400 이다 — AuthContractIntegrationTest 가 확인한다.
-        for (String provider : new String[] {"kakao", "google"}) {
+        for (String provider : new String[] {"kakao", "google", "apple"}) {
             var response = controller.startOAuth(provider, null);
 
             assertThat(response.getStatusCode())

@@ -2437,18 +2437,28 @@ components:
       in: path
       required: true
       description: |
-        지원 공급자는 `kakao` · `google` 둘뿐입니다 —
+        지원 공급자는 `kakao` · `google` · `apple` 셋입니다 —
         [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략)
-        이 정한 집합입니다. 코드의 `AuthController.SUPPORTED_PROVIDERS` 가 **같은 목록**이어야
-        하고, `OpenApiAuthContractTest` 가 두 집합을 대조합니다. 한쪽만 넓히면 계약에 없는
+        이 정한 둘에 [ADR-0022](../99-decisions/decision-log.md#adr-0022--로그인은-소셜만이-정본이다--이메일-가입로그인은-개발qa-전용)
+        결정 3 이 `apple` 을 더했습니다(#301, App Store 심사 지침 4.8). 코드의
+        `OAuthLoginController.SUPPORTED_PROVIDERS` 가 **같은 목록**이어야 하고,
+        `OpenApiAuthContractTest` 가 두 집합을 대조합니다. 한쪽만 넓히면 계약에 없는
         값이 302 로 통과합니다.
+
+        **`apple` 은 다른 둘과 흐름이 같되 셋이 다릅니다.** ① Apple 은 사용자 정보 엔드포인트가
+        없어 서버가 `id_token`(OIDC)으로 계정을 만듭니다 — 앱이 받는 것은 똑같이 1회용 `code` 입니다.
+        ② 이름은 오지 않습니다(첫 응답의 폼 필드로 한 번만 주고, 서버는 그것을 받지 않습니다) —
+        닉네임이 "반려인N" 으로 시작하고 사용자가 고칩니다. 이메일은 사용자가 가리면
+        `@privaterelay.appleid.com` 릴레이 주소입니다. ③ 개발자 키가 설정되지 않은 서버에서는
+        딥링크가 `error=apple_not_configured` 로 돌아옵니다 — 카카오·구글은 그와 무관합니다.
+        Return URL 이 https 여야 해서 **로컬 http 서버로는 Apple 을 시험할 수 없습니다.**
 
         `naver` 는 **보류**입니다(ADR-0010). 다만 백엔드에는 아직 네이버 클라이언트 등록
         (`application-dev.properties`·`application-prod.properties`)과 `NaverOAuth2User`
         매핑이 남아 있어, 스프링 시큐리티 자체 진입점인 `GET /oauth2/authorization/naver`
         는 여전히 열려 있습니다. 이 계약이 광고하는 집합과 실제로 도달 가능한 집합이 아직
         같지 않다는 뜻이며, 그 구멍을 닫는 일은 **#13** 이 소유합니다.
-      schema: { type: string, enum: [kakao, google] }
+      schema: { type: string, enum: [kakao, google, apple] }
     Cursor:
       name: cursor
       in: query
@@ -2701,15 +2711,16 @@ components:
         updatedAt: { type: string, format: date-time }
         provider:
           type: [string, "null"]
-          enum: [local, kakao, google, null]
+          enum: [local, kakao, google, apple, null]
           description: |
             계정 출처. `local` = 이메일/비밀번호 가입.
             `users.provider` 컬럼과 `UserResponse.provider` 로 구현돼 있습니다(#7).
             소셜 계정의 식별 키는 `(provider, social_id)` 이며 이메일이 아닙니다.
             백필 SQL 이 아직 실행되지 않은 환경의 옛 행은 `null` 일 수 있습니다.
 
-            `naver` 는 빠졌습니다 — ADR-0010 의 보류 결정입니다. **enum 을 통째로 지우지
-            마세요**: `local` 은 이메일 가입자를, `null` 은 백필 전 옛 행을 표현합니다.
+            `naver` 는 빠졌습니다 — ADR-0010 의 보류 결정입니다. `apple` 은 #301 이 더했습니다
+            (`social_id` 는 Apple 의 `sub`). **enum 을 통째로 지우지 마세요**: `local` 은 이메일
+            가입자를, `null` 은 백필 전 옛 행을 표현합니다.
             운영 DB 에 `provider='naver'` 인 행이 남아 있을 수 있으나, 그 계정으로 다시
             로그인할 수 있는 경로를 이 계약은 광고하지 않습니다.
 
