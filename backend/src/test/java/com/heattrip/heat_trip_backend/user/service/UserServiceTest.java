@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,6 +47,10 @@ class UserServiceTest {
     /** RT 를 만지는 유일한 통로. UserService 는 RefreshTokenRepository 를 직접 보지 않는다. (이슈 #9) */
     @Mock
     private RefreshTokenService refreshTokenService;
+
+    /** 로그아웃·탈퇴의 사건(#83). 이 테스트는 발행 자체를 재지 않는다 — 듣는 쪽의 통합 테스트가 잰다. */
+    @Mock
+    private ApplicationEventPublisher events;
 
     @InjectMocks
     private UserService userService;

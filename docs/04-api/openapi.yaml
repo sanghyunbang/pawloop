@@ -131,6 +131,11 @@ tags:
     description: |
       약관 동의의 기록 (이슈 #190). 서버는 "누가 어느 문서의 어느 버전에 언제 동의(철회)했는가" 만
       적습니다. 문서와 그 최신 버전은 앱이 들고 있고, 재동의가 필요한지도 앱이 정합니다.
+  - name: Push
+    description: |
+      푸시 알림 (이슈 #83). 기기 토큰 원장과 전체 끄기. 방별 음소거는 멤버십의 속성이라 `Chat` 의
+      `PUT /api/chat/rooms/{roomId}/mute` 다. 발송은 메시지 저장이 **커밋된 뒤 다른 스레드에서** 나가고,
+      Firebase 키가 없으면 서버는 발송만 끈 채로 뜬다 — 등록·설정은 그대로 저장된다.
   - name: Places
     description: 반려동반 장소(관광공사) · 동물병원/펫샵/산책로 레이어
   - name: Walks
@@ -635,6 +640,67 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Consents' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/push/tokens:
+    put:
+      tags: [Push]
+      summary: 기기 토큰 등록
+      description: |
+        앱이 시작할 때, 로그인할 때, FCM 이 토큰을 바꿀 때마다 부릅니다. **upsert** 입니다 — 같은 토큰을 다시
+        보내면 행이 늘지 않고, 같은 기기에서 다른 계정으로 들어오면 토큰의 주인이 바뀝니다(옛 계정의 알림이
+        새 사람의 기기에 오면 안 됩니다). 그래서 돌려줄 값이 없고 `204` 입니다.
+
+        사용자당 살아 있는 토큰은 10개까지입니다 — 넘치면 가장 오래 안 보인 것부터 폐기합니다.
+        로그아웃(`POST /auth/logout`, 전 기기)은 이 사용자의 토큰을 전부 폐기하고, 탈퇴는 행을 지웁니다 —
+        앱이 따로 해지 요청을 보낼 필요가 없습니다.
+
+        `429` 는 `group-write` 버킷입니다 — 요청 한 건이 행을 만들기 때문이고 `PUT /api/consents` 와 같은 판단입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushTokenInput' }
+      responses:
+        '204':
+          description: 등록 또는 갱신됨
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/push/settings:
+    get:
+      tags: [Push]
+      summary: 내 알림 설정
+      description: |
+        전체 끄기 하나입니다. 한 번도 만진 적이 없으면 `enabled: true` 입니다 — 행이 없는 것이 켜진 것입니다.
+        방별 음소거는 여기 없고 방 목록(`ChatRoom.muted`)에 실립니다.
+      responses:
+        '200':
+          description: 알림 설정
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PushSettings' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Push]
+      summary: 알림 전체 끄기 · 켜기
+      description: |
+        `enabled` 가 없으면 400 입니다 — 빠진 필드를 `false` 로 채우면 `{}` 라는 본문이 "끄기" 가 됩니다.
+        응답은 서버가 실제로 쓴 값입니다. `429` 는 `group-write` 버킷입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushSettingsInput' }
+      responses:
+        '200':
+          description: 적은 뒤의 설정
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PushSettings' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -2066,6 +2132,33 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/chat/rooms/{roomId}/mute:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    put:
+      tags: [Chat]
+      summary: 방별 음소거
+      description: |
+        이 방의 알림만 끄거나 켭니다 (이슈 #83). 멤버십의 속성이라 `chat_room_member.muted_at` 에 남고,
+        살아 있는 멤버만 할 수 있습니다 — 아니면 `403` 입니다(없는 방도 같습니다).
+        `muted` 가 없으면 400 입니다 — `{}` 가 해제로 읽히면 안 됩니다. 응답은 서버가 실제로 쓴 값입니다.
+        방 목록(`GET /api/chat/rooms`)의 `muted` 로 확인합니다. `429` 는 `group-write` 버킷입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoomMuteInput' }
+      responses:
+        '200':
+          description: 적은 뒤의 값
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoomMute' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /api/chat/rooms/{roomId}/invites:
     parameters:
@@ -3677,6 +3770,49 @@ components:
         type: { $ref: '#/components/schemas/CareType' }
         memo: { type: string, maxLength: 500 }
 
+    PushTokenInput:
+      type: object
+      description: 기기 토큰 등록 본문 (이슈 #83)
+      required: [token, platform]
+      properties:
+        token:
+          type: string
+          maxLength: 512
+          description: FCM 등록 토큰. 앱이 `firebase_messaging` 에서 받는 값 그대로
+          example: "dK3f...:APA91b..."
+        platform:
+          type: string
+          enum: [android, ios]
+
+    PushSettings:
+      type: object
+      description: 사용자별 알림 설정. 방별 음소거는 `ChatRoom.muted` 에 있습니다
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: 전체 끄기의 반대. 한 번도 만진 적이 없으면 `true`
+
+    PushSettingsInput:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+
+    RoomMuteInput:
+      type: object
+      required: [muted]
+      properties:
+        muted: { type: boolean }
+
+    RoomMute:
+      type: object
+      description: 방별 음소거의 결과 — 서버가 실제로 쓴 값
+      required: [roomId, muted]
+      properties:
+        roomId: { type: integer, format: int64 }
+        muted: { type: boolean }
+
     ChatRoom:
       type: object
       description: |
@@ -3685,7 +3821,7 @@ components:
       # myRole 은 입장 응답에서 null 이 될 수 있다(내 멤버 행을 못 찾은 방어적 기본값).
       # lastMessage 는 아직 아무 말도 없는 방에서 null 이다.
       # isDefault·members 는 서버가 아예 안 싣는다 — 방 상세 조회가 미구현이다.
-      required: [id, title, tag, originKind, originRef, lastSeq, lastReadSeq, unread, memberCount, createdAt]
+      required: [id, title, tag, originKind, originRef, lastSeq, lastReadSeq, unread, memberCount, muted, createdAt]
       properties:
         id: { type: integer, format: int64 }
         title: { type: string, example: "우리 가족" }
@@ -3714,6 +3850,9 @@ components:
           description: |
             `lastSeq − lastReadSeq`. 서버가 뺄셈으로 냅니다 — 읽음 표를 두지 않습니다.
         memberCount: { type: integer, example: 3 }
+        muted:
+          type: boolean
+          description: 내가 이 방을 음소거했는가 (`PUT /api/chat/rooms/{roomId}/mute`, #83). 방 목록·상세 둘 다 실립니다
         myRole: { type: string, enum: [OWNER, MEMBER] }
         lastMessage:
           description: |

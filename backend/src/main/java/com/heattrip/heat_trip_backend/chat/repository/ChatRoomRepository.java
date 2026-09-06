@@ -142,4 +142,8 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
      */
     @Query("select r.originKind from ChatRoom r where r.id = :id")
     Optional<String> findOriginKindById(@Param("id") long id);
+
+    /** 방 이름 — 알림 제목용(#83). 엔티티를 읽지 않는다 — postMessage 가 방 엔티티를 안 읽는 이유와 같다. */
+    @Query("select r.name from ChatRoom r where r.id = :id")
+    Optional<String> findNameById(@Param("id") long id);
 }

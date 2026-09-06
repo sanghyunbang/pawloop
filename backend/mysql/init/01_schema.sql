@@ -106,6 +106,7 @@ CREATE TABLE `chat_room_member` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `joined_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `last_read_seq` bigint NOT NULL DEFAULT '0',
+  `muted_at` datetime(6) DEFAULT NULL,
   `removed_at` datetime(6) DEFAULT NULL,
   `removed_by` bigint DEFAULT NULL,
   `room_id` bigint NOT NULL,
@@ -130,6 +131,20 @@ CREATE TABLE `comment` (
   KEY `idx_comment_user` (`user_id`),
   CONSTRAINT `fk_comment_post` FOREIGN KEY (`post_id`) REFERENCES `post` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_comment_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `device_token` (
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `last_seen_at` datetime(6) NOT NULL,
+  `platform` varchar(8) NOT NULL,
+  `revoked_at` datetime(6) DEFAULT NULL,
+  `user_id` bigint NOT NULL,
+  `token` varchar(512) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_device_token_token` (`token`),
+  KEY `idx_device_token_user` (`user_id`,`revoked_at`),
+  CONSTRAINT `chk_device_token_platform` CHECK ((`platform` in (_utf8mb4'android',_utf8mb4'ios')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `dog` (
@@ -246,6 +261,13 @@ CREATE TABLE `post` (
   KEY `idx_post_user` (`user_id`),
   CONSTRAINT `fk_post_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `chk_post_board` CHECK ((`board` in (_utf8mb4'walk_review',_utf8mb4'pet_place',_utf8mb4'health',_utf8mb4'free',_utf8mb4'brag')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `push_preference` (
+  `enabled` bit(1) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `reaction` (

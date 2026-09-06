@@ -118,6 +118,10 @@ dependencies {
 	// EPSG 파라미터 DB(proj4j-epsg)는 안 든다 — 정의 문자열 하나를 Tm5174 가 직접 든다.
 	implementation 'org.locationtech.proj4j:proj4j:1.4.3'
 
+	// 푸시 발송 — Firebase Cloud Messaging HTTP v1 (이슈 #83). 레거시 서버 키 API 는 2024 년에 끝났다.
+	// 키가 없으면 PushConfig 가 발송을 끈 클라이언트를 든다 — 의존성은 있어도 부팅에 키가 필요 없다.
+	implementation 'com.google.firebase:firebase-admin:9.9.0'
+
 
     // Swagger (springdoc)
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'

@@ -52,7 +52,8 @@ public record ChatRoomResponse(
         int memberCount,
         String myRole,
         ChatMessageResponse lastMessage,
-        Instant createdAt) {
+        Instant createdAt,
+        boolean muted) {
 
     /**
      * 방 목록 한 줄 — {@code GET /api/chat/rooms}.
@@ -72,7 +73,7 @@ public record ChatRoomResponse(
         return new ChatRoomResponse(room.id(), room.name(), room.tag(),
                 room.originKind(), room.originRef(), room.lastSeq(),
                 summary.lastReadSeq(), summary.unread(), summary.memberCount(),
-                summary.myRole(), preview, ChatTime.toInstant(room.createdAt()));
+                summary.myRole(), preview, ChatTime.toInstant(room.createdAt()), summary.muted());
     }
 
     /**
@@ -94,6 +95,7 @@ public record ChatRoomResponse(
         return new ChatRoomResponse(room.id(), room.name(), room.tag(),
                 room.originKind(), room.originRef(), room.lastSeq(),
                 lastReadSeq, room.lastSeq() - lastReadSeq, liveMembers.size(),
-                me == null ? null : me.role(), null, ChatTime.toInstant(room.createdAt()));
+                me == null ? null : me.role(), null, ChatTime.toInstant(room.createdAt()),
+                me != null && me.muted());
     }
 }

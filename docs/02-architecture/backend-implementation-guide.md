@@ -113,9 +113,9 @@ package com.heattrip.heat_trip_backend.care.api;
 
 2단으로 옮기면 그 0건이 깨질 수 있다. 옮길 때 `api` 에 이름을 붙여야 하고, **무엇을 `api` 에 넣을지는 이미 정해져 있다.** 2026-09-05 실측으로 루트 19개가 이렇게 갈린다(#281 로 옛 신고 뷰 둘이 빠졌다).
 
-| 밖에서 실제로 부름 → `api/` 로 (14) | 밖에서 이름이 안 보임 (5) |
+| 밖에서 실제로 부름 → `api/` 로 (17) | 밖에서 이름이 안 보임 (5) |
 |:---|:---|
-| `ChatRoomService` · `ChatRoomView` · `ChatMessageView` · `ChatRoomSummaryView` · `ChatMessagePageView` · `ChatMemberView` · `ChatLimitViolationException` · `ChatReadView` · `ChatMessageSender` · `ChatMessageSendResult` · `ChatJoinResult` · `ChatInviteView` · `ChatReportService` · `ChatReportDraft` · `ChatBlocks` · `ChatTime` | `ChatErrorCode` · `ChatLimits` · `FixedChatLimits` · `InviteCodeGenerator` · `ChatReportReason` |
+| `ChatRoomService` · `ChatRoomView` · `ChatMessageView` · `ChatRoomSummaryView` · `ChatMessagePageView` · `ChatMemberView` · `ChatLimitViolationException` · `ChatReadView` · `ChatMessageSender` · `ChatMessageSendResult` · `ChatJoinResult` · `ChatInviteView` · `ChatReportService` · `ChatReportDraft` · `ChatBlocks` · `ChatTime` · `ChatMessagePosted`(저장 사건 — 푸시가 커밋 뒤에 듣는다, #83) | `ChatErrorCode` · `ChatLimits` · `FixedChatLimits` · `InviteCodeGenerator` · `ChatReportReason` |
 
 **오른쪽 칸의 이름이 "내부로 옮겨도 된다" 는 뜻은 아니다.** 세는 방식이 **밖의 소스에 그 이름이 적혀 있는가** 라서 맹점이 있다 — 공개 record 가 들고 있는 리스트의 원소 타입은 밖 어디에도 안 적혀 있지만, 내부로 내리면 **공개 record 의 시그니처가 깨진다.** `ChatReportedMessageView`(`ChatReportView` 의 원소)가 그 예였고, 둘 다 옛 신고 표와 함께 #281 로 사라졌다.
 

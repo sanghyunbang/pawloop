@@ -149,6 +149,15 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("PUT".equals(method) && "/api/consents".equals(path)) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
+        // 푸시(#83). 토큰 등록은 앱 시작·로그인 때, 설정과 방 음소거는 설정 화면에서 — 셋 다 행을
+        // 만들거나 바꾸는 쓰기라 동의(PUT /api/consents)와 같은 판단으로 group-write 를 함께 쓴다.
+        // GET /api/push/settings 는 다른 인증 읽기와 같이 버킷이 없다.
+        if ("PUT".equals(method) && ("/api/push/tokens".equals(path) || "/api/push/settings".equals(path))) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        if ("PUT".equals(method) && path.matches("^/api/chat/rooms/\\d+/mute$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         // 회수(DELETE .../invites/{code})는 넣지 않는다. 자기 방의 코드를 죽이는 것뿐이라
         // 반복해도 새로 생기는 것이 없고, 유출 대응을 한도로 막으면 그게 더 나쁘다.
         // 메시지 삭제(DELETE /api/chat/messages/{id}, #197)도 같은 판단이다 — 내 메시지의 본문을

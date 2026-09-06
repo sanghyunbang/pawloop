@@ -50,6 +50,7 @@ com.heattrip.heat_trip_backend
 ├─ consent/                        # 약관 동의 이력 — 서버 정본, 재동의는 앱이  (#190, ADR-0020)
 ├─ moderation/                     # 신고·가리기 — 도메인 공용             (#166, ADR-0016)
 ├─ moderationweb/                  # 가리기의 HTTP 표면                    (#166)
+├─ push/                           # 푸시 — 기기 토큰 · 전체 끄기 · 커밋 뒤 비동기 발송 (#83)
 │
 │  ── 공통 ──
 ├─ S3/                             # 미디어 업로드(presigned/direct) — 반려동물·게시글 사진
@@ -86,7 +87,7 @@ controller  →  service  →  repository(JPA)  →  entity
 
 ## 4. 도메인 패키지별 상세
 
-도메인별 서술은 [backend/](./backend/) 아래 문서가 정본이다 — [auth](./backend/auth.md) · [dogs](./backend/dogs.md) · [walks](./backend/walks.md) · [places](./backend/places.md) · [community](./backend/community.md) · [bookmarks](./backend/bookmarks.md)(계획). 여기서는 공통 둘만 적는다.
+도메인별 서술은 [backend/](./backend/) 아래 문서가 정본이다 — [auth](./backend/auth.md) · [dogs](./backend/dogs.md) · [walks](./backend/walks.md) · [places](./backend/places.md) · [community](./backend/community.md) · [bookmarks](./backend/bookmarks.md)(계획) · [push](./backend/push.md). 여기서는 공통 둘만 적는다.
 
 ### 4.1 `S3` — 미디어 업로드
 
@@ -159,6 +160,7 @@ refresh 를 타므로 이 차이가 클라이언트 분기를 바꾼다.
 | --- | --- |
 | `config/KtoWebClientConfig` | `korPetTourWebClient`·`korServiceDetailWebClient`(#40) · 인허가·두루누비·GPX 클라이언트(#291). 연결·응답·읽기·쓰기 **타임아웃 네 겹** + 인코딩 끔(서비스키가 이미 URL 인코딩돼 있어 재인코딩하면 인증이 깨진다) |
 | `config/SchedulingConfig` | `@EnableScheduling` — §6 |
+| `config/AsyncConfig` | `@EnableAsync` + `pushExecutor`(스레드 2~4 · 큐 1,000 · 넘치면 버리고 경고) — 푸시 발송(#83). 큐는 인메모리 상태다(#86 §2) |
 | `config/OpenApiConfig` | springdoc Swagger UI 메타 |
 | `config/SecurityConfig` / `PublicSecurityConfig` / `PublicSecurityProperties` | 보안 필터체인 + 공개 경로/오리진 프로퍼티 |
 

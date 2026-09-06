@@ -792,6 +792,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq\|beforeSeq&limit` | 폴링/스크롤 겸용. 응답은 `{ items, lastSeq, hasMore }` 이고 `items` 는 **어느 방향이든 `roomSeq` 오름차순**이다. `ETag: "{roomId}:{lastSeq}"` 를 직접 계산해 붙이고, `If-None-Match` 가 같으면 `304`(인가가 **먼저**다) | M2.6 ✅ |
 | `POST` | `/api/chat/rooms/{roomId}/messages` | 전송 `{ "body": "...", "clientMsgId": "..." }`. 처음이면 `201`, 같은 키의 재전송이면 **`200`**(409 가 아니다) 이고 두 응답의 `roomSeq` 가 같다 | M2.6 ✅ |
 | `POST` | `/api/chat/rooms/{roomId}/read` | `lastReadSeq` 올리기. `GREATEST` 로 **뒤로 안 가고** `LEAST(:seq, room.last_seq)` 로 방의 끝을 넘지 않는다. 응답은 서버가 실제로 쓴 값 | M2.6 ✅ |
+| `PUT` | `/api/chat/rooms/{roomId}/mute` | 방별 음소거 `{ "muted": true }`. 살아 있는 멤버만(아니면 403). 방 목록의 `muted` 에 실린다. `{}` 는 400. 버킷 `group-write` | M2.8 ✅ |
 | `POST` | `/api/chat/rooms/{roomId}/invites` | 초대코드 발급(방장만. 7일·무제한 고정 — **본문을 받지 않는다**) | M2.5 ✅ |
 | `DELETE` | `/api/chat/rooms/{roomId}/invites/{code}` | 초대코드 폐기. **행을 지우지 않는다**(회수된 코드와 없던 코드를 구별해야 한다). 기존 멤버는 남는다 | M2.5 ✅ |
 | `POST` | `/api/chat/invites/{code}/join` | 코드로 입장. 없음 `404` → 만료 `410` → 회수 `410` → **이미 멤버면 `200`** → 소진 `409` → 정원 `409`. 재입장 금지 대상이면 `403` | M2.5 ✅ |
@@ -894,6 +895,22 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 6. **post-MVP:** 북마크, 케어 로그, 매칭/산책 크루.
 
 > **2·3 이 1 보다 먼저 끝났다.** 이 목록의 번호는 순서가 아니라 이름이다.
+
+---
+
+## 13. 알림 (Push) — ✅ 서버 구현(M2.8 · #83) · 앱은 Firebase 파일 대기
+
+앱이 꺼져 있어도 메시지가 온 것을 안다. **서버 쪽은 다 있다** — 기기 토큰 원장, 전체 끄기, 방별 음소거(§7), 메시지 저장 **커밋 뒤 비동기** 발송. 앱 쪽(`firebase_messaging` · 알림 설정 화면)은 사장님의 Firebase 프로젝트 파일이 와야 붙는다. 키가 없으면 서버는 발송만 끈 채로 뜬다([push.md](../02-architecture/backend/push.md)).
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `PUT` | `/api/push/tokens` | 기기 토큰 등록 `{ "token": "...", "platform": "android" \| "ios" }` → `204`. **upsert** — 같은 기기에서 다른 계정으로 들어오면 주인이 바뀐다. 사용자당 살아 있는 토큰 10개 상한. 버킷 `group-write` |
+| `GET` | `/api/push/settings` | 전체 끄기 상태 `{ "enabled": true }`. 행이 없으면 켜짐 |
+| `PUT` | `/api/push/settings` | `{ "enabled": false }` → 서버가 쓴 값. `{}` 는 400. 버킷 `group-write` |
+
+- 발송 대상 = 방의 살아 있는 멤버 − 보낸 사람 − 음소거한 사람 − 전체 끈 사람, 그중 살아 있는 토큰. FCM 이 죽었다고 답한 토큰(`UNREGISTERED` 등)은 `revoked_at` 이 찍힌다.
+- 로그아웃은 전 기기 토큰 폐기, 탈퇴는 토큰·설정 행 삭제 — `user` 가 `UserSessionsRevoked` 를 발행하고 `push` 가 커밋 뒤에 듣는다. 앱이 따로 해지 요청을 보낼 필요가 없다.
+- 실기기 도착은 자동화할 수 없다 — 자동화 범위는 "커밋 뒤에 다른 스레드에서 보낸다" 와 "수신자 거르기" 까지다.
 
 ---
 

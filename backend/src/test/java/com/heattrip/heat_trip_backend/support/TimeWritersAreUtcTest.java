@@ -53,7 +53,7 @@ class TimeWritersAreUtcTest {
 
     /** UTC 로 저장하기로 한 모듈들. 케어는 서비스 존이 규약이라(#247) 여기 없다. */
     private static final List<String> UTC_MODULES = List.of(
-            "chat", "chatweb", "user", "OAuth", "group", "moderation", "moderationweb");
+            "chat", "chatweb", "user", "OAuth", "group", "moderation", "moderationweb", "push");
 
     /** {@code LocalDateTime.now()} · {@code LocalDateTime.now(clock)} 둘 다. */
     private static final Pattern DIRECT_NOW = Pattern.compile("LocalDateTime\\s*\\.\\s*now\\s*\\(");

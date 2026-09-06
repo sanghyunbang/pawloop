@@ -13,6 +13,7 @@ import com.heattrip.heat_trip_backend.chat.repository.ChatRoomRepository;
 import com.heattrip.heat_trip_backend.chat.metrics.ChatMetrics;
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -139,6 +140,9 @@ public class ChatRoomService {
     /** 이 저장소의 첫 커스텀 메트릭 셋 (#80). 이름 규약은 그쪽 javadoc 에 있다. */
     private final ChatMetrics metrics;
 
+    /** 메시지가 저장됐음을 알린다 — 듣는 쪽은 커밋 뒤에 받는다({@link ChatMessagePosted}). chat 은 누가 듣는지 모른다. */
+    private final ApplicationEventPublisher events;
+
     // ─────────────────────────── 방 ───────────────────────────
 
     /**
@@ -239,7 +243,8 @@ public class ChatRoomService {
                     // 자르지 않는다 — 이유는 ChatRoomSummaryView javadoc.
                     room.getLastSeq() - member.getLastReadSeq(),
                     memberCounts.getOrDefault(room.getId(), 0),
-                    lastMessages.get(room.getId()));
+                    lastMessages.get(room.getId()),
+                    member.getMutedAt() != null);
         }).toList();
     }
 
@@ -658,6 +663,7 @@ public class ChatRoomService {
         // 방 종류 — 메트릭 태그 하나를 위한 추가 왕복이다. **잠금을 잡기 전에** 부른다.
         // 뒤에서 부르면 직렬화 구간이 그만큼 길어진다 (#80).
         String roomKind = rooms.findOriginKindById(roomId).orElse("unknown");
+        String roomName = rooms.findNameById(roomId).orElse("");
 
         // ③ ★ 직렬화 지점. 발급 문장 하나가 방 행을 잠그고 카운터를 올린다.
         long assignStartedAt = System.nanoTime();
@@ -686,6 +692,9 @@ public class ChatRoomService {
                 .build());
 
         metrics.messageSent(roomKind);
+        // 저장 트랜잭션 안에서 알린다 — 듣는 쪽(알림, #83)은 AFTER_COMMIT 으로 받아 커밋 뒤에만 움직인다.
+        events.publishEvent(new ChatMessagePosted(roomId, roomName, seq, saved.getId(), senderUserId, name,
+                "text".equals(type) ? text : "", saved.getCreatedAt()));
         return viewOf(saved);
     }
 
@@ -1136,9 +1145,39 @@ public class ChatRoomService {
                 room.getName(), room.getTag(), room.getLastSeq(), room.getCreatedAt());
     }
 
+    /**
+     * 이 방의 알림을 끄거나 켠다 — 이슈 #83. 멤버십의 속성이라 여기 있다.
+     *
+     * @return 서버가 실제로 쓴 값
+     * @throws ResponseStatusException 403 — 살아 있는 멤버가 아니면(없는 방도 여기다)
+     */
+    @Transactional
+    public boolean setMuted(long roomId, long userId, boolean muted) {
+        ChatRoomMember member = members.findByRoomIdAndUserId(roomId, userId)
+                .filter(m -> m.getRemovedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "이 방의 멤버가 아닙니다."));
+        member.setMutedAt(muted ? ChatTime.nowUtc(clock) : null);
+        return member.getMutedAt() != null;
+    }
+
+    /**
+     * 이 방의 메시지를 알려야 할 사람들 — 살아 있는 멤버 중 보낸 사람과 음소거한 사람을 뺀 것 (이슈 #83).
+     *
+     * <p>{@link #liveMembers} 로도 낼 수 있지만 그러면 부르는 쪽이 {@code removedAt}·{@code mutedAt} 을
+     * 스스로 걸러야 한다 — {@link #isLiveMember} 가 판정을 안에 두는 것과 같은 이유로 여기 둔다.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> notifiableMembers(long roomId, long exceptUserId) {
+        return members.findByRoomIdAndRemovedAtIsNull(roomId).stream()
+                .filter(member -> member.getMutedAt() == null)
+                .map(ChatRoomMember::getUserId)
+                .filter(userId -> userId != exceptUserId)
+                .toList();
+    }
+
     private static ChatMemberView viewOf(ChatRoomMember member) {
         return new ChatMemberView(member.getUserId(), member.getRole().name(),
-                member.getLastReadSeq(), member.getJoinedAt());
+                member.getLastReadSeq(), member.getJoinedAt(), member.getMutedAt() != null);
     }
 
     private static ChatMessageView viewOf(ChatMessage message) {

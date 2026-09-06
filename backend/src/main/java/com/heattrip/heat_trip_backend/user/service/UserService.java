@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -13,6 +14,7 @@ import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
+import com.heattrip.heat_trip_backend.user.UserSessionsRevoked;
 import com.heattrip.heat_trip_backend.user.UserTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
@@ -32,6 +34,9 @@ public class UserService {
      * refresh 토큰을 만지는 유일한 통로. 이 서비스는 리포지토리를 직접 보지 않는다. (이슈 #9)
      */
     private final RefreshTokenService refreshTokenService;
+
+    /** 로그아웃·탈퇴를 알린다 — 듣는 쪽(기기 토큰, #83)은 커밋 뒤에 받는다. 이 모듈은 누가 듣는지 모른다. */
+    private final ApplicationEventPublisher events;
 
     /**
      * 이메일/비밀번호 가입.
@@ -198,6 +203,7 @@ public class UserService {
         User me = require(userId);
         refreshTokenService.deleteAllByUserId(userId);
         userRepository.delete(me);
+        events.publishEvent(new UserSessionsRevoked(userId, true));
         // 필요 시: userRepository.flush();
     }
 
@@ -220,6 +226,7 @@ public class UserService {
     @Transactional
     public void logout(Long userId) {
         refreshTokenService.revokeAllByUserId(userId);
+        events.publishEvent(new UserSessionsRevoked(userId, false));
     }
 
      // helpers

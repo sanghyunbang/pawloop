@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -236,6 +237,17 @@ public class ChatRoomController {
                                  @RequestBody ChatReadRequest request) {
         return ChatReadResponse.of(
                 chatRooms.markRead(roomId, user.getId(), request.requireLastReadSeq()));
+    }
+
+    /**
+     * 방별 음소거 — 이슈 #83. 살아 있는 멤버만(아니면 403). {@code muted} 가 없으면 400 —
+     * "{}" 가 해제로 읽히면 안 된다. 버킷은 group-write 다(ApiRateLimitFilter).
+     */
+    @PutMapping("/rooms/{roomId}/mute")
+    public ChatMuteResponse mute(@CurrentUser User user,
+                                 @PathVariable long roomId,
+                                 @RequestBody ChatMuteRequest request) {
+        return new ChatMuteResponse(roomId, chatRooms.setMuted(roomId, user.getId(), request.requireMuted()));
     }
 
     /**
