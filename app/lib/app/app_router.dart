@@ -5,8 +5,10 @@ import 'package:heat_trip_flutter/app/navigator_keys.dart';
 import 'package:heat_trip_flutter/features/auth/auth_routes.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/data/consent_gate.dart';
+import 'package:heat_trip_flutter/v2/data/intro_gate.dart';
 import 'package:heat_trip_flutter/v2/data/location_service.dart';
 import 'package:heat_trip_flutter/v2/screens/consent_screen.dart';
+import 'package:heat_trip_flutter/v2/screens/intro_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/main_shell.dart';
 import 'package:heat_trip_flutter/v2/screens/onboarding_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/splash_screen.dart';
@@ -23,6 +25,18 @@ String? _pendingLocation;
 /// 값으로 넘긴다 — `_pendingLocation` 과 같은 모양이다.
 final ValueNotifier<bool?> _consented = ValueNotifier<bool?>(null);
 
+/// 첫 실행 소개(#323)를 이 기기에서 봤는가. **`null` 이면 아직 모른다**(저장소를 읽는 중).
+/// `_consented` 와 같은 모양이다 — 모르는 동안 라우터는 스플래시에 머문다.
+final ValueNotifier<bool?> _introSeen = ValueNotifier<bool?>(null);
+
+/// 소개를 끝냈다(건너뛰기든 시작하기든). 적고, 라우터를 다시 돌리고, 로그인 화면으로.
+/// 건너뛰기와 시작하기가 같은 곳으로 가는 이유는 `intro_screen.dart` 머리에 있다.
+Future<void> _finishIntro() async {
+  await const IntroGate().markSeen();
+  _introSeen.value = true;
+  appRouter.go(loginRoute);
+}
+
 /// 인증 상태가 바뀌면 동의 여부를 다시 읽는다.
 ///
 /// **계정이 바뀌면 반드시 다시 읽어야 한다.** 앞사람의 값을 그대로 쓰면 뒷사람은
@@ -30,6 +44,13 @@ final ValueNotifier<bool?> _consented = ValueNotifier<bool?>(null);
 Future<void> _refreshConsent() async {
   final user = AuthState.user;
   final status = AuthState.status.value;
+  // 로그인한 사람은 소개를 본 것으로 친다(#323) — 예전 빌드에서 토큰을 갖고 넘어온
+  // 사람이 나중에 로그아웃했을 때 소개가 불쑥 나오지 않게.
+  if ((status == AuthStatus.authenticated || status == AuthStatus.onboarding) &&
+      _introSeen.value == false) {
+    _introSeen.value = true;
+    await const IntroGate().markSeen();
+  }
   if (user == null ||
       (status != AuthStatus.authenticated && status != AuthStatus.onboarding)) {
     _consented.value = null;
@@ -48,6 +69,9 @@ class _RouterRefresh extends ChangeNotifier {
   _RouterRefresh() {
     AuthState.status.addListener(_onAuth);
     _consented.addListener(notifyListeners);
+    _introSeen.addListener(notifyListeners);
+    // 봤는지는 앱을 켤 때 한 번 읽는다. 읽는 동안은 `null` 이라 스플래시에 머문다.
+    const IntroGate().hasSeen().then((seen) => _introSeen.value = seen);
   }
 
   void _onAuth() {
@@ -89,6 +113,7 @@ final GoRouter appRouter = GoRouter(
       pendingLocation: _pendingLocation,
       sessionEnded: sessionEnded,
       consented: _consented.value,
+      introSeen: _introSeen.value,
     );
 
     // 1회성 신호다. 여기서 소비하지 않으면 사용자가 로그인 화면을 닫을 때마다
@@ -123,6 +148,11 @@ final GoRouter appRouter = GoRouter(
       path: onboardingRoute,
       name: 'onboarding',
       builder: (context, state) => const OnboardingScreen(),
+    ),
+    GoRoute(
+      path: introRoute,
+      name: 'intro',
+      builder: (context, state) => IntroScreen(onDone: _finishIntro),
     ),
     GoRoute(path: '/home', builder: (context, state) => const MainShell()),
     ...authRoutes,

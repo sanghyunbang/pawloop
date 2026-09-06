@@ -139,25 +139,25 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([앱 최초 실행]) --> B{로그인 상태?}
-    B -->|기존 로그인| H([MainShell - 홈])
-    B -->|최초 실행| C[온보딩<br/>산책·지도·커뮤니티 가치 소개]
-
-    C --> D[로그인 화면<br/>소셜 로그인 provider/social_id]
+    A([앱 실행]) --> S[스플래시<br/>저장된 토큰 검증 · 소개 봤는지 읽기]
+    S -->|토큰 있음| H([MainShell - 홈])
+    S -->|토큰 없음 · 소개 안 봄| I[첫 실행 소개 intro_screen<br/>가치 3장 · 건너뛰기 · 기기당 한 번]
+    S -->|토큰 없음 · 소개 봤음| G([홈 - 그냥 둘러보기])
+    I -->|시작하기 / 건너뛰기| D[로그인 화면<br/>카카오 · Google · Apple iOS · 그냥 둘러보기]
+    D -->|둘러보기| G
     D --> D1{인증}
     D1 -->|실패/취소| D
-    D1 -->|성공, 신규 유저| E[강아지 프로필 등록<br/>이름·견종·크기·나이·중성화]
-    D1 -->|성공, 기존 유저| F[위치 권한 요청<br/>geolocator]
-
-    E --> F
-    F -->|허용| G[현재 위치 기반 지도/장소]
-    F -->|거부| G2[서울 기본 위치 fallback]
-    G --> H
-    G2 --> H
-
+    D1 -->|성공| C[약관 동의 consent_screen<br/>필수 3 + 선택 1]
+    C -->|isNew| E[반려동물 등록 권유 onboarding_screen<br/>등록하기 / 나중에 할래요]
+    C -->|기존 계정| H
+    E --> H
+    H -->|첫 산책 시작| F[위치 권한 요청<br/>geolocator]
+    F -->|허용| T[산책 트래킹]
+    F -->|거부| T2[안내 + 설정으로]
 ```
 
 **구현 메모**
+- **첫 실행 소개는 기기 단위로 한 번이다**(#323, 2026-09-07). `IntroGate`(`intro_seen_v1`)가 봤는지 기억하고, 라우터는 모르는 동안(`null`) 스플래시에 머문다. 소개는 `concept.md` §2 의 가치 세 줄뿐이고 **사용법·기능 홍보는 넣지 않는다**(근거는 Epic #322 의 자료 표). 건너뛰기와 시작하기는 둘 다 로그인 화면으로 간다. 다시 보려면 설정 > 앱 소개 다시 보기.
 - 판정은 `app/lib/app/auth_redirect.dart` 의 **순수 함수** 하나다 — 라우터·상태에서 떼어 놨기 때문에 화면 없이 단위 테스트로 전 갈래를 돈다.
 - **동의 게이트가 로그인과 온보딩 사이에 있다**(#180). 위치기반서비스 약관 동의 전에는 `/consent` 로 보낸다 — 위치정보법 제18·19조가 요구하는 것이고, 그 화면을 지나기 전에는 `LocationService.locate()` 자체가 거부한다.
 - 데이터: `users(provider, social_id, role, email nullable, nickname)` + `dog(user_id FK, name, species, breed, size, birth, neutered, avatar)`.
