@@ -33,6 +33,13 @@ const List<PetCategory> kPetCategories = [
 /// KTO 가 아닌 출처의 키 — 서버의 `PlaceDto.LAYER_SOURCES` 와 같은 셋.
 const Set<String> kLayerKeys = {'vet', 'shop', 'trail'};
 
+/// 산책로 칩은 **반경을 안 보고** 가까운 코스 이만큼을 준다 — 2026-09-06 결정(#291).
+///
+/// 코리아둘레길(해파랑·남파랑·서해랑·DMZ)은 해안·접경에만 있어 도심에서 8km 안은 늘 비었다.
+/// 산책로는 "근처에 있는 곳" 이 아니라 "가는 곳" 이다. 서버의 `PlaceQueryService.TRAIL_NEAREST_LIMIT`
+/// 과 같은 수다 — 기기 안 계산(A안)과 서버 계산(B안)이 같은 답을 내야 한다.
+const int kTrailNearestLimit = 20;
+
 /// 카테고리 키(`PetPlace.categoryKey`) → 카테고리. 미지정/기타는 "기타" 로.
 PetCategory petCatByType(String? contentTypeId) => kPetCategories.firstWhere(
   (c) => c.key == contentTypeId,

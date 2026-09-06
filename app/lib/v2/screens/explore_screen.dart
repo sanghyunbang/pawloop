@@ -224,7 +224,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
         const SizedBox(height: 4),
         // "지도를 움직여 보세요" 라고 하지 않는다 — 지도를 움직여도 다시 읽지 않는다
         // (`_load` 는 `_boot` 에서 한 번만 불린다). 시킨 대로 해도 소용없는 안내는 거짓이다.
-        const Text('현위치 8km 안을 봤어요 · 필터를 바꿔보세요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
+        Text(
+          _catFilter == 'trail'
+              // 산책로는 반경을 안 본다 — 비었다면 카탈로그에 코스가 아직 없는 것이다.
+              ? '전국의 코스를 가까운 순으로 봤어요 · 잠시 뒤 다시 열어 보세요'
+              : '현위치 8km 안을 봤어요 · 필터를 바꿔보세요',
+          style: const TextStyle(fontSize: 12.5, color: Color(0xA8463C64)),
+        ),
       ]),
     );
   }
@@ -232,7 +238,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// 목록 머리의 출처 한 마디 — 칩에 따라 다르다 (#291).
   String _sourceCaption() => switch (_catFilter) {
         'vet' || 'shop' => '행정안전부 인허가 · 전국',
-        'trail' => '두루누비 · 한국관광공사',
+        'trail' => '두루누비 · 가까운 코스 $kTrailNearestLimit개 (거리 제한 없음)',
         null => '관광공사 · 인허가 · 두루누비',
         _ => '관광공사',
       };

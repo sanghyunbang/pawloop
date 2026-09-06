@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/pet.dart';
 import 'pet_places_repository.dart';
 import '../../core/config/env.dart';
 
@@ -127,6 +128,10 @@ class PlaceCatalogRepository {
   ///
   /// 서버의 `PlaceQueryService.within` 과 같은 규칙이다: 카테고리로 거르고, 반경 밖을
   /// 빼고, 거리순으로 정렬해 [limit] 만큼 자른다. 거리는 하버사인이다.
+  ///
+  /// **산책로 칩만 반경을 안 본다** — [kTrailNearestLimit]개를 가까운 순으로 준다. 코리아둘레길은
+  /// 해안·접경에만 있어 도심에서 8km 안은 늘 비었다(2026-09-06 결정, #291). 좌표는 여전히
+  /// 기기 밖으로 안 나간다 — 거리를 재는 자리가 여기(기기)라서다.
   Future<List<PetPlace>> nearby({
     required double lat,
     required double lng,
@@ -136,6 +141,8 @@ class PlaceCatalogRepository {
   }) async {
     final places = await all();
     final out = <PetPlace>[];
+    final trailsOnly = contentTypeId == 'trail';
+    final cap = trailsOnly ? kTrailNearestLimit : limit;
 
     for (final place in places) {
       // KTO 는 contentTypeId, 병원·펫샵·산책로는 category 로 견준다 (#291).
@@ -145,12 +152,12 @@ class PlaceCatalogRepository {
         continue;
       }
       final distance = haversineMeters(lat, lng, place.lat, place.lng);
-      if (distance > radius) continue;
+      if (!trailsOnly && distance > radius) continue;
       out.add(place.withDistance(distance));
     }
 
     out.sort((a, b) => a.distM.compareTo(b.distM));
-    return out.length > limit ? out.sublist(0, limit) : out;
+    return out.length > cap ? out.sublist(0, cap) : out;
   }
 
   // ─────────────────────────── 갱신 ───────────────────────────

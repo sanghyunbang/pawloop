@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
+import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
 import 'package:heat_trip_flutter/v2/data/place_catalog_repository.dart';
 import 'package:http/http.dart' as http;
@@ -121,6 +122,43 @@ void main() {
     test('kto 칩(12)은 병원·산책로를 안 준다', () async {
       final places = await repo().nearby(lat: 37.5445, lng: 127.0374, radius: 18000, contentTypeId: '12');
       expect(places.map((p) => p.contentId), ['2733967']);
+    });
+
+    test('산책로 칩은 반경을 안 본다 — 부산에서 물어도 서울숲 둘레길이 거리와 함께 온다 (2026-09-06 결정)', () async {
+      final r = repo();
+
+      final trails = await r.nearby(lat: 35.1796, lng: 129.0756, contentTypeId: 'trail');
+      expect(trails.map((p) => p.contentId), ['trail:T_ROUTE_1'],
+          reason: '코리아둘레길은 해안·접경에만 있어 도심 8km 안은 늘 비었다 — 산책로는 "가는 곳" 이다');
+      expect(trails.single.distM, greaterThan(300000));
+
+      final vets = await r.nearby(lat: 35.1796, lng: 129.0756, contentTypeId: 'vet');
+      expect(vets, isEmpty, reason: '반경을 푸는 것은 산책로 칩뿐이다 — 병원은 그대로 8km 다');
+    });
+
+    test('산책로는 가까운 순 $kTrailNearestLimit개에서 잘린다 — 반경 대신 이 수가 상한이다', () async {
+      final trails = List.generate(kTrailNearestLimit + 5, (i) => {
+            ...trailJson,
+            'contentId': 'trail:T_ROUTE_$i',
+            'title': '코스 $i',
+            'lat': 37.5445 + i * 0.01, // 북쪽으로 1.1km 씩 — 멀수록 번호가 크다
+          });
+      final r = PlaceCatalogRepository(
+        client: MockClient((_) async => http.Response.bytes(
+              utf8.encode(jsonEncode(trails)),
+              200,
+              headers: {'etag': '"e2"', 'content-type': 'application/json'},
+            )),
+        baseUrl: 'https://example.test',
+        cacheDirectory: () async => tempDir,
+      );
+
+      final nearest = await r.nearby(lat: 37.5445, lng: 127.0374, contentTypeId: 'trail');
+
+      expect(nearest, hasLength(kTrailNearestLimit));
+      expect(nearest.first.contentId, 'trail:T_ROUTE_0');
+      expect(nearest.last.contentId, 'trail:T_ROUTE_${kTrailNearestLimit - 1}',
+          reason: '거리순으로 자른다 — 반경이 없어도 먼 것이 앞에 오면 안 된다');
     });
   });
 }

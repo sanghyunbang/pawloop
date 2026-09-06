@@ -358,7 +358,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 |---|---|---|---|
 | `lat` | double | 필수 | 위도(WGS84) |
 | `lng` | double | 필수 | 경도 |
-| `radius` | int | 8000 | 반경(m) |
+| `radius` | int | 8000 | 반경(m). **`category=trail` 이면 안 본다** — 가까운 코스 20개(2026-09-06 결정, #291) |
 | `category` | string | - | 필터. `12/14/28/32/38/39`(KTO) 또는 `vet/shop/trail`(공공데이터 레이어 — #291 부터 실데이터. 그 셋이면 KTO 셀을 안 부른다) |
 | `limit` | int | 80 | **최대 200.** 공통 파라미터 `Limit`(20/100)과 다른 지도 전용 상한이다 |
 

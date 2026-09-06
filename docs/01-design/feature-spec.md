@@ -80,7 +80,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 |---|---|---|
 | 목적 | 반려동반 가능 장소 + 병원/펫샵/산책로를 카테고리별로 탐색 | `explore_screen.dart` |
 | 뷰 | 리스트 ↔ 지도 토글(`view = 'list'|'map'`). 카메라·마커는 `NaverMap` | |
-| 필터 | 카테고리 칩 가로 스크롤(전체 + `kPetCategories` 9종). 선택 시 `_catFilter` = contenttypeid 또는 레이어 key 를 **조회에 붙여 다시 받는다** — 받아 놓은 80곳 안에서 거르면 도심의 병원 칩이 빈다(#291 실측). 항목은 `PetPlace.categoryKey`(`contentTypeId` 가 있으면 그것, 없으면 `category`)로 견준다 | |
+| 필터 | 카테고리 칩 가로 스크롤(전체 + `kPetCategories` 9종). 선택 시 `_catFilter` = contenttypeid 또는 레이어 key 를 **조회에 붙여 다시 받는다** — 받아 놓은 80곳 안에서 거르면 도심의 병원 칩이 빈다(#291 실측). 항목은 `PetPlace.categoryKey`(`contentTypeId` 가 있으면 그것, 없으면 `category`)로 견준다. **산책로 칩은 반경 없이 가까운 코스 20개**(`kTrailNearestLimit`) — 코리아둘레길이 해안·접경에만 있어 도심 8km 는 늘 비었다(2026-09-06 결정) | |
 | 장소 상세 | 마커/카드 탭 → 바텀시트(이름·카테고리·거리·요약·주소·전화·출처 배지). 산책로면 지도 뷰에서 선(`GET /api/places/trails/{courseId}/route`)을 받아 폴리라인으로 그리고 카메라를 맞춘다(#291) | |
 
 ### 2.1 데이터 소스
