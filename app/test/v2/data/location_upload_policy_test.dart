@@ -123,18 +123,11 @@ final _writesCoordinate = RegExp(
 /// 이유를 적게 하는 것이 이 목록의 요점이다. 파일 이름만 늘어나는 목록은 다음 사람이
 /// 그냥 한 줄 더 적고 지나간다.
 ///
-/// 여기 있는 것은 전부 `lib/features/` 의 **레거시 셸**이다. v2 화면 어디에서도 그리로
-/// 가지 않는 것을 `legacy_shell_reachability_test.dart` 가 따로 잠근다 — 그 잠금이
-/// 풀리면 이 예외의 근거도 함께 사라진다.
-const Map<String, String> _exempt = {
-  'lib/features/emotion_map/data/emotion_map_repository.dart':
-      '감정 지도의 주변 조회·검색. GET /api/curation/places/* 에 현위치를 쿼리로 싣는다. '
-          'v2 에서 도달 불가이고, 이 셸의 처분은 #174 가 정한다 — 지금 정책을 끼워 넣으면 '
-          '버릴지도 모르는 코드에 손을 대는 것이다.',
-  'lib/features/foryou_v2/data/foryou_repository_impl.dart':
-      '감정 추천. POST /api/curation/recommend 본문에 userLat·userLng 를 싣는다. '
-          '위와 같은 셸이고 같은 이유다.',
-};
+/// 지금은 **비어 있다.** 예전에는 `lib/features/` 의 레거시 셸 둘(감정 지도·감정 추천)이
+/// 있었는데, 그 셸을 #94 로 지웠다(2026-09-06). 살아 있는 화면의 전송은 전부 정책을
+/// 지나야 하므로, 여기 한 줄을 더하려면 "v2 에서 도달 불가" 같은 근거와 그 근거를
+/// 잠그는 검사가 함께 있어야 한다.
+const Map<String, String> _exempt = {};
 
 void main() {
   group('소스 — 좌표를 보내는 자리가 정책을 지난다', () {
@@ -196,18 +189,10 @@ void main() {
           reason: '예외가 죽은 채 남으면, 그 파일에 새 전송이 생겨도 검사가 눈감아 준다');
     });
 
-    test('예외는 레거시 셸뿐이고 이유가 적혀 있다 — v2 에는 예외가 없다', () {
-      _exempt.forEach((path, reason) {
-        expect(path, startsWith('lib/features/'),
-            reason: 'v2 에 예외를 두면 그 순간 이 검사가 뜻을 잃는다. 살아 있는 화면의 '
-                '전송은 정책을 지나야 한다');
-        expect(reason.length, greaterThan(40),
-            reason: '「괜찮음」 은 이유가 아니다. 무엇과 무엇을 견줘서 괜찮은지 적어라');
-      });
-
-      expect(File('test/app/legacy_shell_reachability_test.dart').existsSync(), isTrue,
-          reason: '예외의 근거가 「v2 에서 도달 불가」 다. 그것을 잠그는 검사가 사라지면 '
-              '이 예외들도 함께 다시 봐야 한다');
+    test('예외가 없다 — 레거시 셸을 지운 뒤로 살아 있는 화면의 전송은 전부 정책을 지난다', () {
+      expect(_exempt, isEmpty,
+          reason: '예외를 되살리려면 「v2 에서 도달 불가」 같은 근거와 그 근거를 잠그는 검사가 '
+              '함께 있어야 한다 — #94 전에는 legacy_shell_reachability_test 가 그 역할이었다');
     });
   });
 

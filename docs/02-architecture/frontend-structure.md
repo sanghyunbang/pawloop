@@ -1,22 +1,24 @@
 # 프론트엔드 구조 (Frontend Structure)
 
-> Pawloop(포루프) Flutter 앱의 디렉터리 구조 · 상태관리 · 라우팅 · 데이터 흐름. 현재 화면은 모두 `lib/v2/` 하위에 있으며, 진입점은 `lib/main_v2.dart` → `MainShell`이다.
+> Pawloop(포루프) Flutter 앱의 디렉터리 구조 · 상태관리 · 라우팅 · 데이터 흐름. 화면은 모두 `lib/v2/` 하위에 있으며, 진입점은 `lib/main.dart` → `go_router` 의 `/home` → `MainShell` 이다.
 
 관련 문서: [ERD](../03-database/erd.md) · [시스템 아키텍처](./system-overview.md)
 
 ---
 
-## 1. 두 개의 코드베이스: `lib/` (레거시) vs `lib/v2/` (현재)
+## 1. 코드베이스는 하나다 — `lib/main.dart` → `go_router` → `lib/v2/`
 
-앱 소스는 `app/lib/` 아래에 있고, 크게 두 세대로 나뉜다.
+앱 소스는 `app/lib/` 아래에 있다. 감정 여행(heattrip) 시절의 레거시 셸(`lib/features/` 의 start·explore·record·journey·profile·bookmark·foryou_v2·emotion_map·social·feed·common, `core/widgets`, `theme`, `main_v2.dart`)은 **2026-09-06 에 #94 로 지웠다** — `main.dart` 에서 닿지 않는 175 파일이었다. 남은 것은 아래 넷이다.
 
-| 구분 | 진입점 | 라우팅 | 상태관리 | 상태 |
-| --- | --- | --- | --- | --- |
-| **레거시** `lib/` (app·core·features·shared) | `lib/main.dart` (`HeatTrip`) | `go_router` (`appRouter` → `MaterialApp.router`) | `provider` (MultiProvider DI) | 감정(heattrip) 시절 잔재. `foryou_v2`/`auth`/`emotion_map` 등 다수가 삭제·미정리 상태 |
-| **현재** `lib/v2/` | `lib/main_v2.dart` (`HeatTripV2App`) | 없음 — `MaterialApp.home: MainShell()` 직접 지정 | `ValueNotifier` + `ValueListenableBuilder` (경량, 전역 정적 필드) | Pawloop 반려/산책 화면 전부. 실제 개발·데모 대상 |
+| 디렉터리 | 역할 |
+| --- | --- |
+| `lib/v2/` | 화면·도메인·레포·위젯·테마 전부. 새 기능은 여기에 둔다 |
+| `lib/app/` | `go_router`(`appRouter`)와 인증 리다이렉트 규칙(`auth_redirect.dart`), 네비게이터 키 |
+| `lib/core/` | `config/env.dart`(--dart-define), `net/`(인증 클라이언트·토큰 저장소·로그 마스킹), `theme/` |
+| `lib/features/auth/` · `lib/shared/media/` | 소셜 로그인의 데이터 계층(`auth_repository_impl` · `social_login_service` · `secure_token_store`)과 **디버그 빌드에만 붙는 이메일 로그인·가입 화면**(ADR-0022). `shared/media` 는 프로필 사진 업로드 |
 
-- 실행: 현재 앱은 `flutter run -t lib/main_v2.dart`.
-- 레거시 `lib/main.dart`는 `go_router` 기반이지만 반려 피벗 이후 화면 대부분이 제거되어 사실상 참고용이다. **이 문서는 `lib/v2/`를 기준으로 서술**한다.
+- 실행: `flutter run`(`lib/main.dart`). 라우트는 `/splash`·`/consent`·`/onboarding`·`/home`·`/auth/*` 뿐이고, `/home` 이 `MainShell` 이다. 나머지 화면은 `Navigator.push` 로 연다(4장).
+- 상태관리는 `ValueNotifier` + `ValueListenableBuilder`(3장). `provider` 는 `main.dart` 가 미디어 업로드 클라이언트를 주입하는 데만 쓴다.
 
 ---
 
@@ -24,8 +26,9 @@
 
 ```
 lib/
-├─ main_v2.dart            # v2 진입점: NaverMap 초기화(Env.naverMapClientId) → MainShell
-├─ core/config/env.dart    # (레거시 core 재사용) --dart-define 값 단일 진입점 Env
+├─ main.dart               # 진입점: NaverMap 초기화(Env.naverMapClientId) → go_router(appRouter) → /home
+├─ app/app_router.dart     # 라우트 다섯(splash·consent·onboarding·home·auth) + 인증 리다이렉트
+├─ core/config/env.dart    # --dart-define 값 단일 진입점 Env
 └─ v2/
    ├─ screens/             # 화면 (탭 + 푸시 라우트)
    ├─ domain/pet.dart      # 도메인 모델 + 샘플 데이터 + 전역 상태(kMyDog 등)
@@ -137,14 +140,14 @@ Provider/Riverpod/Bloc 없이 **정적 전역 `ValueNotifier`** 를 두고, 화�
 
 ## 4. 라우팅 — `MainShell` 탭 스와핑 + `Navigator.push`
 
-현재 v2는 **`go_router`를 쓰지 않는다.** `MaterialApp.home: MainShell()`로 시작하고, 화면 전환은 두 방식이다.
+라우트는 다섯뿐이다(`app/app_router.dart`: splash·consent·onboarding·home·auth). `/home` 이 `MainShell` 이고, 그 안의 화면 전환은 두 방식이다.
 
 1. **탭 전환 (선언적)** — `MainShell.body`가 `ValueListenableBuilder<int>(RootTab.index)`로 `switch(i)` 하여 홈/지도/커뮤니티/채팅 위젯을 교체. 바텀네비는 본문 위에 `Stack` 오버레이(배경 끊김 없이 항상 표시).
 2. **세부 화면 (명령형)** — `Navigator.of(context).push(MaterialPageRoute(...))`. 산책 트래킹·기록 작성·글 상세·프로필 편집 등은 스택에 push.
 
 ```mermaid
 flowchart TD
-  Main[main_v2.dart] --> Shell[MainShell]
+  Main[main.dart · go_router /home] --> Shell[MainShell]
 
   subgraph Tabs[RootTab.index 로 스와핑]
     T0[TodayScreen · 홈]
@@ -163,7 +166,7 @@ flowchart TD
   T1 -.->|핀 선택| PP[PinPickerScreen]
 ```
 
-> 레거시 `lib/main.dart`는 `go_router`(`appRouter`)를 쓰지만 반려 피벗 이후 실사용 경로가 아니다. v2 재정비 시 `go_router` 재도입은 열려 있는 선택지.
+> 인증 리다이렉트(스플래시·동의·온보딩·로그인)는 `app/auth_redirect.dart` 의 순수 함수가 정하고 `app_router_test.dart` 가 규칙표를 잠근다. 레거시 셸의 `StatefulShellRoute`(여섯 브랜치)는 #94 로 지웠다(2026-09-06).
 
 ---
 

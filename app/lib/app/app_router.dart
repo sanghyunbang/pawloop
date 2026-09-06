@@ -2,8 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heat_trip_flutter/app/auth_redirect.dart';
 import 'package:heat_trip_flutter/app/navigator_keys.dart';
-import 'package:heat_trip_flutter/core/widgets/layout/main_nav_shell.dart';
-import 'package:heat_trip_flutter/features/bookmark/bookmark_routes.dart';
+import 'package:heat_trip_flutter/features/auth/auth_routes.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/data/consent_gate.dart';
 import 'package:heat_trip_flutter/v2/data/location_service.dart';
@@ -11,17 +10,6 @@ import 'package:heat_trip_flutter/v2/screens/consent_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/main_shell.dart';
 import 'package:heat_trip_flutter/v2/screens/onboarding_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/splash_screen.dart';
-
-// tabs
-import 'package:heat_trip_flutter/features/start/start_routes.dart';
-import 'package:heat_trip_flutter/features/auth/auth_routes.dart';
-import 'package:heat_trip_flutter/features/explore/explore_routes.dart';
-import 'package:heat_trip_flutter/features/record/record_routes.dart';
-import 'package:heat_trip_flutter/features/journey/journey_routes.dart';
-import 'package:heat_trip_flutter/features/profile/profile_routes.dart';
-
-import 'package:heat_trip_flutter/features/foryou_v2/routes.dart';
-import 'package:heat_trip_flutter/features/emotion_map/emotion_map_routes.dart';
 
 /// 스플래시로 튕기기 전에 가려던 곳. 상태가 확정되면 여기로 돌려보낸다.
 ///
@@ -74,7 +62,8 @@ final _routerRefresh = _RouterRefresh();
 
 final GoRouter appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
-  // v2 디자인을 정식 진입으로 승격. (구 /start 셸은 아래에 보존 — 로그인/구화면 참조용)
+  // 진입은 v2 셸 하나다. 감정 여행 시절의 `StatefulShellRoute`(탐색·기록·오늘·피드·나·감정지도)와
+  // `/start` 는 #94 로 지웠다(2026-09-06) — v2 화면은 라우트가 아니라 `Navigator.push` 로 연다.
   initialLocation: '/home',
 
   // 인증 상태가 바뀌면 redirect 를 다시 돌린다. 이것이 없으면 로그아웃해도
@@ -136,20 +125,6 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const OnboardingScreen(),
     ),
     GoRoute(path: '/home', builder: (context, state) => const MainShell()),
-    ...startRoutes,
     ...authRoutes,
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, shell) => MainNavShell(navigationShell: shell),
-      branches: [
-        StatefulShellBranch(routes: buildExploreRoutes()), // 0
-        StatefulShellBranch(routes: recordRoutes), // 1 (Schedule, 네비 강등)
-        StatefulShellBranch(routes: forYouV2Routes), // 2 오늘
-        StatefulShellBranch(routes: journeyRoutes), // 3 피드
-        StatefulShellBranch(
-          routes: [...profileRoutes, ...bookmarkRoutes],
-        ), // 4 나
-        StatefulShellBranch(routes: emotionMapRoutes), // 5 감정지도
-      ],
-    ),
   ],
 );

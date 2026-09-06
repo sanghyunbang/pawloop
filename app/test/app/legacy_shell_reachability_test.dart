@@ -13,6 +13,14 @@
 // 더 나빴던 것은 **회원 탈퇴**다. #165 로 v2 설정에 넣은 탈퇴 화면이 성공 후
 // `goNamed('start')` 로 레거시 시작 화면에 보냈다. 탈퇴한 사람이 Heat Trip 로고를
 // 보고 끝났다.
+//
+// ## 2026-09-06 — 셸을 지웠다 (#94)
+//
+// 레거시 셸(`lib/features/` 의 start·explore·record·journey·profile·bookmark·foryou_v2·
+// emotion_map·social·feed·common 과 `core/widgets`·`theme`·`main_v2.dart`)을 지웠다. 남은
+// 것은 `features/auth` 뿐이다 — 소셜 로그인의 데이터 계층과 디버그 빌드의 이메일 경로.
+// 첫 검사는 그 경로 이름이 v2 에 되돌아오지 않게, 마지막 검사는 디렉터리가 되돌아오지
+// 않게 잠근다.
 
 import 'dart:io';
 
@@ -71,5 +79,28 @@ void main() {
     // 갈리는 날 탈퇴한 사람이 엉뚱한 데 착지한다.
     expect(code.contains("goNamed('start')"), isFalse);
     expect(code.contains("go('/start')"), isFalse);
+  });
+
+  test('lib/features 에는 auth 만 남아 있다 — 셸을 지운 뒤 (#94)', () {
+    final dirs = Directory('lib/features')
+        .listSync()
+        .whereType<Directory>()
+        .map((d) => d.uri.pathSegments.where((s) => s.isNotEmpty).last)
+        .toList()
+      ..sort();
+    expect(dirs, ['auth'],
+        reason: '레거시 셸 디렉터리가 되돌아왔다. 감정 여행 화면은 #94 로 지웠다 — '
+            '새 기능은 lib/v2/ 에 둔다');
+
+    for (final gone in [
+      'lib/core/widgets',
+      'lib/theme',
+      'lib/shared/design',
+      'lib/main_v2.dart',
+      'lib/app/app.dart',
+    ]) {
+      expect(FileSystemEntity.typeSync(gone), FileSystemEntityType.notFound,
+          reason: '$gone 은 셸과 함께 지웠다(#94)');
+    }
   });
 }

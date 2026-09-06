@@ -13,7 +13,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  intl: ^0.18.1
   http: ^1.4.0
 
   # http 가 끌어오던 전이 의존이었다. 다섯 파일이 직접 import 하는데 그중 하나가
@@ -21,15 +20,10 @@ dependencies:
   # 컴파일이 깨진다 — 앱 전체가 그 위에 있다. 쓰는 것은 직접 적는다.
   http_parser: ^4.1.0   # MediaType — multipart 재조립(authed_client)
   mime: ^2.0.0          # lookupMimeType — 업로드 파일 형식 판별
-  meta: ^1.16.0         # @immutable — core/mood, foryou_v2/domain
   flutter_secure_storage: ^9.2.4
-  table_calendar: ^3.0.9
-
-  cupertino_icons: ^1.0.8
   google_fonts: ^8.1.0
   flutter_svg: ^2.2.0
   image_picker: ^1.1.2
-  lottie: ^3.4.0
   fl_chart: ^1.2.0
 
   # 소셜 로그인 관련
@@ -52,12 +46,6 @@ dependencies:
   go_router: ^16.1.0
   provider: ^6.1.5
 
-  visibility_detector: ^0.4.0+2
-  flutter_animate: ^4.5.2
-  iconsax: ^0.0.8
-
-  flutter_staggered_grid_view: ^0.7.0
-  url_launcher: ^6.3.2
   cached_network_image: ^3.3.1
 
   # 지도 SDK (네이버 Dynamic Map) — F1-4/F2-1
@@ -109,11 +97,9 @@ flutter:
   assets:
     - assets/icons/google.svg
     - assets/icons/kakao.svg
-    - assets/icons/naver.svg
     - assets/Logo4.png
     - assets/
     - assets/emoji/
-    - assets/lottie/
     # `.env` 는 여기에 두지 않는다 — 에셋은 APK 에 원본 그대로 들어간다. → 이슈 #29
     - assets/terms/terms_ko.md
     - assets/terms/location_ko.md

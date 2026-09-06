@@ -37,9 +37,10 @@ const String homeRoute = '/home';
 ///
 /// 여기 있는 것들은 전부 "내 데이터" 다 — 서버가 주체를 알아야 응답할 수 있다.
 const List<String> protectedRoutePrefixes = [
-  '/profile/edit', // 내 프로필 수정 — PUT /auth/me
-  '/bookmarks', // 내 북마크·컬렉션
-  '/record/create', // 산책 기록 작성
+  // v2 의 화면은 라우트가 아니라 `Navigator.push` 로 열리므로 여기서 잡을 수 없고, 로그인이
+  // 필요한 동작은 그 화면이 스스로 안내한다(`startWalk()` · `writePost()`). 라우트로 존재하는
+  // 보호 화면은 온보딩뿐이다 — 레거시 셸의 `/profile/edit` · `/bookmarks` · `/record/create` 는
+  // #94 로 셸과 함께 지웠다(2026-09-06).
   onboardingRoute, // 온보딩은 인증된 신규 가입자만
 ];
 

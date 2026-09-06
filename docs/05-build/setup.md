@@ -43,7 +43,6 @@ flutter pub get
 | --- | --- | --- |
 | `flutter_naver_map` | ^1.3.1 (1.4.x 호환) | 지도 SDK |
 | `fl_chart` | ^1.2.0 | 산책 통계 차트 |
-| `lottie` | ^3.4.0 | 애니메이션 |
 | `google_fonts` | ^8.1.0 | 폰트(Pretendard 로컬 에셋 병행) |
 | `go_router` | ^16.1.0 | 라우팅(MainShell) |
 | `provider` | ^6.1.5 | 상태/DI |

@@ -11,7 +11,7 @@ import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 void main() {
   group('unknown — 스플래시 구간', () {
     test('어디로 가려 하든 스플래시로 보낸다', () {
-      for (final location in ['/home', '/explore', '/bookmarks', loginRoute]) {
+      for (final location in ['/home', onboardingRoute, '/home?tab=1', loginRoute]) {
         expect(
           authRedirect(status: AuthStatus.unknown, location: location),
           splashRoute,
@@ -30,12 +30,10 @@ void main() {
 
   group('unauthenticated — 둘러보기는 막지 않는다', () {
     test('보호 라우트는 로그인으로 보낸다', () {
+      // 라우트로 존재하는 보호 화면은 온보딩뿐이다 — 레거시 셸의 보호 라우트는 #94 로 지웠다.
       for (final location in [
-        '/profile/edit',
-        '/bookmarks',
-        '/bookmarks/collections/3',
-        '/record/create',
         onboardingRoute,
+        '$onboardingRoute/step-2',
       ]) {
         expect(
           authRedirect(
@@ -51,16 +49,10 @@ void main() {
     test('공개 라우트는 그대로 둔다 — "그냥 둘러보기" 가 성립해야 한다', () {
       for (final location in [
         '/home',
-        '/explore',
-        '/explore/123/12',
-        '/discover',
-        '/emotion_map',
-        '/journey',
-        '/foryou_v2',
-        '/profile',
-        '/start',
+        '/home?tab=1',
         loginRoute,
         '/auth/sign-up',
+        '/auth/login/email',
       ]) {
         expect(
           authRedirect(
@@ -77,7 +69,7 @@ void main() {
       expect(
         authRedirect(
           status: AuthStatus.unauthenticated,
-          location: '/bookmarks/',
+          location: '$onboardingRoute/',
         ),
         loginRoute,
       );
@@ -87,31 +79,31 @@ void main() {
       expect(
         authRedirect(
           status: AuthStatus.unauthenticated,
-          location: '/bookmarks?tab=all',
+          location: '$onboardingRoute?step=2',
         ),
         loginRoute,
       );
       expect(
         authRedirect(
           status: AuthStatus.unauthenticated,
-          location: '/explore?q=%EC%84%9C%EC%9A%B8',
+          location: '/home?q=%EC%84%9C%EC%9A%B8',
         ),
         isNull,
       );
     });
 
-    test('/profile 은 공개지만 /profile/edit 은 보호된다 — 접두사 오판 방지', () {
+    test('/onboarding-guide 는 공개지만 /onboarding 은 보호된다 — 접두사 오판 방지', () {
       expect(
         authRedirect(
           status: AuthStatus.unauthenticated,
-          location: '/profile',
+          location: '$onboardingRoute-guide',
         ),
         isNull,
       );
       expect(
         authRedirect(
           status: AuthStatus.unauthenticated,
-          location: '/profile/edit',
+          location: onboardingRoute,
         ),
         loginRoute,
       );
@@ -134,7 +126,7 @@ void main() {
     });
 
     test('보호 라우트도 공개 라우트도 그대로 연다', () {
-      for (final location in ['/home', '/bookmarks', '/profile/edit']) {
+      for (final location in ['/home', onboardingRoute]) {
         expect(
           authRedirect(status: AuthStatus.authenticated, location: location),
           isNull,
@@ -156,9 +148,9 @@ void main() {
         authRedirect(
           status: AuthStatus.authenticated,
           location: splashRoute,
-          pendingLocation: '/explore/999/12',
+          pendingLocation: '/home?tab=1',
         ),
-        '/explore/999/12',
+        '/home?tab=1',
       );
     });
 
@@ -167,7 +159,7 @@ void main() {
         authRedirect(
           status: AuthStatus.unauthenticated,
           location: splashRoute,
-          pendingLocation: '/bookmarks',
+          pendingLocation: onboardingRoute,
         ),
         loginRoute,
       );
@@ -178,9 +170,9 @@ void main() {
         authRedirect(
           status: AuthStatus.unauthenticated,
           location: splashRoute,
-          pendingLocation: '/explore',
+          pendingLocation: '/home?tab=1',
         ),
-        '/explore',
+        '/home?tab=1',
       );
     });
 
@@ -198,7 +190,7 @@ void main() {
 
   group('onboarding — 신규 가입자를 붙잡는다', () {
     test('온보딩 화면 밖으로 나가려 하면 다시 온보딩으로', () {
-      for (final location in ['/home', '/explore', loginRoute, splashRoute]) {
+      for (final location in ['/home', '/home?tab=1', loginRoute, splashRoute]) {
         expect(
           authRedirect(status: AuthStatus.onboarding, location: location),
           onboardingRoute,
@@ -220,7 +212,7 @@ void main() {
 
   group('authenticating — 외부 브라우저 왕복 중', () {
     test('화면을 옮기지 않는다 — 돌아올 자리를 없애면 안 된다', () {
-      for (final location in ['/home', loginRoute, '/bookmarks']) {
+      for (final location in ['/home', loginRoute, onboardingRoute]) {
         expect(
           authRedirect(status: AuthStatus.authenticating, location: location),
           isNull,
@@ -233,7 +225,7 @@ void main() {
   // 보여 줄 화면이 다르다. 후자는 자기가 로그인 상태라고 믿고 있다.
   group('sessionEnded — 방금 끝난 세션 (완료 조건 4·6)', () {
     test('공개 라우트에 있어도 로그인 화면으로 보낸다', () {
-      for (final location in ['/home', '/explore', '/profile']) {
+      for (final location in ['/home', '/home?tab=1', '/auth/sign-up']) {
         expect(
           authRedirect(
             status: AuthStatus.unauthenticated,
@@ -279,9 +271,9 @@ void main() {
 
   group('isProtectedRoute', () {
     test('목록에 적힌 것과 그 하위만 보호된다', () {
-      expect(isProtectedRoute('/bookmarks'), isTrue);
-      expect(isProtectedRoute('/bookmarks/collections/1'), isTrue);
-      expect(isProtectedRoute('/bookmarksomething'), isFalse,
+      expect(isProtectedRoute(onboardingRoute), isTrue);
+      expect(isProtectedRoute('$onboardingRoute/step-2'), isTrue);
+      expect(isProtectedRoute('${onboardingRoute}something'), isFalse,
           reason: '접두사 문자열이 아니라 경로 세그먼트로 판정해야 한다');
       expect(isProtectedRoute('/home'), isFalse);
     });
@@ -294,7 +286,7 @@ void main() {
 
   group('동의 전에는 앱을 못 쓴다', () {
     test('로그인했는데 동의를 안 했으면 어디로 가든 동의 화면이다', () {
-      for (final where in [homeRoute, onboardingRoute, '/explore', '/bookmarks']) {
+      for (final where in [homeRoute, onboardingRoute, '/home?tab=1', loginRoute]) {
         expect(
           authRedirect(
             status: AuthStatus.authenticated,
@@ -357,7 +349,7 @@ void main() {
       expect(
         authRedirect(
           status: AuthStatus.unauthenticated,
-          location: '/explore',
+          location: '/home?tab=1',
           consented: false,
         ),
         isNull,
