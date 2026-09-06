@@ -52,11 +52,11 @@ class OpenApiAuthContractTest {
     // ─────────────────── A. 공급자 집합 — ADR-0010 의 실행 가능한 형태 ───────────────────
 
     @Test
-    @DisplayName("경로 파라미터 Provider 의 enum 이 ADR-0010 이 정한 [kakao, google] 과 정확히 같다")
+    @DisplayName("경로 파라미터 Provider 의 enum 이 ADR-0010(kakao·google) + ADR-0022(apple) 과 정확히 같다")
     void providerParameterEnum_matchesAdr0010() {
         assertThat(providerParameterEnum())
-                .as("naver 를 되돌리면 여기서 빨간불이 난다 — 보류는 산문이 아니라 계약이다 (완료 조건 8)")
-                .containsExactly("kakao", "google");
+                .as("naver 를 되돌리면 여기서 빨간불이 난다 — 보류는 산문이 아니라 계약이다 (완료 조건 8). apple 은 #301")
+                .containsExactly("kakao", "google", "apple");
     }
 
     @Test
@@ -66,7 +66,7 @@ class OpenApiAuthContractTest {
 
         assertThat(values)
                 .as("보류 대상은 naver 하나다. enum 을 통째로 지우면 이메일 가입자와 백필 전 옛 행을 표현할 수 없다")
-                .containsExactlyInAnyOrder("local", "kakao", "google", "null");
+                .containsExactlyInAnyOrder("local", "kakao", "google", "apple", "null");
     }
 
     @Test

@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.heattrip.heat_trip_backend.OAuth.user.AppleOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.CustomOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.GoogleOAuth2User;
 import com.heattrip.heat_trip_backend.OAuth.user.KakaoOAuth2User;
@@ -113,11 +114,13 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
      * {@code case "kakao"} 와 {@code case "Kakao"} 가 나란히 있었다. registrationId 는 설정 파일이
      * 정하는 값이라 언제든 대소문자가 흔들릴 수 있고, case 를 하나씩 늘리는 것은 해결이 아니다.
      */
-    static OAuth2UserInfo toUserInfo(String registrationId, Map<String, Object> attributes) {
+    public static OAuth2UserInfo toUserInfo(String registrationId, Map<String, Object> attributes) {
         String provider = (registrationId == null) ? "" : registrationId.trim().toLowerCase(Locale.ROOT);
         return switch (provider) {
             case "google" -> new GoogleOAuth2User(attributes);
             case "kakao" -> new KakaoOAuth2User(attributes);
+            // Apple 은 OIDC 경로(AppleOidcUserService)가 id_token 클레임을 여기로 넘긴다 (#301).
+            case "apple" -> new AppleOAuth2User(attributes);
             // naver 는 여기 없다. ADR-0010 이 보류로 확정했고, 클라이언트 등록도
             // application-dev/prod.properties 에서 걷어냈다(#15). 분기만 남겨 두면
             // "지원한다" 는 인상을 주는 죽은 코드가 되고, 등록을 되살리는 사람이

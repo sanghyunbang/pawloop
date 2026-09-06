@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -35,12 +36,22 @@ const Color _googleBg = Color(0xFFFFFFFF);
 const Color _googleBorder = Color(0xFF747775);
 const Color _googleFg = Color(0xFF1F1F1F);
 
-/// Pawloop 로그인 — 카카오/구글 소셜 로그인.
+/// "Sign in with Apple" 버튼 규격(HIG) — 검정 배경 · 흰 로고와 글자. 문구는 승인된 셋
+/// ("Apple로 로그인" · "Apple로 가입하기" · "Apple로 계속하기") 중 하나여야 한다.
+const Color _appleBg = Color(0xFF000000);
+const Color _appleFg = Color(0xFFFFFFFF);
+
+/// Pawloop 로그인 — 카카오/구글 소셜 로그인 + iOS 에서는 Apple(#301).
 ///
 /// 네이버는 화면에서만 내렸다. `NaverOAuth2User`와 백엔드 설정은 그대로 살아 있으므로
 /// `_login('naver')`를 부르는 버튼만 다시 넣으면 언제든 되살릴 수 있다. (이슈 #3)
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  /// Apple 버튼을 그릴지. `null` 이면 **iOS 에서만** 그린다 — App Store 심사 지침 4.8 이
+  /// iOS 앱에 적용되고(#301), 안드로이드 사용자에게 Apple 계정을 권할 이유가 없다.
+  /// 테스트가 명시적으로 켜고 끈다.
+  final bool? showAppleSignIn;
+
+  const LoginScreen({super.key, this.showAppleSignIn});
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -105,6 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final showApple = widget.showAppleSignIn ?? (defaultTargetPlatform == TargetPlatform.iOS);
     return Scaffold(
       backgroundColor: T.lilacTop,
       body: AuroraBackground(
@@ -152,6 +164,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   icon: 'assets/icons/google.svg',
                   onTap: () => _login('google'),
                 ),
+                if (showApple) ...[
+                  const SizedBox(height: 12),
+                  // Apple — 서버가 OIDC 로 계정을 만든다. 앱의 흐름은 카카오·구글과 같다(#301).
+                  _socialBtn(
+                    label: 'Apple로 계속하기',
+                    bg: _appleBg,
+                    fg: _appleFg,
+                    iconWidget: const Icon(Icons.apple, size: 22, color: _appleFg),
+                    onTap: () => _login('apple'),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: _busy ? null : _dismiss,
@@ -170,10 +193,12 @@ class _LoginScreenState extends State<LoginScreen> {
     required String label,
     required Color bg,
     required Color fg,
-    required String icon,
+    String? icon,
+    Widget? iconWidget,
     required VoidCallback onTap,
     Color? border,
   }) {
+    assert(icon != null || iconWidget != null, '아이콘 하나는 있어야 한다');
     return GestureDetector(
       onTap: _busy ? null : onTap,
       child: Opacity(
@@ -187,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
             border: border == null ? null : Border.all(color: border),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            SvgPicture.asset(icon, width: 20, height: 20),
+            iconWidget ?? SvgPicture.asset(icon!, width: 20, height: 20),
             const SizedBox(width: 10),
             Text(label, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: fg)),
           ]),

@@ -17,12 +17,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
+import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 
+import com.heattrip.heat_trip_backend.OAuth.AppleOidcUserService;
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2FailureHandler;
 import com.heattrip.heat_trip_backend.OAuth.handler.OAuth2SuccessHandler;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTAuthenticationFilter;
@@ -90,6 +93,12 @@ public class SecurityConfig {
 
     private final JWTProvider jwtProvider;
     private final CustomOAuth2UserService customOAuth2UserService;
+
+    /** OIDC(openid scope) 등록 — Apple — 의 사용자 서비스. 같은 upsert 를 지난다 (#301). */
+    private final AppleOidcUserService appleOidcUserService;
+
+    /** 토큰 교환. Apple 만 client_secret 을 서명한 JWT 로 바꿔 끼운다 — AppleSignInConfig (#301). */
+    private final OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> accessTokenResponseClient;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final OAuth2FailureHandler oAuth2FailureHandler;
     private final PublicSecurityProperties publicSecurityProperties;
@@ -191,7 +200,11 @@ public class SecurityConfig {
             // email_already_registered 같은 원인 코드가 앱에 전혀 닿지 않는다. (이슈 #7)
             // 성공과 같은 딥링크로, 토큰 대신 에러 코드만 실어 돌려보낸다.
             .oauth2Login(oauth2 -> oauth2
-                .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
+                .tokenEndpoint(token -> token.accessTokenResponseClient(accessTokenResponseClient))
+                .userInfoEndpoint(userInfo -> userInfo
+                    .userService(customOAuth2UserService)
+                    // scope 에 openid 가 있는 등록(Apple)은 이쪽이다 — id_token 클레임으로 같은 upsert (#301)
+                    .oidcUserService(appleOidcUserService))
                 .successHandler(oAuth2SuccessHandler)
                 .failureHandler(oAuth2FailureHandler)
             );

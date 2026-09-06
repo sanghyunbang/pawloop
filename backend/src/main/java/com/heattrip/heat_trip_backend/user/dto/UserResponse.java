@@ -27,7 +27,7 @@ public class UserResponse {
     private String email;      // 소셜 공급자가 이메일을 주지 않으면 null
     private String travelType; // 현재 스키마는 단일 문자열
     private String imageUrl;
-    private String provider;   // "local" / "kakao" / "google" — 계약의 User.provider (naver 는 ADR-0010 에서 보류)
+    private String provider;   // "local" / "kakao" / "google" / "apple"(#301) — 계약의 User.provider (naver 는 ADR-0010 에서 보류)
     /** 가입 시각. <b>오프셋이 붙는다</b> — 컬럼 값은 UTC 다({@link UserTime}). #248 */
     private Instant createdAt;
     /** 마지막 수정 시각. 같은 규약이다. */

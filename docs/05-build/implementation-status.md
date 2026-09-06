@@ -20,7 +20,7 @@
 | 산책 통계 | ✅ 구현완료 (더미 데이터) | fl_chart 주간 막대 + 요약 + 자주 가는 곳 |
 | 커뮤니티 | ✅ **읽기·쓰기·수정·삭제가 서버** | 백엔드 `/api/community` 열 경로(#170·#211) — 읽기 셋은 **인증 선택**(게스트가 읽는다), 반응은 멱등 둘, 수정 하나, 삭제 둘. 앱은 `community_repository.dart` 로 붙었고 편집 화면만 아직 없다(#171·#172·#211). 남은 것은 관리(#166) |
 | 강아지 프로필 | ✅ 구현완료 (로컬 상태) | 프로필/편집. `ValueNotifier`로 전역 반영, 영속화 없음 |
-| 로그인 | ✅ 구현완료 (카카오·구글) | 소셜 로그인 화면 · 1회용 코드 교환 · 토큰 보관 · 401 자동 갱신 · 서버 로그아웃 |
+| 로그인 | ✅ 구현완료 (카카오·구글·Apple) | 소셜 로그인 화면 · 1회용 코드 교환 · 토큰 보관 · 401 자동 갱신 · 서버 로그아웃. Apple(#301)은 코드가 다 있고 **개발자 키 셋만 사장님 발급 대기** — iOS 에서만 버튼이 보인다 |
 | 실위치 | ✅ 구현완료 | `location_service.dart` — 단발 조회 + 5m distanceFilter 스트림. 실패했을 때만 서울시청으로 떨어진다 |
 | 백엔드 반려 API | ✅ 대부분 | 인증·프로필·가족·케어·주의사항·채팅·장소 프록시·반려동물·산책·**커뮤니티**가 서버에 있고 앱이 전부 붙었다. 남은 것은 병원/펫샵/산책로 실데이터(M3)다 |
 | 채팅 | ✅ 서버 연동 | 방 목록·방 안·가족 화면 셋 다 서버에서 받는다. 적응형 폴링 · 낙관적 전송 · 멱등 재전송 · 미읽음 뱃지(#81) |
@@ -92,7 +92,7 @@
 | 강아지 프로필(견종/크기/나이/중성화) | ✅ | `DogProfile`, 전역 `kMyDog`(`ValueNotifier`) |
 | 프로필 편집 | ✅ | 저장 시 즉시 전역 반영. **영속화 없음** |
 | 아바타 테두리색 | ✅ | `AppThemeCtl.avatarBorder` |
-| 로그인/소셜 | ✅ 구현완료 | `v2/screens/login_screen.dart`(카카오·구글). `flutter_web_auth_2` 로 `/oauth2/authorization/{provider}?state=` 를 열고, 딥링크의 1회용 `code` 를 `POST /auth/oauth/{provider}/callback` 으로 교환한다(#14). 공급자 집합은 [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) |
+| 로그인/소셜 | ✅ 구현완료 | `v2/screens/login_screen.dart`(카카오·구글·Apple — Apple 은 iOS 에서만, #301). `flutter_web_auth_2` 로 `/oauth2/authorization/{provider}?state=` 를 열고, 딥링크의 1회용 `code` 를 `POST /auth/oauth/{provider}/callback` 으로 교환한다(#14). 공급자 집합은 [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) |
 | 북마크 | ❌ 미구현 | 스낵바만 |
 
 ### 3.5 채팅

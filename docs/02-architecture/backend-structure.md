@@ -14,7 +14,7 @@
 | 영속 | Spring Data JPA + `spring-boot-starter-data-jdbc`, MySQL (`mysql-connector-j`) |
 | 매핑 | Lombok + MapStruct `1.5.5` (+ lombok-mapstruct-binding) |
 | 외부호출 | WebFlux `WebClient`(공공데이터/카카오/LLM), `RestClient` 미사용 |
-| 인증 | Spring Security + OAuth2 Client(구글/카카오/네이버) + JWT(jjwt 0.11.5), 세션 STATELESS |
+| 인증 | Spring Security + OAuth2 Client(구글/카카오/Apple — Apple 은 OIDC, #301) + JWT(jjwt 0.11.5), 세션 STATELESS |
 | 문서화 | springdoc-openapi (Swagger UI) |
 | AI | Spring AI `1.0.0` (OpenAI) — **감정 추천 레거시, 반려 맥락 재검토 대상** |
 | 저장소 | AWS S3 (`aws-java-sdk-s3 1.12.574`) 미디어 업로드 |
@@ -178,7 +178,7 @@ web/Controller → service(도메인 유스케이스) → port(인터페이스) 
 ### 5.1 구성
 
 - `config/SecurityConfig` — `SecurityFilterChain` 단일 정의. `cors` 활성, `csrf`/`formLogin` 비활성, **세션 STATELESS**.
-- 소셜 로그인: `oauth2Login` + `OAuth/service/CustomOAuth2UserService`(구글/카카오/네이버 `OAuth2UserInfo` 분기) + `OAuth/handler/OAuth2SuccessHandler`(로그인 성공 시 JWT 발급).
+- 소셜 로그인: `oauth2Login` + `OAuth/service/CustomOAuth2UserService`(구글/카카오/Apple `OAuth2UserInfo` 분기) + `OAuth/AppleOidcUserService`(OIDC 경로 — Apple, #301 — 모듈 루트에 둔 이유는 그 javadoc) + `OAuth/apple/`(`client_secret` JWT 서명·토큰 교환 끼움·발급자 검사) + `OAuth/handler/OAuth2SuccessHandler`(로그인 성공 시 1회용 코드).
 - JWT: `OAuth/jwt/JWTProvider`(발급/검증) + `OAuth/jwt/JWTAuthenticationFilter`(요청당 토큰 파싱). `UsernamePasswordAuthenticationFilter` 앞에 등록.
 - 레이트리밋: `security/ApiRateLimitFilter`를 JWT 필터보다 **앞에** 등록.
 - 비밀번호: `BCryptPasswordEncoder`. 자체 로그인/회원은 `user/`(`AuthController`, `UserService`, `User`). 예전에 있던 `login/loginController` 는 **#110 에서 지웠습니다.**

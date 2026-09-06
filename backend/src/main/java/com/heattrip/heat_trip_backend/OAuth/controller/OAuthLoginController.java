@@ -68,7 +68,7 @@ public class OAuthLoginController {
      * 소유한다. 여기서 좁히는 것은 "계약이 광고하는 집합과 코드가 통과시키는 집합을 같게
      * 유지한다" 는 불변식이다 — {@code OpenApiAuthContractTest} 가 두 집합을 대조한다.
      */
-    private static final List<String> SUPPORTED_PROVIDERS = List.of("kakao", "google");
+    private static final List<String> SUPPORTED_PROVIDERS = List.of("kakao", "google", "apple");
 
     /**
      * 호환 래퍼가 302 대상에 실어 보내도 되는 {@code state} 의 형태.

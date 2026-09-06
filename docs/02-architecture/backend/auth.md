@@ -10,7 +10,7 @@
 
 | 계약 엔드포인트 | 상태 | 비고 |
 | --- | --- | --- |
-| `GET /auth/oauth/{provider}` (로그인 시작 302) | **있음(#10 완료)** | `AuthController.startOAuth` 가 `Location: /oauth2/authorization/{provider}` 로 302 한다. 화이트리스트(`kakao`·`google`) 밖은 400 + `Error`(`VALIDATION`). `naver` 는 ADR-0010 이 보류로 확정하면서 계약 enum 과 함께 빠졌다 — 이 래퍼로는 400 이다(#15). 예전에는 핸들러가 **빈 200** 을 주면서 계약은 "미구현" 이라고 적고 있었다. |
+| `GET /auth/oauth/{provider}` (로그인 시작 302) | **있음(#10 완료)** | `AuthController.startOAuth` 가 `Location: /oauth2/authorization/{provider}` 로 302 한다. 화이트리스트(`kakao`·`google`·`apple`(#301)) 밖은 400 + `Error`(`VALIDATION`). `naver` 는 ADR-0010 이 보류로 확정하면서 계약 enum 과 함께 빠졌다 — 이 래퍼로는 400 이다(#15). 예전에는 핸들러가 **빈 200** 을 주면서 계약은 "미구현" 이라고 적고 있었다. |
 | `POST /auth/signup` | **있음(#10 완료)** | `201` + 계약의 `User`. 중복 이메일은 **409**. 예전에는 `200` + 평문 `"회원가입 성공"` 이었고 중복이 400 이었다. 토큰은 발급하지 않는다 — 가입 직후 로그인은 `POST /auth/login` 이다. |
 | `POST /auth/login` | **있음(#10 완료)** | `200` + `AuthTokensResponse`(계약의 `AuthTokens`). #9 가 발급·저장하던 refresh 토큰이 드디어 응답에 실린다. 자격증명 실패는 **본문 없는 401**(예전에는 500). |
 | (SuccessHandler → `heattrip://login-callback?code=&state=`) | **있음(#14 완료)** | `OAuth2SuccessHandler` 가 토큰 대신 60초짜리 1회용 코드를 내보낸다. 리다이렉트 대상은 `app.security.oauth.redirect-allowlist` 가 정한다. 예전에는 `?token=<AT>&refresh=<RT>` 였다. |
@@ -27,7 +27,8 @@
 - `OAuth/handler/OAuth2SuccessHandler` — 1회용 코드 발급 후 `heattrip://login-callback?code=&state=` 딥링크 리다이렉트(#14). 예전에는 여기서 JWT 를 만들어 URL 에 실었다.
 - `OAuth/code/AuthCodeStore` — 1회용 코드의 발급소이자 유일한 소비처(#14). 인메모리이며 **수평 확장 시 깨진다** — 근거와 대응은 그 클래스의 javadoc 에 적혀 있다.
 - `OAuth/state/OAuthAppStateFilter` — 앱이 만든 `state` 를 소셜 왕복 동안 세션에 붙든다(#14).
-- `OAuth/user/OAuth2UserInfo`(+ Google/Kakao/NaverOAuth2User) — 공급자별 provider/providerId/email/name 추출.
+- `OAuth/user/OAuth2UserInfo`(+ Google/Kakao/AppleOAuth2User) — 공급자별 provider/providerId/email/name 추출. Apple 은 id_token 클레임(`sub`·`email`)이고 이름이 없다(#301).
+- `OAuth/AppleOidcUserService` + `OAuth/apple/*` — OIDC 경로(Apple). `AppleClientSecret` 이 .p8 로 `client_secret` JWT 를 서명하고, `AppleTokenResponseClient` 가 토큰 교환 직전에 끼우며, `AppleSignInConfig` 가 발급자 검사를 더한다(#301).
 - ~~`user/service/UserService` 의 `Bearer` 헤더 → subject 추출 헬퍼~~ — **#5 에서 삭제됐다.** 대체: `OAuth/principal/CurrentUserArgumentResolver` + `@CurrentUser`. 컨트롤러는 Authorization 헤더를 다시 읽지 않는다(§6-1).
 - `user/repository/UserRepository` — `findByEmail`, `findByUsername`, `findByNickname`.
 - `config/SecurityConfig` — **`/auth/**` 는 더 이상 permitAll 이 아니다(#23).** 공개는 `/auth/signup`·`/auth/login`·`/auth/oauth/**`·`/auth/token/refresh`·`/oauth2/**`·`/login/**` 등 열거된 경로뿐이고 나머지는 `anyRequest().authenticated()` + `HttpStatusEntryPoint(401)`. STATELESS, `oauth2Login(userService, successHandler)`.
@@ -65,7 +66,7 @@
 > `startOAuth` 는 `HttpServletRequest`/`Response` 를 받지 않는다 — 302 를 `ResponseEntity` 로
 > 만들면 서블릿 API 를 컨트롤러에 들일 이유가 없다(#10).
 
-- `provider` 파라미터: `kakao|google` 이외 값 → 400 + `Error`(`code: VALIDATION`). 네이버는 ADR-0010 의 보류 대상이라 이 목록에 없다. 대소문자·앞뒤 공백은 정규화한다. 사유 문구에 입력값을 되싣지 않는다 — 반사형 XSS 재료다.
+- `provider` 파라미터: `kakao|google|apple` 이외 값 → 400 + `Error`(`code: VALIDATION`). 네이버는 ADR-0010 의 보류 대상이라 이 목록에 없다. 대소문자·앞뒤 공백은 정규화한다. 사유 문구에 입력값을 되싣지 않는다 — 반사형 XSS 재료다.
 - 인증 필요 메서드는 `@CurrentUser User me` 하나로 끝난다. 주입에 실패하는 모든 경우(인증 없음 · principal 타입 불일치 · 그 id 의 행 없음)는 **본문 없는 401** 이다. `SocialController.requireUser(...)` 같은 컨트롤러별 헬퍼는 #5 에서 전부 사라졌다.
 - 오류 응답은 계약의 `Error` 형태(`{ error: { code, message, traceId } }`) 하나뿐이다(#10 완료) — §6-7.
 
@@ -141,7 +142,7 @@
 | 컬럼 | 현행 | 비고 |
 | --- | --- | --- |
 | `id BIGINT PK` | `id Long` | **JWT `sub` 가 이 값**(ADR-0010) |
-| `provider VARCHAR(20)` | `provider` | `local`/`kakao`/`google`. `naver` 는 ADR-0010 에서 보류 |
+| `provider VARCHAR(20)` | `provider` | `local`/`kakao`/`google`/`apple`(#301). `naver` 는 ADR-0010 에서 보류 |
 | `social_id VARCHAR(191)` | `socialId` | 이메일 가입자는 NULL |
 | `role VARCHAR(20) NOT NULL` | `role` | 기본 `ROLE_USER`. 토큰 발급이 쓴다 |
 | `email VARCHAR(255) NULL UNIQUE` | `email` | 카카오 미동의 시 NULL |
