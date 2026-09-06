@@ -28,5 +28,6 @@ public record ChatRoomSummaryView(
         long lastReadSeq,
         long unread,
         int memberCount,
-        ChatMessageView lastMessage) {
+        ChatMessageView lastMessage,
+        boolean muted) {
 }

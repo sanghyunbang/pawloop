@@ -30,6 +30,9 @@ import com.heattrip.heat_trip_backend.dog.DogTime;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.moderation.ModerationTime;
 import com.heattrip.heat_trip_backend.moderation.entity.Block;
+import com.heattrip.heat_trip_backend.push.PushTime;
+import com.heattrip.heat_trip_backend.push.entity.DeviceToken;
+import com.heattrip.heat_trip_backend.push.entity.PushPreference;
 import com.heattrip.heat_trip_backend.walk.entity.Walk;
 import com.heattrip.heat_trip_backend.chat.entity.ChatMessage;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoom;
@@ -85,7 +88,9 @@ class StoredTimestampsAreUtcTest {
             FamilyGroup.class, User.class,
             // #306 — 훑는 범위를 chat·group·user 에서 전체로 넓히면서 들어온 반려 축 엔티티.
             Dog.class, CareLog.class, Walk.class,
-            Post.class, Comment.class, Reaction.class, Block.class);
+            Post.class, Comment.class, Reaction.class, Block.class,
+            // #83 — 기기 토큰과 알림 설정.
+            DeviceToken.class, PushPreference.class);
 
     /**
      * 훅이 있는데 <b>일부러 목록에 안 넣는</b> 엔티티. 이름을 여기 적는 이유는 "몰라서 빠진 것"
@@ -114,13 +119,14 @@ class StoredTimestampsAreUtcTest {
     void nowUtc_ignoresTheJvmDefaultZone() {
         withDefaultZone(FORCED, () -> {
             for (String label : List.of("ChatTime", "UserTime", "DogTime", "CareTime",
-                    "CommunityTime", "ModerationTime")) {
+                    "CommunityTime", "ModerationTime", "PushTime")) {
                 LocalDateTime written = switch (label) {
                     case "ChatTime" -> ChatTime.nowUtc();
                     case "UserTime" -> UserTime.nowUtc();
                     case "DogTime" -> DogTime.nowUtc();
                     case "CareTime" -> CareTime.nowUtc();
                     case "CommunityTime" -> CommunityTime.nowUtc();
+                    case "PushTime" -> PushTime.nowUtc();
                     default -> ModerationTime.nowUtc();
                 };
 

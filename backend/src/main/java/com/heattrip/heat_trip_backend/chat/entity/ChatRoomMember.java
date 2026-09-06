@@ -136,6 +136,10 @@ public class ChatRoomMember {
     @Column(name = "rejoin_blocked", nullable = false)
     private boolean rejoinBlocked = false;
 
+    /** 방별 음소거 시각 — 이 방의 알림이 안 간다(#83). {@code null} 이면 켜져 있다. 멤버십의 속성이라 여기 있다. */
+    @Column(name = "muted_at")
+    private LocalDateTime mutedAt;
+
     @PrePersist
     void fillJoinedAt() {
         if (joinedAt == null) {

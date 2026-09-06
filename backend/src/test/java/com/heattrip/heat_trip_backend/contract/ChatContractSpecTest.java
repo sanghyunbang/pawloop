@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.yaml.snakeyaml.Yaml;
 
@@ -74,13 +75,13 @@ class ChatContractSpecTest {
     // ─────────────────── A. 코드 ↔ 계약 ───────────────────
 
     @Test
-    @DisplayName("컨트롤러의 다섯 매핑(#79 넷 + #197 삭제)이 계약에 그대로 등재돼 있다 — 경로 목록은 컨트롤러에서 읽는다")
+    @DisplayName("컨트롤러의 여섯 매핑(#79 넷 + #197 삭제 + #83 음소거)이 계약에 그대로 등재돼 있다 — 경로 목록은 컨트롤러에서 읽는다")
     void everyEndpointThisIssueOpened_isDeclaredInTheContract() {
         List<String> implemented = operationsOf(ChatRoomController.class);
 
         assertThat(implemented)
                 .as("컨트롤러에서 매핑을 하나도 못 읽었다면 이 검사는 아무것도 지키지 않는다")
-                .hasSize(5);
+                .hasSize(6);
         assertThat(declaredOperations())
                 .as("""
                         계약에 없는 경로는 앱이 존재를 모른다 — design-first 라 앱은 이 파일을 보고 만든다.
@@ -184,9 +185,14 @@ class ChatContractSpecTest {
     // ─────────────────── D. 한도 표 (📌 #86 원칙 4) ───────────────────
 
     @Test
-    @DisplayName("다섯 경로 다 429 를 선언하지 않는다 — rate limit 표 밖이라는 것을 계약도 말한다")
+    @DisplayName("표 밖의 다섯 경로는 429 를 선언하지 않는다 — 음소거(#83)만 group-write 라 예외다")
     void noneOfTheFourDeclaresRateLimiting() {
         for (String operation : operationsOf(ChatRoomController.class)) {
+            if (operation.endsWith("/mute")) {
+                // PUT .../mute 는 #83 이 group-write 버킷에 넣었다 — 계약도 429 를 선언한다.
+                // PushContractSpecTest.writesDeclareRateLimiting 이 그쪽을 잰다.
+                continue;
+            }
             String[] parts = operation.split(" ", 2);
             assertThat(statusCodesOf(parts[1], parts[0].toLowerCase()))
                     .as("""
@@ -341,6 +347,9 @@ class ChatContractSpecTest {
             }
             if (method.isAnnotationPresent(PostMapping.class)) {
                 found.add("POST " + base + method.getAnnotation(PostMapping.class).value()[0]);
+            }
+            if (method.isAnnotationPresent(PutMapping.class)) {
+                found.add("PUT " + base + method.getAnnotation(PutMapping.class).value()[0]);
             }
             if (method.isAnnotationPresent(DeleteMapping.class)) {
                 found.add("DELETE " + base + method.getAnnotation(DeleteMapping.class).value()[0]);

@@ -549,6 +549,7 @@ CREATE TABLE chat_room_member (
   removed_at     DATETIME    NULL COMMENT '강퇴 시각 — 행은 남긴다',
   removed_by     BIGINT      NULL COMMENT '강퇴한 방장(users.id) — FK 없음',
   rejoin_blocked BIT(1)      NOT NULL DEFAULT b'0' COMMENT '강퇴 = 재입장 금지',
+  muted_at       DATETIME(6) NULL COMMENT '방별 음소거 시각 — NULL 이면 알림이 간다 (#83)',
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_member (room_id, user_id),
   KEY idx_chat_member_user (user_id),
@@ -573,6 +574,7 @@ CREATE TABLE chat_room_member (
 | `removed_at` | `DATETIME` | NULL | 강퇴 시각 |
 | `removed_by` | `BIGINT` | NULL, **FK 없음** | 강퇴한 방장 |
 | `rejoin_blocked` | `BIT(1)` | NOT NULL, 기본 `b'0'` | 유효한 초대코드로도 다시 못 들어온다 |
+| `muted_at` | `DATETIME(6)` | NULL | 방별 음소거 시각 — 이 방의 알림이 안 간다(#83). `PUT /api/chat/rooms/{roomId}/mute`. 멤버십의 속성이라 여기 있다 |
 
 ---
 
@@ -960,6 +962,43 @@ CREATE TABLE `user_consent` (
 
 ---
 
+## 29. `device_token` — 기기 토큰 원장 (**실재**)
+
+푸시 알림(#83)의 기기 토큰 — [`25_push.sql`](../../backend/mysql/post-start/25_push.sql). 한 행이 "이 기기(토큰)는 지금 이 사용자의 것" 이다. `UNIQUE(token)` 이라 같은 기기에서 다른 계정으로 들어오면 주인이 바뀐다 — 등록(`PUT /api/push/tokens`)이 upsert 인 이유다. `user_id` 는 값만 든다 — `push` 모듈이 `users` 를 모른다. **지우지 않고 `revoked_at` 을 찍는다** — FCM 이 "없는 기기" 라 답하거나 로그아웃하면. 지우면 "없던 토큰" 과 "죽은 토큰" 을 구별할 수 없다(`refresh_token` 과 같은 이유). 탈퇴만 행을 지운다(개인정보). 사용자당 살아 있는 토큰은 10개까지 — 넘치면 `last_seen_at` 이 오래된 것부터 폐기한다.
+
+```sql
+CREATE TABLE `device_token` (
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `last_seen_at` datetime(6) NOT NULL,
+  `platform` varchar(8) NOT NULL,
+  `revoked_at` datetime(6) DEFAULT NULL,
+  `user_id` bigint NOT NULL,
+  `token` varchar(512) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_device_token_token` (`token`),
+  KEY `idx_device_token_user` (`user_id`,`revoked_at`),
+  CONSTRAINT `chk_device_token_platform` CHECK ((`platform` in (_utf8mb4'android',_utf8mb4'ios')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
+## 30. `push_preference` — 알림 전체 끄기 (**실재**)
+
+사용자별 "전체 끄기" 하나(#83). **행이 없으면 켜진 것**이라 가입 때 만들지 않고 처음 끄는 순간 생긴다. 방별 음소거는 여기 없다 — 멤버십의 속성이라 §13 `chat_room_member.muted_at` 이다. 탈퇴 때 행을 지운다.
+
+```sql
+CREATE TABLE `push_preference` (
+  `enabled` bit(1) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+---
+
 ## 인덱스 · 공간 인덱스 요약
 
 | 테이블 | 인덱스 | 종류 | 목적 |
@@ -992,12 +1031,14 @@ CREATE TABLE `user_consent` (
 | `care_log` | `idx_carelog_group(group_id, occurred_at)` | 보조 | 그룹별 "오늘의 케어" 조회 |
 | `care_log` | `idx_carelog_doneby(done_by)` | 보조 | 사용자 삭제 시 `SET NULL` 이 훑는 자리 |
 | `care_log` | `idx_carelog_dog(dog_id, occurred_at)` | 보조 | `dog` 삭제 시 `SET NULL` 이 훑는 자리 · 반려동물별 케어 기록(#154) |
+| `device_token` | `uk_device_token_token(token)` | UNIQUE | 같은 기기(토큰)는 한 행 — 등록이 upsert 인 이유(#83) |
+| `device_token` | `idx_device_token_user(user_id, revoked_at)` | 보조 | 사용자의 살아 있는 토큰 조회 · 전 기기 폐기(#83) |
 
 > 공간 컬럼(`walk.path`, `place.geom`)은 모두 `SRID 4326` + `NOT NULL` + `SPATIAL INDEX`. 초기에는 MySQL 공간형 단일 저장소로 운영하고, 대량 GPS 시계열·장소검색(ES/Redis)은 규모 확장 시 옵션이다. 관계 개요는 [ERD](./erd.md) 참조.
 
 ---
 
-## 부록 A. 정본의 표 24개 — 어디에 적혀 있나
+## 부록 A. 정본의 표 26개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
@@ -1009,6 +1050,7 @@ CREATE TABLE `user_consent` (
 | `chat_room_invite` | 실재 §14 | `chat` | 초대코드 |
 | `chat_room_member` | 실재 §13 | `chat` | 방 멤버십 |
 | `comment` | 실재 §8 | `community` | 게시글 댓글 |
+| `device_token` | 실재 §29 | `push` | 기기 토큰 원장 — 푸시(#83) |
 | `dog` | 실재 §3 | `dog` | 반려동물 프로필(소프트 삭제 `deleted_at`) |
 | `family_group` | 실재 §11 | `group` | 가족 케어 그룹 |
 | `kto_call_budget` | 실재 §21 | `place` | KTO 일 호출 예산 |
@@ -1017,6 +1059,7 @@ CREATE TABLE `user_consent` (
 | `place_catalog` | 실재 §24 | `place` | 장소 한 벌 — 출처별 한 행(kto·localdata·durunubi, #291) |
 | `place_cell` | 실재 §22 | `place` | 주변 장소 셀 스냅샷 |
 | `post` | 실재 §7 | `community` | 커뮤니티 게시글 |
+| `push_preference` | 실재 §30 | `push` | 알림 전체 끄기 — 행이 없으면 켜짐(#83) |
 | `reaction` | 실재 §9 | `community` | 게시글 반응 |
 | `refresh_token` | 실재 §2 | `user` | refresh 토큰 원장 |
 | `report` | 실재 §25 | `moderation` | 신고 |

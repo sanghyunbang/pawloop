@@ -2,7 +2,7 @@
 
 > Pawloop(포루프) MySQL 공간형 데이터 모델의 개체-관계도. GPS 산책 경로(`LINESTRING`)와 장소 좌표(`POINT`)를 공간 컬럼으로 저장하고, `SPATIAL INDEX` + `ST_Distance_Sphere`/`MBRContains`로 주변 검색을 수행한다. **가족 케어 공유**와 **채팅** 기능으로 `family_group`·`chat_room`·`chat_room_member`·`chat_room_invite`·`chat_message`·`walk_note` 엔티티가 추가되고, `care_log`는 `group_id`/`done_by`를 더해 "누가·언제 했는지"를 가족과 공유하는 케어 기록으로 확장된다. 방·멤버십·초대는 가족 그룹에 종속되지 않는 범용 3엔티티이고, `family_group` 은 `origin_kind`/`origin_ref` 쌍으로 방에 **불투명하게** 닿는다 — 그 방향의 FK 는 없다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 거기에 표가 **24개** 있다(전체 목록은 [테이블 스키마 부록 A](./schema.md)). 이 문서가 그리는 엔티티 중 무엇이 실재인지는 아래 **엔티티 설명** 표의 "실재" 열이 정본이고, 그 집합은 [테이블 스키마](./schema.md)의 절 제목 **실재** 표시와 같다 — `DocDriftTest` 가 정본·절 제목·부록·이 표 넷을 대조한다(#176). 그림의 `place`·`bookmark` 는 아직 **계획**이다 — 그 둘이 낀 관계선에는 '계획' 꼬리표가 붙어 있다. 산책로는 `trail_route`(실재)가 선을 들고 `place_catalog` 의 두루누비 행이 시작점을 든다(#291). 감정 여행·관광 수집 시절의 표 21개는 정본에 있지만 반려 축에서 쓰지 않는다 — 지우지 않고 격리한다(#174). 감정카드 셋은 v2 커뮤니티(`post`·`comment`·`reaction`)와 다른 표라 그림에 따로 그렸다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 거기에 표가 **26개** 있다(전체 목록은 [테이블 스키마 부록 A](./schema.md)). 이 문서가 그리는 엔티티 중 무엇이 실재인지는 아래 **엔티티 설명** 표의 "실재" 열이 정본이고, 그 집합은 [테이블 스키마](./schema.md)의 절 제목 **실재** 표시와 같다 — `DocDriftTest` 가 정본·절 제목·부록·이 표 넷을 대조한다(#176). 그림의 `place`·`bookmark` 는 아직 **계획**이다 — 그 둘이 낀 관계선에는 '계획' 꼬리표가 붙어 있다. 산책로는 `trail_route`(실재)가 선을 들고 `place_catalog` 의 두루누비 행이 시작점을 든다(#291). 감정 여행·관광 수집 시절의 표 21개는 정본에 있지만 반려 축에서 쓰지 않는다 — 지우지 않고 격리한다(#174). 감정카드 셋은 v2 커뮤니티(`post`·`comment`·`reaction`)와 다른 표라 그림에 따로 그렸다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
 
 ## ER 다이어그램
 
@@ -41,6 +41,8 @@ erDiagram
     report ||--o{ report_snapshot : "대상 스냅샷 (CASCADE)"
     users ||--o{ user_block    : "가린다 (FK 없음)"
     users ||--o{ user_consent  : "동의 이력 (FK 없음)"
+    users ||--o{ device_token  : "기기 토큰 (FK 없음 - #83)"
+    users ||--o| push_preference : "알림 전체 끄기 (FK 없음 - #83)"
 
     users {
         BIGINT   id PK
@@ -126,6 +128,7 @@ erDiagram
         BIGINT   removed_by     "강퇴한 방장 (FK 없음)"
         BOOLEAN  rejoin_blocked "강퇴 = 재입장 금지"
         DATETIME joined_at
+        DATETIME muted_at       "방별 음소거 - NULL 이면 알림이 간다 (#83)"
     }
 
     chat_room_invite {
@@ -252,6 +255,22 @@ erDiagram
         DATETIME created_at  "UTC"
     }
 
+    device_token {
+        BIGINT   id PK
+        BIGINT   user_id      "users.id - FK 없음"
+        VARCHAR  token        "UNIQUE - 같은 기기는 한 행"
+        VARCHAR  platform     "android|ios"
+        DATETIME created_at   "UTC"
+        DATETIME last_seen_at "마지막 등록 - 상한을 넘칠 때 오래된 것부터 폐기"
+        DATETIME revoked_at   "폐기 - NULL 이면 살아 있다"
+    }
+
+    push_preference {
+        BIGINT   user_id PK   "users.id - FK 없음"
+        BOOLEAN  enabled      "행이 없으면 켜짐"
+        DATETIME updated_at   "UTC"
+    }
+
     place_catalog {
         INT      id PK       "1 kto · 2 localdata · 3 durunubi"
         VARCHAR  source UK   "kto|localdata|durunubi (CHECK)"
@@ -313,6 +332,8 @@ erDiagram
 | `report_snapshot` | 실재 | 신고 시점의 대상 본문 스냅샷. `report` 에 CASCADE. [schema.md §26](./schema.md). |
 | `user_block` | 실재 | 가리기(사람 단위). `chat_block` 에서 이름을 옮겼다. [schema.md §27](./schema.md). |
 | `user_consent` | 실재 | 약관 동의 이력 — 덧붙이기만 한다(ADR-0020). [schema.md §28](./schema.md). |
+| `device_token` | 실재 | 기기 토큰 원장 — 푸시(#83). `UNIQUE(token)`, 지우지 않고 `revoked_at`, 탈퇴만 삭제. [schema.md §29](./schema.md). |
+| `push_preference` | 실재 | 알림 전체 끄기 — 행이 없으면 켜짐(#83). [schema.md §30](./schema.md). |
 
 ## 공간(Spatial) 컬럼 요약
 

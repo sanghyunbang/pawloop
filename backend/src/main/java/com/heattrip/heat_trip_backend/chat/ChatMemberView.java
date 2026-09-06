@@ -17,5 +17,6 @@ public record ChatMemberView(
         long userId,
         String role,
         long lastReadSeq,
-        LocalDateTime joinedAt) {
+        LocalDateTime joinedAt,
+        boolean muted) {
 }

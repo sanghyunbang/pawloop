@@ -319,6 +319,20 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("PUT /api/push/tokens · /api/push/settings 는 group-write 버킷이다 — 한도+1 번째에서 429")
+    void pushWrites_areRateLimited() throws Exception {
+        // 표에 없는 경로는 한도가 0 이 아니라 무한이다. 토큰 등록은 행을 만들고 설정은 행을 바꾼다 (#83).
+        assertThat(exhaust(filterWithGroupWriteLimit(2), "PUT", "/api/push/tokens", 2).getStatus()).isEqualTo(429);
+        assertThat(exhaust(filterWithGroupWriteLimit(2), "PUT", "/api/push/settings", 2).getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("PUT /api/chat/rooms/{roomId}/mute 도 group-write 버킷이다 — 한도+1 번째에서 429")
+    void roomMute_isRateLimited() throws Exception {
+        assertThat(exhaust(filterWithGroupWriteLimit(2), "PUT", "/api/chat/rooms/7/mute", 2).getStatus()).isEqualTo(429);
+    }
+
+    @Test
     @DisplayName("그룹 생성과 초대 발급은 같은 버킷을 나눠 쓴다 — 합쳐서 한도다")
     void groupCreationAndInviteIssuing_shareTheSameBucket() throws Exception {
         ApiRateLimitFilter f = filterWithGroupWriteLimit(2);
