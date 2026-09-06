@@ -32,10 +32,11 @@ void main() {
         .where((entity) => entity.path.endsWith('.dart'))
         .toList();
 
-    // 스캔이 비어 있으면 이 테스트는 아무것도 검증하지 않는 셈이다.
+    // 스캔이 비어 있으면 이 테스트는 아무것도 검증하지 않는 셈이다. 레거시 셸을 지운
+    // 뒤(#94, 2026-09-06) lib 은 88 파일이다 — 바닥은 그 아래에 둔다.
     expect(
       dartFiles.length,
-      greaterThan(100),
+      greaterThan(60),
       reason: 'lib 스캔이 비었다 (cwd=${Directory.current.path})',
     );
     expect(

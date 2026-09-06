@@ -31,28 +31,21 @@
 
 | 패키지 | 버전 | 용도 |
 | --- | --- | --- |
-| `flutter_naver_map` | ^1.3.1 | 지도 SDK(네이버 Dynamic Map) — 감정지도/장소 지도 |
+| `flutter_naver_map` | ^1.3.1 | 지도 SDK(네이버 Dynamic Map) — 장소 지도 · 산책 트래킹 |
 | `geolocator` | ^13.0.1 | 실시간 위치/GPS(산책 트래킹 확장) |
 | `fl_chart` | ^1.2.0 | 산책 통계 차트(주간 막대 등) |
-| `lottie` | ^3.4.0 | Lottie 애니메이션 |
 | `http` | ^1.4.0 | REST API 호출(백엔드/공공데이터) |
 | `flutter_secure_storage` | ^9.2.4 | 토큰 등 보안 저장(Bearer 주입) |
 | `shared_preferences` | ^2.5.3 | 경량 로컬 설정 저장 |
 | `flutter_web_auth_2` | ^4.1.0 | 소셜 로그인 웹 인증 플로우 |
 | `image_picker` | ^1.1.2 | 사진 선택(프로필/게시글) |
 | `cached_network_image` | ^3.3.1 | 네트워크 이미지 캐싱 |
-| `flutter_svg` | ^2.2.0 | SVG 아이콘(google/kakao/naver) |
+| `flutter_svg` | ^2.2.0 | SVG 아이콘(google/kakao) |
 | `google_fonts` | ^8.1.0 | 웹폰트 |
-| `table_calendar` | ^3.0.9 | 캘린더 UI |
-| `intl` | ^0.18.1 | 날짜/숫자 국제화 포맷 |
 | `provider` | ^6.1.5 | 의존성 주입(MultiProvider) |
 | `go_router` | ^16.1.0 | 선언형 라우팅 |
-| `flutter_staggered_grid_view` | ^0.7.0 | 스태거드 그리드 레이아웃 |
-| `visibility_detector` | ^0.4.0+2 | 위젯 가시성 감지 |
-| `flutter_animate` | ^4.5.2 | 선언형 애니메이션 |
-| `iconsax` | ^0.0.8 | 아이콘 세트 |
-| `url_launcher` | ^6.3.2 | 외부 URL/전화(장소 tel) 실행 |
-| `cupertino_icons` | ^1.0.8 | iOS 스타일 아이콘 |
+
+> 2026-09-06 #94 로 레거시 셸을 지우면서 그 셸만 쓰던 열 개(`lottie` · `table_calendar` · `intl` · `meta` · `flutter_staggered_grid_view` · `visibility_detector` · `flutter_animate` · `iconsax` · `url_launcher` · `cupertino_icons`)를 뺐다 — `lib`·`test` 에 import 가 0건이었다.
 
 ### 2.2 개발 의존성 (dev_dependencies)
 
@@ -64,9 +57,8 @@
 
 ### 2.3 에셋
 
-- 아이콘: `assets/icons/`(google/kakao/naver SVG), 로고 `assets/Logo4.png`
-- 이모지: `assets/emoji/`(Fluent Emoji 3D PNG)
-- Lottie: `assets/lottie/`
+- 아이콘: `assets/icons/`(google/kakao SVG), 로고 `assets/Logo4.png`(디버그 이메일 로그인 화면)
+- 이모지: `assets/emoji/`(Fluent Emoji 3D PNG — cat·dog·paw. 감정 여섯 개는 #94 로 셸과 함께 지웠다)
 - 약관: `assets/terms/`(terms/privacy/marketing ko.md)
 - 폰트: `assets/fonts/Pretendard-*.otf`
 
@@ -112,7 +104,7 @@
 
 ### 5.1 지도 — 네이버 (flutter_naver_map)
 
-- `--dart-define=NAVER_MAP_CLIENT_ID` 로 주입한 값을 `Env.naverMapClientId` 로 읽어 `main.dart`·`main_v2.dart` 에서 `FlutterNaverMap().init(...)` 초기화.
+- `--dart-define=NAVER_MAP_CLIENT_ID` 로 주입한 값을 `Env.naverMapClientId` 로 읽어 `main.dart` 에서 `FlutterNaverMap().init(...)` 초기화.
 - Client ID 미설정 시 지도 비활성(안내문 표시)하고 앱은 계속 동작.
 
 ### 5.2 공공데이터

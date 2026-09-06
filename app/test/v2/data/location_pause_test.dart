@@ -5,15 +5,14 @@
 //
 //  1. 값이 메모리 `ValueNotifier` 에만 있었다 — 앱을 껐다 켜면 중단이 풀렸다.
 //     사용자는 껐다고 믿는 채로 다시 켜진 앱을 썼다.
-//  2. `LocationService` 가 저장소에 둘인데, 레거시(감정 지도·둘러보기·포유) 쪽은
-//     이 토글을 아예 보지 않았다. 켜도 절반만 들었다.
+//  2. `LocationService` 가 저장소에 둘이었는데, 레거시(감정 지도·둘러보기·포유) 쪽은
+//     이 토글을 아예 보지 않았다. 켜도 절반만 들었다. 그 쪽은 #94 로 셸과 함께
+//     지웠다(2026-09-06) — 이제 저장소는 하나다.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/v2/data/location_service.dart';
-import 'package:heat_trip_flutter/features/foryou_v2/state/location_service.dart'
-    as legacy;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -72,15 +71,6 @@ void main() {
       final fix = await LocationService.locate();
       expect(fix.denial, LocationDenial.pausedByUser,
           reason: '동의는 켜 두었으므로 여기서 걸리는 것은 일시중지여야 한다');
-    });
-
-    test('레거시 서비스도 토글을 듣는다', () async {
-      await LocationService.setPaused(true);
-
-      final (lat, lng) = await legacy.LocationService().getCurrentLatLng();
-
-      expect(lat, isNull);
-      expect(lng, isNull);
     });
   });
 }

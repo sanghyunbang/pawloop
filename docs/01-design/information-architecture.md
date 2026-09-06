@@ -13,7 +13,7 @@
 - **탭 전환 방식**: 탭은 화면을 **push하지 않고** `RootTab.index`(`ValueNotifier<int>`)로 본문만 교체(IndexedStack 유사). 상세/작성 화면만 `Navigator.push`로 위에 쌓임.
 - **글로벌 진입**: 모든 메인 탭 우상단의 **프로필 아바타**(`ProfileAvatar`)를 탭하면 어디서든 `MeScreen`(내 프로필)을 push.
 
-> 참고: `lib/v2/`가 정식 화면 트리다. `app_router.dart`에 남아 있는 `StatefulShellRoute`(explore/record/journey/profile/emotion_map 브랜치)와 `foryou`/`start` 라우트들은 **구버전(피벗 이전) 잔재**로, `/home` 진입 시 사용되지 않는다.
+> 참고: `lib/v2/`가 정식 화면 트리다. `app_router.dart` 에 남아 있던 구버전 `StatefulShellRoute`(explore/record/journey/profile/emotion_map 브랜치)와 `foryou`/`start` 라우트는 2026-09-06 에 #94 로 지웠다 — 라우트는 splash·consent·onboarding·home·auth 다섯뿐이다.
 
 ---
 

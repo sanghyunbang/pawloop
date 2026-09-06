@@ -9,7 +9,7 @@ import 'package:heat_trip_flutter/core/net/log_redaction.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/auth_tokens.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/login_request.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/register_request.dart';
-import 'package:heat_trip_flutter/features/profile/data/dto/update_profile_request.dart';
+import 'package:heat_trip_flutter/features/auth/data/dto/update_profile_request.dart';
 
 /// 회원가입 결과. 화면이 사용자에게 무엇을 말해야 하는지 결정한다.
 ///
