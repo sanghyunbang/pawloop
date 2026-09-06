@@ -184,12 +184,13 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
 
 
     @Test
-    @DisplayName("소셜 계정 토큰으로 /auth/me 밖의 소비처인 GET /bookmarks 도 200 이다")
-    void 소셜계정_토큰으로_북마크목록이_200이다() throws Exception {
+    @DisplayName("소셜 계정 토큰으로 /auth/me 밖의 소비처인 GET /api/dogs 도 200 이다")
+    void 소셜계정_토큰으로_반려동물목록이_200이다() throws Exception {
+        // 예전에는 레거시 GET /bookmarks 였다 — #94 로 지워서 같은 뜻의 v2 경로로 바꿨다.
         User kakao = seedKakaoUserWithoutEmail();
         String token = tokenIssuedByRealSocialLogin(kakao);
 
-        int status = mockMvc.perform(get("/bookmarks").header("Authorization", "Bearer " + token))
+        int status = mockMvc.perform(get("/api/dogs").header("Authorization", "Bearer " + token))
                 .andReturn().getResponse().getStatus();
 
         assertThat(status)

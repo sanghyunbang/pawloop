@@ -781,61 +781,9 @@ CREATE TABLE care_log (
 
 ---
 
-## 18. `emotion_card` — 감정카드 (**실재** · 격리)
+## 18. 감정카드 셋 — 코드는 지웠고 표는 운영 DB 에 남아 있다 (#94)
 
-감정 여행 시절의 표다. **반려 커뮤니티(§7~9 `post`·`comment`·`reaction`)와 다른 것**이다 — 같은 "커뮤니티" 라는 말로 부르면 다음 사람이 잘못 지운다(#174). 2026-09-03 결정([#174](https://github.com/sanghyunbang/heattrip/issues/174))으로 **지우지 않고 격리한다** — 표·데이터·`SocialController`(`/api/social`)는 그대로 두고 v2 앱이 닿지 않게 한다. 쓰기 경로가 v2 에 없어 데이터가 늘지 않는다(소비자는 레거시 셸의 `feed_screen.dart`·`together_feed.dart` 뿐). 앱에서 끊는 자리는 레거시 셸 처분([#94](https://github.com/sanghyunbang/heattrip/issues/94))이 정한다.
-
-`users` 로 가는 FK 는 없고 `user_id` 값과 작성 시점의 `handle` 스냅샷을 든다 — 탈퇴자의 이름은 `WithdrawnUsers`(#82)가 응답에서 가린다.
-
-```sql
-CREATE TABLE `emotion_card` (
-  `created_at` datetime(6) NOT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `place_id` bigint DEFAULT NULL,
-  `user_id` bigint NOT NULL,
-  `body` varchar(280) DEFAULT NULL,
-  `handle` varchar(255) DEFAULT NULL,
-  `mood_key` varchar(255) NOT NULL,
-  `place_name` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-```
-
----
-
-## 19. `card_comment` — 감정카드 댓글 (**실재** · 격리)
-
-§18 `emotion_card` 의 댓글. `card_id` 로 카드를 가리키지만 FK 는 없다(감정 여행 시절 표는 셋 다 FK 가 없다). 처분은 §18 과 같다 — 격리(#174).
-
-```sql
-CREATE TABLE `card_comment` (
-  `card_id` bigint NOT NULL,
-  `created_at` datetime(6) NOT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL,
-  `body` varchar(280) NOT NULL,
-  `handle` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-```
-
----
-
-## 20. `card_reaction` — 감정카드 반응 (**실재** · 격리)
-
-§18 `emotion_card` 의 반응. `UNIQUE (card_id, user_id, reaction_type)` 이 한 사람이 같은 카드에 같은 반응을 두 번 남기는 것을 막는다 — 이 셋 중 유일한 제약이다. 처분은 §18 과 같다 — 격리(#174).
-
-```sql
-CREATE TABLE `card_reaction` (
-  `card_id` bigint NOT NULL,
-  `created_at` datetime(6) NOT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL,
-  `reaction_type` varchar(255) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_card_reaction_card_user_type` (`card_id`,`user_id`,`reaction_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-```
+`emotion_card` · `card_comment` · `card_reaction` 은 감정 여행 시절의 표다. 2026-09-03 에는 지우지 않고 격리하기로 했고([#174](https://github.com/sanghyunbang/heattrip/issues/174)), 2026-09-06 에 그 코드(`social` 패키지)를 [#94](https://github.com/sanghyunbang/heattrip/issues/94) 로 지웠다. **표와 데이터는 그대로다** — 다만 정본 `01_schema.sql` 은 엔티티에서 뽑으므로 여기서 빠졌고, 새 DB 에는 만들어지지 않는다. 지우는 SQL 은 만들지 않았다 — 되돌릴 수 없는 일은 따로 정한다. 같은 처지의 표가 부록 A 아래에 20개 더 있다. §19·§20 번호는 비워 둔다 — 뒤 절의 번호를 흔들지 않기 위해서다.
 
 ---
 
@@ -1049,56 +997,35 @@ CREATE TABLE `user_consent` (
 
 ---
 
-## 부록 A. 정본의 표 47개 — 어디에 적혀 있나
+## 부록 A. 정본의 표 24개 — 어디에 적혀 있나
 
-`01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**가 `실재 §N` 이면 그 절이 정의이고, `레거시` 면 감정 여행·관광 수집 시절의 표라 이 문서에 절이 없다 — 반려 축에서 쓰지 않고, 지우지 않고 격리한다(#174 · 앱에서 끊는 자리는 #94). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
+`01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
 | 표 | 상태 | 모듈 | 한 줄 |
 | --- | --- | --- | --- |
-| `bookmarks` | 레거시 | `bookmark` | v1 장소 저장. 계획 §10 `bookmark` 와 **다른 표**다 |
-| `card_comment` | 실재 §19 | `social` | 감정카드 댓글 — **격리** #174 |
-| `card_reaction` | 실재 §20 | `social` | 감정카드 반응 — **격리** #174 |
 | `care_log` | 실재 §17 | `care` | 케어 로그 |
-| `cat3_category_mapping` | 레거시 | `curation` | KTO 소분류(cat3) → 감정 카테고리 매핑 |
 | `chat_message` | 실재 §15 | `chat` | 채팅 메시지 |
 | `chat_room` | 실재 §12 | `chat` | 채팅방(범용) |
 | `chat_room_invite` | 실재 §14 | `chat` | 초대코드 |
 | `chat_room_member` | 실재 §13 | `chat` | 방 멤버십 |
-| `collection_items` | 레거시 | `bookmark` | v1 컬렉션 항목 |
-| `collections` | 레거시 | `bookmark` | v1 저장 컬렉션 |
 | `comment` | 실재 §8 | `community` | 게시글 댓글 |
 | `dog` | 실재 §3 | `dog` | 반려동물 프로필(소프트 삭제 `deleted_at`) |
-| `emotion_card` | 실재 §18 | `social` | 감정카드 — **격리** #174 |
-| `emotion_categories` | 레거시 | `curation` | 감정 카테고리 사전 |
-| `emotion_feedbacks` | 레거시 | `explore` | 감정 피드백(`POST …/feedback`) |
-| `emotion_reviews` | 레거시 | `explore` | 감정 리뷰(`…/emotional-reviews` 읽기만). **격리** — #174 |
 | `family_group` | 실재 §11 | `group` | 가족 케어 그룹 |
-| `feedback` | 레거시 | `feedback` | 앱 피드백 전송 |
-| `journey` | 레거시 | `schedules` | 감정 여행 일정 |
-| `journey_photos` | 레거시 | `schedules` | 일정 사진 목록 |
 | `kto_call_budget` | 실재 §21 | `place` | KTO 일 호출 예산 |
 | `media_objects` | 레거시 | `S3` | 업로드 객체 원장(S3 objectKey) |
 | `pet_place_detail` | 실재 §23 | `place` | 장소 상세 캐시 |
 | `place_catalog` | 실재 §24 | `place` | 장소 한 벌 — 출처별 한 행(kto·localdata·durunubi, #291) |
 | `place_cell` | 실재 §22 | `place` | 주변 장소 셀 스냅샷 |
-| `place_descriptions` | 레거시 | `tour` | KTO 수집 — 장소 설명 |
-| `place_features` | 레거시 | `curation · explore` | 장소 특성. 두 모듈이 같은 표를 매핑한다 |
-| `place_hashtags` | 레거시 | `tour` | KTO 수집 — 해시태그 |
-| `place_kakao_links` | 레거시 | `kakao` | 카카오 로컬 장소 매핑 |
-| `place_simple_tags` | 레거시 | `tour` | KTO 수집 — 단순 태그 |
-| `place_star_ratings` | 레거시 | `curation` | 장소 별점 집계 |
-| `place_trait_snapshots` | 레거시 | `tour` | KTO 수집 — 성향 스냅샷 |
-| `place_traits` | 레거시 | `curation` | 장소 성향 태그 |
-| `places` | 레거시 | `curation · tour` | KTO 원본 장소 캐시(감정 여행 시절). 계획 §5 `place` 와 **다른 표**다 |
 | `post` | 실재 §7 | `community` | 커뮤니티 게시글 |
 | `reaction` | 실재 §9 | `community` | 게시글 반응 |
 | `refresh_token` | 실재 §2 | `user` | refresh 토큰 원장 |
 | `report` | 실재 §25 | `moderation` | 신고 |
 | `report_snapshot` | 실재 §26 | `moderation` | 신고 대상 스냅샷 |
-| `schedule` | 레거시 | `schedules` | 일정 항목 |
 | `trail_route` | 실재 §6 | `place` | 산책로 코스의 선 — 두루누비 GPX 를 300점 이하로 줄인 `[[경도, 위도]]` JSON(#291) |
 | `user_block` | 실재 §27 | `moderation` | 가리기 |
 | `user_consent` | 실재 §28 | `consent` | 약관 동의 이력 |
 | `users` | 실재 §1 | `user` | 앱 사용자 계정 |
+
+정본에서 빠졌지만 운영 DB 에 남아 있는 표(#94, 2026-09-06): `bookmarks` · `card_comment` · `card_reaction` · `cat3_category_mapping` · `collection_items` · `collections` · `emotion_card` · `emotion_categories` · `emotion_feedbacks` · `emotion_reviews` · `feedback` · `journey` · `journey_photos` · `place_descriptions` · `place_features` · `place_hashtags` · `place_kakao_links` · `place_simple_tags` · `place_star_ratings` · `place_trait_snapshots` · `place_traits` · `places` · `schedule`. 코드가 없으니 새 행은 생기지 않는다.
 | `walk` | 실재 §4 | `walk` | 산책 기록(GPS 경로) |
 | `walk_note` | 실재 §16 | `care` | 산책 주의사항(그룹당 한 장) |

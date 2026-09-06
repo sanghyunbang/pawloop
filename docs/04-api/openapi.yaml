@@ -1537,7 +1537,7 @@ paths:
     get:
       x-status: planned
       x-status-note: |
-        v2(반려) 북마크는 아직 없다. 레거시 heattrip 의 `/bookmarks` 는 경로도 스키마도 다른 별개 기능이고 이 계약의 범위 밖이다 — #94 의 레거시 셸 결정을 기다린다.
+        v2(반려) 북마크는 아직 없다. 레거시 heattrip 의 `/bookmarks` 는 경로도 스키마도 다른 별개 기능이고 이 계약의 범위 밖이었고, 그 레거시는 2026-09-06 에 #94 로 지웠다.
       tags: [Bookmarks]
       summary: 저장한 장소 목록
       description: |
@@ -1572,7 +1572,7 @@ paths:
     post:
       x-status: planned
       x-status-note: |
-        v2(반려) 북마크는 아직 없다. 레거시 `/bookmarks` 와 다른 기능이다 — #94.
+        v2(반려) 북마크는 아직 없다. 레거시 `/bookmarks` 와 다른 기능이었고, 그 레거시는 #94 로 지웠다.
       tags: [Bookmarks]
       summary: 장소 북마크 추가
       description: |
@@ -1596,7 +1596,7 @@ paths:
     delete:
       x-status: planned
       x-status-note: |
-        v2(반려) 북마크는 아직 없다. 레거시 `/bookmarks/{contentId}` 와 다른 기능이다 — #94.
+        v2(반려) 북마크는 아직 없다. 레거시 `/bookmarks/{contentId}` 와 다른 기능이었고, 그 레거시는 #94 로 지웠다.
       tags: [Bookmarks]
       summary: 북마크 삭제
       parameters:

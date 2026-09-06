@@ -15,7 +15,7 @@
 | prod 프로필 | `spring.jpa.hibernate.ddl-auto=validate` | `application-prod.properties` |
 | DB | MySQL (`jdbc:mysql://.../heat_trip_db`) | `spring.datasource.url` |
 | 런타임 | Java 21 / Spring Boot 3.5.4 | `backend/build.gradle` |
-| 시드 로딩 | opencsv (`resources/data/place_traits.csv`) | `build.gradle` opencsv 5.9 |
+| 시드 로딩 | 없음 — `place_traits.csv` 를 읽던 opencsv 로더(`tour`·`curation`)는 #94 로 지웠다 | 파일은 `resources/data/` 에 남아 있다 |
 | POI upsert | JPA `saveAll` 배치(merge) | `PlaceService.saveInBatches(...)` |
 
 > 참고: 스키마·DB 이름은 `heat_trip_db`, 엔티티 테이블은 `places` 등 레거시 명(heattrip 시절)이 잔존한다. 반려 피벗 후 컬럼/의미는 재정의되지만 **이름 rename은 마이그레이션으로 신중히 처리**한다(아래 3장).
@@ -269,7 +269,7 @@ place upsert → ST_SRID(POINT(lat, lon), 4326)   ← 4.2 네이티브 upsert
 
 | 시드 | 방법 | 현재 |
 | --- | --- | --- |
-| `place_traits.csv` | opencsv 로더 → `R__seed_place_traits.sql`(Flyway 반복) 또는 부트 러너 | **존재**(`resources/data/place_traits.csv`) |
+| `place_traits.csv` | 읽는 코드가 없다 — `tour`·`curation` 과 함께 2026-09-06 #94 로 지웠다 | **존재**(`resources/data/place_traits.csv`) — 파일은 지우지 않기로 한 것이다 |
 | KTO 서울 동반장소 | 풀임포트 배치 1회(`fullImportAllAreas`) | **실연동**(앱 지도 서울 45곳) |
 | 게시판(board) 코드 | `V1` 마이그레이션에 enum 값/기본 게시판 INSERT | 코드 상수 |
 | 개발용 더미 유저/강아지 | dev 전용 시드(`R__dev_seed.sql`, prod 제외) | 앱 샘플데이터(`lib/v2/domain/pet.dart`) |

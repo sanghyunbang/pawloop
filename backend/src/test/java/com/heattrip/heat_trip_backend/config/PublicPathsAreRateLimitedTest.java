@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.heattrip.heat_trip_backend.explore.web.ExploreController;
 
 import com.heattrip.heat_trip_backend.security.ApiRateLimitFilter;
 import com.heattrip.heat_trip_backend.security.RateLimitProperties;
@@ -35,16 +34,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 필터가 그대로 통과시킨다).
  *
  * <p>그래서 {@code PUBLIC_MATCHERS} 에 한 줄을 더하면서 그쪽을 안 고치면 <b>인증도 한도도
- * 없는 경로</b>가 조용히 생긴다. 실제로 {@code /api/explore/**} 가 그 상태였다 —
- * 매핑 일곱 중 <b>다섯</b>이 아무 버킷에도 안 걸려 있었다.
+ * 없는 경로</b>가 조용히 생긴다. 실제로 감정 여행 시절의 {@code /api/explore/**} 가 그 상태였다 —
+ * 매핑 일곱 중 <b>다섯</b>이 아무 버킷에도 안 걸려 있었다(그 컨트롤러는 #94 로 지웠다).
  *
  * <h2>어떻게 재는가</h2>
  * <p><b>필터를 실제로 돌린다.</b> 한도를 1 로 두고 같은 경로를 두 번 부르면 버킷에 걸린
  * 경로만 429 가 된다. {@code resolveRule} 은 private 이고, 규칙 문자열을 손으로 옮겨 적으면
  * 사본과 문서를 대조하는 셈이라 둘이 나란히 낡는다.
  *
- * <p>경로도 손으로 안 적는다 — {@code ExploreController} 의 매핑은 <b>리플렉션으로</b>
- * 읽는다. 새 매핑이 생기면 이 검사가 자동으로 그것을 본다.
+ * <p>경로도 손으로 안 적는다 — 공개 매처마다 대표 요청을 {@code sampleFor} 가 정하고,
+ * 매처가 늘면 그 switch 가 빠진 것을 잡는다.
  */
 class PublicPathsAreRateLimitedTest {
 
@@ -66,44 +65,7 @@ class PublicPathsAreRateLimitedTest {
             "/swagger-ui.html", "같은 이유",
             "/swagger-ui/**", "같은 이유"));
 
-    // ─────────────────── A. explore — 이 이슈가 찾은 구멍 ───────────────────
-
-    @Test
-    @DisplayName("ExploreController 의 모든 매핑이 버킷에 걸린다 — 경로는 코드에서 읽는다")
-    void everyExploreMappingIsMetered() throws Exception {
-        List<String> mappings = operationsOf(ExploreController.class);
-
-        assertThat(mappings)
-                .as("컨트롤러에서 매핑을 하나도 못 읽었다면 이 검사는 아무것도 지키지 않는다")
-                .isNotEmpty();
-
-        List<String> unmetered = new ArrayList<>();
-        for (String mapping : mappings) {
-            String[] parts = mapping.split(" ", 2);
-            if (secondCallStatus(parts[0], sampleOf(parts[1])) != 429) {
-                unmetered.add(mapping + "  (샘플: " + sampleOf(parts[1]) + ")");
-            }
-        }
-
-        assertThat(unmetered)
-                .as("""
-                        이 경로들은 SecurityConfig 가 permitAll 로 열어 둔 것이라 인증이 없다. \
-                        표에 없으면 한도가 0 이 아니라 무한이라, 누구나 무제한으로 부를 수 있다. \
-                        2026-09-03 이전에는 일곱 중 다섯이 이 상태였다 (#232).""")
-                .isEmpty();
-    }
-
-    @Test
-    @DisplayName("숫자가 아닌 id 도 버킷이 덮는다 — permitAll 과 같은 집합이어야 한다")
-    void nonNumericIdsAreAlsoMetered() throws Exception {
-        // SecurityConfig 는 "/api/explore/**" 로 통째로 연다. 필터가 [0-9]+ 만 덮으면
-        // GET /api/explore/places/abc 가 인증 없음 + 한도 무한이 된다 — places 가 같은
-        // 함정을 이미 겪었다.
-        assertThat(secondCallStatus("GET", "/api/explore/places/abc")).isEqualTo(429);
-        assertThat(secondCallStatus("GET", "/api/explore/places/abc/features")).isEqualTo(429);
-    }
-
-    // ─────────────────── B. 공개 경로 전체 ───────────────────
+    // ─────────────────── 공개 경로 전체 ───────────────────
 
     @Test
     @DisplayName("PUBLIC_MATCHERS 의 모든 경로가 한도를 갖는다 — 면제는 이유와 함께 적는다")
@@ -172,7 +134,6 @@ class PublicPathsAreRateLimitedTest {
             case "/auth/login" -> new Sample("POST", "/auth/login");
             case "/auth/oauth/**" -> new Sample("POST", "/auth/oauth/kakao/callback");
             case "/auth/token/refresh" -> new Sample("POST", "/auth/token/refresh");
-            case "/api/explore/**" -> new Sample("GET", "/api/explore/places");
             case "/api/places/nearby" -> new Sample("GET", "/api/places/nearby");
             case "/api/places/*" -> new Sample("GET", "/api/places/126508");
             case "/api/places/trails/*/route" -> new Sample("GET", "/api/places/trails/T_ROUTE_1/route");

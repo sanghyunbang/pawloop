@@ -9,7 +9,7 @@
 | 레이어 | 핵심 기술 |
 | --- | --- |
 | 프론트엔드 | Flutter 3.44.4 / Dart 3.12.2 (SDK `^3.8.1`), go_router, ValueNotifier |
-| 백엔드 | Spring Boot(Java/Kotlin) + MySQL(공간형) — 원격 `api.heattrip.link` |
+| 백엔드 | Spring Boot(Java 21) + MySQL(공간형) — 원격 `api.heattrip.link` |
 | 지도 | flutter_naver_map(네이버 Dynamic Map) |
 | 공공데이터 | 관광공사 KorPetTourService2, LOCALDATA, 두루누비 |
 | 안드로이드 툴체인 | AGP 8.11.1 / Kotlin 2.2.20 / Gradle 8.13 / compileSdk 36 / Java 17 |
@@ -68,7 +68,7 @@
 
 | 구분 | 기술 | 비고 |
 | --- | --- | --- |
-| 프레임워크 | Spring Boot (Java/Kotlin 혼용) | 패키지 `tour`(관광 장소)/`curation`(추천)/`social`(커뮤니티)/`auth` |
+| 프레임워크 | Spring Boot (Java 21) | 패키지 `place`(장소 프록시·카탈로그·레이어) · `walk` · `dog` · `care` · `group` · `chat`/`chatweb` · `community` · `user`/`OAuth`(인증). 감정 여행 패키지(`tour`·`curation`·`social` …)와 Kotlin 은 2026-09-06 #94 로 지웠다 |
 | DB | MySQL (공간형) | `POINT`/`LINESTRING`, `SPATIAL INDEX`, `ST_Distance_Sphere`/`MBRContains` |
 | 배포 엔드포인트 | `https://api.heattrip.link` | 앱은 `--dart-define=API_BASE_URL` 로 주입 — 현재 **원격** 백엔드 사용. `--dart-define=API_BASE` 가 있으면 그쪽이 우선(로컬/스테이징 전환용) |
 | 레거시 추천 | FastAPI + OpenAI | 감정여행 시절 추천 파이프라인. **현재 앱에 연결점이 없다** — 예전 `.env` 에 있던 `API_RECSYS_URL` 은 #29 에서 `.env` 를 걷어낼 때 함께 사라졌고 `Env` 에도 대응 키가 없다. 반려 맥락 재검토 대상 |

@@ -92,23 +92,15 @@ class StoredTimestampsAreUtcTest {
      * 과 "알고 뺀 것" 을 가르기 위해서다 — {@code theWriterListCoversEveryEntityWithALifecycleHook}
      * 가 이 둘 밖의 엔티티를 잡는다(#306).
      *
-     * <ul>
-     *   <li>감정 여행·관광 수집 시절의 레거시 — 지우지 않고 격리한다(#174 · #94). v2 에 쓰기 경로가
-     *       없어 새 행이 안 생기고, 손대면 그쪽으로 사람을 이끈다. {@code LocalDateTime.now()} 인 채로
-     *       둔다는 것을 <b>알고</b> 둔다.</li>
-     *   <li>{@code Place}(tour) 의 훅은 시각이 아니라 문자열 정리다.</li>
-     * </ul>
+     * <p><b>지금은 비어 있다.</b> 2026-09-06 까지는 감정 여행·관광 수집 시절의 엔티티 열 개
+     * (bookmark·feedback·schedules·social·tour)가 여기 있었다 — 지우지 않고 격리하던 것들이다.
+     * #94 로 그 패키지를 지웠다. 되살릴 것이 없으니 새 엔티티는 전부 {@code WRITERS} 로 간다.
      */
     /** 소스에서 훅 <b>애노테이션</b> 줄만 찾는다 — 본문·javadoc 의 언급은 세지 않는다. */
     private static final Pattern LIFECYCLE_ANNOTATION =
             Pattern.compile("(?m)^\\s*@(PrePersist|PreUpdate)\\b");
 
-    private static final Set<String> KNOWN_JVM_ZONE_LEGACY = Set.of(
-            "Bookmark", "Collection", "CollectionItem",     // bookmark
-            "Feedback",                                      // feedback
-            "Journey", "Schedule",                           // schedules
-            "EmotionCard", "CardComment", "CardReaction",    // social — #174 격리
-            "Place");                                        // tour — 훅이 시각을 안 찍는다
+    private static final Set<String> KNOWN_JVM_ZONE_LEGACY = Set.of();
 
     /** 되돌리면 값이 이만큼 움직인다. DST 가 없어 사시사철 같다. */
     private static final ZoneId FORCED = ZoneId.of("Asia/Seoul");

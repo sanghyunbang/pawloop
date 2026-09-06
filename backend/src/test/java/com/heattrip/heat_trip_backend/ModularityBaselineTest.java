@@ -140,8 +140,15 @@ class ModularityBaselineTest {
      * 를 선언하지 않아, 열린 표면으로의 참조는 위반이 아니다({@code walk} 가 같은 길이다).
      * 위반 목록을 떠서 확인했다 — {@code care} 의 위반 22건은 전부 {@code group.entity.FamilyGroup}
      * 로 가는 것이고(#120 이 소유), {@code dog} 로 가는 것은 0 이다.
+     *
+     * <p><b>230 에서 96 으로 내렸다 — 빚을 갚은 것이 아니라 빚진 코드를 지웠다.</b> (#94, 2026-09-06)
+     * 감정 여행 시절의 패키지 아홉({@code tour} {@code explore} {@code curation} {@code social}
+     * {@code llm} {@code schedules} {@code bookmark} {@code feedback} {@code kakao})을 지웠다.
+     * 사라진 134건은 그 아홉이 남의 모듈 내부를 부르던 것과 남이 그 아홉의 내부를 부르던 것이다.
+     * 남은 96건은 여전히 {@code OAuth.jwt} · {@code group.entity.FamilyGroup} 처럼 표면을 안 정한
+     * 모듈로 가는 참조다 — 그건 #104 · #105 · #120 의 자리이지 이 삭제의 자리가 아니다.
      */
-    private static final int BASELINE_VIOLATIONS = 230;
+    private static final int BASELINE_VIOLATIONS = 96;
 
     private static final char NL = (char) 10;
 

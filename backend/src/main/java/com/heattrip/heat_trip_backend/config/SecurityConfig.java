@@ -66,7 +66,6 @@ public class SecurityConfig {
             "/actuator/health/**",
             "/actuator/info",
             "/actuator/prometheus",
-            "/api/explore/**",
             // 관광공사 프록시(#40). 계약이 security: [] 로 선언했다 — 지도는 로그인
             // 전에도 보여야 한다.
             //
@@ -151,26 +150,12 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(publicMatchers.toArray(String[]::new)).permitAll()
-                // ── 관리자 배치는 로그인한 아무나 부를 수 있으면 안 된다 ──────────────
-                // `/api/curation/**` 보다 **먼저** 와야 한다. Spring Security 는 먼저
-                // 일치하는 규칙을 쓰므로, 순서를 뒤집으면 이 줄이 영영 실행되지 않는다
-                // (#14 에서 필터 등록 순서 때문에 rate limit 이 도달조차 못 한 것과 같은 종류다).
-                //
-                // 이 아래 `SeedEmotionAdminController` 는 전 장소를 돌며 외부 LLM 을
-                // 호출하는 배치다(`SeedEmotionBatchService`). `.authenticated()` 만 걸려
-                // 있던 동안에는 **로그인한 아무나 청구서를 늘릴 수 있었다.**
-                //
-                // 지금 `ROLE_ADMIN` 을 가진 계정은 없다 — `User.role` 기본값이 `ROLE_USER`
-                // 하나뿐이라(`User.java:37,99`) 사실상 아무도 못 지나간다. 그게 의도다.
-                // 운영자가 쓰려면 그 계정 행의 `users.role` 을 `ROLE_ADMIN` 으로 바꾸고
-                // 다시 로그인하면 된다 — 토큰의 role 클레임이 그대로 권한이 되므로
-                // (`JWTAuthenticationFilter.java:56`) 별도 배선이 필요 없다.
                 // ── 커뮤니티 읽기는 인증이 선택이다 (ADR-0016 결정 3 · #170) ────────
                 //
                 // publicMatchers 에 못 넣는다. 그 목록은 **경로만** 받는데 커뮤니티는
                 // 같은 경로에 GET(선택)과 POST(필수)가 겹친다 — 경로로 열면 글쓰기까지
-                // 비인증이 된다. /api/explore/** 가 그 반례이고, 그 아래
-                // POST .../feedback 이 실제로 토큰 없이 행을 만든다.
+                // 비인증이 된다. 감정 여행 시절의 /api/explore/** 가 그 반례였다 — 그 아래
+                // POST .../feedback 이 실제로 토큰 없이 행을 만들었다(#94 로 지웠다).
                 //
                 // 와일드카드(/api/community/**)도 쓰지 않는다. 여는 것은 실제로 있는
                 // GET 셋뿐이다 — /api/places/** 를 거부한 것과 같은 이유다(위 :94-96).
@@ -186,8 +171,6 @@ public class SecurityConfig {
                         "/api/community/posts",
                         "/api/community/posts/*",
                         "/api/community/posts/*/comments").permitAll()
-                .requestMatchers("/api/curation/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/curation/**").authenticated()
                 .requestMatchers("/public/**").authenticated()
                 .anyRequest().authenticated()
             )
