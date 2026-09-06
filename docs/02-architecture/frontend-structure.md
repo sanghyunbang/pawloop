@@ -72,6 +72,7 @@ lib/
 | `login_screen.dart` | 소셜 로그인(카카오·구글) · 그냥 둘러보기 | 미로그인 진입 |
 | `onboarding_screen.dart` | 신규 가입자 — 반려동물 등록 권유 | 동의 후 (`isNew`) |
 | `splash_screen.dart` | 저장된 토큰 검증 중 머무는 자리 | 앱 시작 |
+| `intro_screen.dart` | **첫 실행 소개** — 가치 3장 · 건너뛰기 · 기기당 한 번(`IntroGate`) · 설정 > 앱 소개 다시 보기 (#323) | 스플래시 뒤 · 로그인 앞 |
 | `start_walk.dart` | 산책 시작 진입 — 미로그인이면 로그인부터 | 화면 아님(함수) |
 
 > **주의:** 화면 파일명은 감정 시절 이름(explore/feed/insight/me)을 유지하지만 내용은 전부 반려/산책으로 대체됐다. 예: `explore_screen.dart` = 지도, `insight_screen.dart` = 산책 통계.
