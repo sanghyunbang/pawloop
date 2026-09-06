@@ -85,27 +85,7 @@ public class RateLimitProperties {
      * 갱신에 실패해 로그아웃되므로, 낮추기 전에 실측을 보라.
      */
     private int authMaxRequests = 20;
-    private int curationMaxRequests = 30;
     private int uploadMaxRequests = 20;
-    private int feedbackMaxRequests = 30;
-    private int searchMaxRequests = 120;
-
-    /**
-     * {@code /api/explore/places} 의 읽기 다섯 — 이슈 #232. 분당 120.
-     *
-     * <p><b>이 경로들은 인증이 없다</b>({@code SecurityConfig.PUBLIC_MATCHERS} 의
-     * {@code /api/explore/**}). 남은 방어선이 한도 하나뿐인데, 2026-09-03 이전에는 표에
-     * 아예 없어서 <b>인증도 한도도 없는 경로 다섯</b>이었다 — 표에 없으면 한도가 0 이 아니라
-     * 무한이다.
-     *
-     * <p>숫자가 {@link #searchMaxRequests} 와 같은 것은 <b>같은 도메인·같은 비용 등급</b>
-     * 이라서다 — 둘 다 인증 없이 DB 만 읽는다. {@code places}(60)·{@code places-detail}(30)
-     * 보다 넉넉한 이유는 그쪽이 KTO 일일 예산을 태우기 때문이고, 여기는 안 태운다.
-     *
-     * <p><b>검색과 버킷을 합치지 않는다.</b> 하나가 소진돼도 다른 하나가 살아 있어야 한다 —
-     * 목록을 스크롤하다 검색이 막히면 사용자는 앱이 고장 난 것으로 읽는다.
-     */
-    private int exploreReadMaxRequests = 120;
 
     /**
      * 가족·채팅 쓰기 버킷의 창당 한도 — {@code POST /api/groups},

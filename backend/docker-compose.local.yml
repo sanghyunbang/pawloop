@@ -1,8 +1,9 @@
-# 로컬 스택 (운영 api.heattrip.link 와 무관) — recsys(FastAPI) + backend(Spring)
+# 로컬 스택 (운영 api.heattrip.link 와 무관) — backend(Spring) 하나.
 # DB는 새로 만들지 않고, 이미 호스트(PC)에서 돌고 있는 MySQL(3306, heat_trip_db)을 그대로 사용한다.
+# 2026-09-06 까지 함께 뜨던 recsys(FastAPI 추천 서버)는 감정 추천과 함께 지웠다(#94).
 #
 # 준비:
-#   cp .env.local.example .env.local   # OPENAI_API_KEY 입력 (recsys는 키 없으면 부팅 불가)
+#   cp .env.local.example .env.local   # DB 이름·계정
 # 실행:
 #   docker compose --env-file .env.local -f docker-compose.local.yml up -d --build
 # 종료:
@@ -13,23 +14,10 @@
 name: heattrip-local
 
 services:
-  recsys:
-    build:
-      context: ../heattrip_rec_py
-    container_name: heattrip-recsys-local
-    # 키/모델은 파이썬 레포의 기존 .env 를 그대로 사용 (이미 OPENAI_API_KEY 들어있음)
-    env_file:
-      - ../heattrip_rec_py/.env
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-
   backend:
     build:
       context: .
     container_name: heattrip-backend-local
-    depends_on:
-      - recsys
     # 운영 .env의 비밀값(OAuth/공공데이터 키 등) 재사용 + DB 비번(root)도 .env에서 옴
     env_file:
       - .env
@@ -41,7 +29,6 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://host.docker.internal:3306/${MYSQL_DATABASE:-heat_trip_db}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-root}
       # SPRING_DATASOURCE_PASSWORD 는 env_file(.env)의 값을 사용
-      LLM_RECOMMENDER_BASE_URL: http://recsys:8000
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

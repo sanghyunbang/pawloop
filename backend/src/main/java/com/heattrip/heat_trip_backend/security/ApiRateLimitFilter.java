@@ -225,9 +225,6 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("PUT".equals(method) && path.matches("^/api/walks/\\d+/memo$")) {
             return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
         }
-        if (path.startsWith("/api/curation/")) {
-            return new Rule("curation", rateLimitProperties.getCurationMaxRequests());
-        }
         // 관광공사 프록시(#40). 인증 없는 공개 경로라 등재가 특히 중요하다 —
         // 표에 없으면 한도가 0 이 아니라 무한이다.
         if ("GET".equals(method) && "/api/places/nearby".equals(path)) {
@@ -245,27 +242,6 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         }
         if ("GET".equals(method) && path.matches("^/api/places/[^/]+$")) {
             return new Rule("places-detail", rateLimitProperties.getPlacesDetailMaxRequests());
-        }
-        if ("GET".equals(method) && "/api/explore/places/search".equals(path)) {
-            return new Rule("search", rateLimitProperties.getSearchMaxRequests());
-        }
-        // explore 읽기 다섯 — 목록·스크롤·상세·features·emotional-reviews (#232).
-        //
-        // **SecurityConfig 가 "/api/explore/**" 로 통째로 열어 둔 자리다.** 인증이 없으므로
-        // 남은 방어선이 이 줄 하나뿐인데, 2026-09-03 이전에는 이 줄이 없어서 다섯이 전부
-        // 무한이었다 — 표에 없으면 한도가 0 이 아니라 무한이다.
-        //
-        // 패턴이 [^/]+ 인 것은 permitAll 과 **같은 집합을 덮기 위해서**다. [0-9]+ 로 좁히면
-        // GET /api/explore/places/abc 가 인증 없음 + 한도 무한으로 남는다 — places 가 같은
-        // 함정을 이미 겪었다.
-        if ("GET".equals(method) && path.startsWith("/api/explore/places")) {
-            return new Rule("explore-read", rateLimitProperties.getExploreReadMaxRequests());
-        }
-        if ("POST".equals(method) && "/feedback".equals(path)) {
-            return new Rule("feedback", rateLimitProperties.getFeedbackMaxRequests());
-        }
-        if ("POST".equals(method) && path.matches("^/api/explore/places/\\d+/feedback$")) {
-            return new Rule("feedback", rateLimitProperties.getFeedbackMaxRequests());
         }
         // ── 커뮤니티 (이슈 #170 · ADR-0016 결정 3) ─────────────────────────
         //
@@ -301,12 +277,6 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
             return new Rule("community-write", rateLimitProperties.getCommunityWriteMaxRequests());
         }
         if (path.startsWith("/media")) {
-            return new Rule("upload", rateLimitProperties.getUploadMaxRequests());
-        }
-        if (path.startsWith("/journeys/v2/entries/") && path.endsWith("/images")) {
-            return new Rule("upload", rateLimitProperties.getUploadMaxRequests());
-        }
-        if ("POST".equals(method) && "/journeys/v2/entries/with-images".equals(path)) {
             return new Rule("upload", rateLimitProperties.getUploadMaxRequests());
         }
         return null;

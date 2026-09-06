@@ -3,7 +3,7 @@
 > 이 문서는 **구현 청사진**이다. 메서드 바디(실제 로직)는 포함하지 않는다. 개발자가 직접 구현한다.
 > 담당 리소스: `GET /api/places/nearby`, `GET /api/places/{contentId}`.
 > 계약: [openapi.yaml](../../04-api/openapi.yaml) Places 태그 / 데이터 모델: [erd.md](../../03-database/erd.md), [schema.md](../../03-database/schema.md).
-> 컨벤션 준거: `social/*`(record DTO·`ResponseEntity<?>`), `user/controller/AuthController`(JWT), `tour/service/TourApiClient`(공공데이터 프록시), `config/WebClientConfig`(WebClient 빈).
+> 컨벤션 준거: `user/controller/AuthController`(JWT), `place/service/KtoApiClient`(공공데이터 프록시), `config/KtoWebClientConfig`(WebClient 빈). 이 청사진이 처음 가리키던 `social`·`tour`·`WebClientConfig` 는 감정 여행 시절의 것이라 2026-09-06 #94 로 지웠다.
 
 ---
 
@@ -28,10 +28,7 @@
 ### 기존 재사용 가능한 것
 | 항목 | 위치 | 재사용 방법 |
 | --- | --- | --- |
-| KTO WebClient 빈 | `config/WebClientConfig.tourApiWebClient` | baseUrl이 `KorService2`. KorPetTourService2는 base가 다르므로(§6 참고) **새 빈 추가** 필요. 코덱/버퍼 설정은 복붙. |
-| 공공데이터 호출 패턴 | `tour/service/TourApiClient` | `@Qualifier` WebClient + `@Value` serviceKey + `.block()` 동기 호출 그대로 답습. |
-| XML 파싱 | `tour/util/XmlParser` | DOM 파서 방식(`getElementsByTagName("item")`, `getStr/getDouble`) 복제해 KorPet 응답 파싱. |
-| Sanitizer | `tour/util/Sanitizers` | tel/문자열 정리·truncate. |
+| 공공데이터 호출 | `place/service/KtoApiClient` + `config/KtoWebClientConfig` | 청사진이 베끼라던 `tour/service/TourApiClient`·`WebClientConfig.tourApiWebClient`·`tour/util/*` 는 #94 로 지웠다 — 지금은 `place` 의 것이 정본이다(타임아웃 네 겹 · 서비스키 재인코딩 금지). |
 | JWT 추출 | `@CurrentUser User me` 파라미터 하나(#5) | Places 읽기는 비인증이라 **안 쓴다**. 인증이 필요한 이웃(북마크)이 이 모양을 쓴다. 여기 적혀 있던 `SocialController.requireUser()` 는 #5 가 지운 메서드다 — 베끼면 컴파일이 안 된다. |
 | 에러 응답 | `social` 컨트롤러 `Map.of("error", ...)` 패턴 | openapi `Error` 스키마(`{error:{code,message}}`)로 통일 권장. |
 
@@ -188,7 +185,7 @@
 ## 6. 구현 노트 (함정 위주)
 
 1. **KorPetTourService2 = KTO의 별도 서비스 (base URL 다름).**
-   - `WebClientConfig.tourApiWebClient`는 `.../B551011/KorService2`. 반려동반은 `.../B551011/KorPetTourService2`.
+   - 반려동반은 `.../B551011/KorPetTourService2`(`KtoWebClientConfig`). 감정 여행 시절의 `KorService2` 빈(`WebClientConfig.tourApiWebClient`)은 #94 로 지웠다.
    - `WebClientConfig`에 **새 빈**(`@Bean("korPetWebClient")`) 추가 후 `KorPetTourClient`에서 `@Qualifier("korPetWebClient")`로 주입. 코덱 `maxInMemorySize` 설정 복제.
    - serviceKey는 `@Value("${TOUR.API.SECRET}")` 재사용(동일 키). `MobileOS=WEB`, `MobileApp=HeatTrip`, `_type=json` 파라미터 컨벤션 유지.
 
@@ -215,7 +212,7 @@
    - 대량 배치는 한 트랜잭션에 다 묶지 말고 청크 단위 커밋(메모리·락 회피).
 
 7. **엔티티/테이블 네이밍 충돌.**
-   - 기존 `tour.domain.Place`(테이블 `places`)와 **다른 테이블**(`place`)이다. 클래스명 `PetPlace`로 분리(§1). 리포지토리·서비스도 `place` 패키지에 격리해 `tour` 패키지와 섞지 말 것.
+   - 감정 여행 시절의 `places` 표(`tour.domain.Place` — 코드는 #94 로 지웠고 표는 운영 DB 에 남아 있다)와 **다른 테이블**(`place`)이다. 클래스명 `PetPlace`로 분리(§1).
 
 8. **에러 바디 계약.**
    - social의 `Map.of("error", msg)` 대신 openapi `Error` 스키마(`{error:{code,message,traceId}}`)를 따른다. 전역 `@RestControllerAdvice` 하나로 400/404/429 매핑 권장.

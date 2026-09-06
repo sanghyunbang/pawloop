@@ -242,7 +242,7 @@
 
 - **인증 분기(읽기 vs 쓰기) — ADR-0016 결정 3:** GET 셋은 계약이 `security: [{}, {bearerAuth: []}]`(**인증 선택**)이다. `security: []` 가 아니다 — 그것은 인증을 계약에서 **제거**해 `mine` 을 영원히 `null` 로 만든다(ADR-0017 규약 6이 뒤집었다).
   서버는 **같은 체인에 메서드 축 한 줄**로 연다. `.requestMatchers(HttpMethod.GET, "/api/community/posts", "/api/community/posts/*", "/api/community/posts/*/comments").permitAll()` 을 `anyRequest().authenticated()` **앞**에 둔다.
-  **와일드카드(`/api/community/**`)는 쓰지 않는다** — 같은 경로의 `POST` 까지 열린다. `/api/explore/**` 가 그 반례다(그 아래 `POST .../feedback` 이 토큰 없이 행을 만든다).
+  **와일드카드(`/api/community/**`)는 쓰지 않는다** — 같은 경로의 `POST` 까지 열린다. 감정 여행 시절의 `/api/explore/**` 가 그 반례였다(그 아래 `POST .../feedback` 이 토큰 없이 행을 만들었다 — #94 로 지웠다).
   그리고 **rate limit 규칙을 함께 붙인다** — 표에 없는 경로는 한도가 0 이 아니라 **무한**이고, 지금은 `authenticated` 가 방어선인데 게스트에 열면 그것이 사라진다.
 - **JWT 추출:** subject 는 **`users.id`** 다(#5 — 예전 서술의 email 이 아니다). `@CurrentUser User me` 파라미터 하나로 받는다(#5). 인증 주체 해석은 `CurrentUserArgumentResolver` 한 곳뿐이고, 실패는 전부 **본문 없는 401** 이다 — 컨트롤러가 `Authorization` 헤더를 다시 읽거나 `findByEmail` 로 주체를 찾는 것은 금지이며 `AuthSubjectContractSpecTest` 가 소스 스캔으로 막는다. 읽기 엔드포인트의 `mine` 처럼 **인증이 선택인 경로**는 컨트롤러 파라미터로 표현하지 않는다 — 그 결정은 `SecurityConfig` 가 한다(#23). **`@CurrentUser` 는 그대로 둔다**(실패를 전부 401 로 만드는 것이 설계다). 주체는 **컨트롤러 밖**에서 읽는다 — 필터가 넣는 `AuthenticatedUser` principal 이 이미 "없으면 없는 대로" 이고, 토큰이 없으면 `SecurityContext` 가 비어 있을 뿐이다. **새 애노테이션도 새 리졸버도 만들지 않는다**(ADR-0016 결정 3).
 - **반응은 복수다(ADR-0016 결정 2):** 스키마 유니크 `(post, user, type)` 이 그대로 불변식이고 **서비스가 단일화하지 않는다.** social 의 `myReactions`(리스트) 로직이 여기서는 **맞는 모양**이다 — 복붙하면 안 되는 것은 반응 타입 이름(`SAME/CHEER/CALM` → `help/cute/empathy`)뿐이다.

@@ -18,8 +18,8 @@ import org.testcontainers.containers.MySQLContainer;
  *
  * <p>이슈 #26 의 함정: compose 의 mysql 은 기본값이 아닌 서버 플래그로 뜬다. 그중
  * {@code --innodb-ft-min-token-size=2} 가 없으면 "카페" 같은 2글자 한국어 FULLTEXT 검색이
- * <b>예외 없이 0건</b>을 반환한다. 그러면 {@link com.heattrip.heat_trip_backend.explore.web.ExploreSearchSqlLogTest}
- * 가 "통과는 하는데 아무것도 못 잡는" 상태가 된다.</p>
+ * <b>예외 없이 0건</b>을 반환한다. 그러면 FULLTEXT 를 쓰는 검색 테스트가 "통과는 하는데 아무것도
+ * 못 잡는" 상태가 된다(감정 여행 시절의 {@code ExploreSearchSqlLogTest} 가 그랬다 — #94 로 지웠다).</p>
  *
  * <p>그래서 세 지점을 묶어 검사한다.</p>
  * <ol>

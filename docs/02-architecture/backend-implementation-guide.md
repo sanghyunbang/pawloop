@@ -70,7 +70,7 @@ com.heattrip.heat_trip_backend
 | 단 | 대상 | 하위 구조 |
 |:---|:---|:---|
 | **1단 — 단순 CRUD** | `bookmark` · `feedback` · `social` · `user` · `group` | `controller/ service/ repository/ entity/ dto/` |
-| **2단 — 핵심 도메인** | `chat` · `care` · `curation` · `explore` | `api/ application/ domain/ infrastructure/` |
+| **2단 — 핵심 도메인** | `chat` · `care` · `walk` · `place` | `api/ application/ domain/ infrastructure/` |
 
 단을 올릴 때는 **이슈를 하나 파고 근거를 적는다.** 조용히 올리지 않는다.
 

@@ -51,7 +51,7 @@
 ```
 heattrip/
 ├── app/               Flutter 앱 — 화면 · 지도 · 산책 트래킹 · 소셜 로그인
-├── backend/           Spring Boot API 서버 + MySQL · 관측성(Prometheus/Grafana) · k6
+├── backend/           Spring Boot API 서버 + MySQL · 관측성(Prometheus/Grafana)
 ├── docs/              기술 문서 — 설계 · 아키텍처 · DB · API 계약 · 빌드 · 테스트 · ADR
 ├── design_refactor/   피벗 이전 디자인 프로토타입 핸드오프 (정리 대상)
 └── .github/           이슈·PR 템플릿 · CI 워크플로 · 문서 드리프트 검사 스크립트
@@ -80,20 +80,20 @@ heattrip/
 
 | | 버전 | 비고 |
 | :--- | :--- | :--- |
-| Java / Kotlin | **21** / 2.2.20 | Gradle toolchain. Kotlin 은 일부 설정·유틸에 섞여 있습니다 |
+| Java | **21** | Gradle toolchain. Kotlin 은 감정 추천에만 있었고 #94 로 뺐습니다 |
 | Spring Boot | **3.5.4** | Web · WebFlux · Data JPA · Validation |
 | 모듈 경계 | Spring Modulith 1.4.13 | 구조 검사만 들입니다 — 이벤트는 보류([ADR-0012](docs/99-decisions/decision-log.md#adr-0012--모듈-경계는-spring-modulith-의-구조-검사만-들인다)) |
 | 인증 | Spring Security + OAuth2 Client · JJWT 0.11.5 | 카카오 · 구글 |
 | DB | **MySQL 8.0** + `hibernate-spatial` | 산책 경로를 `walk.path LINESTRING SRID 4326` 으로 저장합니다. **`SPATIAL INDEX` 는 만들지 않습니다** — 공간으로 묻는 질의가 없고, 인덱스가 `NOT NULL` 을 요구해 경로 없는 산책을 못 담게 됩니다([ADR-0015](docs/99-decisions/decision-log.md#adr-0015--산책-경로는-linestring-으로-저장하되-spatial-index-는-만들지-않는다)). 장소 캐시는 공간형이 아니라 0.02° 격자입니다([ADR-0013](docs/99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)) |
 | API 문서 | springdoc-openapi 2.7.0 | 계약 원본은 [`docs/04-api/openapi.yaml`](docs/04-api/openapi.yaml) |
-| 관측성 · 부하 | Micrometer + Prometheus · Grafana · k6 | |
+| 관측성 | Micrometer + Prometheus · Grafana | |
 
 ### 외부 데이터
 
-- **한국관광공사 `KorPetTourService2`** — 반려동반 가능 장소. 현재 유일한 실데이터 레이어입니다. **앱은 관광공사를 직접 부르지 않습니다** — `GET /api/places/nearby` 만 부르고, 서비스키는 서버 환경변수 `TOUR_API_SECRET` 으로만 존재합니다([#40](https://github.com/sanghyunbang/heattrip/issues/40)). 캐시는 0.02° 격자 스냅샷이고 일일 호출 예산은 `kto_call_budget` 표가 지킵니다([ADR-0013](docs/99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)).
-- **LOCALDATA**(동물병원·펫샵), **두루누비**(산책로) — 연동 예정. 지금은 더미 레이어입니다.
+- **한국관광공사 `KorPetTourService2`** — 반려동반 가능 장소. **앱은 관광공사를 직접 부르지 않습니다** — `GET /api/places/nearby` 만 부르고, 서비스키는 서버 환경변수 `TOUR_API_SECRET` 으로만 존재합니다([#40](https://github.com/sanghyunbang/heattrip/issues/40)). 캐시는 0.02° 격자 스냅샷이고 일일 호출 예산은 `kto_call_budget` 표가 지킵니다([ADR-0013](docs/99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)).
+- **행정안전부 인허가**(동물병원·동물판매업 — 전국), **두루누비**(걷기여행길 — 선 포함) — 실데이터입니다([#291](https://github.com/sanghyunbang/heattrip/issues/291)). 서버가 월 1회 받아 같은 카탈로그에 이어 붙입니다.
 
-> 감정 여행 시절의 OpenAI 추천 파이프라인이 아직 남아 있습니다 — `spring-ai-starter-model-openai`(`backend/build.gradle:133`)와 `curation`·`llm` 패키지입니다. 반려 맥락에서 쓰이지 않으므로 **재검토 대상**이고, 레거시 셸 전체의 처리는 [#94](https://github.com/sanghyunbang/heattrip/issues/94) 가 정합니다.
+> 감정 여행 시절의 백엔드 패키지(관광 수집 · 탐색 · OpenAI 감정 추천 · 감정카드 · 여정 · v1 북마크 · 피드백 · 카카오 백필)와 앱의 레거시 셸은 2026-09-06 에 [#94](https://github.com/sanghyunbang/heattrip/issues/94) 로 지웠습니다. 표는 운영 DB 에 남아 있습니다.
 
 ---
 

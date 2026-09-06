@@ -2,7 +2,7 @@
 
 > Pawloop(포루프) MySQL 공간형 데이터 모델의 개체-관계도. GPS 산책 경로(`LINESTRING`)와 장소 좌표(`POINT`)를 공간 컬럼으로 저장하고, `SPATIAL INDEX` + `ST_Distance_Sphere`/`MBRContains`로 주변 검색을 수행한다. **가족 케어 공유**와 **채팅** 기능으로 `family_group`·`chat_room`·`chat_room_member`·`chat_room_invite`·`chat_message`·`walk_note` 엔티티가 추가되고, `care_log`는 `group_id`/`done_by`를 더해 "누가·언제 했는지"를 가족과 공유하는 케어 기록으로 확장된다. 방·멤버십·초대는 가족 그룹에 종속되지 않는 범용 3엔티티이고, `family_group` 은 `origin_kind`/`origin_ref` 쌍으로 방에 **불투명하게** 닿는다 — 그 방향의 FK 는 없다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 거기에 표가 **47개** 있다(전체 목록은 [테이블 스키마 부록 A](./schema.md)). 이 문서가 그리는 엔티티 중 무엇이 실재인지는 아래 **엔티티 설명** 표의 "실재" 열이 정본이고, 그 집합은 [테이블 스키마](./schema.md)의 절 제목 **실재** 표시와 같다 — `DocDriftTest` 가 정본·절 제목·부록·이 표 넷을 대조한다(#176). 그림의 `place`·`bookmark` 는 아직 **계획**이다 — 그 둘이 낀 관계선에는 '계획' 꼬리표가 붙어 있다. 산책로는 `trail_route`(실재)가 선을 들고 `place_catalog` 의 두루누비 행이 시작점을 든다(#291). 감정 여행·관광 수집 시절의 표 21개는 정본에 있지만 반려 축에서 쓰지 않는다 — 지우지 않고 격리한다(#174). 감정카드 셋은 v2 커뮤니티(`post`·`comment`·`reaction`)와 다른 표라 그림에 따로 그렸다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 거기에 표가 **24개** 있다(전체 목록은 [테이블 스키마 부록 A](./schema.md)). 이 문서가 그리는 엔티티 중 무엇이 실재인지는 아래 **엔티티 설명** 표의 "실재" 열이 정본이고, 그 집합은 [테이블 스키마](./schema.md)의 절 제목 **실재** 표시와 같다 — `DocDriftTest` 가 정본·절 제목·부록·이 표 넷을 대조한다(#176). 그림의 `place`·`bookmark` 는 아직 **계획**이다 — 그 둘이 낀 관계선에는 '계획' 꼬리표가 붙어 있다. 산책로는 `trail_route`(실재)가 선을 들고 `place_catalog` 의 두루누비 행이 시작점을 든다(#291). 감정 여행·관광 수집 시절의 표 21개는 정본에 있지만 반려 축에서 쓰지 않는다 — 지우지 않고 격리한다(#174). 감정카드 셋은 v2 커뮤니티(`post`·`comment`·`reaction`)와 다른 표라 그림에 따로 그렸다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
 
 ## ER 다이어그램
 
@@ -36,10 +36,6 @@ erDiagram
 
     post     ||--o{ comment   : "댓글"
     post     ||--o{ reaction  : "반응"
-
-    users ||--o{ emotion_card  : "작성 (감정 여행 시절 - 격리 #174, FK 없음)"
-    emotion_card ||--o{ card_comment  : "댓글 (격리 #174, FK 없음)"
-    emotion_card ||--o{ card_reaction : "반응 (격리 #174, FK 없음)"
 
     users ||--o{ report        : "신고한다 (FK 없음 - 탈퇴가 신고를 못 지운다)"
     report ||--o{ report_snapshot : "대상 스냅샷 (CASCADE)"
@@ -221,33 +217,6 @@ erDiagram
         DATETIME created_at
     }
 
-    emotion_card {
-        BIGINT   id PK
-        BIGINT   user_id     "users.id - FK 없음"
-        BIGINT   place_id    "nullable"
-        VARCHAR  mood_key
-        VARCHAR  body
-        VARCHAR  handle      "작성 시점 닉네임 스냅샷"
-        DATETIME created_at
-    }
-
-    card_comment {
-        BIGINT   id PK
-        BIGINT   card_id     "emotion_card.id - FK 없음"
-        BIGINT   user_id
-        VARCHAR  body
-        VARCHAR  handle
-        DATETIME created_at
-    }
-
-    card_reaction {
-        BIGINT   id PK
-        BIGINT   card_id
-        BIGINT   user_id
-        VARCHAR  reaction_type "UNIQUE(card_id, user_id, reaction_type)"
-        DATETIME created_at
-    }
-
     report {
         BIGINT   id PK
         BIGINT   reporter_user_id "FK 없음"
@@ -336,9 +305,6 @@ erDiagram
 | `comment` | 실재 | 게시글 댓글. `post` 1:N, `users` 1:N. |
 | `reaction` | 실재 | 게시글 반응(도움돼요/귀여워요/공감). `post` 1:N, `users` 1:N. |
 | `bookmark` | 계획 | 사용자가 저장한 장소. `users`·`place` 각각 1:N (사용자-장소 조합 유니크 권장). |
-| `emotion_card` | 실재 | 감정카드 — **감정 여행 시절의 표이고 반려 커뮤니티 `post` 와 다르다.** 지우지 않고 격리한다(#174). `users` 로의 FK 없이 `user_id` 와 `handle` 스냅샷을 든다. [schema.md §18](./schema.md). |
-| `card_comment` | 실재 | 감정카드 댓글. 격리(#174). [schema.md §19](./schema.md). |
-| `card_reaction` | 실재 | 감정카드 반응. `UNIQUE(card_id, user_id, reaction_type)`. 격리(#174). [schema.md §20](./schema.md). |
 | `kto_call_budget` | 실재 | KTO 일 호출 예산. `PRIMARY KEY(day, pool)` 이 1,000콜 한도를 지키는 유일한 장치다(#40). [schema.md §21](./schema.md). |
 | `place_cell` | 실재 | 주변 장소 셀 스냅샷 — 좌표를 0.02° 격자로 접은 키로 KTO 응답을 통째로 보관(#40). [schema.md §22](./schema.md). |
 | `pet_place_detail` | 실재 | 장소 상세의 KTO 응답 캐시(`content_id` 키). [schema.md §23](./schema.md). |

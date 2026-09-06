@@ -79,7 +79,7 @@ public repo에는 실제 비밀번호를 커밋하지 않는다. `.env.example`�
 
 ## 부하 테스트에서 보는 순서
 
-1. k6 실행 시간대를 확인한다.
+1. 부하를 준 시간대를 확인한다(감정 여행 시절의 k6 스크립트는 #94 로 지웠다).
 2. HTTP latency p95/p99가 튀는지 본다.
 3. 같은 시간에 5xx ratio가 증가했는지 본다.
 4. Hikari pending이 증가하면 DB connection pool 병목을 의심한다.

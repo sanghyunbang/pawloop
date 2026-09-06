@@ -4,9 +4,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.4'
 	id 'io.spring.dependency-management' version '1.1.7'
-    id 'org.jetbrains.kotlin.jvm'
     id 'jacoco'
-	id "org.jetbrains.kotlin.plugin.spring" version '2.2.20'
 }
 
 group = 'com.heattrip'
@@ -120,11 +118,6 @@ dependencies {
 	// EPSG 파라미터 DB(proj4j-epsg)는 안 든다 — 정의 문자열 하나를 Tm5174 가 직접 든다.
 	implementation 'org.locationtech.proj4j:proj4j:1.4.3'
 
-	// csv 주입 관련
-	implementation ('com.opencsv:opencsv:5.9') {
-		exclude group: 'commons-logging', module: 'commons-logging'
-	}
-
 
     // Swagger (springdoc)
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
@@ -136,11 +129,6 @@ dependencies {
     // Spring AI (OpenAI)
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 
-	// Kotlin
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation "org.jetbrains.kotlin:kotlin-reflect"
-    implementation "com.fasterxml.jackson.module:jackson-module-kotlin"
-	implementation "org.jetbrains.kotlin:kotlin-stdlib"
 
 	// TEST관련
 	// H2 는 걷어냈다 (이슈 #49). 스프링 컨텍스트를 띄우는 테스트는 전부

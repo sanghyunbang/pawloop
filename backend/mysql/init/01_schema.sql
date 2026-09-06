@@ -36,36 +36,6 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 
-CREATE TABLE `bookmarks` (
-  `created_at` datetime(6) DEFAULT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL,
-  `content_id` varchar(64) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `UKk1k57s35xli8cwue7u9l4dnhx` (`user_id`,`content_id`),
-  CONSTRAINT `FKdbsho2e05w5r13fkjqfjmge5f` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `card_comment` (
-  `card_id` bigint NOT NULL,
-  `created_at` datetime(6) NOT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL,
-  `body` varchar(280) NOT NULL,
-  `handle` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `card_reaction` (
-  `card_id` bigint NOT NULL,
-  `created_at` datetime(6) NOT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL,
-  `reaction_type` varchar(255) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_card_reaction_card_user_type` (`card_id`,`user_id`,`reaction_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
 CREATE TABLE `care_log` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `dog_id` bigint DEFAULT NULL,
@@ -83,13 +53,6 @@ CREATE TABLE `care_log` (
   CONSTRAINT `fk_carelog_doneby` FOREIGN KEY (`done_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_carelog_group` FOREIGN KEY (`group_id`) REFERENCES `family_group` (`id`) ON DELETE SET NULL,
   CONSTRAINT `ck_carelog_type` CHECK ((`type` in (_utf8mb4'water',_utf8mb4'meal',_utf8mb4'walk',_utf8mb4'med',_utf8mb4'vet')))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `cat3_category_mapping` (
-  `category_id` int DEFAULT NULL,
-  `mapping_id` bigint NOT NULL AUTO_INCREMENT,
-  `cat3_code` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`mapping_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `chat_message` (
@@ -155,30 +118,6 @@ CREATE TABLE `chat_room_member` (
   CONSTRAINT `chat_room_member_chk_1` CHECK ((`role` in (_utf8mb4'OWNER',_utf8mb4'MEMBER')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE `collection_items` (
-  `collection_id` bigint NOT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL,
-  `content_id` varchar(64) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `UK9io6dptmsfqnrumptrwye63lm` (`user_id`,`collection_id`,`content_id`),
-  KEY `FKrkp5wpkksx5aqex6v4qnq9912` (`collection_id`),
-  CONSTRAINT `FKqbqdudvmw7hwi6ijdfg2vtrq4` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `FKrkp5wpkksx5aqex6v4qnq9912` FOREIGN KEY (`collection_id`) REFERENCES `collections` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `collections` (
-  `created_at` datetime(6) DEFAULT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `user_id` bigint NOT NULL,
-  `name` varchar(60) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `UK9jlux1cwd4hfslei7lc96f29d` (`user_id`,`name`),
-  CONSTRAINT `FKn7pdedyqaiddr0uxdj603my7d` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
 CREATE TABLE `comment` (
   `created_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -212,103 +151,11 @@ CREATE TABLE `dog` (
   CONSTRAINT `ck_dog_species` CHECK ((`species` in (_utf8mb4'dog',_utf8mb4'cat',_utf8mb4'other')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE `emotion_card` (
-  `created_at` datetime(6) NOT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `place_id` bigint DEFAULT NULL,
-  `user_id` bigint NOT NULL,
-  `body` varchar(280) DEFAULT NULL,
-  `handle` varchar(255) DEFAULT NULL,
-  `mood_key` varchar(255) NOT NULL,
-  `place_name` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `emotion_categories` (
-  `category_id` int NOT NULL,
-  `category_emoji` varchar(255) DEFAULT NULL,
-  `category_name` varchar(255) DEFAULT NULL,
-  `characteristic` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`category_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `emotion_feedbacks` (
-  `client_timestamp` datetime(6) DEFAULT NULL,
-  `content_id` bigint NOT NULL,
-  `created_at` datetime(6) NOT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `after_emotion` varchar(32) NOT NULL,
-  `before_emotion` varchar(32) NOT NULL,
-  `content` longtext,
-  `feature_ratings_json` tinytext,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `emotion_reviews` (
-  `delta_arousal` double NOT NULL,
-  `delta_dominance` double NOT NULL,
-  `delta_valence` double NOT NULL,
-  `helpful_count` int NOT NULL,
-  `content_id` bigint NOT NULL,
-  `created_at` datetime(6) NOT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `review_date` datetime(6) NOT NULL,
-  `updated_at` datetime(6) NOT NULL,
-  `after_emotion` varchar(32) NOT NULL,
-  `before_emotion` varchar(32) NOT NULL,
-  `author` varchar(100) NOT NULL,
-  `content` longtext,
-  `images_json` tinytext,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
 CREATE TABLE `family_group` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `id` bigint NOT NULL AUTO_INCREMENT,
   `name` varchar(50) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `feedback` (
-  `created_at` datetime(6) DEFAULT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `user_id` bigint DEFAULT NULL,
-  `app_version` varchar(50) DEFAULT NULL,
-  `category` varchar(50) DEFAULT NULL,
-  `device_info` varchar(120) DEFAULT NULL,
-  `content` longtext,
-  `status` enum('IN_PROGRESS','NEW','RESOLVED') DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `FKpwwmhguqianghvi1wohmtsm8l` (`user_id`),
-  CONSTRAINT `FKpwwmhguqianghvi1wohmtsm8l` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `journey` (
-  `date` date DEFAULT NULL,
-  `id` int NOT NULL AUTO_INCREMENT,
-  `schedule_id` int DEFAULT NULL,
-  `created_at` datetime(6) DEFAULT NULL,
-  `place_id` bigint DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `user_id` bigint NOT NULL,
-  `body` varchar(255) DEFAULT NULL,
-  `location` varchar(255) DEFAULT NULL,
-  `mood_label` varchar(255) DEFAULT NULL,
-  `title` varchar(255) DEFAULT NULL,
-  `weather_label` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `FKk0vc19jo5wygypce9f3okcvvs` (`schedule_id`),
-  KEY `FK9xglfr1fkvuoypqh75fgxju5o` (`user_id`),
-  CONSTRAINT `FK9xglfr1fkvuoypqh75fgxju5o` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `FKk0vc19jo5wygypce9f3okcvvs` FOREIGN KEY (`schedule_id`) REFERENCES `schedule` (`schedule_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `journey_photos` (
-  `journey_id` int NOT NULL,
-  `photo_url` varchar(255) DEFAULT NULL,
-  KEY `FKqanwlnup01qpasii1iggj7s9x` (`journey_id`),
-  CONSTRAINT `FKqanwlnup01qpasii1iggj7s9x` FOREIGN KEY (`journey_id`) REFERENCES `journey` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `kto_call_budget` (
@@ -381,139 +228,6 @@ CREATE TABLE `place_cell` (
   `fetched_at` datetime(6) NOT NULL,
   `payload` longtext NOT NULL,
   PRIMARY KEY (`lat_idx`,`lng_idx`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `place_descriptions` (
-  `place_id` varchar(16) NOT NULL,
-  `short_desc_1` tinytext,
-  `short_desc_2` tinytext,
-  PRIMARY KEY (`place_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `place_features` (
-  `adventure` double DEFAULT NULL,
-  `conf_adventure` double DEFAULT NULL,
-  `conf_culture` double DEFAULT NULL,
-  `conf_nature_healing` double DEFAULT NULL,
-  `conf_quiet` double DEFAULT NULL,
-  `conf_sociality` double DEFAULT NULL,
-  `conf_spirituality` double DEFAULT NULL,
-  `culture` double DEFAULT NULL,
-  `n_blogs` int DEFAULT NULL,
-  `n_reviews` int DEFAULT NULL,
-  `nature_healing` double DEFAULT NULL,
-  `quiet` double DEFAULT NULL,
-  `sociality` double DEFAULT NULL,
-  `spirituality` double DEFAULT NULL,
-  `link_id` bigint NOT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `method_ver` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`link_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `place_hashtags` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `place_id` varchar(16) NOT NULL,
-  `hashtag` varchar(100) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_ph_place` (`place_id`),
-  KEY `idx_ph_hashtag` (`hashtag`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `place_kakao_links` (
-  `kakao_mapx` double DEFAULT NULL,
-  `kakao_mapy` double DEFAULT NULL,
-  `created` datetime(6) NOT NULL,
-  `id` bigint NOT NULL,
-  `place_url` varchar(512) DEFAULT NULL,
-  `title` varchar(255) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_place_kakao_created` (`created`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `place_simple_tags` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `place_id` varchar(16) NOT NULL,
-  `tag` varchar(100) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_pst_place` (`place_id`),
-  KEY `idx_pst_tag` (`tag`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `place_star_ratings` (
-  `rating` double DEFAULT NULL,
-  `link_id` bigint NOT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `source` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`link_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `place_trait_snapshots` (
-  `a_score` double DEFAULT NULL,
-  `crowdness` double DEFAULT NULL,
-  `d_score` double DEFAULT NULL,
-  `noise` double DEFAULT NULL,
-  `p_score` double DEFAULT NULL,
-  `sociality` double DEFAULT NULL,
-  `snapshot_at` datetime(6) DEFAULT NULL,
-  `cat3` varchar(16) NOT NULL,
-  `cat3name` varchar(255) DEFAULT NULL,
-  `hashtags` tinytext,
-  `short_desc1` tinytext,
-  `short_desc2` tinytext,
-  `simple_tags` tinytext,
-  PRIMARY KEY (`cat3`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `place_traits` (
-  `a_score` double DEFAULT NULL,
-  `crowdness` double DEFAULT NULL,
-  `d_score` double DEFAULT NULL,
-  `del_state` int DEFAULT NULL,
-  `noise` double DEFAULT NULL,
-  `p_score` double DEFAULT NULL,
-  `sociality` double DEFAULT NULL,
-  `place_id` varchar(16) NOT NULL,
-  `name` varchar(200) NOT NULL,
-  `hash1` varchar(255) DEFAULT NULL,
-  `hash2` varchar(255) DEFAULT NULL,
-  `hash3` varchar(255) DEFAULT NULL,
-  `location_type` varchar(255) DEFAULT NULL,
-  `short_descript1` varchar(255) DEFAULT NULL,
-  `short_descript2` varchar(255) DEFAULT NULL,
-  `simple_tag1` varchar(255) DEFAULT NULL,
-  `simple_tag2` varchar(255) DEFAULT NULL,
-  `simple_tag3` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`place_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `places` (
-  `areacode` int DEFAULT NULL,
-  `l_dong_regn_cd` int DEFAULT NULL,
-  `l_dong_signgu_cd` int DEFAULT NULL,
-  `mapx` double DEFAULT NULL,
-  `mapy` double DEFAULT NULL,
-  `sigungucode` int DEFAULT NULL,
-  `ugc_count` int NOT NULL,
-  `contentid` bigint NOT NULL,
-  `createdtime` datetime(6) DEFAULT NULL,
-  `modifiedtime` datetime(6) DEFAULT NULL,
-  `zipcode` varchar(20) DEFAULT NULL,
-  `tel` varchar(100) DEFAULT NULL,
-  `addr1` varchar(255) DEFAULT NULL,
-  `addr2` varchar(255) DEFAULT NULL,
-  `cat1` varchar(255) DEFAULT NULL,
-  `cat2` varchar(255) DEFAULT NULL,
-  `cat3` varchar(255) DEFAULT NULL,
-  `contenttypeid` varchar(255) DEFAULT NULL,
-  `firstimage` varchar(255) DEFAULT NULL,
-  `firstimage2` varchar(255) DEFAULT NULL,
-  `mlevel` varchar(255) DEFAULT NULL,
-  `title` varchar(255) DEFAULT NULL,
-  `search_text` longtext,
-  `seed_emotion` json DEFAULT NULL,
-  `ugc_emotion` json DEFAULT NULL,
-  PRIMARY KEY (`contentid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `post` (
@@ -594,20 +308,6 @@ CREATE TABLE `report_snapshot` (
   CONSTRAINT `chk_report_snapshot_role` CHECK ((`role` in (_utf8mb4'target',_utf8mb4'context'))),
   CONSTRAINT `chk_report_snapshot_target_has_body` CHECK (((`role` <> _utf8mb4'target') or (`body` is not null))),
   CONSTRAINT `chk_report_snapshot_target_type` CHECK ((`target_type` in (_utf8mb4'community_post',_utf8mb4'community_comment',_utf8mb4'chat_message',_utf8mb4'chat_room')))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `schedule` (
-  `date_from` date DEFAULT NULL,
-  `date_to` date DEFAULT NULL,
-  `schedule_id` int NOT NULL AUTO_INCREMENT,
-  `created_at` datetime(6) DEFAULT NULL,
-  `updated_at` datetime(6) DEFAULT NULL,
-  `user_id` bigint NOT NULL,
-  `title` varchar(100) DEFAULT NULL,
-  `content` varchar(1000) DEFAULT NULL,
-  PRIMARY KEY (`schedule_id`),
-  KEY `FKdn5svbxyacce1gpfiawk7iqtc` (`user_id`),
-  CONSTRAINT `FKdn5svbxyacce1gpfiawk7iqtc` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `trail_route` (

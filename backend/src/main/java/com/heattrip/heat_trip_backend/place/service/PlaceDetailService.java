@@ -6,8 +6,6 @@ import com.heattrip.heat_trip_backend.place.dto.PlaceDetailDto;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
 import com.heattrip.heat_trip_backend.place.entity.PetPlaceDetailRow;
 import com.heattrip.heat_trip_backend.place.repository.PetPlaceDetailRepository;
-import com.heattrip.heat_trip_backend.tour.KnownPlaceIds;
-import com.heattrip.heat_trip_backend.tour.PlaceBasics;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -56,7 +54,6 @@ public class PlaceDetailService {
     private final UpstreamGate gate;
     private final KtoBudgetProperties properties;
     private final PlaceDetailStore store;
-    private final KnownPlaceIds knownPlaces;
     private final Clock clock;
 
     public PlaceDetailService(PetPlaceDetailRepository details,
@@ -65,7 +62,6 @@ public class PlaceDetailService {
                               UpstreamGate gate,
                               KtoBudgetProperties properties,
                               PlaceDetailStore store,
-                              KnownPlaceIds knownPlaces,
                               Clock clock) {
         this.details = details;
         this.kto = kto;
@@ -73,34 +69,29 @@ public class PlaceDetailService {
         this.gate = gate;
         this.properties = properties;
         this.store = store;
-        this.knownPlaces = knownPlaces;
         this.clock = clock;
     }
 
     /**
      * 이 장소의 상세.
      *
-     * <p>기본 필드(제목·좌표·주소…)는 <b>스스로 찾는다</b> — 캐시 행에 있으면 그것을,
-     * 없으면 {@code tour} 가 적재한 것을. 상세 응답이 계약의 {@code allOf: [Place, ...]} 라
+     * <p>기본 필드(제목·좌표·주소…)는 캐시 행이 든다 — 셀 스냅샷과 카탈로그(#273)가 목록에
+     * 실은 장소마다 행을 만들어 두기 때문이다. 상세 응답이 계약의 {@code allOf: [Place, ...]} 라
      * 그 필드들이 함께 실려야 하는데, 부르는 쪽이 넘기게 하면 컨트롤러가 장소를 먼저
      * 찾아야 하고 그 조회가 두 번이 된다.
+     *
+     * <p>예전에는 행이 없을 때 감정 여행 시절의 {@code tour} 수집 표({@code places})를 한 번 더
+     * 물었다 — 레거시 탐색 화면이 그 표의 id 로 상세에 들어왔기 때문이다. 그 화면과 표의 코드를
+     * #94 로 지웠다(2026-09-06). v2 가 보내는 id 는 전부 목록·카탈로그를 거친 것이라 폴백이
+     * 필요 없다.
      *
      * @return 우리가 모르는 {@code contentId} 면 비어 있다 — <b>아웃바운드 0콜로</b> 404 다
      */
     public Optional<PlaceDetailDto> detail(String contentId) {
         PetPlaceDetailRow row = details.findById(contentId).orElse(null);
-        PlaceBasics fromTour = row == null || row.getLat() == null
-                ? knownPlaces.find(contentId).orElse(null)
-                : null;
-
-        if (row == null && fromTour == null) {
+        if (row == null) {
             // 허용목록 밖이다. 아웃바운드 0콜로 404 — 무작위 id 가 예산에 닿지 않는다.
             return Optional.empty();
-        }
-        if (row == null) {
-            // places 표는 아는데 캐시에 없다. 행을 만들어 두면 다음 요청부터 허용목록을
-            // 바로 통과하고, 받아 온 상세도 여기 쌓인다.
-            row = store.adopt(fromTour);
         }
         if (isNegativeCached(row)) {
             return Optional.empty();
@@ -113,10 +104,10 @@ public class PlaceDetailService {
             }
         }
 
-        // 아직 못 받았어도 200 이다. 기본 필드는 목록이나 places 표에서 왔으므로 화면이 뜬다 —
+        // 아직 못 받았어도 200 이다. 기본 필드는 목록에서 왔으므로 화면이 뜬다 —
         // overview 가 null 이고 petInfo 의 세 필드가 null 일 뿐이다.
         return Optional.of(new PlaceDetailDto(
-                base(row, fromTour),
+                base(row),
                 row.getOverview(),
                 new PetInfoDto(row.getAcmpyPsblCpam(), row.getAcmpyNeedMtr(), row.getEtcAcmpyInfo())));
     }
@@ -127,34 +118,25 @@ public class PlaceDetailService {
      * <p>{@code distM} 은 항상 {@code null} 이다 — 상세 경로에는 <b>기준점이 없다.</b>
      * 사용자가 어디서 이 장소를 눌렀는지 서버가 모른다.
      */
-    private static PlaceDto base(PetPlaceDetailRow row, PlaceBasics fallback) {
-        String contentTypeId = row.getContentTypeId() != null
-                ? row.getContentTypeId()
-                : (fallback == null ? null : fallback.contentTypeId());
-
+    private static PlaceDto base(PetPlaceDetailRow row) {
+        String contentTypeId = row.getContentTypeId();
         return new PlaceDto(
                 row.getContentId(),
-                pick(row.getTitle(), fallback == null ? null : fallback.title(), ""),
+                orElse(row.getTitle(), ""),
                 PlaceDto.SOURCE_KTO,
                 contentTypeId != null && PlaceDto.KNOWN_CATEGORIES.contains(contentTypeId)
                         ? contentTypeId : null,
                 contentTypeId,
-                row.getLat() != null ? row.getLat() : (fallback == null ? 0 : fallback.lat()),
-                row.getLng() != null ? row.getLng() : (fallback == null ? 0 : fallback.lng()),
-                pick(row.getAddr(), fallback == null ? null : fallback.addr(), ""),
-                pick(row.getTel(), fallback == null ? null : fallback.tel(), null),
-                pick(row.getImage(), fallback == null ? null : fallback.image(), null),
+                row.getLat() != null ? row.getLat() : 0,
+                row.getLng() != null ? row.getLng() : 0,
+                orElse(row.getAddr(), ""),
+                orElse(row.getTel(), null),
+                orElse(row.getImage(), null),
                 null);
     }
 
-    private static String pick(String first, String second, String fallback) {
-        if (first != null && !first.isBlank()) {
-            return first;
-        }
-        if (second != null && !second.isBlank()) {
-            return second;
-        }
-        return fallback;
+    private static String orElse(String value, String fallback) {
+        return value != null && !value.isBlank() ? value : fallback;
     }
 
     // ─────────────────────────── 내부 ───────────────────────────
@@ -257,27 +239,6 @@ public class PlaceDetailService {
             target.setContentId(contentId);
             target.setNotFoundAt(null);
             return details.save(target);
-        }
-
-        /**
-         * {@code places} 표는 아는데 캐시에 없는 장소를 받아들인다.
-         *
-         * <p>행을 만들어 두면 다음 요청부터 허용목록을 바로 통과하고, 받아 온 상세도
-         * 여기 쌓인다. 만들지 않으면 탐색 화면에서 들어온 장소는 <b>매번 tour 를 다시</b>
-         * 물어야 한다.
-         */
-        @Transactional(propagation = Propagation.REQUIRES_NEW)
-        public PetPlaceDetailRow adopt(PlaceBasics basics) {
-            return details.save(PetPlaceDetailRow.builder()
-                    .contentId(basics.contentId())
-                    .title(basics.title())
-                    .addr(basics.addr())
-                    .tel(basics.tel())
-                    .image(basics.image())
-                    .lat(basics.lat())
-                    .lng(basics.lng())
-                    .contentTypeId(basics.contentTypeId())
-                    .build());
         }
 
         /** KTO 가 모르는 id 로 기억해 둔다. 되돌아오는 값은 "없음" 을 뜻한다. */
