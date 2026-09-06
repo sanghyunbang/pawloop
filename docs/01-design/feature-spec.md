@@ -21,7 +21,7 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 |---|---|---|---|---|
 | P0 | 실시간 산책 트래킹 | **완료(#145·#160)** | `geolocator` 위치 스트림 → `walk.path(LINESTRING)` | 실 GPS — 위치를 못 쓰면 이유별 안내 화면 + 직접 입력 |
 | P0 | 산책 기록 작성/조회 | **완료(#145)** | `GET/POST /api/walks` | 트래킹 초안 → 저장. 못 보내면 초안 큐에 남는다 |
-| P0 | 지도 · 동반장소 | KTO 실연동 | 관광공사 KorPetTourService2 | 병원/펫샵/산책로 레이어는 더미 |
+| P0 | 지도 · 동반장소 | **실연동(#40 · #273 · #291)** | 관광공사 KorPetTourService2 · 행정안전부 인허가 · 두루누비 | 병원/펫샵/산책로도 실데이터. 산책로는 시트를 열면 선을 그린다 |
 | P0 | 강아지 프로필 | 세션 내 편집 반영 | 전역 `kMyDog` | 앱 재시작 시 초기화(미영속) |
 | P1 | 커뮤니티(피드/상세/댓글/반응) | 더미 | 로컬 상수(`kPetPosts`) | 백엔드 social API 미연동 |
 | P1 | 산책 통계 | **완료(#145)** | `GET /api/walks/stats/weekly` | fl_chart 주간 막대. 이번 주 + 전체 기간이 한 응답 |
@@ -80,17 +80,17 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 |---|---|---|
 | 목적 | 반려동반 가능 장소 + 병원/펫샵/산책로를 카테고리별로 탐색 | `explore_screen.dart` |
 | 뷰 | 리스트 ↔ 지도 토글(`view = 'list'|'map'`). 카메라·마커는 `NaverMap` | |
-| 필터 | 카테고리 칩 가로 스크롤(전체 + `kPetCategories` 9종). 선택 시 `_catFilter` = contenttypeid 또는 레이어 key | |
-| 장소 상세 | 마커/카드 탭 → 바텀시트(이름·카테고리·거리·주소·전화·"반려동물 동반 가능(관광공사)") | |
+| 필터 | 카테고리 칩 가로 스크롤(전체 + `kPetCategories` 9종). 선택 시 `_catFilter` = contenttypeid 또는 레이어 key — 항목은 `PetPlace.categoryKey`(`contentTypeId` 가 있으면 그것, 없으면 `category`)로 견준다 | |
+| 장소 상세 | 마커/카드 탭 → 바텀시트(이름·카테고리·거리·요약·주소·전화·출처 배지). 산책로면 지도 뷰에서 선(`GET /api/places/trails/{courseId}/route`)을 받아 폴리라인으로 그리고 카메라를 맞춘다(#291) | |
 
 ### 2.1 데이터 소스
 
 | 레이어 | key | 소스 | 상태 |
 |---|---|---|---|
 | 여행지/카페·식당/레포츠/숙박/쇼핑/문화 | `12/39/28/32/38/14` | 관광공사 **KorPetTourService2** `locationBasedList2` | **실연동** |
-| 병원 | `vet` | 인허가(LOCALDATA) 예정 | **더미**(`_dummyVet` 3건) |
-| 펫샵 | `shop` | 인허가(LOCALDATA) 예정 | **더미**(`_dummyShop` 2건) |
-| 산책로 | `trail` | 두루누비 걷기여행길 예정 | **더미** 폴리라인(`_trailCoords`) + 카드 2건 |
+| 병원 | `vet` | 행정안전부 인허가 동물병원(전국) — 서버가 월 1회 받아 카탈로그에 이어 붙인다 | **실연동**(#291) |
+| 펫샵 | `shop` | 행정안전부 인허가 동물판매업(전국) | **실연동**(#291) |
+| 산책로 | `trail` | 두루누비 걷기여행길 — 시작점은 카탈로그, 선은 `trail_route` | **실연동**(#291) — 카드의 `summary`("2.6km · 약 40분 · 쉬움") + 지도 폴리라인 |
 
 - 호출: `PetPlacesRepository.fetchNearby(lat, lng, radius=8000, numOfRows=80)` → **우리 백엔드**의 `GET /api/places/nearby`. 앱에 관광공사 서비스키가 없다 — 서버가 대신 부르고 셀 단위로 캐시한다(#40). `radius` 의 상한은 계약이 18,000m 로 정한다(서버가 셀 중심에서 20km 를 받아 두고 셀 반지름 약 1.4km 를 뺀 값).
 - 응답 파싱: `PetPlace.fromJson` — `mapx`(경도)/`mapy`(위도)/`contenttypeid`/`addr1`/`tel`/`firstimage`/`dist`. 좌표 0인 항목은 제외.
@@ -268,7 +268,7 @@ MVP 범위 밖. 개요만 정의하며 현재 미구현.
 
 - `walk(dog_id, started_at, ended_at, distance_m, duration_s, path LINESTRING, memo, weather)` — GPS 경로는 한 컬럼
 - `care_log(dog_id, type[meal/health/vet/med], occurred_at, title, value, memo, photo)`
-- `place(source, category, geom POINT, ...)` — POI 캐시(KTO/LOCALDATA/두루누비)
+- `place_catalog(source, payload)` — 출처별 장소 한 벌(KTO/인허가/두루누비, #291) · `trail_route(course_id, payload)` — 산책로의 선
 - 공간쿼리: `ST_Distance_Sphere`/`MBRContains` + SPATIAL INDEX. 상세는 [ERD](../03-database/erd.md) 참조.
 
 ---
@@ -279,5 +279,5 @@ MVP 범위 밖. 개요만 정의하며 현재 미구현.
 |---|---|
 | 상태관리 | `ValueNotifier` + `ValueListenableBuilder`. 전역: `RootTab.index/exploreView`, `kMyDog`, `AppThemeCtl.avatarBorder` |
 | 영속성 | **현재 없음** — 대부분 로컬 상수/세션 상태. 저장 액션은 스낵바 피드백만 |
-| 외부 연동 | 관광공사 KorPetTourService2(장소, 실연동) · 네이버 지도 SDK(Client ID). 그 외 병원/펫샵/산책로·커뮤니티·기록은 더미 |
+| 외부 연동 | 관광공사 KorPetTourService2 · 행정안전부 인허가 · 두루누비(전부 서버 경유, 실연동) · 네이버 지도 SDK(Client ID) |
 | 미구현 진입점 | 커뮤니티 글쓰기, 지도 검색, 날짜 선택, 사진 첨부, 북마크 저장, 로그인 |

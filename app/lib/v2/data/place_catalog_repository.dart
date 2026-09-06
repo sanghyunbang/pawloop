@@ -138,9 +138,10 @@ class PlaceCatalogRepository {
     final out = <PetPlace>[];
 
     for (final place in places) {
+      // KTO 는 contentTypeId, 병원·펫샵·산책로는 category 로 견준다 (#291).
       if (contentTypeId != null &&
           contentTypeId.isNotEmpty &&
-          place.contentTypeId != contentTypeId) {
+          place.categoryKey != contentTypeId) {
         continue;
       }
       final distance = haversineMeters(lat, lng, place.lat, place.lng);

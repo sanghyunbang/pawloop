@@ -30,7 +30,9 @@ lib/
    ├─ screens/             # 화면 (탭 + 푸시 라우트)
    ├─ domain/pet.dart      # 도메인 모델 + 샘플 데이터 + 전역 상태(kMyDog 등)
    ├─ data/                # 레포지토리 (외부 API 호출)
-   │  └─ pet_places_repository.dart
+   │  ├─ pet_places_repository.dart
+   │  ├─ place_catalog_repository.dart   # 전국 한 벌(KTO + 인허가 + 두루누비) 기기 캐시 (#273 · #291)
+   │  └─ trail_route_repository.dart     # 산책로의 선 (#291)
    ├─ widgets/             # 공용 위젯 (배경/카드/아바타/산책 완료 시트)
    ├─ walk/                # 경로 그림·갤러리 저장 (#310) — 네트워크 없음
    └─ theme/               # 디자인 토큰 + 배경 테마
@@ -44,7 +46,7 @@ lib/
 | --- | --- | --- |
 | `main_shell.dart` | 네비게이션 셸. 탭 스와핑 + 플로팅 글래스 바텀네비 + 산책 FAB | 루트 (`home`) |
 | `today_screen.dart` | 홈(오늘) — 강아지 히어로 · 오늘 산책 요약 · 근처 동반장소 | 탭 0 |
-| `explore_screen.dart` | 지도 — KTO 반려동반 장소 + 병원/펫샵/산책로 레이어 + 필터 (리스트/지도 토글) | 탭 1 |
+| `explore_screen.dart` | 지도 — KTO 반려동반 장소 + 병원/펫샵/산책로(실데이터, #291) + 필터 (리스트/지도 토글). 산책로 시트를 열면 선을 그린다 | 탭 1 |
 | `feed_screen.dart` | 커뮤니티 — 게시글 카드/리스트 (더미) | 탭 2 |
 | `insight_screen.dart` | 통계 — 이번 주 요약 + 주간 거리 막대(fl_chart). 자주 가는 곳은 빈 상태 | `me_screen` → push |
 | `walk_tracking_screen.dart` | 실시간 산책 트래킹 (실 GPS, 경로 폴리라인 + 라이브 스탯) | FAB·홈 CTA → `startWalk()` |
@@ -92,7 +94,7 @@ lib/
 - `pet_places_repository.dart`: **우리 백엔드**의 `GET /api/places/nearby` 를 `http` 로 호출(#40). `PetPlace` 모델은 계약의 `Place` 를 그대로 읽는다(`lat`/`lng`/`contentTypeId`/`addr`/`tel`/`image`/`distM`).
   - **앱에 관광공사 서비스키가 없다.** 서버가 대신 부른다. 서버가 실패하면 빈 리스트다(앱이 죽지 않음).
   - ✅ 관광공사 키는 **이미 앱에서 사라졌다**. 예전 서술: 이 키는 앱 바이너리에 박히는 과금성 자격증명이다. [#40](https://github.com/sanghyunbang/heattrip/issues/40) 에서 호출을 백엔드 프록시로 옮기면 앱에서 완전히 사라진다 — 그때 이 레포는 KTO 대신 자체 백엔드를 호출한다.
-  - 병원(vet)·펫샵(shop)·산책로(trail)는 **아직 레포가 없고** 화면(`explore_screen.dart`) 안 `_dummyVet`/`_dummyShop`/`_trailCoords` 상수로 대체 → 향후 LOCALDATA·두루누비 레포로 분리 예정.
+  - 병원(vet)·펫샵(shop)·산책로(trail)는 **서버가 같은 카탈로그에 이어 붙인다**(#291) — 앱에 별도 레포가 없고 `PetPlace.categoryKey`(`contentTypeId` 가 없으면 `category`)로 칩을 가른다. 산책로의 선만 `trail_route_repository.dart` 가 따로 받는다.
 
 ### 2.4 `widgets/` — 공용 위젯
 
@@ -167,7 +169,7 @@ flowchart TD
 
 ## 5. 데이터 흐름 — 레포 → 화면
 
-실제 원격 데이터를 쓰는 경로는 **지도(장소 프록시)** 와 **산책**(#145) 둘이다. 나머지(커뮤니티·병원·펫샵·산책로)는 `domain/pet.dart` 상수 또는 화면 내부 더미다.
+실제 원격 데이터를 쓰는 경로는 **지도(장소 프록시 — KTO·인허가·두루누비, #40 · #273 · #291)** 와 **산책**(#145), **커뮤니티**(#170 · #171) 다.
 
 ```mermaid
 flowchart LR

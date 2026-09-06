@@ -110,6 +110,13 @@ class PlacesContractSpecTest {
         assertThat(secondCallStatus("/api/places/abc")).isEqualTo(429);
     }
 
+    @Test
+    @DisplayName("산책로 선 경로도 버킷에 걸리고 계약이 429 를 선언한다 — permitAll 이 셋째 경로를 열었다 (#291)")
+    void trailRouteIsMeteredAndDeclares429() throws Exception {
+        assertThat(secondCallStatus("/api/places/trails/T_ROUTE_1/route")).isEqualTo(429);
+        assertThat(declaredStatuses("/api/places/trails/{courseId}/route")).contains("429", "404");
+    }
+
     // ─────────────────── B. 코드 ↔ 계약 ───────────────────
 
     @Test

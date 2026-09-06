@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import org.hibernate.annotations.Check;
 
@@ -21,7 +22,8 @@ import java.time.LocalDateTime;
  *
  * <h2>{@code place_cell} 과 무엇이 다른가</h2>
  * <p>{@link PlaceCell} 은 <b>좌표</b>를 0.02° 격자로 접은 키를 쓴다. 이 표에는 <b>키가 없다.</b>
- * 전국이 한 벌이고 행이 하나다. 그래서 <b>요청에 좌표도 지역도 실려 오지 않는다</b> —
+ * <b>출처마다</b> 전국 한 벌이고 행이 하나다(#291 — {@code kto}·{@code localdata}·{@code durunubi}).
+ * 그래서 <b>요청에 좌표도 지역도 실려 오지 않는다</b> —
  * A안 빌드(완전 온디바이스)가 쓰는 길이다.
  *
  * <p>앱은 이 한 벌을 받아 기기에 두고, 거리 정렬과 반경 필터를 <b>자기 좌표로 기기에서</b>
@@ -32,9 +34,11 @@ import java.time.LocalDateTime;
  * 시군구 249개로 쪼개는 설계를 접은 이유가 이 숫자다 — 쪼개면 요청에 지역이 실리고
  * (행정구역이지만 0 은 아니다) 한 벌 데우는 콜이 10 에서 249 로 는다.
  *
- * <h2>{@link #id} 가 항상 {@code 1} 인 이유</h2>
- * <p>행이 하나라는 것을 <b>DB 가 지키게</b> 한다. 관례로만 두면 두 인스턴스가 동시에
- * 갱신할 때 행이 둘이 되고, 그때 어느 것이 답인지 코드에 안 적혀 있다.
+ * <h2>{@link #id} 와 {@link #source} 가 고정인 이유</h2>
+ * <p>출처당 행이 하나라는 것을 <b>DB 가 지키게</b> 한다 — {@code source} 가 UNIQUE 이고
+ * CHECK 가 세 값만 허용한다. 관례로만 두면 두 인스턴스가 동시에 갱신할 때 행이 둘이 되고,
+ * 그때 어느 것이 답인지 코드에 안 적혀 있다. #273 에서는 {@code CHECK (id = 1)} 로 행이
+ * 하나였고, #291 이 출처별 행으로 넓혔다 — 번호는 {@link com.heattrip.heat_trip_backend.place.CatalogSource} 가 든다.
  *
  * <h2>{@link #payload} 를 파싱해서 서빙하지 않는다</h2>
  * <p>이 문자열이 <b>응답 본문 그대로</b>다. 꺼내서 객체로 만들었다가 다시 직렬화하면
@@ -47,8 +51,9 @@ import java.time.LocalDateTime;
  * <p>행에 저장하는 이유: 재시작해도 같고, 인스턴스가 여럿이어도 같다.
  */
 @Entity
-@Table(name = "place_catalog")
-@Check(name = "chk_place_catalog_singleton", constraints = "id = 1")
+@Table(name = "place_catalog",
+        uniqueConstraints = @UniqueConstraint(name = "uk_place_catalog_source", columnNames = "source"))
+@Check(name = "chk_place_catalog_source", constraints = "source in ('kto','localdata','durunubi')")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -56,13 +61,14 @@ import java.time.LocalDateTime;
 @Builder
 public class PlaceCatalog {
 
-    /** 이 표의 유일한 행. */
-    public static final int SINGLETON_ID = 1;
-
-    /** 항상 {@link #SINGLETON_ID} 다. 체크 제약이 그것을 지킨다. */
+    /** {@code CatalogSource.id()} — 출처마다 고정 번호다. 1 이 KTO 다. */
     @Id
     @Column(name = "id", nullable = false)
     private Integer id;
+
+    /** {@code CatalogSource.wireValue()} — {@code kto}·{@code localdata}·{@code durunubi}. UNIQUE + CHECK. */
+    @Column(name = "source", nullable = false, length = 16)
+    private String source;
 
     /** 정규화된 {@code Place} 배열 JSON. <b>응답 본문 그대로다.</b> */
     @Lob

@@ -81,6 +81,15 @@ public class KtoBudgetProperties {
     private int detailMaxCallsPerDay = 150;
 
     /**
+     * 인허가 API 의 하루 상한 — 이슈 #291. 1페이지(100건) = 1콜. 영업 중 동물병원·판매업이
+     * 합쳐 1만 곳 안팎이라 한 벌이 100콜 남짓이고, 월 1회다. 상대 한도는 10,000 이다.
+     */
+    private int localdataMaxCallsPerDay = 500;
+
+    /** 두루누비 코스 목록의 하루 상한 — 이슈 #291. 1페이지(100건) = 1콜, 상대 한도 1,000. */
+    private int durunubiMaxCallsPerDay = 100;
+
+    /**
      * 셀 스냅샷을 다시 받아 보려는 주기(시간).
      *
      * <p><b>만료가 아니다.</b> 이 시간이 지나도 예산이 없으면 옛 스냅샷을 <b>그대로 계속

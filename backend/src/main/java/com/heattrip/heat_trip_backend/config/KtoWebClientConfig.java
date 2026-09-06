@@ -18,7 +18,7 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 관광공사(KTO) 프록시가 쓰는 WebClient 둘 — 이슈 #40.
+ * 관광공사(KTO) 프록시가 쓰는 WebClient 둘 — 이슈 #40. #291 이 공공데이터 레이어용 셋을 더했다.
  *
  * <h2>왜 기존 {@code tourApiWebClient} 를 안 쓰는가</h2>
  * <p>두 가지 이유가 있다.
@@ -64,6 +64,18 @@ public class KtoWebClientConfig {
     /** 일반 관광 상세(개요). */
     public static final String KOR_SERVICE_DETAIL = "korServiceDetailWebClient";
 
+    /** 행정안전부 인허가(동물병원·동물판매업) — 이슈 #291. 같은 포털, 같은 키, 다른 게이트웨이 경로. */
+    public static final String LOCALDATA = "localDataWebClient";
+
+    /** 두루누비 걷기여행길 코스 목록 — 이슈 #291. */
+    public static final String DURUNUBI = "durunubiWebClient";
+
+    /**
+     * 두루누비 GPX 파일 — 이슈 #291. 기본 URL 이 없다(코스 목록이 주는 주소를 그대로 연다).
+     * 파일이 1MB 안팎이라 읽기 타임아웃이 API 보다 길다.
+     */
+    public static final String GPX = "gpxWebClient";
+
     @Bean(KOR_PET_TOUR)
     public WebClient korPetTourWebClient(
             WebClient.Builder builder,
@@ -82,19 +94,52 @@ public class KtoWebClientConfig {
                 connectTimeoutMs, readTimeoutMs);
     }
 
-    private static WebClient build(WebClient.Builder builder, String baseUrl,
-                                   int connectTimeoutMs, int readTimeoutMs) {
-        HttpClient httpClient = HttpClient.create()
+    @Bean(LOCALDATA)
+    public WebClient localDataWebClient(
+            WebClient.Builder builder,
+            @Value("${app.place.layer.localdata-base-url:https://apis.data.go.kr/1741000}") String baseUrl,
+            @Value("${app.kto.connect-timeout-ms:3000}") int connectTimeoutMs,
+            @Value("${app.place.layer.api-read-timeout-ms:10000}") int readTimeoutMs) {
+        return build(builder, baseUrl, connectTimeoutMs, readTimeoutMs);
+    }
+
+    @Bean(DURUNUBI)
+    public WebClient durunubiWebClient(
+            WebClient.Builder builder,
+            @Value("${app.place.layer.durunubi-base-url:https://apis.data.go.kr/B551011/Durunubi}") String baseUrl,
+            @Value("${app.kto.connect-timeout-ms:3000}") int connectTimeoutMs,
+            @Value("${app.place.layer.api-read-timeout-ms:10000}") int readTimeoutMs) {
+        return build(builder, baseUrl, connectTimeoutMs, readTimeoutMs);
+    }
+
+    @Bean(GPX)
+    public WebClient gpxWebClient(
+            WebClient.Builder builder,
+            @Value("${app.kto.connect-timeout-ms:3000}") int connectTimeoutMs,
+            @Value("${app.place.layer.gpx-read-timeout-ms:15000}") int readTimeoutMs) {
+        return builder
+                .clientConnector(new ReactorClientHttpConnector(httpClient(connectTimeoutMs, readTimeoutMs)))
+                .exchangeStrategies(strategies())
+                .build();
+    }
+
+    private static HttpClient httpClient(int connectTimeoutMs, int readTimeoutMs) {
+        return HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutMs)
                 .responseTimeout(Duration.ofMillis(readTimeoutMs))
                 .doOnConnected(conn -> conn
                         .addHandlerLast(new ReadTimeoutHandler(readTimeoutMs, TimeUnit.MILLISECONDS))
                         .addHandlerLast(new WriteTimeoutHandler(readTimeoutMs, TimeUnit.MILLISECONDS)));
+    }
 
-        ExchangeStrategies strategies = ExchangeStrategies.builder()
+    private static ExchangeStrategies strategies() {
+        return ExchangeStrategies.builder()
                 .codecs(c -> c.defaultCodecs().maxInMemorySize(MAX_IN_MEMORY_BYTES))
                 .build();
+    }
 
+    private static WebClient build(WebClient.Builder builder, String baseUrl,
+                                   int connectTimeoutMs, int readTimeoutMs) {
         // 인코딩을 **끈다**. TOUR.API.SECRET 은 이미 URL 인코딩된 문자열이라
         // 기본 모드(TEMPLATE_AND_VALUES)로 두면 % 가 %25 로 다시 인코딩돼
         // KTO 가 인증 실패를 돌려주고, 그 실패는 HTTP 200 이라 "장소 없음" 으로 보인다.
@@ -103,8 +148,8 @@ public class KtoWebClientConfig {
 
         return builder
                 .uriBuilderFactory(uriFactory)
-                .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .exchangeStrategies(strategies)
+                .clientConnector(new ReactorClientHttpConnector(httpClient(connectTimeoutMs, readTimeoutMs)))
+                .exchangeStrategies(strategies())
                 .build();
     }
 }

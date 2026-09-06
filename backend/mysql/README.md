@@ -48,6 +48,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\21_users_drop_consent_columns.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\22_care_log_dog_fk.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\23_dog_deleted_at.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\24_place_catalog_layers.sql
 ```
 
 | 파일 | 무엇을 |
@@ -75,6 +76,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `21_users_drop_consent_columns.sql` | `users` 의 옛 동의 컬럼 아홉(`agree_*` · `*_version` · `*_agreed_at`)을 **`user_consent` 로 옮긴 뒤 지웁니다** — #190 후속. 동의한 사람의 버전·시각이 그대로 옮겨지고(버전이 비면 옛 기본값 `v1.0`, 시각이 비면 가입 시각), 동의 안 한 칸은 안 옮깁니다. 이미 있는 행은 다시 안 만듭니다. **순서가 반대입니다** — 새 앱을 먼저 배포하고 돌립니다. `user_consent` 가 없으면(19 미실행) 시작하지 않고, 컬럼이 일부만 남아 있어도 멈춥니다. 되돌리는 SQL 은 헤더에 있지만 값은 `user_consent` 에서 다시 채워야 합니다. |
 | `22_care_log_dog_fk.sql` | `care_log.dog_id` 를 `dog` 에 **잇습니다** — #154. `fk_carelog_dog`(`ON DELETE SET NULL`)과 `idx_carelog_dog(dog_id, occurred_at)`. 08 은 컬럼만 만들었고, FK 는 `CareLog` 가 `@ManyToOne Dog` 를 들게 된 날 겁니다 — 그래야 `01_schema.sql` 재생성에도 살아남습니다. `SET NULL` 인 이유: 케어는 "누가 언제 무엇을 했는가" 의 기록이라 반려동물이 지워져도 남아야 합니다(`group_id`·`done_by` 와 같은 답). `dog` 에 없는 id 를 든 행이 있으면 지우지 않고 멈춥니다. 08·11 뒤에, 앱 배포 전·후 어느 쪽이든 됩니다(`validate` 는 FK 를 안 봅니다). |
 | `23_dog_deleted_at.sql` | `dog` 에 **소프트 삭제 컬럼** `deleted_at datetime(6) NULL` 을 더합니다 — #156. `DELETE /api/dogs/{dogId}` 가 이 값을 찍고 행은 남깁니다 — 물리 삭제하면 `walk.fk_walk_dog` 의 CASCADE 로 그 아이의 산책 이력이 통째로 사라지고, FK 를 RESTRICT 로 바꾸면 탈퇴가 막힙니다. 컬럼이 이미 있으면 지나가고, 있는데 모양이 다르면 멈춥니다. 11 뒤에, 새 코드 배포 **전**(`validate` 가 컬럼을 요구합니다). |
+| `24_place_catalog_layers.sql` | `place_catalog` 를 **출처별 한 행**으로 넓히고 `trail_route` 를 만듭니다 — #291. `source varchar(16)` 컬럼(옛 행 1 은 `kto`), `uk_place_catalog_source` UNIQUE, `CHECK (id = 1)` 을 `CHECK (source in ('kto','localdata','durunubi'))` 로 교체. `trail_route` 는 두루누비 코스의 선(`[[경도, 위도]]` JSON, FK 없음). id 가 1·2·3 밖인 행이 있거나 `source` 가 다른 모양으로 이미 있으면 멈춥니다. 18 뒤에, 새 코드 배포 **전**(`validate` 가 컬럼과 표를 요구합니다). 되돌리는 SQL 은 헤더에 있습니다 — 레이어 한 벌은 공공데이터라 다음 적재가 다시 받습니다. |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 

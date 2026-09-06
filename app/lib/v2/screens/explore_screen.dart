@@ -8,6 +8,7 @@ import 'post_write_screen.dart';
 import '../domain/pet.dart';
 import '../data/pet_places_repository.dart';
 import '../data/place_catalog_repository.dart';
+import '../data/trail_route_repository.dart';
 import '../data/location_upload_policy.dart';
 import '../data/location_service.dart';
 import '../widgets/aurora.dart';
@@ -16,10 +17,10 @@ import '../widgets/profile_avatar.dart';
 /// 지도 — 관광공사 반려동물 동반여행(KTO) 기반 "우리 아이랑 갈 수 있는 곳".
 /// 리스트/지도 토글 + 카테고리 필터.
 ///
-/// 병원·펫샵·산책로 칩은 없다 — 이슈 #282. 실데이터가 없어서 성수동 근처의 가짜 5곳과
-/// 선 하나를 "예시" 라며 보여 주고 있었고, 부산 사용자가 병원 칩을 누르면 성수동의 가짜
-/// 병원이 떴다. 실데이터(LOCALDATA·두루누비)를 붙이는 날 칩도 돌아온다. 계약의
-/// `PlaceCategory` 에는 셋이 남아 있고, 서버는 그 값에 빈 목록을 준다.
+/// 병원·펫샵·산책로 칩은 #282 에서 가짜와 함께 내렸다가 #291 에서 실데이터로 돌아왔다 —
+/// 행정안전부 인허가(전국)와 두루누비 걷기여행길을 서버가 카탈로그 한 벌에 이어 붙인다.
+/// 산책로는 카탈로그에 **시작점**만 있고, 시트를 열면 선을 따로 받아 지도에 그린다
+/// (`TrailRouteRepository`). 지도 키 없는 빌드는 선을 못 그리고 카드의 요약만 본다.
 class ExploreScreen extends StatefulWidget {
   final String initialView; // 'list' | 'map'
   const ExploreScreen({super.key, this.initialView = 'list'});
@@ -31,6 +32,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   late String view = widget.initialView;
   NaverMapController? _mapCtrl;
   final _repo = PetPlacesRepository();
+  final _trails = TrailRouteRepository();
 
   // 기본 중심: 서울 시청. (추후 현재 위치)
   NLatLng _center = const NLatLng(37.5665, 126.9816);
@@ -67,7 +69,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   List<PetPlace> get _filtered {
     if (_catFilter == null) return _places;
-    return _places.where((p) => p.contentTypeId == _catFilter).toList();
+    return _places.where((p) => p.categoryKey == _catFilter).toList();
   }
 
   @override
@@ -111,7 +113,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             Text('반려동반 가능 · ${_filtered.length}곳',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
             const Spacer(),
-            const Text('관광공사', style: TextStyle(fontSize: 10.5, color: T.textMuted)),
+            Text(_sourceCaption(), style: const TextStyle(fontSize: 10.5, color: T.textMuted)),
           ]),
           const SizedBox(height: 10),
           for (int i = 0; i < _filtered.length; i++) ...[
@@ -211,6 +213,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
+  /// 목록 머리의 출처 한 마디 — 칩에 따라 다르다 (#291).
+  String _sourceCaption() => switch (_catFilter) {
+        'vet' || 'shop' => '행정안전부 인허가 · 전국',
+        'trail' => '두루누비 · 한국관광공사',
+        null => '관광공사 · 인허가 · 두루누비',
+        _ => '관광공사',
+      };
+
   Widget _imgFallback(PetCategory cat) => Container(
         width: 64, height: 64, alignment: Alignment.center,
         decoration: BoxDecoration(color: cat.color.withValues(alpha: 0.14)),
@@ -218,7 +228,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       );
 
   Widget _placeCard(PetPlace p) {
-    final cat = p.category;
+    final cat = p.petCategory;
     return GestureDetector(
       onTap: () => _showPlaceSheet(p),
       child: GlassCard(
@@ -245,6 +255,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   Text(p.distLabel, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
                 ],
               ]),
+              if (p.summary.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Text(p.summary, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: T.textSecondary)),
+              ],
               if (p.addr.isNotEmpty) ...[
                 const SizedBox(height: 5),
                 Text(p.addr, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: T.textMuted)),
@@ -429,7 +444,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     await c.clearOverlays();
     final markers = <NAddableOverlay>{};
     for (final p in _filtered) {
-      final icon = await _markerIcon(p.category);
+      final icon = await _markerIcon(p.petCategory);
       final m = NMarker(id: p.contentId.isEmpty ? p.title : p.contentId, position: NLatLng(p.lat, p.lng), icon: icon);
       m.setOnTapListener((_) => _showPlaceSheet(p));
       markers.add(m);
@@ -504,8 +519,39 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
+  /// 산책로의 선을 지도에 얹는다 (#291). 선은 카탈로그에 없어 시트를 열 때 따로 받는다.
+  ///
+  /// 못 받으면 아무것도 안 그린다 — 산책로 항목은 이미 시작점 마커로 화면에 있고 선은
+  /// 덧그림이다. 카메라는 선이 보이게 옮긴다. 지도가 없는 빌드(`_mapCtrl == null`)는
+  /// 받지도 않는다.
+  Future<void> _drawTrail(PetPlace p) async {
+    final c = _mapCtrl;
+    if (c == null) return;
+    final route = await _trails.fetch(p.trailCourseId);
+    if (route == null || !mounted || _mapCtrl == null) return;
+    final coords = [for (final q in route.lngLat) NLatLng(q[1], q[0])];
+    await c.addOverlay(NPolylineOverlay(
+      id: 'trail-${p.trailCourseId}',
+      coords: coords,
+      color: const Color(0xFF2FB89B),
+      width: 6,
+    ));
+    double minLat = coords.first.latitude, maxLat = minLat, minLng = coords.first.longitude, maxLng = minLng;
+    for (final q in coords) {
+      if (q.latitude < minLat) minLat = q.latitude;
+      if (q.latitude > maxLat) maxLat = q.latitude;
+      if (q.longitude < minLng) minLng = q.longitude;
+      if (q.longitude > maxLng) maxLng = q.longitude;
+    }
+    await c.updateCamera(NCameraUpdate.fitBounds(
+      NLatLngBounds(southWest: NLatLng(minLat, minLng), northEast: NLatLng(maxLat, maxLng)),
+      padding: const EdgeInsets.all(60),
+    ));
+  }
+
   void _showPlaceSheet(PetPlace p) {
-    final cat = p.category;
+    final cat = p.petCategory;
+    if (p.isTrail && view == 'map') _drawTrail(p);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -536,6 +582,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
             GestureDetector(onTap: () => Navigator.pop(sheetCtx), child: const Icon(Icons.close, size: 22, color: Color(0xFFBBB3CC))),
           ]),
+          if (p.summary.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Row(children: [
+              Icon(cat.icon, size: 16, color: cat.color),
+              const SizedBox(width: 7),
+              Expanded(child: Text(p.summary, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary))),
+            ]),
+          ],
           if (p.addr.isNotEmpty) ...[
             const SizedBox(height: 14),
             Row(children: [
@@ -553,12 +607,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ]),
           ],
           const SizedBox(height: 8),
-          // 출처 배지. 목록의 전부가 관광공사 데이터다 — 더미 레이어는 #282 로 사라졌다.
-          const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.pets, size: 13, color: Color(0xFFFF8F63)),
-            SizedBox(width: 5),
-            Text('반려동물 동반 가능 (관광공사)',
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+          // 출처 배지 — 어디서 온 데이터인지 말한다 (#291). 가짜 레이어는 #282 로 사라졌다.
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.pets, size: 13, color: Color(0xFFFF8F63)),
+            const SizedBox(width: 5),
+            Text(p.sourceLabel,
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
           ]),
           const SizedBox(height: 14),
           _writeAboutPlace(sheetCtx, p),
