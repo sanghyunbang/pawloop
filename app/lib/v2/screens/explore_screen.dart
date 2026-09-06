@@ -21,9 +21,16 @@ import '../widgets/profile_avatar.dart';
 /// 행정안전부 인허가(전국)와 두루누비 걷기여행길을 서버가 카탈로그 한 벌에 이어 붙인다.
 /// 산책로는 카탈로그에 **시작점**만 있고, 시트를 열면 선을 따로 받아 지도에 그린다
 /// (`TrailRouteRepository`). 지도 키 없는 빌드는 선을 못 그리고 카드의 요약만 본다.
+///
+/// 칩을 누르면 **칩 키를 붙여 다시 조회**한다. 가까운 80곳을 받아 놓고 그 안에서 거르면
+/// 병원 칩이 빈다 — 서울시청 근처는 백화점 매장 80곳이 어느 병원보다 가깝다(#291 실측).
+/// 서버·카탈로그는 거른 뒤에 자르므로 키만 붙이면 된다. 늦게 돌아온 옛 조회는 버린다.
 class ExploreScreen extends StatefulWidget {
   final String initialView; // 'list' | 'map'
-  const ExploreScreen({super.key, this.initialView = 'list'});
+
+  /// 테스트가 진짜 네트워크·카탈로그에 닿지 않게 끼우는 자리. 없으면 실물이다.
+  final PetPlacesRepository? repository;
+  const ExploreScreen({super.key, this.initialView = 'list', this.repository});
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
 }
@@ -31,7 +38,7 @@ class ExploreScreen extends StatefulWidget {
 class _ExploreScreenState extends State<ExploreScreen> {
   late String view = widget.initialView;
   NaverMapController? _mapCtrl;
-  final _repo = PetPlacesRepository();
+  late final PetPlacesRepository _repo = widget.repository ?? PetPlacesRepository();
   final _trails = TrailRouteRepository();
 
   // 기본 중심: 서울 시청. (추후 현재 위치)
@@ -56,10 +63,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
     await _load();
   }
 
+  /// 조회 순번 — 칩을 빠르게 두 번 누르면 먼저 간 조회가 늦게 돌아올 수 있다. 마지막만 남긴다.
+  int _loadSeq = 0;
+
   Future<void> _load() async {
+    final seq = ++_loadSeq;
     setState(() => _loading = true);
-    final places = await _repo.fetchNearby(lat: _center.latitude, lng: _center.longitude);
-    if (!mounted) return;
+    // 칩 키를 조회에 붙인다 — 받아 놓은 80곳 안에서 거르면 병원은 매장 뒤에 묻힌다(#291 실측).
+    final places = await _repo.fetchNearby(
+      lat: _center.latitude,
+      lng: _center.longitude,
+      contentTypeId: _catFilter,
+    );
+    if (!mounted || seq != _loadSeq) return;
     setState(() {
       _places = places;
       _loading = false;
@@ -150,7 +166,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
             Text('우리 동네 업체 자리', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
             SizedBox(height: 3),
-            Text('동네 펫샵·미용·병원이 여기에 소개될 예정이에요', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+            Text('동네 미용·호텔·훈련 등 제휴 업체가 여기에 소개될 예정이에요', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
           ]),
         ),
         Container(
@@ -288,8 +304,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
       final on = _catFilter == key;
       return GestureDetector(
         onTap: () {
+          if (_catFilter == key) return;
           setState(() => _catFilter = key);
-          _refreshMarkers();
+          _load(); // 끝나면 마커도 다시 그린다.
         },
         child: Container(
           margin: const EdgeInsets.only(right: 8),
