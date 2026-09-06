@@ -349,6 +349,26 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("category=trail 은 반경을 안 본다 — 부산에서 물어도 서울숲 둘레길이 거리와 함께 온다 (2026-09-06 결정)")
+    void nearbyTrailIgnoresTheRadius() throws Exception {
+        layers.refreshAll();
+
+        mockMvc.perform(get("/api/places/nearby")
+                        .param("lat", "35.1796").param("lng", "129.0756").param("category", "trail"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].contentId").value("trail:T_ROUTE_1"))
+                .andExpect(jsonPath("$[0].distM").value(org.hamcrest.Matchers.greaterThan(300000.0)));
+
+        // 반경을 푸는 것은 산책로뿐이다 — 병원은 부산 8km 안에 없으니 빈 목록이다.
+        mockMvc.perform(get("/api/places/nearby")
+                        .param("lat", "35.1796").param("lng", "129.0756").param("category", "vet"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        assertThat(kto.nearbyCalls.get()).isZero();
+    }
+
+    @Test
     @DisplayName("카테고리가 없으면 KTO 셀과 레이어를 합쳐 거리순이다")
     void nearbyWithoutCategoryMergesEverything() throws Exception {
         layers.refreshAll();

@@ -119,22 +119,35 @@ public class PlaceQueryService {
         return places;
     }
 
-    /** 반경·카테고리로 거르고 거리순으로 자른다. */
+    /**
+     * 산책로({@code category=trail})는 반경을 안 보고 가까운 순 이만큼을 준다 — 2026-09-06 결정(#291).
+     *
+     * <p>코리아둘레길(해파랑·남파랑·서해랑·DMZ)은 해안·접경에만 있어 도심에서 8km 안은 늘 비었다.
+     * 산책로는 "근처에 있는 곳" 이 아니라 "가는 곳" 이다. 앱의 {@code kTrailNearestLimit} 과 같은 수다 —
+     * 기기 안 계산(A안)과 여기(B안)가 같은 답을 내야 한다.
+     */
+    static final int TRAIL_NEAREST_LIMIT = 20;
+
+    /**
+     * 반경·카테고리로 거르고 거리순으로 자른다. 산책로만 반경을 안 본다({@link #TRAIL_NEAREST_LIMIT}).
+     */
     private static List<PlaceDto> within(List<PlaceDto> places, double lat, double lng,
                                          int radiusM, String category, int limit) {
+        boolean trailsOnly = PlaceDto.SOURCE_TRAIL.equals(category);
+        int cap = trailsOnly ? Math.min(limit, TRAIL_NEAREST_LIMIT) : limit;
         List<PlaceDto> out = new ArrayList<>();
         for (PlaceDto place : places) {
             if (category != null && !category.equals(place.categoryKey())) {
                 continue;
             }
             double distance = haversineMeters(lat, lng, place.lat(), place.lng());
-            if (distance > radiusM) {
+            if (!trailsOnly && distance > radiusM) {
                 continue;
             }
             out.add(place.withDistance(distance));
         }
         out.sort(Comparator.comparingDouble(p -> p.distM() == null ? Double.MAX_VALUE : p.distM()));
-        return out.size() > limit ? List.copyOf(out.subList(0, limit)) : out;
+        return out.size() > cap ? List.copyOf(out.subList(0, cap)) : out;
     }
 
     /**
