@@ -2,7 +2,8 @@ package com.heattrip.heat_trip_backend.place.controller;
 
 import com.heattrip.heat_trip_backend.place.dto.PlaceDetailDto;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
-import com.heattrip.heat_trip_backend.place.entity.PlaceCatalog;
+import com.heattrip.heat_trip_backend.place.dto.TrailRouteDto;
+import com.heattrip.heat_trip_backend.place.layer.TrailRouteQueryService;
 import com.heattrip.heat_trip_backend.place.service.GridCell;
 import com.heattrip.heat_trip_backend.place.service.PlaceCatalogService;
 import com.heattrip.heat_trip_backend.place.service.PlaceDetailService;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -94,6 +96,7 @@ public class PlaceController {
     private final PlaceQueryService places;
     private final PlaceDetailService details;
     private final PlaceCatalogService catalog;
+    private final TrailRouteQueryService trails;
 
     /**
      * 내 주변 반려동반 장소 — 거리순.
@@ -107,10 +110,10 @@ public class PlaceController {
      * 앱이 실수로 큰 값을 보냈을 때 지도를 죽이는 것보다 좁혀서 주는 쪽이 낫다.
      * {@code limit} 도 같은 이유로 자른다.
      *
-     * <h2>{@code source} 필터를 안 받는다</h2>
-     * <p>계약의 {@code category} enum 에 {@code vet}/{@code shop}/{@code trail} 이 있지만
-     * 그 셋은 <b>미구현</b>이다(LOCALDATA·두루누비는 좌표변환과 대량 적재가 필요하다).
-     * 앱은 #282 부터 그 칩을 보여 주지 않는다. 그 값이 오면 빈 목록이다.
+     * <h2>{@code vet}/{@code shop}/{@code trail} 도 실데이터다 (#291)</h2>
+     * <p>2026-09-06 이전에는 그 셋이 미구현이라 빈 목록이었다. 지금은 행정안전부 인허가·두루누비
+     * 한 벌({@code place_catalog} 의 다른 행)에서 거른다 — 그 셋이면 KTO 셀을 부르지 않고,
+     * 카테고리가 없으면 KTO 셀과 레이어를 합쳐 거리순이다({@code PlaceQueryService}).
      */
     @GetMapping("/nearby")
     public List<PlaceDto> nearby(@RequestParam("lat") double lat,
@@ -124,10 +127,8 @@ public class PlaceController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "좌표 범위를 벗어났습니다.");
         }
 
-        // 미구현 레이어는 빈 목록이다. KTO 를 부르지 않는다 — 부르면 예산만 태운다.
-        if (category != null && !category.isBlank() && !category.chars().allMatch(Character::isDigit)) {
-            return List.of();
-        }
+        // vet·shop·trail 은 #291 부터 실데이터다 — 서비스가 레이어 한 벌에서 거른다.
+        // 그 셋이면 KTO 셀을 부르지 않는다(예산만 태운다). 그 판단도 서비스에 있다.
 
         int effectiveRadius = clamp(radius == null ? DEFAULT_RADIUS_M : radius,
                 1, GridCell.GUARANTEED_RADIUS_M);
@@ -181,7 +182,9 @@ public class PlaceController {
      */
     @GetMapping(value = "/catalog", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> catalog() {
-        Optional<PlaceCatalog> row = catalog.catalog();
+        // #291 부터 KTO 한 벌 뒤에 병원·펫샵·산책로 한 벌이 이어 붙는다. 이어 붙이는 일과
+        // ETag 는 서비스가 한다 — 여기는 문자열을 옮길 뿐이다.
+        Optional<PlaceCatalogService.Served> row = catalog.serve();
 
         if (row.isEmpty()) {
             // ETag 를 안 붙인다. 붙이면 앱이 빈 목록을 캐시하고, 그 뒤 서버가 회복해도
@@ -192,8 +195,28 @@ public class PlaceController {
         }
 
         return ResponseEntity.ok()
-                .eTag(WEAK_PREFIX + "\"" + row.get().getEtag() + "\"")
-                .body(row.get().getPayload());
+                .eTag(WEAK_PREFIX + "\"" + row.get().etag() + "\"")
+                .body(row.get().payload());
+    }
+
+    /**
+     * 산책로 코스 하나의 <b>선</b> — 이슈 #291. 계약의 {@code GET /api/places/trails/{courseId}/route}.
+     *
+     * <p>카탈로그에는 코스의 시작점만 실린다({@code source=trail}). 사용자가 그 산책로를 눌렀을
+     * 때 앱이 이 경로로 선을 받아 지도에 그린다. {@code courseId} 는 카탈로그 항목의
+     * {@code contentId} 에서 {@code trail:} 을 뗀 값이다.
+     *
+     * <p>선은 월 1회 바뀌므로 하루 캐시를 허용한다. 없으면 404 — 카탈로그와 선의 적재 사이에
+     * 코스가 사라졌거나, 앱이 만든 값이다.
+     */
+    @GetMapping(value = "/trails/{courseId}/route", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<TrailRouteDto> trailRoute(@PathVariable("courseId") String courseId) {
+        TrailRouteDto route = trails.route(courseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "산책로를 찾을 수 없습니다."));
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(1)).cachePublic())
+                .body(route);
     }
 
     /**

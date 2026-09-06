@@ -175,6 +175,7 @@ class PublicPathsAreRateLimitedTest {
             case "/api/explore/**" -> new Sample("GET", "/api/explore/places");
             case "/api/places/nearby" -> new Sample("GET", "/api/places/nearby");
             case "/api/places/*" -> new Sample("GET", "/api/places/126508");
+            case "/api/places/trails/*/route" -> new Sample("GET", "/api/places/trails/T_ROUTE_1/route");
             default -> throw new AssertionError(
                     "공개 패턴 '" + pattern + "' 의 대표 요청이 없다. "
                             + "여기에 더하거나 UNMETERED_ON_PURPOSE 에 이유와 함께 적어라.");

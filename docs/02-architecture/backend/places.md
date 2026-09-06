@@ -17,8 +17,11 @@
 ### 관련 테이블
 | 테이블 | 용도 | 공간 컬럼 |
 | --- | --- | --- |
-| `place` | KTO 동반장소 + LOCALDATA 병원/펫샵 POI 캐시 | `geom POINT` (SRID 4326, SPATIAL INDEX) |
-| `trail` | 두루누비 산책로 코스 | `path LINESTRING` (SRID 4326, SPATIAL INDEX) |
+| `place_cell` · `pet_place_detail` · `kto_call_budget` | KTO 격자 스냅샷 · 상세 캐시 · 일 호출 예산(#40) | 없음 |
+| `place_catalog` | 장소 한 벌 — **출처별 한 행**(`kto`·`localdata`·`durunubi`, #273 · #291) | 없음 — 앱이 통째로 받아 기기에서 거른다 |
+| `trail_route` | 두루누비 산책로 코스의 선(`[[경도, 위도]]` JSON, #291) | 없음 — 키로 한 건씩 꺼낸다 |
+
+> 아래 `place`(`geom POINT`)·`trail`(`path LINESTRING`) 서술은 이 청사진이 처음 적힌 때의 **계획**이고 만들지 않았다(#291 에서 판단 — 공간 인덱스가 할 일이 없다). 실재 표는 위 표와 [schema.md](../../03-database/schema.md) 다.
 
 > ⚠️ 주의: `place` 테이블은 이 리소스에서 **새로 정의**하는 스키마([schema.md §5](../../03-database/schema.md))이며, 기존 `tour.domain.Place`(테이블 `places`, PK=`contentid`, `mapx`/`mapy` Double)와는 **별개 테이블**이다. 기존 `places`는 관광공사 감정추천용, 여기 `place`는 반려동반 지도용. 패키지 충돌 방지를 위해 엔티티 클래스명을 `PetPlace`로 두는 것을 권장(테이블명은 `place`).
 
@@ -43,6 +46,8 @@
 | --- | --- | --- | --- | --- | --- |
 | 1 | `GET /api/places/nearby` | `nearby(@RequestParam("lat") double lat, @RequestParam("lng") double lng, @RequestParam(value="radius", defaultValue="8000") int radius, @RequestParam(value="category", required=false) String category, @RequestParam(value="limit", defaultValue="80") int limit)` → `ResponseEntity<?>` | `List<PlaceDto>` | 없음 | `/api/places/nearby` GET |
 | 2 | `GET /api/places/{contentId}` | `detail(@PathVariable("contentId") String contentId)` → `ResponseEntity<?>` | `PlaceDetailDto` | 없음 | `/api/places/{contentId}` GET |
+| 3 | `GET /api/places/catalog` | `catalog()` → `ResponseEntity<String>` (저장된 JSON 을 이어 붙여 그대로) | `Place[]` — KTO + 인허가 + 두루누비(#273 · #291) | 없음 | `/api/places/catalog` GET |
+| 4 | `GET /api/places/trails/{courseId}/route` | `trailRoute(@PathVariable("courseId") String courseId)` → `ResponseEntity<TrailRouteDto>` | `TrailRouteDto` | 없음 | `/api/places/trails/{courseId}/route` GET (#291) |
 
 **응답 규약**
 - 1번: 성공 시 `ResponseEntity.ok(List<PlaceDto>)`. 좌표 검증 실패(lat/lng 범위·radius>20000·limit>200) → 400 `Error`. KTO 일일 한도 초과 프록시 실패 시 → **429**(openapi `RateLimited`). 캐시 hit이면 429 상황이라도 캐시로 응답.
@@ -143,14 +148,18 @@
 
 > geom을 JTS 타입으로 매핑하려면 `hibernate-spatial` 의존성 필요. 부담되면 geom은 native 쿼리 전용으로 두고 엔티티엔 매핑하지 않는 선택도 가능(그 경우 nearby는 전부 native projection).
 
-### 5.2 Entity `Trail` (테이블 `trail`)
+### 5.2 Entity `TrailRoute` (테이블 `trail_route`) — **실재**(#291)
 | 필드 : 타입 | 컬럼 | 매핑/제약 |
 | --- | --- | --- |
-| `id : Long` | `id` | `@Id @GeneratedValue(IDENTITY)` |
-| `source : String` | `source` | 기본 `durunubi` |
-| `name : String` | `name` | NOT NULL |
-| `path : org.locationtech.jts.geom.LineString` | `path` | **// 공간 컬럼 LINESTRING SRID 4326, NOT NULL, SPATIAL INDEX.** |
-| `lengthM : Integer` | `length_m` | nullable |
+| `courseId : String` | `course_id` | `@Id`, `varchar(32)` — 두루누비 `crsIdx`. 카탈로그 항목의 `contentId` 는 `trail:` + 이 값 |
+| `name : String` | `name` | NOT NULL, len 150 |
+| `pointCount : int` | `point_count` | 줄인 뒤 점 수(≤ 300) |
+| `lengthM : int` | `length_m` | 원본 GPX 길이(m) |
+| `startLat / startLng : double` | `start_lat` / `start_lng` | 선의 첫 점 = 카탈로그의 좌표 |
+| `payload : String` | `payload` | `LONGTEXT` — `[[경도, 위도], …]` JSON, 응답 `points` 그대로 |
+| `fetchedAt : LocalDateTime` | `fetched_at` | 서비스 존 벽시계(`place_catalog` 와 같다) |
+
+> 처음 계획은 `Trail(path LINESTRING, SPATIAL INDEX)` 였다. 만들지 않았다 — 선은 키로 한 건씩 꺼내고 근접은 카탈로그의 시작점으로 한다.
 
 ### 5.3 Repository
 

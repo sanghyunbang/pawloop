@@ -357,14 +357,14 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 | `lat` | double | 필수 | 위도(WGS84) |
 | `lng` | double | 필수 | 경도 |
 | `radius` | int | 8000 | 반경(m) |
-| `category` | string | - | 필터. `12/14/28/32/38/39`(KTO) 또는 `vet/shop/trail`(공공데이터 레이어) |
+| `category` | string | - | 필터. `12/14/28/32/38/39`(KTO) 또는 `vet/shop/trail`(공공데이터 레이어 — #291 부터 실데이터. 그 셋이면 KTO 셀을 안 부른다) |
 | `limit` | int | 80 | **최대 200.** 공통 파라미터 `Limit`(20/100)과 다른 지도 전용 상한이다 |
 
 **좌표는 범위 밖이면 `400` 이다** — `radius`·`limit` 과 태도가 다르다. 그 둘은 자르는데(`clamp`) 좌표는 거절한다. 조용히 다른 지점의 답을 주면 사용자는 자기 주변이 비어 있다고 읽는다. `NaN`·`Infinity` 도 `400` 이다.
 
 **`429` 가 난다** — `places` 버킷(기본 60/창). 상세는 별도의 더 좁은 버킷이다(4.3).
 
-동작: 백엔드가 KTO 를 호출·정규화하고 **0.02° 격자 스냅샷**에 캐시한다(공간 인덱스가 아니다 — [ADR-0013](../99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)). 일일 호출 예산은 `kto_call_budget` 표가 지킨다. LOCALDATA·두루누비는 아직 연동 전이라 **앱 안 더미 레이어**다.
+동작: 백엔드가 KTO 를 호출·정규화하고 **0.02° 격자 스냅샷**에 캐시한다(공간 인덱스가 아니다 — [ADR-0013](../99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)). 일일 호출 예산은 `kto_call_budget` 표가 지킨다. 동물병원·펫샵(행정안전부 인허가, 전국)과 산책로(두루누비)는 **#291 부터 실데이터**다 — 월 1회 받아 `place_catalog` 에 출처별 한 벌로 두고, 카테고리가 없으면 KTO 셀과 합쳐 거리순, `vet/shop/trail` 이면 그 한 벌에서만 거른다(§4.4).
 
 **응답은 봉투가 아니라 벌거벗은 배열이다** — 서버가 반경 안을 한 번에 주고 상한이 `limit` 으로 코드에 있다(ADR-0017 규약 2의 예외). 그래서 **잘렸다는 신호를 실을 자리가 없다.**
 
@@ -389,7 +389,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 > 2026-09-03 이전 이 예시는 배열을 열고 객체로 닫는 **깨진 JSON** 이었고, 계약에 없는 `count`·`cachedAt` 두 키를 달고 있었습니다. 봉투이던 시절의 잔해입니다.
 
-> `category` 는 **앱이 안 읽는다** — 아이콘도 필터도 `contentTypeId` 로 판단한다. 남겨 둔 이유는 계약의 그 필드 설명에 있다. 카테고리 라벨 SSOT 는 `app/lib/v2/domain/pet.dart` `kPetCategories`. `vet/shop/trail` 은 별도 공공데이터 레이어(현재 앱 더미).
+> 앱은 `contentTypeId` 가 있으면 그것을, 없으면 `category` 를 본다(`PetPlace.categoryKey`, #291). KTO 항목은 전자, `vet/shop/trail` 항목은 후자다 — 그 셋은 `source` 와 `category` 가 같은 값이고 `contentId` 가 `출처:원본키` 다. 카테고리 라벨 SSOT 는 `app/lib/v2/domain/pet.dart` `kPetCategories`.
 
 ### 4.3 장소 상세 — ✅ 구현(#40)
 
@@ -430,9 +430,42 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 원본 KTO 오퍼레이션: `detailCommon2` + `detailPetTour2`(반려 동반 상세).
 
-### 4.4 산책로 코스 — ⚪ post-MVP
+### 4.4 전국 한 벌 — ✅ 구현(#273 · #291)
 
-`GET /api/trails/nearby?lat&lng&radius` → 두루누비(걷기여행길) 코스. `path`는 인코딩 폴리라인/GPX 좌표열. 현재 앱은 더미 폴리라인.
+`GET /api/places/catalog` — 요청에 아무것도 안 실린다. A안 빌드(좌표를 서버로 안 보내는 빌드)가 쓰는 길이고, 앱은 한 벌을 기기에 두고 거리를 기기에서 잰다(계약 참조).
+
+**#291 부터 한 배열에 출처가 넷이다.** KTO 반려동반(`source=kto`) 뒤에 동물병원(`vet`)·펫샵(`shop`) — 행정안전부 인허가, 전국 — 과 산책로(`trail`) — 두루누비 걷기여행길 — 가 이어 붙는다. 서버는 출처별로 한 벌씩 따로 받아 둔다(`place_catalog` 행 셋, `24_place_catalog_layers.sql`).
+
+| 출처 | 어디서 | 얼마나 자주 | 예산 풀 |
+|---|---|---|---|
+| `kto` | `KorPetTourService2/areaBasedList2` | 매일 04:40 예열(#279) | `catalog` 50/일 |
+| `vet` · `shop` | `apis.data.go.kr/1741000/animal_hospitals/info` · `/animal_sales/info` — 영업 중(`SALS_STTS_CD=01`)만, 좌표 EPSG:5174 → WGS84 | 매월 1일 05:20 · 기동 시 없으면 한 번 | `localdata` 500/일 |
+| `trail` | `apis.data.go.kr/B551011/Durunubi/courseList` + 코스별 GPX 파일 | 같음 | `durunubi` 100/일 (GPX 는 안 센다) |
+
+- 세 API 는 **같은 서비스키**(`TOUR_API_SECRET`)를 쓰지만 공공데이터포털에서 API 마다 **활용신청**이 따로다(자동 승인). 안 돼 있으면 게이트웨이가 `30`(키 미등록)을 주고 그날 풀을 닫는다 — KTO 한 벌은 그와 무관하게 나간다.
+- KTO 한 벌이 없으면 레이어가 있어도 `[]` 다. 레이어가 없으면 KTO 한 벌만 나간다.
+- `ETag` 는 이어 붙인 벌들의 해시를 다시 해시한 값이다.
+
+### 4.5 산책로 코스의 선 — ✅ 구현(#291)
+
+`GET /api/places/trails/{courseId}/route` — 두루누비 코스 하나의 경로. `courseId` 는 카탈로그 항목 `contentId` 의 `trail:` 뒤(두루누비 `crsIdx`).
+
+```json
+// 200 OK — 계약의 TrailRoute
+{
+  "courseId": "T_ROUTE_1",
+  "name": "서울숲 둘레길",
+  "lengthM": 2600,          // 줄이기 전 원본 길이
+  "pointCount": 180,        // 300 이하
+  "points": [[127.0374, 37.5445], [127.0379, 37.5449]]   // [경도, 위도] — Walk.path 와 같은 순서
+}
+```
+
+- 원본 GPX 를 Douglas–Peucker 로 **300 점 이하**로 줄여 `trail_route` 에 둔다. 카탈로그에는 시작점만 싣는다 — 2,000 코스의 선을 한 벌에 실으면 16MB 다.
+- `404` 없는 코스 · `429` 상세와 같은 `places-detail` 버킷 · `Cache-Control: max-age=86400`.
+- 앱은 산책로 항목의 시트를 열 때 이것을 받아 지도에 폴리라인을 그린다(`TrailRouteRepository`). 지도 키 없는 빌드는 선을 못 그리고 카드의 `summary`("2.6km · 약 40분 · 쉬움 · 순환")만 본다.
+
+> 2026-09-06 이전 이 절은 `GET /api/trails/nearby` 를 "post-MVP" 로 적고 있었다. 그 경로는 만들지 않았다 — 산책로도 카탈로그의 점이고, 선만 따로 받는 편이 앱 코드가 적다.
 
 ---
 
@@ -838,7 +871,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | 화면(lib/v2) | 현재 데이터 소스 | 목표 API |
 |---|---|---|
 | 홈 (강아지 히어로/오늘 산책) | `kMyDog`(로컬) + **산책은 서버**(#145) | `GET /auth/me`, `GET /api/dogs`, `GET /api/walks`, `GET /api/walks/stats/weekly` |
-| 지도 (KTO 45곳 + 병원/펫샵/산책로 더미) | **백엔드 프록시 경유**(#40) | `GET /api/places/nearby`, `GET /api/places/{contentId}` |
+| 지도 (KTO 전국 + 병원/펫샵/산책로 실데이터 #291) | **백엔드 프록시 경유**(#40 · #273) | `GET /api/places/nearby`, `GET /api/places/catalog`, `GET /api/places/{contentId}`, `GET /api/places/trails/{courseId}/route` |
 | 실시간 산책 (실 GPS) | **서버 연동 완료**(#145) | `POST /api/walks` |
 | 산책 통계 (fl_chart) | **서버 연동 완료**(#145) | `GET /api/walks/stats/weekly` |
 | 커뮤니티 (앱은 아직 더미 — #171) | `kPetPosts`(로컬) | **서버는 붙었다**(#170): `GET/POST /api/community/posts`, `.../comments`, `.../reactions/{type}` |
@@ -855,7 +888,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 2. ~~**Phase 2 — 계정·프로필**~~ **완료(#12·#145).** 카카오/구글 OAuth + `/auth/me` + `/api/dogs`.
 3. ~~**Phase 3 — 산책 저장**~~ **완료(#145·#155).** `POST /api/walks` + `stats/weekly`. 경로는 `walk.path LINESTRING SRID 4326`, 점별 시각은 `walk.path_t`.
 4. **Phase 4 — 커뮤니티 실연동:** `/api/community/posts` 계열로 `kPetPosts` 대체 — **M3.1**(#169~#172). 착수 전 결정은 [ADR-0016](../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) 에서 끝났다.
-5. **Phase 5 — 공공데이터 레이어:** LOCALDATA(동물병원 ~9,445건, EPSG:5174→WGS84) · 두루누비 산책로 실데이터. `vet/shop/trail` 레이어 더미 제거 — **M3 잔여**.
+5. ~~**Phase 5 — 공공데이터 레이어**~~ → **완료**(#291). 행정안전부 인허가(동물병원·동물판매업, 전국, EPSG:5174→WGS84) · 두루누비 산책로(코스 시작점 + 선). §4.4 · §4.5.
 6. **post-MVP:** 북마크, 케어 로그, 매칭/산책 크루.
 
 > **2·3 이 1 보다 먼저 끝났다.** 이 목록의 번호는 순서가 아니라 이름이다.

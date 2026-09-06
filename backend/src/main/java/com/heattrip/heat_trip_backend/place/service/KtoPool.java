@@ -33,7 +33,16 @@ public enum KtoPool {
      * <p><b>1건 = 2콜이다.</b> 예약할 때 2 단위를 잡는다 — 1 로 잡으면 150건이 통과해
      * 실제로는 300콜이 나가고 일 총량이 무너진다.
      */
-    DETAIL("detail");
+    DETAIL("detail"),
+
+    /**
+     * 행정안전부 인허가(동물병원·동물판매업) — 이슈 #291. 1페이지 = 1콜. 같은 서비스키지만
+     * 다른 API 라 한도도 따로다(개발계정 10,000/일).
+     */
+    LOCALDATA("localdata"),
+
+    /** 두루누비 걷기여행길 코스 목록 — 이슈 #291. 1페이지 = 1콜(개발계정 1,000/일). GPX 파일은 안 센다. */
+    DURUNUBI("durunubi");
 
     private final String wireValue;
 

@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **46개** 있다(전체 목록은 [부록 A](#부록-a-정본의-표-46개--어디에-적혀-있나)). 이 문서에 절이 있는 실재 표는 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§7 post` · `§8 comment` · `§9 reaction` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` · `§18 emotion_card` · `§19 card_comment` · `§20 card_reaction` · `§21 kto_call_budget` · `§22 place_cell` · `§23 pet_place_detail` · `§24 place_catalog` · `§25 report` · `§26 report_snapshot` · `§27 user_block` · `§28 user_consent` 스물다섯이다. 나머지 절(`§5 place` · `§6 trail` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 절이 없는 21개는 감정 여행·관광 수집 시절의 표라 부록 A 에만 적었다 — 지우지 않고 격리한다(#174). 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **47개** 있다(전체 목록은 [부록 A](#부록-a-정본의-표-47개--어디에-적혀-있나)). 이 문서에 절이 있는 실재 표는 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§6 trail_route` · `§7 post` · `§8 comment` · `§9 reaction` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` · `§18 emotion_card` · `§19 card_comment` · `§20 card_reaction` · `§21 kto_call_budget` · `§22 place_cell` · `§23 pet_place_detail` · `§24 place_catalog` · `§25 report` · `§26 report_snapshot` · `§27 user_block` · `§28 user_consent` 스물여섯이다. 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 절이 없는 21개는 감정 여행·관광 수집 시절의 표라 부록 A 에만 적었다 — 지우지 않고 격리한다(#174). 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -260,30 +260,35 @@ LIMIT 80;
 
 ---
 
-## 6. `trail` — 산책로 코스 (경로 LINESTRING)
+## 6. `trail_route` — 산책로 코스의 선 (**실재**)
 
-두루누비(걷기여행길) 산책로 코스. 경로를 `LINESTRING`으로 저장. 현재 다른 엔티티와 FK 없이 지도 레이어(`trail` 카테고리)에만 사용(향후 `walk`/`post` 연결 확장 여지).
+두루누비(걷기여행길) 코스 하나의 경로 — [`24_place_catalog_layers.sql`](../../backend/mysql/post-start/24_place_catalog_layers.sql) · #291. 원본 GPX 를 Douglas–Peucker 로 **300점 이하**로 줄여 `payload` 에 `[[경도, 위도], …]` JSON 으로 둔다 — 응답(`GET /api/places/trails/{courseId}/route`)의 `points` 그대로라 꺼내서 객체로 만들지 않는다(§24 와 같은 원칙). 카탈로그(§24 `durunubi` 행)에는 코스의 **시작점**(`start_lat`/`start_lng`)만 실리고 선은 사용자가 그 산책로를 눌렀을 때 따로 나간다 — 2,000 코스의 선을 한 벌에 실으면 16MB 다. `length_m` 은 줄이기 전 원본의 길이다. FK 는 없다 — `course_id` 는 두루누비의 `crsIdx` 다. `fetched_at` 은 §24 와 같은 **서비스 존 벽시계**로, "다시 받을 때가 됐는가" 에만 쓴다.
+
+> 2026-09-06 이전 이 절은 `LINESTRING` + `SPATIAL INDEX` 의 `trail` 표를 **계획**으로 적고 있었다. 만들지 않았다 — 근접 조회는 카탈로그의 시작점으로 하고 선은 키로 한 건씩 꺼내므로 공간 인덱스가 할 일이 없다(ADR-0013 의 `walk` 판단과 같다).
 
 ```sql
-CREATE TABLE trail (
-  id       BIGINT      NOT NULL AUTO_INCREMENT,
-  source   VARCHAR(30) NOT NULL DEFAULT 'durunubi' COMMENT '두루누비(걷기여행길)',
-  name     VARCHAR(150) NOT NULL,
-  path     LINESTRING  SRID 4326 NOT NULL COMMENT '산책로 경로',
-  length_m INT         NULL COMMENT '코스 길이(m)',
-  created_at DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  SPATIAL INDEX spx_trail_path (path)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `trail_route` (
+  `length_m` int NOT NULL,
+  `point_count` int NOT NULL,
+  `start_lat` double NOT NULL,
+  `start_lng` double NOT NULL,
+  `fetched_at` datetime(6) NOT NULL,
+  `course_id` varchar(32) NOT NULL,
+  `name` varchar(150) NOT NULL,
+  `payload` longtext NOT NULL,
+  PRIMARY KEY (`course_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
-| `id` | `BIGINT` | PK | |
-| `source` | `VARCHAR(30)` | NOT NULL 기본 durunubi | 데이터 출처 |
+| `course_id` | `VARCHAR(32)` | PK | 두루누비 `crsIdx`. 카탈로그 항목의 `contentId` 는 `trail:` + 이 값 |
 | `name` | `VARCHAR(150)` | NOT NULL | 코스명 |
-| `path` | `LINESTRING` | **SRID 4326, NOT NULL, SPATIAL INDEX** | 코스 경로 |
-| `length_m` | `INT` | NULL | 코스 길이(m) |
+| `point_count` | `INT` | NOT NULL | 줄인 뒤 남은 점 수(≤ 300) |
+| `length_m` | `INT` | NOT NULL | 원본 선의 길이(m) |
+| `start_lat` / `start_lng` | `DOUBLE` | NOT NULL | 선의 첫 점 — 카탈로그의 `Place.lat/lng` |
+| `payload` | `LONGTEXT` | NOT NULL | `[[경도, 위도], …]` JSON |
+| `fetched_at` | `DATETIME(6)` | NOT NULL | 받은 시각(서비스 존 벽시계) |
 
 ---
 
@@ -896,9 +901,9 @@ CREATE TABLE `pet_place_detail` (
 
 ---
 
-## 24. `place_catalog` — 전국 반려동반 장소 한 벌 (**실재**)
+## 24. `place_catalog` — 장소 한 벌, 출처별 한 행 (**실재**)
 
-전국 반려동반 장소 목록 **한 벌** — [`18_place_catalog.sql`](../../backend/mysql/post-start/18_place_catalog.sql). **행이 하나다** (`PRIMARY KEY (id)` + `CHECK (id = 1)`) — §22 `place_cell` 이 좌표를 접은 키를 갖는 것과 달리 이 표에는 키가 없고, 그래서 요청에 좌표도 지역도 실려 오지 않는다. `etag` 로 앱이 304 를 받고, 매일 04:40(KST) 예열 스케줄러가 갱신한다(#279). `fetched_at` 은 **서비스 존(Asia/Seoul) 벽시계**다 — 다른 표의 UTC 와 다르다. FK 는 없다.
+장소 목록 **한 벌** — [`18_place_catalog.sql`](../../backend/mysql/post-start/18_place_catalog.sql) · [`24_place_catalog_layers.sql`](../../backend/mysql/post-start/24_place_catalog_layers.sql). §22 `place_cell` 이 좌표를 접은 키를 갖는 것과 달리 이 표에는 좌표 키가 없고, 그래서 요청에 좌표도 지역도 실려 오지 않는다. #273 에서는 행이 하나(`CHECK (id = 1)`, KTO 전국)였고, **#291 이 출처별 한 행**으로 넓혔다 — `source` 가 `kto`(id 1, 매일 04:40 예열 #279) · `localdata`(id 2, 행정안전부 인허가 동물병원·동물판매업, 월 1회) · `durunubi`(id 3, 두루누비 걷기여행길, 월 1회)이고 UNIQUE + CHECK 가 그것을 지킨다. 번호는 코드의 `CatalogSource` 가 든다. `GET /api/places/catalog` 은 세 행의 `payload` 를 **문자열로 이어 붙여** 하나의 배열로 내보내고, `etag` 는 세 해시를 다시 해시한다. `fetched_at` 은 **서비스 존(Asia/Seoul) 벽시계**다 — 다른 표의 UTC 와 다르다. FK 는 없다.
 
 ```sql
 CREATE TABLE `place_catalog` (
@@ -908,10 +913,12 @@ CREATE TABLE `place_catalog` (
   `total_count` int NOT NULL,
   `failed_at` datetime(6) DEFAULT NULL,
   `fetched_at` datetime(6) NOT NULL,
+  `source` varchar(16) NOT NULL,
   `etag` varchar(64) NOT NULL,
   `payload` longtext NOT NULL,
   PRIMARY KEY (`id`),
-  CONSTRAINT `chk_place_catalog_singleton` CHECK ((`id` = 1))
+  UNIQUE KEY `uk_place_catalog_source` (`source`),
+  CONSTRAINT `chk_place_catalog_source` CHECK ((`source` in (_utf8mb4'kto',_utf8mb4'localdata',_utf8mb4'durunubi')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
@@ -1020,7 +1027,7 @@ CREATE TABLE `user_consent` (
 | `place` | `uq_place_src(source, external_id)` | UNIQUE | POI 중복 방지 |
 | `place` | `idx_place_category(category)` | 보조 | 카테고리 필터 |
 | `place` | `spx_place_geom(geom)` | **SPATIAL** | 주변 장소 검색 |
-| `trail` | `spx_trail_path(path)` | **SPATIAL** | 산책로 코스 공간 표시 |
+| `place_catalog` | `uk_place_catalog_source(source)` | UNIQUE | 출처(kto·localdata·durunubi)당 한 벌 — #291 |
 | `post` | `idx_post_board(board, created_at)` | 보조 | 게시판별 최신순 |
 | `comment` | `idx_comment_post(post_id, created_at)` | 보조 | 글별 댓글 |
 | `reaction` | `uq_reaction(post_id, user_id, type)` | UNIQUE | 중복 반응 방지 |
@@ -1038,11 +1045,11 @@ CREATE TABLE `user_consent` (
 | `care_log` | `idx_carelog_doneby(done_by)` | 보조 | 사용자 삭제 시 `SET NULL` 이 훑는 자리 |
 | `care_log` | `idx_carelog_dog(dog_id, occurred_at)` | 보조 | `dog` 삭제 시 `SET NULL` 이 훑는 자리 · 반려동물별 케어 기록(#154) |
 
-> 공간 컬럼(`walk.path`, `place.geom`, `trail.path`)은 모두 `SRID 4326` + `NOT NULL` + `SPATIAL INDEX`. 초기에는 MySQL 공간형 단일 저장소로 운영하고, 대량 GPS 시계열·장소검색(ES/Redis)은 규모 확장 시 옵션이다. 관계 개요는 [ERD](./erd.md) 참조.
+> 공간 컬럼(`walk.path`, `place.geom`)은 모두 `SRID 4326` + `NOT NULL` + `SPATIAL INDEX`. 초기에는 MySQL 공간형 단일 저장소로 운영하고, 대량 GPS 시계열·장소검색(ES/Redis)은 규모 확장 시 옵션이다. 관계 개요는 [ERD](./erd.md) 참조.
 
 ---
 
-## 부록 A. 정본의 표 46개 — 어디에 적혀 있나
+## 부록 A. 정본의 표 47개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**가 `실재 §N` 이면 그 절이 정의이고, `레거시` 면 감정 여행·관광 수집 시절의 표라 이 문서에 절이 없다 — 반려 축에서 쓰지 않고, 지우지 않고 격리한다(#174 · 앱에서 끊는 자리는 #94). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
@@ -1072,7 +1079,7 @@ CREATE TABLE `user_consent` (
 | `kto_call_budget` | 실재 §21 | `place` | KTO 일 호출 예산 |
 | `media_objects` | 레거시 | `S3` | 업로드 객체 원장(S3 objectKey) |
 | `pet_place_detail` | 실재 §23 | `place` | 장소 상세 캐시 |
-| `place_catalog` | 실재 §24 | `place` | 전국 반려동반 장소 한 벌(행 하나) |
+| `place_catalog` | 실재 §24 | `place` | 장소 한 벌 — 출처별 한 행(kto·localdata·durunubi, #291) |
 | `place_cell` | 실재 §22 | `place` | 주변 장소 셀 스냅샷 |
 | `place_descriptions` | 레거시 | `tour` | KTO 수집 — 장소 설명 |
 | `place_features` | 레거시 | `curation · explore` | 장소 특성. 두 모듈이 같은 표를 매핑한다 |
@@ -1089,6 +1096,7 @@ CREATE TABLE `user_consent` (
 | `report` | 실재 §25 | `moderation` | 신고 |
 | `report_snapshot` | 실재 §26 | `moderation` | 신고 대상 스냅샷 |
 | `schedule` | 레거시 | `schedules` | 일정 항목 |
+| `trail_route` | 실재 §6 | `place` | 산책로 코스의 선 — 두루누비 GPX 를 300점 이하로 줄인 `[[경도, 위도]]` JSON(#291) |
 | `user_block` | 실재 §27 | `moderation` | 가리기 |
 | `user_consent` | 실재 §28 | `consent` | 약관 동의 이력 |
 | `users` | 실재 §1 | `user` | 앱 사용자 계정 |

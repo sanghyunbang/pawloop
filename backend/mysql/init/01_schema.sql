@@ -363,10 +363,12 @@ CREATE TABLE `place_catalog` (
   `total_count` int NOT NULL,
   `failed_at` datetime(6) DEFAULT NULL,
   `fetched_at` datetime(6) NOT NULL,
+  `source` varchar(16) NOT NULL,
   `etag` varchar(64) NOT NULL,
   `payload` longtext NOT NULL,
   PRIMARY KEY (`id`),
-  CONSTRAINT `chk_place_catalog_singleton` CHECK ((`id` = 1))
+  UNIQUE KEY `uk_place_catalog_source` (`source`),
+  CONSTRAINT `chk_place_catalog_source` CHECK ((`source` in (_utf8mb4'kto',_utf8mb4'localdata',_utf8mb4'durunubi')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `place_cell` (
@@ -606,6 +608,18 @@ CREATE TABLE `schedule` (
   PRIMARY KEY (`schedule_id`),
   KEY `FKdn5svbxyacce1gpfiawk7iqtc` (`user_id`),
   CONSTRAINT `FKdn5svbxyacce1gpfiawk7iqtc` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `trail_route` (
+  `length_m` int NOT NULL,
+  `point_count` int NOT NULL,
+  `start_lat` double NOT NULL,
+  `start_lng` double NOT NULL,
+  `fetched_at` datetime(6) NOT NULL,
+  `course_id` varchar(32) NOT NULL,
+  `name` varchar(150) NOT NULL,
+  `payload` longtext NOT NULL,
+  PRIMARY KEY (`course_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `user_block` (

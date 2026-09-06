@@ -225,7 +225,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
       final m = NMarker(
         id: 'poi-${p.contentId.isEmpty ? p.title : p.contentId}',
         position: NLatLng(p.lat, p.lng),
-        icon: await _poiIcon(p.category),
+        icon: await _poiIcon(p.petCategory),
       );
       m.setOnTapListener((_) => _showPoiInfo(p));
       markers.add(m);
@@ -275,7 +275,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   }
 
   void _showPoiInfo(PetPlace p) {
-    final cat = p.category;
+    final cat = p.petCategory;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -351,10 +351,10 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
         builder: (sheetCtx, setSheet) {
           _sheetRefresh = setSheet;
           final cats = kPetCategories
-              .where((c) => _places.any((p) => p.contentTypeId == c.key))
+              .where((c) => _places.any((p) => p.categoryKey == c.key))
               .toList();
           final list = _places.where((p) {
-            if (cat != null && p.contentTypeId != cat) return false;
+            if (cat != null && p.categoryKey != cat) return false;
             if (q.isNotEmpty && !p.title.contains(q)) return false;
             return true;
           }).toList();
@@ -463,7 +463,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
                           itemCount: list.length,
                           itemBuilder: (_, i) {
                             final p = list[i];
-                            final c = p.category;
+                            final c = p.petCategory;
                             return GestureDetector(
                               onTap: () {
                                 Navigator.pop(sheetCtx);

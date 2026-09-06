@@ -123,6 +123,8 @@ public class KtoCallBudget {
             case NEARBY -> properties.getNearbyMaxCallsPerDay();
             case CATALOG -> properties.getCatalogMaxCallsPerDay();
             case DETAIL -> properties.getDetailMaxCallsPerDay();
+            case LOCALDATA -> properties.getLocaldataMaxCallsPerDay();
+            case DURUNUBI -> properties.getDurunubiMaxCallsPerDay();
         };
     }
 }

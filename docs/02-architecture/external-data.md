@@ -11,11 +11,11 @@
 | 소스 | 제공기관 | 채우는 레이어(카테고리 key) | 좌표계 | 현재 상태 |
 |---|---|---|---|---|
 | **KorPetTourService2** | 한국관광공사 | 여행지`12`·문화`14`·레포츠`28`·숙박`32`·쇼핑`38`·카페/식당`39` | WGS84 (경위도) | **실연동** (백엔드 프록시 경유, 서울 ~45곳) |
-| **LOCALDATA 인허가** | 행정안전부 | 병원`vet`·펫샵`shop` | **EPSG:5174** → WGS84 변환 필요 | 더미 (미연동) |
-| **두루누비 걷기여행길** | 한국관광공사 | 산책로`trail` | WGS84 (GPX/좌표) | 더미 폴리라인 (미연동) |
+| **행정안전부 인허가** (공공데이터포털 `1741000/animal_hospitals`·`animal_sales`) | 행정안전부 | 병원`vet`·펫샵`shop` | **EPSG:5174** → WGS84 (서버가 proj4j 로 변환) | **실연동** (#291 — 전국, 월 1회, `place_catalog` 의 `localdata` 행) |
+| **두루누비 걷기여행길** (`B551011/Durunubi/courseList` + GPX) | 한국관광공사 | 산책로`trail` | WGS84 (GPX) | **실연동** (#291 — 월 1회, 시작점은 `place_catalog` 의 `durunubi` 행, 선은 `trail_route`) |
 
 - 카테고리 key는 `lib/v2/domain/pet.dart`의 `kPetCategories` SSOT를 그대로 사용한다. 숫자 key(`12`/`14`/`28`/`32`/`38`/`39`)는 KTO `contenttypeid`, 문자 key(`vet`/`shop`/`trail`)는 별도 공공데이터 레이어(`kLayerKeys`)다.
-- KTO 는 **백엔드가 부른다**(#40). 앱은 `GET /api/places/nearby` 만 안다(`lib/v2/data/pet_places_repository.dart`). 나머지 두 소스(`vet`/`shop`/`trail`)는 아직 더미다(→ [6. 캐싱·동기화](#6-캐싱동기화-전략placetrail)).
+- 셋 다 **백엔드가 부른다**(#40 · #291). 앱은 `GET /api/places/nearby`·`GET /api/places/catalog`·`GET /api/places/trails/{courseId}/route` 만 안다(`lib/v2/data/pet_places_repository.dart`·`place_catalog_repository.dart`·`trail_route_repository.dart`). 세 API 는 공공데이터포털의 **같은 인증키**(`TOUR_API_SECRET`)를 쓰되 API 마다 활용신청이 따로다.
 
 ---
 
@@ -130,67 +130,77 @@ String query = "serviceKey=" + serviceKey
 
 ---
 
-## 2. LOCALDATA 인허가 (동물병원 · 펫샵)
+## 2. 행정안전부 인허가 (동물병원 · 동물판매업) — 실연동 (#291)
 
-행정안전부 지방행정 인허가데이터(LOCALDATA). 동물병원은 전국 약 **9,445건**, 그 외 동물미용·펫샵·펫호텔 업종이 있다. 지도의 `vet`/`shop` 레이어를 채운다. **현재 앱은 더미**이며, 좌표계 변환이 최대 관문이다.
+행정안전부 지방행정인허가데이터의 **전국** 동물병원·동물판매업. 공공데이터포털이 게이트웨이(`apis.data.go.kr/1741000/…`)로 준다 — 동물병원 9,445건 · 동물판매업 8,907건(폐업 포함, 2025-11 기준). 지도의 `vet`/`shop` 칩을 채운다.
 
-### 2.1 좌표계 변환 — EPSG:5174 → WGS84 (필수)
+> 2026-09-06 이전 이 절과 #291 본문은 서울 열린데이터광장만 보고 "서울만 있다" 고 적었다. 그 자료의 원천인 지방행정인허가데이터가 전국을 한 API 로 준다 — 서울 한정은 없어졌고, "서울만" 칩 표시도 만들지 않았다.
 
-LOCALDATA 좌표(`x`, `y`)는 경위도가 아니라 **EPSG:5174 (중부원점 TM, Bessel 타원체)** 미터 좌표다. 지도(WGS84 경위도)에 찍으려면 반드시 변환해야 하며, 안 하면 한반도 밖(혹은 바다)에 찍힌다.
-
-| 필드 | 의미 |
-|---|---|
-| `x` | TM 동쪽(easting), meter |
-| `y` | TM 북쪽(northing), meter |
-
-- **원본**: `EPSG:5174` (Korea 2000 / Central Belt, 중부원점, Bessel 1841)
-- **목표**: `EPSG:4326` (WGS84 경위도)
-- 주의: 5174는 5186(GRS80 중부원점)과 **타원체가 달라(Bessel vs GRS80)** 혼용 시 수십~수백 m 오차. LOCALDATA는 5174가 맞다.
-
-변환은 **백엔드 배치에서 1회 수행 후 `place.geom`에 WGS84로 저장**하는 것을 권장(앱은 변환 부담 없음). 예: PROJ / GeoTools / proj4 계열.
-
-```
-# proj4 정의 (EPSG:5174)
-+proj=tmerc +lat_0=38 +lon_0=127.0028902777778 +k=1 +x_0=200000 +y_0=500000
-+ellps=bessel +units=m +no_defs
-+towgs84=-115.80,474.99,674.11,1.16,-2.31,-1.63,6.43
-```
-
-### 2.2 주요 필드 (인허가 공통 스키마)
-
-| 필드 | 의미 | `place` 매핑 |
-|---|---|---|
-| `bplcNm` | 사업장명 | `name` |
-| `siteWhlAddr` / `rdnWhlAddr` | 지번/도로명 주소 | `addr` |
-| `x`, `y` | EPSG:5174 좌표 | 변환 후 `geom(POINT)` |
-| `trdStateNm` | 영업상태(영업/폐업) | 필터(영업 중만) |
-| `siteTel` | 전화 | `raw_json` |
-| `uptaeNm` | 업태(동물병원/미용 등) | `category` 판별 |
-
-- **폐업 필터 필수**: `trdStateNm`(또는 `trdStateGbn`)로 영업 중만 적재. 안 하면 폐업 병원이 지도에 남음.
-- 업종별로 파일/서비스가 나뉘므로(동물병원, 동물판매업 등) `source`를 `localdata_vet`/`localdata_shop`으로 구분해 저장.
-
-### 2.3 상태·한계
-
-- 현재 지도의 병원/펫샵은 **하드코딩 더미**(`kLayerKeys = {vet, shop, trail}` 레이어).
-- 좌표 변환 + 폐업 필터 + 주기적(월 단위) 재적재가 실연동의 전제.
-
----
-
-## 3. 두루누비 걷기여행길 (산책로)
-
-한국관광공사 두루누비(walk trail) 데이터. 걷기여행길 코스의 경로 좌표/GPX를 제공한다. 지도의 `trail` 레이어(폴리라인)와 `trail` 테이블을 채운다.
+### 2.1 기본 정보
 
 | 항목 | 값 |
 |---|---|
-| 제공 | 한국관광공사 두루누비 |
-| 형식 | 코스 좌표열 / GPX 트랙 |
-| 좌표계 | WGS84 (변환 불필요) |
-| 매핑 | 코스명 → `trail.name`, 좌표열 → `trail.path(LINESTRING)`, 총거리 → `trail.length_m` |
-| 현재 상태 | **더미 폴리라인**(실데이터 미연동) |
+| 동물병원 | `https://apis.data.go.kr/1741000/animal_hospitals/info` — 공공데이터포털 "행정안전부_동물_동물병원 조회서비스"(15154952) |
+| 동물판매업 | `https://apis.data.go.kr/1741000/animal_sales/info` — "행정안전부_동물_동물판매업 조회서비스"(15155083) |
+| 인증 | `serviceKey` — KTO 와 **같은 키**(`TOUR_API_SECRET`). 다만 포털에서 API 마다 **활용신청**이 따로다(자동 승인). 안 돼 있으면 게이트웨이가 `returnReasonCode=30` 을 준다 |
+| 한 페이지 | `numOfRows` 상한 **100**. 영업 중만 받으면 업종당 50페이지 안팎 |
+| 필터 | `cond[SALS_STTS_CD::EQ]=01` — 영업/정상만. 폐업까지 받으면 페이지가 두 배다 |
+| 한도 | 개발계정 10,000/일. 우리 풀(`kto_call_budget.pool = localdata`)은 500/일 |
+| 갱신 | **월 1회**(매월 1일 05:20 KST, `LayerCatalogScheduler`) + 기동 시 한 벌이 없으면 한 번 |
+| 호출 위치 | 백엔드 `place/layer/LocalDataApiClient` → `LayerCatalogService.refreshLocalData()` |
 
-- GPX/좌표열을 `LINESTRING`으로 변환해 `trail.path`에 저장, `length_m`는 사전 계산해 넣는다(지도 렌더 시 재계산 회피).
-- 두루누비 코스는 도시 산책 규모보다 긴 트레킹 코스가 많아, MVP 지도에는 **도심 근처 코스만 선별 적재** 권장.
+### 2.2 좌표계 변환 — EPSG:5174 → WGS84 (서버가 한다)
+
+`CRD_INFO_X`/`CRD_INFO_Y` 는 경위도가 아니라 **Bessel 중부원점 TM(EPSG:5174) 미터 좌표**다("보정계수 안들어간 Bessel 중부원점TM" — 데이터 설명 그대로). 그대로 찍으면 한반도 밖에 찍힌다. `place/layer/Tm5174` 가 proj4j 로 바꾼다 — 정의 문자열은 아래이고 EPSG 파라미터 DB 는 들이지 않았다.
+
+```
++proj=tmerc +lat_0=38 +lon_0=127.0028902777778 +k=1 +x_0=200000 +y_0=500000
++ellps=bessel +units=m +no_defs +towgs84=-115.80,474.99,674.11,1.16,-2.31,-1.63,6.43
+```
+
+`Tm5174Test` 가 서울 다섯 곳(열린데이터광장 sample 행의 TM 좌표 ↔ 카카오 주소검색 WGS84)을 **60m 안**에서 맞추는지 잰다. 타원체나 원점을 틀리면 수백 m 가 어긋나 빨간불이다. 한국 밖으로 떨어지는 결과는 버린다.
+
+### 2.3 필드 매핑 (`LocalDataPlaceMapper`)
+
+| 응답 필드 | 계약 `Place` | 비고 |
+|---|---|---|
+| `MNG_NO` | `contentId` = `vet:관리번호` / `shop:관리번호` | KTO 숫자 키와 겹치지 않게 접두사. 상세 경로 없음(404) |
+| `BPLC_NM` | `title` | |
+| `SALS_STTS_CD` | (필터) | `01` 이 아니면 버린다 — 호출이 걸러도 한 번 더 본다 |
+| `CRD_INFO_X` / `CRD_INFO_Y` | `lat` / `lng` | 변환 뒤. 비어 있으면 버린다(개업 며칠 안 된 곳은 비어 온다 — 서울 실측) |
+| `ROAD_NM_ADDR` → `LOTNO_ADDR` | `addr` | 도로명이 없으면 지번 |
+| `TELNO` | `tel` | |
+| `DTL_TASK_SE_NM` | `summary` | 판매업만 — 동물판매업/동물미용업 구분 |
+| — | `source` = `category` = `vet`/`shop`, `contentTypeId` = null | 앱은 `contentTypeId` 가 없으면 `category` 를 본다 |
+
+### 2.4 한계·주의
+
+- 공공데이터포털의 정상 코드가 서비스마다 다르다(KTO `0000`, 여기는 `00` 으로 적혀 있다). `DataGoKrEnvelope` 는 코드를 판정하지 않고 넘기고, `body` 가 있으면 계속한다 — 실측 뒤 맞춘다.
+- 키 미등록(30)·한도 초과(22)를 받으면 **그날 풀을 닫는다.** 활용신청이 안 된 API 를 하루 종일 두드리지 않는다. KTO 한 벌은 그와 무관하게 나간다.
+- 중간 페이지가 실패하면 **아무것도 저장하지 않는다.** 옛 한 벌이 반쪽보다 낫다(KTO 카탈로그와 같은 원칙).
+- 대안으로 파일 다운로드(`file.localdata.go.kr/file/download/animal_hospitals/info`, 매일 갱신 CSV, 로그인 없음)가 있다. 키가 필요 없지만 CP949 CSV 와 zip 을 풀어야 하고 증분이 없어 API 를 골랐다. 포털 API 가 막히는 날의 예비다.
+
+---
+
+## 3. 두루누비 걷기여행길 (산책로) — 실연동 (#291)
+
+한국관광공사 두루누비의 걷기여행길. 코스 목록은 API 가, 선은 코스마다 **GPX 파일**이 준다. "중간에 변환" 이 이것이다 — 선을 받아서 **시작점은 카탈로그의 점**으로, **선은 `trail_route`** 로 나눠 담는다.
+
+| 항목 | 값 |
+|---|---|
+| 코스 목록 | `https://apis.data.go.kr/B551011/Durunubi/courseList?brdDiv=DNWW&numOfRows=100&pageNo=n&_type=json` — 공공데이터포털 "한국관광공사_두루누비 정보 서비스_GW"(15101974). `brdDiv=DNWW` 가 걷기길(명세: "걷기 길만 제공되고 있음") |
+| 인증 | KTO 와 같은 키. **활용신청 따로**(자동 승인). 2026-09-06 실측: 신청 전이라 `returnReasonCode=30` |
+| 한도 | 개발계정 1,000/일. 우리 풀(`durunubi`)은 100/일. GPX 파일은 두루누비 웹서버라 안 센다 |
+| 응답 필드 | `crsIdx`(코스 번호) · `crsKorNm` · `routeIdx` · `crsDstnc`(km) · `crsTotlRqrmHour`(분) · `crsLevel`(1~3) · `crsCycle` · `sigun` · `crsSummary` · **`gpxpath`**(GPX URL) |
+| GPX | `<trkpt lat lon>` 를 순서대로 읽고(`GpxParser`), Douglas–Peucker 로 **300점 이하**로 줄여 `[[경도, 위도]]` JSON 으로 `trail_route.payload` 에 둔다. 길이는 줄이기 전에 잰다 |
+| 카탈로그 항목 | `contentId` = `trail:crsIdx` · `lat/lng` = 선의 첫 점 · `addr` = `sigun` · `summary` = "12.3km · 약 4시간 · 보통 · 순환" |
+| 선 응답 | `GET /api/places/trails/{courseId}/route` — `TrailRoute{courseId, name, lengthM, pointCount, points}`. `Cache-Control: max-age=86400` |
+| 갱신 | 월 1회. 이미 30일 안에 받은 코스의 GPX 는 다시 받지 않는다 |
+| 호출 위치 | `place/layer/DurunubiApiClient` · `GpxFetcher` → `LayerCatalogService.refreshDurunubi()` |
+
+- 응답이 JSON 인지 XML 인지 실측 전이다 — `DataGoKrEnvelope` 가 둘 다 같은 트리로 읽는다.
+- 코스 하나의 선은 10KB 안팎이라 2,000 코스면 16MB 다. 그래서 카탈로그에 선을 싣지 않는다.
+- 앱은 산책로 시트를 열 때 선을 받아 지도에 폴리라인을 그린다(`TrailRouteRepository`). 지도 키 없는 빌드는 카드의 `summary` 만 본다.
 
 ---
 
@@ -208,14 +218,16 @@ LOCALDATA 좌표(`x`, `y`)는 경위도가 아니라 **EPSG:5174 (중부원점 T
 
 ## 5. 데이터 흐름 (현재 vs 목표)
 
-**현재** - KTO 는 프록시 경유, 나머지 더미:
+**현재** - 셋 다 백엔드가 받아 둔다(#291):
 
 ```mermaid
 flowchart LR
-  App[Flutter 앱\nlib/v2] -->|GET /api/places/nearby| BE[백엔드 place 프록시\n0.02° 격자 캐시]
-  BE -->|캐시 미스일 때만\nlocationBasedList2| KTO[(KTO KorPetTourService2)]
-  App -. 더미 .-> Vet[병원/펫샵]
-  App -. 더미 .-> Trail[산책로]
+  App[Flutter 앱\nlib/v2] -->|GET /api/places/nearby · /catalog| BE[백엔드 place\n격자 캐시 + 출처별 한 벌]
+  App -->|GET /api/places/trails/id/route| BE
+  BE -->|캐시 미스일 때만| KTO[(KTO KorPetTourService2)]
+  Job[LayerCatalogScheduler\n월 1회] -->|좌표 변환| LD[(행정안전부 인허가\n1741000)]
+  Job -->|코스 목록 + GPX| DN[(두루누비)]
+  Job --> BE
 ```
 
 **목표** — 백엔드 프록시 + `place`/`trail` 캐시:
@@ -240,8 +252,10 @@ flowchart LR
 
 | 테이블 | 컬럼(핵심) | 채우는 소스 |
 |---|---|---|
-| `place` | `source`, `category`, `name`, `geom POINT`, `addr`, `tel`, `raw_json`, `updated_at` | `kto_pet` / `localdata_vet` / `localdata_shop` |
-| `trail` | `source`, `name`, `path LINESTRING`, `length_m` | 두루누비 |
+| `place_catalog` | `id`, `source`, `payload`(계약 `Place[]` JSON), `etag`, `fetched_at` — **출처별 한 행** | `kto` / `localdata`(vet·shop) / `durunubi`(trail 시작점) |
+| `trail_route` | `course_id`, `name`, `payload`(`[[경도, 위도]]`), `length_m`, `start_lat/lng`, `fetched_at` | 두루누비 GPX |
+
+> 2026-09-06 이전 이 표는 `place(geom POINT)`·`trail(path LINESTRING)` 를 계획으로 적었다. 만들지 않았다 — 카탈로그는 앱이 통째로 받아 기기에서 거르고, 서버의 주변 조회는 메모리의 한 벌에서 하버사인으로 거른다(1만 점에 1ms 안팎). 공간 인덱스가 할 일이 없다.
 
 - `source`로 출처 구분: `kto_pet`, `localdata_vet`, `localdata_shop`.
 - `raw_json`에 원본 응답을 보관해 스키마 변경/재파싱에 대비.
@@ -252,8 +266,8 @@ flowchart LR
 | 소스 | 갱신 성격 | 권장 주기 |
 |---|---|---|
 | KTO 반려동반 | 저빈도 변경 | 주 1회 배치(도시별 `areaBasedList2` 페이지네이션 수집) |
-| LOCALDATA | 인허가 변동(개·폐업) | 월 1회 재적재 + 폐업 필터 |
-| 두루누비 | 거의 정적 | 분기/수동 |
+| 행정안전부 인허가 | 인허가 변동(개·폐업) | **월 1회**(매월 1일 05:20 KST) + 영업 중 필터 — 구현됨(#291) |
+| 두루누비 | 거의 정적 | **월 1회**, 30일 안에 받은 GPX 는 재사용 — 구현됨(#291) |
 
 ### 6.3 갱신 규칙
 
@@ -265,8 +279,8 @@ flowchart LR
 ### 6.4 이전 로드맵
 
 1. ~~KTO 프록시 엔드포인트 신설~~ → **완료**(#40). 경로는 `GET /api/places/nearby?lat&lng&radius&category&limit` 다(`?bbox=` 가 아니다 - 앱이 갖고 있는 것이 중심 좌표와 반경이라 그쪽이 계약과 맞는다).
-2. LOCALDATA 배치(좌표변환 포함) → `place`(`vet`/`shop`) 적재 → 더미 제거.
-3. 두루누비 배치 → `trail` 적재 → 더미 폴리라인 제거.
+2. ~~LOCALDATA 배치(좌표변환 포함) → `place`(`vet`/`shop`) 적재 → 더미 제거.~~ → **완료**(#291) — `place_catalog` 의 `localdata` 행.
+3. ~~두루누비 배치 → `trail` 적재 → 더미 폴리라인 제거.~~ → **완료**(#291) — 시작점은 `place_catalog` 의 `durunubi` 행, 선은 `trail_route`.
 
 ---
 
@@ -280,3 +294,6 @@ flowchart LR
 | `--dart-define` (템플릿 `app/dart-define.example.json`) | `NAVER_MAP_CLIENT_ID` 뿐. **관광공사 키는 여기 없다**(#40) |
 | `backend/.../tour/service/TourApiClient.java` | `areaBasedList2` 배치 적재(감정추천용). **타임아웃이 없다** - 배치라 감수하는 것이고, 프록시는 `KtoWebClientConfig` 의 빈을 쓴다 |
 | `backend/mysql/post-start/10_place_cache.sql` | `kto_call_budget`·`place_cell`·`pet_place_detail` |
+| `backend/.../place/layer/` | 공공데이터 레이어(#291) — `LocalDataApiClient`·`LocalDataPlaceMapper`·`Tm5174`(좌표 변환)·`DurunubiApiClient`·`GpxFetcher`·`GpxParser`·`LayerCatalogService`·`LayerCatalogScheduler`(월 1회)·`LayerPlaceIndex`(주변 조회용 메모리 사본) |
+| `backend/mysql/post-start/24_place_catalog_layers.sql` | `place_catalog.source`(출처별 한 행)·`trail_route` |
+| `app/lib/v2/data/trail_route_repository.dart` | `GET /api/places/trails/{courseId}/route` — 산책로 시트를 열 때 선을 받아 지도에 그린다 |
