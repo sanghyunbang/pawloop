@@ -116,6 +116,10 @@ dependencies {
 		exclude group: 'commons-logging', module: 'commons-logging'
 	}
 
+	// 좌표계 변환 — 행정안전부 인허가 데이터의 EPSG:5174(Bessel 중부원점 TM)를 WGS84 로 (이슈 #291).
+	// EPSG 파라미터 DB(proj4j-epsg)는 안 든다 — 정의 문자열 하나를 Tm5174 가 직접 든다.
+	implementation 'org.locationtech.proj4j:proj4j:1.4.3'
+
 	// csv 주입 관련
 	implementation ('com.opencsv:opencsv:5.9') {
 		exclude group: 'commons-logging', module: 'commons-logging'

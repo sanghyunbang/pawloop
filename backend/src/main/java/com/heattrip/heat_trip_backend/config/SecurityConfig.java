@@ -74,7 +74,9 @@ public class SecurityConfig {
             // 경로 분기가 못 덮는 자리(/api/places/a/b 같은)가 **인증 없음 + 한도 무한**
             // 이 된다. 여는 것은 실제로 있는 두 경로뿐이다.
             "/api/places/nearby",
-            "/api/places/*"
+            "/api/places/*",
+            // 산책로의 선(#291). 셋째 경로다 — 지도는 로그인 전에도 보여야 한다.
+            "/api/places/trails/*/route"
     );
 
     /**

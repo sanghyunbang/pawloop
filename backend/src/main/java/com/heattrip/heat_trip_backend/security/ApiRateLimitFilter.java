@@ -239,6 +239,10 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("GET".equals(method) && "/api/places/catalog".equals(path)) {
             return new Rule("places-catalog", rateLimitProperties.getPlacesCatalogMaxRequests());
         }
+        // 산책로의 선(#291). 응답이 코스당 10KB 안팎이라 상세와 같은 버킷이면 충분하다.
+        if ("GET".equals(method) && path.matches("^/api/places/trails/[^/]+/route$")) {
+            return new Rule("places-detail", rateLimitProperties.getPlacesDetailMaxRequests());
+        }
         if ("GET".equals(method) && path.matches("^/api/places/[^/]+$")) {
             return new Rule("places-detail", rateLimitProperties.getPlacesDetailMaxRequests());
         }

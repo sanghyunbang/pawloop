@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.place.service;
 
+import com.heattrip.heat_trip_backend.place.CatalogSource;
 import com.heattrip.heat_trip_backend.place.KtoBudgetProperties;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
 import com.heattrip.heat_trip_backend.place.entity.PlaceCatalog;
@@ -100,13 +101,45 @@ public class PlaceCatalogService {
         log.info("카탈로그 예열 — {}곳, fetchedAt={}", row.get().getItemCount(), row.get().getFetchedAt());
     }
 
+    /** 앱에 나가는 본문과 그 ETag — 세 출처를 이어 붙인 것이다(#291). */
+    public record Served(String payload, String etag) { }
+
     /**
-     * 서빙할 한 벌.
+     * 계약의 {@code GET /api/places/catalog} 본문 — <b>KTO 한 벌 뒤에 인허가·두루누비 한 벌을
+     * 이어 붙인다</b>(#291). 앱은 출처가 몇인지 모르고 배열 하나를 받는다.
+     *
+     * <p>KTO 한 벌이 없으면 <b>비어 있다</b> — 레이어만 주면 앱이 "전국에 병원뿐인 한 벌" 을
+     * 캐시하고, KTO 가 회복해도 ETag 가 바뀔 때까지 지도의 대부분이 빈다. 반대로 레이어가
+     * 없는 것은 정상이다(활용신청 전·첫 적재 전) — KTO 만 나간다.
+     *
+     * <p>ETag 는 이어 붙인 벌들의 ETag 를 다시 해시한 것이다. 어느 한 벌이 바뀌면 값이 바뀌고,
+     * 셋 다 그대로면 그대로다. 한 벌뿐이면 그 행의 ETag 그대로라 #273 과 바이트까지 같다.
+     */
+    public Optional<Served> serve() {
+        Optional<PlaceCatalog> kto = catalog();
+        if (kto.isEmpty()) {
+            return Optional.empty();
+        }
+        List<PlaceCatalog> rows = new ArrayList<>();
+        rows.add(kto.get());
+        for (CatalogSource layer : List.of(CatalogSource.LOCALDATA, CatalogSource.DURUNUBI)) {
+            snapshots.find(layer).filter(r -> r.getItemCount() > 0).ifPresent(rows::add);
+        }
+        if (rows.size() == 1) {
+            return Optional.of(new Served(kto.get().getPayload(), kto.get().getEtag()));
+        }
+        return Optional.of(new Served(
+                CatalogPayloads.concat(rows.stream().map(PlaceCatalog::getPayload).toList()),
+                CatalogPayloads.combinedEtag(rows.stream().map(PlaceCatalog::getEtag).toList())));
+    }
+
+    /**
+     * 서빙할 KTO 한 벌.
      *
      * @return 저장된 행. 한 벌도 없고 받아 오지도 못했으면 비어 있다
      */
     public Optional<PlaceCatalog> catalog() {
-        Optional<PlaceCatalog> row = snapshots.find();
+        Optional<PlaceCatalog> row = snapshots.find(CatalogSource.KTO);
 
         if (row.isEmpty() || shouldRefresh(row.get())) {
             Optional<PlaceCatalog> fresh = refresh();
@@ -167,7 +200,7 @@ public class PlaceCatalogService {
 
                 if (result0 instanceof KtoApiClient.Result.Failed<List<PlaceDto>> failed) {
                     closeIfQuotaOrKey(failed.resultCode());
-                    snapshots.recordFailure();
+                    snapshots.recordFailure(CatalogSource.KTO);
                     return Optional.<PlaceCatalog>empty();
                 }
                 if (!(result0 instanceof KtoApiClient.Result.Ok<List<PlaceDto>> ok)) {
@@ -187,7 +220,7 @@ public class PlaceCatalogService {
                 }
             }
 
-            return snapshots.store(all, Math.max(totalCount, 0));
+            return snapshots.store(CatalogSource.KTO, all, Math.max(totalCount, 0));
         });
 
         return result == null ? Optional.empty() : result;

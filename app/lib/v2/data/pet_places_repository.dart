@@ -15,7 +15,17 @@ import '../domain/pet.dart';
 class PetPlace {
   final String contentId;
   final String title;
+
+  /// 계약의 `source` — `kto` · `vet` · `shop` · `trail` (#291).
+  final String source;
+
+  /// 계약의 `category`. KTO 는 여섯 숫자 중 하나이거나 비어 있고(모르는 타입),
+  /// 공공데이터 레이어는 `source` 와 같은 값이다.
+  final String category;
   final String contentTypeId;
+
+  /// 카드 한 줄 — 산책로 "2.6km · 약 40분 · 쉬움", 판매업 "동물판매업". 없으면 빈 문자열.
+  final String summary;
   final String addr;
   final String image;
   final String tel;
@@ -26,7 +36,10 @@ class PetPlace {
   const PetPlace({
     required this.contentId,
     required this.title,
+    this.source = 'kto',
+    this.category = '',
     required this.contentTypeId,
+    this.summary = '',
     required this.addr,
     required this.image,
     required this.tel,
@@ -35,7 +48,28 @@ class PetPlace {
     this.distM = 0,
   });
 
-  PetCategory get category => petCatByType(contentTypeId);
+  /// 필터와 아이콘이 보는 키 — `contentTypeId` 가 있으면 그것, 없으면 `category` (#291).
+  ///
+  /// 서버의 `PlaceDto.categoryKey()` 와 같은 규칙이다. 갈리면 서버가 거른 것과 앱이
+  /// 그리는 것이 다른 칩이 된다. KTO 는 전자, 병원·펫샵·산책로는 후자다.
+  String get categoryKey => contentTypeId.isNotEmpty ? contentTypeId : category;
+
+  PetCategory get petCategory => petCatByType(categoryKey);
+
+  /// 산책로(두루누비)인가 — 시트를 열면 선을 따로 받아 그린다.
+  bool get isTrail => source == 'trail';
+
+  /// 산책로 선을 받을 때 쓰는 코스 번호 — `contentId` 의 `trail:` 뒤.
+  String get trailCourseId =>
+      contentId.startsWith('trail:') ? contentId.substring('trail:'.length) : contentId;
+
+  /// 출처 배지 문구. 데이터를 어디서 가져왔는지 사용자에게 말한다.
+  String get sourceLabel => switch (source) {
+        'vet' => '동물병원 · 행정안전부 인허가',
+        'shop' => '동물판매업 · 행정안전부 인허가',
+        'trail' => '걷기여행길 · 두루누비(한국관광공사)',
+        _ => '반려동물 동반 가능 (관광공사)',
+      };
 
   /// 거리를 채운 사본. **기기에서 잰 값을 담는 자리다** (이슈 #273).
   ///
@@ -44,7 +78,10 @@ class PetPlace {
   PetPlace withDistance(double meters) => PetPlace(
         contentId: contentId,
         title: title,
+        source: source,
+        category: category,
         contentTypeId: contentTypeId,
+        summary: summary,
         addr: addr,
         image: image,
         tel: tel,
@@ -65,7 +102,10 @@ class PetPlace {
   factory PetPlace.fromJson(Map<String, dynamic> j) => PetPlace(
         contentId: '${j['contentId'] ?? ''}',
         title: '${j['title'] ?? ''}',
+        source: '${j['source'] ?? 'kto'}',
+        category: '${j['category'] ?? ''}',
         contentTypeId: '${j['contentTypeId'] ?? ''}',
+        summary: '${j['summary'] ?? ''}',
         addr: '${j['addr'] ?? ''}',
         image: '${j['image'] ?? ''}',
         tel: '${j['tel'] ?? ''}',
@@ -122,6 +162,7 @@ class PetPlacesRepository {
     required double lng,
     int radius = 8000,
     int numOfRows = 80,
+    // 카테고리 키 — KTO contentTypeId 또는 vet/shop/trail (#291). 이름은 옛 것을 남긴다.
     String? contentTypeId,
   }) async {
     // 좌표가 기기를 떠나는 자리다. 정책이 꺼져 있으면 **요청 자체를 안 만든다**(#235).

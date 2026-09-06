@@ -52,7 +52,7 @@ public class KtoApiClient {
      * <p>HTTP 200 의 {@code resultCode} 로도, 4xx 의 {@code returnReasonCode} 로도 온다.
      * 두 봉투를 다 읽는 이유가 그것이다.
      */
-    static final String RESULT_QUOTA_EXCEEDED = "22";
+    public static final String RESULT_QUOTA_EXCEEDED = "22";
 
     /**
      * 서비스키 미등록. 키가 폐기됐거나 잘못 들어갔다는 뜻이라 계속 두드리면 안 된다.
@@ -62,7 +62,7 @@ public class KtoApiClient {
      * 온다 — {@code response.header.resultCode} 가 아니다. 처음에 그쪽만 읽어서 이 판정이
      * 안 걸렸고, 그 상태로는 <b>죽은 키가 하루 예산을 전부 태운다.</b>
      */
-    static final String RESULT_KEY_NOT_REGISTERED = "30";
+    public static final String RESULT_KEY_NOT_REGISTERED = "30";
 
     /** 호출 전체의 상한. 소켓 타임아웃(5s)보다 길어야 그쪽이 먼저 걸린다. */
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(6);

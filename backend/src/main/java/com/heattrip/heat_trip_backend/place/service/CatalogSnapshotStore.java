@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.place.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.heattrip.heat_trip_backend.place.CatalogSource;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
 import com.heattrip.heat_trip_backend.place.entity.PlaceCatalog;
 import com.heattrip.heat_trip_backend.place.repository.PetPlaceDetailBatchWriter;
@@ -60,14 +61,15 @@ public class CatalogSnapshotStore {
         this.clock = clock;
     }
 
-    /** 저장된 한 벌. 없으면 비어 있다. */
+    /** 이 출처의 저장된 한 벌. 없으면 비어 있다. */
     @Transactional(readOnly = true)
-    public Optional<PlaceCatalog> find() {
-        return catalogs.findById(PlaceCatalog.SINGLETON_ID);
+    public Optional<PlaceCatalog> find(CatalogSource source) {
+        return catalogs.findById(source.id());
     }
 
     /**
-     * 한 벌을 쓰고, 그 안의 장소들을 <b>상세 허용목록에 등재</b>한다.
+     * 한 벌을 쓰고, KTO 면 그 안의 장소들을 <b>상세 허용목록에 등재</b>한다. 인허가·두루누비
+     * 항목은 상세 경로가 없으므로 등재하지 않는다(#291).
      *
      * <p>등재를 빠뜨리면 <b>카탈로그로 받은 장소는 상세를 못 연다.</b> "우리가 목록에 실어
      * 보낸 장소" 만 상세를 받을 수 있게 해 둔 것이 그 목록이고({@link CellSnapshotStore}),
@@ -80,9 +82,9 @@ public class CatalogSnapshotStore {
      * @return 저장된 행. 빈 목록이라 안 저장했으면 비어 있다
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Optional<PlaceCatalog> store(List<PlaceDto> places, int totalCount) {
+    public Optional<PlaceCatalog> store(CatalogSource source, List<PlaceDto> places, int totalCount) {
         if (places.isEmpty()) {
-            log.error("카탈로그가 0곳으로 왔다. 저장하지 않는다 — 지도가 통째로 빈다.");
+            log.error("카탈로그({})가 0곳으로 왔다. 저장하지 않는다 — 그 칩이 통째로 빈다.", source);
             return Optional.empty();
         }
 
@@ -95,7 +97,8 @@ public class CatalogSnapshotStore {
         }
 
         PlaceCatalog row = catalogs.save(PlaceCatalog.builder()
-                .id(PlaceCatalog.SINGLETON_ID)
+                .id(source.id())
+                .source(source.wireValue())
                 .payload(payload)
                 .etag(etagOf(payload))
                 .itemCount(places.size())
@@ -105,15 +108,15 @@ public class CatalogSnapshotStore {
                 .failStreak(0)
                 .build());
 
-        int registered = details.registerAll(places);
+        int registered = source == CatalogSource.KTO ? details.registerAll(places) : 0;
 
         if (totalCount > places.size()) {
             log.warn("카탈로그가 잘렸다 — 받은 것 {} / 전체 {}. 페이지 상한이나"
                             + " app.kto.budget.catalog-max-calls-per-day 를 올려야 한다.",
                     places.size(), totalCount);
         }
-        log.info("카탈로그를 갱신했다 — {}곳, {}바이트, 허용목록 {}건, etag={}",
-                places.size(), payload.length(), registered, row.getEtag());
+        log.info("카탈로그({})를 갱신했다 — {}곳, {}바이트, 허용목록 {}건, etag={}",
+                source, places.size(), payload.length(), registered, row.getEtag());
         return Optional.of(row);
     }
 
@@ -124,15 +127,16 @@ public class CatalogSnapshotStore {
      * 부르고, 그것만으로 하루 예산이 사라진다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordFailure() {
+    public void recordFailure(CatalogSource source) {
         LocalDateTime now = LocalDateTime.now(clock);
 
-        if (catalogs.recordFailure(PlaceCatalog.SINGLETON_ID, now) > 0) {
+        if (catalogs.recordFailure(source.id(), now) > 0) {
             return;
         }
 
         catalogs.save(PlaceCatalog.builder()
-                .id(PlaceCatalog.SINGLETON_ID)
+                .id(source.id())
+                .source(source.wireValue())
                 .payload("[]")
                 .etag(etagOf("[]"))
                 .itemCount(0)

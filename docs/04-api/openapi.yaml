@@ -796,7 +796,10 @@ paths:
           in: query
           description: |
             카테고리 필터(생략 시 전체). KTO contentTypeId 또는 레이어 키.
-            `vet`/`shop`/`trail` 은 미구현이라 빈 배열입니다.
+
+            `vet`/`shop`/`trail` 은 #291 부터 **실데이터**입니다 — 행정안전부 인허가(동물병원·
+            동물판매업)와 두루누비(걷기여행길) 한 벌에서 거릅니다. 그 셋을 주면 서버는 KTO 셀을
+            부르지 않습니다. 생략하면 KTO 셀과 레이어를 **합쳐** 거리순입니다.
           schema: { $ref: '#/components/schemas/PlaceCategory' }
         - name: limit
           in: query
@@ -835,6 +838,21 @@ paths:
 
         거리 정렬·반경 필터·카테고리 필터는 **앱이 기기에서** 합니다. 응답의 `distM` 은
         항상 생략됩니다 — 서버가 그 값을 계산할 좌표를 갖고 있지 않습니다.
+
+        ## 한 배열에 출처가 넷입니다 (#291)
+
+        KTO 반려동반 장소(`source=kto`) 뒤에 **동물병원(`vet`)·펫샵(`shop`)** — 행정안전부
+        인허가, 전국 — 과 **산책로(`trail`)** — 두루누비 걷기여행길 — 가 이어 붙습니다. 서버는
+        출처별로 한 벌씩 따로 받아 두고(`place_catalog` 행 셋) 응답에서 **문자열로 잇습니다.**
+        앱은 출처가 몇인지 몰라도 됩니다 — `source` 와 `category` 로 구분합니다.
+
+        - 레이어는 **월 1회** 갱신됩니다(인허가 데이터는 느리게 바뀝니다). 아직 못 받았으면
+          KTO 한 벌만 옵니다 — 공공데이터포털에 그 API 의 활용신청이 안 된 상태가 그렇습니다.
+        - KTO 한 벌이 없으면 레이어가 있어도 `[]` 입니다. 병원뿐인 한 벌을 앱이 캐시하면
+          KTO 가 회복해도 다음 갱신까지 지도의 대부분이 빕니다.
+        - `ETag` 는 이어 붙인 벌들의 해시를 다시 해시한 값입니다. 어느 한 벌이 바뀌면 바뀝니다.
+        - 산책로 항목의 좌표는 **코스의 시작점**입니다. 선은 `GET /api/places/trails/{courseId}/route`
+          로 따로 받습니다 — 2,000 코스의 선을 한 벌에 실으면 16MB 입니다.
 
         ## 크기와 `ETag`
 
@@ -907,6 +925,40 @@ paths:
             ETag:
               description: 서버가 갖고 있는 한 벌의 해시. 요청에 실어 보낸 것과 같습니다.
               schema: { type: string }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/places/trails/{courseId}/route:
+    get:
+      tags: [Places]
+      summary: 산책로 코스 하나의 선
+      description: |
+        두루누비 걷기여행길 코스의 경로 — `[[경도, 위도], …]` (이슈 #291).
+
+        카탈로그의 산책로 항목(`source=trail`)은 **시작점 하나**만 싣습니다. 사용자가 그 산책로를
+        눌렀을 때 앱이 이 경로로 선을 받아 지도에 그립니다. `courseId` 는 그 항목의 `contentId`
+        에서 `trail:` 을 뗀 값입니다 — 두루누비의 `crsIdx` 그대로입니다.
+
+        선은 원본 GPX 를 **300 점 이하로 줄인** 것입니다(Douglas–Peucker). 지도 배율 어디서도
+        형태가 그대로이고, 코스 하나가 10KB 안팎입니다. `lengthM` 은 줄이기 **전** 원본의 길이입니다.
+
+        좌표 순서는 `Walk.path` 와 같습니다 — **경도가 먼저**입니다.
+
+        월 1회 바뀌므로 `Cache-Control: max-age=86400` 입니다. `429` 는 상세와 같은
+        `places-detail` 버킷입니다.
+      security: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: 두루누비 코스 번호(`crsIdx`). 카탈로그 `contentId` 의 `trail:` 뒤.
+          schema: { type: string, example: "T_ROUTE_1" }
+      responses:
+        '200':
+          description: 코스의 선
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrailRoute' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /api/places/{contentId}:
@@ -2918,9 +2970,24 @@ components:
       # tel·image 는 KTO 가 안 주면 null 이다. title·addr 은 빈 문자열로 눕힌다.
       required: [contentId, title, source, lat, lng, addr]
       properties:
-        contentId: { type: string, example: "2733967" }
+        contentId:
+          type: string
+          example: "2733967"
+          description: |
+            `kto` 면 KTO 의 `contentid` 그대로(숫자 문자열)이고 상세(`GET /api/places/{contentId}`)의
+            열쇠입니다. **다른 출처는 `출처:원본키`** 입니다 — `vet:322000001020260003`(인허가
+            관리번호) · `shop:…` · `trail:T_ROUTE_1`(두루누비 `crsIdx`). 접두사가 붙은 값에는
+            상세 경로가 **없습니다**(404) — 카탈로그 항목이 곧 전부입니다. 산책로는 선을
+            `GET /api/places/trails/{courseId}/route` 로 따로 받습니다(#291).
         title: { type: string, example: "서울숲" }
-        source: { type: string, enum: [kto, vet, shop, trail], example: kto }
+        source:
+          type: string
+          enum: [kto, vet, shop, trail]
+          example: kto
+          description: |
+            `kto` 관광공사 반려동반 · `vet` 동물병원 · `shop` 동물판매업(둘 다 행정안전부 인허가,
+            전국) · `trail` 두루누비 걷기여행길. #291 부터 넷 다 실데이터입니다. `kto` 가 아니면
+            `category` 가 `source` 와 같은 값이고 `contentTypeId` 는 `null` 입니다.
         category:
           $ref: '#/components/schemas/PlaceCategory'
           description: |
@@ -2929,10 +2996,11 @@ components:
             엉뚱한 아이콘을 그립니다. 앱은 모르는 값을 "기타" 로 폴백합니다.
             원래 값은 `contentTypeId` 에 그대로 있습니다.
 
-            **앱은 이 필드를 안 읽습니다.** 아이콘도 필터도 `contentTypeId` 로 판단합니다.
-            남겨 둔 것은 이 필드가 "계약이 아는 값인가" 를 그 자체로 말해 주기 때문입니다 —
-            있으면 여섯 중 하나이고, 없으면 KTO 가 그 밖의 값을 준 것입니다. 두 필드가
-            같은 것을 두 가지로 말하지 않도록 여기 적어 둡니다(#210 `Places-high-3`).
+            **앱이 보는 순서: `contentTypeId` 가 있으면 그것, 없으면 이 필드.** KTO 항목은
+            `contentTypeId` 로 아이콘과 필터를 정하고, `vet`/`shop`/`trail` 항목은 `contentTypeId`
+            가 없어 이 필드(= `source`)를 씁니다(#291). 서버의 `PlaceDto.categoryKey()` 와 앱의
+            `PetPlace.categoryKey` 가 같은 규칙입니다. KTO 항목에서 이 필드가 있으면 여섯 중
+            하나이고, 없으면 KTO 가 그 밖의 값을 준 것입니다(#210 `Places-high-3`).
         contentTypeId:
           type: [string, "null"]
           example: "12"
@@ -2942,9 +3010,8 @@ components:
             **앱이 실제로 보는 필드가 이것입니다.** `category` 가 아닙니다 —
             `category` 설명을 참고하세요.
 
-            **`kto` 가 아닌 출처에서는 `null` 입니다.** 오늘 서버가 만드는 출처는 `kto`
-            하나뿐이라 아직 그런 행이 없지만, `vet`/`shop`/`trail` 이 붙는 날 이 필드는
-            채울 값이 없습니다 — KTO 체계의 값이기 때문입니다.
+            **`kto` 가 아닌 출처에서는 `null` 입니다.** `vet`/`shop`/`trail` 은 KTO 체계의 값이
+            없어 채울 것이 없고, 그때 앱은 `category` 를 봅니다(#291).
         lat: { type: number, format: double, example: 37.5445 }
         lng: { type: number, format: double, example: 127.0374 }
         addr: { type: string, example: "서울특별시 성동구 뚝섬로 273" }
@@ -2961,6 +3028,13 @@ components:
             스냅샷은 셀 중심에서 받은 것이라 그대로 실으면 같은 셀의 모든 사용자가 같은
             거리를 봅니다(최대 1.4km 틀립니다).
           example: 320
+        summary:
+          type: [string, "null"]
+          example: "12.3km · 약 4시간 · 보통 · 순환"
+          description: |
+            카드에 그대로 얹는 한 줄(#291). 산책로는 "거리 · 약 시간 · 난이도 · 순환" 이고,
+            동물판매업은 상세 업무 구분(동물판매업/동물미용업)입니다. KTO 항목과 동물병원에는
+            없어 생략됩니다. 앱은 없으면 안 그립니다.
 
     # 값의 출처가 둘이다 — 이 enum 과 PlaceDto.KNOWN_CATEGORIES.
     # 갈리면 KTO 가 준 값을 서버가 실어 보내고 앱이 라벨을 못 찾는다.
@@ -3010,9 +3084,32 @@ components:
       type: string
       description: >
         프론트 카테고리 키. 숫자는 KTO contentTypeId. `vet`·`shop`·`trail` 은 공공데이터
-        레이어 자리인데 **아직 데이터가 없습니다** — 서버는 그 값에 빈 목록을 주고, 앱은
-        #282 부터 그 칩을 보여 주지 않습니다. 실데이터(LOCALDATA·두루누비)가 붙는 날 돌아옵니다.
+        레이어 — #291 부터 **실데이터**입니다(행정안전부 인허가 전국 · 두루누비 걷기여행길).
+        #282 가 가짜와 함께 내렸던 칩 셋이 그때 돌아왔습니다. 이 셋에서는 `Place.category`
+        와 `Place.source` 가 같은 값입니다.
       enum: ['12', '14', '28', '32', '38', '39', 'vet', 'shop', 'trail']
+
+    TrailRoute:
+      type: object
+      description: 산책로 코스 하나의 선 (이슈 #291). `GET /api/places/trails/{courseId}/route` 의 본문.
+      required: [courseId, name, lengthM, pointCount, points]
+      properties:
+        courseId: { type: string, example: "T_ROUTE_1", description: 두루누비 코스 번호(`crsIdx`) }
+        name: { type: string, example: "서울숲 둘레길" }
+        lengthM:
+          type: integer
+          example: 2600
+          description: 원본 GPX 의 길이(m). 점을 줄이기 **전**에 잰 값입니다.
+        pointCount: { type: integer, example: 180, description: "`points` 의 길이. 300 이하입니다." }
+        points:
+          type: array
+          description: "`[[경도, 위도], …]` — `Walk.path` 와 같은 순서입니다."
+          items:
+            type: array
+            items: { type: number, format: double }
+            minItems: 2
+            maxItems: 2
+          example: [[127.0374, 37.5445], [127.0379, 37.5449]]
 
     PlaceDetail:
       allOf:

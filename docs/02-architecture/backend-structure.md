@@ -46,7 +46,7 @@ com.heattrip.heat_trip_backend
 ├─ group/                          # 가족 그룹                              (#73~#75)
 ├─ chat/                           # 채팅 도메인(방·메시지·신고·차단)        (#78~#82)
 ├─ chatweb/                        # 채팅 HTTP 표면(컨트롤러·요청/응답)      (ADR-0011, #72)
-├─ place/                          # KTO 프록시 · 격자 캐시 · 호출 예산      (ADR-0013, #40)
+├─ place/                          # KTO 프록시 · 격자 캐시 · 호출 예산 · 공공데이터 레이어(layer/) (ADR-0013, #40 · #291)
 ├─ community/                      # 커뮤니티 글·댓글·반응·신고             (#169·#170·#211·#166)
 ├─ consent/                        # 약관 동의 이력 — 서버 정본, 재동의는 앱이  (#190, ADR-0020)
 ├─ moderation/                     # 신고·가리기 — 도메인 공용             (#166, ADR-0016)
@@ -196,7 +196,7 @@ web/Controller → service(도메인 유스케이스) → port(인터페이스) 
 | 그 밖의 `/auth/*` (`GET`·`PUT`·`DELETE /auth/me`, `POST /auth/logout`) | `authenticated` — `anyRequest()` 로 떨어진다 |
 | `/actuator/health/**`, `/actuator/info`, `/actuator/prometheus` | `permitAll` |
 | `/api/explore/**` | `permitAll`(공개 조회) |
-| `/api/places/nearby`, `/api/places/*` | `permitAll` — 관광공사 프록시(#40). 지도는 로그인 전에도 보여야 한다. **`/api/places/**` 와일드카드는 일부러 피했다** — 그렇게 열면 `ApiRateLimitFilter` 의 경로 분기가 못 덮는 자리(`/api/places/a/b`)가 인증 없음 + 한도 무한이 된다 |
+| `/api/places/nearby`, `/api/places/*`, `/api/places/trails/*/route` | `permitAll` — 관광공사 프록시(#40) · 산책로의 선(#291). 지도는 로그인 전에도 보여야 한다. **`/api/places/**` 와일드카드는 일부러 피했다** — 그렇게 열면 `ApiRateLimitFilter` 의 경로 분기가 못 덮는 자리(`/api/places/a/b`)가 인증 없음 + 한도 무한이 된다. 셋째 경로도 `places-detail` 버킷에 걸려 있다 |
 | `/v3/api-docs/**`, `/swagger-ui.html`, `/swagger-ui/**` | `docsPublic` 플래그가 true일 때만 공개 (셋 다) |
 | `/api/curation/admin/**` | `hasRole("ADMIN")` — **`/api/curation/**` 보다 먼저** 등록된다. 먼저 일치하는 규칙이 이기므로 순서를 뒤집으면 이 줄이 죽는다 |
 | `/api/curation/**`, `/public/**` | `authenticated` (위 admin 경로 제외) |
@@ -227,7 +227,7 @@ refresh 를 타므로 이 차이가 클라이언트 분기를 바꾼다.
                      ─▶ TraitSnapshotService.rebuildAllSnapshots(1000)  (스냅샷 물리테이블 재빌드)
 ```
 
-**Pawloop 동기화 계획**: 위 파이프라인을 그대로 활용하되 대상 API를 KorPetTourService2(반려동반)로 바꾸고, 추가로 LOCALDATA(동물병원 ~9,445건, EPSG:5174→WGS84 변환)·두루누비(산책로 GPX)용 임포트 잡을 동일 스케줄러 패턴으로 추가한다. `@EnableScheduling` 활성화 + cron 주석 해제가 최소 착수 작업이다.
+**Pawloop 의 잡은 따로 있다(위 파이프라인을 안 쓴다)**: `config/SchedulingConfig` 가 `@EnableScheduling` 을 켜고, `place/service/PlaceCatalogWarmupScheduler`(매일 04:40 KST, KTO 전국 한 벌 #279)와 `place/layer/LayerCatalogScheduler`(매월 1일 05:20 KST + 기동 시 한 벌이 없으면 한 번 — 행정안전부 인허가 동물병원·동물판매업 EPSG:5174→WGS84 변환, 두루누비 코스 목록 + GPX, #291)가 `place_catalog` 의 출처별 행을 채운다. 둘 다 프로퍼티로 끌 수 있고 테스트에서는 꺼져 있다.
 
 ---
 

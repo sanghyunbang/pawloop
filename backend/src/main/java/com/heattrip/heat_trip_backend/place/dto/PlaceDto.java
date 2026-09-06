@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.place.dto;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.Set;
@@ -16,12 +17,22 @@ import java.util.Set;
  * {@code petCatByType} 로 모르는 값을 "기타" 로 폴백하므로 화면이 깨지지 않는다.
  *
  * <p>{@link #contentTypeId} 는 KTO 값을 <b>그대로</b> 싣는다 — 계약이 자유 문자열이고,
- * 앱의 카테고리 필터가 이 값으로 비교한다.
+ * 앱의 카테고리 필터가 이 값으로 비교한다. <b>KTO 가 아닌 출처에서는 {@code null}</b> 이고
+ * 그때 앱이 보는 것은 {@link #category} 다({@link #categoryKey()} — #291).
+ *
+ * <h2>출처가 넷이다 (#291)</h2>
+ * <p>{@code kto} 하나였던 {@link #source} 에 {@code vet}·{@code shop}(행정안전부 인허가)·
+ * {@code trail}(두루누비)이 붙었다. 그 셋은 {@code source} 와 {@code category} 가 같은 값이고
+ * {@code contentId} 가 {@code 출처:원본키} 다 — KTO 의 숫자 키와 겹치지 않게.
  *
  * <h2>{@link #distM} 은 캐시에 안 들어간다</h2>
  * <p>거리는 <b>묻는 사람의 좌표</b>에 따라 달라진다. 셀 스냅샷은 셀 중심에서 받은 것이라
  * 그때의 거리를 그대로 실으면 같은 셀의 모든 사용자가 같은 거리를 본다. 서빙 시점에
  * 사용자 실좌표로 다시 계산한다.
+ *
+ * <h2>{@link #summary} — 산책로의 한 줄</h2>
+ * <p>"12.3km · 약 4시간 · 보통" 처럼 카드에 그대로 얹는 문장이다. KTO 항목에는 없다
+ * ({@code null} 이라 생략된다). 판매업은 상세 업무 구분(동물판매업/동물미용업)이 여기 온다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PlaceDto(
@@ -35,10 +46,26 @@ public record PlaceDto(
         String addr,
         String tel,
         String image,
-        Double distM) {
+        Double distM,
+        String summary) {
 
-    /** 이 프록시가 내보내는 유일한 출처. {@code vet}/{@code shop}/{@code trail} 은 미구현이다. */
+    /** 관광공사 반려동반 장소. {@code contentId} 가 KTO 의 {@code contentid} 그대로다. */
     public static final String SOURCE_KTO = "kto";
+
+    /** 동물병원 — 행정안전부 인허가(#291). {@code contentId} = {@code vet:관리번호}. */
+    public static final String SOURCE_VET = "vet";
+
+    /** 동물판매업(펫샵) — 행정안전부 인허가(#291). {@code contentId} = {@code shop:관리번호}. */
+    public static final String SOURCE_SHOP = "shop";
+
+    /** 산책로 — 두루누비 걷기여행길(#291). {@code contentId} = {@code trail:crsIdx}. */
+    public static final String SOURCE_TRAIL = "trail";
+
+    /**
+     * KTO 가 아닌 출처 — 계약 {@code PlaceCategory} 의 문자 값 셋과 같다. 이 값이 {@code category}
+     * 로 오면 서버는 KTO 셀을 부르지 않고 레이어 한 벌에서 거른다({@code PlaceQueryService}).
+     */
+    public static final Set<String> LAYER_SOURCES = Set.of(SOURCE_VET, SOURCE_SHOP, SOURCE_TRAIL);
 
     /**
      * 계약의 {@code PlaceCategory} 가 아는 KTO 콘텐츠타입 — 이슈 #210({@code Places-low-1}).
@@ -55,9 +82,36 @@ public record PlaceDto(
      */
     public static final Set<String> KNOWN_CATEGORIES = Set.of("12", "14", "28", "32", "38", "39");
 
+    /** Jackson 이 <b>이 생성자</b>로 읽게 한다 — 아래 편의 생성자와 헷갈리지 않도록. */
+    @JsonCreator
+    public PlaceDto {
+    }
+
+    /** KTO 항목의 편의 생성자 — {@code summary} 가 없다. 호출부 열 곳을 안 바꾸려고 남긴다. */
+    public PlaceDto(String contentId, String title, String source, String category,
+                    String contentTypeId, double lat, double lng, String addr,
+                    String tel, String image, Double distM) {
+        this(contentId, title, source, category, contentTypeId, lat, lng, addr, tel, image, distM, null);
+    }
+
+    /**
+     * 앱의 필터·아이콘이 보는 값 — KTO 면 {@code contentTypeId}, 아니면 {@code category}.
+     *
+     * <p>앱({@code PetPlace.categoryKey})과 같은 규칙이다. 갈리면 서버가 거른 것과 앱이 그리는
+     * 것이 다른 칩이 된다.
+     */
+    public String categoryKey() {
+        return contentTypeId != null ? contentTypeId : category;
+    }
+
+    /** KTO 가 아닌 출처인가 — 상세 경로({@code /api/places/{contentId}})가 없다. */
+    public boolean isLayer() {
+        return LAYER_SOURCES.contains(source);
+    }
+
     /** 거리를 채운 사본. 캐시에서 꺼낸 뒤 서빙 직전에 부른다. */
     public PlaceDto withDistance(double meters) {
         return new PlaceDto(contentId, title, source, category, contentTypeId,
-                lat, lng, addr, tel, image, meters);
+                lat, lng, addr, tel, image, meters, summary);
     }
 }

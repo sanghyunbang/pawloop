@@ -58,40 +58,39 @@
 ## 2. 지도 — 리스트/지도 (`explore_screen.dart` · `ExploreScreen`)
 
 ### 목적
-"우리 아이랑 갈 수 있는 곳" — 관광공사 반려동물 동반여행(KTO) 장소 + 병원/펫샵/산책로 레이어를 **리스트/지도 토글**과 **카테고리 필터**로 탐색.
+"우리 아이랑 갈 수 있는 곳" — 관광공사 반려동물 동반여행(KTO) 장소 + 병원/펫샵(행정안전부 인허가)/산책로(두루누비) 레이어를 **리스트/지도 토글**과 **카테고리 필터**로 탐색. 셋 다 실데이터다(#291).
 
 ### 공통 컨트롤
 - **뷰 토글**(`_viewToggle`): `list`(view_agenda) / `map`(map). 활성 시 warm 그라데이션. `initialView`로 진입 뷰 지정(셸의 `RootTab.exploreView`).
 - **카테고리 필터 칩**(`_catChips`, 가로 스크롤): `전체` + `kPetCategories` 9종. 활성 칩은 카테고리 색으로 채움.
-  - 카테고리: 여행지(12)/카페·식당(39)/레포츠(28)/숙박(32)/쇼핑(38)/문화(14) = KTO contenttypeid, + 병원(vet)/펫샵(shop)/산책로(trail) = 별도 레이어.
+  - 카테고리: 여행지(12)/카페·식당(39)/레포츠(28)/숙박(32)/쇼핑(38)/문화(14) = KTO contenttypeid, + 병원(vet)/펫샵(shop)/산책로(trail) = 공공데이터 레이어(#291). 항목은 `PetPlace.categoryKey` 로 견준다.
 - **검색바**: 플레이스홀더만(`카페, 공원, 산책로...`) — **미구현(비활성 표시용)**.
 
 ### 리스트 뷰 (`_listView`)
 - 타이틀 `지도` + 서브 `우리 아이랑 갈 수 있는 곳` + `ProfileAvatar`.
 - 상태별 분기:
   - 로딩 → `CircularProgressIndicator`.
-  - `trail` 필터 → **산책로 카드 2개**(더미: 서울숲 강변 2.6km / 중랑천 4.1km, 탭 시 지도 뷰로 전환).
+  - `trail` 필터 → 두루누비 코스 카드(시작점 기준 거리순). 카드에 `summary`("2.6km · 약 40분 · 쉬움 · 순환")가 한 줄 더 붙는다(#291).
   - 결과 없음 → `_emptyBox`(paw 이미지 + "이 지역엔 등록된 곳이 없어요").
-  - 결과 있음 → 헤더(`반려동반 가능 · N곳` 또는 레이어명, 출처 `관광공사`/`공공데이터 (더미)`) + `_placeCard` 목록.
+  - 결과 있음 → 헤더(`반려동반 가능 · N곳`, 출처 한 마디 — 칩에 따라 `관광공사`/`행정안전부 인허가 · 전국`/`두루누비 · 한국관광공사`) + `_placeCard` 목록.
 - **장소 카드**(`_placeCard`): 썸네일(firstimage 또는 카테고리색 폴백) + 이름 + 카테고리 태그 + 거리(`near_me`) + 주소. 탭 시 바텀시트.
 
 ### 지도 뷰 (`_mapView`)
 - **NaverMap**(`flutter_naver_map`): 초기 중심 서울시청(37.5665, 126.9816), zoom 12(min 9 / max 18), 위치버튼 on, ko 로케일.
 - 상단 오버레이: 검색바(`이 지역에서 찾기...`, 더미) + 뷰 토글 + ProfileAvatar + 카테고리 칩.
 - **마커**(`_refreshMarkers`): 필터된 장소마다 카테고리색 원형 핀(`NOverlayImage.fromWidget`), 탭 시 바텀시트.
-  - `trail` 선택 시 → 폴리라인(`_trailCoords`, `#2FB89B`) + 시작 마커 + 카메라 이동.
-  - vet/shop 레이어 선택 시 → 더미 데이터 위치로 카메라 이동.
+  - 산책로 항목의 시트를 열면 → 선을 `GET /api/places/trails/{courseId}/route` 로 받아 폴리라인(`#2FB89B`)을 얹고 카메라를 선에 맞춘다(#291). 못 받으면 시작점 마커만 남는다.
 - 좌하단 **범례**(`_legend`): 카테고리 9종 색 도트 목록.
 - 로딩 시 상단 "주변 장소 불러오는 중..." 카드.
 
 ### 장소 상세 바텀시트 (`_showPlaceSheet`)
 - 카테고리색 아이콘 박스 + 이름 + 카테고리 태그 + 거리 + 닫기(X).
-- 주소(`place_outlined`) / 전화(`call_outlined`, 있을 때) + `반려동물 동반 가능 (관광공사)` 배지.
+- 요약(`summary`, 있을 때) / 주소(`place_outlined`) / 전화(`call_outlined`, 있을 때) + 출처 배지(`반려동물 동반 가능 (관광공사)` · `동물병원 · 행정안전부 인허가` · `걷기여행길 · 두루누비(한국관광공사)`).
 
 ### 데이터
 - `PetPlacesRepository.fetchNearby(lat, lng, radius:8000, numOfRows:80)` → **`GET /api/places/nearby`**(우리 백엔드). 응답은 계약의 `Place` 다 — `lat/lng/contentTypeId/addr/image/tel/distM`. **KTO 의 `mapx/addr1/firstimage` 가 아니다**: 그 모양을 해석하는 일은 서버가 한다(#40).
-- `_dummyVet`(3건) / `_dummyShop`(2건) / `_trailCoords` — **더미 레이어**(실제론 LOCALDATA 인허가 · 두루누비 걷기여행길).
-- 필터 로직: `_filtered`(trail→빈배열+폴리라인, vet/shop→더미, null→전체, 그 외→contentTypeId 일치).
+- 병원/펫샵/산책로는 서버가 카탈로그 한 벌에 이어 붙인다(#291) — 앱에 레이어 데이터가 없다. `explore_has_no_dummy_layer_test` 가 가짜 좌표·이름이 돌아오지 않는지 잰다.
+- 필터 로직: `_filtered`(null→전체, 그 외→`categoryKey` 일치).
 
 ---
 
@@ -337,6 +336,6 @@
 > **이 표는 `find app/lib/v2/screens -name '*.dart'` 와 같아야 합니다(2026-09-02 기준 25개).**
 > 세었을 때 표에 10개뿐이었고 `consent_screen` 은 `docs/` 전체에서 0건이었습니다. (#201)
 
-> **아직 더미인 것**: 커뮤니티(`kPetPosts` · 로컬 댓글/반응 — M3.1), 병원/펫샵/산책로 레이어, 날씨.
+> **아직 더미인 것**: 날씨. (커뮤니티는 #170·#171, 병원/펫샵/산책로는 #291 에서 서버로 갔다.)
 > **실연동된 것**: 소셜 로그인, 실 GPS 와 경로 저장, 산책 통계·삭제·회고, KTO 반려동반 장소,
 > 가족 그룹·케어·채팅, 약관 동의.

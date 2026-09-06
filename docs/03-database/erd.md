@@ -2,7 +2,7 @@
 
 > Pawloop(포루프) MySQL 공간형 데이터 모델의 개체-관계도. GPS 산책 경로(`LINESTRING`)와 장소 좌표(`POINT`)를 공간 컬럼으로 저장하고, `SPATIAL INDEX` + `ST_Distance_Sphere`/`MBRContains`로 주변 검색을 수행한다. **가족 케어 공유**와 **채팅** 기능으로 `family_group`·`chat_room`·`chat_room_member`·`chat_room_invite`·`chat_message`·`walk_note` 엔티티가 추가되고, `care_log`는 `group_id`/`done_by`를 더해 "누가·언제 했는지"를 가족과 공유하는 케어 기록으로 확장된다. 방·멤버십·초대는 가족 그룹에 종속되지 않는 범용 3엔티티이고, `family_group` 은 `origin_kind`/`origin_ref` 쌍으로 방에 **불투명하게** 닿는다 — 그 방향의 FK 는 없다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 거기에 표가 **46개** 있다(전체 목록은 [테이블 스키마 부록 A](./schema.md)). 이 문서가 그리는 엔티티 중 무엇이 실재인지는 아래 **엔티티 설명** 표의 "실재" 열이 정본이고, 그 집합은 [테이블 스키마](./schema.md)의 절 제목 **실재** 표시와 같다 — `DocDriftTest` 가 정본·절 제목·부록·이 표 넷을 대조한다(#176). 그림의 `place`·`trail`·`bookmark` 는 아직 **계획**이다 — 그 셋이 낀 관계선에는 '계획' 꼬리표가 붙어 있다. 감정 여행·관광 수집 시절의 표 21개는 정본에 있지만 반려 축에서 쓰지 않는다 — 지우지 않고 격리한다(#174). 감정카드 셋은 v2 커뮤니티(`post`·`comment`·`reaction`)와 다른 표라 그림에 따로 그렸다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 거기에 표가 **47개** 있다(전체 목록은 [테이블 스키마 부록 A](./schema.md)). 이 문서가 그리는 엔티티 중 무엇이 실재인지는 아래 **엔티티 설명** 표의 "실재" 열이 정본이고, 그 집합은 [테이블 스키마](./schema.md)의 절 제목 **실재** 표시와 같다 — `DocDriftTest` 가 정본·절 제목·부록·이 표 넷을 대조한다(#176). 그림의 `place`·`bookmark` 는 아직 **계획**이다 — 그 둘이 낀 관계선에는 '계획' 꼬리표가 붙어 있다. 산책로는 `trail_route`(실재)가 선을 들고 `place_catalog` 의 두루누비 행이 시작점을 든다(#291). 감정 여행·관광 수집 시절의 표 21개는 정본에 있지만 반려 축에서 쓰지 않는다 — 지우지 않고 격리한다(#174). 감정카드 셋은 v2 커뮤니티(`post`·`comment`·`reaction`)와 다른 표라 그림에 따로 그렸다. 예전 이 문서는 사용자 테이블을 `app_user` 로 그렸는데, 그 이름의 테이블은 만들어진 적이 없다(→ [테이블 스키마 §1 각주](./schema.md)).
 
 ## ER 다이어그램
 
@@ -177,12 +177,15 @@ erDiagram
         DATETIME  updated_at
     }
 
-    trail {
-        BIGINT     id PK
-        VARCHAR    source   "durunubi (걷기여행길)"
-        VARCHAR    name
-        LINESTRING path     "산책로 경로 (공간타입)"
-        INT        length_m
+    trail_route {
+        VARCHAR  course_id PK  "두루누비 crsIdx"
+        VARCHAR  name
+        INT      point_count   "300 이하"
+        INT      length_m      "원본 길이(m)"
+        DOUBLE   start_lat
+        DOUBLE   start_lng
+        LONGTEXT payload       "[[경도, 위도], ...] JSON"
+        DATETIME fetched_at    "Asia/Seoul 벽시계"
     }
 
     post {
@@ -281,7 +284,8 @@ erDiagram
     }
 
     place_catalog {
-        INT      id PK       "항상 1 (CHECK)"
+        INT      id PK       "1 kto · 2 localdata · 3 durunubi"
+        VARCHAR  source UK   "kto|localdata|durunubi (CHECK)"
         VARCHAR  etag
         LONGTEXT payload
         DATETIME fetched_at  "Asia/Seoul 벽시계"
@@ -309,7 +313,7 @@ erDiagram
     }
 ```
 
-> `trail`은 공공 산책로(두루누비) 데이터를 담는 독립 엔티티로, 현재 다른 엔티티와 FK 관계 없이 지도 레이어에만 사용된다(향후 `walk`/`post` 연결 확장 여지).
+> `trail_route` 는 두루누비 코스 하나의 선이다. 다른 엔티티와 FK 가 없다 — `course_id` 는 두루누비의 키이고, 카탈로그(`place_catalog` 의 `durunubi` 행)가 같은 코스의 시작점을 `trail:crsIdx` 로 든다(#291). 사용자가 산책로를 눌렀을 때만 선이 나간다.
 
 ## 엔티티 설명
 
@@ -327,7 +331,7 @@ erDiagram
 | `chat_message` | 실재 | 채팅 메시지. 순서·델타·미읽음의 기준은 방별 `room_seq` 이고 **`id` 는 커서로 쓰지 않는다**(배정 시점과 가시성 시점이 달라 폴링이 메시지를 영구히 건너뛴다). 발신자는 값만 들고 `sender_name` 스냅샷을 함께 둔다. MVP는 폴링, 소켓은 트리거 기반(M2.9). |
 | `walk_note` | 실재 | 산책 시 주의사항(가족 공유 메모). **`family_group` 1:1** — `UNIQUE(group_id)` 로 그룹당 한 장이고, 마지막으로 고친 사람(`updated_by`)과 시각을 든다. |
 | `place` | 계획 | 동반장소·동물병원·펫샵 POI 캐시. 좌표 `POINT` + `SPATIAL INDEX`. 공공데이터 원본 `raw_json` 보관. |
-| `trail` | 계획 | 산책로 코스. 경로를 `LINESTRING`으로 저장(두루누비 걷기여행길). |
+| `trail_route` | 실재 | 산책로 코스의 선 — 두루누비 GPX 를 300점 이하로 줄인 `[[경도, 위도]]` JSON. 카탈로그에는 시작점만 실린다(#291). [schema.md §6](./schema.md). |
 | `post` | 실재 | 커뮤니티 게시글. 게시판(board) 분류, 장소(`place`) 선택 태그 가능. `users` 1:N `post`. |
 | `comment` | 실재 | 게시글 댓글. `post` 1:N, `users` 1:N. |
 | `reaction` | 실재 | 게시글 반응(도움돼요/귀여워요/공감). `post` 1:N, `users` 1:N. |
@@ -338,7 +342,7 @@ erDiagram
 | `kto_call_budget` | 실재 | KTO 일 호출 예산. `PRIMARY KEY(day, pool)` 이 1,000콜 한도를 지키는 유일한 장치다(#40). [schema.md §21](./schema.md). |
 | `place_cell` | 실재 | 주변 장소 셀 스냅샷 — 좌표를 0.02° 격자로 접은 키로 KTO 응답을 통째로 보관(#40). [schema.md §22](./schema.md). |
 | `pet_place_detail` | 실재 | 장소 상세의 KTO 응답 캐시(`content_id` 키). [schema.md §23](./schema.md). |
-| `place_catalog` | 실재 | 전국 반려동반 장소 한 벌 — 행 하나(`id = 1`), `etag` 로 304, 매일 04:40 예열(#279). [schema.md §24](./schema.md). |
+| `place_catalog` | 실재 | 장소 한 벌 — **출처별 한 행**(`kto` 매일 04:40 예열 #279 · `localdata` 인허가 · `durunubi` 두루누비, 둘은 월 1회 #291). 응답은 셋을 이어 붙인 배열 하나이고 `etag` 는 세 해시의 해시. [schema.md §24](./schema.md). |
 | `report` | 실재 | 신고. `users` 로 FK 를 안 건다 — 탈퇴가 신고를 못 지운다(#254). [schema.md §25](./schema.md). |
 | `report_snapshot` | 실재 | 신고 시점의 대상 본문 스냅샷. `report` 에 CASCADE. [schema.md §26](./schema.md). |
 | `user_block` | 실재 | 가리기(사람 단위). `chat_block` 에서 이름을 옮겼다. [schema.md §27](./schema.md). |
@@ -350,6 +354,5 @@ erDiagram
 | --- | --- | --- | --- |
 | `walk` | `path` | `LINESTRING` | 산책 GPS 경로(폴리라인). 거리 산출·경로 표시. |
 | `place` | `geom` | `POINT` | 장소 좌표. `ST_Distance_Sphere`/`MBRContains`로 주변 검색. |
-| `trail` | `path` | `LINESTRING` | 산책로 코스 경로. 지도 폴리라인. |
 
 > 공간쿼리는 `SPATIAL INDEX`를 전제로 하며, 대량 GPS 시계열/장소검색(ES·Redis)은 규모 확장 시 옵션이다. 초기에는 RDB(MySQL 공간형) 단일 저장소로 운영한다. 상세 컬럼 정의는 [테이블 명세](../03-database/) 참조.

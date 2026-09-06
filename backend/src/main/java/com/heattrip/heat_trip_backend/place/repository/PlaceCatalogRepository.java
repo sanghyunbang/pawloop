@@ -8,8 +8,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
-/** 전국 장소 한 벌 — 이슈 #273. {@link PlaceCellRepository} 와 같은 모양이다. */
+/**
+ * 출처별 장소 한 벌 — 이슈 #273 · #291. {@link PlaceCellRepository} 와 같은 모양이다.
+ *
+ * <p>행은 출처마다 하나이고 번호가 고정이다({@code CatalogSource.id()}). 그래서 조회가 전부
+ * PK 다 — {@code source} 로 찾는 메서드를 두지 않는다.
+ */
 public interface PlaceCatalogRepository extends JpaRepository<PlaceCatalog, Integer> {
 
     /**
@@ -25,4 +31,11 @@ public interface PlaceCatalogRepository extends JpaRepository<PlaceCatalog, Inte
              where c.id = :id
             """)
     int recordFailure(@Param("id") Integer id, @Param("now") LocalDateTime now);
+
+    /**
+     * ETag 만. {@code payload} 가 MB 단위라, "바뀌었는가" 만 물을 때 행을 통째로 읽으면 안 된다 —
+     * {@code LayerPlaceIndex} 가 요청마다 이것으로 캐시가 낡았는지 본다(#291).
+     */
+    @Query("select c.etag from PlaceCatalog c where c.id = :id")
+    Optional<String> etagOf(@Param("id") Integer id);
 }

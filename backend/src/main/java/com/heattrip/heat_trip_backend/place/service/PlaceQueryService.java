@@ -3,6 +3,7 @@ package com.heattrip.heat_trip_backend.place.service;
 import com.heattrip.heat_trip_backend.place.KtoBudgetProperties;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
 import com.heattrip.heat_trip_backend.place.entity.PlaceCell;
+import com.heattrip.heat_trip_backend.place.layer.LayerPlaceIndex;
 
 import org.springframework.stereotype.Service;
 
@@ -50,6 +51,7 @@ public class PlaceQueryService {
     private final KtoCallBudget budget;
     private final UpstreamGate gate;
     private final KtoBudgetProperties properties;
+    private final LayerPlaceIndex layers;
     private final Clock clock;
 
     public PlaceQueryService(CellSnapshotStore snapshots,
@@ -57,12 +59,14 @@ public class PlaceQueryService {
                              KtoCallBudget budget,
                              UpstreamGate gate,
                              KtoBudgetProperties properties,
+                             LayerPlaceIndex layers,
                              Clock clock) {
         this.snapshots = snapshots;
         this.kto = kto;
         this.budget = budget;
         this.gate = gate;
         this.properties = properties;
+        this.layers = layers;
         this.clock = clock;
     }
 
@@ -71,9 +75,36 @@ public class PlaceQueryService {
      *
      * @param radiusM  사용자가 요청한 반경. {@link GridCell#GUARANTEED_RADIUS_M} 이하여야
      *                 셀 안 어디서든 완전히 덮인다 — 계약이 그 값으로 상한을 건다
-     * @param category KTO {@code contentTypeId}. {@code null} 이면 전부
+     * @param category KTO {@code contentTypeId} 또는 레이어 키({@code vet}·{@code shop}·{@code trail}).
+     *                 {@code null} 이면 전부 — KTO 셀과 레이어 한 벌을 합친다(#291)
      */
     public List<PlaceDto> nearby(double lat, double lng, int radiusM, String category, int limit) {
+        boolean layerOnly = category != null && PlaceDto.LAYER_SOURCES.contains(category);
+        List<PlaceDto> pool = new ArrayList<>();
+
+        // 레이어 칩(vet·shop·trail)이면 KTO 셀을 부르지 않는다 — 부르면 예산만 태운다.
+        if (!layerOnly) {
+            List<PlaceDto> ktoPlaces = ktoCell(lat, lng);
+            if (ktoPlaces != null) {
+                pool.addAll(ktoPlaces);
+            }
+        }
+        // 전체이거나 레이어 칩이면 레이어 한 벌도 본다. 전국이 메모리에 있고 거리는 여기서 잰다.
+        if (category == null || layerOnly) {
+            pool.addAll(layers.allLayers());
+        }
+
+        if (pool.isEmpty()) {
+            // 스냅샷도 없고 갱신도 못 했다. 빈 목록이다 — 앱은 지금도 실패를 빈 목록으로
+            // 다루므로 화면이 깨지지 않는다. 운영자는 kto_call_budget 과 로그로 본다.
+            return List.of();
+        }
+
+        return within(pool, lat, lng, radiusM, category, limit);
+    }
+
+    /** KTO 셀 스냅샷. 없고 갱신도 못 했으면 {@code null}. */
+    private List<PlaceDto> ktoCell(double lat, double lng) {
         GridCell cell = GridCell.of(lat, lng);
         Optional<PlaceCell> row = snapshots.find(cell);
 
@@ -85,14 +116,7 @@ public class PlaceQueryService {
                 places = fresh;
             }
         }
-
-        if (places == null) {
-            // 스냅샷도 없고 갱신도 못 했다. 빈 목록이다 — 앱은 지금도 실패를 빈 목록으로
-            // 다루므로 화면이 깨지지 않는다. 운영자는 kto_call_budget 과 로그로 본다.
-            return List.of();
-        }
-
-        return within(places, lat, lng, radiusM, category, limit);
+        return places;
     }
 
     /** 반경·카테고리로 거르고 거리순으로 자른다. */
@@ -100,7 +124,7 @@ public class PlaceQueryService {
                                          int radiusM, String category, int limit) {
         List<PlaceDto> out = new ArrayList<>();
         for (PlaceDto place : places) {
-            if (category != null && !category.equals(place.contentTypeId())) {
+            if (category != null && !category.equals(place.categoryKey())) {
                 continue;
             }
             double distance = haversineMeters(lat, lng, place.lat(), place.lng());
