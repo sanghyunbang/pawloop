@@ -157,7 +157,9 @@ public class LayerCatalogService {
             }
 
             log.info("인허가 레이어 — 담은 곳 {} · 좌표 없음 등으로 건너뜀 {} · API 전체 {}", all.size(), skipped, total);
-            return snapshots.store(CatalogSource.LOCALDATA, all, total);
+            // 전체 수에서 못 담는 행을 뺀다 — 좌표 없는 행은 다시 받아도 못 담으므로 '잘렸다'가 아니다.
+            // 실측(#291)에서 8,110 중 354 가 그랬고, 다 받았는데도 경고가 울렸다.
+            return snapshots.store(CatalogSource.LOCALDATA, all, Math.max(total - skipped, 0));
         });
         return result == null ? Optional.empty() : result;
     }
@@ -248,7 +250,8 @@ public class LayerCatalogService {
 
             log.info("두루누비 레이어 — 코스 {} · GPX 새로 받음 {} · 못 받음 {} · 담은 곳 {}",
                     courses.size(), fetched, failedGpx, places.size());
-            return snapshots.store(CatalogSource.DURUNUBI, places, Math.max(total, 0));
+            // GPX 를 못 받은 코스는 전체 수에서도 뺀다 — 위 '못 받음' 이 그 수다. 상한에 걸려 미룬 코스만 '잘렸다'다.
+            return snapshots.store(CatalogSource.DURUNUBI, places, Math.max(Math.max(total, 0) - failedGpx, 0));
         });
         return result == null ? Optional.empty() : result;
     }

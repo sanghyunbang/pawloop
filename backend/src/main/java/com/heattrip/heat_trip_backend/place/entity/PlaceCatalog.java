@@ -83,7 +83,10 @@ public class PlaceCatalog {
     @Column(name = "item_count", nullable = false)
     private int itemCount;
 
-    /** KTO 가 말한 전체 수. {@link #itemCount} 보다 크면 <b>잘렸다</b>. */
+    /**
+     * 출처가 말한 전체 수 — 레이어는 못 담는 행(좌표 없음 · GPX 실패)을 뺀 뒤다.
+     * {@link #itemCount} 보다 크면 <b>잘렸다</b>.
+     */
     @Builder.Default
     @Column(name = "total_count", nullable = false)
     private int totalCount = 0;

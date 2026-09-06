@@ -40,6 +40,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -139,6 +140,8 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
         final AtomicInteger pageCalls = new AtomicInteger();
         final AtomicInteger failFromPage = new AtomicInteger(0);
         final AtomicReference<String> failCode = new AtomicReference<>("999");
+        /** 업종마다 이만큼의 좌표 없는 행을 더 준다 — 실데이터의 4% 가 그렇다. */
+        final AtomicInteger rowsWithoutCoords = new AtomicInteger(0);
 
         FakeLocalData(LayerCatalogProperties properties) {
             super(null, null, "unused", properties);
@@ -165,7 +168,12 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
                        "ROAD_NM_ADDR":"서울특별시 강동구 올림픽로 783","DTL_TASK_SE_NM":"동물판매업"}
                       """;
             try {
-                return new KtoApiClient.Result.Ok<>(List.of(MAPPER.readTree(json)), 1);
+                List<JsonNode> rows = new ArrayList<>();
+                rows.add(MAPPER.readTree(json));
+                for (int i = 0; i < rowsWithoutCoords.get(); i++) {
+                    rows.add(MAPPER.readTree("{\"MNG_NO\":\"NOCOORD" + i + "\",\"BPLC_NM\":\"좌표 없는 곳\",\"SALS_STTS_CD\":\"01\"}"));
+                }
+                return new KtoApiClient.Result.Ok<>(rows, rows.size());
             } catch (Exception e) {
                 throw new IllegalStateException(e);
             }
@@ -176,6 +184,8 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
     static class FakeDurunubi extends DurunubiApiClient {
         final AtomicInteger pageCalls = new AtomicInteger();
         final AtomicReference<String> failCode = new AtomicReference<>(null);
+        /** GPX 주소가 죽은 코스를 하나 더 준다. */
+        final AtomicBoolean extraCourseWithBrokenGpx = new AtomicBoolean(false);
 
         FakeDurunubi(LayerCatalogProperties properties) {
             super(null, null, "unused", properties);
@@ -190,8 +200,14 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
             if (pageNo > 1) {
                 return new KtoApiClient.Result.Empty<>();
             }
-            return new KtoApiClient.Result.Ok<>(List.of(new Course("T_ROUTE_1", "서울숲 둘레길", "R1",
-                    2.6, 40, 1, "순환", "서울 성동구", "https://fake.durunubi.kr/T_ROUTE_1.gpx")), 1);
+            List<Course> courses = new ArrayList<>();
+            courses.add(new Course("T_ROUTE_1", "서울숲 둘레길", "R1",
+                    2.6, 40, 1, "순환", "서울 성동구", "https://fake.durunubi.kr/T_ROUTE_1.gpx"));
+            if (extraCourseWithBrokenGpx.get()) {
+                courses.add(new Course("T_ROUTE_BROKEN", "GPX 가 죽은 길", "R2",
+                        1.0, 20, 1, "순환", "서울 성동구", "https://fake.durunubi.kr/BROKEN.gpx"));
+            }
+            return new KtoApiClient.Result.Ok<>(courses, courses.size());
         }
     }
 
@@ -211,7 +227,7 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
 
         @Override
         public Optional<String> fetch(String url) {
-            return Optional.of(GPX);
+            return url.contains("BROKEN") ? Optional.empty() : Optional.of(GPX);
         }
     }
 
@@ -246,6 +262,8 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
         localData.failCode.set("999");
         durunubi.pageCalls.set(0);
         durunubi.failCode.set(null);
+        localData.rowsWithoutCoords.set(0);
+        durunubi.extraCourseWithBrokenGpx.set(false);
     }
 
     // ─────────────────────────── 카탈로그 ───────────────────────────
@@ -411,5 +429,34 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(catalogRows.findById(CatalogSource.LOCALDATA.id())).isPresent();
         assertThat(catalogRows.findById(CatalogSource.DURUNUBI.id()).map(PlaceCatalog::getItemCount).orElse(0))
                 .isZero();
+    }
+
+    // ─────────────────────────── 전체 수 ───────────────────────────
+
+    @Test
+    @DisplayName("좌표 없는 행은 전체 수에서도 뺀다 — 다 받았는데 '잘렸다'가 되면 안 된다")
+    void rowsWithoutCoordinatesDoNotCountAsTruncation() {
+        localData.rowsWithoutCoords.set(3);
+
+        layers.refreshLocalData();
+
+        PlaceCatalog row = catalogRows.findById(CatalogSource.LOCALDATA.id()).orElseThrow();
+        assertThat(row.getItemCount()).as("병원 하나 · 판매업 하나만 담긴다").isEqualTo(2);
+        assertThat(row.getTotalCount())
+                .as("실측(#291)에서 API 전체 8,110 중 좌표 없는 354 때문에 경고가 헛울렸다")
+                .isEqualTo(row.getItemCount());
+    }
+
+    @Test
+    @DisplayName("GPX 를 못 받은 코스는 전체 수에서도 뺀다 — 못 받음은 따로 세고 '잘렸다'는 아니다")
+    void coursesWithoutGpxDoNotCountAsTruncation() {
+        durunubi.extraCourseWithBrokenGpx.set(true);
+
+        layers.refreshDurunubi();
+
+        PlaceCatalog row = catalogRows.findById(CatalogSource.DURUNUBI.id()).orElseThrow();
+        assertThat(row.getItemCount()).isEqualTo(1);
+        assertThat(row.getTotalCount()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from trail_route", Integer.class)).isEqualTo(1);
     }
 }
