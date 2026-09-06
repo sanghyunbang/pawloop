@@ -268,7 +268,11 @@ class PushDispatchIntegrationTest extends AbstractMySqlIntegrationTest {
 
         userService.deleteMe(second.getId());
 
-        waitUntil(() -> tokenRows.findByUserId(second.getId()).isEmpty());
+        // 토큰 삭제와 설정 삭제는 커밋 뒤 실행기 스레드에서 각각 다른 트랜잭션으로 돈다 — 하나만 기다리고
+        // 다른 하나를 바로 단언하면 느린 기계(CI)에서 그 사이를 본다. 둘 다 기다린다.
+        waitUntil(() -> tokenRows.findByUserId(second.getId()).isEmpty()
+                && preferenceRows.findById(second.getId()).isEmpty());
+        assertThat(tokenRows.findByUserId(second.getId())).isEmpty();
         assertThat(preferenceRows.findById(second.getId())).isEmpty();
     }
 
