@@ -26,6 +26,9 @@ const String consentRoute = '/consent';
 /// 로그인 후 돌아갈 기본 자리.
 const String homeRoute = '/home';
 
+/// 첫 실행 소개(#323). 로그인한 적 없는 기기에서 한 번, 로그인 화면보다 앞.
+const String introRoute = '/intro';
+
 /// **로그인해야 열리는** 경로의 접두사.
 ///
 /// ## 왜 화이트리스트가 아니라 블랙리스트인가
@@ -45,7 +48,7 @@ const List<String> protectedRoutePrefixes = [
 ];
 
 /// 로그인 상태에서는 머무를 이유가 없는 경로.
-const List<String> _authOnlyEntryRoutes = [loginRoute, '/auth/sign-up'];
+const List<String> _authOnlyEntryRoutes = [loginRoute, '/auth/sign-up', introRoute];
 
 /// [location] 이 로그인해야 열리는 곳인가.
 bool isProtectedRoute(String location) {
@@ -80,18 +83,26 @@ bool isProtectedRoute(String location) {
 /// | authenticated | 스플래시 | pending ?? 홈 |
 /// | authenticated | 그 밖 | null |
 /// | unauthenticated + sessionEnded | 아무 데나 | 로그인 |
+/// | unauthenticated · 소개 모름(null) | 아무 데나 | null (스플래시에 머문다) |
+/// | unauthenticated · 소개 안 봄 | 소개 | null |
+/// | unauthenticated · 소개 안 봄 | 그 밖 | 소개 |
 /// | unauthenticated | 보호 라우트 | 로그인 |
 /// | unauthenticated | 공개 라우트 | null |
 ///
 /// [consented] 는 **아직 모를 때 `null`** 이다. 저장소를 읽는 동안이라는 뜻이고, 그때는
 /// 아무 데로도 보내지 않는다 — `false` 로 치면 읽는 사이에 동의 화면이 한 번 깜빡이고,
 /// `true` 로 치면 그 사이에 동의 없이 앱이 열린다. 둘 다 틀리다.
+///
+/// [introSeen] 은 첫 실행 소개를 본 적 있는가(#323). `consented` 와 같은 모양으로
+/// 모르면 `null` 이다. **기본값이 `true` 인 이유**: 이 표의 다른 규칙은 소개와 무관하게
+/// 성립해야 하고, 라우터는 언제나 실제 값을 넘긴다.
 String? authRedirect({
   required AuthStatus status,
   required String location,
   String? pendingLocation,
   bool sessionEnded = false,
   bool? consented,
+  bool? introSeen = true,
 }) {
   final path = _pathOf(location);
 
@@ -129,12 +140,17 @@ String? authRedirect({
       return null;
 
     case AuthStatus.unauthenticated:
+      // 방금 끝난 세션이 먼저다. 공개 라우트에 있어도 로그인 화면을 보여 준다 —
+      // 로그아웃/폐기를 알리지 않으면 사용자는 자기가 나갔다는 것을 모른다.
+      // 소개보다 앞인 이유: 이 사람은 앱이 무엇인지 이미 안다.
+      if (sessionEnded) return path == loginRoute ? null : loginRoute;
+      // 첫 실행 소개(#323). 모르면 움직이지 않는다 — `consented` 와 같은 이유로,
+      // `false` 로 치면 소개가 한 프레임 깜빡이고 `true` 로 치면 소개를 건너뛴다.
+      if (introSeen == null) return null;
+      if (!introSeen) return path == introRoute ? null : introRoute;
       if (path == splashRoute) {
         return _settle(status, pendingLocation, sessionEnded: sessionEnded);
       }
-      // 방금 끝난 세션. 공개 라우트에 있어도 로그인 화면을 보여 준다 —
-      // 로그아웃/폐기를 알리지 않으면 사용자는 자기가 나갔다는 것을 모른다.
-      if (sessionEnded && path != loginRoute) return loginRoute;
       return isProtectedRoute(path) ? loginRoute : null;
   }
 }

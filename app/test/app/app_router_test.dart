@@ -375,4 +375,114 @@ void main() {
       );
     });
   });
+
+  // 첫 실행 소개(#323) — 로그인한 적 없는 기기에서 한 번, 로그인 화면보다 앞.
+  group('intro — 첫 실행 소개', () {
+    test('소개를 안 봤으면 어디로 가려 하든 소개로', () {
+      for (final location in [
+        splashRoute,
+        '/home',
+        '/home?tab=1',
+        loginRoute,
+        '/auth/sign-up',
+      ]) {
+        expect(
+          authRedirect(
+            status: AuthStatus.unauthenticated,
+            location: location,
+            introSeen: false,
+          ),
+          introRoute,
+          reason: '$location — 앱이 무엇인지 모른 채 시작하면 안 된다',
+        );
+      }
+    });
+
+    test('소개 화면 자체는 그대로 둔다 — 무한 루프 방지', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.unauthenticated,
+          location: introRoute,
+          introSeen: false,
+        ),
+        isNull,
+      );
+    });
+
+    test('봤는지 모르면 움직이지 않는다 — 깜빡임도 건너뜀도 아니다', () {
+      for (final location in [splashRoute, '/home', loginRoute]) {
+        expect(
+          authRedirect(
+            status: AuthStatus.unauthenticated,
+            location: location,
+            introSeen: null,
+          ),
+          isNull,
+          reason: location,
+        );
+      }
+    });
+
+    test('봤으면 지금 규칙 그대로 — 스플래시는 홈으로, 공개 라우트는 그대로', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.unauthenticated,
+          location: splashRoute,
+          introSeen: true,
+        ),
+        homeRoute,
+      );
+      expect(
+        authRedirect(
+          status: AuthStatus.unauthenticated,
+          location: '/home',
+          introSeen: true,
+        ),
+        isNull,
+      );
+      expect(
+        authRedirect(
+          status: AuthStatus.unauthenticated,
+          location: introRoute,
+          introSeen: true,
+        ),
+        isNull,
+        reason: '설정에서 다시 보는 길을 막지 않는다',
+      );
+    });
+
+    test('방금 끝난 세션은 소개를 다시 보지 않는다 — 로그인으로', () {
+      for (final location in [splashRoute, '/home', introRoute]) {
+        expect(
+          authRedirect(
+            status: AuthStatus.unauthenticated,
+            location: location,
+            sessionEnded: true,
+            introSeen: false,
+          ),
+          loginRoute,
+          reason: '$location — 이 사람은 앱이 무엇인지 이미 안다',
+        );
+      }
+    });
+
+    test('로그인한 사람이 소개로 들어오면 홈으로', () {
+      for (final seen in [false, true]) {
+        expect(
+          authRedirect(
+            status: AuthStatus.authenticated,
+            location: introRoute,
+            introSeen: seen,
+          ),
+          homeRoute,
+          reason: 'introSeen=$seen',
+        );
+      }
+    });
+
+    test('소개 라우트는 공개다 — 보호 목록에 없다', () {
+      expect(isProtectedRoute(introRoute), isFalse);
+    });
+  });
+
 }

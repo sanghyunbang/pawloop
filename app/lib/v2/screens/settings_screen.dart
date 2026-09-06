@@ -33,6 +33,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import 'intro_screen.dart';
 import 'settings/account_delete_screen.dart';
 import 'settings/legal_document_screen.dart';
 
@@ -65,6 +66,18 @@ class SettingsScreen extends StatelessWidget {
                       _divider(),
                       _row(context, Icons.campaign_outlined, '마케팅 정보 수신 동의',
                           () => _open(context, LegalDocument.marketing)),
+                    ]),
+                    const SizedBox(height: 18),
+                    // 첫 실행 소개는 한 번만 나온다(#323). 닫아 버린 안내를 나중에 다시
+                    // 찾을 수 있어야 한다 — 그 자리가 여기다.
+                    _section('앱'),
+                    _card([
+                      _row(context, Icons.auto_awesome_outlined, '앱 소개 다시 보기',
+                          () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => IntroScreen(
+                                    replay: true,
+                                    onDone: () => Navigator.of(context).maybePop(),
+                                  )))),
                     ]),
                     const SizedBox(height: 18),
                     _section('계정'),

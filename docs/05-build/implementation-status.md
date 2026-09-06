@@ -46,6 +46,7 @@
 | **채팅 (방 목록)** | `chat_list_screen.dart` `ChatListScreen` | ✅ 서버 연동 | 방 카드 리스트(이름·태그·마지막 메시지·미읽음 뱃지·멤버 수) — `GET /api/chat/rooms` | 방은 가족 그룹을 만들 때 함께 생긴다(#196). 방만 따로 만드는 경로는 없다 — ADR-0011 이 방을 `origin_kind`/`origin_ref` 로 그룹에 매달았다 |
 | **채팅 (방 안)** | `family_chat_screen.dart` `FamilyChatScreen` | ✅ 서버 연동 | 적응형 폴링(`afterSeq` 델타·ETag), 낙관적 전송 + 같은 멱등키 재전송, 읽음 보고, 신고·가리기·강퇴, 첫 진입 약관 동의 | 메시지 삭제 UI 없음(서버 API 도 없다) |
 | **가족** | `family_screen.dart` `FamilyScreen` | ✅ 서버 연동 | 멤버 목록, 초대코드, 오늘의 케어 현황, 산책 주의사항, 채팅 진입 — `FamilyRepository`(#76). **그룹 만들기·초대 코드로 참여**(#196) | 그룹이 없으면 만들기·참여 둘 다 보이고, 만들면 초대 코드가 바로 뜬다 |
+| **첫 실행 소개** | `intro_screen.dart` `IntroScreen` | ✅ 구현완료 | 가치 3장(`kIntroPages`) · 건너뛰기 · 기기당 한 번(`IntroGate`, `intro_seen_v1`) · 설정 > 앱 소개 다시 보기 (#323) | — |
 
 ---
 
