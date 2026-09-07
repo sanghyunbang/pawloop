@@ -41,6 +41,7 @@
 3. **오늘 산책 요약 카드**(GlassCard): 3분할 셀 — `{count}회 오늘 산책` / `{km}km 거리` / `{minutes}분 시간`. **서버 목록 + 전송 대기 초안**을 합쳐 오늘 것만 접는다(#145). 대기 중인 것이 있으면 아래에 `전송 대기 N건`, 서버를 못 불렀으면 `기록을 불러오지 못했어요` — **0 을 그냥 보여 주지 않는다**(0 은 "한 번도 안 걸었다" 로 읽힌다).
 4. **CTA 2버튼**: `산책 시작`(flex 3, warm 채움) / `코스 찾기`(flex 2, 흰색 아웃라인).
 5. **산책 안전 지수 카드**(`WalkSafetyCard`, #336): 판정 아이콘 + 한 줄(`지금 나가기 좋아요` / `짧게 다녀오세요 · 바닥 7초 룰 확인` / `지금은 피하고 저녁 7시 뒤에` / `옷 입히고 짧게 다녀오세요`) + 근거(`26°C · 미세먼지 보통(성수)`). 누르면 7초 룰·시간대 시트. 키·위치·기상청 응답이 없으면 **카드가 없다**.
+6. **급할 때 한 줄**(`_emergency`, #337): `급할 때 · 가까운 동물병원`. 누르면 `EmergencyVetsSheet` — 가까운 병원 **셋**(이름 · 거리 · 주소 · 전화 버튼). 이름에 24시가 있으면 `24시 · 이름 기준` 배지. 위치가 없으면 목록 대신 "위치를 켜면 가까운 곳부터 찾아 드려요".
 
 ### 상호작용
 | 요소 | 동작 |
@@ -51,7 +52,7 @@
 
 ### 데이터
 - `kMyDog`(ValueNotifier<DogProfile>) → 이름·견종·나이·크기·아바타. 편집 화면과 실시간 연동.
-- `WalkFeedData.today`(count/km/minutes) — `GET /api/walks` + 초안 큐. 안전 지수는 기상청·에어코리아를 기기가 직접 부른다(#336).
+- `WalkFeedData.today`(count/km/minutes) — `GET /api/walks` + 초안 큐. 안전 지수는 **서버**가 기상청·에어코리아를 부르고 앱은 5km 격자만 보낸다(`GET /api/walk-safety/now`, #336). 급할 때 목록은 `PetPlacesRepository.fetchNearby(contentTypeId: 'vet')` — 거리는 기기 안에서 잰다(#337).
 
 ---
 
@@ -86,11 +87,13 @@
 ### 장소 상세 바텀시트 (`_showPlaceSheet`)
 - 카테고리색 아이콘 박스 + 이름 + 카테고리 태그 + 거리 + 닫기(X).
 - 요약(`summary`, 있을 때) / 주소(`place_outlined`) / 전화(`call_outlined`, 있을 때) + 출처 배지(`반려동물 동반 가능 (관광공사)` · `동물병원 · 행정안전부 인허가` · `걷기여행길 · 두루누비(한국관광공사)`).
+- 병원이고 **이름에 24시가 있으면** 카테고리 태그 옆에 `24시 · 이름 기준` 배지(#337). 진료시간을 주는 공공 데이터가 없어서 이름으로 짐작한 것이고, 그 사실을 배지가 함께 말한다.
+- 병원 칩을 고르면 칩 줄 끝에 **`24시` 토글**이 붙는다(#337) — 이름 기준으로 거르고, 카테고리를 바꾸면 꺼진다. 조회를 다시 하지 않고 받아 둔 목록에서 거른다.
 
 ### 데이터
 - `PetPlacesRepository.fetchNearby(lat, lng, radius:8000, numOfRows:80)` → **`GET /api/places/nearby`**(우리 백엔드). 응답은 계약의 `Place` 다 — `lat/lng/contentTypeId/addr/image/tel/distM`. **KTO 의 `mapx/addr1/firstimage` 가 아니다**: 그 모양을 해석하는 일은 서버가 한다(#40).
 - 병원/펫샵/산책로는 서버가 카탈로그 한 벌에 이어 붙인다(#291) — 앱에 레이어 데이터가 없다. `explore_has_no_dummy_layer_test` 가 가짜 좌표·이름이 돌아오지 않는지 잰다.
-- 필터 로직: `_filtered`(null→전체, 그 외→`categoryKey` 일치).
+- 필터 로직: `_filtered`(null→전체, 그 외→`categoryKey` 일치). `_only24h` 가 켜져 있으면 `isTwentyFourHourByName(title)` 까지 통과한 것만(#337).
 
 ---
 

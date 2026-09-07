@@ -5,6 +5,7 @@ import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/today_care_card.dart';
 import '../widgets/walk_feed_builder.dart';
+import '../widgets/emergency_vets_sheet.dart';
 import '../widgets/walk_safety_card.dart';
 import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
@@ -115,6 +116,9 @@ class TodayScreen extends StatelessWidget {
                   // 하드코딩 "맑음 · 24°C" 가 있던 자리(#326). 지금은 기상청·에어코리아 값으로 판정한
                   // 산책 안전 지수 한 줄이고, 키·위치·응답이 없으면 카드 자체가 없다(#336).
                   const WalkSafetyCard(),
+                  // 급할 때 — 페르소나 P1 의 실패비용이 "아플 때 근처 병원을 못 찾음" 이다(#337).
+                  // 목록도 지도도 아니고 전화까지 두 번 만에 닿게 둔다.
+                  _emergency(context),
                 ],
               ),
             ),
@@ -245,6 +249,35 @@ class TodayScreen extends StatelessWidget {
         ),
       ),
     ]);
+  }
+
+  /// "급할 때" 한 줄. 눈에 띄되 산책 시작을 가리지 않게 작다.
+  Widget _emergency(BuildContext context) {
+    const red = Color(0xFFD7263D);
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: GestureDetector(
+        onTap: () => EmergencyVets.open(context),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: const Color(0x0FD7263D),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0x26D7263D)),
+          ),
+          child: Row(children: [
+            const Icon(Icons.local_hospital_rounded, size: 17, color: red),
+            const SizedBox(width: 9),
+            const Expanded(
+              child: Text('급할 때 · 가까운 동물병원',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: red)),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: Color(0x66D7263D)),
+          ]),
+        ),
+      ),
+    );
   }
 
   Widget _btn({required IconData icon, required String label, required Gradient? gradient, required VoidCallback onTap}) {
