@@ -2,6 +2,7 @@
 //
 // 없으면 없는 대로 둔다: 키가 없거나, 게스트라 위치 동의가 없거나, 못 받았으면 **카드가 없다.**
 // "맑음 · 24°C" 를 새벽에도 보여 주던 자리에 다시 가짜를 놓지 않는다.
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import '../data/location_service.dart';
@@ -23,18 +24,36 @@ class WalkSafetyCard extends StatefulWidget {
   State<WalkSafetyCard> createState() => _WalkSafetyCardState();
 }
 
-class _WalkSafetyCardState extends State<WalkSafetyCard> {
+class _WalkSafetyCardState extends State<WalkSafetyCard> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refresh();
     kMyDog.addListener(_refresh);
+    // 첫 시도는 실패하기 쉽다 — 동의 값이 아직 안 읽혔거나(라우터가 비동기로 쓴다) 실내라
+    // 좌표가 안 잡힌 때다. 그때 한 번 실패하고 마는 카드는 앱을 껐다 켤 때까지 없다.
+    LocationService.consented.addListener(_retry);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     kMyDog.removeListener(_refresh);
+    LocationService.consented.removeListener(_retry);
     super.dispose();
+  }
+
+  /// 앱으로 돌아올 때 한 번 더 — 위치를 못 잡았던 자리에서 나갔다 온 것일 수 있다.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _retry();
+  }
+
+  /// 아직 판정이 없을 때만 다시 부른다. 판정이 있으면 30분 TTL 에 맡긴다 —
+  /// 홈으로 돌아올 때마다 위치를 잡으면 배터리만 쓴다.
+  void _retry() {
+    if (WalkSafetyStore.latest.value == null) _refresh();
   }
 
   Future<void> _refresh() => WalkSafetyStore.refresh(
@@ -47,8 +66,13 @@ class _WalkSafetyCardState extends State<WalkSafetyCard> {
       );
 
   static Future<({double lat, double lng})?> _locate() async {
-    final p = await LocationService.current();
-    if (p == null) return null;
+    final fix = await LocationService.locate();
+    final p = fix.position;
+    if (p == null) {
+      // 카드가 없는 이유를 말없이 삼키지 않는다 — 동의 전인지, 실내라 못 잡은 것인지.
+      if (kDebugMode) debugPrint('[WalkSafety] 위치 없음: ${fix.denial}');
+      return null;
+    }
     return (lat: p.latitude, lng: p.longitude);
   }
 

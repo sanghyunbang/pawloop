@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:heat_trip_flutter/v2/data/location_service.dart';
 import 'package:heat_trip_flutter/v2/data/walk_safety_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/widgets/walk_safety_card.dart';
@@ -41,7 +42,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     WalkSafetyStore.resetForTest();
     kMyDog.value = null;
+    LocationService.consented.value = false;
   });
+
+  tearDown(() => LocationService.consented.value = false);
 
   testWidgets('서버가 503 이면 카드가 없다 — 가짜를 놓지 않는다', (t) async {
     await _pump(t, _repo(status: 503));
@@ -83,5 +87,49 @@ void main() {
     await t.pumpAndSettle();
 
     expect(find.text('지금은 피하고 저녁 7시 뒤에'), findsOneWidget);
+  });
+
+  testWidgets('첫 시도에 위치가 없어도 동의가 켜지면 다시 부른다 — 카드가 뒤늦게 나온다', (t) async {
+    var located = false;
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: WalkSafetyCard(
+          repository: _repo(),
+          locate: () async => located ? (lat: 37.5445, lng: 127.0410) : null,
+          now: () => DateTime(2026, 9, 7, 14, 10),
+        ),
+      ),
+    ));
+    await t.pumpAndSettle();
+    expect(find.textContaining('°C'), findsNothing);
+
+    // 라우터가 저장소를 읽고 뒤늦게 써 준다 — 그 전에 만들어진 카드가 그대로 비어 있으면
+    // 앱을 껐다 켜기 전에는 안전 지수를 볼 수 없다.
+    located = true;
+    LocationService.consented.value = true;
+    await t.pumpAndSettle();
+
+    expect(find.text('지금 나가기 좋아요'), findsOneWidget);
+  });
+
+  testWidgets('앱으로 돌아오면 다시 부른다 — 실내에서 못 잡고 나갔다 온 자리', (t) async {
+    var located = false;
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: WalkSafetyCard(
+          repository: _repo(),
+          locate: () async => located ? (lat: 37.5445, lng: 127.0410) : null,
+          now: () => DateTime(2026, 9, 7, 14, 10),
+        ),
+      ),
+    ));
+    await t.pumpAndSettle();
+    expect(find.textContaining('°C'), findsNothing);
+
+    located = true;
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await t.pumpAndSettle();
+
+    expect(find.text('지금 나가기 좋아요'), findsOneWidget);
   });
 }
