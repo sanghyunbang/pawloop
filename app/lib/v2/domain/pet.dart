@@ -345,10 +345,6 @@ const List<FamilyMember> kFamilyMembers = [
   FamilyMember('아빠', '가족', Color(0xFF5B8DEF), todayKm: 0),
 ];
 
-/// 내 산책 거리 가족 공유 동의(위치정보법상 '개인위치정보 제3자 제공' 동의) 상태.
-/// 켤 때 반드시 동의 시트를 거치고, 제공 시마다 알림 통지(법 제19조) — 푸시는 백엔드 연동 시.
-final ValueNotifier<bool> kShareMyDistance = ValueNotifier<bool>(false);
-
 /// 가족 초대 코드(옛 더미).
 ///
 /// ⚠️ **화면은 더 이상 이것을 보여주지 않는다** — 이슈 #76. 발급은
