@@ -1,3 +1,7 @@
+import 'myrecords_screen.dart';
+import '../data/walk_care_link.dart';
+import 'package:heat_trip_flutter/app/navigator_keys.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -28,7 +32,11 @@ class CreateScreen extends StatefulWidget {
   /// 트래킹이 만든 초안. **없으면 손입력이다.**
   final WalkDraft? draft;
 
-  const CreateScreen({super.key, this.prefillPlace, this.draft});
+  /// 테스트에서 갈아 끼운다. 화면은 평소 기본 생성자를 쓴다.
+  final WalkRepository? repository;
+  final WalkCareLink? careLink;
+
+  const CreateScreen({super.key, this.prefillPlace, this.draft, this.repository, this.careLink});
   @override
   State<CreateScreen> createState() => _CreateScreenState();
 }
@@ -105,7 +113,7 @@ class _CreateScreenState extends State<CreateScreen> {
 
     final WalkSyncResult result;
     try {
-      final sync = await WalkSync.open();
+      final sync = await WalkSync.open(repository: widget.repository);
       result = await sync.push(draft);
     } catch (_) {
       // 저장소를 열지 못했다(디스크 문제 등). 기록을 잃지 않았다고 말할 수 없다.
@@ -127,33 +135,56 @@ class _CreateScreenState extends State<CreateScreen> {
       );
       if (!mounted) return;
       if (registered != null) {
-        final retried = await WalkSync.open().then((s) => s.flush());
+        final retried = await WalkSync.open(repository: widget.repository).then((s) => s.flush());
         if (!mounted) return;
         setState(() => _saving = false);
-        _toast(retried > 0
-            ? '산책 기록이 저장됐어요 🐾'
-            : '기록을 보관했어요 · 연결되면 올릴게요');
+        if (retried > 0) _afterSaved();
+        _toast(
+          retried > 0 ? '산책이 기록됐어요' : '기록을 보관했어요 · 연결되면 올릴게요',
+          seeRecords: retried > 0,
+        );
         Navigator.of(context).maybePop();
         return;
       }
     }
 
     setState(() => _saving = false);
-
-    _toast(switch (result.outcome) {
-      WalkSyncOutcome.saved => '산책 기록이 저장됐어요 🐾',
-      // 사라지지 않았다는 것과, 아직 서버에 없다는 것을 둘 다 말한다.
-      WalkSyncOutcome.queued =>
-        result.reason ?? '기록을 보관했어요 · 연결되면 올릴게요',
-      WalkSyncOutcome.rejected => result.reason ?? '기록을 저장할 수 없어요',
-    });
+    final saved = result.outcome == WalkSyncOutcome.saved;
+    if (saved) _afterSaved();
+    _toast(
+      switch (result.outcome) {
+        WalkSyncOutcome.saved => '산책이 기록됐어요',
+        // 사라지지 않았다는 것과, 아직 서버에 없다는 것을 둘 다 말한다.
+        WalkSyncOutcome.queued =>
+          result.reason ?? '기록을 보관했어요 · 연결되면 올릴게요',
+        WalkSyncOutcome.rejected => result.reason ?? '기록을 저장할 수 없어요',
+      },
+      seeRecords: saved,
+    );
     Navigator.of(context).maybePop();
   }
 
-  void _toast(String message) {
+  /// 서버에 저장된 뒤 — 오늘의 케어 "산책" 칸에도 남긴다(#326). 기다리지 않는다:
+  /// 케어가 늦거나 실패해도 산책은 이미 저장됐고, 홈은 그 결과를 따로 다시 읽는다.
+  void _afterSaved() {
+    unawaited((widget.careLink ?? WalkCareLink()).recordWalk());
+  }
+
+  /// [seeRecords] 면 "보기" 가 붙는다 — 저장한 산책이 어디로 갔는지 홈이 말하지 않았다(#326).
+  void _toast(String message, {bool seeRecords = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(milliseconds: 1800)),
+      SnackBar(
+        content: Text(message),
+        duration: Duration(milliseconds: seeRecords ? 3200 : 1800),
+        action: seeRecords ? SnackBarAction(label: '보기', onPressed: _openRecords) : null,
+      ),
     );
+  }
+
+  /// 스낵바가 살아 있을 때 이 화면은 이미 닫혀 있다 — 루트 내비게이터로 연다.
+  static void _openRecords() {
+    rootNavigatorKey.currentState
+        ?.push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()));
   }
 
   @override
