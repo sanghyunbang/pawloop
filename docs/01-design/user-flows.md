@@ -156,11 +156,11 @@ flowchart TD
     C -->|isNew| E[onboarding_screen.dart<br/>반려동물 등록 권유 — 등록하기 / 나중에 할래요]
     C -->|기존 계정| H
     E --> H
-    H -->|첫 산책 시작| F[위치 권한 요청<br/>geolocator]
+    H -->|첫 산책 시작| S[location_priming_sheet.dart<br/>왜 · 기기에만 남음 · 프로필에서 끔 — 허용하기 / 나중에]
+    S -->|허용하기| F[OS 위치 권한 대화상자<br/>geolocator]
+    S -->|나중에| H
     F -->|허용| T[산책 트래킹 — 플로우 1]
     F -->|거부| T2[플로우 10]
-    F -.-> P1[[위치 사전 안내 한 장 #325]]:::todo
-    classDef todo fill:#f5f0ff,stroke:#9B7BFF,stroke-dasharray:5 4,color:#463C64;
 ```
 
 **구현 메모**
@@ -295,19 +295,19 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([첫 산책 시작]) --> P[OS 위치 권한 대화상자]
+    A([첫 산책 시작]) --> S[사전 안내 시트 #325<br/>허용하기 / 나중에 · 한 번 거부한 뒤엔 설정에서 켜기 · deniedForever 면 설정만]
+    S -->|허용하기| P[OS 위치 권한 대화상자]
     P -->|거부| D[walk_tracking_screen.dart 안내<br/>'위치 권한이 필요해요' · 설정으로]
     P -->|허용| T[트래킹]
     B([프로필 '위치 정보 수집 일시 중단' 켬]) --> S[LocationService.paused<br/>앱을 켤 때 복원 — 첫 화면 전에]
     S --> M[지도는 서울시청 기준 · 산책 시작은 안내]
-    D -.-> T1[[사전 안내 한 장 #325]]:::todo
-    classDef todo fill:#f5f0ff,stroke:#9B7BFF,stroke-dasharray:5 4,color:#463C64;
 ```
 
 **구현 메모**
 
 - 이용중지는 위치정보법 제24조의 자리다. `main.dart` 가 첫 화면이 그려지기 전에 복원한다 — 늦으면 중단해 둔 사용자의 현위치를 한 번 조회한 뒤에 꺼진다.
 - 게스트는 동의한 적이 없으므로 `LocationService.consented` 가 `false` 다 — 지도가 현위치를 묻지 않는다(#180).
+- 첫 산책 시작의 사전 안내는 `LocationPriming.stateFor()` 가 OS 권한을 읽어 정한다 — 이미 허용됐으면 시트 없이 바로 트래킹, "허용하기" 를 누른 적이 있는데 또 거부 상태면 설정 길을 함께, `deniedForever` 면 설정 길만(#325).
 
 ---
 

@@ -332,6 +332,7 @@
 | 온보딩 | `onboarding_screen.dart` | 동의 후 (`isNew`) | 반려동물 등록 권유 |
 | 스플래시 | `splash_screen.dart` | 앱 시작 | 저장된 토큰 검증 |
 | **첫 실행 소개** | `intro_screen.dart` | **스플래시 뒤 · 로그인 앞 — 기기당 한 번**(#323) | 가치 3장 · 건너뛰기 · `IntroGate` · 설정 > 앱 소개 다시 보기 |
+| **위치 사전 안내** | `location_priming_sheet.dart` | 첫 산책 시작 · 위치 권한이 없을 때(#325) | 왜 · 기기에만 남음 · 프로필에서 끔 3줄 · 허용하기 / 나중에 · 한 번 거부한 뒤엔 설정에서 켜기 · deniedForever 면 설정만 |
 | (진입 함수) | `start_walk.dart` | — | 미로그인이면 로그인부터 |
 
 > **이 표는 `find app/lib/v2/screens -name '*.dart'` 와 같아야 합니다(2026-09-07 기준 27개).**

@@ -56,7 +56,7 @@ class OnboardingScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  '반려동물 프로필을 등록하면\n산책 기록과 추천이 훨씬 정확해져요.',
+                  '반려동물 프로필을 등록하면\n산책 기록이 우리 아이 이름으로 쌓여요.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
