@@ -19,12 +19,13 @@ String _read(File file) {
 
 void main() {
   group('안드로이드 포그라운드 서비스', () {
-    test('권한 셋 — FOREGROUND_SERVICE · FOREGROUND_SERVICE_LOCATION · POST_NOTIFICATIONS', () {
+    test('권한 넷 — FOREGROUND_SERVICE · FOREGROUND_SERVICE_LOCATION · POST_NOTIFICATIONS · WAKE_LOCK(enableWakeLock 이 요구, 없으면 서비스가 예외로 죽는다)', () {
       final m = _read(_manifest);
       for (final p in [
         'android.permission.FOREGROUND_SERVICE',
         'android.permission.FOREGROUND_SERVICE_LOCATION',
         'android.permission.POST_NOTIFICATIONS',
+        'android.permission.WAKE_LOCK',
       ]) {
         expect(m, contains('<uses-permission android:name="$p"'), reason: '$p 가 없으면 서비스가 시작 직후 죽거나(14+) 알림이 안 보인다(13+)');
       }

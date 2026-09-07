@@ -2,6 +2,7 @@ import '../widgets/walk_locating_view.dart';
 import '../widgets/walk_stats_panel.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -189,6 +190,14 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       if (_paused) return;
       setState(() => _seconds++);
     });
+    _listenPositions();
+    _loadNearbyPlaces(_path.first);
+  }
+
+  /// 위치 스트림 구독. 끊기면(플러그인 오류·서비스 종료) 말하고 다시 이을 길을 준다 — 조용히
+  /// 0km 로 걷게 두지 않는다. WAKE_LOCK 권한이 빠졌을 때 정확히 그렇게 됐다(#335 실측).
+  void _listenPositions() {
+    _posSub?.cancel();
     final dogName = kMyDog.value?.name ?? '우리 아이';
     _posSub = LocationService.stream(notificationTitle: '$dogName랑 산책 기록 중').listen((p) {
       if (_paused || !mounted) return;
@@ -203,8 +212,15 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       _drawPath();
       if (_follow) _ctrl?.updateCamera(NCameraUpdate.withParams(target: cur));
       if (!_poisLoaded) _loadNearbyPlaces(cur);
+        }, onError: (Object e) {
+      if (kDebugMode) debugPrint('[WalkTracking] 위치 스트림 오류: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('위치 갱신이 끊겼어요'),
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(label: '다시 연결', onPressed: _listenPositions),
+      ));
     });
-    _loadNearbyPlaces(_path.first);
   }
 
   /// 거절 화면에서 다시 시도. 판정을 처음 상태로 되돌리고 [_start] 를 다시 탄다.
