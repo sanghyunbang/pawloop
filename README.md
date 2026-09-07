@@ -195,6 +195,17 @@ bash scripts/local-ci.sh backend    # 하나만 (backend | app | docs)
 
 `ci.yml` 과 **같은 명령**을 돌리고 로그를 `build/local-ci/` 에 남깁니다. 이 저장소는 private 이라 액션이 계정의 Actions 분(minutes, 월 3,000분)을 씁니다. 분이 떨어지면 잡이 **시작조차 못 하고** 1~2초 만에 실패합니다(단계 0개·로그 없음) — 그때는 코드를 의심하기 전에 [Billing](https://github.com/settings/billing) 을 먼저 보고, 이 스크립트로 근거를 남긴 뒤 머지합니다.
 
+### 외부 API 키가 아직 살아 있는지 보기
+
+```bash
+bash scripts/check-external-keys.sh          # 공공데이터 API 여덟 + .env 자리 점검
+bash scripts/check-external-keys.sh public   # API 만
+```
+
+공공데이터포털은 계정 하나에 인증키 하나지만 **API 마다 활용신청이 따로**입니다. "키는 있는데 이 API 만 안 된다" 가 정상적으로 일어나고, 앱에서는 카드 하나가 안 뜨는 것으로만 보입니다. 키를 새로 신청한 날·갈아 끼운 날·배포 전날에 여기서 물어봅니다.
+
+**키를 찍지 않습니다** — 응답에 섞여 와도 가리고, `backend/.env` 는 이름과 채움 여부만 읽습니다(앱 쪽 값은 `--dart-define` 이라 `app/dart-define.json` 을 같은 방식으로 봅니다). 출력을 그대로 이슈에 붙여도 됩니다. 무엇을 더 받아야 하는지는 [키·승인 목록 #393](https://github.com/sanghyunbang/heattrip/issues/393) 에 있습니다.
+
 테스트 정책과 기여 규약은 이슈로 관리합니다 — [규약 #4](https://github.com/sanghyunbang/heattrip/issues/4) · [테스트 정책 #21](https://github.com/sanghyunbang/heattrip/issues/21) · [로드맵 #20](https://github.com/sanghyunbang/heattrip/issues/20).
 
 ---
