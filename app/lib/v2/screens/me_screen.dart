@@ -17,7 +17,10 @@ import 'insight_screen.dart';
 /// 프로필 (me) — 우리 아이(강아지) 프로필 + 산책 활동 요약 + 메뉴.
 /// (감정 도메인 제거, 반려/산책 중심)
 class MeScreen extends StatelessWidget {
-  const MeScreen({super.key});
+  /// 테스트에서 갈아 끼운다 — 로그인 상태의 화면을 서버 없이 세우기 위해서다(#332).
+  final WalkFeed? feed;
+
+  const MeScreen({super.key, this.feed});
 
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
@@ -190,7 +193,8 @@ class MeScreen extends StatelessWidget {
         if (status == AuthStatus.unknown) {
           text = '계정 확인 중…';
         } else if (user != null) {
-          final provider = user.provider;
+          // 'local' 같은 내부 제공자 이름이 그대로 보였다(#332). 사람 말로 바꾼다.
+          final provider = providerLabel(user.provider);
           text = provider == null
               ? user.displayName
               : '${user.displayName} · $provider';
@@ -293,6 +297,7 @@ class MeScreen extends StatelessWidget {
 
   // ───────────── 산책 활동 요약 ─────────────
   Widget _statsCard(BuildContext context) => WalkFeedBuilder(
+      feed: feed,
         builder: (context, data, _) => _statsCardOf(context, data),
       );
 
@@ -428,18 +433,13 @@ class MeScreen extends StatelessWidget {
       );
     }
 
-    void snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), duration: const Duration(milliseconds: 1800)),
-        );
-
     return ClipRRect(
       borderRadius: BorderRadius.circular(T.radius),
       child: GlassCard(
         padding: EdgeInsets.zero,
         child: Column(children: [
+          // "프로필 편집" 행은 뺐다 — 바로 위 배너와 같은 화면으로 갔다(#332).
           _menuBanner(context, dog),
-          row(Icons.pets_outlined, '프로필 편집',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EditScreen(pet: dog)))),
           row(Icons.article_outlined, '내 산책 기록',
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
           row(Icons.diversity_1_rounded, '우리 가족',
@@ -452,7 +452,7 @@ class MeScreen extends StatelessWidget {
           row(Icons.settings_outlined, '설정',
               onTap: () => Navigator.of(context)
                   .push(MaterialPageRoute(builder: (_) => const SettingsScreen()))),
-          row(Icons.bookmark_border, '북마크', onTap: () => snack('저장한 장소가 아직 없어요 · 지도에서 마음에 드는 곳을 담아보세요')),
+          // 북마크 행은 뺐다 — 기능이 없어 스낵바만 띄우던 죽은 메뉴였다(#332). 생기면 넣는다.
           ValueListenableBuilder<AuthStatus>(
             valueListenable: AuthState.status,
             builder: (_, status, __) => status == AuthStatus.authenticated ||
@@ -505,3 +505,13 @@ class MeScreen extends StatelessWidget {
     );
   }
 }
+
+/// 로그인 제공자 이름을 사람 말로. 모르는 값은 보여 주지 않는다(null) — 내부 이름을 그대로
+/// 노출하던 것이 #332 의 "walker · local" 이다.
+String? providerLabel(String? provider) => switch (provider) {
+      'kakao' => '카카오로 로그인',
+      'google' => 'Google 로 로그인',
+      'apple' => 'Apple 로 로그인',
+      'local' || 'email' => '이메일로 로그인',
+      _ => null,
+    };
