@@ -115,12 +115,6 @@ class MyRecordsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  // P1: 히스토리 보존 정책 사전 고지(추후 유료 경계 — 처음부터 알리고 시작).
-                  const SizedBox(height: 6),
-                  const Center(
-                    child: Text('무료 플랜은 최근 3개월의 상세 기록을 볼 수 있어요',
-                        style: TextStyle(fontSize: 11.5, color: T.textMuted)),
-                  ),
                 ],
               ),
             ),
@@ -222,7 +216,7 @@ class MyRecordsScreen extends StatelessWidget {
   /// 것은 곧 올라가므로 손대지 않는다 — 올라가는 중에 지우면 서버에 남고 화면에서만
   /// 사라진다.
   Widget _walkCard(BuildContext context, _RecordView w) {
-    final card = _cardBody(w);
+    final card = _cardBody(context, w);
     if (!w.deletable) return card;
     return GestureDetector(
       // 서버에 있는 것만 회고를 쓸 수 있다. 거절된 것은 서버에 행이 없어 고칠 대상이
@@ -305,7 +299,39 @@ class MyRecordsScreen extends StatelessWidget {
     }
   }
 
-  Widget _cardBody(_RecordView w) {
+  /// 카드 오른쪽 위 "…" — 지우기(와 회고). 길게 누르기는 눌러 보기 전에는 있는지 모른다(#327).
+  Future<void> _showActions(BuildContext context, _RecordView w) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (sheetCtx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (w.walkId != null)
+            ListTile(
+              leading: const Icon(Icons.edit_note_rounded, color: T.textSecondary),
+              title: const Text('회고 쓰기'),
+              onTap: () => Navigator.pop(sheetCtx, 'memo'),
+            ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFD9534F)),
+            title: const Text('지우기', style: TextStyle(color: Color(0xFFD9534F))),
+            onTap: () => Navigator.pop(sheetCtx, 'delete'),
+          ),
+          const SizedBox(height: 6),
+        ]),
+      ),
+    );
+    if (!context.mounted) return;
+    if (action == 'delete') {
+      await _confirmDelete(context, w);
+    } else if (action == 'memo') {
+      _openDetail(context, w);
+    }
+  }
+
+  Widget _cardBody(BuildContext context, _RecordView w) {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -353,6 +379,17 @@ class MyRecordsScreen extends StatelessWidget {
                         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                             color: Color(0xFFE07A4E))),
                   ),
+                if (w.deletable) ...[
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: () => _showActions(context, w),
+                    behavior: HitTestBehavior.opaque,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.more_horiz_rounded, size: 20, color: T.textMuted),
+                    ),
+                  ),
+                ],
               ]),
               const SizedBox(height: 3),
               Row(children: [
