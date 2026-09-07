@@ -116,6 +116,9 @@ flutter:
     - assets/terms/location_ko.md
     - assets/terms/privacy_ko.md
     - assets/terms/marketing_ko.md
+    # 전국 행정동 3,516개(285KB) — 동네 고르기 #342. 통계청 SGIS 경계에서 이름·코드·중심점만
+    # 뽑은 것이고 출처 표시(CC BY 4.0)가 파일 안과 화면에 함께 있다. app/tool/build_regions.py
+    - assets/regions/hangjeongdong.json
 
 
   # An image asset can refer to one or more resolution-specific "variants", see

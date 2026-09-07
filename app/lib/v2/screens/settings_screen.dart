@@ -33,6 +33,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../widgets/neighborhood_tile.dart';
 import '../widgets/walk_reminder_tile.dart';
 import 'intro_screen.dart';
 import 'settings/account_delete_screen.dart';
@@ -68,6 +69,11 @@ class SettingsScreen extends StatelessWidget {
                       _row(context, Icons.campaign_outlined, '마케팅 정보 수신 동의',
                           () => _open(context, LegalDocument.marketing)),
                     ]),
+                    const SizedBox(height: 18),
+                    // 내 동네 (#342). 좌표가 아니라 사용자가 고른 행정동이라 위치 절이 아니라
+                    // 여기 있다 — 지도와 커뮤니티가 이 값을 기준으로 삼는다.
+                    _section('내 동네'),
+                    _card(const [NeighborhoodTile()]),
                     const SizedBox(height: 18),
                     // 저녁 산책 알림 (#341). 푸시(#83)와 무관한 기기 안 예약이라
                     // 로그인·토큰과 상관이 없다.
