@@ -10,6 +10,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/walk_moment.dart';
+
 /// 진행 중인 산책 한 장. 저장 화면이 받는 `WalkDraft` 와 달리 **끝나지 않은** 산책이다.
 class WalkInProgress {
   final DateTime startedAt;
@@ -24,6 +26,10 @@ class WalkInProgress {
   /// 각 점의 시각(시작 기준 델타 초). `path` 와 길이가 같다.
   final List<int> pathT;
 
+  /// 산책 중 한 탭으로 남긴 것들 (#340). 앱이 죽었다 살아나도 눌러 둔 것이 안 사라진다.
+  /// 옛 스냅숏에는 이 키가 없다 — 그때는 빈 목록이다.
+  final List<WalkMoment> moments;
+
   /// 마지막으로 적은 시각. "지난 산책이 몇 분 전에 끊겼나" 를 말할 때 쓴다.
   final DateTime savedAt;
 
@@ -34,6 +40,7 @@ class WalkInProgress {
     required this.path,
     required this.pathT,
     required this.savedAt,
+    this.moments = const [],
   });
 
   double get km => distanceM / 1000;
@@ -44,6 +51,7 @@ class WalkInProgress {
         'distanceM': distanceM,
         'path': path,
         'pathT': pathT,
+        if (moments.isNotEmpty) 'moments': [for (final m in moments) m.toJson()],
         'savedAt': savedAt.toIso8601String(),
       };
 
@@ -68,12 +76,20 @@ class WalkInProgress {
       if (t is! int) return null;
       times.add(t);
     }
+    // 순간들은 **깨져도 스냅숏을 버리지 않는다** — 걸은 경로가 배변 한 줄 때문에
+    // 통째로 사라지면 안 된다. 모양이 아닌 항목만 조용히 뺀다.
+    final rawMoments = raw['moments'];
+    final moments = rawMoments is List
+        ? [for (final m in rawMoments) WalkMoment.tryParse(m)].whereType<WalkMoment>().toList()
+        : <WalkMoment>[];
+
     return WalkInProgress(
       startedAt: startedAt,
       seconds: seconds,
       distanceM: distanceM,
       path: points,
       pathT: times,
+      moments: moments,
       savedAt: savedAt,
     );
   }

@@ -8,6 +8,7 @@
 //
 // 가족이 없는 것은 오류가 아니다 — 아무것도 하지 않는다. 다른 실패도 산책 저장을 되돌리지
 // 않는다(산책은 이미 서버에 있다). 조용히 false 를 돌려주고 끝난다.
+import '../domain/walk_moment.dart';
 import '../widgets/today_care_card.dart' show kServerCareRev;
 import 'family_repository.dart';
 
@@ -17,10 +18,24 @@ class WalkCareLink {
   final FamilyRepository _repo;
 
   /// 케어 로그를 남겼으면 true. 가족이 없거나 못 남겼으면 false — 어느 쪽도 던지지 않는다.
-  Future<bool> recordWalk() async {
+  ///
+  /// [moments] 는 산책 중에 한 탭으로 남긴 것들이다(#340). **한 탭에 한 줄**로 보낸다 —
+  /// 서버에 묶어 보내는 경로가 없고, 케어 카드가 하루치를 세는 단위가 줄 하나다.
+  /// 시각은 서버가 정하므로(계약이 `occurredAt` 을 안 받는다) 눌린 시각이 아니라
+  /// **저장한 시각**으로 남는다. 그 차이가 문제가 되는 화면은 아직 없다.
+  Future<bool> recordWalk({List<WalkMoment> moments = const []}) async {
     try {
       final group = await _repo.myGroup();
       await _repo.recordCare(group.id, ServerCareType.walk);
+      for (final moment in moments) {
+        final type = ServerCareType.tryParse(moment.kind.wire);
+        if (type == null) continue;
+        try {
+          await _repo.recordCare(group.id, type);
+        } on FamilyFailure {
+          // 한 건이 막혀도(429·네트워크) 나머지는 보낸다 — 산책은 이미 저장됐다.
+        }
+      }
       kServerCareRev.value++;
       return true;
     } on FamilyFailure {

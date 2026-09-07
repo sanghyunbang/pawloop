@@ -9,6 +9,7 @@ import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
 import 'package:heat_trip_flutter/v2/data/walk_care_link.dart';
+import 'package:heat_trip_flutter/v2/domain/walk_moment.dart';
 import 'package:heat_trip_flutter/v2/widgets/today_care_card.dart';
 
 const _base = 'https://api.example.test';
@@ -82,5 +83,48 @@ void main() {
     expect(ok, isFalse);
     expect(f.posts, isEmpty);
     expect(kServerCareRev.value, 0);
+  });
+
+  // ── 산책 중 한 손 기록 (#340) ────────────────────────────
+
+  test('눌러 둔 것들이 한 탭에 한 줄로 함께 올라간다 — 산책 한 줄 + 순간 셋', () async {
+    final f = _fixture();
+
+    final ok = await WalkCareLink(repository: f.repo).recordWalk(moments: const [
+      WalkMoment(kind: WalkMomentKind.poop, tSec: 60, pathIndex: 3),
+      WalkMoment(kind: WalkMomentKind.pee, tSec: 90),
+      WalkMoment(kind: WalkMomentKind.poop, tSec: 300, pathIndex: 20),
+    ]);
+
+    expect(ok, isTrue);
+    expect(f.posts, hasLength(4), reason: '묶어 보내는 경로가 없다 — 케어는 줄 하나가 단위다');
+    expect(
+      [for (final p in f.posts) jsonDecode(p.body)['type']],
+      ['walk', 'poop', 'pee', 'poop'],
+    );
+  });
+
+  test('요청 본문에 위치가 없다 — 어디서 눴는지는 기기에만 남는다 (A안 #235)', () async {
+    final f = _fixture();
+
+    await WalkCareLink(repository: f.repo).recordWalk(moments: const [
+      WalkMoment(kind: WalkMomentKind.poop, tSec: 60, pathIndex: 3),
+    ]);
+
+    final sent = jsonDecode(f.posts.last.body) as Map<String, dynamic>;
+    expect(sent.keys, ['type'],
+        reason: 'pathIndex 도 tSec 도 안 나간다 — 계약(CareLogInput)이 type·memo 뿐이다');
+    expect(f.posts.last.body.contains('pathIndex'), isFalse);
+  });
+
+  test('가족이 없으면 순간들도 안 올라간다 — 산책과 같은 길이다', () async {
+    final f = _fixture(hasGroup: false);
+
+    final ok = await WalkCareLink(repository: f.repo).recordWalk(moments: const [
+      WalkMoment(kind: WalkMomentKind.poop, tSec: 60),
+    ]);
+
+    expect(ok, isFalse);
+    expect(f.posts, isEmpty);
   });
 }

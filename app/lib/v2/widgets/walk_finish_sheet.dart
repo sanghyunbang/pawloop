@@ -15,6 +15,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../theme/app_tokens.dart';
+import '../domain/walk_moment.dart';
 import '../walk/route_image.dart';
 import '../walk/route_photo_saver.dart';
 
@@ -104,7 +105,10 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       padding: EdgeInsets.fromLTRB(20, 18, 20, 18 + MediaQuery.of(context).padding.bottom),
-      child: Column(
+      // 줄이 하나 늘 때마다 넘치던 자리다 — 한 손 기록 요약(#340)을 더하자 26px 넘쳤다.
+      // 시트 높이는 화면·글자 크기에 따라 달라지므로 넘치면 스크롤로 받는다.
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // 시스템 이모지 대신 자산 — 디자인 시스템은 Fluent 3D 이모지다(#327).
@@ -125,6 +129,23 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
               _SumCell(widget.paceLabel, '페이스'),
             ],
           ),
+          // 산책 중에 누른 것들 (#340). 안 눌렀으면 줄이 아예 없다 — 0회를 세어 보여 주면
+          // 안 한 일이 못 한 일처럼 읽힌다.
+          if (!WalkMomentTally.of(widget.art.moments).isEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F1FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                WalkMomentTally.of(widget.art.moments).summary,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           if (widget.art.drawable) ...[
             _preview(),
@@ -159,6 +180,7 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
             child: const Text('저장 안 함', style: TextStyle(color: T.textMuted)),
           ),
         ],
+        ),
       ),
     );
   }

@@ -356,4 +356,22 @@ void main() {
       expect(subjectParticle(''), '가');
     });
   });
+
+  test('카드의 칸은 다섯이다 — 서버 종류가 늘어도 여기가 저절로 늘지 않는다 (#340)', () {
+    expect(
+      kCareCardColumns,
+      const [
+        ServerCareType.water,
+        ServerCareType.meal,
+        ServerCareType.walk,
+        ServerCareType.med,
+        ServerCareType.vet,
+      ],
+      reason: """
+예전에는 ServerCareType.values 를 그대로 돌려서, 배변·마킹이 계약에 생기자 칸이 일곱으로
+저절로 늘었다 — 다섯도 이미 좁아 라벨이 잘리던 자리다(#326). 칸을 더하는 것은 배치를
+함께 봐야 하는 결정이라(#340 완료 조건 4) 목록을 손으로 적는다.""",
+    );
+    expect(kCareCardColumns.contains(ServerCareType.poop), isFalse);
+  });
 }

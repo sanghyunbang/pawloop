@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:heat_trip_flutter/v2/domain/walk_moment.dart';
 import 'package:heat_trip_flutter/v2/walk/route_image.dart';
 import 'package:heat_trip_flutter/v2/walk/route_photo_saver.dart';
 import 'package:heat_trip_flutter/v2/widgets/walk_finish_sheet.dart';
@@ -18,6 +19,7 @@ final _fakePng = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]);
 ({Widget sheet, List<String> savedNames, List<Uint8List> savedBytes, List<String> events}) fixture({
   List<List<double>> path = _path,
   RoutePhotoException? saveFails,
+  List<WalkMoment> moments = const [],
 }) {
   final names = <String>[];
   final bytes = <Uint8List>[];
@@ -31,6 +33,7 @@ final _fakePng = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]);
       distanceLabel: '1.24km',
       timeLabel: '18:40',
       dateLabel: WalkFinishSheet.dateLabel(DateTime(2026, 9, 6, 14, 20)),
+      moments: moments,
     ),
     walkedAt: DateTime(2026, 9, 6, 14, 20),
     // 렌더러는 가짜 — 실제 PNG 는 route_image_test 가 잰다. 여기서는 "만든 바이트가 그대로
@@ -113,5 +116,44 @@ void main() {
 
     await tester.tap(find.text('저장 안 함'));
     expect(f.events, ['discard']);
+  });
+
+  // ── 산책 중 한 손 기록 (#340) ────────────────────────────
+
+  testWidgets('눌러 둔 것이 있으면 "배변 2회 · 물 1회" 한 줄이 붙는다', (tester) async {
+    final f = fixture(moments: const [
+      WalkMoment(kind: WalkMomentKind.poop, tSec: 60, pathIndex: 0),
+      WalkMoment(kind: WalkMomentKind.poop, tSec: 300, pathIndex: 1),
+      WalkMoment(kind: WalkMomentKind.water, tSec: 400, pathIndex: 2),
+    ]);
+    await pumpSheet(tester, f.sheet);
+
+    expect(find.text('배변 2회 · 물 1회'), findsOneWidget);
+  });
+
+  testWidgets('하나도 안 눌렀으면 줄 자체가 없다 — 0회를 적으면 못 한 일처럼 읽힌다', (tester) async {
+    final f = fixture();
+    await pumpSheet(tester, f.sheet);
+
+    expect(find.textContaining('회'), findsNothing);
+  });
+
+  testWidgets('작은 화면에서도 안 넘친다 — 줄이 하나 늘 때마다 넘치던 자리다', (tester) async {
+    // 실측: 요약 줄을 더하자 에뮬레이터에서 **세로로** 26px 넘쳤다(2026-09-07).
+    // 폭은 에뮬레이터와 같은 393dp 로 둔다 — 360dp 로 좁히면 요약 줄과 무관한 **가로**
+    // 넘침(요약 줄이 없어도 24px)이 먼저 터져서 이 테스트가 다른 것을 재게 된다.
+    // 그 가로 넘침은 이 이슈 밖의 문제라 따로 남겼다.
+    tester.view.physicalSize = const Size(1080, 1400);
+    tester.view.devicePixelRatio = 2.75;
+    addTearDown(tester.view.reset);
+
+    final f = fixture(moments: const [
+      WalkMoment(kind: WalkMomentKind.poop, tSec: 60, pathIndex: 0),
+      WalkMoment(kind: WalkMomentKind.water, tSec: 400, pathIndex: 2),
+    ]);
+    await pumpSheet(tester, f.sheet);
+
+    expect(tester.takeException(), isNull,
+        reason: '넘치면 프레임워크가 예외를 남긴다 — 노란 줄무늬는 그 예외의 그림이다');
   });
 }

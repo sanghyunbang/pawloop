@@ -4,12 +4,14 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:geolocator/geolocator.dart';
 import '../theme/app_tokens.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
 import '../domain/pet.dart';
+import '../domain/walk_moment.dart';
 import '../data/location_service.dart';
 import '../data/location_upload_policy.dart';
 import '../data/pet_places_repository.dart';
@@ -20,6 +22,7 @@ import '../data/walk_repository.dart';
 import '../walk/route_image.dart';
 import '../walk/route_photo_saver.dart';
 import '../widgets/walk_finish_sheet.dart';
+import '../widgets/walk_moment_bar.dart';
 import 'create_screen.dart';
 
 /// 실시간 산책 트래킹 — "기록계"가 아니라 걷는 동안 주변을 탐색하는 지도.
@@ -112,6 +115,16 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   /// 건너뛰면 그 사이가 멈춘 구간이라는 것을 나중에 추론할 수 있다.
   final List<int> _pathT = [];
 
+  /// 산책 중 한 탭으로 남긴 것들과 취소 규칙 (#340). 규칙은 화면 밖에 있다 —
+  /// 이 화면은 지도·GPS 를 물고 있어 위젯 테스트로 못 띄우기 때문이다.
+  final WalkMomentLog _log = WalkMomentLog();
+
+  /// "다시 누르면 취소" 표시를 5초 뒤에 지우는 손잡이. 판정 자체는 [_log] 가 한다.
+  Timer? _undoTimer;
+
+  /// 화면에 지금 취소 안내를 띄울 종류. [_log] 의 판정을 그대로 옮겨 담는다.
+  WalkMomentKind? _undoable;
+
   /// 5초마다 기기에 적는 스냅숏(#335). 앱이 죽었다 살아나면 [WalkResumePrompt] 가 읽는다.
   static const _snapshots = WalkInProgressStore();
   int _sinceSave = 0;
@@ -127,6 +140,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
 
   @override
   void dispose() {
+    _undoTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _posSub?.cancel();
@@ -152,8 +166,44 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       distanceM: (_km * 1000).round(),
       path: [for (final p in _path) [p.longitude, p.latitude]],
       pathT: List<int>.of(_pathT),
+      moments: _log.moments,
       savedAt: DateTime.now(),
     )));
+  }
+
+  /// 한 손 기록 버튼 (#340). **누르면 바로 기록**이고, 5초 안에 같은 것을 다시 누르면 취소다.
+  ///
+  /// 확인을 묻지 않는 이유는 이 기능의 전제다 — 확인이 붙으면 한 탭이 두 탭이 되고,
+  /// 줄을 쥔 손으로는 그 두 번째를 못 누른다.
+  void _tapMoment(WalkMomentKind kind) {
+    HapticFeedback.selectionClick();
+    _undoTimer?.cancel();
+
+    final now = DateTime.now();
+    final result = _log.tap(
+      kind,
+      tSec: _seconds,
+      now: now,
+      // 경로의 마지막 점 = 지금 서 있는 자리. 좌표를 새로 베끼지 않는다(A안 #235).
+      pathIndex: _path.isEmpty ? null : _path.length - 1,
+    );
+    final undoing = result == WalkMomentTap.cancelled;
+    setState(() => _undoable = _log.undoableAt(now));
+
+    // 눌린 것이 화면 밖으로 사라지지 않게 스낵바로 한 줄 — 취소도 이 문장으로 알린다.
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(undoing ? '${kind.label} 기록을 취소했어요' : '${kind.label} 기록했어요'),
+        duration: const Duration(milliseconds: 1400),
+      ));
+
+    if (!undoing) {
+      _undoTimer = Timer(WalkMomentLog.undoWindow, () {
+        if (mounted) setState(() => _undoable = null);
+      });
+    }
+    _snapshot();
   }
 
   // ───────────── 트래킹 ─────────────
@@ -178,6 +228,8 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       _km = resume.km;
       _path.addAll([for (final p in resume.path) NLatLng(p[1], p[0])]);
       _pathT.addAll(resume.pathT);
+      // 눌러 둔 것도 함께 살아난다 — 배변 두 번이 앱이 죽었다고 사라지면 안 된다(#340).
+      _log.addAll(resume.moments);
     } else {
       _startedAt = DateTime.now();
     }
@@ -749,6 +801,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       ],
       pathT: List<int>.of(_pathT),
       place: widget.place,
+      moments: _log.moments,
     );
   }
 
@@ -768,6 +821,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       distanceLabel: distanceLabel,
       timeLabel: _timeLabel,
       dateLabel: WalkFinishSheet.dateLabel(walkedAt),
+      moments: _log.moments,
     );
     showModalBottomSheet(
       context: context,
@@ -967,10 +1021,23 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
                 ],
               ),
             ),
-            // 하단: 스탯 패널(기본 접힘 알약, 탭하면 펼침)
+            // 하단: 한 손 기록 줄 + 스탯 패널(기본 접힘 알약, 탭하면 펼침)
             Align(
               alignment: Alignment.bottomCenter,
-              child: _statsPanel(context),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 스탯 패널이 접히든 펼쳐지든 **항상 보인다** — 눌러야 할 때 패널을 먼저
+                  // 펼쳐야 한다면 그건 이미 한 탭이 아니다(#340).
+                  WalkMomentBar(
+                    tally: _log.tally,
+                    undoable: _undoable,
+                    onTap: _tapMoment,
+                  ),
+                  const SizedBox(height: 8),
+                  _statsPanel(context),
+                ],
+              ),
             ),
           ],
         ),

@@ -20,6 +20,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../domain/walk_moment.dart';
+
 /// 경도·위도 목록을 그림 안의 점으로 옮긴다. 순수 함수라 따로 잰다.
 ///
 /// 계약과 초안 큐가 쓰는 순서 그대로 **`[경도, 위도]`** 를 받는다 — `WalkDraft.path` 와 같다.
@@ -78,11 +80,18 @@ class RouteArt {
   final String timeLabel;
   final String dateLabel;
 
+  /// 산책 중에 한 탭으로 남긴 것들 (#340). 경로 위 **그 점**에 작은 표식을 찍는다.
+  ///
+  /// 좌표를 따로 안 받는다 — [WalkMoment.pathIndex] 가 [lngLat] 의 몇 번째인지를 가리키므로
+  /// 좌표가 사는 자리가 늘지 않는다. 범위 밖 인덱스는 그냥 안 그린다(옛 초안·잘린 경로).
+  final List<WalkMoment> moments;
+
   const RouteArt({
     required this.lngLat,
     required this.distanceLabel,
     required this.timeLabel,
     required this.dateLabel,
+    this.moments = const [],
   });
 
   /// 점이 둘은 있어야 선이 된다.
@@ -104,6 +113,14 @@ class RouteCanvasPainter extends CustomPainter {
   static const _start = Color(0xFF4CAF88);
   static const _end = Color(0xFF463C64);
   static const _ink = Color(0xFF463C64);
+
+  /// 순간 표식의 색. 버튼 줄(`walk_moment_bar.dart`)과 **같은 색**이어야 한다 —
+  /// 누를 때 본 색과 그림에 남는 색이 다르면 같은 일로 안 읽힌다.
+  static const Map<WalkMomentKind, Color> _momentColors = {
+    WalkMomentKind.poop: Color(0xFF9C6B4A),
+    WalkMomentKind.pee: Color(0xFFD9A02B),
+    WalkMomentKind.water: Color(0xFF3E9AD6),
+  };
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -167,6 +184,8 @@ class RouteCanvasPainter extends CustomPainter {
       canvas.drawCircle(points.first, 6, Paint()..color = _end);
     }
 
+    _drawMoments(canvas, points, routeBox);
+
     if (withCaption) {
       final fontSize = math.max(11.0, captionH * 0.3);
       _text(canvas, '${art.distanceLabel}  ·  ${art.timeLabel}',
@@ -189,6 +208,18 @@ class RouteCanvasPainter extends CustomPainter {
       ellipsis: '…',
     )..layout(maxWidth: maxW);
     tp.paint(canvas, at);
+  }
+
+  /// 경로 위의 표식. 선 위에 얹으므로 흰 테두리를 한 겹 두른다.
+  void _drawMoments(Canvas canvas, List<Offset> points, Size routeBox) {
+    if (points.isEmpty) return;
+    final r = math.max(3.5, routeBox.shortestSide * 0.016);
+    for (final moment in art.moments) {
+      final i = moment.pathIndex;
+      if (i == null || i < 0 || i >= points.length) continue;
+      canvas.drawCircle(points[i], r + 1.6, Paint()..color = Colors.white);
+      canvas.drawCircle(points[i], r, Paint()..color = _momentColors[moment.kind]!);
+    }
   }
 
   @override

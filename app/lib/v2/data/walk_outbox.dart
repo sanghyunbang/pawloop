@@ -30,6 +30,7 @@ library;
 
 import 'dart:convert';
 import 'walk_repository.dart';
+import '../domain/walk_moment.dart';
 import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -68,6 +69,13 @@ class WalkDraft {
   /// 저장한 산책이 며칠 뒤 올라갈 때 장소만 사라지면, 그 장소는 다시 만들 수 없다.
   final WalkPlaceRef? place;
 
+  /// 산책 중 한 탭으로 남긴 것들 (#340) — 배변·마킹·물.
+  ///
+  /// **초안에만 산다.** `POST /api/walks` 에는 이 필드가 없다 — 종류와 횟수는 저장 뒤
+  /// `care-logs` 로 따로 가고, 어디서 눴는지는 [WalkMoment.pathIndex] 라 경로를 안 보내는
+  /// 빌드에서는 기기를 떠나지 않는다(A안 #235).
+  final List<WalkMoment> moments;
+
   /// 마지막 실패의 사유. 화면이 "왜 아직 안 올라갔는지" 를 말해 준다.
   final String? lastError;
 
@@ -83,6 +91,7 @@ class WalkDraft {
     this.weather,
     this.dogId,
     this.place,
+    this.moments = const [],
     this.lastError,
   });
 
@@ -100,6 +109,7 @@ class WalkDraft {
     List<int> pathT = const [],
     int? dogId,
     WalkPlaceRef? place,
+    List<WalkMoment> moments = const [],
   }) =>
       WalkDraft(
         clientWalkId: _newKey(),
@@ -111,6 +121,7 @@ class WalkDraft {
         pathT: pathT,
         dogId: dogId,
         place: place,
+        moments: moments,
       );
 
   WalkDraft copyWith({
@@ -140,6 +151,8 @@ class WalkDraft {
         weather: weather ?? this.weather,
         dogId: dogId ?? this.dogId,
         place: dropPlace ? null : (place ?? this.place),
+        // 저장 화면이 copyWith 로 이름·거리를 고칠 때 눌러 둔 것이 떨어지면 안 된다.
+        moments: moments,
         lastError: lastError ?? this.lastError,
       );
 
@@ -155,6 +168,7 @@ class WalkDraft {
         if (weather != null) 'weather': weather,
         if (dogId != null) 'dogId': dogId,
         if (place != null) 'place': place!.toJson(),
+        if (moments.isNotEmpty) 'moments': [for (final m in moments) m.toJson()],
         if (lastError != null) 'lastError': lastError,
       };
 
@@ -200,6 +214,12 @@ class WalkDraft {
       dogId: (json['dogId'] as num?)?.toInt(),
       // 장소는 모양이 다르면 없는 것으로 둔다 — 그것 하나 때문에 산책을 잃지 않는다.
       place: WalkPlaceRef.tryParse(json['place']),
+      // 순간들도 같다 — 배변 한 줄이 깨졌다고 걸은 기록을 통째로 버리지 않는다(#340).
+      moments: json['moments'] is List
+          ? [for (final m in json['moments'] as List) WalkMoment.tryParse(m)]
+              .whereType<WalkMoment>()
+              .toList()
+          : const [],
       lastError: json['lastError'] as String?,
     );
   }

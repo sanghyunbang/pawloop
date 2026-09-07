@@ -450,9 +450,9 @@ class _TodayCareCardState extends State<TodayCareCard> {
     }
 
     return Row(children: [
-      for (int i = 0; i < ServerCareType.values.length; i++) ...[
+      for (int i = 0; i < kCareCardColumns.length; i++) ...[
         if (i > 0) const SizedBox(width: 6),
-        Expanded(child: _cell(ServerCareType.values[i])),
+        Expanded(child: _cell(kCareCardColumns[i])),
       ],
     ]);
   }
@@ -510,14 +510,37 @@ class _TodayCareCardState extends State<TodayCareCard> {
 
   /// 아이콘·색은 `pet.dart` 의 것을 그대로 쓴다 — 화면의 시각 언어가 갈리지 않게.
   /// 서버의 `vet`(병원)은 그쪽에 없어서 `etc` 로 떨어진다.
+  ///
+  /// 배변·마킹(#340)도 지금은 `etc` 다. **이 카드에 칸을 더할지는 아직 안 정했다** —
+  /// 다섯 칸이 이미 좁아서(#326 의 라벨 잘림) 칸을 늘리면 두 줄로 바꾸는 문제가 함께 온다.
+  /// 그때까지 그 기록은 산책 화면과 가족 목록에서 보인다. 여기서 값을 빠뜨리면 화면이
+  /// 죽으므로 갈래는 지금 만들어 둔다.
   static CareType _iconTypeOf(ServerCareType type) => switch (type) {
         ServerCareType.water => CareType.water,
         ServerCareType.meal => CareType.meal,
         ServerCareType.walk => CareType.walk,
         ServerCareType.med => CareType.med,
         ServerCareType.vet => CareType.etc,
+        ServerCareType.poop => CareType.etc,
+        ServerCareType.pee => CareType.etc,
       };
 }
+
+/// 이 카드가 그리는 칸. **서버의 종류 전부가 아니다** (#340).
+///
+/// 예전에는 `ServerCareType.values` 를 그대로 돌렸다. 그러다 배변·마킹이 계약에 생기자
+/// 칸이 다섯에서 일곱으로 **저절로** 늘었다 — 다섯도 이미 좁아 라벨이 잘리던 자리다(#326).
+/// 화면에 무엇을 보일지는 계약이 아니라 이 화면이 정할 일이라 목록을 여기 적는다.
+///
+/// 배변 칸을 더할지는 사장님 결정이다(#340 완료 조건 4) — 더하는 날 두 줄 배치를 함께
+/// 봐야 한다. 그때까지 그 기록은 산책 저장 화면과 가족 목록에서 보인다.
+const List<ServerCareType> kCareCardColumns = [
+  ServerCareType.water,
+  ServerCareType.meal,
+  ServerCareType.walk,
+  ServerCareType.med,
+  ServerCareType.vet,
+];
 
 /// "14:20 에 남긴 밥 기록을 지웁니다. 가족 화면에서도 사라져요."
 ///
@@ -537,6 +560,11 @@ String duplicateWarning(CareLogEntry already) {
     ServerCareType.walk => '산책을 다녀왔습니다',
     ServerCareType.med => '약을 줬습니다',
     ServerCareType.vet => '병원에 다녀왔습니다',
+    // 산책 중 한 탭으로 들어오는 것들(#340). 이 문구는 "그래도 기록할까요?" 앞에 붙는데,
+    // 배변·마킹은 하루에 여러 번이 정상이라 중복 경고를 띄울 자리가 아니다 — 그래도
+    // 값이 빠지면 화면이 죽으므로 문장은 만들어 둔다.
+    ServerCareType.poop => '배변을 기록했습니다',
+    ServerCareType.pee => '마킹을 기록했습니다',
   };
   final name = already.doneByName.isEmpty ? '누군가' : already.doneByName;
   return '오늘 ${already.timeLabel} $name${subjectParticle(name)} $phrase. 그래도 기록할까요?';
