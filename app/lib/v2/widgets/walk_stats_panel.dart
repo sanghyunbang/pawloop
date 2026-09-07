@@ -11,9 +11,16 @@
 // 트래킹 화면(`walk_tracking_screen.dart`)의 상태 메서드였던 것을 떼어 낸 이유는
 // 그 화면이 실 GPS 와 지도 SDK 를 끌고 와서 위젯 테스트로 세울 수 없기 때문이다 —
 // 여기서는 "펼침이면 종료가 보인다" 를 화면 없이 잰다.
+//
+// ## 숫자 세 칸은 완료 시트와 한 벌이다 (#386)
+//
+// 거리·시간·페이스는 `WalkSummaryRow` 가 그린다 — 산책 완료 시트도 같은 것을 쓴다.
+// 왜 재서 줄이는지는 `walk_summary_row.dart` 머리말에 있다. 여기 있던 `_stat` 은
+// `Row(spaceAround)` 에 얹혀 있어 360dp 에서 68px, 393dp 에서도 35px 넘쳤다.
 import 'package:flutter/material.dart';
 
 import '../theme/app_tokens.dart';
+import 'walk_summary_row.dart';
 
 class WalkStatsPanel extends StatelessWidget {
   const WalkStatsPanel({
@@ -79,9 +86,20 @@ class WalkStatsPanel extends StatelessWidget {
               decoration: BoxDecoration(shape: BoxShape.circle, color: _dot),
             ),
             const SizedBox(width: 8),
-            Text(
-              '${km.toStringAsFixed(2)}km · $timeLabel',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: T.textPrimary),
+            // 알약은 한 줄짜리라 나눌 칸이 없다 — 안 들어가면 그대로 줄인다.
+            // `Flexible` 이 없으면 Row 가 이 글자에 폭을 무한대로 주고, 값이 길거나 기기
+            // 글자 크기가 크면 노란 줄무늬가 된다(360dp·1.5배·`12.24km · 120:45` 에서 54px).
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '${km.toStringAsFixed(2)}km · $timeLabel',
+                  maxLines: 1,
+                  softWrap: false,
+                  style:
+                      const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: T.textPrimary),
+                ),
+              ),
             ),
             const SizedBox(width: 6),
             const Icon(Icons.keyboard_arrow_up_rounded, size: 20, color: T.textMuted),
@@ -135,13 +153,15 @@ class WalkStatsPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _stat(km.toStringAsFixed(2), 'km'),
-              _stat(timeLabel, '시간'),
-              _stat(paceLabel, '페이스'),
+          WalkSummaryRow(
+            [
+              (km.toStringAsFixed(2), 'km'),
+              (timeLabel, '시간'),
+              (paceLabel, '페이스'),
             ],
+            valueSize: 24,
+            labelSize: 11.5,
+            gap: 2,
           ),
           const SizedBox(height: 14),
           Row(
@@ -207,15 +227,4 @@ class WalkStatsPanel extends StatelessWidget {
       ),
     );
   }
-
-  Widget _stat(String v, String label) => Column(
-        children: [
-          Text(
-            v,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary),
-          ),
-          const SizedBox(height: 2),
-          Text(label, style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
-        ],
-      );
 }
