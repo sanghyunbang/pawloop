@@ -13,6 +13,7 @@ import '../data/location_service.dart';
 import '../data/location_upload_policy.dart';
 import '../data/pet_places_repository.dart';
 import '../data/place_catalog_repository.dart';
+import '../data/walk_in_progress.dart';
 import '../data/walk_outbox.dart';
 import '../walk/route_image.dart';
 import '../walk/route_photo_saver.dart';
@@ -25,12 +26,15 @@ import 'create_screen.dart';
 /// - 스탯(거리/시간)은 접힌 알약이 기본, 탭하면 펼침
 /// - 뒤로가기는 확인 후 종료(실수 방지)
 class WalkTrackingScreen extends StatefulWidget {
-  const WalkTrackingScreen({super.key});
+  /// 끊긴 산책의 스냅숏. 있으면 그 경로·거리·초에서 이어 간다(#335).
+  final WalkInProgress? resume;
+
+  const WalkTrackingScreen({super.key, this.resume});
   @override
   State<WalkTrackingScreen> createState() => _WalkTrackingScreenState();
 }
 
-class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
+class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBindingObserver {
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
@@ -98,9 +102,14 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   /// 건너뛰면 그 사이가 멈춘 구간이라는 것을 나중에 추론할 수 있다.
   final List<int> _pathT = [];
 
+  /// 5초마다 기기에 적는 스냅숏(#335). 앱이 죽었다 살아나면 [WalkResumePrompt] 가 읽는다.
+  static const _snapshots = WalkInProgressStore();
+  int _sinceSave = 0;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // 지도가 준비되기를 기다리지 않는다 — 위치 판정이 먼저다. 판정이 끝나야 지도를
     // 만들지 말지가 정해진다.
     _start();
@@ -108,9 +117,33 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _posSub?.cancel();
     super.dispose();
+  }
+
+  /// 뒤로 갔다 돌아오면 그 사이 쌓인 점으로 선과 카메라를 맞춘다. 스트림은 포그라운드 서비스가
+  /// 계속 돌린다(#335) — 여기서 다시 열지 않는다.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    setState(() {});
+    _drawPath();
+    if (_follow && _path.isNotEmpty) _ctrl?.updateCamera(NCameraUpdate.withParams(target: _path.last));
+  }
+
+  void _snapshot() {
+    final startedAt = _startedAt;
+    if (startedAt == null) return;
+    unawaited(_snapshots.save(WalkInProgress(
+      startedAt: startedAt,
+      seconds: _seconds,
+      distanceM: (_km * 1000).round(),
+      path: [for (final p in _path) [p.longitude, p.latitude]],
+      pathT: List<int>.of(_pathT),
+      savedAt: DateTime.now(),
+    )));
   }
 
   // ───────────── 트래킹 ─────────────
@@ -126,13 +159,38 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
     final pos = fix.position;
     if (pos == null) return;
 
-    _startedAt = DateTime.now();
-    _path.add(NLatLng(pos.latitude, pos.longitude));
+    final resume = widget.resume;
+    if (resume != null) {
+      // 끊긴 자리에서 이어 간다. 죽어 있던 동안은 초에 안 들어가고, 마지막 점에서 지금 자리까지는
+      // 직선 거리로 더한다 — 실제로 걸은 길의 하한이다.
+      _startedAt = resume.startedAt;
+      _seconds = resume.seconds;
+      _km = resume.km;
+      _path.addAll([for (final p in resume.path) NLatLng(p[1], p[0])]);
+      _pathT.addAll(resume.pathT);
+    } else {
+      _startedAt = DateTime.now();
+    }
+    final first = NLatLng(pos.latitude, pos.longitude);
+    if (_path.isNotEmpty) _km += _dist(_path.last, first);
+    _path.add(first);
+    // 첫 점도 t 를 갖는다 — path 와 pathT 는 길이가 같아야 한다(스냅숏도 서버 계약도).
+    _pathT.add(_seconds);
+    // 안드로이드 13+: 알림 권한이 있어야 포그라운드 서비스 알림이 보인다. 거부해도 기록은 된다.
+    await LocationService.requestNotificationPermission();
+    if (!mounted) return;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_paused || !mounted) return;
+      if (!mounted) return;
+      // 일시정지 중에도 적는다 — 멈춰 선 채 앱이 죽어도 그때까지의 경로는 남아야 한다.
+      if (++_sinceSave >= 5) {
+        _sinceSave = 0;
+        _snapshot();
+      }
+      if (_paused) return;
       setState(() => _seconds++);
     });
-    _posSub = LocationService.stream().listen((p) {
+    final dogName = kMyDog.value?.name ?? '우리 아이';
+    _posSub = LocationService.stream(notificationTitle: '$dogName랑 산책 기록 중').listen((p) {
       if (_paused || !mounted) return;
       final cur = NLatLng(p.latitude, p.longitude);
       setState(() {
@@ -623,6 +681,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
     if (leave == true && mounted) {
       _timer?.cancel();
       _posSub?.cancel();
+      unawaited(_snapshots.clear());
       Navigator.of(context).pop();
     }
   }
@@ -660,6 +719,8 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   void _finish() {
     _timer?.cancel();
     _posSub?.cancel();
+    // 산책은 끝났다 — 저장 화면이 실패해도 초안 큐(WalkOutbox)가 맡는다. 스냅숏은 지운다.
+    unawaited(_snapshots.clear());
     final walkedAt = _startedAt ?? DateTime.now();
     final distanceLabel = '${_km.toStringAsFixed(2)}km';
     final art = RouteArt(

@@ -8,6 +8,11 @@
     <!-- 위치 권한(포그라운드) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- 화면을 꺼도 산책이 이어진다(#335) — geolocator 의 포그라운드 서비스(type=location)와 그 알림.
+         ACCESS_BACKGROUND_LOCATION 은 넣지 않는다: 앞에서 시작한 포그라운드 서비스면 충분하다. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- 경로 사진을 갤러리에 넣는다 (이슈 #310). API 29 이하만 필요하다 — 30+ 는 MediaStore 라
          권한 없이 들어간다(gal). 읽기 권한은 요청하지 않는다. -->

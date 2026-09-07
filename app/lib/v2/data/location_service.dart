@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 위치를 쓸 수 없는 이유.
@@ -132,10 +133,11 @@ class LocationService {
     }
     try {
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: currentSettingsFor(defaultTargetPlatform),
       );
       return LocationFix.found(pos);
     } catch (_) {
+      // 시간 제한(25초)에 걸린 것도 여기다 — "위치를 잡는 중" 을 영원히 돌리지 않는다(#335).
       return const LocationFix.denied(LocationDenial.unavailable);
     }
   }
@@ -147,10 +149,86 @@ class LocationService {
   static Future<Position?> current() async => (await locate()).position;
 
   /// 실시간 위치 스트림(산책 트래킹용). 5m 이동마다. 동의 전·일시중지 시 빈 스트림.
-  static Stream<Position> stream() {
+  ///
+  /// 화면을 꺼도 이어진다(#335) — 안드로이드는 [notificationTitle]·[notificationText] 를 단
+  /// 포그라운드 서비스 알림, iOS 는 `UIBackgroundModes/location`. 알림 문구는 스트림을 여는
+  /// 순간에 정해지고 그 뒤에는 바뀌지 않는다(geolocator 가 갱신 API 를 주지 않는다).
+  static Stream<Position> stream({
+    String notificationTitle = '산책 기록 중',
+    String notificationText = '화면을 꺼도 경로가 이어져요 · 탭하면 돌아가요',
+  }) {
     if (!consented.value || paused.value) return const Stream.empty();
     return Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5),
+      locationSettings: settingsFor(defaultTargetPlatform, title: notificationTitle, text: notificationText),
     );
+  }
+
+  /// 첫 위치 한 번(트래킹 시작·지도 내 주변). 스트림과 같은 이유로 안드로이드는 GPS 제공자에서
+  /// 직접 받고, 25초 안에 못 잡으면 포기한다 — 실내에서 "위치를 잡는 중" 이 영원히 돌던 자리다.
+  static LocationSettings currentSettingsFor(TargetPlatform platform) {
+    const limit = Duration(seconds: 25);
+    switch (platform) {
+      case TargetPlatform.android:
+        return AndroidSettings(accuracy: LocationAccuracy.high, forceLocationManager: true, timeLimit: limit);
+      case TargetPlatform.iOS:
+        return AppleSettings(accuracy: LocationAccuracy.high, timeLimit: limit);
+      default:
+        return const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: limit);
+    }
+  }
+
+  /// 플랫폼별 스트림 설정. 순수 함수라 테스트가 본다(`location_settings_test`).
+  ///
+  /// - 안드로이드: 포그라운드 서비스 + 알림. `enableWakeLock` 은 CPU 가 자도 위치 갱신이 오게,
+  ///   `setOngoing` 은 산책 중에 알림을 지우면 서비스가 죽은 것으로 오해하지 않게.
+  /// - iOS: WhenInUse 로 시작한 갱신을 백그라운드에서 이어 간다. 파란 표시를 숨기지 않는다.
+  ///   `pauseLocationUpdatesAutomatically` 를 끈다 — 줄을 푸는 동안 멈춰 서면 iOS 가 스트림을 끊는다.
+  /// - `ACCESS_BACKGROUND_LOCATION`(안드로이드) · Always(iOS) 는 요청하지 않는다: 앞에서 시작한
+  ///   포그라운드 서비스면 충분하고, 그 권한은 심사에서 별도 사유를 요구한다.
+  static LocationSettings settingsFor(TargetPlatform platform, {required String title, required String text}) {
+    switch (platform) {
+      case TargetPlatform.android:
+        return AndroidSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+          // GPS 제공자에서 직접 받는다. FusedLocation 은 포그라운드 서비스 안에서 갱신을
+          // "too close / too fast" 로 막아 한 점도 오지 않았다(에뮬레이터 실측, #335). 산책 경로에
+          // 네트워크·셀 위치가 섞이면 선이 튀기도 한다 — 어차피 GPS 만 쓰는 것이 맞다.
+          forceLocationManager: true,
+          foregroundNotificationConfig: ForegroundNotificationConfig(
+            notificationTitle: title,
+            notificationText: text,
+            notificationChannelName: '산책 기록',
+            enableWakeLock: true,
+            setOngoing: true,
+          ),
+        );
+      case TargetPlatform.iOS:
+        return AppleSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+          activityType: ActivityType.fitness,
+          allowBackgroundLocationUpdates: true,
+          showBackgroundLocationIndicator: true,
+          pauseLocationUpdatesAutomatically: false,
+        );
+      default:
+        return const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5);
+    }
+  }
+
+  /// 안드로이드 13+ 는 알림 권한이 없으면 포그라운드 서비스 알림이 안 보인다(서비스는 돈다).
+  /// 트래킹을 시작하는 순간 한 번 묻는다. 거부해도 기록은 이어진다 — 알림만 없다.
+  /// 테스트가 갈아 끼우는 자리.
+  static Future<bool> Function() requestNotificationPermission = _requestNotificationPermission;
+
+  static Future<bool> _requestNotificationPermission() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    try {
+      return (await Permission.notification.request()).isGranted;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[LocationService] 알림 권한을 못 물었다: $e');
+      return false;
+    }
   }
 }

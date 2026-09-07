@@ -53,6 +53,9 @@ dependencies:
   gal: ^2.3.3
   url_launcher: ^6.3.2
   share_plus: ^12.0.2
+  # 알림 권한(안드로이드 13+ 포그라운드 서비스 알림, #335). 13.x 는 android 패키지가 compileSdk 37 을
+  # 요구해 우리 compileSdk 36 빌드가 깨진다 — 올릴 때 함께 올린다.
+  permission_handler: ^12.0.1
 
 dev_dependencies:
   flutter_test:

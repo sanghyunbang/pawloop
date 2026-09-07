@@ -6,6 +6,9 @@ import 'explore_screen.dart';
 import 'feed_screen.dart';
 import 'chat_list_screen.dart';
 import 'start_walk.dart';
+import 'walk_tracking_screen.dart';
+import '../data/walk_in_progress.dart';
+import '../widgets/walk_resume_prompt.dart';
 import '../widgets/pet_loader.dart';
 
 /// 루트 탭 상태. 푸시된 화면(result 등)에서도 탭을 바꿀 수 있게 전역 보관.
@@ -23,7 +26,10 @@ class RootTab {
 
 /// 메인 네비게이션 셸 — 오늘/탐색/커뮤니티/흐름 탭 + 가운데 기록(+) 버튼.
 class MainShell extends StatelessWidget {
-  const MainShell({super.key});
+  /// 끊긴 산책 스냅숏 저장소. 테스트가 갈아 끼운다(#335).
+  final WalkInProgressStore resumeStore;
+
+  const MainShell({super.key, this.resumeStore = const WalkInProgressStore()});
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +62,13 @@ class MainShell extends StatelessWidget {
           return Stack(children: [
             Positioned.fill(child: screen),
             const Align(alignment: Alignment.bottomCenter, child: _ShellNav()),
+            // 앱이 죽었다 살아났을 때 끊긴 산책을 이어 갈지 묻는다(#335). 그리는 것은 없다.
+            WalkResumeGate(
+              store: resumeStore,
+              openTracking: (ctx, walk) => Navigator.of(ctx).push(
+                MaterialPageRoute(builder: (_) => WalkTrackingScreen(resume: walk)),
+              ),
+            ),
           ]);
         },
       ),

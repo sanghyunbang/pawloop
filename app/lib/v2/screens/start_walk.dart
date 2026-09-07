@@ -21,6 +21,8 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import 'login_screen.dart';
+import '../data/walk_in_progress.dart';
+import '../widgets/walk_resume_prompt.dart';
 import 'location_priming_sheet.dart';
 import 'walk_tracking_screen.dart';
 
@@ -32,9 +34,13 @@ import 'walk_tracking_screen.dart';
 /// 로그인 뒤, 위치 권한이 없으면 **앱의 사전 안내 시트**가 먼저다(#325). OS 대화상자는
 /// 추적 화면([WalkTrackingScreen] → `LocationService.locate`)이 부르므로, "허용하기" 전에는
 /// 그 화면을 열지 않는다. [openTracking] 은 테스트가 추적 화면 대신 꽂는 자리다.
+///
+/// 끊긴 산책의 스냅숏이 남아 있으면 새로 시작하기 전에 묻는다(#335). "이어서 기록" 이면 그
+/// 스냅숏으로 추적 화면을 연다 — 권한 시트는 건너뛴다(권한이 사라졌으면 추적 화면이 말한다).
 Future<void> startWalk(
   BuildContext context, {
-  Future<void> Function(BuildContext context)? openTracking,
+  Future<void> Function(BuildContext context, WalkInProgress? resume)? openTracking,
+  WalkInProgressStore resumeStore = const WalkInProgressStore(),
 }) async {
   if (!AuthState.isAuthenticated) {
     final messenger = ScaffoldMessenger.of(context);
@@ -60,6 +66,12 @@ Future<void> startWalk(
   }
 
   if (!context.mounted) return;
+  final leftover = await WalkResumePrompt.offer(context, store: resumeStore);
+  if (!context.mounted) return;
+  if (leftover != null) {
+    await (openTracking ?? _openTracking)(context, leftover);
+    return;
+  }
   final state = await LocationPriming.stateFor();
   if (!context.mounted) return;
   if (state != null) {
@@ -77,9 +89,9 @@ Future<void> startWalk(
     }
   }
   if (!context.mounted) return;
-  await (openTracking ?? _openTracking)(context);
+  await (openTracking ?? _openTracking)(context, null);
 }
 
-Future<void> _openTracking(BuildContext context) => Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const WalkTrackingScreen()),
+Future<void> _openTracking(BuildContext context, WalkInProgress? resume) => Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => WalkTrackingScreen(resume: resume)),
     );
