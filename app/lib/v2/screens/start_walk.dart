@@ -21,13 +21,21 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import 'login_screen.dart';
+import 'location_priming_sheet.dart';
 import 'walk_tracking_screen.dart';
 
 /// 산책 트래킹을 연다. **미로그인이면 로그인부터 안내한다.**
 ///
 /// 로그인을 마치고 돌아오면 그때 트래킹을 연다 — 사용자가 버튼을 두 번 누르게 하지
 /// 않는다.
-Future<void> startWalk(BuildContext context) async {
+///
+/// 로그인 뒤, 위치 권한이 없으면 **앱의 사전 안내 시트**가 먼저다(#325). OS 대화상자는
+/// 추적 화면([WalkTrackingScreen] → `LocationService.locate`)이 부르므로, "허용하기" 전에는
+/// 그 화면을 열지 않는다. [openTracking] 은 테스트가 추적 화면 대신 꽂는 자리다.
+Future<void> startWalk(
+  BuildContext context, {
+  Future<void> Function(BuildContext context)? openTracking,
+}) async {
   if (!AuthState.isAuthenticated) {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
@@ -52,7 +60,26 @@ Future<void> startWalk(BuildContext context) async {
   }
 
   if (!context.mounted) return;
-  await Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => const WalkTrackingScreen()),
-  );
+  final state = await LocationPriming.stateFor();
+  if (!context.mounted) return;
+  if (state != null) {
+    final answer = await LocationPrimingSheet.show(context, state);
+    if (!context.mounted) return;
+    switch (answer) {
+      case LocationPrimingAnswer.later:
+        return;
+      case LocationPrimingAnswer.openSettings:
+        await LocationPriming.openSettings();
+        return;
+      case LocationPrimingAnswer.allow:
+        // 다음에 또 거부 상태면 "설정에서 켜기" 길을 보여 준다.
+        await LocationPriming.markAsked();
+    }
+  }
+  if (!context.mounted) return;
+  await (openTracking ?? _openTracking)(context);
 }
+
+Future<void> _openTracking(BuildContext context) => Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const WalkTrackingScreen()),
+    );

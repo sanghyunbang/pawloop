@@ -213,6 +213,16 @@ void main() {
   });
 
   group('화면', () {
+    testWidgets('미체크는 빈 원이다 — 회색 체크는 "이미 체크된 비활성" 처럼 읽힌다(#325)', (t) async {
+      await _pump(t, gate: _gate(_FakeServer()));
+
+      expect(find.byIcon(Icons.check), findsNothing, reason: '아무것도 안 골랐는데 체크가 보이면 안 된다');
+
+      await t.tap(find.text('전체 동의 (선택 항목 포함)'));
+      await t.pump();
+      expect(find.byIcon(Icons.check), findsNWidgets(5), reason: '전체 + 필수 3 + 선택 1');
+    });
+
     testWidgets('필수 셋을 다 안 채우면 못 넘어간다', (t) async {
       final agreed = await _pump(t, gate: _gate(_FakeServer()));
 

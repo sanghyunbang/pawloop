@@ -273,8 +273,10 @@ class _ConsentScreenState extends State<ConsentScreen> {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: on ? const Color(0xFFFF8F63) : const Color(0x33463C64),
+          color: on ? const Color(0xFFFF8F63) : Colors.transparent,
+          // 미체크는 빈 원이다 — 회색 바탕에 흰 체크는 "이미 체크된 비활성" 처럼 읽혔다(#325).
+          border: on ? null : Border.all(color: const Color(0x66463C64), width: 1.6),
         ),
-        child: const Icon(Icons.check, size: 14, color: Colors.white),
+        child: on ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
       );
 }
