@@ -189,6 +189,12 @@ class AuthState {
   /// 라우트를 열어 주면 반쯤 빈 화면을 보게 된다. 라우터가 온보딩에 붙잡아 둔다.
   static bool get isAuthenticated => status.value == AuthStatus.authenticated;
 
+  /// 로그인한 적 없는 사람("그냥 둘러보기")인가. `unknown`(확인 중)·`authenticating` 은 아니다.
+  ///
+  /// 게스트에게 서버를 부르면 401 이 돌아오고 화면은 그것을 "다시 로그인해 주세요" 로
+  /// 그린다 — 로그인한 적 없는 사람에게 할 말이 아니다(#324). 부르기 전에 이걸 본다.
+  static bool get isGuest => status.value == AuthStatus.unauthenticated;
+
   // ── 의존성 (테스트에서 교체) ─────────────────────────────────────────────
 
   static AuthTokenStore? _tokenStore;

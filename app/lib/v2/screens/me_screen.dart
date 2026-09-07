@@ -90,39 +90,52 @@ class MeScreen extends StatelessWidget {
   ///
   /// 로그인 전이거나, 아직 한 마리도 등록하지 않았거나, 서버를 못 불렀을 때다.
   /// 셋을 구분하지 않는 이유: 사용자가 할 일은 셋 다 같다 — 로그인하고 등록하는 것이다.
-  Widget _emptyState(BuildContext context) => ListView(
-        padding: const EdgeInsets.fromLTRB(22, 40, 22, 28),
-        children: [
-          Center(
-            child: Image.asset('assets/emoji/paw.png',
-                width: 72, height: 72, gaplessPlayback: true),
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            '아직 등록된 아이가 없어요',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            '우리 아이를 등록하면 산책이 기록되기 시작해요',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary),
-          ),
-          const SizedBox(height: 22),
-          FilledButton(
-            onPressed: () => showPetRegistrationSheet(context),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            ),
-            child: const Text('우리 아이 등록하기'),
-          ),
-          const SizedBox(height: 16),
-          _accountLine(),
-        ],
+  Widget _emptyState(BuildContext context) => ValueListenableBuilder<AuthStatus>(
+        valueListenable: AuthState.status,
+        builder: (_, status, __) {
+          // 로그인 전에는 "등록" 이 아니라 "로그인" 이 주 동작이다 — 등록은 로그인 없이는
+          // 안 되는데 그걸 주 버튼으로 두면 사용자가 벽에 부딪힌다(#324).
+          final guest = status == AuthStatus.unauthenticated;
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(22, 40, 22, 28),
+            children: [
+              Center(
+                child: Image.asset('assets/emoji/paw.png',
+                    width: 72, height: 72, gaplessPlayback: true),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                guest ? '로그인하면 우리 아이가 여기 있어요' : '아직 등록된 아이가 없어요',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                guest
+                    ? '카카오나 Google 로 시작하고 우리 아이를 등록해요'
+                    : '우리 아이를 등록하면 산책이 기록되기 시작해요',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary),
+              ),
+              const SizedBox(height: 22),
+              FilledButton(
+                onPressed: guest
+                    ? () => Navigator.of(context)
+                        .push(MaterialPageRoute(builder: (_) => const LoginScreen()))
+                    : () => showPetRegistrationSheet(context),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  shape:
+                      RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                ),
+                child: Text(guest ? '로그인 / 회원가입' : '우리 아이 등록하기'),
+              ),
+              const SizedBox(height: 16),
+              _accountLine(),
+            ],
+          );
+        },
       );
 
   Widget _dogHeader(DogProfile dog) {
