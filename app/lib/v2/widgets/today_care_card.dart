@@ -422,12 +422,23 @@ class _TodayCareCardState extends State<TodayCareCard> {
               style: const TextStyle(
                   fontSize: 11, fontWeight: FontWeight.w700, color: T.textSecondary)),
           const SizedBox(height: 2),
-          Text(
-            done == null ? '아직' : '${done.doneByName} · ${done.timeLabel}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 10, color: done != null ? color : T.textMuted),
-          ),
+          // 한 줄 "walker · 15:40" 은 다섯 칸 폭에서 "walker · 1…" 로 잘렸다(#326).
+          // 이름과 시각을 따로 그린다 — 시각은 잘리지 않는다.
+          if (done == null)
+            const Text('아직', style: TextStyle(fontSize: 10, color: T.textMuted))
+          else ...[
+            Text(
+              done.doneByName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 10, color: color),
+            ),
+            Text(
+              done.timeLabel,
+              maxLines: 1,
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
+            ),
+          ],
         ]),
       ),
     );
