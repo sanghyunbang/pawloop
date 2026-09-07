@@ -40,6 +40,12 @@ class LocationPriming {
   }
 
   /// 권한이 이미 있으면 `null`(시트 없이 바로 간다), 아니면 보여 줄 시트의 상태.
+  ///
+  /// Android 의 `checkPermission()` 은 `denied` 와 `deniedForever` 를 구분하지 못한다 — 그것은
+  /// `requestPermission()` 의 답에서만 온다. 그래서 한 번 거부한 뒤에는 [LocationPrimingState.deniedBefore]
+  /// 로 "허용하기" 와 "설정에서 켜기" 를 함께 보여 준다: OS 가 다시 물을 수 있으면 대화상자가 뜨고,
+  /// 아니면 추적 화면이 "앱 설정 열기" 로 받는다(에뮬레이터에서 실측). iOS 는 `deniedForever` 를
+  /// 바로 주므로 설정 길만 보인다.
   static Future<LocationPrimingState?> stateFor() async {
     final perm = await checkPermission();
     switch (perm) {
