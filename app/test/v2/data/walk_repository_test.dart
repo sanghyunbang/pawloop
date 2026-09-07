@@ -264,6 +264,25 @@ void main() {
       expect(stats.weekKm[2], 0);
       expect(stats.allTimeCount, 5);
       expect(stats.allTimeMinutes, 120);
+      expect(stats.weekMinutes.length, 7,
+          reason: 'weekMinutes 가 아예 없는 옛 서버여도 화면이 요일을 돈다 (#341)');
+    });
+
+    test('통계의 weekMinutes 를 읽는다 — 목표가 분 단위다 (#341)', () async {
+      final r = repositoryThatAnswers((_) => _json({
+            'weekKm': [1.0, 0, 2.0, 0, 0, 0, 0],
+            'weekMinutes': [20, 0, 35, 0, 0, 0, 0],
+            'totalKm': 3.0,
+            'walkCount': 2,
+            'avgKm': 1.5,
+            'allTimeKm': 10.0,
+            'allTimeCount': 5,
+            'allTimeMinutes': 120,
+          }));
+
+      final stats = await r.repo.stats();
+
+      expect(stats.weekMinutes, [20, 0, 35, 0, 0, 0, 0]);
     });
 
     test('반려동물의 species 를 읽는다 — 고양이가 개로 보이면 안 된다', () async {

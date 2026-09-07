@@ -358,6 +358,12 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(stats.path("weekKm").get(0).asDouble())
                 .as("월요일이 0번이다. 두 산책이 같은 날이니 5.0km 다")
                 .isEqualTo(5.0);
+        assertThat(stats.path("weekMinutes").size())
+                .as("거리와 같은 축이다 — 목표가 분 단위라 화면이 둘을 나란히 읽는다(#341)")
+                .isEqualTo(7);
+        assertThat(stats.path("weekMinutes").get(0).asInt())
+                .as("1800 + 1200 초가 같은 월요일이다 — 50분")
+                .isEqualTo(50);
         assertThat(stats.path("walkCount").asInt())
                 .as("산책한 '날 수' 가 아니라 '건수' 다 — 하루에 두 번이면 2 다")
                 .isEqualTo(2);
@@ -385,6 +391,9 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(stats.path("avgKm").asDouble()).isZero();
         assertThat(stats.path("allTimeCount").asInt()).isZero();
         assertThat(stats.path("weekKm").size()).isEqualTo(7);
+        assertThat(stats.path("weekMinutes").size())
+                .as("빈 주에도 길이 7 이다 — 화면이 요일을 돌면서 그리므로 짧으면 죽는다")
+                .isEqualTo(7);
     }
 
     // ─────────────────── 지운 반려동물의 산책 (이슈 #156) ───────────────────

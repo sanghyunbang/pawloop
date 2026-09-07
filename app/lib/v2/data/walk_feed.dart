@@ -131,6 +131,56 @@ class WalkFeedData {
     return (count: count, km: meters / 1000.0, minutes: seconds ~/ 60);
   }
 
+  /// 이번 주 요일별 **분**(월요일부터, 길이 7). 대기 중인 것을 얹는다 (#341).
+  List<int> get weekMinutesWithPending {
+    final week = List<int>.from(stats.weekMinutes);
+    while (week.length < 7) {
+      week.add(0);
+    }
+    final monday = _mondayOf(DateTime.now());
+
+    for (final draft in pending) {
+      final day = DateTime(draft.startedAt.year, draft.startedAt.month, draft.startedAt.day);
+      final index = day.difference(monday).inDays;
+      if (index >= 0 && index < 7) {
+        week[index] += draft.durationS ~/ 60;
+      }
+    }
+    return week;
+  }
+
+  /// 이번 주에 **산책한 날 수**. 하루에 두 번 걸어도 1 이다 (#341).
+  ///
+  /// 거리와 분을 함께 본다 — 거리가 0 인 기록(손입력·실내)도 걸은 날이고, 반대로 분이 0 인
+  /// 아주 짧은 기록도 그날 나갔다는 뜻이다. 둘 중 하나라도 있으면 센다.
+  int get daysWalkedThisWeek {
+    final km = weekKmWithPending;
+    final minutes = weekMinutesWithPending;
+    var days = 0;
+    for (var i = 0; i < 7; i++) {
+      if (km[i] > 0 || minutes[i] > 0) days++;
+    }
+    return days;
+  }
+
+  /// 이번 주에 걸은 분의 합 (#341).
+  int get minutesThisWeek =>
+      weekMinutesWithPending.fold(0, (sum, minutes) => sum + minutes);
+
+  /// 산책이 있었던 날들 — 서버 기록과 대기 초안을 함께 (#341).
+  ///
+  /// **첫 장만 본다.** 목록은 커서 페이지라 오래된 것은 아직 안 왔을 수 있고, 그래서 아주 긴
+  /// 연속은 실제보다 짧게 나올 수 있다. 그 대신 서버에 질문을 하나 더 만들지 않는다 —
+  /// 30일 넘게 매일 걷는 사람에게 숫자가 조금 작게 보이는 것이 서버 왕복 하나보다 낫다.
+  Iterable<DateTime> get walkedDates sync* {
+    for (final walk in walks) {
+      yield walk.startedAt;
+    }
+    for (final draft in pending) {
+      yield draft.startedAt;
+    }
+  }
+
   /// 이번 주 요일별 거리(월요일부터, 길이 7). **대기 중인 것을 얹는다.**
   ///
   /// 서버 통계만 그리면 방금 걸었는데 막대가 안 오르고, 사용자는 기록이 안 됐다고 읽는다.

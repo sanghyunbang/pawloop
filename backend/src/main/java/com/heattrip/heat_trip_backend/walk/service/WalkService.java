@@ -259,10 +259,14 @@ public class WalkService {
         List<Walk> week = walks.findStartedBetween(userId, dogId, fromUtc, toUtc);
 
         double[] perDay = new double[7];
+        // 초로 모았다가 마지막에 분으로 내린다. 요일마다 분으로 내려 더하면 하루 7분 짜리
+        // 산책 다섯 번이 5분이 아니라 0분이 된다(#341).
+        long[] perDaySeconds = new long[7];
         for (Walk walk : week) {
             // 월요일이 0 이다. 계약의 weekKm 이 "월~일 길이 7" 이라고 선언했다.
             int index = walk.startedAtInstant().atZone(KST).getDayOfWeek().getValue() - 1;
             perDay[index] += walk.getDistanceM() / 1000.0;
+            perDaySeconds[index] += walk.getDurationS();
         }
 
         List<Double> weekKm = new ArrayList<>(7);
@@ -270,6 +274,10 @@ public class WalkService {
         for (double km : perDay) {
             weekKm.add(round(km));
             totalKm += km;
+        }
+        List<Integer> weekMinutes = new ArrayList<>(7);
+        for (long seconds : perDaySeconds) {
+            weekMinutes.add((int) (seconds / 60));
         }
         int walkCount = week.size();
 
@@ -279,6 +287,7 @@ public class WalkService {
                 weekStart.toLocalDate(),
                 weekStart.toLocalDate().plusDays(6),
                 weekKm,
+                weekMinutes,
                 round(totalKm),
                 walkCount,
                 // 건수가 0 이면 나누지 않는다. 계약이 그 경우 0 이라고 선언했다.

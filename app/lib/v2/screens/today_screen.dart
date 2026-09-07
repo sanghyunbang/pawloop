@@ -6,6 +6,7 @@ import '../widgets/profile_avatar.dart';
 import '../widgets/today_care_card.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../widgets/emergency_vets_sheet.dart';
+import '../widgets/walk_goal_row.dart';
 import '../widgets/walk_safety_card.dart';
 import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
@@ -100,7 +101,7 @@ class TodayScreen extends StatelessWidget {
                     behavior: HitTestBehavior.opaque,
                     // 예전에는 `const WalkToday()` 였다 — 무엇을 걷든 영원히 0회 0.0km 0분.
                     child: WalkFeedBuilder(
-                      builder: (_, data, __) => _walkSummary(data),
+                      builder: (_, data, __) => _walkSummary(data, dog),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -179,7 +180,7 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
-  Widget _walkSummary(WalkFeedData data) {
+  Widget _walkSummary(WalkFeedData data, DogProfile? dog) {
     final today = data.today;
     final pendingToday = data.pending.length;
     Widget cell(String v, String label) => Expanded(
@@ -222,6 +223,9 @@ class TodayScreen extends StatelessWidget {
             style: TextStyle(fontSize: 11.5, color: Color(0x9E463C64)),
           ),
         ],
+        // 이번 주 목표와 연속 일수 (#341). 아이가 없거나 개가 아니면 줄 자체가 없다 —
+        // 산책 권장량은 개에 대한 자료라 고양이에게 제안하면 근거 없는 숫자가 된다.
+        if (!data.guest) WalkGoalRow(dog: dog, data: data),
       ]),
     );
   }
