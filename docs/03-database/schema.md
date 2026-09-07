@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **47개** 있다(전체 목록은 [부록 A](#부록-a-정본의-표-47개--어디에-적혀-있나)). 이 문서에 절이 있는 실재 표는 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§6 trail_route` · `§7 post` · `§8 comment` · `§9 reaction` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` · `§18 emotion_card` · `§19 card_comment` · `§20 card_reaction` · `§21 kto_call_budget` · `§22 place_cell` · `§23 pet_place_detail` · `§24 place_catalog` · `§25 report` · `§26 report_snapshot` · `§27 user_block` · `§28 user_consent` 스물여섯이다. 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 절이 없는 21개는 감정 여행·관광 수집 시절의 표라 부록 A 에만 적었다 — 지우지 않고 격리한다(#174). 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **48개** 있다(전체 목록은 [부록 A](#부록-a-정본의-표-48개--어디에-적혀-있나)). 이 문서에 절이 있는 실재 표는 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§6 trail_route` · `§7 post` · `§8 comment` · `§9 reaction` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` · `§18 emotion_card` · `§19 card_comment` · `§20 card_reaction` · `§21 kto_call_budget` · `§22 place_cell` · `§23 pet_place_detail` · `§24 place_catalog` · `§25 report` · `§26 report_snapshot` · `§27 user_block` · `§28 user_consent` 스물여섯이다. 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 절이 없는 21개는 감정 여행·관광 수집 시절의 표라 부록 A 에만 적었다 — 지우지 않고 격리한다(#174). 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -1006,6 +1006,51 @@ CREATE TABLE `push_preference` (
 
 ---
 
+## 31. `course` — 내가 남긴 코스 (**실재**)
+
+산책 기록 중에 "여기 좋다" 고 남긴 것(#339). **산책과 다른 것이다** — 산책은 "그날 내가 걸었다" 이고 코스는 "여기를 이렇게 걸으면 좋다" 다. 그래서 (1) `walk.path` 에서 **양 끝 100m 를 잘라 낸 선**이 들어가고(집 앞이 남으면 공개할 수 없다), (2) 산책을 지워도 코스는 남는다(`fk_course_walk ... ON DELETE SET NULL`).
+
+`SPATIAL INDEX` 는 없다 — `walk` 와 같은 이유다([ADR-0015](../99-decisions/decision-log.md#adr-0015--산책-경로는-linestring-으로-저장하되-spatial-index-는-만들지-않는다)). 지도의 "이웃 코스" 는 공개 목록을 받아 **기기에서** 거리를 잰다(A안 #235).
+
+```sql
+CREATE TABLE `course` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `walk_id` bigint DEFAULT NULL,
+  `name` varchar(60) NOT NULL,
+  `note` varchar(200) DEFAULT NULL,
+  `tags` varchar(60) DEFAULT NULL,
+  `path` linestring /*!80003 SRID 4326 */ NOT NULL,
+  `distance_m` int NOT NULL,
+  `duration_s` int NOT NULL,
+  `visibility` varchar(10) NOT NULL DEFAULT 'private',
+  `created_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_course_user` (`user_id`,`created_at`),
+  KEY `idx_course_public` (`visibility`,`created_at`),
+  KEY `fk_course_walk` (`walk_id`),
+  CONSTRAINT `fk_course_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_course_walk` FOREIGN KEY (`walk_id`) REFERENCES `walk` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `ck_course_visibility` CHECK (`visibility` in ('private','public'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `user_id` | `BIGINT` | FK→`users.id`, **CASCADE** | 주인. 탈퇴하면 함께 사라진다 — 그 사람의 글이다 |
+| `walk_id` | `BIGINT` | FK→`walk.id`, **SET NULL** | 어느 산책에서 왔나. 산책을 지워도 코스는 남는다 |
+| `name` | `VARCHAR(60)` | NOT NULL | 코스 이름 |
+| `note` | `VARCHAR(200)` | NULL | 한 줄 소개 |
+| `tags` | `VARCHAR(60)` | NULL | `leash`·`poopbag`·`shade` 를 콤마로. 값이 셋으로 닫혀 있어 표를 나누지 않았다 |
+| `path` | `LINESTRING` | **SRID 4326**, NOT NULL | 양 끝 100m 를 자른 선. 선이 곧 코스다 |
+| `distance_m` | `INT` | NOT NULL | **자른 뒤**의 길이. 원래 산책의 거리가 아니다 |
+| `duration_s` | `INT` | NOT NULL | 원래 산책의 소요. 자른 만큼을 뺄 수 없다 |
+| `visibility` | `VARCHAR(10)` | NOT NULL 기본 `private`, CHECK | `private`\|`public`. 공개는 사용자가 명시적으로 하는 일이다 |
+| `created_at` | `DATETIME(6)` | NOT NULL | UTC |
+
+---
+
 ## 인덱스 · 공간 인덱스 요약
 
 | 테이블 | 인덱스 | 종류 | 목적 |
@@ -1017,6 +1062,8 @@ CREATE TABLE `push_preference` (
 | `refresh_token` | `idx_refresh_token_expires_at(expires_at)` | 보조 | 만료 RT 정리 배치 |
 | `dog` | `idx_dog_user(user_id)` | 보조 | 사용자별 강아지 조회 |
 | `walk` | `idx_walk_dog(dog_id, started_at)` | 보조 | 강아지별 산책 이력 |
+| `course` | `idx_course_user(user_id, created_at)` | 보조 | 내 코스 최근 순 |
+| `course` | `idx_course_public(visibility, created_at)` | 보조 | 공개 코스 한 벌(지도의 "이웃 코스") |
 | `walk` | `spx_walk_path(path)` | **SPATIAL** | GPS 경로 공간 연산 |
 | `place` | `uq_place_src(source, external_id)` | UNIQUE | POI 중복 방지 |
 | `place` | `idx_place_category(category)` | 보조 | 카테고리 필터 |
@@ -1051,6 +1098,7 @@ CREATE TABLE `push_preference` (
 
 | 표 | 상태 | 모듈 | 한 줄 |
 | --- | --- | --- | --- |
+| `course` | 실재 §31 | `walk` | 내가 걸은 길 중에 남긴 코스 — 양 끝 100m 를 자른 선(#339) |
 | `care_log` | 실재 §17 | `care` | 케어 로그 |
 | `chat_message` | 실재 §15 | `chat` | 채팅 메시지 |
 | `chat_room` | 실재 §12 | `chat` | 채팅방(범용) |

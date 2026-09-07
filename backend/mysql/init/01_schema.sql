@@ -411,6 +411,27 @@ CREATE TABLE `walk` (
   CONSTRAINT `fk_walk_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `course` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `walk_id` bigint DEFAULT NULL,
+  `name` varchar(60) NOT NULL,
+  `note` varchar(200) DEFAULT NULL,
+  `tags` varchar(60) DEFAULT NULL,
+  `path` linestring /*!80003 SRID 4326 */ NOT NULL,
+  `distance_m` int NOT NULL,
+  `duration_s` int NOT NULL,
+  `visibility` varchar(10) NOT NULL DEFAULT 'private',
+  `created_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_course_user` (`user_id`,`created_at`),
+  KEY `idx_course_public` (`visibility`,`created_at`),
+  KEY `fk_course_walk` (`walk_id`),
+  CONSTRAINT `fk_course_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_course_walk` FOREIGN KEY (`walk_id`) REFERENCES `walk` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `ck_course_visibility` CHECK (`visibility` in ('private','public'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `walk_note` (
   `group_id` bigint NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,

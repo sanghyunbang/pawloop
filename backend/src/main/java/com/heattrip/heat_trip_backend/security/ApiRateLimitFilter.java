@@ -229,6 +229,17 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("DELETE".equals(method) && path.matches("^/api/walks/\\d+$")) {
             return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
         }
+        // 코스 쓰기 셋(#339)도 같은 버킷이다. 코스로 남기는 일은 산책을 저장하는 일과
+        // 같은 성격이고(한 사람이 자기 기록에서 만든다), 따로 숫자를 정할 근거가 아직 없다.
+        if ("POST".equals(method) && "/api/courses".equals(path)) {
+            return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
+        }
+        if ("PUT".equals(method) && path.matches("^/api/courses/\\d+/visibility$")) {
+            return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
+        }
+        if ("DELETE".equals(method) && path.matches("^/api/courses/\\d+$")) {
+            return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
+        }
         // 회고 글 교체(#187)도 같은 버킷이다. 글을 고치는 일이 산책을 저장하는 일보다
         // 잦을 이유가 없고, 한도를 따로 움직일 근거가 아직 없다.
         if ("PUT".equals(method) && path.matches("^/api/walks/\\d+/memo$")) {

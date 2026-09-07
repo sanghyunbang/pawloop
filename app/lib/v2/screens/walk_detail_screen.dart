@@ -18,7 +18,9 @@ library;
 import 'package:flutter/material.dart';
 
 import '../data/walk_feed.dart';
+import '../data/course_repository.dart';
 import '../data/walk_repository.dart';
+import '../widgets/course_save_sheet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 
@@ -35,6 +37,9 @@ class WalkDetailScreen extends StatefulWidget {
   /// 서버를 어디로 부르는가. **테스트만 넘긴다.**
   final WalkRepository? repository;
 
+  /// 코스 저장소. 테스트가 꽂는 자리다 (#339).
+  final CourseRepository? courses;
+
   const WalkDetailScreen({
     super.key,
     required this.walkId,
@@ -43,6 +48,7 @@ class WalkDetailScreen extends StatefulWidget {
     required this.minutes,
     required this.initialMemo,
     this.repository,
+    this.courses,
   });
 
   @override
@@ -119,6 +125,10 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
                 children: [
                   _summaryCard(),
                   const SizedBox(height: 16),
+                  // 걸은 길을 남기는 자리 (#339). 회고 위에 둔다 — 기록을 열어 처음 드는
+                  // 생각이 "이 길 좋았다" 이고, 그 다음이 "무슨 일이 있었더라" 다.
+                  _saveAsCourseCard(),
+                  const SizedBox(height: 16),
                   _memoCard(),
                 ],
               ),
@@ -164,6 +174,46 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
             ),
           ),
         ]),
+      );
+
+  Widget _saveAsCourseCard() => GestureDetector(
+        onTap: () async {
+          final course = await CourseSaveSheet.open(
+            context,
+            walkId: widget.walkId,
+            km: widget.km,
+            minutes: widget.minutes,
+            walks: widget.repository,
+            courses: widget.courses,
+          );
+          if (course == null || !mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('"${course.name}" 코스로 남겼어요')),
+          );
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xCCFFFFFF),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0x1F8C7BFF)),
+          ),
+          child: Row(children: [
+            const Icon(Icons.route_rounded, size: 18, color: Color(0xFFE07A4E)),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('이 길을 코스로 남기기',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                SizedBox(height: 3),
+                Text('시작·끝 100m 는 빼고 저장해요',
+                    style: TextStyle(fontSize: 12, color: T.textMuted)),
+              ]),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+          ]),
+        ),
       );
 
   Widget _summaryCard() {

@@ -51,6 +51,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\24_place_catalog_layers.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\25_push.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\26_walk_place.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\27_course.sql
 ```
 
 | 파일 | 무엇을 |
@@ -81,6 +82,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `24_place_catalog_layers.sql` | `place_catalog` 를 **출처별 한 행**으로 넓히고 `trail_route` 를 만듭니다 — #291. `source varchar(16)` 컬럼(옛 행 1 은 `kto`), `uk_place_catalog_source` UNIQUE, `CHECK (id = 1)` 을 `CHECK (source in ('kto','localdata','durunubi'))` 로 교체. `trail_route` 는 두루누비 코스의 선(`[[경도, 위도]]` JSON, FK 없음). id 가 1·2·3 밖인 행이 있거나 `source` 가 다른 모양으로 이미 있으면 멈춥니다. 18 뒤에, 새 코드 배포 **전**(`validate` 가 컬럼과 표를 요구합니다). 되돌리는 SQL 은 헤더에 있습니다 — 레이어 한 벌은 공공데이터라 다음 적재가 다시 받습니다. |
 | `25_push.sql` | 푸시 알림(#83)의 표 둘과 컬럼 하나를 만듭니다 — `device_token`(기기 토큰 원장, `UNIQUE(token)`, FK 없음) · `push_preference`(전체 끄기, 행이 없으면 켜짐) · `chat_room_member.muted_at datetime(6) NULL`(방별 음소거). 이미 있으면 지나가고, 있는데 모양이 다르면 멈춥니다. 앱 배포 **전**에 돌립니다(`validate`). DOWN 은 헤더 주석에 있습니다 — 값을 잃습니다. |
 | `26_walk_place.sql` | `walk` 에 **장소 축** 셋을 더합니다 — #338. `place_source varchar(16)` · `place_content_id varchar(64)` · `place_name varchar(120)` 전부 NULL 허용, 인덱스 `idx_walk_place (place_source, place_content_id)`. `place_catalog` 에 FK 를 걸지 않습니다 — 그 표는 월 1회 통째로 갈아 끼우므로 FK 가 적재를 막거나 적재 뒤 참조가 깨집니다. 장소가 사라져도 "그날 거기를 걸었다" 는 남아야 해서 값을 베껴 둡니다. 이미 있으면 지나가고, 있는데 폭이 다르면 멈춥니다. 12 뒤에, 새 코드 배포 **전**(`validate` 가 컬럼을 요구합니다). DOWN 은 헤더 주석에 있습니다 — 값을 잃습니다. |
+| `27_course.sql` | **코스** 표를 만듭니다 — #339. 내가 걸은 길 중에 "여기 좋다" 고 남긴 것으로, `walk.path` 에서 **양 끝 100m 를 잘라 낸 선**을 이름·소개·태그와 함께 둡니다. FK 둘의 규칙이 다릅니다 — `users` 는 CASCADE(탈퇴하면 그 사람의 글이 사라진다), `walk` 는 **SET NULL**(산책 기록을 지워도 코스는 남는다). 공개 범위 기본값은 `private` 이고 `CHECK` 가 두 값만 받습니다. 이미 있으면 지나가고, 있는데 컬럼이 모자라면 멈춥니다. 01·12 뒤에, 새 코드 배포 **전**(`validate` 가 표를 요구합니다). DOWN 은 `DROP TABLE course` 이고 값을 잃습니다. |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
