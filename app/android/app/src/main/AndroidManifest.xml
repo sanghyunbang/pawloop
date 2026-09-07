@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- enableWakeLock — 없으면 서비스 시작이 PlatformException 으로 죽고 위치가 한 점도 안 온다(실측). -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- 재부팅 뒤에도 저녁 알림 예약이 살아 있게 (#341). 정확 알람(SCHEDULE_EXACT_ALARM)은
+         일부러 안 쓴다 — 산책 알림은 1분 어긋나도 되고, 그 권한은 사용자에게 한 번 더 묻는다. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
     <!-- 경로 사진을 갤러리에 넣는다 (이슈 #310). API 29 이하만 필요하다 — 30+ 는 MediaStore 라
          권한 없이 들어간다(gal). 읽기 권한은 요청하지 않는다. -->
@@ -82,6 +85,23 @@
         </activity>
 
         <meta-data android:name="flutterEmbedding" android:value="2" />
+
+        <!-- 저녁 산책 알림 (#341). 예약을 받아 실제로 띄우는 리시버와, 재부팅 뒤 예약을
+             다시 거는 리시버다. 둘 다 flutter_local_notifications 의 클래스이고
+             android:exported="false" 라 다른 앱이 부를 수 없다. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <queries>

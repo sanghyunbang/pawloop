@@ -57,6 +57,12 @@ dependencies:
   # 요구해 우리 compileSdk 36 빌드가 깨진다 — 올릴 때 함께 올린다.
   permission_handler: ^12.0.1
 
+  # 저녁 한 번의 산책 알림 (#341). **푸시가 아니다** — 서버(#83, FCM)와 무관하게 기기 안에
+  # 예약한다. 오늘 기록이 0 일 때만 울리고, 산책을 저장하면 그날 것은 취소된다.
+  # 시각을 다루므로 timezone 을 직접 적는다(전이 의존에 기대지 않는다 — http_parser 와 같은 이유).
+  flutter_local_notifications: ^19.4.2
+  timezone: ^0.10.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

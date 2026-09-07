@@ -28,6 +28,10 @@ android {
         // 자바 17 타깃
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications(#341)가 java.time 을 쓴다. minSdk 가 23 이라
+        // 그 API 가 없는 기기가 있어서 디슈가링이 필요하다 — 끄면 빌드가 아니라
+        // **실행 중에** NoClassDefFoundError 로 죽는다.
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions { jvmTarget = "17" }
 
@@ -131,3 +135,8 @@ android {
 
 // Flutter 소스 루트
 flutter { source = "../.." }
+
+dependencies {
+    // isCoreLibraryDesugaringEnabled 의 짝. 이 줄이 없으면 그 옵션이 빌드 오류다.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+}

@@ -33,6 +33,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../widgets/walk_reminder_tile.dart';
 import 'intro_screen.dart';
 import 'settings/account_delete_screen.dart';
 import 'settings/legal_document_screen.dart';
@@ -67,6 +68,11 @@ class SettingsScreen extends StatelessWidget {
                       _row(context, Icons.campaign_outlined, '마케팅 정보 수신 동의',
                           () => _open(context, LegalDocument.marketing)),
                     ]),
+                    const SizedBox(height: 18),
+                    // 저녁 산책 알림 (#341). 푸시(#83)와 무관한 기기 안 예약이라
+                    // 로그인·토큰과 상관이 없다.
+                    _section('알림'),
+                    _card(const [WalkReminderTile()]),
                     const SizedBox(height: 18),
                     // 첫 실행 소개는 한 번만 나온다(#323). 닫아 버린 안내를 나중에 다시
                     // 찾을 수 있어야 한다 — 그 자리가 여기다.
