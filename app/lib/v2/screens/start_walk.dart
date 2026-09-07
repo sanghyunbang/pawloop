@@ -48,6 +48,9 @@ Future<void> startWalk(
 
   /// 지도에서 "여기서 산책 시작" 으로 왔으면 그 장소 (#338). 초안에 실려 저장까지 간다.
   WalkPlaceRef? place,
+
+  /// "다시 걷기" 로 왔으면 따라 걸을 코스의 선 (#339). 지도에 연한 선으로 깔린다.
+  List<List<double>>? courseLine,
 }) async {
   if (!AuthState.isAuthenticated) {
     final messenger = ScaffoldMessenger.of(context);
@@ -98,6 +101,7 @@ Future<void> startWalk(
   if (!context.mounted) return;
   if (!await _confirmIfUnsafe(context, now: (now ?? DateTime.now)())) return;
   if (!context.mounted) return;
+  _courseLineForOpen = courseLine;
   await (openTracking ?? _openTracking)(context, null, place);
 }
 
@@ -130,7 +134,15 @@ Future<bool> _confirmIfUnsafe(BuildContext context, {required DateTime now}) asy
   return go ?? false;
 }
 
-Future<void> _openTracking(BuildContext context, WalkInProgress? resume, WalkPlaceRef? place) =>
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => WalkTrackingScreen(resume: resume, place: place)),
-    );
+/// 따라 걸을 선은 화면 인자로만 흐른다 — 초안·서버와 무관하다(#339).
+List<List<double>>? _courseLineForOpen;
+
+Future<void> _openTracking(BuildContext context, WalkInProgress? resume, WalkPlaceRef? place) {
+  final line = _courseLineForOpen;
+  _courseLineForOpen = null;
+  return Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => WalkTrackingScreen(resume: resume, place: place, courseLine: line),
+    ),
+  );
+}

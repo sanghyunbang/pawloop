@@ -40,6 +40,30 @@ double coursePathLengthMeters(List<List<double>>? points) {
   return total;
 }
 
+/// 지도의 "이웃 코스" 에 그릴 것들 — **가까운 순 [limit] 개** (#339).
+///
+/// 서버는 공개 코스 한 벌을 그냥 준다. 어디가 가까운지는 **기기에서** 고른다 — 좌표를 서버로
+/// 보내지 않는 A안(#235)이고, 장소 카탈로그(#273)와 같은 방식이다.
+///
+/// 거리는 **시작점** 기준이다. 선 전체와의 최단거리가 더 정확하지만, 목록 응답에는 시작점만
+/// 오고(선은 상세에서 온다) 그 차이가 "가까운 20개" 를 고르는 데 뒤집히는 경우는 드물다.
+List<T> nearestByStart<T>(
+  List<T> courses,
+  double lat,
+  double lng, {
+  required List<double>? Function(T) startOf,
+  int limit = 20,
+}) {
+  final withDistance = <({T course, double meters})>[];
+  for (final course in courses) {
+    final start = startOf(course);
+    if (start == null || start.length != 2) continue;
+    withDistance.add((course: course, meters: _distanceMeters([lng, lat], start)));
+  }
+  withDistance.sort((a, b) => a.meters.compareTo(b.meters));
+  return [for (final row in withDistance.take(limit)) row.course];
+}
+
 int _advance(List<List<double>> points, int start, int step) {
   var walked = 0.0;
   var index = start;

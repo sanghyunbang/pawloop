@@ -35,7 +35,11 @@ class WalkTrackingScreen extends StatefulWidget {
   /// 초안에 실려 저장 화면까지 간다. 좌표가 아니라 카탈로그의 이름·식별자다.
   final WalkPlaceRef? place;
 
-  const WalkTrackingScreen({super.key, this.resume, this.place});
+  /// 따라 걸을 코스의 선 (#339). "다시 걷기" 로 왔으면 지도에 <b>연한 선</b>으로 깔아 준다.
+  /// 내 경로와 색이 다르다 — 겹쳐 놓고도 어느 쪽이 지금 걷는 것인지 알아야 한다.
+  final List<List<double>>? courseLine;
+
+  const WalkTrackingScreen({super.key, this.resume, this.place, this.courseLine});
   @override
   State<WalkTrackingScreen> createState() => _WalkTrackingScreenState();
 }
@@ -248,6 +252,19 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   }
 
   double _rad(double d) => d * math.pi / 180;
+
+  /// 따라 걸을 코스 선. 내 경로보다 **먼저·연하게** 깐다 — 위에 내 선이 얹혀야 한다.
+  Future<void> _drawCourseLine() async {
+    final c = _ctrl;
+    final line = widget.courseLine;
+    if (c == null || line == null || line.length < 2) return;
+    await c.addOverlay(NPolylineOverlay(
+      id: 'course-line',
+      coords: [for (final p in line) NLatLng(p[1], p[0])],
+      color: const Color(0x668C7BFF),
+      width: 9,
+    ));
+  }
 
   Future<void> _drawPath() async {
     final c = _ctrl;
@@ -826,6 +843,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
                   c.updateCamera(
                     NCameraUpdate.withParams(target: _path.last, zoom: 16),
                   );
+                  _drawCourseLine();
                   _drawPath();
                   // _start 가 지도보다 먼저 끝나면 그때의 POI 적재는 `_ctrl == null`
                   // 로 버려진다. 가만히 서 있는 사용자는 위치 스트림 갱신
