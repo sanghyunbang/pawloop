@@ -29,6 +29,7 @@
 library;
 
 import 'dart:convert';
+import 'walk_repository.dart';
 import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,6 +63,11 @@ class WalkDraft {
   /// 아직 없으면 `null` 이고, 등록한 뒤 전송할 때 채워진다.
   final int? dogId;
 
+  /// 어디를 걸었나 (#338). 지도에서 "여기서 산책 시작" 으로 왔거나 저장 화면에서 골랐으면
+  /// 채워진다. **초안에 실어 두는 이유**는 전송이 나중일 수 있기 때문이다 — 비행기 모드에서
+  /// 저장한 산책이 며칠 뒤 올라갈 때 장소만 사라지면, 그 장소는 다시 만들 수 없다.
+  final WalkPlaceRef? place;
+
   /// 마지막 실패의 사유. 화면이 "왜 아직 안 올라갔는지" 를 말해 준다.
   final String? lastError;
 
@@ -76,6 +82,7 @@ class WalkDraft {
     this.memo,
     this.weather,
     this.dogId,
+    this.place,
     this.lastError,
   });
 
@@ -92,6 +99,7 @@ class WalkDraft {
     required List<List<double>> path,
     List<int> pathT = const [],
     int? dogId,
+    WalkPlaceRef? place,
   }) =>
       WalkDraft(
         clientWalkId: _newKey(),
@@ -102,6 +110,7 @@ class WalkDraft {
         path: path,
         pathT: pathT,
         dogId: dogId,
+        place: place,
       );
 
   WalkDraft copyWith({
@@ -110,6 +119,11 @@ class WalkDraft {
     int? durationS,
     String? memo,
     String? weather,
+    WalkPlaceRef? place,
+
+    /// 장소를 **없앤다**. 이름 칸을 비우고 저장하면 초안이 들고 온 장소도 함께 지운다 —
+    /// `place: null` 만으로는 "안 바꿈" 과 구분되지 않는다.
+    bool dropPlace = false,
     String? lastError,
   }) =>
       WalkDraft(
@@ -125,6 +139,7 @@ class WalkDraft {
         memo: memo ?? this.memo,
         weather: weather ?? this.weather,
         dogId: dogId ?? this.dogId,
+        place: dropPlace ? null : (place ?? this.place),
         lastError: lastError ?? this.lastError,
       );
 
@@ -139,6 +154,7 @@ class WalkDraft {
         if (memo != null) 'memo': memo,
         if (weather != null) 'weather': weather,
         if (dogId != null) 'dogId': dogId,
+        if (place != null) 'place': place!.toJson(),
         if (lastError != null) 'lastError': lastError,
       };
 
@@ -182,6 +198,8 @@ class WalkDraft {
       memo: json['memo'] as String?,
       weather: json['weather'] as String?,
       dogId: (json['dogId'] as num?)?.toInt(),
+      // 장소는 모양이 다르면 없는 것으로 둔다 — 그것 하나 때문에 산책을 잃지 않는다.
+      place: WalkPlaceRef.tryParse(json['place']),
       lastError: json['lastError'] as String?,
     );
   }

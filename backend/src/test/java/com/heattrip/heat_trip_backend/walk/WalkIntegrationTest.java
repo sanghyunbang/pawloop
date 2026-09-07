@@ -471,6 +471,23 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
                 """.formatted(dogId, clientWalkId, startedAt, distanceM, durationS);
     }
 
+    /** 장소를 붙인 산책. {@code source}·{@code contentId} 가 null 이면 이름만 보낸다 (#338). */
+    private static String walkAtPlace(long dogId, Instant startedAt, String source, String contentId, String title) {
+        StringBuilder place = new StringBuilder();
+        if (source != null) {
+            place.append(",\"placeSource\":\"").append(source).append('"');
+        }
+        if (contentId != null) {
+            place.append(",\"placeContentId\":\"").append(contentId).append('"');
+        }
+        if (title != null) {
+            place.append(",\"placeName\":\"").append(title).append('"');
+        }
+        return """
+                {"dogId":%d,"clientWalkId":"%s","startedAt":"%s","distanceM":1200,"durationS":900%s}
+                """.formatted(dogId, UUID.randomUUID(), startedAt, place);
+    }
+
     private ResultActions save(Account account, String json) throws Exception {
         return mockMvc.perform(post("/api/walks")
                 .header("Authorization", "Bearer " + account.token())
@@ -494,6 +511,82 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
 
     private static String withoutTraceId(String body) {
         return body.replaceAll("\"traceId\":\"[^\"]*\"", "\"traceId\":\"·\"");
+    }
+
+    // ─────────────── 장소 축 (#338) ───────────────
+
+    @Test
+    @DisplayName("장소를 붙여 저장하면 응답에 셋이 그대로 오고, 자주 가는 곳에 잡힌다")
+    void savesAPlaceAndCountsIt() throws Exception {
+        Account me = account("장소");
+        long dogId = dog(me, "보리");
+        Instant when = thisWeekMondayOnePm();
+
+        JsonNode saved = body(save(me, walkAtPlace(dogId, when, "kto", "2733967", "서울숲"))
+                .andExpect(status().isCreated()));
+        assertThat(saved.path("place").path("source").asText()).isEqualTo("kto");
+        assertThat(saved.path("place").path("contentId").asText()).isEqualTo("2733967");
+        assertThat(saved.path("place").path("title").asText()).isEqualTo("서울숲");
+
+        save(me, walkAtPlace(dogId, when.plusSeconds(60), "kto", "2733967", "서울숲"))
+                .andExpect(status().isCreated());
+        save(me, walkAtPlace(dogId, when.plusSeconds(120), "trail", "trail:41", "DMZ 평화의 길"))
+                .andExpect(status().isCreated());
+
+        JsonNode stats = body(mockMvc.perform(get("/api/walks/stats/weekly")
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk()));
+
+        JsonNode top = stats.path("topPlaces");
+        assertThat(top).hasSize(2);
+        assertThat(top.get(0).path("place").path("title").asText())
+                .as("많이 간 곳이 먼저다")
+                .isEqualTo("서울숲");
+        assertThat(top.get(0).path("count").asInt()).isEqualTo(2);
+        assertThat(top.get(1).path("place").path("source").asText()).isEqualTo("trail");
+        assertThat(top.get(1).path("count").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("손으로 적은 이름은 기록에 남되 자주 가는 곳에는 안 들어간다 — PlaceRef 를 만들 수 없다")
+    void keepsAFreeTypedNameOutOfTheCounts() throws Exception {
+        Account me = account("손입력");
+        long dogId = dog(me, "보리");
+
+        JsonNode saved = body(save(me, walkAtPlace(dogId, thisWeekMondayOnePm(), null, null, "우리 아파트 뒷길"))
+                .andExpect(status().isCreated()));
+        assertThat(saved.path("place").path("title").asText()).isEqualTo("우리 아파트 뒷길");
+        assertThat(saved.path("place").path("source").isNull())
+                .as("카탈로그에 없는 곳이라 출처가 없다")
+                .isTrue();
+
+        JsonNode stats = body(mockMvc.perform(get("/api/walks/stats/weekly")
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk()));
+        assertThat(stats.path("topPlaces")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("출처만 보내면 400 — 반쪽짜리 참조는 있는 척한다")
+    void rejectsHalfAPlaceRef() throws Exception {
+        Account me = account("반쪽");
+        long dogId = dog(me, "보리");
+
+        save(me, walkAtPlace(dogId, thisWeekMondayOnePm(), "kto", null, "서울숲"))
+                .andExpect(status().isBadRequest());
+        save(me, walkAtPlace(dogId, thisWeekMondayOnePm(), null, "2733967", "서울숲"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("장소를 안 붙이면 place 가 null 이다 — 빈 객체를 주지 않는다")
+    void omitsThePlaceWhenThereIsNone() throws Exception {
+        Account me = account("장소없음");
+        long dogId = dog(me, "보리");
+
+        JsonNode saved = body(save(me, walkJson(dogId, thisWeekMondayOnePm(), 1000, 600))
+                .andExpect(status().isCreated()));
+        assertThat(saved.path("place").isNull()).isTrue();
     }
 
     // ─────────────── 회고 글 (#187) ───────────────

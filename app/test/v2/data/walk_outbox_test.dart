@@ -69,6 +69,7 @@ class _ScriptedRepository implements WalkRepository {
     List<int>? pathT,
     String? memo,
     String? weather,
+    WalkPlaceRef? place,
   }) async {
     saveCalls++;
     savedKeys.add(clientWalkId);

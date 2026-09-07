@@ -24,7 +24,29 @@ public record WalkResponse(
         int durationS,
         List<List<Double>> path,
         String memo,
-        String weather) {
+        String weather,
+
+        /**
+         * 어디를 걸었나 (#338). 카탈로그에서 고른 곳이면 셋 다 있고, 손으로 이름만 적었으면
+         * {@code source}·{@code contentId} 가 {@code null} 이다. 아무것도 안 붙였으면 이 필드가
+         * {@code null} 이다 — 빈 객체를 주지 않는다.
+         */
+        WalkPlace place) {
+
+    /**
+     * 계약의 {@code Walk.place}. {@code PlaceRef} 와 같은 모양이되 <b>출처와 id 가 없을 수
+     * 있다</b> — 카탈로그에 없는 곳을 손으로 적은 경우다.
+     */
+    public record WalkPlace(String source, String contentId, String title) {
+
+        /** 이름이 없으면 장소가 없는 것이다 — 출처만 있는 행은 만들지 않는다. */
+        static WalkPlace of(Walk walk) {
+            if (walk.getPlaceName() == null || walk.getPlaceName().isBlank()) {
+                return null;
+            }
+            return new WalkPlace(walk.getPlaceSource(), walk.getPlaceContentId(), walk.getPlaceName());
+        }
+    }
 
     /** 목록용 — 경로를 빼고 만든다. */
     public static WalkResponse summary(Walk walk) {
@@ -38,7 +60,8 @@ public record WalkResponse(
                 walk.getDurationS(),
                 null,
                 walk.getMemo(),
-                walk.getWeather());
+                walk.getWeather(),
+                WalkPlace.of(walk));
     }
 
     /** 상세용 — 경로를 실어 만든다. */
@@ -53,6 +76,7 @@ public record WalkResponse(
                 walk.getDurationS(),
                 WalkPath.toPoints(walk.getPath()),
                 walk.getMemo(),
-                walk.getWeather());
+                walk.getWeather(),
+                WalkPlace.of(walk));
     }
 }

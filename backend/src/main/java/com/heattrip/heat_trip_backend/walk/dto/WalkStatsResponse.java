@@ -19,8 +19,10 @@ import java.util.List;
  * @param walkCount 이번 주 산책 <b>건수</b>다. "산책한 날 수" 가 아니다 — 하루에 두 번
  *                  걸으면 2 다. 예전 더미 화면은 {@code weekKm} 에서 0 이 아닌 요일을 세어
  *                  날 수를 보여 줬다
- * @param topPlaces <b>지금은 항상 빈 배열이다.</b> {@code walk} 에 장소 축이 없어 셀 근거가
- *                  없다. 그럴듯한 값을 만들어 넣으면 화면이 거짓말을 한다
+ * @param topPlaces 자주 간 곳 상위 다섯, 전체 기간, {@code count} 내림차순 (#338).
+ *                  <b>카탈로그에서 고른 곳만 센다</b> — 손으로 적은 이름은 계약의
+ *                  {@link PlaceRef} 를 만들 수 없어(출처·id 가 없다) 여기 안 들어간다.
+ *                  기록 카드에는 그 이름이 그대로 보인다
  */
 public record WalkStatsResponse(
         LocalDate weekStart,
@@ -35,11 +37,12 @@ public record WalkStatsResponse(
         List<TopPlace> topPlaces) {
 
     /**
-     * 계약의 {@code WalkStats.topPlaces[]}. 채워지는 날까지 이 record 는 쓰이지 않는다.
+     * 계약의 {@code WalkStats.topPlaces[]}.
      *
      * <p>{@code place} 가 문자열이 아니라 {@link PlaceRef} 인 것은 #209 {@code Walks-low-1} 이
      * 고친 것이다 — 이름만 주면 {@code Place.contentId} 와 이어지지 않아 화면이 그 장소로
-     * 갈 수 없다. 항상 빈 배열인 지금이 모양을 바꾸는 데 비용이 0 인 유일한 시점이었다.
+     * 갈 수 없다. 항상 빈 배열이던 그때가 모양을 바꾸는 데 비용이 0 인 유일한 시점이었고,
+     * #338 이 그 모양 그대로 값을 채웠다.
      */
     public record TopPlace(PlaceRef place, int count) {
     }

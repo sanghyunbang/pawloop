@@ -79,7 +79,9 @@ import java.time.ZoneOffset;
         name = "walk",
         indexes = {
                 @Index(name = "idx_walk_dog", columnList = "dog_id, started_at"),
-                @Index(name = "idx_walk_dog_created", columnList = "dog_id, created_at, id")
+                @Index(name = "idx_walk_dog_created", columnList = "dog_id, created_at, id"),
+                // "자주 가는 곳" 은 이 둘로 묶어 센다(#338).
+                @Index(name = "idx_walk_place", columnList = "place_source, place_content_id")
         },
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_walk_client", columnNames = {"dog_id", "client_walk_id"}))
@@ -171,6 +173,30 @@ public class Walk {
 
     @Column(name = "weather", length = 30)
     private String weather;
+
+    /**
+     * 어디를 걸었나 — 카탈로그에서 고른 장소의 출처({@code kto}·{@code vet}·{@code shop}·
+     * {@code trail}). 손으로 이름만 적었으면 {@code null} 이다 (#338).
+     *
+     * <p>{@code place_catalog} 에 FK 를 걸지 않는다. 그 표는 공공데이터를 월 1회 통째로
+     * 갈아 끼우므로, FK 를 걸면 적재가 남의 기록에 막히거나 적재 뒤 참조가 깨진다. 장소가
+     * 카탈로그에서 사라져도 <b>그날 거기를 걸었다는 사실은 남아야 한다</b> — 그래서 값을
+     * 베껴 둔다(스냅숏).
+     */
+    @Column(name = "place_source", length = 16)
+    private String placeSource;
+
+    /** 카탈로그의 {@code contentId}. 출처와 짝이다 — 둘 다 있거나 둘 다 없다. */
+    @Column(name = "place_content_id", length = 64)
+    private String placeContentId;
+
+    /**
+     * 화면에 그대로 나가는 이름. <b>이것만 있을 수 있다</b> — 카탈로그에 없는 곳을 손으로
+     * 적은 경우다. 그때는 통계의 "자주 가는 곳" 에 안 들어간다(계약의 {@code PlaceRef} 가
+     * 출처와 id 를 요구한다).
+     */
+    @Column(name = "place_name", length = 120)
+    private String placeName;
 
     /**
      * <b>UTC</b>, 서버가 찍는다. <b>목록 커서의 기준이다.</b>

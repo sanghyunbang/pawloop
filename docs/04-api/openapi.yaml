@@ -3341,6 +3341,23 @@ components:
             maxItems: 2
           example: [[127.0374, 37.5445], [127.0402, 37.5455]]
         memo: { type: [string, "null"] }
+        place:
+          description: |
+            어디를 걸었나 (#338). 지도에서 "여기서 산책 시작" 으로 시작했거나 저장 화면에서
+            장소를 고르면 `source`·`contentId`·`title` 셋이 다 옵니다. 카탈로그에 없는 곳을
+            손으로 적었으면 **`source` 와 `contentId` 가 `null`** 이고 `title` 만 있습니다.
+            아무것도 안 붙였으면 이 필드가 `null` 입니다 — 빈 객체를 주지 않습니다.
+
+            값은 저장할 때 **베껴 둔 스냅숏**입니다. 카탈로그에서 그 장소가 사라져도
+            "그날 거기를 걸었다" 는 남습니다.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [title]
+              properties:
+                source: { type: [string, "null"], enum: [kto, vet, shop, trail, null], example: kto }
+                contentId: { type: [string, "null"], example: "2733967" }
+                title: { type: string, maxLength: 120, example: "서울숲" }
         weather:
           type: [string, "null"]
           example: "맑음 24°C"
@@ -3453,6 +3470,26 @@ components:
           items: { type: integer, minimum: 0 }
           example: [0, 3, 7]
         memo: { type: string, maxLength: 500 }
+        placeSource:
+          type: string
+          enum: [kto, vet, shop, trail]
+          description: |
+            어디를 걸었나 — 카탈로그 장소의 출처 (#338). `placeContentId` 와 **짝입니다**:
+            하나만 보내면 400 입니다. 반쪽짜리 참조는 이름만 있는 것과 같으면서 있는 척합니다.
+          example: kto
+        placeContentId:
+          type: string
+          maxLength: 64
+          description: 카탈로그의 `contentId`. `placeSource` 와 함께 보냅니다.
+          example: "2733967"
+        placeName:
+          type: string
+          maxLength: 120
+          description: |
+            화면에 나갈 이름. 카탈로그에 없는 곳은 **이것만** 보냅니다(그때는 통계의
+            "자주 가는 곳" 에 안 들어갑니다). 이름이 비어 있으면 출처와 id 도 버립니다 —
+            이름 없는 참조는 그릴 것이 없습니다.
+          example: "서울숲"
         weather:
           type: string
           maxLength: 30
@@ -3506,11 +3543,14 @@ components:
         topPlaces:
           type: array
           description: |
-            자주 간 곳 상위 **5개**, `count` 내림차순.
+            자주 간 곳 상위 **5개**, `count` 내림차순. **전체 기간**입니다(#338).
 
-            **지금은 항상 빈 배열입니다.** `Walk` 에 장소 축이 없어서 셀 근거가 없습니다.
-            산책과 장소를 잇는 결정이 나오기 전까지 채우지 않습니다 — 그럴듯한 값을 만들어
-            넣으면 화면이 거짓말을 합니다.
+            **카탈로그에서 고른 곳만 셉니다.** 저장 화면에서 이름을 손으로 적으면 `Walk.place`
+            에는 남지만 여기에는 안 들어갑니다 — `PlaceRef` 가 `source`·`contentId` 를
+            요구하고, 그것이 없으면 화면이 그 장소로 갈 수 없기 때문입니다.
+
+            묶는 기준은 이름이 아니라 `(source, contentId)` 입니다. 카탈로그가 갱신되며 이름이
+            바뀌어도 한 줄로 셉니다.
 
             항목의 `place` 가 문자열이 아니라 `PlaceRef` 인 것은 #209 `Walks-low-1` 이 고친
             것입니다 — 이름만 주면 `Place.contentId` 와 이어지지 않아 화면이 그 장소로 갈 수

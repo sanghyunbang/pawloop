@@ -89,6 +89,9 @@ erDiagram
         VARCHAR    memo
         VARCHAR    weather
         VARCHAR    client_walk_id "재전송 멱등키. dog+client UNIQUE"
+        VARCHAR    place_source "kto|vet|shop|trail. FK 없음 - 스냅숏 (#338)"
+        VARCHAR    place_content_id "카탈로그 contentId. source 와 짝"
+        VARCHAR    place_name "화면에 나갈 이름. 손으로 적으면 이것만"
         DATETIME   created_at   "서버 시각 - 목록 커서의 기준"
     }
 

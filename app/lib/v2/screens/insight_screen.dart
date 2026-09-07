@@ -5,6 +5,7 @@ import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../data/walk_feed.dart';
+import '../data/walk_repository.dart';
 import '../widgets/profile_avatar.dart';
 
 /// 산책 통계 (insight) — 이번 주 요약 + 주간 거리 막대그래프 + 자주 가는 곳.
@@ -77,14 +78,12 @@ class _InsightScreenState extends State<InsightScreen> {
   /// 예전에는 `kWalkTodayIdx = 6` 이라는 상수였다 — 무슨 요일이든 강조가 일요일에 찍혔다.
   int get _todayIndex => WalkFeedData.todayIndex;
 
-  /// 자주 간 곳 상위.
+  /// 자주 간 곳 상위 — 서버가 센 값이다 (#338).
   ///
-  /// **항상 비어 있다.** 계약의 `WalkStats.topPlaces` 도 그렇고, 이유가 같다 — `Walk` 에
-  /// 장소 축이 없어서 셀 근거가 없다. 예전에는 더미 `kWalks` 의 `place` 문자열을 세고
-  /// 있었고, 그건 사용자가 실제로 간 곳이 아니었다.
-  ///
-  /// 그럴듯한 값을 만들어 넣는 대신 화면이 "아직 없다" 를 말한다.
-  List<MapEntry<String, int>> get _topPlaces => const [];
+  /// **카탈로그에서 고른 곳만 들어온다.** 저장 화면에서 이름을 손으로 적으면 그 기록에는
+  /// 남지만 여기에는 안 온다 — 서버가 계약의 `PlaceRef`(출처·id)를 만들 수 없어서다.
+  /// 예전에는 더미 `kWalks` 의 문자열을 세고 있었고, 그건 사용자가 간 곳이 아니었다.
+  List<WalkTopPlace> get _topPlaces => _data.stats.topPlaces;
 
   Widget _gradNum(String v, {double size = 21}) => ShaderMask(
     shaderCallback: (r) => _warm.createShader(r),
@@ -496,17 +495,17 @@ class _InsightScreenState extends State<InsightScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          // 지금은 늘 비어 있다(`_topPlaces`). 빈 카드로 두면 고장처럼 보인다(#332).
+          // 비어 있으면 빈 카드로 두지 않고 무엇을 하면 쌓이는지 말한다(#332 · #338).
           if (top.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 10),
               child: Text(
-                '아직 없어요 · 산책에 장소가 붙으면 여기 쌓여요',
+                '아직 없어요 · 산책을 저장할 때 장소를 고르면 여기 쌓여요',
                 style: TextStyle(fontSize: 12.5, color: T.textMuted),
               ),
             ),
           for (int i = 0; i < top.length; i++)
-            _placeRow(i + 1, top[i].key, top[i].value, i < top.length - 1),
+            _placeRow(i + 1, top[i].place.title, top[i].count, i < top.length - 1),
         ],
       ),
     );

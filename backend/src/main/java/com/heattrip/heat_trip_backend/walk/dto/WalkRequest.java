@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.walk.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
@@ -61,5 +62,29 @@ public record WalkRequest(
         String memo,
 
         @Size(max = 30, message = "날씨는 30자를 넘을 수 없습니다.")
-        String weather) {
+        String weather,
+
+        /**
+         * 어디를 걸었나 — 카탈로그 장소의 출처. {@code kto}·{@code vet}·{@code shop}·
+         * {@code trail} 넷 중 하나이거나 없다 (#338).
+         *
+         * <p>{@link #placeContentId} 와 <b>짝이다.</b> 하나만 보내면 400 이다 — 반쪽짜리
+         * 참조는 화면이 그 장소로 갈 수 없어 이름만 있는 것과 같으면서, 있는 척한다.
+         */
+        @Pattern(regexp = "kto|vet|shop|trail", message = "장소 출처는 kto·vet·shop·trail 중 하나여야 합니다.")
+        String placeSource,
+
+        @Size(max = 64, message = "장소 식별자는 64자를 넘을 수 없습니다.")
+        String placeContentId,
+
+        /** 화면에 나갈 이름. 카탈로그에 없는 곳은 이것만 보낸다. */
+        @Size(max = 120, message = "장소 이름은 120자를 넘을 수 없습니다.")
+        String placeName) {
+
+    /** 출처와 id 는 둘 다 있거나 둘 다 없어야 한다. */
+    public boolean hasHalfPlaceRef() {
+        boolean source = placeSource != null && !placeSource.isBlank();
+        boolean contentId = placeContentId != null && !placeContentId.isBlank();
+        return source != contentId;
+    }
 }
