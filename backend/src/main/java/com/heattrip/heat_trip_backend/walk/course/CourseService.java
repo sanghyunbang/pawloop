@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.walk.course;
 
+import com.heattrip.heat_trip_backend.walk.CourseAttachment;
 import com.heattrip.heat_trip_backend.walk.entity.Walk;
 import com.heattrip.heat_trip_backend.walk.repository.WalkRepository;
 import com.heattrip.heat_trip_backend.walk.service.WalkPath;
@@ -12,8 +13,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -30,7 +35,7 @@ import java.util.Set;
  */
 @Service
 @RequiredArgsConstructor
-public class CourseService {
+public class CourseService implements CourseAttachment {
 
     /** 목록 한 장의 크기. 코스는 한 사람이 수십 개를 만들 것이라 커서를 두지 않는다. */
     private static final int MINE_LIMIT = 100;
@@ -127,6 +132,41 @@ public class CourseService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "그 코스를 찾을 수 없습니다."));
         courses.delete(course);
+    }
+
+    // ─────────────────── 밖으로 내놓는 표면 (CourseAttachment) ───────────────────
+
+    /** 카드에 싣는 점의 상한. 카드 크기의 그림에는 이만큼이면 충분하다. */
+    private static final int CARD_POINTS = 40;
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<AttachedCourse> forAttaching(long courseId, long userId) {
+        return courses.findById(courseId)
+                .filter(course -> course.getUserId() == userId)
+                .filter(Course::isPublic)
+                .map(CourseService::toCard);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, AttachedCourse> cards(Collection<Long> courseIds) {
+        if (courseIds == null || courseIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, AttachedCourse> out = new LinkedHashMap<>();
+        for (Course course : courses.findPublicByIds(courseIds)) {
+            out.put(course.getId(), toCard(course));
+        }
+        return out;
+    }
+
+    private static AttachedCourse toCard(Course course) {
+        return new AttachedCourse(
+                course.getId(),
+                course.getName(),
+                course.getDistanceM(),
+                CoursePath.simplify(WalkPath.toPoints(course.getPath()), CARD_POINTS));
     }
 
     private static String joinTags(List<String> tags) {

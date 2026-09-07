@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/date_label.dart';
 import '../data/community_repository.dart';
+import '../widgets/post_course_card.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
@@ -570,6 +571,11 @@ class _FeedScreenState extends State<FeedScreen> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: 13.5, height: 1.5, color: Color(0xCC463C64))),
+          // 붙은 코스가 있으면 그림 한 장 (#339). 비공개로 되돌렸거나 지웠으면 안 온다.
+          if (post.course != null) ...[
+            const SizedBox(height: 12),
+            PostCourseCard(course: post.course!),
+          ],
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (final reaction in CommunityReaction.values)

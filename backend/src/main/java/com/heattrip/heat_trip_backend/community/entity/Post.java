@@ -130,6 +130,19 @@ public class Post {
     private String loc;
 
     /**
+     * 붙어 있는 코스 (#339). 없으면 {@code null} 이다.
+     *
+     * <p><b>연관이 아니라 값</b>이다. {@code course} 는 {@code walk} 모듈의 하위 패키지라
+     * 여기서 엔티티로 들고 있으면 모듈 경계를 넘는다. 필요한 값은 {@code walk.CourseAttachment}
+     * 가 준다.
+     *
+     * <p>DB 에는 FK 가 있고 <b>{@code ON DELETE SET NULL}</b> 이다 — 코스를 지우면 그림만
+     * 빠지고 글은 남는다.
+     */
+    @Column(name = "course_id")
+    private Long courseId;
+
+    /**
      * 작성 시점 닉네임 스냅샷. <b>응답에는 안 싣는다</b> — 클래스 javadoc 참조.
      *
      * <p><b>폭은 {@code users.nickname} 과 같은 255 다.</b> #169 는 50 으로 좁혔는데, 그러면
@@ -223,5 +236,21 @@ public class Post {
             updatedAt = CommunityTime.nowUtc();
         }
         return changed;
+    }
+
+    /**
+     * 붙은 코스를 바꾼다 (#339). {@code null} 은 <b>"떼어 낸다"</b> 이다 — 본문 셋의
+     * "안 바꿈" 과 규칙이 다르다. 코스를 떼는 방법이 달리 없기 때문이고, 호출부는 요청에
+     * {@code courseId} 키가 왔는지로 그 둘을 가른다.
+     *
+     * @return 바뀌었으면 {@code true}
+     */
+    public boolean attachCourse(Long newCourseId) {
+        if (java.util.Objects.equals(courseId, newCourseId)) {
+            return false;
+        }
+        courseId = newCourseId;
+        updatedAt = CommunityTime.nowUtc();
+        return true;
     }
 }

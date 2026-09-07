@@ -231,6 +231,140 @@ class CourseIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    // ─────────────── 글에 붙이기 (#339) ───────────────
+
+    @Test
+    @DisplayName("공개 코스를 글에 붙이면 카드에 이름과 줄인 선이 온다 — 이웃도 본다")
+    void attachesAPublicCourseToAPost() throws Exception {
+        Account me = account("글쓴이");
+        Account neighbour = account("이웃글");
+        long courseId = publicCourse(me, "서울숲 한 바퀴");
+
+        JsonNode created = body(mockMvc.perform(post("/api/community/posts")
+                        .header("Authorization", "Bearer " + me.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"board":"walk_review","title":"이 길 좋아요","body":"그늘이 많아요","courseId":%d}
+                                """.formatted(courseId)))
+                .andExpect(status().isCreated()));
+
+        assertThat(created.path("course").path("name").asText()).isEqualTo("서울숲 한 바퀴");
+        assertThat(created.path("course").path("distanceM").asInt()).isBetween(380, 420);
+        int points = created.path("course").path("path").size();
+        assertThat(points)
+                .as("카드에 그릴 만큼만 — 40점 이하로 줄여 보낸다")
+                .isBetween(2, 40);
+
+        long postId = created.path("id").asLong();
+        JsonNode seen = body(mockMvc.perform(get("/api/community/posts/{id}", postId)
+                        .header("Authorization", "Bearer " + neighbour.token()))
+                .andExpect(status().isOk()));
+        assertThat(seen.path("course").path("id").asLong()).isEqualTo(courseId);
+    }
+
+    @Test
+    @DisplayName("비공개 코스는 못 붙인다 — 남들에게 빈 자리로 보이기 전에 막는다")
+    void refusesAPrivateCourse() throws Exception {
+        Account me = account("비공개붙임");
+        long dogId = dog(me, "보리");
+        long walkId = walk(me, dogId, 61, 10);
+        long courseId = body(saveCourse(me, """
+                {"walkId":%d,"name":"나만의 길"}
+                """.formatted(walkId)).andExpect(status().isCreated())).path("id").asLong();
+
+        String error = mockMvc.perform(post("/api/community/posts")
+                        .header("Authorization", "Bearer " + me.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"board":"walk_review","title":"비공개","body":"본문","courseId":%d}
+                                """.formatted(courseId)))
+                .andExpect(status().isBadRequest())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(error).contains("공개로 바꾼 뒤");
+    }
+
+    @Test
+    @DisplayName("남의 코스는 공개되어 있어도 못 붙인다 — 내 것만 붙는다")
+    void refusesAnotherPersonsCourse() throws Exception {
+        Account owner = account("코스주인");
+        Account other = account("남의붙임");
+        long courseId = publicCourse(owner, "남의 길");
+
+        mockMvc.perform(post("/api/community/posts")
+                        .header("Authorization", "Bearer " + other.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"board":"walk_review","title":"남의 코스","body":"본문","courseId":%d}
+                                """.formatted(courseId)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("붙였다 뗐다 한다 — 떼도 코스 자체는 남는다")
+    void attachesAndDetaches() throws Exception {
+        Account me = account("붙였다뗌");
+        long courseId = publicCourse(me, "왔다갔다 길");
+        long postId = body(mockMvc.perform(post("/api/community/posts")
+                        .header("Authorization", "Bearer " + me.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"board":"walk_review","title":"나중에 붙일게요","body":"본문"}
+                                """))
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        JsonNode attached = body(mockMvc.perform(put("/api/community/posts/{id}/course", postId)
+                        .header("Authorization", "Bearer " + me.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"courseId\":%d}".formatted(courseId)))
+                .andExpect(status().isOk()));
+        assertThat(attached.path("course").path("id").asLong()).isEqualTo(courseId);
+
+        JsonNode detached = body(mockMvc.perform(delete("/api/community/posts/{id}/course", postId)
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk()));
+        assertThat(detached.path("course").isNull()).isTrue();
+
+        mockMvc.perform(get("/api/courses/{id}", courseId)
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("붙인 뒤 비공개로 되돌리면 글에서도 그림이 사라진다 — 글쓴이에게도 그렇다")
+    void hidesTheCardWhenTheCourseGoesPrivate() throws Exception {
+        Account me = account("되돌림");
+        long courseId = publicCourse(me, "잠깐 공개한 길");
+        long postId = body(mockMvc.perform(post("/api/community/posts")
+                        .header("Authorization", "Bearer " + me.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"board":"walk_review","title":"공개했다가","body":"본문","courseId":%d}
+                                """.formatted(courseId)))
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        mockMvc.perform(put("/api/courses/{id}/visibility", courseId)
+                        .header("Authorization", "Bearer " + me.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visibility\":\"private\"}"))
+                .andExpect(status().isOk());
+
+        JsonNode after = body(mockMvc.perform(get("/api/community/posts/{id}", postId)
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk()));
+        assertThat(after.path("course").isNull())
+                .as("비공개로 되돌린 사람의 뜻이 그것이다")
+                .isTrue();
+    }
+
+    /** 공개 코스 하나를 만들어 id 를 준다. */
+    private long publicCourse(Account account, String name) throws Exception {
+        long dogId = dog(account, "보리");
+        long walkId = walk(account, dogId, 61, 10);
+        return body(saveCourse(account, """
+                {"walkId":%d,"name":"%s","visibility":"public"}
+                """.formatted(walkId, name)).andExpect(status().isCreated())).path("id").asLong();
+    }
+
     // ─────────────────────────── 지그 ───────────────────────────
 
     /** 동쪽으로 {@code stepM}m 씩 {@code count} 개. 위도 37.5 에서 경도 1도는 약 88,000m 다. */

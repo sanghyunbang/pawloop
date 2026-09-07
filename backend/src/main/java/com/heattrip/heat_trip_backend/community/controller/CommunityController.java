@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -160,6 +161,38 @@ public class CommunityController {
                                    @PathVariable long postId,
                                    @Valid @RequestBody PostPatchRequest request) {
         return community.updatePost(me, postId, request);
+    }
+
+    /**
+     * 글에 코스를 붙인다 — 이슈 #339. 이미 붙어 있으면 갈아 끼운다.
+     *
+     * <p>붙일 수 있는 것은 <b>내 것이면서 공개된 코스</b>뿐이다. 비공개를 붙이면 남들에게는
+     * 빈 자리로 보이므로 400 으로 막고, 서버가 몰래 공개로 바꾸지 않는다 — 공개는 사용자가
+     * 하는 일이다.
+     *
+     * <p>PATCH 본문에 넣지 않은 이유: JSON 은 "키가 없음" 과 {@code null} 을 record 에서
+     * 구분해 주지 않는다. 그러면 "안 바꿈" 과 "떼어 냄" 이 같은 모양이 된다. 그래서 붙이기와
+     * 떼기를 별도 오퍼레이션으로 뒀다({@code PUT /api/walks/&#123;id&#125;/memo} 와 같은 모양).
+     *
+     * <p>rate limit 은 {@code community-write} 버킷이다 — 글 쓰기와 같은 성격이다.
+     */
+    @PutMapping("/posts/{postId}/course")
+    public PostResponse attachCourse(@CurrentUser User me,
+                                     @PathVariable long postId,
+                                     @Valid @RequestBody PostCourseRequest request) {
+        return community.attachCourse(me, postId, request.courseId());
+    }
+
+    /** 붙은 코스를 뗀다 — 이슈 #339. 코스 자체는 그대로다. */
+    @DeleteMapping("/posts/{postId}/course")
+    public PostResponse detachCourse(@CurrentUser User me, @PathVariable long postId) {
+        return community.detachCourse(me, postId);
+    }
+
+    /** 붙일 코스 하나. */
+    public record PostCourseRequest(
+            @jakarta.validation.constraints.NotNull(message = "붙일 코스를 알려 주세요.")
+            Long courseId) {
     }
 
     /**

@@ -256,9 +256,12 @@ CREATE TABLE `post` (
   `title` varchar(200) NOT NULL,
   `handle` varchar(255) DEFAULT NULL,
   `body` text NOT NULL,
+  `course_id` bigint DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_post_board_created` (`board`,`created_at`,`id`),
   KEY `idx_post_user` (`user_id`),
+  KEY `fk_post_course` (`course_id`),
+  CONSTRAINT `fk_post_course` FOREIGN KEY (`course_id`) REFERENCES `course` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_post_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `chk_post_board` CHECK ((`board` in (_utf8mb4'walk_review',_utf8mb4'pet_place',_utf8mb4'health',_utf8mb4'free',_utf8mb4'brag')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
