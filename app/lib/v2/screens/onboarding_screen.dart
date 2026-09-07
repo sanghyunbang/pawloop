@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'neighborhood_picker_screen.dart';
 import '../widgets/pet_registration_sheet.dart';
 
 import '../data/auth_state.dart';
@@ -14,7 +16,10 @@ import '../widgets/aurora.dart';
 /// 지금은 "나중에 할래요" 로 건너뛸 수 있다 — 건너뛰기가 없으면 신규 가입자가
 /// 앱에 갇힌다(라우터가 온보딩 밖으로 나가지 못하게 막고 있다).
 class OnboardingScreen extends StatelessWidget {
-  const OnboardingScreen({super.key});
+  /// 동네 고르기를 여는 자리 (#342). **테스트만 넘긴다.**
+  final Future<void> Function(BuildContext context)? openNeighborhood;
+
+  const OnboardingScreen({super.key, this.openNeighborhood});
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +80,11 @@ class OnboardingScreen extends StatelessWidget {
                       context,
                       reason: '등록하면 산책 기록이 서버에 남아요',
                     );
+                    // 아이를 등록했으면 동네도 한 번 권한다 (#342) — 그 둘이 홈의 두 축이다.
+                    // **건너뛸 수 있다.** 여기서 막으면 구경만 하려는 사람이 갇힌다.
+                    if (registered != null && context.mounted) {
+                      await (openNeighborhood ?? _openNeighborhood)(context);
+                    }
                     // 등록했든 닫았든 온보딩은 끝난다. 닫았다면 나중에 다시 권한다.
                     if (registered != null || context.mounted) {
                       AuthState.completeOnboarding();
@@ -105,3 +115,9 @@ class OnboardingScreen extends StatelessWidget {
     );
   }
 }
+
+/// 동네 고르기를 연다. 고르든 닫든 온보딩은 이어진다 — 이 화면이 사람을 붙잡지 않는다.
+Future<void> _openNeighborhood(BuildContext context) =>
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const NeighborhoodPickerScreen()),
+    );
