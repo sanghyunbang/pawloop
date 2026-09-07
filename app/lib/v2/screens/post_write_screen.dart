@@ -28,6 +28,7 @@ import 'package:flutter/material.dart';
 import '../data/auth_state.dart';
 import '../data/community_repository.dart';
 import '../data/course_repository.dart';
+import '../data/location_upload_policy.dart';
 import '../widgets/course_picker_sheet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -290,7 +291,8 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                   _label('게시판'),
                   _boardChips(),
                   // 산책로 후기에만 붙인다 — 다른 게시판에 경로는 뜻이 흐리다(#339).
-                  if (_board == CommunityBoard.walkReview) ...[
+                  if (_board == CommunityBoard.walkReview &&
+                      LocationUploadPolicy.sharesRoutes) ...[
                     const SizedBox(height: 12),
                     _courseRow(),
                   ],

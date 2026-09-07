@@ -106,9 +106,9 @@ Pawloop은 "반려동물과 함께 걷고, 동네 반려인들과 연결되는 �
 | 장소 상세 | 마커/카드 탭 → 바텀시트(이름·카테고리·거리·요약·주소·전화·출처 배지). 산책로면 지도 뷰에서 선(`GET /api/places/trails/{courseId}/route`)을 받아 폴리라인으로 그리고 카메라를 맞춘다(#291) | |
 | 24시 병원 | 이름에 `24시`/`24시간`/`24H` 가 있으면 시트에 `24시 · 이름 기준` 배지, 병원 칩 안에 `24시` 토글(#337). **진료시간을 주는 공공 데이터가 없다** — 인허가 데이터에는 영업시간 항목이 아예 없다(조사는 #337 댓글). 그래서 확인한 척하지 않고 "이름 기준" 을 함께 적는다 | `vet_hours.dart` · `vet_badge.dart` |
 | 급할 때 | 홈의 `급할 때 · 가까운 동물병원` 한 줄 → 가까운 병원 셋과 전화 버튼(#337). 거리는 기기 안에서 잰다 — 좌표가 서버로 안 나간다(A안 #235) | `emergency_vets_sheet.dart` |
-| 코스로 남기기 | 산책 회고에서 "이 길을 코스로 남기기" → 이름·한 줄·태그 셋(목줄 규정·배변봉투통·그늘/물)·공개 여부(#339). **양 끝 100m 는 서버가 자른다** — 집 앞이 남으면 공개할 수 없다. 기본은 비공개 | `course_save_sheet.dart` · `walk/course` |
-| 이웃 코스 | 지도 산책로 칩의 `이웃 코스` 토글 — 공개 코스 한 벌을 받아 **기기에서** 가까운 20개(#339). 누르면 선과 `다시 걷기` | `explore_screen.dart` · `GET /api/courses/public` |
-| 글에 코스 붙이기 | 산책로 후기 글쓰기에서 내 **공개** 코스를 붙인다. 비공개는 "공개하고 붙이기". 비공개로 되돌리면 글에서도 사라진다(#339) | `course_picker_sheet.dart` · `walk.CourseAttachment` |
+| 코스로 남기기 | 산책 회고에서 "이 길을 코스로 남기기" → 이름·한 줄·태그 셋(목줄 규정·배변봉투통·그늘/물)·공개 여부(#339). **양 끝 100m 는 서버가 자른다** — 집 앞이 남으면 공개할 수 없다. 기본은 비공개. **공모전 빌드에서는 이 줄이 화면에 없습니다** — 코스의 선은 서버가 `walk.path` 를 베껴 만드는데, A안(#235)에서는 그 선이 올라가지 않아 서버의 모든 산책이 `path IS NULL` 입니다. `--dart-define=UPLOAD_LOCATION=true` 를 켜면 함께 돌아옵니다(`LocationUploadPolicy.sharesRoutes`). | `course_save_sheet.dart` · `walk/course` |
+| 이웃 코스 | 지도 산책로 칩의 `이웃 코스` 토글 — 공개 코스 한 벌을 받아 **기기에서** 가까운 20개(#339). 누르면 선과 `다시 걷기`. **공모전 빌드에서는 이 줄이 화면에 없습니다** — 코스의 선은 서버가 `walk.path` 를 베껴 만드는데, A안(#235)에서는 그 선이 올라가지 않아 서버의 모든 산책이 `path IS NULL` 입니다. `--dart-define=UPLOAD_LOCATION=true` 를 켜면 함께 돌아옵니다(`LocationUploadPolicy.sharesRoutes`). | `explore_screen.dart` · `GET /api/courses/public` |
+| 글에 코스 붙이기 | 산책로 후기 글쓰기에서 내 **공개** 코스를 붙인다. 비공개는 "공개하고 붙이기". 비공개로 되돌리면 글에서도 사라진다(#339). **공모전 빌드에서는 이 줄이 화면에 없습니다** — 코스의 선은 서버가 `walk.path` 를 베껴 만드는데, A안(#235)에서는 그 선이 올라가지 않아 서버의 모든 산책이 `path IS NULL` 입니다. `--dart-define=UPLOAD_LOCATION=true` 를 켜면 함께 돌아옵니다(`LocationUploadPolicy.sharesRoutes`). | `course_picker_sheet.dart` · `walk.CourseAttachment` |
 
 ### 2.1 데이터 소스
 

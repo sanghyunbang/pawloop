@@ -9,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/v2/data/course_repository.dart';
+import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/course_path.dart';
 import 'package:heat_trip_flutter/v2/screens/explore_screen.dart';
@@ -75,7 +76,13 @@ Future<void> _pump(WidgetTester tester, _Courses courses) async {
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  // 이웃 코스는 **켜진 빌드**의 기능이다 — 선이 서버에 올라가야 남의 코스가 생긴다.
+  // 꺼진 빌드에서 이 세 자리가 사라지는지는 `route_sharing_gate_test.dart` 가 잰다.
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    LocationUploadPolicy.setForTest(true);
+  });
+  tearDown(LocationUploadPolicy.resetForTest);
 
   group('가까운 순 고르기 — 기기에서', () {
     test('시작점이 가까운 것부터, limit 만큼', () {

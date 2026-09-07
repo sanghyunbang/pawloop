@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 
 import '../data/walk_feed.dart';
 import '../data/course_repository.dart';
+import '../data/location_upload_policy.dart';
 import '../data/walk_repository.dart';
 import '../widgets/course_save_sheet.dart';
 import '../theme/app_tokens.dart';
@@ -127,8 +128,11 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
                   const SizedBox(height: 16),
                   // 걸은 길을 남기는 자리 (#339). 회고 위에 둔다 — 기록을 열어 처음 드는
                   // 생각이 "이 길 좋았다" 이고, 그 다음이 "무슨 일이 있었더라" 다.
-                  _saveAsCourseCard(),
-                  const SizedBox(height: 16),
+                  // 좌표가 안 올라가는 빌드에서는 서버에 벨 선이 없다 — 자리를 안 만든다.
+                  if (LocationUploadPolicy.sharesRoutes) ...[
+                    _saveAsCourseCard(),
+                    const SizedBox(height: 16),
+                  ],
                   _memoCard(),
                 ],
               ),

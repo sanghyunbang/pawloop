@@ -99,6 +99,22 @@ class LocationUploadPolicy {
   static List<int>? pathTimesForUpload(List<int>? pathT) =>
       uploadsLocation ? pathT : null;
 
+  /// 걸은 길을 **코스로 남기고 이웃 코스를 보는** 기능이 사는가 — 이슈 #339.
+  ///
+  /// 코스의 선은 앱이 보내지 않는다. 서버가 그 산책의 `walk.path` 를 베껴 와 양 끝
+  /// 100m 를 자른다(`CourseService.create`). 그런데 [pathForUpload] 가 꺼져 있으면
+  /// **서버의 모든 산책이 `path IS NULL`** 이다 — 벨 선이 없으니 만들 코스도 없고,
+  /// 아무의 빌드도 안 올리니 지도에 그릴 이웃 코스도 없다.
+  ///
+  /// 그래서 자리를 화면에서도 없앤다. 남겨 두면 6분을 걸어 온 사람이
+  /// *"경로가 없는 기록이라 코스로 남길 수 없어요"* 를 본다 — 경로는 있었고 이 빌드가
+  /// 안 보낸 것이라, 그 말은 사용자 입장에서 거짓이다.
+  ///
+  /// `legal-lbs-compliance.md` §1.3 의 A 행이 이것을 미리 적어 뒀다 —
+  /// *"좌표를 전제한 서버 기능(경로 공유·경로 통계) 불가"*.
+  /// `--dart-define=UPLOAD_LOCATION=true` 를 켜는 날 세 자리가 함께 돌아온다.
+  static bool get sharesRoutes => uploadsLocation;
+
   /// 주변 장소를 물어도 되는가 — `GET /api/places/nearby?lat=..&lng=..`.
   ///
   /// **이 경로는 제품이 필요해서가 아니라 관광공사 서비스키를 앱에서 숨기려고 생겼다**(#40).

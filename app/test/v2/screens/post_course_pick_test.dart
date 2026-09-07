@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 import 'package:heat_trip_flutter/v2/data/course_repository.dart';
+import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/screens/post_write_screen.dart';
 
 Course _course(int id, String name, {bool isPublic = true}) => Course(
@@ -86,11 +87,16 @@ Future<void> _pump(WidgetTester t, _Community community, _Courses courses) async
 }
 
 void main() {
+  // 코스 줄은 **켜진 빌드**에만 있다(`route_sharing_gate_test.dart`).
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AuthState.signInForTest(const AuthUser(id: 3, nickname: '보리아빠'));
+    LocationUploadPolicy.setForTest(true);
   });
-  tearDown(AuthState.resetForTest);
+  tearDown(() {
+    AuthState.resetForTest();
+    LocationUploadPolicy.resetForTest();
+  });
 
   testWidgets('산책로 후기에서만 코스 줄이 보인다', (t) async {
     await _pump(t, _Community(), _Courses([_course(5, '서울숲 한 바퀴')]));
