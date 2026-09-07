@@ -24,6 +24,7 @@
 // 낼 수 있는 가장 나쁜 거짓말이다 — 그걸 보고 밥을 한 번 더 준다. 그래서 로딩·실패·
 // "가족 없음" 을 각각 다른 문구로 그린다.
 
+import '../screens/login_screen.dart';
 import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
@@ -70,6 +71,9 @@ class _TodayCareCardState extends State<TodayCareCard> {
   FamilyFailureKind? _failure;
   bool _loading = true;
 
+  /// 로그인한 적 없는 사람. 서버를 부르지 않는다(#324).
+  bool _guest = false;
+
   /// 기록을 보내는 중인 종류. 같은 칸을 두 번 눌러 두 번 보내는 것을 막는다.
   ServerCareType? _sending;
 
@@ -77,12 +81,14 @@ class _TodayCareCardState extends State<TodayCareCard> {
   void initState() {
     super.initState();
     kServerCareRev.addListener(_reload);
+    AuthState.status.addListener(_reload);
     _load();
   }
 
   @override
   void dispose() {
     kServerCareRev.removeListener(_reload);
+    AuthState.status.removeListener(_reload);
     super.dispose();
   }
 
@@ -95,6 +101,16 @@ class _TodayCareCardState extends State<TodayCareCard> {
       _loading = true;
       _failure = null;
     });
+    if (AuthState.isGuest) {
+      // 게스트는 가족이 없는 게 아니라 아직 계정이 없다. 401 을 받아 "다시 로그인" 이라고
+      // 말하는 대신 여기서 멈춘다(#324).
+      setState(() {
+        _guest = true;
+        _loading = false;
+      });
+      return;
+    }
+    _guest = false;
     try {
       final group = _group ?? await _repo.myGroup();
       final logs = await _repo.careLogs(group.id);
@@ -306,6 +322,27 @@ class _TodayCareCardState extends State<TodayCareCard> {
       );
     }
 
+    if (_guest) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(children: [
+          const Icon(Icons.login_rounded, size: 16, color: T.textMuted),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text('로그인하면 가족과 오늘의 케어를 나눠요',
+                style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const LoginScreen())),
+            behavior: HitTestBehavior.opaque,
+            child: const Text('로그인',
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+          ),
+        ]),
+      );
+    }
     final failure = _failure;
     if (failure != null) {
       // 빈 카드로 그리지 않는다 — "아무도 아무것도 안 했다" 로 읽히고, 그걸 보고

@@ -1,3 +1,5 @@
+import 'login_screen.dart';
+import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
 
 import '../data/chat_repository.dart';
@@ -36,7 +38,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void initState() {
     super.initState();
+    AuthState.status.addListener(_onAuth);
     _load();
+  }
+
+  @override
+  void dispose() {
+    AuthState.status.removeListener(_onAuth);
+    super.dispose();
+  }
+
+  void _onAuth() {
+    if (mounted) _load();
   }
 
   Future<void> _load() async {
@@ -44,6 +57,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
       _loading = true;
       _failure = null;
     });
+    if (AuthState.isGuest) {
+      // 게스트는 방이 없는 게 아니라 계정이 없다. 서버를 부르지 않는다(#324).
+      setState(() {
+        _failure = ChatFailure(ChatFailureKind.unauthorized,
+            ChatFailure.messageFor(ChatFailureKind.unauthorized));
+        _loading = false;
+      });
+      return;
+    }
     try {
       final rooms = await _repo.rooms();
       if (!mounted) return;
@@ -85,8 +107,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
                 const SizedBox(height: 16),
                 ..._body(),
-                const SizedBox(height: 4),
-                _actions(context),
+                // 로그인 전에는 가족 관리·초대 참여를 보여 주지 않는다 — 눌러도 안 되는 항목이다(#324).
+                if (_failure?.kind != ChatFailureKind.unauthorized) ...[
+                  const SizedBox(height: 4),
+                  _actions(context),
+                ],
               ],
             ),
           ),
@@ -132,8 +157,21 @@ class _ChatListScreenState extends State<ChatListScreen> {
         Text(failure.message,
             style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
         const SizedBox(height: 12),
-        // 세션이 끝난 것은 다시 눌러도 안 된다. 라우터가 로그인으로 보낸다.
-        if (failure.kind != ChatFailureKind.unauthorized)
+        // 로그인이 필요한 것은 다시 눌러도 안 된다 — 로그인 버튼을 준다(#324).
+        if (failure.kind == ChatFailureKind.unauthorized)
+          GestureDetector(
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const LoginScreen())),
+            behavior: HitTestBehavior.opaque,
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.login_rounded, size: 17, color: Color(0xFFE07A4E)),
+              SizedBox(width: 6),
+              Text('로그인',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+            ]),
+          )
+        else
           GestureDetector(
             onTap: _load,
             behavior: HitTestBehavior.opaque,
