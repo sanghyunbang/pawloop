@@ -3856,8 +3856,8 @@ components:
         3. **이 값이 DB 컬럼에 들어갑니다.** 표시 문구를 저장하면 게시판 이름을 다듬는 날
            **쌓인 행을 전부 고쳐야** 합니다. 값과 문구를 갈라 두면 문구만 바꿉니다.
 
-        `CareType` 이 이미 같은 모양입니다 — `water|meal|walk|med|vet` 이고 "물/밥/산책/투약/병원"
-        은 앱이 붙입니다.
+        `CareType` 이 이미 같은 모양입니다 — `water|meal|walk|med|vet|poop|pee` 이고
+        "물/밥/산책/투약/병원/배변/마킹" 은 앱이 붙입니다.
 
     ReactionType:
       type: string
@@ -4117,8 +4117,13 @@ components:
 
     CareType:
       type: string
-      enum: [water, meal, walk, med, vet]
-      description: 물 갈아주기/밥/산책/약/병원
+      enum: [water, meal, walk, med, vet, poop, pee]
+      description: |
+        물 갈아주기/밥/산책/약/병원, 그리고 배변·마킹(#340).
+
+        앞의 다섯은 집에서 하는 일이고, `poop`·`pee` 는 **산책 중에** 트래킹 화면에서
+        한 탭으로 들어옵니다. **어디서 눴는지는 안 올라옵니다** — 위치는 기기에만 남습니다
+        (A안 #235). `CareLogInput` 에 좌표 필드가 없는 것이 그 약속입니다.
 
     CareDoer:
       type: object

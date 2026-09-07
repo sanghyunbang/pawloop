@@ -85,7 +85,7 @@ class CareContractSpecTest {
     }
 
     @Test
-    @DisplayName("CareType 의 다섯 값이 계약·enum·DB CHECK 에서 같은 문자열이다")
+    @DisplayName("CareType 의 일곱 값이 계약·enum·DB CHECK 에서 같은 문자열이다")
     void careTypeHasOneSpelling() {
         List<String> fromContract = (List<String>) schema("CareType").get("enum");
         List<String> fromCode = Arrays.stream(CareType.values()).map(CareType::wire).toList();
@@ -98,7 +98,11 @@ class CareContractSpecTest {
                         @Enumerated(STRING) 을 쓰면 이 단언이 빨간불이다.""")
                 .isEqualTo(fromCode);
 
-        String migration = readRepositoryFile("mysql/post-start/08_care_log.sql");
+        // CHECK 의 정본이 두 파일에 걸쳐 있다 — 08 이 다섯을 만들고 29 가 poop·pee 를 더한다(#340).
+        // 그래서 "어느 한 스크립트에는 있다" 로 잰다. 08 에만 대면 새 값이 영원히 빨간불이고,
+        // 29 에만 대면 옛 다섯이 검사에서 빠진다.
+        String migration = readRepositoryFile("mysql/post-start/08_care_log.sql")
+                + readRepositoryFile("mysql/post-start/29_care_type_poop.sql");
         for (String value : fromCode) {
             assertThat(migration)
                     .as("DB CHECK 가 마지막 방어선이다 (📌 #86 원칙 5) — '%s' 가 빠져 있다", value)
@@ -123,7 +127,7 @@ class CareContractSpecTest {
     }
 
     @Test
-    @DisplayName("CareLogInput 에 dogId·occurredAt·doneBy 가 없고 type 만 필수다")
+    @DisplayName("CareLogInput 에 dogId·occurredAt·doneBy·위치가 없고 type 만 필수다")
     void careLogInput_letsTheServerDecideWhoAndWhen() {
         Map<String, Object> input = schema("CareLogInput");
 
@@ -133,7 +137,9 @@ class CareContractSpecTest {
                         id 를 저장하면 아무도 해석 못 하는 값이 남고, 필수로 두면 앱이 더미 id 를 \
                         지어내야 한다.
                         occurredAt·doneBy 는 서버가 정한다 — 그 둘이 '오늘 누가 했는지' 를 가르는 \
-                        기준이라 클라이언트가 정하면 남의 화면에 없던 기록을 만들어 넣을 수 있다.""")
+                        기준이라 클라이언트가 정하면 남의 화면에 없던 기록을 만들어 넣을 수 있다.
+                        위치도 없다 — 배변·마킹(#340)은 산책 중에 눌리지만 어디서 눴는지는 \
+                        기기에만 남는다(A안 #235). 이 목록에 좌표 키가 생기면 그 약속이 깨진다.""")
                 .containsExactly("type", "memo");
         assertThat((List<String>) input.get("required")).containsExactly("type");
     }

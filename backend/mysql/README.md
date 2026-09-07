@@ -53,6 +53,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\26_walk_place.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\27_course.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\28_post_course.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\29_care_type_poop.sql
 ```
 
 | 파일 | 무엇을 |
@@ -85,6 +86,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `26_walk_place.sql` | `walk` 에 **장소 축** 셋을 더합니다 — #338. `place_source varchar(16)` · `place_content_id varchar(64)` · `place_name varchar(120)` 전부 NULL 허용, 인덱스 `idx_walk_place (place_source, place_content_id)`. `place_catalog` 에 FK 를 걸지 않습니다 — 그 표는 월 1회 통째로 갈아 끼우므로 FK 가 적재를 막거나 적재 뒤 참조가 깨집니다. 장소가 사라져도 "그날 거기를 걸었다" 는 남아야 해서 값을 베껴 둡니다. 이미 있으면 지나가고, 있는데 폭이 다르면 멈춥니다. 12 뒤에, 새 코드 배포 **전**(`validate` 가 컬럼을 요구합니다). DOWN 은 헤더 주석에 있습니다 — 값을 잃습니다. |
 | `27_course.sql` | **코스** 표를 만듭니다 — #339. 내가 걸은 길 중에 "여기 좋다" 고 남긴 것으로, `walk.path` 에서 **양 끝 100m 를 잘라 낸 선**을 이름·소개·태그와 함께 둡니다. FK 둘의 규칙이 다릅니다 — `users` 는 CASCADE(탈퇴하면 그 사람의 글이 사라진다), `walk` 는 **SET NULL**(산책 기록을 지워도 코스는 남는다). 공개 범위 기본값은 `private` 이고 `CHECK` 가 두 값만 받습니다. 이미 있으면 지나가고, 있는데 컬럼이 모자라면 멈춥니다. 01·12 뒤에, 새 코드 배포 **전**(`validate` 가 표를 요구합니다). DOWN 은 `DROP TABLE course` 이고 값을 잃습니다. |
 | `28_post_course.sql` | `post` 에 **코스 연결** 컬럼 하나를 더합니다 — #339. `course_id bigint NULL` + `fk_post_course ... ON DELETE SET NULL`. **CASCADE 가 아닌 이유**: 코스 하나를 지우다 거기 붙은 글이 통째로 사라지면 안 됩니다 — 글은 사람이 쓴 문장이고 코스는 거기 붙은 그림입니다. 붙일 수 있는 코스가 "내 것이면서 공개된 것" 이라는 판정은 서버가 합니다(`walk.CourseAttachment`) — DB 는 참조만 지킵니다. 07·27 뒤에, 새 코드 배포 **전**. DOWN 은 헤더 주석에 있습니다. |
+| `29_care_type_poop.sql` | `care_log` 의 **CHECK 제약만** 넓힙니다 — #340. `ck_carelog_type` 이 `water|meal|walk|med|vet` 다섯에 더해 `poop`(배변)·`pee`(마킹)를 받습니다. 컬럼은 그대로입니다(`varchar(10)` 이라 값이 그냥 들어갑니다). **배포 전에 돌립니다** — `validate` 는 CHECK 를 안 보므로 안 돌려도 부팅은 뜨고, 대신 **첫 배변 기록이 실패합니다**. 이미 일곱 값이면 지나갑니다. 08 뒤에. DOWN 은 헤더 주석에 있고, 되돌리려면 쌓인 `poop`·`pee` 행을 먼저 지워야 합니다(안 지우면 MySQL 이 좁히는 ALTER 를 거절합니다). |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 

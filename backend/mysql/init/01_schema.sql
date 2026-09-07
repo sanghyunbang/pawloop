@@ -52,7 +52,7 @@ CREATE TABLE `care_log` (
   CONSTRAINT `fk_carelog_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_carelog_doneby` FOREIGN KEY (`done_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_carelog_group` FOREIGN KEY (`group_id`) REFERENCES `family_group` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `ck_carelog_type` CHECK ((`type` in (_utf8mb4'water',_utf8mb4'meal',_utf8mb4'walk',_utf8mb4'med',_utf8mb4'vet')))
+  CONSTRAINT `ck_carelog_type` CHECK ((`type` in (_utf8mb4'water',_utf8mb4'meal',_utf8mb4'walk',_utf8mb4'med',_utf8mb4'vet',_utf8mb4'poop',_utf8mb4'pee')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `chat_message` (

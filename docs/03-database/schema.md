@@ -337,7 +337,7 @@ CREATE TABLE post (
 > **각주 — `board` 는 왜 ASCII 인가.** 2026-09 이전 계약은 값 자체가 한글 표시 문자열이었다
 > (`"산책로 후기"` 등). 그 값이 **query 파라미터로 나가고 이 컬럼에 들어간다.** 표시 문구를
 > 저장하면 게시판 이름을 다듬는 날 **쌓인 행을 전부 고쳐야 한다.** `CareType` 이 이미 같은
-> 모양이다 — 값은 `water|meal|walk|med|vet` 이고 "물/밥/산책/투약/병원" 은 앱이 붙인다.
+> 모양이다 — 값은 `water|meal|walk|med|vet|poop|pee` 이고 "물/밥/산책/투약/병원/배변/마킹" 은 앱이 붙인다.
 >
 > `CHECK` 는 걸지 않는다. 게시판은 **제품이 늘리는 목록**이라 값이 늘 때마다 마이그레이션이
 > 따라오면 그 자체가 비용이다. 케어 종류는 다섯으로 굳었고 늘리는 날이 M4 로 못 박혀 있다.
@@ -740,7 +740,7 @@ CREATE TABLE care_log (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
   dog_id      BIGINT       NULL COMMENT '대상 반려동물(dog.id). FK 는 #154 에서 걸었다 — 값은 아직 항상 NULL 이다(쓰기 경로가 dogId 를 안 받는다, #209 Dogs-high-3)',
   group_id    BIGINT       NULL COMMENT '가족 그룹 공유(nullable — 미소속 시 개인 기록)',
-  type        VARCHAR(10)  NOT NULL COMMENT 'water|meal|walk|med|vet',
+  type        VARCHAR(10)  NOT NULL COMMENT 'water|meal|walk|med|vet|poop|pee',
   done_by     BIGINT       NULL COMMENT '수행자(users.id) — 토큰의 사용자다. 탈퇴하면 NULL 이다',
   occurred_at DATETIME(6)  NOT NULL,
   memo        VARCHAR(500) NULL,
@@ -755,7 +755,7 @@ CREATE TABLE care_log (
     REFERENCES users (id) ON DELETE SET NULL,
   CONSTRAINT fk_carelog_dog FOREIGN KEY (dog_id)
     REFERENCES dog (id) ON DELETE SET NULL,
-  CONSTRAINT ck_carelog_type CHECK (type IN ('water','meal','walk','med','vet'))
+  CONSTRAINT ck_carelog_type CHECK (type IN ('water','meal','walk','med','vet','poop','pee'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
@@ -764,7 +764,7 @@ CREATE TABLE care_log (
 | `id` | `BIGINT` | PK | |
 | `dog_id` | `BIGINT` | FK→`dog.id` nullable, **ON DELETE SET NULL**, INDEX(dog,occurred_at) | 대상 반려동물. FK 는 #154 에서 걸었다(`22_care_log_dog_fk.sql`). 값은 아직 항상 `NULL` — 아래 참조 |
 | `group_id` | `BIGINT` | FK→`family_group.id` nullable, ON DELETE SET NULL, INDEX(group,occurred_at) | 공유 대상 가족 그룹 |
-| `type` | `VARCHAR(10)` | NOT NULL, CHECK | `water`(물)/`meal`(밥)/`walk`(산책)/`med`(투약)/`vet`(병원). **소문자다** |
+| `type` | `VARCHAR(10)` | NOT NULL, CHECK | `water`(물)/`meal`(밥)/`walk`(산책)/`med`(투약)/`vet`(병원)/`poop`(배변)/`pee`(마킹). **소문자다**. 뒤의 둘은 #340 이 더했고 `29_care_type_poop.sql` 이 CHECK 를 넓힌다. **어디서 눴는지는 이 표에 없다** — 위치는 기기에만 남는다(A안 #235) |
 | `done_by` | `BIGINT` | FK→`users.id` nullable, **ON DELETE SET NULL**, INDEX | 수행자. 토큰의 사용자이지 요청 본문의 값이 아니다. 그 사람이 탈퇴하면 `NULL` — §16 의 경고와 같은 판단이다 |
 | `occurred_at` | `DATETIME(6)` | NOT NULL | 발생 시각. 서버 시계다 |
 | `memo` | `VARCHAR(500)` | NULL | 메모 |

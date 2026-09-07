@@ -214,7 +214,7 @@ class CareSchemaMigrationExecutionTest {
     }
 
     @Test
-    @DisplayName("CHECK 제약이 여섯 번째 케어 종류를 거절한다 — 애플리케이션 검증을 지나쳐도")
+    @DisplayName("CHECK 제약이 계약에 없는 케어 종류를 거절한다 — 애플리케이션 검증을 지나쳐도")
     void anUnknownCareType_isRejectedByTheDatabase() throws Exception {
         try (Fixture db = fixture()) {
             db.createParents();
@@ -226,9 +226,10 @@ class CareSchemaMigrationExecutionTest {
                     "INSERT INTO care_log (type, done_by, occurred_at, created_at) "
                             + "VALUES ('grooming', 1, NOW(6), NOW(6))"))
                     .as("""
-                            CareType 이 다섯인 것은 계약이고, 그 계약을 DB 가 마지막으로 받친다. \
+                            CareType 의 목록이 계약이고, 그 계약을 DB 가 마지막으로 받친다. \
                             손으로 INSERT 하는 사람이나 M4 의 새 코드가 종류를 늘릴 때 여기가 먼저 \
-                            막고, 그러면 계약·CHECK·enum 셋을 함께 넓히게 된다.""")
+                            막고, 그러면 계약·CHECK·enum 셋을 함께 넓히게 된다 — #340 의 poop·pee 가\
+                            29_care_type_poop.sql 로 간 이유다. 08 은 다섯 그대로 둔다.""")
                     .isInstanceOf(SQLException.class);
         }
     }
