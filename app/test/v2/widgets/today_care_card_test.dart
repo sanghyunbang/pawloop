@@ -177,7 +177,9 @@ void main() {
     ]);
     await pumpCard(tester, f.repo);
 
-    expect(find.text('엄마 · 07:05'), findsOneWidget);
+    // 이름과 시각은 두 줄이다 — 한 줄 "엄마 · 07:05" 는 다섯 칸 폭에서 잘렸다(#326).
+    expect(find.text('엄마'), findsOneWidget);
+    expect(find.text('07:05'), findsOneWidget);
     expect(find.text('아직'), findsNWidgets(4), reason: '다섯 칸 중 넷은 아직이다');
   });
 

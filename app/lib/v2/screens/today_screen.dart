@@ -108,8 +108,8 @@ class TodayScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   _ctas(context),
-                  const SizedBox(height: 12),
-                  _weatherCard(),
+                  // 날씨 카드는 없다 — 하드코딩 "맑음 · 24°C" 를 새벽에도 보여 주던 자리다(#326).
+                  // 진짜 값(기상청·에어코리아)은 #336 산책 안전 지수가 가져온다.
                 ],
               ),
             ),
@@ -268,25 +268,4 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
-  Widget _weatherCard() {
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(children: [
-        Container(
-          width: 40, height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: const Color(0x22FFB74D), borderRadius: BorderRadius.circular(12)),
-          child: const Icon(Icons.wb_sunny_rounded, color: Color(0xFFFFA726), size: 22),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-            Text('산책하기 좋은 날씨예요', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
-            SizedBox(height: 3),
-            Text('맑음 · 24°C · 미세먼지 보통', style: TextStyle(fontSize: 12, color: Color(0x9E463C64))),
-          ]),
-        ),
-      ]),
-    );
-  }
 }
