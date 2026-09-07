@@ -309,3 +309,20 @@ flowchart LR
 | 에어코리아 | `MsrstnInfoInqireSvc/getMsrstnList`(측정소 목록, `dmX`=위도 `dmY`=경도, 서버 24h 캐시) → 격자 중심(`KmaGrid.toLatLng`, 역변환)에서 가장 가까운 측정소 → `ArpltnInforInqireSvc/getMsrstnAcctntRltmMesureDnsty?stationName=…&dataTerm=DAILY&ver=1.3` → `pm10Value` · `pm25Value`("-" 면 null). **API 마다 활용신청이 따로** — 승인 전에는 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR` 가 오고 응답의 PM 이 null 이다 |
 | 한도 | IP 분당 30(`walk-safety` 버킷, `ApiRateLimitFilter`). 기상청 쿼터는 격자 캐시로 격자 수에 묶인다 |
 | 앱 | `app/lib/v2/data/walk_safety.dart`(격자 순변환 `kmaGrid` · 판정 규칙, 순수) · `walk_safety_repository.dart`(우리 서버 호출 · 30분 판정 캐시) · `widgets/walk_safety_card.dart` |
+
+## 8. 동물병원 진료시간 — **여는 데이터가 없다** (#337)
+
+동물병원의 야간·24시 여부를 주는 공공 데이터를 찾다가 못 찾았습니다. 아래 넷을 봤고, 전부 **인허가**
+데이터라 영업시간 항목이 애초에 없습니다.
+
+| 출처 | 주는 것 | 진료시간 |
+|:---|:---|:---|
+| [행정안전부 동물_동물병원 조회서비스](https://www.data.go.kr/data/15154952/openapi.do) (LOCALDATA, 우리가 쓰는 것) | 사업장명 · 소재지 · 인허가일자 · 영업상태 · 전화번호 | 없음 |
+| [서울 열린데이터광장 동물병원 인허가 정보](https://data.seoul.go.kr/dataList/OA-16007/S/1/datasetView.do) | 명칭 · 전화번호 · 도로명주소 | 없음 |
+| [경기데이터드림 동물병원 현황](https://data.gg.go.kr/portal/data/service/selectServicePage.do?infId=Y5M0CVS8XM2C821G09A813809578&infSeq=3) | 시군 · 사업장명 · 주소 · 전화 · 좌표(WGS84) | 없음 |
+| 구 단위 파일 데이터(종로·금천 등) | 위와 같은 인허가 항목 | 없음 |
+
+**그래서 이름으로 짐작하고, 짐작이라고 적습니다.** `isTwentyFourHourByName`(`app/lib/v2/domain/vet_hours.dart`)
+이 이름에서 `24시`·`24시간`·`24H` 를 찾고, 화면에는 늘 `24시 · 이름 기준` 으로 나갑니다. 채우는 길은
+셋인데 이 이슈에서는 안 합니다 — (a) 병원이 직접 등록, (b) 이웃 후기(#338 의 `place_id` 필요),
+(c) 지도 사업자 API 의 영업시간(약관·비용 확인 필요).

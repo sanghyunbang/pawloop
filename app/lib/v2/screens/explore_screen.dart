@@ -3,11 +3,13 @@ import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
+import '../widgets/vet_badge.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import '../data/community_repository.dart';
 import '../theme/app_tokens.dart';
 import 'post_write_screen.dart';
 import '../domain/pet.dart';
+import '../domain/vet_hours.dart';
 import '../data/pet_places_repository.dart';
 import '../data/place_catalog_repository.dart';
 import '../data/trail_route_repository.dart';
@@ -74,6 +76,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   /// 조회 순번 — 칩을 빠르게 두 번 누르면 먼저 간 조회가 늦게 돌아올 수 있다. 마지막만 남긴다.
+  /// 병원 칩 안의 "24시" 토글. 이름 기준이고, 카테고리를 바꾸면 꺼진다 —
+  /// 켜 둔 채로 다른 칩으로 가면 "왜 안 나오지" 가 된다.
+  bool _only24h = false;
+
   int _loadSeq = 0;
 
   Future<void> _load() async {
@@ -95,8 +101,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   List<PetPlace> get _filtered {
-    if (_catFilter == null) return _places;
-    return _places.where((p) => p.categoryKey == _catFilter).toList();
+    final byCat = _catFilter == null
+        ? _places
+        : _places.where((p) => p.categoryKey == _catFilter).toList();
+    // 24시는 병원 칩 안에서만 켤 수 있다 — 이름 기준이라 다른 카테고리에 쓰면 뜻이 없다(#337).
+    if (!_only24h) return byCat;
+    return byCat.where((p) => isTwentyFourHourByName(p.title)).toList();
   }
 
   @override
@@ -436,7 +446,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
       return GestureDetector(
         onTap: () {
           if (_catFilter == key) return;
-          setState(() => _catFilter = key);
+          setState(() {
+            _catFilter = key;
+            _only24h = false;
+          });
           _load(); // 끝나면 마커도 다시 그린다.
         },
         child: Container(
@@ -457,7 +470,33 @@ class _ExploreScreenState extends State<ExploreScreen> {
       child: ListView(scrollDirection: Axis.horizontal, children: [
         chip('전체', null, const Color(0xFFFF8F63)),
         for (final c in kPetCategories) chip(c.label, c.key, c.color),
+        // 병원을 고른 뒤에만 나온다. 이름에 24시가 있는 곳만 남긴다(#337).
+        if (_catFilter == 'vet') _only24hChip(),
       ]),
+    );
+  }
+
+  /// "24시" 토글 칩. 조회를 다시 하지 않는다 — 받아 둔 병원 목록에서 이름으로 거른다.
+  Widget _only24hChip() {
+    const red = Color(0xFFD7263D);
+    return GestureDetector(
+      onTap: () => setState(() => _only24h = !_only24h),
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: _only24h ? red : const Color(0xC9FFFFFF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _only24h ? Colors.transparent : const Color(0x33D7263D)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.nightlight_round, size: 13, color: _only24h ? Colors.white : red),
+          const SizedBox(width: 5),
+          Text('24시',
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: _only24h ? Colors.white : red)),
+        ]),
+      ),
     );
   }
 
@@ -743,6 +782,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 const SizedBox(height: 4),
                 Row(children: [
                   _catTag(cat),
+                  // 진료시간 데이터가 없어서 이름으로 짐작한다 — 배지가 그 사실을 함께 말한다(#337).
+                  if (p.categoryKey == 'vet' && isTwentyFourHourByName(p.title)) ...[
+                    const SizedBox(width: 7),
+                    const VetTwentyFourBadge(),
+                  ],
                   if (p.distLabel.isNotEmpty) ...[
                     const SizedBox(width: 7),
                     Text(p.distLabel, style: const TextStyle(fontSize: 12, color: T.textMuted)),
