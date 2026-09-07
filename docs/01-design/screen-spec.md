@@ -308,8 +308,8 @@
 | --- | --- | --- | --- |
 | 셸 | `main_shell.dart` | 루트 (`/home`) | 탭 스와핑 + 산책 FAB |
 | 홈 | `today_screen.dart` | 탭 0 | `kMyDog`, `WalkFeedData.today`(서버 + 전송 대기) |
-| 지도(리스트·지도) | `explore_screen.dart` | 탭 1 | `GET /api/places/nearby`(KTO 프록시, 실연동) + vet/shop/trail 더미 |
-| 커뮤니티 | `feed_screen.dart` | 탭 2 | `kPetPosts`(**더미** — #171) |
+| 지도(리스트·지도) | `explore_screen.dart` | 탭 1 | 기기 카탈로그(24h 갱신) — 관광공사 반려동반 · 인허가 병원/펫샵 · 두루누비 산책로 전부 실데이터(#291·#317·#321). 거리 계산은 기기 안 |
+| 커뮤니티 | `feed_screen.dart` | 탭 2 | `GET /api/community/posts` 커서 페이지 — 서버(#170·#171) |
 | 채팅 방 목록 | `chat_list_screen.dart` | 탭 3 | `GET /api/chat/rooms` |
 | 산책 트래킹 | `walk_tracking_screen.dart` | 홈 CTA / 중앙 FAB (**둘 다 `startWalk()` 를 지난다**) | 실 GPS. **위치를 못 잡으면 이유를 말하는 화면**을 띄우고 아무것도 그리지 않는다(#160) |
 | 산책 기록 작성 | `create_screen.dart` | 트래킹 완료 / 내 기록 | `POST /api/walks`. 초안 없이 열리면 "직접 입력" 이라고 말한다 |
