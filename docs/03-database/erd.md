@@ -95,6 +95,20 @@ erDiagram
         DATETIME   created_at   "서버 시각 - 목록 커서의 기준"
     }
 
+    course {
+        BIGINT   id PK
+        BIGINT   user_id FK  "탈퇴하면 함께 사라진다 - CASCADE"
+        BIGINT   walk_id FK  "nullable - 산책을 지워도 코스는 남는다 (SET NULL)"
+        VARCHAR  name
+        VARCHAR  note
+        VARCHAR  tags        "leash|poopbag|shade 콤마"
+        LINESTRING path      "양 끝 100m 를 자른 선 (#339)"
+        INT      distance_m  "자른 뒤의 길이"
+        INT      duration_s
+        VARCHAR  visibility  "private|public - 기본은 private"
+        DATETIME created_at
+    }
+
     care_log {
         BIGINT   id PK
         BIGINT   dog_id FK   "nullable - ON DELETE SET NULL. 값은 아직 항상 NULL (#154)"
@@ -314,6 +328,7 @@ erDiagram
 | `refresh_token` | 실재 | 앱 세션의 refresh 토큰 원장(#9). RT 는 JWT 가 아니라 불투명 난수이고 SHA-256 해시로 저장한다. 회전·재사용 감지·전 기기 로그아웃이 이 테이블 위에서 돈다. **실재.** |
 | `dog` | 실재 | 사용자의 반려견 프로필. 견종·크기·생일·중성화 여부. `users` 1:N `dog`. |
 | `walk` | 실재 | 산책 기록 1건. GPS 경로를 `LINESTRING`으로, 거리·시간·페이스·메모 저장. `dog` 1:N `walk`. |
+| `course` | 실재 | 산책 기록 중에 "여기 좋다" 고 남긴 코스(#339). `walk.path` 에서 **양 끝 100m 를 잘라 낸 선**을 들고, 산책을 지워도 남는다(`walk_id` 가 NULL 이 된다). 기본은 비공개이고 공개한 것만 지도의 "이웃 코스" 에 나온다. 가까운 것 고르기는 기기에서 한다(A안 #235). |
 | `care_log` | 실재 | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. `dog_id` 는 `dog.id` 로 가는 FK 다(**#154**, `ON DELETE SET NULL` — 반려동물이 지워져도 기록은 남는다). 값은 아직 항상 `NULL` — 쓰기 경로가 `dogId` 를 안 받는다([schema.md §17](./schema.md)). |
 | `family_group` | 실재 | 가족 케어 그룹. **이름과 생성 시각만** 든다 — 초대코드도 멤버십도 여기 없다. 방은 `chat_room` 이 `origin_kind`/`origin_ref` 로 불투명하게 가리킨다. |
 | `chat_room` | 실재 | 채팅방. **가족 그룹 종속이 아니다** — 산책 크루 방도 같은 표에 산다. `UNIQUE(origin_kind, origin_ref)` 가 같은 출처에 방이 둘 생기는 것을 막고, `last_seq` 가 `room_seq` 발급기이자 미읽음 뺄셈의 좌변이다. |

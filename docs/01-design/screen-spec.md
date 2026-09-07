@@ -320,6 +320,7 @@
 | 채팅 방 목록 | `chat_list_screen.dart` | 탭 3 | `GET /api/chat/rooms` |
 | 산책 트래킹 | `walk_tracking_screen.dart` | 홈 CTA / 중앙 FAB (**둘 다 `startWalk()` 를 지난다**) | 실 GPS. **위치를 못 잡으면 이유를 말하는 화면**을 띄우고 아무것도 그리지 않는다(#160) |
 | 산책 기록 작성 | `create_screen.dart` | 트래킹 완료 / 내 기록 | `POST /api/walks`. 초안 없이 열리면 "직접 입력" 이라고 말한다 |
+| 코스로 남기기 | `widgets/course_save_sheet.dart` | 산책 회고 화면의 "이 길을 코스로 남기기" | `POST /api/courses`(#339). **선은 안 보낸다** — 서버가 그 산책에서 베껴 와 양 끝 100m 를 자른다. 시트는 잘린 선을 미리 그려 "0.60km 중 0.40km 가 코스가 돼요" 라고 말한다 |
 | 산책 회고 | `walk_detail_screen.dart` | 기록 카드 탭 | `PUT /api/walks/{id}/memo`(#187) |
 | 내 산책 기록 | `myrecords_screen.dart` | 프로필 → 내 산책 기록 | `GET /api/walks`(커서) + 전송 대기·거절 큐 |
 | 산책 통계 | `insight_screen.dart` | `me_screen` 에서 진입 | `GET /api/walks/stats/weekly` |

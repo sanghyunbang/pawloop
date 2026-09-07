@@ -64,6 +64,7 @@ class DateTimeFieldsAreInstantTest {
 
             Map.entry("User", com.heattrip.heat_trip_backend.user.dto.UserResponse.class),
             Map.entry("Walk", com.heattrip.heat_trip_backend.walk.dto.WalkResponse.class),
+            Map.entry("Course", com.heattrip.heat_trip_backend.walk.course.CourseResponse.class),
             Map.entry("WalkSafetyNow", com.heattrip.heat_trip_backend.walksafety.dto.WalkSafetyNowResponse.class),
             Map.entry("WalkInput", com.heattrip.heat_trip_backend.walk.dto.WalkRequest.class));
 

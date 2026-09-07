@@ -116,6 +116,11 @@ tags:
       각 태그 설명에 이유가 있습니다.)
       `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 **반드시 bearerAuth 검증을 거쳐야 합니다.**
       (구현 참조: `SecurityConfig` 의 permitAll 목록에 `/auth/**` 를 통째로 넣지 말 것 — 이슈 #23)
+  - name: Courses
+    description: |
+      내가 걸은 길 중에 "여기 좋다" 고 남긴 것(#339). 선은 **서버가 그 산책에서 베껴 와**
+      양 끝 100m 를 자릅니다 — 앱이 보낸 선을 믿으면 안 자르는 옛 앱 하나가 그 사람의 집 앞을
+      공개합니다. 기본은 비공개이고, 공개는 사용자가 명시적으로 합니다.
   - name: WalkSafety
     description: |
       산책 안전 지수의 재료(#336) — 기상청 초단기실황과 에어코리아 미세먼지를 **서버가 대신** 부릅니다.
@@ -903,6 +908,141 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /api/courses:
+    post:
+      tags: [Courses]
+      summary: 산책 하나를 코스로 남긴다
+      description: |
+        그 산책의 경로를 **서버가 베껴 와 양 끝 100m 를 자릅니다**(#339). 자르고 남은 길이가
+        100m 보다 짧으면 `400` 입니다 — 결국 300m 쯤은 걸어야 코스가 됩니다. 경로가 없는
+        산책(손입력·위치 거부)도 `400` 입니다.
+
+        내 산책이 아니면 `404` — 없는 산책과 같습니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CourseInput' }
+      responses:
+        '201':
+          description: 만들어짐. 응답의 `path` 는 **이미 잘린 선**입니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Course' }
+        '400':
+          description: 경로가 없거나 너무 짧습니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: 그런 산책이 없거나 내 산책이 아닙니다. 두 경우를 구분하지 않습니다.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/courses/me:
+    get:
+      tags: [Courses]
+      summary: 내 코스 목록
+      description: |
+        최근 순 100개. **선은 빼고 시작점 하나만** 옵니다(`path` 의 길이가 1) — 목록에 선
+        수십 개를 실을 이유가 없습니다. 선이 필요하면 상세를 부릅니다.
+      responses:
+        '200':
+          description: 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Course' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/courses/public:
+    get:
+      tags: [Courses]
+      summary: 공개 코스 한 벌 — 지도의 "이웃 코스"
+      description: |
+        **좌표 파라미터가 없습니다.** 가까운 것을 고르는 일은 기기에서 합니다(A안 #235) —
+        장소 카탈로그(#273)와 같은 방식입니다. 최근 순 300개까지, 목록이라 선은 시작점뿐입니다.
+
+        로그인해야 봅니다. 공개 코스라도 비인증으로 열면 그 목록이 곧 크롤링 대상입니다.
+      responses:
+        '200':
+          description: 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Course' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/courses/{courseId}:
+    get:
+      tags: [Courses]
+      summary: 코스 하나 — 선을 실어 준다
+      description: 내 것이거나 공개된 것만. 남의 비공개는 **없는 것과 같은 404** 입니다.
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: 코스
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Course' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: 없거나 볼 수 없습니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [Courses]
+      summary: 코스 지우기
+      description: 내 코스만. 남의 것은 `404` 이고 그대로 남습니다.
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: 지워짐 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: 없거나 내 코스가 아닙니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/courses/{courseId}/visibility:
+    put:
+      tags: [Courses]
+      summary: 공개 범위 바꾸기
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visibility]
+              properties:
+                visibility: { type: string, enum: [private, public] }
+      responses:
+        '200':
+          description: 바뀐 코스
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Course' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: 없거나 내 코스가 아닙니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
   /api/walk-safety/now:
     get:
       tags: [WalkSafety]
@@ -2735,6 +2875,62 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
 
   schemas:
+    Course:
+      type: object
+      description: |
+        내가 걸은 길 중에 남긴 것(#339). `path` 는 **양 끝 100m 를 잘라 낸 선**이고, 원래 산책의
+        선은 이 응답 어디에도 없습니다 — 받는 쪽이 집 앞을 복원할 수 없어야 합니다.
+      required: [id, name, distanceM, durationS, visibility, mine, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        walkId:
+          type: [integer, "null"]
+          format: int64
+          description: 어느 산책에서 왔나. **그 산책을 지우면 `null`** 이 됩니다 — 코스는 남습니다
+        name: { type: string, maxLength: 60, example: "서울숲 한 바퀴" }
+        note: { type: [string, "null"], maxLength: 200 }
+        tags:
+          type: array
+          description: 반려견 관점 — `leash`(목줄 규정) · `poopbag`(배변봉투통) · `shade`(그늘·물)
+          items: { type: string, enum: [leash, poopbag, shade] }
+        path:
+          type: [array, "null"]
+          description: |
+            잘라 낸 선, **`[경도, 위도]` 순서**입니다(`Walk.path` 와 같습니다).
+            **목록 응답에서는 시작점 하나뿐**이고 상세에서만 전체가 옵니다.
+          items:
+            type: array
+            items: { type: number, format: double }
+            minItems: 2
+            maxItems: 2
+        distanceM:
+          type: integer
+          description: 잘라 낸 **뒤**의 길이(m). 원래 산책의 거리가 아닙니다
+          example: 400
+        durationS:
+          type: integer
+          description: 원래 산책의 소요(초). 잘라 낸 만큼을 빼지 않습니다 — 그 값은 알 수 없습니다
+        visibility: { type: string, enum: [private, public], example: private }
+        mine: { type: boolean, description: 내 코스인가. 공개 목록에서 내 것을 가리는 데 씁니다 }
+        createdAt: { type: string, format: date-time }
+
+    CourseInput:
+      type: object
+      description: |
+        코스로 남기기(#339). **선을 보내지 않습니다** — 서버가 그 산책의 선을 베껴 와 자릅니다.
+      required: [walkId, name]
+      properties:
+        walkId: { type: integer, format: int64 }
+        name: { type: string, maxLength: 60 }
+        note: { type: string, maxLength: 200 }
+        tags:
+          type: array
+          items: { type: string, enum: [leash, poopbag, shade] }
+        visibility:
+          type: string
+          enum: [private, public]
+          description: 생략하면 `private` 입니다 — 공개는 사용자가 명시적으로 하는 일입니다
+
     WalkSafetyNow:
       type: object
       description: 산책 안전 지수의 재료 한 묶음(#336). 판정은 앱이 한다.
