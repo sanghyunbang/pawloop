@@ -297,3 +297,15 @@ flowchart LR
 | `backend/.../place/layer/` | 공공데이터 레이어(#291) — `LocalDataApiClient`·`LocalDataPlaceMapper`·`Tm5174`(좌표 변환)·`DurunubiApiClient`·`GpxFetcher`·`GpxParser`·`LayerCatalogService`·`LayerCatalogScheduler`(월 1회)·`LayerPlaceIndex`(주변 조회용 메모리 사본) |
 | `backend/mysql/post-start/24_place_catalog_layers.sql` | `place_catalog.source`(출처별 한 행)·`trail_route` |
 | `app/lib/v2/data/trail_route_repository.dart` | `GET /api/places/trails/{courseId}/route` — 산책로 시트를 열 때 선을 받아 지도에 그린다 |
+
+## 7. 기상청 초단기실황 · 에어코리아 — 산책 안전 지수 (#336), **서버가 대신 부른다**
+
+| 항목 | 내용 |
+|:---|:---|
+| 왜 서버인가 | 키를 앱에 두지 않는다(#40 — 바이너리에 남고 폐기하려면 재배포). 대신 앱은 **5km 격자 번호(nx, ny)만** 보내고, 요청에 인증이 없어 서버는 누구의 격자인지 모른다. 격자별 10분 캐시뿐, 저장하는 것이 없다 — 위치를 서버에 안 보내는 A안(#235)과의 절충이다. 위치기반서비스 이용약관 제3조 4) |
+| 키 | `app.public-data.service-key` ← `PUBLIC_DATA_SERVICE_KEY`(없으면 `TOUR_API_SECRET`, 같은 공공데이터포털 키). 비어 있으면 `GET /api/walk-safety/now` 가 503 이고 앱은 카드를 안 그린다 |
+| 경로 | `GET /api/walk-safety/now?nx=&ny=` — `walksafety` 모듈(`controller/service/dto`, [walk-safety.md](backend/walk-safety.md)). 응답 `WalkSafetyNow`([openapi](../04-api/openapi.yaml)) |
+| 기상청 | `GET https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?dataType=JSON&base_date=YYYYMMDD&base_time=HH00&nx=61&ny=126` — 매시 40분에 그 시각 실황이 나오므로 40분 전을 시 단위로 내려 부른다(`WalkSafetyService.kmaBase`, KST). 쓰는 항목 `T1H`(기온) · `REH`(습도) · `RN1`(1시간 강수) · `PTY`(강수형태). 기온이 없으면 503 |
+| 에어코리아 | `MsrstnInfoInqireSvc/getMsrstnList`(측정소 목록, `dmX`=위도 `dmY`=경도, 서버 24h 캐시) → 격자 중심(`KmaGrid.toLatLng`, 역변환)에서 가장 가까운 측정소 → `ArpltnInforInqireSvc/getMsrstnAcctntRltmMesureDnsty?stationName=…&dataTerm=DAILY&ver=1.3` → `pm10Value` · `pm25Value`("-" 면 null). **API 마다 활용신청이 따로** — 승인 전에는 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR` 가 오고 응답의 PM 이 null 이다 |
+| 한도 | IP 분당 30(`walk-safety` 버킷, `ApiRateLimitFilter`). 기상청 쿼터는 격자 캐시로 격자 수에 묶인다 |
+| 앱 | `app/lib/v2/data/walk_safety.dart`(격자 순변환 `kmaGrid` · 판정 규칙, 순수) · `walk_safety_repository.dart`(우리 서버 호출 · 30분 판정 캐시) · `widgets/walk_safety_card.dart` |

@@ -239,6 +239,15 @@ public class RateLimitProperties {
     private int placesCatalogMaxRequests = 5;
 
     /**
+     * 산책 안전 지수 버킷 — {@code GET /api/walk-safety/now}. (이슈 #336)
+     *
+     * <p>인증이 없는 경로라 열쇠가 IP 뿐이다. 앱은 홈이 뜰 때 한 번, 그 뒤 30분마다 부른다 —
+     * 분당 30 이면 같은 공유기 뒤의 여러 사람도 넉넉하고, 그보다 잦은 것은 정상 사용이 아니다.
+     * 서버 쪽 격자 캐시(10분)가 있어 기상청 쿼터는 이 한도와 무관하게 격자 수로 묶인다.
+     */
+    private int walkSafetyMaxRequests = 30;
+
+    /**
      * 커뮤니티 읽기 버킷 — {@code GET /api/community/posts} 계열 셋. (이슈 #170)
      *
      * <p><b>이 버킷이 없으면 한도가 0 이 아니라 무한이다.</b> 표에 없는 경로는

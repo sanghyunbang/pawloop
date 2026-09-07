@@ -5,6 +5,7 @@ import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/today_care_card.dart';
 import '../widgets/walk_feed_builder.dart';
+import '../widgets/walk_safety_card.dart';
 import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
 import 'main_shell.dart';
@@ -111,8 +112,9 @@ class TodayScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   _ctas(context),
-                  // 날씨 카드는 없다 — 하드코딩 "맑음 · 24°C" 를 새벽에도 보여 주던 자리다(#326).
-                  // 진짜 값(기상청·에어코리아)은 #336 산책 안전 지수가 가져온다.
+                  // 하드코딩 "맑음 · 24°C" 가 있던 자리(#326). 지금은 기상청·에어코리아 값으로 판정한
+                  // 산책 안전 지수 한 줄이고, 키·위치·응답이 없으면 카드 자체가 없다(#336).
+                  const WalkSafetyCard(),
                 ],
               ),
             ),

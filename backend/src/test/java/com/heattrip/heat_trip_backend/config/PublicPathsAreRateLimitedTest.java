@@ -137,6 +137,10 @@ class PublicPathsAreRateLimitedTest {
             case "/api/places/nearby" -> new Sample("GET", "/api/places/nearby");
             case "/api/places/*" -> new Sample("GET", "/api/places/126508");
             case "/api/places/trails/*/route" -> new Sample("GET", "/api/places/trails/T_ROUTE_1/route");
+            // 산책 안전 지수(#336). 인증이 없으므로 IP 한도가 유일한 문지기다.
+            // 쿼리(?nx=&ny=)는 붙이지 않는다 — MockHttpServletRequest 는 그것까지 requestURI 로
+            // 삼아서 규칙에 안 걸리고, "한도가 없다" 는 엉뚱한 실패가 된다.
+            case "/api/walk-safety/now" -> new Sample("GET", "/api/walk-safety/now");
             default -> throw new AssertionError(
                     "공개 패턴 '" + pattern + "' 의 대표 요청이 없다. "
                             + "여기에 더하거나 UNMETERED_ON_PURPOSE 에 이유와 함께 적어라.");

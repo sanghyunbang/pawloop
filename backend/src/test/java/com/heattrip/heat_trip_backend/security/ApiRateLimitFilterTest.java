@@ -180,6 +180,18 @@ class ApiRateLimitFilterTest {
     // 저장소 전체에서 커뮤니티 한도를 재는 곳이 0 이 된다.
 
     @Test
+    @DisplayName("GET /api/walk-safety/now 는 walk-safety 버킷이다 — permitAll 인데 표에 없으면 한도가 무한이다(#336)")
+    void walkSafety_hasItsOwnBucket() throws Exception {
+        RateLimitProperties p = props(100);
+        p.setWalkSafetyMaxRequests(2);
+        ApiRateLimitFilter filter = new ApiRateLimitFilter(p, MAPPER);
+
+        MockHttpServletResponse blocked = exhaust(filter, "GET", "/api/walk-safety/now", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
     @DisplayName("GET /api/community/posts 는 community-read 버킷이다 — 게스트가 부르는 경로다")
     void communityFeed_isRateLimited() throws Exception {
         MockHttpServletResponse blocked = exhaust(

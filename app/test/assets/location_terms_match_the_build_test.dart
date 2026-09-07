@@ -92,6 +92,13 @@ void main() {
       expect(_read(), contains('시행일: 2026-09-14'));
     });
 
+    test('안전 지수는 격자 번호만 회사 서버에 보내고, 로그인 없이·저장 없이라고 적혀 있다(#336)', () {
+      expect(_read(), contains('산책 안전 지수'));
+      expect(_read(), contains('5km 격자 번호'));
+      expect(_read(), contains('위경도 자체는 보내지 않으며'));
+      expect(_read(), contains('로그인 정보가 붙지 않아'));
+    });
+
     test('화면이 꺼져 있어도 기록 중에는 읽는다고 적혀 있다 — 포그라운드 서비스를 넣은 빌드다(#335)', () {
       expect(_read(), contains('화면이 꺼져 있거나 다른 앱을 보고 있어도'));
       expect(_read(), contains('기록을 끝내면 읽기를 멈춥니다'));

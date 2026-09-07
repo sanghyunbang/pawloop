@@ -334,7 +334,11 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
         // 이번 주 안에서 확실히 지난 시각. 주 시작 직후 + 1시간이면 KST 월요일 새벽이다.
         Instant thisWeek = thisWeekMondayOnePm();
         save(me, walkJson(dogId, thisWeek, 3000, 1800)).andExpect(status().isCreated());
-        save(me, walkJson(dogId, thisWeek.plusSeconds(7200), 2000, 1200))
+        // 두 번째는 **1분 뒤**다. 예전에는 두 시간 뒤였는데, 그러면 CI 가 월요일 오후
+        // 1~3시(KST)에 돌 때 그 시각이 미래가 되어 저장이 거절됐다(미래 허용 5분).
+        // 실제로 2026-09-07 13:58 KST 에 그래서 빨개졌다. 1분 뒤는 어느 시각에 돌아도
+        // 허용 안에 들고, "같은 날 두 번" 이라는 이 테스트의 뜻은 그대로다.
+        save(me, walkJson(dogId, thisWeek.plusSeconds(60), 2000, 1200))
                 .andExpect(status().isCreated());
 
         JsonNode stats = body(mockMvc.perform(get("/api/walks/stats/weekly")
