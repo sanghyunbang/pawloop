@@ -1,3 +1,4 @@
+import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
@@ -45,6 +46,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
   NLatLng _center = const NLatLng(37.5665, 126.9816);
   List<PetPlace> _places = const [];
   bool _loading = true;
+  /// 현위치를 못 받아 서울시청 기준인가. 게스트(동의 전)·권한 거부·실패 모두 여기다.
+  /// 화면에 그 말이 없으면 사용자는 왜 중구가 나오는지 모른다(#324).
+  bool _fallbackCenter = true;
   String? _catFilter; // null = 전체, 아니면 contenttypeid
 
   @override
@@ -58,6 +62,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final pos = await LocationService.current();
     if (mounted && pos != null) {
       _center = NLatLng(pos.latitude, pos.longitude);
+      _fallbackCenter = false;
       await _mapCtrl?.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
     }
     await _load();
@@ -131,6 +136,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
             const Spacer(),
             Text(_sourceCaption(), style: const TextStyle(fontSize: 10.5, color: T.textMuted)),
           ]),
+          if (_fallbackCenter) ...[
+            const SizedBox(height: 6),
+            Text(
+              AuthState.isGuest
+                  ? '현재 위치를 못 받아 서울시청 기준이에요 · 로그인하고 위치를 켜면 내 주변'
+                  : '현재 위치를 못 받아 서울시청 기준이에요 · 위치 권한을 켜면 내 주변',
+              style: const TextStyle(fontSize: 11, color: T.textMuted),
+            ),
+          ],
           const SizedBox(height: 10),
           for (int i = 0; i < _filtered.length; i++) ...[
             _placeCard(_filtered[i]),

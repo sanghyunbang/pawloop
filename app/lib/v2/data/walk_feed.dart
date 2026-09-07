@@ -14,6 +14,7 @@
 // 그려진다 — 없는 것처럼 감추지도, 저장된 것처럼 보이지도 않는다.
 library;
 
+import 'auth_state.dart';
 import 'package:flutter/foundation.dart';
 
 import 'walk_outbox.dart';
@@ -53,6 +54,10 @@ class WalkFeedData {
 
   final bool hasMore;
 
+  /// 로그인한 적 없는 사람의 값. 서버를 부르지 않았으니 `offline` 도 아니다 — 화면은
+  /// "불러오지 못했다" 가 아니라 "로그인하면" 을 말해야 한다(#324).
+  final bool guest;
+
   const WalkFeedData({
     required this.walks,
     required this.pending,
@@ -61,6 +66,7 @@ class WalkFeedData {
     this.rejected = const [],
     this.nextCursor,
     this.hasMore = false,
+    this.guest = false,
   });
 
   static const empty = WalkFeedData(
@@ -68,6 +74,15 @@ class WalkFeedData {
     pending: [],
     stats: ServerWalkStats.empty,
     offline: true,
+  );
+
+  /// 게스트. 비어 있지만 오류가 아니다.
+  static const guestData = WalkFeedData(
+    walks: [],
+    pending: [],
+    stats: ServerWalkStats.empty,
+    offline: false,
+    guest: true,
   );
 
   /// 다음 장을 이어 붙인 새 값.
@@ -175,6 +190,9 @@ class WalkFeed {
   /// **밀린 초안을 먼저 내보낸다.** 그래야 방금 연결이 돌아온 사람의 기록이 이 화면에서
   /// 바로 서버 것으로 바뀐다.
   Future<WalkFeedData> load({int? dogId}) async {
+    // 로그인한 적 없는 사람은 서버도 초안 큐도 보지 않는다 — 401 을 "불러오지 못했다" 로
+    // 그리던 것이 #324 의 게스트 홈이었다.
+    if (AuthState.isGuest) return WalkFeedData.guestData;
     // 큐를 비우는 것이 실패해도 읽기는 계속한다 — 연결이 없으면 아래도 실패하지만,
     // 여기서 던지면 대기 목록조차 못 보여 준다.
     List<WalkDraft> pending = const [];

@@ -9,6 +9,7 @@
 // 그래서 불러오기와 갱신 신호 듣기를 여기 한 곳에 둔다.
 library;
 
+import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
 
 import '../data/walk_feed.dart';
@@ -61,12 +62,15 @@ class _WalkFeedBuilderState extends State<WalkFeedBuilder> {
   void initState() {
     super.initState();
     walkFeedRevision.addListener(_reload);
+    // 게스트로 봤다가 로그인하면 값이 바뀐다 — 신호 없이 두면 홈이 "로그인하면" 을 계속 말한다.
+    AuthState.status.addListener(_reload);
     _reload();
   }
 
   @override
   void dispose() {
     walkFeedRevision.removeListener(_reload);
+    AuthState.status.removeListener(_reload);
     super.dispose();
   }
 

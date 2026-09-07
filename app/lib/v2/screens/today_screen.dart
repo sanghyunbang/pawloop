@@ -191,8 +191,16 @@ class TodayScreen extends StatelessWidget {
           div(),
           cell('${today.minutes}분', '시간'),
         ]),
+        // 로그인한 적 없는 사람에게는 "불러오지 못했다" 가 아니라 "로그인하면" 이다(#324).
+        if (data.guest) ...[
+          const SizedBox(height: 8),
+          const Text(
+            '로그인하면 오늘 산책이 여기 쌓여요',
+            style: TextStyle(fontSize: 11.5, color: Color(0x9E463C64)),
+          ),
+        ]
         // 대기 중인 것이 있으면 말한다. 감추면 "저장됐는데 안 보인다" 가 된다.
-        if (pendingToday > 0) ...[
+        else if (pendingToday > 0) ...[
           const SizedBox(height: 8),
           Text(
             '전송 대기 $pendingToday건 · 연결되면 올릴게요',
