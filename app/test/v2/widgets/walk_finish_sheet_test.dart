@@ -20,18 +20,23 @@ final _fakePng = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]);
   List<List<double>> path = _path,
   RoutePhotoException? saveFails,
   List<WalkMoment> moments = const [],
+  // 요약 세 값은 길이가 고정이 아니다 — 두 시간을 넘기면 `120:45`, 10km 를 넘기면 `12.24km`,
+  // 아직 못 잰 페이스는 `-'--"` 다. 좁은 화면 테스트가 긴 쪽을 넣어 본다.
+  String timeLabel = '18:40',
+  String distanceLabel = '1.24km',
+  String paceLabel = "15'03\"",
 }) {
   final names = <String>[];
   final bytes = <Uint8List>[];
   final events = <String>[];
   final sheet = WalkFinishSheet(
-    timeLabel: '18:40',
-    distanceLabel: '1.24km',
-    paceLabel: "15'03\"",
+    timeLabel: timeLabel,
+    distanceLabel: distanceLabel,
+    paceLabel: paceLabel,
     art: RouteArt(
       lngLat: path,
-      distanceLabel: '1.24km',
-      timeLabel: '18:40',
+      distanceLabel: distanceLabel,
+      timeLabel: timeLabel,
       dateLabel: WalkFinishSheet.dateLabel(DateTime(2026, 9, 6, 14, 20)),
       moments: moments,
     ),
@@ -55,6 +60,43 @@ Future<void> pumpSheet(WidgetTester tester, Widget sheet) async {
   await tester.pumpWidget(MaterialApp(home: Scaffold(body: Center(child: sheet))));
   await tester.pumpAndSettle();
 }
+
+/// 논리 폭 [widthDp] 의 화면에 띄운다 — 물리 픽셀이 아니라 **dp** 로 적는다.
+/// 기기 표는 dp 로 말한다(갤럭시 S8·A 다수가 360dp, 픽셀 계열이 393dp).
+Future<void> pumpSheetAt(
+  WidgetTester tester,
+  Widget sheet, {
+  required double widthDp,
+  double heightDp = 780,
+  double textScale = 1.0,
+}) async {
+  const ratio = 3.0;
+  tester.view.physicalSize = Size(widthDp * ratio, heightDp * ratio);
+  tester.view.devicePixelRatio = ratio;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    // 화면 크기는 view 에서 온 것을 그대로 두고 글자 배율만 바꾼다 — MediaQueryData 를
+    // 통째로 새로 만들면 size 가 0 이 되어 다른 것을 재게 된다.
+    home: Builder(
+      builder: (context) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: Scaffold(body: Center(child: sheet)),
+      ),
+    ),
+  ));
+  await tester.pumpAndSettle();
+}
+
+/// 요약 칸에 쓰인 글자 크기(스타일에 적힌 값).
+double valueSizeOf(WidgetTester tester, String value) =>
+    tester.widget<Text>(find.text(value).first).style!.fontSize!;
+
+/// 화면에 **그려진** 높이. 위·아래 모서리를 전역 좌표로 바꿔 재므로 조상이 걸어 둔
+/// 확대·축소(FittedBox 등)까지 함께 잡힌다 — 크기가 스타일에 안 남는 축소를 잡으려면 이쪽이다.
+String Function(String) drawnHeightOf(WidgetTester tester) => (String value) {
+      final f = find.text(value).first;
+      return (tester.getBottomLeft(f).dy - tester.getTopLeft(f).dy).toStringAsFixed(2);
+    };
 
 void main() {
   testWidgets('요약 셋과 경로 미리보기, "경로 사진 저장" 이 보인다', (tester) async {
@@ -138,22 +180,90 @@ void main() {
     expect(find.textContaining('회'), findsNothing);
   });
 
-  testWidgets('작은 화면에서도 안 넘친다 — 줄이 하나 늘 때마다 넘치던 자리다', (tester) async {
+  testWidgets('낮은 화면에서도 세로로 안 넘친다 — 줄이 하나 늘 때마다 넘치던 자리다', (tester) async {
     // 실측: 요약 줄을 더하자 에뮬레이터에서 **세로로** 26px 넘쳤다(2026-09-07).
-    // 폭은 에뮬레이터와 같은 393dp 로 둔다 — 360dp 로 좁히면 요약 줄과 무관한 **가로**
-    // 넘침(요약 줄이 없어도 24px)이 먼저 터져서 이 테스트가 다른 것을 재게 된다.
-    // 그 가로 넘침은 이 이슈 밖의 문제라 따로 남겼다.
-    tester.view.physicalSize = const Size(1080, 1400);
-    tester.view.devicePixelRatio = 2.75;
-    addTearDown(tester.view.reset);
-
+    // 393x509dp 는 그 에뮬레이터의 논리 크기다. 세로를 재는 자리라 폭은 넓은 쪽으로 둔다 —
+    // 좁은 폭의 **가로** 넘침은 아래 360dp 묶음이 따로 잰다.
     final f = fixture(moments: const [
       WalkMoment(kind: WalkMomentKind.poop, tSec: 60, pathIndex: 0),
       WalkMoment(kind: WalkMomentKind.water, tSec: 400, pathIndex: 2),
     ]);
-    await pumpSheet(tester, f.sheet);
+    await pumpSheetAt(tester, f.sheet, widthDp: 393, heightDp: 509);
 
     expect(tester.takeException(), isNull,
         reason: '넘치면 프레임워크가 예외를 남긴다 — 노란 줄무늬는 그 예외의 그림이다');
+  });
+
+  // ── 좁은 폭에서 가로로 안 넘친다 ──────────────────────────
+  //
+  // 요약 세 칸이 `Row(spaceAround)` 에 그냥 얹혀 있었다. Row 는 flex 가 아닌 자식에게 폭을
+  // 무한대로 주므로 값이 제 길이만큼 자라고, 합이 Row 폭을 넘으면 노란 줄무늬가 뜬다.
+  // 폭 360dp 에서 24px, 320dp 에서 64px 넘쳤다(2026-09-07 실측). 요약 줄(#340)이 있든
+  // 없든 같은 값이었다 — 세로가 아니라 **가로**가 좁아서 나던 것이다.
+  //
+  // 360dp 는 갤럭시 S8·A 시리즈 상당수의 논리 폭이다.
+
+  testWidgets('폭 360dp — 요약 줄(#340)과 경로 미리보기가 함께 있어도 가로로 안 넘친다', (tester) async {
+    final f = fixture(moments: const [
+      WalkMoment(kind: WalkMomentKind.poop, tSec: 60, pathIndex: 0),
+      WalkMoment(kind: WalkMomentKind.water, tSec: 400, pathIndex: 2),
+    ]);
+    await pumpSheetAt(tester, f.sheet, widthDp: 360);
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('배변 1회 · 물 1회'), findsOneWidget, reason: '요약 줄이 있는 채로 잰 것이다');
+    expect(find.text('경로 사진 저장'), findsOneWidget, reason: '미리보기도 있는 채로 잰 것이다');
+  });
+
+  testWidgets('폭 360dp — 요약 줄이 없어도 가로로 안 넘친다', (tester) async {
+    // 고친 것이 요약 줄이 아니라 요약 **세 칸**임을 못 박는다.
+    await pumpSheetAt(tester, fixture().sheet, widthDp: 360);
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('두 시간을 넘긴 긴 값(120:45 · 12.24km)도 360dp 에서 안 넘친다', (tester) async {
+    // 패딩·칸 간격을 좁히는 것으로는 여기서 다시 터진다 — 값이 길어지면 어떤 고정 폭도 진다.
+    final f = fixture(
+      timeLabel: '120:45',
+      distanceLabel: '12.24km',
+      paceLabel: "120'03\"",
+      moments: const [WalkMoment(kind: WalkMomentKind.poop, tSec: 60, pathIndex: 0)],
+    );
+    await pumpSheetAt(tester, f.sheet, widthDp: 360);
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('12.24km'), findsOneWidget, reason: '줄이더라도 값을 자르지는 않는다');
+  });
+
+  testWidgets('기기 글자 크기를 1.5배로 키워도 360dp 에서 안 넘친다', (tester) async {
+    // 실기기에서 줄무늬가 나는 길 중 하나다 — 기본 배율의 Pretendard 는 360dp 에 들어가지만
+    // "글자 크기 가장 크게" 로 두면 같은 값이 320px 을 넘는다(2026-09-07 폰트 실측).
+    final f = fixture(moments: const [
+      WalkMoment(kind: WalkMomentKind.water, tSec: 400, pathIndex: 2),
+    ]);
+    await pumpSheetAt(tester, f.sheet, widthDp: 360, textScale: 1.5);
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('세 값은 **같은** 크기로 줄어든다 — 나란한 숫자에 크기가 섞이면 못 견준다', (tester) async {
+    // 칸마다 FittedBox 를 하나씩 두면 짧은 "18:40" 만 20pt 로 남고 긴 값은 17.8pt 가 되어
+    // 줄이 들쭉날쭉해진다. 가장 긴 값 하나로 배율을 정해 셋에 같이 먹인다.
+    await pumpSheetAt(tester, fixture().sheet, widthDp: 360);
+
+    // **화면에 그려진** 높이로 잰다 — style.fontSize 만 보면 FittedBox 로 줄인 것을 놓친다.
+    // FittedBox 는 글자 크기가 아니라 그리기를 확대·축소하므로 스타일에는 자국이 안 남는다.
+    final drawn = ['18:40', '1.24km', "15'03\""].map(drawnHeightOf(tester)).toSet();
+    expect(drawn, hasLength(1), reason: '셋이 한 크기로 그려져야 한다 — 실제: $drawn');
+    expect(valueSizeOf(tester, '1.24km'), lessThan(20),
+        reason: '360dp 에서는 실제로 줄어든 것이어야 한다 — 잘리거나 넘친 것이 아니라');
+  });
+
+  testWidgets('값이 짧으면 줄이지 않는다 — 들어가는데 작게 그리면 그냥 작아진 것이다', (tester) async {
+    final f = fixture(timeLabel: '8:40', distanceLabel: '1.2km', paceLabel: "5'03\"");
+    await pumpSheetAt(tester, f.sheet, widthDp: 360);
+
+    expect(valueSizeOf(tester, '1.2km'), 20);
   });
 }
