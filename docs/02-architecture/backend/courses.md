@@ -1,6 +1,11 @@
 # Courses (내가 남긴 코스) — 백엔드 구현 메모
 
 > 대상: `com.heattrip.heat_trip_backend.walk.course` 패키지. openapi `/api/courses`. 이슈 #339.
+>
+> ⚠️ **공모전 빌드(A안 #235)에서는 앱이 이 API 를 부르지 않습니다.** 선은 서버가 `walk.path` 를
+> 베껴 만드는데 그 빌드는 `path` 를 안 올려 모든 산책이 `path IS NULL` 이기 때문입니다. 서버 쪽은
+> 그대로 살아 있고, `--dart-define=UPLOAD_LOCATION=true` 를 켜는 날 앱의 세 자리가 함께 돌아옵니다
+> — `legal-lbs-compliance.md` §1.3.
 > 참조 계약: [openapi.yaml](../../04-api/openapi.yaml) `paths./api/courses`, `schemas.Course`
 > 표: [schema.md §31](../../03-database/schema.md) · 마이그레이션 `27_course.sql`
 

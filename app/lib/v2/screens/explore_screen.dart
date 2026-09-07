@@ -725,7 +725,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         // 병원을 고른 뒤에만 나온다. 이름에 24시가 있는 곳만 남긴다(#337).
         if (_catFilter == 'vet') _only24hChip(),
         // 산책로를 고른 뒤에만 나온다. 공공데이터 대신 사람들이 올린 코스를 본다(#339).
-        if (_catFilter == 'trail') _neighbourChip(),
+        if (_catFilter == 'trail' && LocationUploadPolicy.sharesRoutes) _neighbourChip(),
       ]),
     );
   }
