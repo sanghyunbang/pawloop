@@ -394,7 +394,8 @@ class _InsightScreenState extends State<InsightScreen> {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 30,
+              // "263m" 이 30px 에서 "263 / m" 두 줄로 꺾였다(에뮬레이터, #332). 한 줄로 못 박는다.
+              reservedSize: 38,
               interval: maxY / 4,
               getTitlesWidget: (value, meta) {
                 if (value <= 0.01) return const SizedBox.shrink();
@@ -402,6 +403,9 @@ class _InsightScreenState extends State<InsightScreen> {
                   padding: const EdgeInsets.only(right: 4),
                   child: Text(
                     axisLabel(value),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.visible,
                     style: const TextStyle(fontSize: 10, color: T.textMuted),
                   ),
                 );
