@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../data/external_maps.dart';
 import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +12,9 @@ import '../theme/app_tokens.dart';
 import 'post_write_screen.dart';
 import '../domain/pet.dart';
 import '../domain/vet_hours.dart';
+import '../walk/route_image.dart';
+import '../domain/course_path.dart';
+import '../data/course_repository.dart';
 import 'start_walk.dart';
 import '../data/walk_repository.dart';
 import '../data/pet_places_repository.dart';
@@ -42,7 +47,10 @@ class ExploreScreen extends StatefulWidget {
 
   /// 테스트가 진짜 네트워크·카탈로그에 닿지 않게 끼우는 자리. 없으면 실물이다.
   final PetPlacesRepository? repository;
-  const ExploreScreen({super.key, this.initialView = 'list', this.repository});
+
+  /// 이웃 코스 저장소. 테스트가 꽂는 자리다 (#339).
+  final CourseRepository? courses;
+  const ExploreScreen({super.key, this.initialView = 'list', this.repository, this.courses});
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
 }
@@ -51,6 +59,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   late String view = widget.initialView;
   NaverMapController? _mapCtrl;
   late final PetPlacesRepository _repo = widget.repository ?? PetPlacesRepository();
+  late final CourseRepository _courses = widget.courses ?? CourseRepository();
   final _trails = TrailRouteRepository();
 
   // 기본 중심: 서울 시청. (추후 현재 위치)
@@ -88,6 +97,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// 켜 둔 채로 다른 칩으로 가면 "왜 안 나오지" 가 된다.
   bool _only24h = false;
 
+  /// 산책로 칩 안의 "이웃 코스" 토글 (#339). 켜면 공공데이터 산책로 대신 **사람들이 올린
+  /// 코스**를 본다. 카테고리를 바꾸면 꺼진다.
+  bool _neighbourCourses = false;
+
+  /// 받아 둔 공개 코스에서 **기기가 고른** 가까운 것들. 좌표는 서버로 안 나간다(A안 #235).
+  List<Course> _nearbyCourses = const [];
+  bool _coursesLoading = false;
+
   int _loadSeq = 0;
 
   Future<void> _load() async {
@@ -106,6 +123,30 @@ class _ExploreScreenState extends State<ExploreScreen> {
     });
     await _refreshMarkers();
     if (_catFilter == 'trail') await _fitToPlaces();
+  }
+
+  /// 공개 코스 한 벌을 받아 **기기에서** 가까운 20개를 고른다 (#339).
+  ///
+  /// 서버에 좌표를 안 보낸다 — 장소 카탈로그(#273)와 같은 방식이다. 못 받으면 빈 목록이고,
+  /// 화면은 "아직 없어요" 를 말한다: 가짜를 놓지 않는다.
+  Future<void> _loadCourses() async {
+    setState(() => _coursesLoading = true);
+    List<Course> all;
+    try {
+      all = await _courses.publicCourses();
+    } catch (_) {
+      all = const [];
+    }
+    if (!mounted) return;
+    setState(() {
+      _nearbyCourses = nearestByStart<Course>(
+        all,
+        _center.latitude,
+        _center.longitude,
+        startOf: (course) => course.start,
+      );
+      _coursesLoading = false;
+    });
   }
 
   List<PetPlace> get _filtered {
@@ -130,6 +171,170 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
+  // ───────────── 이웃 코스 (#339) ─────────────
+
+  Widget _courseCard(Course course) => GestureDetector(
+        onTap: () => _showCourseSheet(course),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: const Color(0xE6FFFFFF),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(children: [
+            SizedBox(
+              width: 78,
+              height: 56,
+              child: course.path.length >= 2
+                  ? CustomPaint(
+                      painter: RouteCanvasPainter(
+                        RouteArt(lngLat: course.path, distanceLabel: '', timeLabel: '', dateLabel: ''),
+                        withCaption: false,
+                      ),
+                    )
+                  : const Icon(Icons.route_rounded, size: 22, color: Color(0xFFBBB3CC)),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(course.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                const SizedBox(height: 4),
+                Text('${course.km.toStringAsFixed(2)}km${course.mine ? ' · 내 코스' : ''}',
+                    style: const TextStyle(fontSize: 12, color: T.textMuted)),
+                if (course.note != null && course.note!.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(course.note!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: Color(0xCC463C64))),
+                ],
+              ]),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+          ]),
+        ),
+      );
+
+  /// 코스 하나 — 온전한 선은 **여기서** 받는다(목록에는 시작점만 온다).
+  Future<void> _showCourseSheet(Course summary) async {
+    Course course = summary;
+    try {
+      course = await _courses.one(summary.id);
+    } catch (_) {
+      // 못 받아도 시트는 연다 — 이름과 거리는 목록에 이미 있다.
+    }
+    if (!mounted) return;
+    if (view == 'map' && course.path.length >= 2) unawaited(_drawCourse(course));
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        decoration: const BoxDecoration(
+            color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+        padding: EdgeInsets.fromLTRB(20, 16, 20, 18 + MediaQuery.of(sheetCtx).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+              child: Text(course.name,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.pop(sheetCtx),
+              child: const Icon(Icons.close, size: 22, color: Color(0xFFBBB3CC)),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Text('${course.km.toStringAsFixed(2)}km · 시작·끝 100m 는 빠져 있어요',
+              style: const TextStyle(fontSize: 12.5, color: T.textMuted)),
+          if (course.note != null && course.note!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(course.note!, style: const TextStyle(fontSize: 13.5, color: Color(0xCC463C64))),
+          ],
+          if (course.tags.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(spacing: 7, runSpacing: 7, children: [
+              for (final tag in course.tags) _courseTag(tag),
+            ]),
+          ],
+          if (course.path.length >= 2) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 130,
+              child: CustomPaint(
+                painter: RouteCanvasPainter(
+                  RouteArt(lngLat: course.path, distanceLabel: '', timeLabel: '', dateLabel: ''),
+                  withCaption: false,
+                ),
+                size: Size.infinite,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: () async {
+              Navigator.pop(sheetCtx);
+              await startWalk(context, courseLine: course.path);
+            },
+            child: Container(
+              height: 46,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text('이 코스 다시 걷기',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _courseTag(String tag) {
+    const labels = {'leash': '목줄 규정', 'poopbag': '배변봉투통', 'shade': '그늘·물'};
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(color: const Color(0x140B7A75), borderRadius: BorderRadius.circular(9)),
+      child: Text(labels[tag] ?? tag,
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0B7A75))),
+    );
+  }
+
+  /// 지도에 코스 선을 얹는다. 공공데이터 산책로와 색이 다르다 — 다른 종류의 것이다.
+  Future<void> _drawCourse(Course course) async {
+    final c = _mapCtrl;
+    if (c == null || course.path.length < 2) return;
+    final coords = [for (final p in course.path) NLatLng(p[1], p[0])];
+    await c.addOverlay(NPolylineOverlay(
+      id: 'course-${course.id}',
+      coords: coords,
+      color: const Color(0xFF0B7A75),
+      width: 6,
+    ));
+    double minLat = coords.first.latitude, maxLat = minLat;
+    double minLng = coords.first.longitude, maxLng = minLng;
+    for (final q in coords) {
+      if (q.latitude < minLat) minLat = q.latitude;
+      if (q.latitude > maxLat) maxLat = q.latitude;
+      if (q.longitude < minLng) minLng = q.longitude;
+      if (q.longitude > maxLng) maxLng = q.longitude;
+    }
+    await c.updateCamera(NCameraUpdate.fitBounds(
+      NLatLngBounds(southWest: NLatLng(minLat, minLng), northEast: NLatLng(maxLat, maxLng)),
+      padding: const EdgeInsets.all(60),
+    ));
+  }
+
   // ───────────── 리스트 ─────────────
   Widget _listView() {
     return ListView(
@@ -147,7 +352,35 @@ class _ExploreScreenState extends State<ExploreScreen> {
         const SizedBox(height: 10),
         _catChips(),
         const SizedBox(height: 14),
-        if (_loading)
+        if (_neighbourCourses) ...[
+          if (_coursesLoading)
+            const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator(color: Color(0xFF0B7A75))))
+          else if (_nearbyCourses.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Text('아직 이웃이 올린 코스가 없어요 · 산책 회고에서 코스를 만들어 공개하면 여기 쌓여요',
+                  style: TextStyle(fontSize: 13, color: T.textMuted)),
+            )
+          else ...[
+            Row(children: [
+              const Icon(Icons.people_alt_rounded, size: 15, color: Color(0xFF0B7A75)),
+              const SizedBox(width: 5),
+              Text('이웃 코스 · ${_nearbyCourses.length}개',
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0B7A75))),
+              const Spacer(),
+              const Text('사람들이 올린 길 · 시작·끝은 빠져 있어요',
+                  style: TextStyle(fontSize: 10.5, color: T.textMuted)),
+            ]),
+            const SizedBox(height: 10),
+            for (final course in _nearbyCourses) ...[
+              _courseCard(course),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ] else if (_loading)
           const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator(color: Color(0xFFFF8F63))))
         else if (_filtered.isEmpty)
           _emptyBox()
@@ -467,6 +700,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           setState(() {
             _catFilter = key;
             _only24h = false;
+            _neighbourCourses = false;
           });
           _load(); // 끝나면 마커도 다시 그린다.
         },
@@ -490,7 +724,37 @@ class _ExploreScreenState extends State<ExploreScreen> {
         for (final c in kPetCategories) chip(c.label, c.key, c.color),
         // 병원을 고른 뒤에만 나온다. 이름에 24시가 있는 곳만 남긴다(#337).
         if (_catFilter == 'vet') _only24hChip(),
+        // 산책로를 고른 뒤에만 나온다. 공공데이터 대신 사람들이 올린 코스를 본다(#339).
+        if (_catFilter == 'trail') _neighbourChip(),
       ]),
+    );
+  }
+
+  /// "이웃 코스" 토글 칩. 켜면 공개 코스를 받아 기기에서 가까운 20개를 고른다.
+  Widget _neighbourChip() {
+    const teal = Color(0xFF0B7A75);
+    return GestureDetector(
+      onTap: () {
+        final next = !_neighbourCourses;
+        setState(() => _neighbourCourses = next);
+        if (next && _nearbyCourses.isEmpty) _loadCourses();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: _neighbourCourses ? teal : const Color(0xC9FFFFFF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _neighbourCourses ? Colors.transparent : const Color(0x330B7A75)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.people_alt_rounded, size: 13, color: _neighbourCourses ? Colors.white : teal),
+          const SizedBox(width: 5),
+          Text('이웃 코스',
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: _neighbourCourses ? Colors.white : teal)),
+        ]),
+      ),
     );
   }
 
