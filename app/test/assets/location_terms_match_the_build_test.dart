@@ -92,6 +92,12 @@ void main() {
       expect(_read(), contains('시행일: 2026-09-14'));
     });
 
+    test('안전 지수가 공공 API 를 기기에서 직접 부르고 위경도는 안 보낸다고 적혀 있다(#336)', () {
+      expect(_read(), contains('산책 안전 지수'));
+      expect(_read(), contains('기기에서 직접'));
+      expect(_read(), contains('위경도 자체는 보내지 않으며'));
+    });
+
     test('화면이 꺼져 있어도 기록 중에는 읽는다고 적혀 있다 — 포그라운드 서비스를 넣은 빌드다(#335)', () {
       expect(_read(), contains('화면이 꺼져 있거나 다른 앱을 보고 있어도'));
       expect(_read(), contains('기록을 끝내면 읽기를 멈춥니다'));

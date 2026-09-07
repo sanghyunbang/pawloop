@@ -22,6 +22,8 @@ import 'package:flutter/material.dart';
 import '../data/auth_state.dart';
 import 'login_screen.dart';
 import '../data/walk_in_progress.dart';
+import '../data/walk_safety_repository.dart';
+import '../theme/app_tokens.dart';
 import '../widgets/walk_resume_prompt.dart';
 import 'location_priming_sheet.dart';
 import 'walk_tracking_screen.dart';
@@ -41,6 +43,7 @@ Future<void> startWalk(
   BuildContext context, {
   Future<void> Function(BuildContext context, WalkInProgress? resume)? openTracking,
   WalkInProgressStore resumeStore = const WalkInProgressStore(),
+  DateTime Function()? now,
 }) async {
   if (!AuthState.isAuthenticated) {
     final messenger = ScaffoldMessenger.of(context);
@@ -89,7 +92,38 @@ Future<void> startWalk(
     }
   }
   if (!context.mounted) return;
+  if (!await _confirmIfUnsafe(context, now: (now ?? DateTime.now)())) return;
+  if (!context.mounted) return;
   await (openTracking ?? _openTracking)(context, null);
+}
+
+/// "피하세요" 판정이 살아 있으면(30분 안) 한 번 묻는다 — 막지 않는다(#336). 홈 카드가 받아 둔 값을
+/// 쓰고, 없으면 묻지 않는다: 산책 시작을 네트워크에 기다리게 하지 않는다.
+Future<bool> _confirmIfUnsafe(BuildContext context, {required DateTime now}) async {
+  final verdict = WalkSafetyStore.latest.value;
+  if (verdict == null || !verdict.shouldAskBeforeWalk || !WalkSafetyStore.isFresh(now)) return true;
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (dialogCtx) => AlertDialog(
+      backgroundColor: const Color(0xFFFCFAFF),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('지금은 피하는 게 좋아요',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+      content: Text('${verdict.headline}\n${verdict.reasons.join(' · ')}',
+          style: const TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogCtx, false),
+          child: const Text('나중에', style: TextStyle(color: T.textMuted)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogCtx, true),
+          child: const Text('그래도 시작', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
+        ),
+      ],
+    ),
+  );
+  return go ?? false;
 }
 
 Future<void> _openTracking(BuildContext context, WalkInProgress? resume) => Navigator.of(context).push(

@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/data/walk_in_progress.dart';
+import 'package:heat_trip_flutter/v2/data/walk_safety.dart';
+import 'package:heat_trip_flutter/v2/data/walk_safety_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/location_priming_sheet.dart';
 import 'package:heat_trip_flutter/v2/screens/start_walk.dart';
 
@@ -54,6 +56,7 @@ void main() {
   tearDown(() {
     AuthState.resetForTest();
     LocationPriming.resetForTest();
+    WalkSafetyStore.resetForTest();
   });
 
   testWidgets('아직 물어본 적 없으면 시트가 먼저 뜨고, "허용하기" 전에는 추적 화면을 열지 않는다', (t) async {
@@ -180,5 +183,50 @@ void main() {
     expect(opened(), 1);
     expect(_resumedWith, isNull, reason: '새 산책이다');
     expect(await const WalkInProgressStore().load(), isNull);
+  });
+
+  // ── "피하세요" 판정이 살아 있으면 한 번 묻는다 (#336) ──────────────────
+
+  testWidgets('피하세요 판정이면 "그래도 시작" 을 눌러야 열린다 — 막지는 않는다', (t) async {
+    LocationPriming.checkPermission = () async => LocationPermission.whileInUse;
+    WalkSafetyStore.latest.value = const WalkSafetyVerdict(WalkSafetyLevel.avoid, '지금은 피하고 저녁 7시 뒤에', ['31°C']);
+    WalkSafetyStore.fetchedAt = DateTime.now();
+    final opened = await _pump(t);
+
+    await t.tap(find.text('산책 시작'));
+    await t.pumpAndSettle();
+
+    expect(find.text('지금은 피하는 게 좋아요'), findsOneWidget);
+    expect(find.textContaining('31°C'), findsOneWidget);
+    expect(opened(), 0);
+
+    await t.tap(find.text('나중에'));
+    await t.pumpAndSettle();
+    expect(opened(), 0);
+
+    await t.tap(find.text('산책 시작'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('그래도 시작'));
+    await t.pumpAndSettle();
+    expect(opened(), 1);
+  });
+
+  testWidgets('판정이 30분 넘게 낡았거나 "짧게" 면 묻지 않는다', (t) async {
+    LocationPriming.checkPermission = () async => LocationPermission.whileInUse;
+    WalkSafetyStore.latest.value = const WalkSafetyVerdict(WalkSafetyLevel.avoid, '지금은 피하고 저녁 7시 뒤에', ['31°C']);
+    WalkSafetyStore.fetchedAt = DateTime.now().subtract(const Duration(minutes: 45));
+    final opened = await _pump(t);
+
+    await t.tap(find.text('산책 시작'));
+    await t.pumpAndSettle();
+    expect(find.text('지금은 피하는 게 좋아요'), findsNothing, reason: '낡은 판정으로 막지 않는다');
+    expect(opened(), 1);
+
+    WalkSafetyStore.latest.value = const WalkSafetyVerdict(WalkSafetyLevel.short, '짧게 다녀오세요 · 바닥 7초 룰 확인', ['27°C']);
+    WalkSafetyStore.fetchedAt = DateTime.now();
+    await t.tap(find.text('산책 시작'));
+    await t.pumpAndSettle();
+    expect(find.text('지금은 피하는 게 좋아요'), findsNothing);
+    expect(opened(), 2);
   });
 }

@@ -297,3 +297,14 @@ flowchart LR
 | `backend/.../place/layer/` | 공공데이터 레이어(#291) — `LocalDataApiClient`·`LocalDataPlaceMapper`·`Tm5174`(좌표 변환)·`DurunubiApiClient`·`GpxFetcher`·`GpxParser`·`LayerCatalogService`·`LayerCatalogScheduler`(월 1회)·`LayerPlaceIndex`(주변 조회용 메모리 사본) |
 | `backend/mysql/post-start/24_place_catalog_layers.sql` | `place_catalog.source`(출처별 한 행)·`trail_route` |
 | `app/lib/v2/data/trail_route_repository.dart` | `GET /api/places/trails/{courseId}/route` — 산책로 시트를 열 때 선을 받아 지도에 그린다 |
+
+## 7. 기상청 초단기실황 · 에어코리아 — 산책 안전 지수 (#336), **기기가 직접 부른다**
+
+| 항목 | 내용 |
+|:---|:---|
+| 왜 기기에서 | 좌표를 회사 서버로 보내지 않는 A안(#235) 그대로. 기상청에는 5km 격자 번호(nx, ny), 에어코리아에는 가장 가까운 측정소 **이름**만 간다 — 위경도 자체는 어디에도 안 보낸다(위치기반서비스 이용약관 제3조 4) |
+| 키 | 공공데이터포털 인증키 하나(디코딩 키). `app/.env` 의 `YOUR_DECODING_SERVICE_KEY` 를 빌드 때 `--dart-define=PUBLIC_DATA_SERVICE_KEY=…` 로 넘긴다(`Env.publicDataServiceKey`). 없으면 카드가 없다 |
+| 기상청 | `GET https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?dataType=JSON&base_date=YYYYMMDD&base_time=HH00&nx=61&ny=126` — 매시 40분에 그 시각 실황이 나오므로 40분 전을 시 단위로 내려 부른다(`WalkSafetyRepository.kmaBase`). 쓰는 항목 `T1H`(기온) · `REH`(습도) · `RN1`(1시간 강수) · `PTY`(강수형태). 격자 변환은 `kmaGrid()`(Lambert Conformal Conic, 기상청 상수) |
+| 에어코리아 | `MsrstnInfoInqireSvc/getMsrstnList`(측정소 목록, `dmX`=위도 `dmY`=경도, 24h 캐시) → 가장 가까운 측정소 → `ArpltnInforInqireSvc/getMsrstnAcctntRltmMesureDnsty?stationName=…&dataTerm=DAILY&ver=1.3` → `pm10Value` · `pm25Value`("-" 면 없음). **API 마다 활용신청이 따로 필요하다** — 승인 전에는 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR` 가 오고 앱은 PM 없이 기온으로만 판정한다 |
+| 실패 | 기상청이 실패하면 카드 없음(반쪽으로 판정하지 않는다). 에어코리아 실패는 "미세먼지 정보 없음" |
+| 코드 | `app/lib/v2/data/walk_safety.dart`(규칙·격자·파싱, 순수) · `walk_safety_repository.dart`(호출·캐시·30분 판정 캐시) · `widgets/walk_safety_card.dart` |
