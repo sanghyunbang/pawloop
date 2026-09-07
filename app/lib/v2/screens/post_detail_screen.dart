@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../data/auth_state.dart';
 import '../data/community_repository.dart';
+import '../domain/date_label.dart';
 import '../widgets/message_actions_sheet.dart';
+import 'login_screen.dart';
 import 'post_write_screen.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -178,8 +180,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _toggleReaction(CommunityReaction reaction) async {
     if (_sending) return;
     if (_isGuest) {
-      _toast(CommunityFailureKind.unauthorized.message);
-      return;
+      if (!await _askLogin('반응을 남길 수 있어요')) return;
     }
     setState(() => _sending = true);
     try {
@@ -365,8 +366,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// 커뮤니티와 채팅 **양쪽에서** 접힌다(`POST /api/blocks`, #166).
   Future<ReportChoice?> _askReport(String who, String subject) async {
     if (_isGuest) {
-      _toast('로그인하면 신고할 수 있어요');
-      return null;
+      if (!await _askLogin('신고할 수 있어요')) return null;
+      if (!mounted) return null;
     }
     return ReportSheet.show(context,
         senderName: who, subject: subject, canBlock: true);
@@ -431,6 +432,26 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// 게스트가 반응·신고를 누르면 — `writePost()` 와 같은 길이다: 안내 → 로그인 화면 →
+  /// 돌아오면 글을 다시 읽는다(#331). 토스트만 띄우면 로그인할 곳을 찾아 헤맨다.
+  /// 로그인 화면은 pop 을 먼저 하고 completeLogin() 을 부르므로 [AuthState.settle] 을 기다린다.
+  Future<bool> _askLogin(String what) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('로그인하면 $what'),
+        duration: const Duration(milliseconds: 1600),
+      ));
+    await navigator.push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    await AuthState.settle();
+    if (!mounted || !AuthState.isAuthenticated) return false;
+    // 서버가 다시 말해야 게스트가 아니다 — `_isGuest` 는 응답의 `mine` 에서 나온다.
+    await _refreshPost();
+    return mounted && !_isGuest;
+  }
+
   @override
   Widget build(BuildContext context) {
     final post = _post;
@@ -464,9 +485,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    const Text(
-                      '산책 이야기',
-                      style: TextStyle(
+                    // 제목 표시줄은 게시판 이름이다(#331). "산책 이야기" 는 어느 글에서나
+                    // 같아서 지금 어디를 보는지 말해 주지 않았다.
+                    Text(
+                      post.board?.label ?? '커뮤니티',
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                         color: T.textPrimary,
@@ -625,12 +648,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   /// 상세의 날짜. 목록과 달리 시각까지 그린다 — 스레드를 읽는 사람은 순서를 본다.
-  static String _dateTime(DateTime at) =>
-      '${at.year % 100}.${at.month.toString().padLeft(2, '0')}.'
-      '${at.day.toString().padLeft(2, '0')} '
-      '${at.hour.toString().padLeft(2, '0')}:'
-      '${at.minute.toString().padLeft(2, '0')}';
-
   Widget _postCard(CommunityPost post) {
     return GlassCard(
       child: Column(
@@ -642,6 +659,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               _avatar(post.author.nickname, 44),
               const SizedBox(width: 11),
               Expanded(
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -665,11 +683,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             color: T.textMuted,
                           ),
                           const SizedBox(width: 2),
-                          Text(
-                            post.loc!,
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              color: T.textMuted,
+                          // 장소 이름은 줄인다 — 폰 폭(411)에서 날짜까지 한 줄이라 넘쳤다(#331).
+                          Flexible(
+                            child: Text(
+                              post.loc!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: T.textMuted,
+                              ),
                             ),
                           ),
                         ],
@@ -678,9 +701,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ],
                 ),
               ),
-              Text(
-                _dateTime(post.createdAt),
-                style: const TextStyle(fontSize: 11.5, color: T.textMuted),
+              // 날짜도 줄어들 수 있어야 한다 — 왼쪽 열이 게시판 칩·장소를 다 쥐고 있어 폰 폭에서
+              // 넘쳤다(#331). 실제 글꼴에서는 "9월 1일 16:30" 이 다 들어간다.
+              Flexible(
+                flex: 2,
+                child: Text(
+                  dateTimeLabel(post.createdAt),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(fontSize: 11.5, color: T.textMuted),
+                ),
               ),
               // 고친 글인지 읽는 사람이 알아야 한다 — 이미 달린 댓글이 무엇에 대한
               // 말이었는지 되짚을 수 있는 유일한 단서다. 서버는 **값이 실제로 달라진
@@ -870,7 +901,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       const SizedBox(width: 8),
                     ],
                     Text(
-                      _dateTime(comment.createdAt),
+                      dateTimeLabel(comment.createdAt),
                       style: const TextStyle(
                         fontSize: 11,
                         color: T.textMuted,
