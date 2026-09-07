@@ -9,6 +9,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.heattrip.heat_trip_backend.user.NeighborhoodCatalog;
 import com.heattrip.heat_trip_backend.user.UnauthenticatedException;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
@@ -37,6 +38,9 @@ public class UserService {
 
     /** 로그아웃·탈퇴를 알린다 — 듣는 쪽(기기 토큰, #83)은 커밋 뒤에 받는다. 이 모듈은 누가 듣는지 모른다. */
     private final ApplicationEventPublisher events;
+
+    /** 동네 코드가 있는 시군구인지 확인하는 표 (#342). 이름은 여기서 붙지 않는다 — 응답 DTO 가 붙인다. */
+    private final NeighborhoodCatalog neighborhoods;
 
     /**
      * 이메일/비밀번호 가입.
@@ -171,6 +175,20 @@ public class UserService {
         }
         if (req.getImageUrl() != null) {
             u.setImageUrl(req.getImageUrl());
+        }
+        // 동네 (#342). null 은 안 바꿈, 빈 문자열은 지움, 값이 오면 **있는 시군구인지 확인**한다.
+        // 확인 없이 저장하면 아무 문자열이나 들어가고, 커뮤니티의 "우리 동네" 가 조용히
+        // 아무것도 안 준다 — 그건 화면에서 "글이 없다" 와 구별되지 않는다.
+        if (req.getNeighborhoodCode() != null) {
+            String code = req.getNeighborhoodCode().trim();
+            if (code.isEmpty()) {
+                u.setNeighborhoodCode(null);
+            } else if (neighborhoods.find(code).isPresent()) {
+                u.setNeighborhoodCode(code);
+            } else {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "모르는 동네 코드입니다.");
+            }
         }
 
         // @PreUpdate가 updatedAt 갱신

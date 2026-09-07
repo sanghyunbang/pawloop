@@ -54,6 +54,10 @@ CREATE TABLE users (
   image_url           VARCHAR(255) NULL,
   travel_type         VARCHAR(255) NULL COMMENT '감정여행(heattrip) 시절 잔재 — ADR-0001',
 
+  -- 동네 (#342). 사용자가 스스로 고른 행정동 코드다 — 단말이 잰 좌표가 아니라 위치정보가 아니고,
+  -- 그래서 신고 전(A안 #235)에도 서버가 든다. 좌표 컬럼을 나란히 두지 않는 것이 그 선이다.
+  neighborhood_code   VARCHAR(10)  NULL COMMENT '통계청 행정동 코드 10자리. 앞 5자리가 시군구',
+
   -- 약관 동의 컬럼은 없다. `user_consent` 표(19_user_consent.sql, #190)가 문서별·버전별 이력으로 든다.
   -- 옛 아홉 컬럼(agree_* / *_version / *_agreed_at)은 21 번 스크립트가 값을 옮긴 뒤 지웠다.
 
@@ -62,7 +66,8 @@ CREATE TABLE users (
 
   PRIMARY KEY (id),
   UNIQUE KEY uk_users_provider_social_id (provider, social_id),
-  UNIQUE KEY uk_users_email (email)
+  UNIQUE KEY uk_users_email (email),
+  KEY idx_users_neighborhood (neighborhood_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 

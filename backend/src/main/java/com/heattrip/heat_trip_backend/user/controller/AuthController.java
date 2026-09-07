@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.user.controller;
 
 import com.heattrip.heat_trip_backend.user.CurrentUser;
+import com.heattrip.heat_trip_backend.user.NeighborhoodCatalog;
 import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -29,6 +30,9 @@ public class AuthController implements AuthApiDoc{
 
     private final UserService userService;
     private final RefreshTokenService refreshTokenService;
+
+    /** 동네 코드에 이름을 붙이는 표 (#342). */
+    private final NeighborhoodCatalog neighborhoods;
 
     /** 1회용 코드 → 토큰. 소셜 경로에서 토큰이 나가는 유일한 자리다. (이슈 #14) */
 
@@ -98,7 +102,7 @@ public class AuthController implements AuthApiDoc{
      */
     @GetMapping("/me")
     public ResponseEntity<UserResponse> me(@CurrentUser User me) {
-        return ResponseEntity.ok(UserResponse.from(me));
+        return ResponseEntity.ok(withNeighborhood(me));
     }
 
     /** 내 프로필 수정 (부분 수정) */
@@ -109,7 +113,18 @@ public class AuthController implements AuthApiDoc{
             @Valid @RequestBody UpdateProfileRequest req) {
 
         User updated = userService.updateProfile(me.getId(), req);
-        return ResponseEntity.ok(UserResponse.from(updated));
+        return ResponseEntity.ok(withNeighborhood(updated));
+    }
+
+    /**
+     * 동네 이름을 붙여 응답한다 (#342).
+     *
+     * <p>이름은 서버의 표에서만 나온다 — 본문으로 받으면 아무나 자기 동네를 "청와대" 라고
+     * 적어 글 카드에 띄울 수 있다.
+     */
+    private UserResponse withNeighborhood(User user) {
+        return UserResponse.from(user,
+                neighborhoods.find(user.getNeighborhoodCode()).orElse(null));
     }
 
     /** 내 계정 삭제 */

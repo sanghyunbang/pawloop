@@ -13,6 +13,7 @@
 | **KorPetTourService2** | 한국관광공사 | 여행지`12`·문화`14`·레포츠`28`·숙박`32`·쇼핑`38`·카페/식당`39` | WGS84 (경위도) | **실연동** (백엔드 프록시 경유, 서울 ~45곳) |
 | **행정안전부 인허가** (공공데이터포털 `1741000/animal_hospitals`·`animal_sales`) | 행정안전부 | 병원`vet`·펫샵`shop` | **EPSG:5174** → WGS84 (서버가 proj4j 로 변환) | **실연동** (#291 — 전국, 월 1회, `place_catalog` 의 `localdata` 행) |
 | **두루누비 걷기여행길** (`B551011/Durunubi/courseList` + GPX) | 한국관광공사 | 산책로`trail` | WGS84 (GPX) | **실연동** (#291 — 월 1회, 시작점은 `place_catalog` 의 `durunubi` 행, 선은 `trail_route`) |
+| **행정동 경계** (통계청 SGIS · [vuski/admdongkor](https://github.com/vuski/admdongkor)) | 통계청 | — (동네 고르기 #342) | WGS84 | **내장 자산** — API 를 안 부른다. 아래 §7 |
 
 - 카테고리 key는 `lib/v2/domain/pet.dart`의 `kPetCategories` SSOT를 그대로 사용한다. 숫자 key(`12`/`14`/`28`/`32`/`38`/`39`)는 KTO `contenttypeid`, 문자 key(`vet`/`shop`/`trail`)는 별도 공공데이터 레이어(`kLayerKeys`)다.
 - 셋 다 **백엔드가 부른다**(#40 · #291). 앱은 `GET /api/places/nearby`·`GET /api/places/catalog`·`GET /api/places/trails/{courseId}/route` 만 안다(`lib/v2/data/pet_places_repository.dart`·`place_catalog_repository.dart`·`trail_route_repository.dart`). 세 API 는 공공데이터포털의 **같은 인증키**(`TOUR_API_SECRET`)를 쓰되 API 마다 활용신청이 따로다.
@@ -201,6 +202,26 @@ String query = "serviceKey=" + serviceKey
 - 응답이 JSON 인지 XML 인지 실측 전이다 — `DataGoKrEnvelope` 가 둘 다 같은 트리로 읽는다.
 - 코스 하나의 선은 10KB 안팎이라 2,000 코스면 16MB 다. 그래서 카탈로그에 선을 싣지 않는다.
 - 앱은 산책로 시트를 열 때 선을 받아 지도에 폴리라인을 그린다(`TrailRouteRepository`). 지도 키 없는 빌드는 카드의 `summary` 만 본다.
+
+---
+
+## 3.5 행정동 목록 — 앱에 넣어 둔다 (#342)
+
+**API 가 아니다.** 받아서 쓰는 것이 아니라 **저장소에 커밋한 파일**이다. 사용자가 자기 동네를 고르는 목록이고, 목록이 바뀌는 주기가 몇 년이라 실시간으로 받을 이유가 없다 — 빌드 때 받으면 그 순간 인터넷이 없을 때 앱이 안 나온다.
+
+| 항목 | 값 |
+|---|---|
+| 원자료 | 통계청 SGIS 행정동 경계 (공공누리 제1유형 — 출처표시) |
+| 가공본 | [vuski/admdongkor](https://github.com/vuski/admdongkor) `ver20230101` — **CC BY 4.0** |
+| 우리 파일 | `app/assets/regions/hangjeongdong.json` (시도 17 · 시군구 250 · 행정동 3,516 · 285KB) |
+| 서버 파일 | `backend/src/main/resources/data/sigungu.json` (시군구 250 줄, 20KB) |
+| 만드는 법 | `python app/tool/build_regions.py <geojson> app/assets/regions/hangjeongdong.json` |
+
+**원본은 34MB 경계 GeoJSON 이다.** 우리에게 필요한 것은 이름·코드·중심점뿐이라 스크립트가 그 셋만 뽑는다. 중심점은 가장 큰 폴리곤 링의 꼭짓점 평균이다 — 지도 첫 화면의 중심으로만 쓰므로 몇백 미터 차이가 뜻을 바꾸지 않는다.
+
+**CC BY 4.0 은 파생물에도 출처 표시 의무가 남는다.** 그래서 출처가 세 군데 적혀 있다 — 생성된 JSON 의 `source` 필드, `NeighborhoodCatalog` 의 javadoc, 그리고 앱의 동네 고르기 화면 아래 한 줄. **지우면 안 된다.**
+
+**서버는 시군구 250 줄만 든다.** 동 이름을 쓸 일이 없어서다 — 글 카드는 구까지만 보여 주고, 지도의 중심 좌표는 앱이 자기 자산에서 읽는다. 서버는 좌표를 받지도 저장하지도 않는다(#235 A안).
 
 ---
 

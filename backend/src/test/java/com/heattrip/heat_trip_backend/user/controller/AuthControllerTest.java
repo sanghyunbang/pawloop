@@ -6,6 +6,7 @@ import com.heattrip.heat_trip_backend.user.dto.RefreshTokenRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
+import com.heattrip.heat_trip_backend.user.NeighborhoodCatalog;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
 import com.heattrip.heat_trip_backend.user.service.UserService;
@@ -39,6 +40,14 @@ class AuthControllerTest {
 
     @Mock
     private RefreshTokenService refreshTokenService;
+
+    /**
+     * 동네 이름을 붙이는 표 (#342). 여기서는 빈 응답이면 충분하다 — 이 테스트가 보는 것은
+     * "컨트롤러가 주입된 사용자를 그대로 넘기는가" 이고 동네는 그 답을 안 바꾼다.
+     * Mockito 가 {@code Optional} 반환에 기본으로 {@code empty} 를 준다.
+     */
+    @Mock
+    private NeighborhoodCatalog neighborhoods;
 
     @InjectMocks
     private AuthController authController;
