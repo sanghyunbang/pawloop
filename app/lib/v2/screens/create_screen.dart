@@ -172,8 +172,6 @@ class _CreateScreenState extends State<CreateScreen> {
                   const SizedBox(height: 14),
                   _metricsCard(),
                   const SizedBox(height: 14),
-                  _photoCard(),
-                  const SizedBox(height: 14),
                   _memoCard(),
                   const SizedBox(height: 18),
                   _saveButton(),
@@ -276,6 +274,17 @@ class _CreateScreenState extends State<CreateScreen> {
         //
         // 지우는 것은 가능하다 — 내 기록 화면(myrecords_screen)에서 길게 눌러 지운다.
         // 하드 삭제라 되돌릴 수 없어서 그 화면이 반드시 한 번 묻는다.
+        if (widget.draft != null) ...[
+          const SizedBox(height: 5),
+          const Row(children: [
+            Icon(Icons.gps_fixed, size: 13, color: T.textMuted),
+            SizedBox(width: 5),
+            Expanded(
+              child: Text('GPS 로 잰 값이에요 · 여기서는 고칠 수 없어요',
+                  style: TextStyle(fontSize: 12, color: T.textMuted)),
+            ),
+          ]),
+        ],
         if (widget.draft == null) ...[
           const SizedBox(height: 5),
           const Row(children: [
@@ -291,7 +300,9 @@ class _CreateScreenState extends State<CreateScreen> {
         _stepperRow(
           icon: Icons.straighten,
           label: '거리',
-          value: '${km.toStringAsFixed(1)} km',
+          readOnly: widget.draft != null,
+          // 잰 값은 둘째 자리까지 — 0.15km 를 0.1 로 보여 주면 잰 값이 아니다.
+          value: widget.draft != null ? '${km.toStringAsFixed(2)} km' : '${km.toStringAsFixed(1)} km',
           onMinus: () => setState(() {
             km = (km - 0.1).clamp(0.0, 99.0);
             _distanceEdited = true;
@@ -305,6 +316,7 @@ class _CreateScreenState extends State<CreateScreen> {
         _stepperRow(
           icon: Icons.schedule,
           label: '시간',
+          readOnly: widget.draft != null,
           value: '$minutes 분',
           onMinus: () => setState(() {
             minutes = (minutes - 5).clamp(0, 600);
@@ -325,6 +337,7 @@ class _CreateScreenState extends State<CreateScreen> {
     required String value,
     required VoidCallback onMinus,
     required VoidCallback onPlus,
+    bool readOnly = false,
   }) {
     Widget btn(IconData i, VoidCallback onTap) => GestureDetector(
           onTap: onTap,
@@ -355,62 +368,14 @@ class _CreateScreenState extends State<CreateScreen> {
         const SizedBox(width: 10),
         _label(label),
         const Spacer(),
-        btn(Icons.remove, onMinus),
+        // GPS 로 잰 값은 고칠 수 없다 — ±가 있으면 잰 값이 믿을 수 없게 된다(#327).
+        if (!readOnly) btn(Icons.remove, onMinus),
         SizedBox(
           width: 78,
           child: Text(value, textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF3A3550))),
         ),
-        btn(Icons.add, onPlus),
-      ]),
-    );
-  }
-
-  // ── 사진(플레이스홀더) ───────────────────────
-  Widget _photoCard() {
-    Widget thumb(List<Color> c) => Container(
-          width: 74, height: 74,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: c),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Align(
-            alignment: Alignment(0, 0.4),
-            child: Icon(Icons.pets, size: 22, color: Color(0x66FFFFFF)),
-          ),
-        );
-    return GlassCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('사진', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
-        const SizedBox(height: 4),
-        const Text('오늘 우리 아이의 산책 순간을 남겨보세요.',
-            style: TextStyle(fontSize: 12, color: Color(0xA8463C64))),
-        const SizedBox(height: 14),
-        Row(children: [
-          GestureDetector(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('사진 첨부는 곧 지원돼요'), duration: Duration(milliseconds: 1200)),
-              );
-            },
-            child: Container(
-              width: 74, height: 74, alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0x59836FFF), width: 1.5),
-              ),
-              child: Column(mainAxisSize: MainAxisSize.min, children: const [
-                Icon(Icons.add_a_photo, size: 22, color: Color(0xFF9B8FC4)),
-                SizedBox(height: 3),
-                Text('추가', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF9B8FC4))),
-              ]),
-            ),
-          ),
-          const SizedBox(width: 10),
-          thumb(const [Color(0xFFFFD9C2), Color(0xFFFFC0B0)]),
-          const SizedBox(width: 10),
-          thumb(const [Color(0xFFD4ECFF), Color(0xFFD9F5EC)]),
-        ]),
+        if (!readOnly) btn(Icons.add, onPlus),
       ]),
     );
   }

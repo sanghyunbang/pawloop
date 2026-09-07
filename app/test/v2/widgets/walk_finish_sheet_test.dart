@@ -58,7 +58,7 @@ void main() {
     final f = fixture();
     await pumpSheet(tester, f.sheet);
 
-    expect(find.text('산책 완료! 🐾'), findsOneWidget);
+    expect(find.text('산책 완료!'), findsOneWidget);
     expect(find.text('18:40'), findsOneWidget);
     expect(find.text('1.24km'), findsOneWidget);
     expect(find.byType(CustomPaint), findsWidgets, reason: '타일 없이 그린 경로 미리보기');

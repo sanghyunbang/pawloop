@@ -1,3 +1,5 @@
+import '../widgets/walk_locating_view.dart';
+import '../widgets/walk_stats_panel.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -53,7 +55,8 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
   /// `ST_Length` 는 6,421m 였다. **경로와 거리가 서로 다른 말을 했다.** (#145)
   LocationFix? _fix;
   bool _follow = true; // 카메라 자동 따라가기(제스처 시 해제)
-  bool _statsExpanded = false; // 스탯 패널 펼침 여부(기본 접힘)
+  // 기본 펼침 — 종료 버튼이 첫 프레임부터 보인다(#327). 접는 것은 사용자가 고른다.
+  bool _statsExpanded = WalkStatsPanel.expandedByDefault;
   bool _poisLoaded = false;
 
   /// 주변 장소를 받는 중인가.
@@ -895,216 +898,17 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> {
     );
   }
 
-  Widget _statsPanel(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
-    if (!_statsExpanded) {
-      // 접힘: 작은 알약 — 핵심만(상태·거리·시간). 탭하면 펼침.
-      return GestureDetector(
-        onTap: () => setState(() => _statsExpanded = true),
-        child: Container(
-          margin: EdgeInsets.only(bottom: bottom + 14),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x2E5A4690),
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _paused
-                      ? const Color(0xFFBBB3CC)
-                      : const Color(0xFFFF7E8A),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${_km.toStringAsFixed(2)}km · $_timeLabel',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: T.textPrimary,
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(
-                Icons.keyboard_arrow_up_rounded,
-                size: 20,
-                color: T.textMuted,
-              ),
-            ],
-          ),
-        ),
+  Widget _statsPanel(BuildContext context) => WalkStatsPanel(
+        km: _km,
+        timeLabel: _timeLabel,
+        paceLabel: _pace,
+        paused: _paused,
+        expanded: _statsExpanded,
+        onToggle: () => setState(() => _statsExpanded = !_statsExpanded),
+        onPauseToggle: () => setState(() => _paused = !_paused),
+        onFinish: _finish,
+        bottomInset: MediaQuery.of(context).padding.bottom,
       );
-    }
-    // 펼침: 큰 스탯 + 일시정지/종료.
-    return Container(
-      margin: EdgeInsets.fromLTRB(14, 0, 14, bottom + 14),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x2E5A4690),
-            blurRadius: 26,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            onTap: () => setState(() => _statsExpanded = false),
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _paused
-                        ? const Color(0xFFBBB3CC)
-                        : const Color(0xFFFF7E8A),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _paused ? '일시정지됨' : '산책 기록 중',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: _paused ? T.textMuted : const Color(0xFFE07A4E),
-                  ),
-                ),
-                const Spacer(),
-                // 이 패널은 실 GPS 로 트래킹 중일 때만 뜬다 — 위치가 없으면 지도
-                // 자체가 만들어지지 않는다(`build` 의 판정 게이트).
-                const Text(
-                  '실시간 GPS',
-                  style: TextStyle(fontSize: 11, color: T.textMuted),
-                ),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 20,
-                  color: T.textMuted,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _stat(_km.toStringAsFixed(2), 'km'),
-              _stat(_timeLabel, '시간'),
-              _stat(_pace, '페이스'),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _paused = !_paused),
-                  child: Container(
-                    height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1ECF7),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _paused
-                              ? Icons.play_arrow_rounded
-                              : Icons.pause_rounded,
-                          size: 21,
-                          color: T.textSecondary,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          _paused ? '재개' : '일시정지',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: T.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: GestureDetector(
-                  onTap: _finish,
-                  child: Container(
-                    height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: _warm,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.stop_rounded, size: 21, color: Colors.white),
-                        SizedBox(width: 6),
-                        Text(
-                          '종료',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _stat(String v, String label) => Column(
-    children: [
-      Text(
-        v,
-        style: const TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w800,
-          color: T.textPrimary,
-        ),
-      ),
-      const SizedBox(height: 2),
-      Text(
-        label,
-        style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64)),
-      ),
-    ],
-  );
 }
 
 /// 위치를 판정하는 동안. 아주 짧게 스쳐 가지만, 이 순간에 지도를 만들지 않는 것이
@@ -1114,10 +918,7 @@ class _LocatingScreen extends StatelessWidget {
   const _LocatingScreen();
 
   @override
-  Widget build(BuildContext context) => const Scaffold(
-    backgroundColor: T.lilacTop,
-    body: Center(child: CircularProgressIndicator()),
-  );
+  Widget build(BuildContext context) => const WalkLocatingView();
 }
 
 /// 위치를 쓸 수 없을 때. **가짜 경로 대신 이 화면이 나온다.**

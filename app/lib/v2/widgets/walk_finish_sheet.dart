@@ -107,10 +107,15 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            '산책 완료! 🐾',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: T.textPrimary),
-          ),
+          // 시스템 이모지 대신 자산 — 디자인 시스템은 Fluent 3D 이모지다(#327).
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            const Text(
+              '산책 완료!',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: T.textPrimary),
+            ),
+            const SizedBox(width: 6),
+            Image.asset('assets/emoji/paw.png', width: 22, height: 22, gaplessPlayback: true),
+          ]),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
