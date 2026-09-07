@@ -276,4 +276,27 @@ void main() {
           reason: '거짓이면 빈 화면 문구 아래에 거절 카드가 놓인다');
     });
   });
+
+  // "…" 메뉴 — 길게 누르기는 눌러 보기 전엔 있는지 모른다 (#327).
+  group('카드의 … 메뉴', () {
+    testWidgets('… → 지우기 → 확인부터 묻는다', (t) async {
+      final repo = _Repo(items: [walkOf()]);
+      await _pump(t, repo);
+      await t.tap(find.byIcon(Icons.more_horiz_rounded));
+      await t.pumpAndSettle();
+      expect(find.text('지우기'), findsOneWidget);
+      expect(find.text('회고 쓰기'), findsOneWidget, reason: '서버에 있는 기록은 회고도 된다');
+      await t.tap(find.text('지우기'));
+      await t.pumpAndSettle();
+      expect(find.text('이 기록을 지울까요?'), findsOneWidget);
+      expect(repo.deleted, isEmpty, reason: '묻기 전에 지우면 안 된다');
+    });
+
+    testWidgets('거짓 플랜 문구가 없다 — 유료 플랜은 없다', (t) async {
+      final repo = _Repo(items: [walkOf()]);
+      await _pump(t, repo);
+      expect(find.textContaining('무료 플랜'), findsNothing);
+    });
+  });
+
 }
