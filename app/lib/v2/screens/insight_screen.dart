@@ -9,7 +9,10 @@ import '../widgets/profile_avatar.dart';
 
 /// 산책 통계 (insight) — 이번 주 요약 + 주간 거리 막대그래프 + 자주 가는 곳.
 class InsightScreen extends StatefulWidget {
-  const InsightScreen({super.key});
+  /// 테스트에서 갈아 끼운다. 화면은 평소 기본 피드를 쓴다.
+  final WalkFeed? feed;
+
+  const InsightScreen({super.key, this.feed});
   @override
   State<InsightScreen> createState() => _InsightScreenState();
 }
@@ -49,7 +52,7 @@ class _InsightScreenState extends State<InsightScreen> {
   /// 걸은 요일. 코스 추천은 `Walk` 에 장소 축이 생기는 날 다시 본다.
   String get _weeklyReport {
     if (_walkCount == 0) {
-      return '이번 주는 아직 기록이 없어요. 오늘 한 바퀴 어때요 🐾';
+      return '이번 주는 아직 기록이 없어요. 오늘 한 바퀴 어때요.';
     }
 
     final buffer = StringBuffer(
@@ -65,7 +68,7 @@ class _InsightScreenState extends State<InsightScreen> {
       buffer.write('${kWeekDayLabels[best]}요일에 가장 많이 걸었고, ');
     }
 
-    buffer.write('평균 ${_avgKm.toStringAsFixed(1)}km 예요 🐾');
+    buffer.write('평균 ${_avgKm.toStringAsFixed(1)}km 예요.');
     return buffer.toString();
   }
 
@@ -97,6 +100,7 @@ class _InsightScreenState extends State<InsightScreen> {
 
   @override
   Widget build(BuildContext context) => WalkFeedBuilder(
+        feed: widget.feed,
         builder: (context, data, _) {
           _data = data;
           return _build(context);
@@ -219,7 +223,7 @@ class _InsightScreenState extends State<InsightScreen> {
     );
   }
 
-  // ── AI 주간 리포트 (P1: 무료 베타 — 추후 LLM 연동, 유료 경계 후보) ──
+  // ── 이번 주 요약 — 규칙으로 계산한 문장이다. "AI" 라고 부르지 않는다(#332). 진짜 요약은 #359.
   Widget _aiReportCard() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -236,33 +240,17 @@ class _InsightScreenState extends State<InsightScreen> {
           Row(
             children: [
               const Icon(
-                Icons.auto_awesome_rounded,
+                Icons.insights_rounded,
                 size: 19,
                 color: Color(0xFFE07A4E),
               ),
               const SizedBox(width: 8),
               const Text(
-                'AI 주간 리포트',
+                '이번 주 요약',
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFFE07A4E),
-                ),
-              ),
-              const SizedBox(width: 7),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  gradient: _warm,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  '베타',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
                 ),
               ),
             ],
@@ -278,7 +266,7 @@ class _InsightScreenState extends State<InsightScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'AI가 산책·케어 기록을 요약해요 · 무료 베타',
+            '이번 주 산책 기록에서 계산했어요',
             style: TextStyle(fontSize: 11, color: T.textMuted),
           ),
         ],
@@ -413,7 +401,7 @@ class _InsightScreenState extends State<InsightScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 4),
                   child: Text(
-                    value.toStringAsFixed(0),
+                    axisLabel(value),
                     style: const TextStyle(fontSize: 10, color: T.textMuted),
                   ),
                 );
@@ -504,6 +492,15 @@ class _InsightScreenState extends State<InsightScreen> {
             ],
           ),
           const SizedBox(height: 4),
+          // 지금은 늘 비어 있다(`_topPlaces`). 빈 카드로 두면 고장처럼 보인다(#332).
+          if (top.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                '아직 없어요 · 산책에 장소가 붙으면 여기 쌓여요',
+                style: TextStyle(fontSize: 12.5, color: T.textMuted),
+              ),
+            ),
           for (int i = 0; i < top.length; i++)
             _placeRow(i + 1, top[i].key, top[i].value, i < top.length - 1),
         ],
@@ -582,4 +579,11 @@ class _InsightScreenState extends State<InsightScreen> {
       ),
     );
   }
+}
+
+/// 세로축 한 눈금. 1km 미만은 m 로, 그 위는 소수 첫째 자리 — 정수로 반올림하면 0.15km 한 건일
+/// 때 눈금이 "0 0 0 0" 이었다(#332).
+String axisLabel(double km) {
+  if (km < 1) return '${(km * 1000).round()}m';
+  return km.toStringAsFixed(1);
 }
