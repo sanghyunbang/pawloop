@@ -570,7 +570,7 @@ CREATE TABLE chat_room_member (
 | `user_id` | `BIGINT` | NOT NULL, INDEX, **FK 없음** | 멤버(`users.id` 값만) |
 | `role` | `VARCHAR(10)` | NOT NULL 기본 MEMBER, CHECK | `OWNER` 만 강퇴·초대 회수를 한다 |
 | `joined_at` | `DATETIME` | NOT NULL, 기본 now | 참여 시각 |
-| `last_read_seq` | `BIGINT` | NOT NULL, 기본 0 | `GREATEST`·`LEAST` 로만 갱신 — 뒤로 못 가고 `room.last_seq` 를 넘지 못한다 |
+| `last_read_seq` | `BIGINT` | NOT NULL, 기본 0 | `GREATEST`·`LEAST` 로만 갱신 — 뒤로 못 가고 `room.last_seq` 를 넘지 못한다. 읽음 보고뿐 아니라 **메시지 전송**도 발신자의 값을 그 메시지까지 올린다(#330) |
 | `removed_at` | `DATETIME` | NULL | 강퇴 시각 |
 | `removed_by` | `BIGINT` | NULL, **FK 없음** | 강퇴한 방장 |
 | `rejoin_blocked` | `BIT(1)` | NOT NULL, 기본 `b'0'` | 유효한 초대코드로도 다시 못 들어온다 |
