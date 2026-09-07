@@ -22,6 +22,8 @@ import '../data/place_catalog_repository.dart';
 import '../data/trail_route_repository.dart';
 import '../data/location_upload_policy.dart';
 import '../data/location_service.dart';
+import '../data/neighborhood_store.dart';
+import '../domain/neighborhood.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 
@@ -50,7 +52,16 @@ class ExploreScreen extends StatefulWidget {
 
   /// 이웃 코스 저장소. 테스트가 꽂는 자리다 (#339).
   final CourseRepository? courses;
-  const ExploreScreen({super.key, this.initialView = 'list', this.repository, this.courses});
+  /// 내 동네를 읽는 자리 (#342). **테스트만 넘긴다.**
+  final NeighborhoodStore? neighborhoods;
+
+  const ExploreScreen({
+    super.key,
+    this.initialView = 'list',
+    this.repository,
+    this.courses,
+    this.neighborhoods,
+  });
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
 }
@@ -66,7 +77,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   NLatLng _center = const NLatLng(37.5665, 126.9816);
   List<PetPlace> _places = const [];
   bool _loading = true;
-  /// 현위치를 못 받아 서울시청 기준인가. 게스트(동의 전)·권한 거부·실패 모두 여기다.
+  /// 내가 고른 동네 (#342). 현위치를 못 받았을 때 서울시청 대신 여기를 쓴다.
+  Neighborhood? _myNeighborhood;
+
+  /// 현위치를 못 받아 **기본 중심**인가. 게스트(동의 전)·권한 거부·실패 모두 여기다.
+  /// 그 기본이 서울시청인지 내 동네인지는 [_myNeighborhood] 가 정한다(#342).
   /// 화면에 그 말이 없으면 사용자는 왜 중구가 나오는지 모른다(#324).
   bool _fallbackCenter = true;
   /// 시트에서 "지도에서 보기" 를 눌렀는데 지도 뷰가 아직 안 만들어졌을 때 — 만들어지면 그린다.
@@ -82,7 +97,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Future<void> _boot() async {
-    // 현위치 확보 → 실패 시 서울 시청 유지.
+    // 고른 동네를 **기다리지 않는다** (#342). 기기 저장소 읽기가 늦거나 실패해도 지도는
+    // 그대로 열려야 한다 — 여기서 await 하면 그 하나가 첫 조회 전체를 붙잡는다.
+    unawaited(_applyMyNeighborhood());
+
+    // 현위치 확보 → 실패 시 기본 중심(서울시청 또는 고른 동네) 유지.
     final pos = await LocationService.current();
     if (mounted && pos != null) {
       _center = NLatLng(pos.latitude, pos.longitude);
@@ -90,6 +109,27 @@ class _ExploreScreenState extends State<ExploreScreen> {
       await _mapCtrl?.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
     }
     await _load();
+  }
+
+  /// 고른 동네가 있으면 그 동네에서 연다 (#342).
+  ///
+  /// 좌표는 기기 안의 자산에서 온 값이라 서버도 위치 권한도 필요 없다. **현위치가 이미
+  /// 잡혔으면 안 건드린다** — 늦게 도착한 이 값이 진짜 위치를 덮으면 안 된다.
+  Future<void> _applyMyNeighborhood() async {
+    Neighborhood? read;
+    try {
+      read = await (widget.neighborhoods ?? NeighborhoodStore()).read();
+    } catch (_) {
+      // 저장소를 못 읽어도 지도는 열린다.
+      return;
+    }
+    final mine = read;
+    if (!mounted || mine == null || !_fallbackCenter) return;
+    setState(() {
+      _myNeighborhood = mine;
+      _center = NLatLng(mine.lat, mine.lng);
+    });
+    await _mapCtrl?.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
   }
 
   /// 조회 순번 — 칩을 빠르게 두 번 누르면 먼저 간 조회가 늦게 돌아올 수 있다. 마지막만 남긴다.
@@ -396,9 +436,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
           if (_fallbackCenter) ...[
             const SizedBox(height: 6),
             Text(
-              AuthState.isGuest
-                  ? '현재 위치를 못 받아 서울시청 기준이에요 · 로그인하고 위치를 켜면 내 주변'
-                  : '현재 위치를 못 받아 서울시청 기준이에요 · 위치 권한을 켜면 내 주변',
+              // 동네를 골랐으면 그 이름을 말한다 (#342) — "서울시청 기준" 은 고른 사람에게
+              // 틀린 말이고, 그 문구를 보고 위치 권한을 켜러 갈 이유도 없다.
+              _myNeighborhood != null
+                  ? '현재 위치를 못 받아 ${_myNeighborhood!.dong} 기준이에요 · 위치를 켜면 내 주변'
+                  : AuthState.isGuest
+                      ? '현재 위치를 못 받아 서울시청 기준이에요 · 로그인하고 위치를 켜면 내 주변'
+                      : '현재 위치를 못 받아 서울시청 기준이에요 · 위치 권한을 켜면 내 주변',
               style: const TextStyle(fontSize: 11, color: T.textMuted),
             ),
           ],

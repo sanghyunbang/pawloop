@@ -50,7 +50,15 @@ public record PostResponse(
          * 지워졌으면 {@code null} 이다 — 그 셋을 구분하지 않는다. 화면에는 "그림이 없다" 로
          * 같기 때문이다.
          */
-        PostCourse course) {
+        PostCourse course,
+
+        /**
+         * 글쓴이의 동네 — <b>구까지만</b> (#342). 안 골랐으면 {@code null} 이다.
+         *
+         * <p>동 이름을 안 싣는 것이 이 필드의 요점이다. 남의 사는 곳을 구보다 좁히면
+         * 그것만으로 사람을 찾아갈 수 있다.
+         */
+        String authorDistrict) {
 
     /**
      * 카드에 그릴 만큼의 코스. 선은 <b>이미 잘라 낸 것을 더 줄인 것</b>(최대 40점)이라
@@ -61,16 +69,25 @@ public record PostResponse(
 
     /** 가리기와 무관한 자리 — 방금 내가 쓰거나 고친 글이다. */
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions) {
-        return of(post, commentCount, reactions, false, null);
+        return of(post, commentCount, reactions, false, null, null);
     }
 
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
                                   boolean hiddenByBlock) {
-        return of(post, commentCount, reactions, hiddenByBlock, null);
+        return of(post, commentCount, reactions, hiddenByBlock, null, null);
     }
 
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
                                   boolean hiddenByBlock, PostCourse course) {
+        return of(post, commentCount, reactions, hiddenByBlock, course, null);
+    }
+
+    /**
+     * @param authorDistrict 글쓴이의 시군구 이름. 서비스가 {@code NeighborhoodCatalog} 로
+     *                       찾아 넣는다 — 사용자가 보낸 문자열이 아니다(#342).
+     */
+    public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
+                                  boolean hiddenByBlock, PostCourse course, String authorDistrict) {
         return new PostResponse(
                 post.getId(),
                 PersonRefResponse.of(post.getUser()),
@@ -84,6 +101,7 @@ public record PostResponse(
                 post.createdAtInstant(),
                 post.updatedAtInstant(),
                 hiddenByBlock,
-                course);
+                course,
+                authorDistrict);
     }
 }

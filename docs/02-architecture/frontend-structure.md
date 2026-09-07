@@ -65,7 +65,8 @@ lib/
 | `family_chat_screen.dart` | 가족 채팅방 (폴링) | family → push |
 | `chat_list_screen.dart` | 방 목록 · 미읽음 | 탭 3 |
 | `invite_join_screen.dart` | 초대 코드로 방 참여 | 링크·코드 입력 |
-| `settings_screen.dart` | 설정 — 약관 넷 · 회원 탈퇴 · 운영자 연락처 | me → push (#165) |
+| `settings_screen.dart` | 설정 — 약관 넷 · 내 동네 · 저녁 알림 · 회원 탈퇴 · 운영자 연락처 | me → push (#165) |
+| `neighborhood_picker_screen.dart` | 내 동네 고르기 — 시도→시군구→동 세 단계 · 검색 · "현재 위치로 찾기"(기기 안) | 설정 → push (#342) |
 | `settings/legal_document_screen.dart` | 약관 전문 렌더 (`assets/terms/*.md`) | 설정·동의 화면 → push |
 | `settings/account_delete_screen.dart` | 회원 탈퇴 → `DELETE /auth/me` | 설정 → push |
 | `consent_screen.dart` | **약관 동의 게이트** — 이용약관·개인정보·위치기반서비스(필수) + 마케팅 | 로그인 직후, 온보딩보다 앞 (#180) |

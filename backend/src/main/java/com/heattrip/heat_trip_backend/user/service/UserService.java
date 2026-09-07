@@ -16,6 +16,7 @@ import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.UserSessionsRevoked;
+import com.heattrip.heat_trip_backend.user.ViewerNeighborhood;
 import com.heattrip.heat_trip_backend.user.UserTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
@@ -25,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class UserService {
+public class UserService implements ViewerNeighborhood {
     
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder; // 이건 뭐지?
@@ -41,6 +42,20 @@ public class UserService {
 
     /** 동네 코드가 있는 시군구인지 확인하는 표 (#342). 이름은 여기서 붙지 않는다 — 응답 DTO 가 붙인다. */
     private final NeighborhoodCatalog neighborhoods;
+
+    /**
+     * 커뮤니티의 "우리 동네" 가 묻는 자리 (#342).
+     *
+     * <p>읽기 전용이고, 없는 사용자에게 예외를 던지지 않는다 — 목록 조회 한 번이 그 이유로
+     * 500 이 되면 안 된다.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Optional<String> sggOf(long userId) {
+        return userRepository.findById(userId)
+                .map(User::getNeighborhoodCode)
+                .map(NeighborhoodCatalog::sggPrefixOf);
+    }
 
     /**
      * 이메일/비밀번호 가입.

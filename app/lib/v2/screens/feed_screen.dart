@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../domain/date_label.dart';
 import '../data/community_repository.dart';
+import '../data/neighborhood_store.dart';
+import '../domain/neighborhood.dart';
 import '../widgets/post_course_card.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -20,7 +22,10 @@ class FeedScreen extends StatefulWidget {
   /// 테스트가 가짜 서버를 넣는 자리. 앱에서는 `null` 이라 기본 리포지토리가 선다.
   final CommunityRepository? repository;
 
-  const FeedScreen({super.key, this.repository});
+  /// 내 동네를 읽는 자리 (#342). **테스트만 넘긴다.**
+  final NeighborhoodStore? neighborhoods;
+
+  const FeedScreen({super.key, this.repository, this.neighborhoods});
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -32,6 +37,13 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// `null` 이면 전체.
   CommunityBoard? _board;
+
+  /// "우리 동네" 만 볼까 (#342). 동네를 고른 사람에게만 칩이 보인다 —
+  /// 안 고른 채로 켜면 서버가 400 이고, 그건 사용자 잘못이 아니다.
+  bool _myNeighborhood = false;
+
+  /// 내가 고른 동네. `null` 이면 칩 자체가 없다.
+  Neighborhood? _mine;
   String _view = 'card'; // 'card' | 'list'
 
   List<CommunityPost> _posts = const [];
@@ -61,7 +73,25 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    _loadNeighborhood();
+    kNeighborhoodRev.addListener(_loadNeighborhood);
     _load();
+  }
+
+  @override
+  void dispose() {
+    kNeighborhoodRev.removeListener(_loadNeighborhood);
+    super.dispose();
+  }
+
+  Future<void> _loadNeighborhood() async {
+    final mine = await (widget.neighborhoods ?? NeighborhoodStore()).read();
+    if (!mounted) return;
+    setState(() {
+      _mine = mine;
+      // 동네를 지웠는데 토글이 켜져 있으면 그 뒤 모든 조회가 400 이다.
+      if (mine == null) _myNeighborhood = false;
+    });
   }
 
   Future<void> _load() async {
@@ -71,7 +101,7 @@ class _FeedScreenState extends State<FeedScreen> {
       _failure = null;
     });
     try {
-      final page = await _repo.feed(board: _board);
+      final page = await _repo.feed(board: _board, myNeighborhood: _myNeighborhood);
       if (!mounted || generation != _generation) return;
       setState(() {
         _posts = page.items;
@@ -94,7 +124,8 @@ class _FeedScreenState extends State<FeedScreen> {
     final generation = _generation;
     setState(() => _loadingMore = true);
     try {
-      final page = await _repo.feed(board: _board, cursor: cursor);
+      final page = await _repo.feed(
+          board: _board, cursor: cursor, myNeighborhood: _myNeighborhood);
       // 기다리는 동안 게시판이 바뀌었으면 이 장은 남의 것이다. 붙이면 두 게시판의
       // 글이 한 목록에 섞인다.
       if (!mounted || generation != _generation) return;
@@ -351,6 +382,37 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   // 보드 필터: 가로로 무한정 늘지 않도록 '전체 ▾' 버튼 + 바텀시트.
+  /// "우리 동네" 토글. 켜면 같은 구의 글만 온다 — 구 코드는 안 보낸다(#342).
+  Widget _neighborhoodChip() {
+    final mine = _mine!;
+    const teal = Color(0xFF0B7A75);
+    return GestureDetector(
+      onTap: () {
+        setState(() => _myNeighborhood = !_myNeighborhood);
+        _load();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: _myNeighborhood ? teal : const Color(0xCCFFFFFF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _myNeighborhood ? Colors.transparent : const Color(0x330B7A75)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.home_work_outlined,
+              size: 14, color: _myNeighborhood ? Colors.white : teal),
+          const SizedBox(width: 5),
+          Text(mine.districtLabel,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _myNeighborhood ? Colors.white : teal)),
+        ]),
+      ),
+    );
+  }
+
   Widget _boardFilter() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -378,6 +440,9 @@ class _FeedScreenState extends State<FeedScreen> {
             ]),
           ),
         ),
+        const SizedBox(width: 8),
+        // 동네를 고른 사람에게만 보인다 (#342).
+        if (_mine != null) _neighborhoodChip(),
         const Spacer(),
         if (_failure == null) ...[
           Text('${_posts.length}개의 글',
@@ -532,6 +597,15 @@ class _FeedScreenState extends State<FeedScreen> {
                               fontSize: 14.5,
                               fontWeight: FontWeight.w800,
                               color: T.textPrimary)),
+                      // 글쓴이의 동네 — **구까지만** (#342). 안 골랐으면 자리가 없다.
+                      if (post.authorDistrict != null) ...[
+                        const SizedBox(width: 6),
+                        Text(post.authorDistrict!,
+                            style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0B7A75))),
+                      ],
                       const Spacer(),
                       Text(dateLabel(post.createdAt),
                           style: const TextStyle(

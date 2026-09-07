@@ -4,6 +4,7 @@
 // 갈아 끼워 어느 URI 를 열었는지 본다.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -75,6 +76,10 @@ Future<void> _pumpWide(WidgetTester tester, Widget child) async {
 }
 
 void main() {
+  // 지도가 내 동네를 기기에서 읽는다(#342). 목을 안 깔면 그 읽기가 안 끝나
+  // 화면이 멈춘다 — pumpAndSettle 이 시간 초과로 죽는다.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   final original = ExternalMaps.launcher;
   tearDown(() => ExternalMaps.launcher = original);
 

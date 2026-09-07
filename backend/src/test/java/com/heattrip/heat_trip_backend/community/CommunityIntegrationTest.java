@@ -1082,10 +1082,103 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
                 .header("Authorization", "Bearer " + account.token()));
     }
 
+    // ─────────────────── 우리 동네 (#342) ───────────────────
+
+    @Test
+    @DisplayName("우리 동네 토글이 같은 구의 글만 준다 — 다른 구도, 동네를 안 고른 사람도 빠진다")
+    void neighborhoodFilterKeepsOnlyTheSameDistrict() throws Exception {
+        Account me = accountInSeongdong("성동사람");
+        Account neighbour = accountInSeongdong("성동이웃");
+        Account faraway = accountIn("종로사람", "1111051500");
+        Account nowhere = account("동네없는사람");
+
+        long mine = newPost(me);
+        long neighbours = newPost(neighbour);
+        long far = newPost(faraway);
+        long none = newPost(nowhere);
+
+        java.util.List<Long> ids = idsOf(body(
+                feed(me, "?neighborhood=mine").andExpect(status().isOk())));
+
+        assertThat(ids).contains(mine, neighbours);
+        assertThat(ids)
+                .as("다른 구의 글이 '우리 동네' 에 섞이면 그 토글이 뜻을 잃는다")
+                .doesNotContain(far);
+        assertThat(ids)
+                .as("동네를 안 고른 사람의 글은 어느 동네에도 속하지 않는다")
+                .doesNotContain(none);
+    }
+
+    @Test
+    @DisplayName("글 카드의 동네 표시가 구 단위다 — 동은 안 보인다")
+    void thePostCardShowsTheDistrictOnly() throws Exception {
+        Account me = accountInSeongdong("성동사람");
+        long postId = newPost(me);
+
+        JsonNode item = itemById(body(feed(me, "").andExpect(status().isOk())), postId);
+
+        assertThat(item.path("authorDistrict").asText()).isEqualTo("성동구");
+        assertThat(item.toString())
+                .as("남의 사는 곳을 구보다 좁히면 그것만으로 사람을 찾아갈 수 있다")
+                .doesNotContain("왕십리");
+    }
+
+    @Test
+    @DisplayName("동네를 안 고른 사람의 글은 authorDistrict 가 null 이다")
+    void withoutANeighborhoodTheDistrictIsNull() throws Exception {
+        Account me = account("동네없는사람");
+        long postId = newPost(me);
+
+        JsonNode item = itemById(body(feed(me, "")), postId);
+
+        assertThat(item.path("authorDistrict").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("동네를 안 골랐는데 우리 동네를 부르면 400 이다 — 조용히 전국을 주지 않는다")
+    void askingForMyNeighborhoodWithoutOneIs400() throws Exception {
+        Account me = account("동네없는사람");
+
+        feed(me, "?neighborhood=mine")
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("mine 이 아닌 값은 400 — 구 코드를 직접 받지 않는다")
+    void anArbitraryDistrictCodeIsRejected() throws Exception {
+        Account me = accountInSeongdong("성동사람");
+
+        feed(me, "?neighborhood=11110").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("파라미터가 없으면 전국이다 — 기본이 바뀌면 안 된다")
+    void withoutTheParameterTheFeedIsNationwide() throws Exception {
+        Account me = accountInSeongdong("성동사람");
+        Account faraway = accountIn("종로사람", "1111051500");
+        long far = newPost(faraway);
+
+        assertThat(idsOf(body(feed(me, "").andExpect(status().isOk())))).contains(far);
+    }
+
     private long newPost(Account account) throws Exception {
         return body(createPost(account, "{\"board\":\"free\",\"title\":\"제목\",\"body\":\"본문\"}")
                 .andExpect(status().isCreated()))
                 .path("id").asLong();
+    }
+
+    /** 성동구 왕십리2동 사람. 앞 다섯 자리 11200 이 성동구다. */
+    private Account accountInSeongdong(String nickname) {
+        return accountIn(nickname, "1120052000");
+    }
+
+    /** 동네를 고른 사람. 코드는 서비스가 하는 것과 같은 경로로 저장한다. */
+    private Account accountIn(String nickname, String neighborhoodCode) {
+        Account created = account(nickname);
+        User user = userRepository.findById(created.id()).orElseThrow();
+        user.setNeighborhoodCode(neighborhoodCode);
+        userRepository.save(user);
+        return created;
     }
 
     private Account account(String nickname) {
