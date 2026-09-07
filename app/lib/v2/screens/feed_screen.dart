@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../domain/date_label.dart';
 import '../data/community_repository.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -508,10 +510,6 @@ class _FeedScreenState extends State<FeedScreen> {
       );
 
   /// 목록의 날짜. 시각까지는 안 그린다 — 카드 한 줄에 들어가야 한다.
-  static String _date(DateTime at) =>
-      '${at.year % 100}.${at.month.toString().padLeft(2, '0')}.'
-      '${at.day.toString().padLeft(2, '0')}';
-
   Widget _card(CommunityPost post) {
     return GestureDetector(
       onTap: () => _open(post),
@@ -534,7 +532,7 @@ class _FeedScreenState extends State<FeedScreen> {
                               fontWeight: FontWeight.w800,
                               color: T.textPrimary)),
                       const Spacer(),
-                      Text(_date(post.createdAt),
+                      Text(dateLabel(post.createdAt),
                           style: const TextStyle(
                               fontSize: 11.5, color: T.textMuted)),
                     ]),
