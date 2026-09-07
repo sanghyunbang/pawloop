@@ -105,7 +105,10 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       padding: EdgeInsets.fromLTRB(20, 18, 20, 18 + MediaQuery.of(context).padding.bottom),
-      child: Column(
+      // 줄이 하나 늘 때마다 넘치던 자리다 — 한 손 기록 요약(#340)을 더하자 26px 넘쳤다.
+      // 시트 높이는 화면·글자 크기에 따라 달라지므로 넘치면 스크롤로 받는다.
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // 시스템 이모지 대신 자산 — 디자인 시스템은 Fluent 3D 이모지다(#327).
@@ -177,6 +180,7 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
             child: const Text('저장 안 함', style: TextStyle(color: T.textMuted)),
           ),
         ],
+        ),
       ),
     );
   }
