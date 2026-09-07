@@ -17,6 +17,7 @@ import 'package:http/testing.dart';
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
+import 'package:heat_trip_flutter/v2/data/invite_share.dart';
 import 'package:heat_trip_flutter/v2/screens/family_screen.dart';
 import 'package:heat_trip_flutter/v2/widgets/today_care_card.dart';
 
@@ -54,9 +55,10 @@ Map<String, Object?> _group({String name = '보리네 가족'}) => {
 /// 처음에는 그룹이 없고, 만들고 나면 생긴다 — 실제 서버가 그렇게 움직인다.
 ({FamilyRepository repo, List<http.Request> writes, int Function() creates}) fixture({
   int createStatus = 201,
+  bool hasGroup = false,
 }) {
   final writes = <http.Request>[];
-  var created = false;
+  var created = hasGroup;
   var creates = 0;
 
   final client = AuthedClient(
@@ -76,7 +78,17 @@ Map<String, Object?> _group({String name = '보리네 가족'}) => {
         return _json({'body': '', 'updatedBy': null, 'updatedAt': null});
       }
       if (path.endsWith('/care-logs')) return _json(const []);
-      if (path.endsWith('/invites')) return _json({'code': 'PAW-1234'});
+      // 서버 ChatInviteView 그대로 — 기본 7일 만료 · 횟수 무제한(null).
+      if (path.endsWith('/invites')) {
+        return _json({
+          'code': 'PAW-1234',
+          'roomId': 9,
+          'expiresAt': '2026-09-14T12:00:00Z',
+          'maxUses': null,
+          'usedCount': 0,
+          'createdAt': '2026-09-07T12:00:00Z',
+        });
+      }
       return _json({'error': {}}, status: 404);
     }),
     baseUrl: _base,
@@ -196,5 +208,71 @@ void main() {
     await tester.pump();
 
     expect(opened, 1, reason: '여기서 길이 끊겨 있었다 — 문구만 있고 누를 곳이 없었다');
+  });
+
+  // ── 한 단계 만들기 · 공유하기 (#329) ──────────────────────────────
+
+  testWidgets('홈 카드의 "만들기" 는 onCreateFamily 로 간다 — 가족 화면만 여는 onOpenFamily 가 아니라',
+      (tester) async {
+    final f = fixture();
+    var opened = 0;
+    var created = 0;
+
+    await tester.pumpWidget(_host(
+      TodayCareCard(repository: f.repo, onOpenFamily: () => opened++, onCreateFamily: () => created++),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('만들기'));
+    await tester.pump();
+
+    expect(created, 1);
+    expect(opened, 0);
+  });
+
+  testWidgets('openCreate 면 그룹이 없을 때 이름 시트가 바로 뜬다 — 홈 "만들기" 가 한 단계', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(FamilyScreen(repository: f.repo, openCreate: true)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('이 이름이 가족 대화방 이름도 됩니다'), findsOneWidget, reason: '이름 시트가 떠 있다');
+    expect(find.widgetWithText(TextField, '우리 가족'), findsOneWidget, reason: '기본 이름이 채워져 있다');
+  });
+
+  testWidgets('openCreate 라도 그룹이 있으면 시트를 열지 않는다', (tester) async {
+    final f = fixture(hasGroup: true);
+
+    await tester.pumpWidget(_host(FamilyScreen(repository: f.repo, openCreate: true)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('이 이름이 가족 대화방 이름도 됩니다'), findsNothing);
+    expect(find.text('가족 구성원'), findsOneWidget);
+  });
+
+  testWidgets('초대 시트의 주 버튼은 공유하기 — 누르면 코드가 든 문장이 OS 공유로 나간다', (tester) async {
+    final f = fixture();
+    String? shared;
+    InviteShare.sender = (text, {String? subject}) async => shared = text;
+    addTearDown(InviteShare.resetForTest);
+
+    await tester.pumpWidget(_host(FamilyScreen(repository: f.repo)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('가족 그룹 만들기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('만들기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PAW-1234'), findsOneWidget);
+    expect(find.text('공유하기'), findsOneWidget);
+    expect(find.text('코드 복사'), findsOneWidget, reason: '복사는 보조로 남는다');
+    expect(find.text('9월 14일까지 써요 · 가족 여럿이 같은 코드로 들어올 수 있어요'), findsOneWidget,
+        reason: '만료·횟수는 발급 응답의 사실이다');
+    expect(find.textContaining('누를 때마다 새 코드'), findsNothing);
+
+    await tester.tap(find.text('공유하기'));
+    await tester.pumpAndSettle();
+
+    expect(shared, contains('PAW-1234'));
+    expect(shared, contains('초대 코드로 참여하기'));
   });
 }

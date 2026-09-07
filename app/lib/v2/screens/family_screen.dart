@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_tokens.dart';
 import 'invite_join_screen.dart';
 import '../data/family_repository.dart';
-import '../domain/pet.dart';
+import '../data/invite_share.dart';
 import '../widgets/aurora.dart';
 import '../widgets/today_care_card.dart';
 import 'family_chat_screen.dart';
@@ -16,9 +16,10 @@ import 'family_chat_screen.dart';
 /// **서버:** 구성원(`GET /api/groups/me`) · 오늘의 케어(`GET|POST .../care-logs`) ·
 /// 산책 주의사항(`GET|PUT .../walk-notes`) · 초대코드(`POST /api/chat/rooms/{id}/invites`).
 ///
-/// **아직 아닌 것:** "오늘 걸은 거리" 의 km 값. 서버가 거리를 주는 경로가 아직 없어서
-/// 이름만 서버에서 오고 값은 0 이다 — **가짜 숫자를 그리지 않는 쪽**을 골랐다. 이 화면이
-/// 실제로 하는 말("아빠가 2.4km 걸었다")이 사실이 아니면 다른 칸의 사실까지 의심받는다.
+/// **아직 아닌 것:** "오늘 걸은 거리". 서버가 거리를 주는 경로가 없다 — 한동안 "연동 전"
+/// 카드로 두었는데 미완성이 사용자에게 보였다(#329). 지금은 카드가 없고, 거리 공유는 위치
+/// 사업 제약(#235)이 풀린 뒤 넣는다. 이 화면이 실제로 하는 말("아빠가 2.4km 걸었다")이
+/// 사실이 아니면 다른 칸의 사실까지 의심받는다.
 ///
 /// 예전에는 이 화면 전체가 `pet.dart` 의 로컬 더미(`kCareToday`·`kFamilyMembers`·
 /// `kWalkNotes`·`kFamilyInviteCode`)였다. 그 상태에서는 엄마가 밥을 줘도 아빠 화면에는
@@ -33,7 +34,10 @@ class FamilyScreen extends StatefulWidget {
   /// 어느 앱 테스트에도 잡히지 않았다.
   final FamilyRepository? repository;
 
-  const FamilyScreen({super.key, this.repository});
+  /// 그룹이 없으면 이름 시트를 바로 연다 — 홈 케어 카드의 "만들기" 가 한 단계가 되게(#329).
+  final bool openCreate;
+
+  const FamilyScreen({super.key, this.repository, this.openCreate = false});
 
   @override
   State<FamilyScreen> createState() => _FamilyScreenState();
@@ -49,6 +53,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
   /// 주의사항을 보내는 중. 같은 순간에 두 번 보내면 나중 것이 앞 것을 덮는다.
   bool _savingNote = false;
+
+  /// [FamilyScreen.openCreate] 로 시트를 한 번 열었는가 — 닫고 다시 읽을 때 또 뜨면 못 나간다.
+  bool _createOffered = false;
 
   @override
   void initState() {
@@ -78,6 +85,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
         _failure = e.kind;
         _loading = false;
       });
+      // 홈 "만들기" 로 왔는데 그룹이 없으면 이름 시트를 바로 연다(#329).
+      if (e.kind == FamilyFailureKind.noGroup && widget.openCreate && !_createOffered) {
+        _createOffered = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openCreateSheet();
+        });
+      }
     }
   }
 
@@ -195,8 +209,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     // 홈과 **같은 위젯**이다. 두 화면이 같은 데이터를 그리는데 코드가 둘이면
                     // 확인 문구가 한쪽에만 생기는 날이 온다.
                     TodayCareCard(repository: widget.repository),
-                    const SizedBox(height: 16),
-                    _distanceCard(),
                     const SizedBox(height: 16),
                     _walkNotesCard(),
                     const SizedBox(height: 16),
@@ -423,10 +435,10 @@ class _FamilyScreenState extends State<FamilyScreen> {
     final group = _group;
     if (group == null) return;
 
-    String? code;
+    FamilyInvite? invite;
     String? error;
     try {
-      code = await _repo.issueInvite(group.roomId);
+      invite = await _repo.issueInvite(group.roomId);
     } on FamilyFailure catch (e) {
       error = e.kind == FamilyFailureKind.forbidden
           ? '초대코드는 방장만 발급할 수 있어요'
@@ -435,15 +447,16 @@ class _FamilyScreenState extends State<FamilyScreen> {
     // await 뒤의 첫 문장에서 가른다 — 이 State 가 사라졌으면 아무것도 하지 않는다.
     if (!mounted) return;
 
-    if (code == null || code.isEmpty) {
+    if (invite == null || invite.code.isEmpty) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error ?? '초대코드를 만들지 못했어요')));
       return;
     }
-    _showInviteSheet(code);
+    _showInviteSheet(invite);
   }
 
-  void _showInviteSheet(String code) {
+  void _showInviteSheet(FamilyInvite invite) {
+    final code = invite.code;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -483,14 +496,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
             ),
           ),
           const SizedBox(height: 14),
+          // 주 버튼은 공유 — 복사 → 앱 전환 → 붙여넣기 세 단계가 한 번이 된다(#329).
           GestureDetector(
-            onTap: () {
-              Clipboard.setData(ClipboardData(text: code));
-              Navigator.pop(sheetCtx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('초대 코드가 복사되었어요'), duration: Duration(milliseconds: 1800)),
-              );
-            },
+            onTap: () => _shareInvite(sheetCtx, code),
             behavior: HitTestBehavior.opaque,
             child: Container(
               width: double.infinity,
@@ -507,193 +515,70 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 ],
               ),
               child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.copy_rounded, size: 18, color: Colors.white),
+                Icon(Icons.ios_share_rounded, size: 18, color: Colors.white),
                 SizedBox(width: 8),
-                Text('코드 복사',
+                Text('공유하기',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
               ]),
             ),
           ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => _copyInvite(sheetCtx, code),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              decoration: BoxDecoration(
+                color: const Color(0xCCFFFFFF),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: const Color(0x1F8C7BFF)),
+              ),
+              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.copy_rounded, size: 16, color: T.textSecondary),
+                SizedBox(width: 6),
+                Text('코드 복사',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: T.textSecondary)),
+              ]),
+            ),
+          ),
           const SizedBox(height: 12),
-          // 재발급은 **이전 코드를 죽이지 않는다**(#75 에서 실측). 유출 대응 버튼처럼
-          // 광고하면 보안 기능이 아닌 것을 보안 기능으로 파는 것이 된다.
-          const Text('가족이 이 코드로 참여해요 · 누를 때마다 새 코드가 하나 더 생겨요',
+          // 사실만 쓴다 — 만료·횟수는 발급 응답의 값이다(#329). "누를 때마다 새 코드가 하나 더
+          // 생겨요" 는 사용자가 알아야 할 사실이 아니라 불안이었다. 재발급이 이전 코드를
+          // 죽이지 않는 것(#75)은 그대로다 — 그래서 이 시트에 "재발급" 버튼이 없다.
+          Text(inviteFactLine(expiresAt: invite.expiresAt?.toLocal(), maxUses: invite.maxUses),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+              style: const TextStyle(fontSize: 12.5, color: T.textMuted)),
         ]),
       ),
     );
   }
 
-  // ───────────── 오늘 걸은 거리 (가족 공유 — 위치정보 제3자 제공) ─────────────
-  //
-  // **이름은 서버에서 오고 거리는 아직 없다.** 거리를 주는 경로가 없어서다 —
-  // 예전에는 `kFamilyMembers` 의 `todayKm`(2.4·1.1·0)을 그렸는데, 그건 아무 데서도
-  // 오지 않는 숫자였다. 구성원만 서버로 바꾸고 이 숫자를 그대로 두면 **진짜 이름 옆에
-  // 가짜 거리**가 붙어 전보다 더 그럴듯한 거짓말이 된다.
-  //
-  // 그래서 막대와 km 를 지우고 "연동 전" 이라고 적는다. 동의 토글은 남긴다 — 그 상태
-  // (`kShareMyDistance`)는 거리 기능이 붙는 날 그대로 쓰이고, 법적으로도 제공 **전에**
-  // 받아 두는 것이 맞다(위치정보법 제3자 제공 동의).
-  Widget _distanceCard() {
-    final members = _group?.members ?? const <FamilyMemberSummary>[];
-
-    return ValueListenableBuilder<bool>(
-      valueListenable: kShareMyDistance,
-      builder: (context, sharing, __) {
-        Widget memberRow(int index, FamilyMemberSummary m) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: _colorOf(index)),
-                  child: Text(m.nickname.isEmpty ? '?' : m.nickname.characters.first,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(m.nickname,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w700, color: T.textPrimary)),
-                ),
-                const Text('연동 전',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: T.textMuted)),
-              ]),
-            );
-
-        return GlassCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Icon(Icons.route_rounded, size: 18, color: Color(0xFF33BFA6)),
-              const SizedBox(width: 7),
-              const Text('오늘 걸은 거리',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
-              const Spacer(),
-              // 내 거리 공유 토글(제3자 제공 동의 — 켤 때 동의 시트 필수)
-              GestureDetector(
-                onTap: () => _toggleShare(sharing),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  width: 46,
-                  height: 27,
-                  padding: const EdgeInsets.all(3),
-                  alignment: sharing ? Alignment.centerRight : Alignment.centerLeft,
-                  decoration: BoxDecoration(
-                    gradient: sharing ? _warm : null,
-                    color: sharing ? null : const Color(0x1F8C7BFF),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Container(
-                    width: 21,
-                    height: 21,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 1))
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 4),
-            Text(sharing ? '내 거리 공유에 동의했어요' : '내 거리 공유가 꺼져 있어요',
-                style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
-            const SizedBox(height: 14),
-            for (int i = 0; i < members.length; i++) memberRow(i, members[i]),
-            const Text('거리 공유는 아직 서버 연동 전이라 숫자가 비어 있어요. '
-                '내 거리·위치는 동의한 가족에게만 제공되고, 제공될 때마다 알림으로 알려드려요',
-                style: TextStyle(fontSize: 11, color: T.textMuted)),
-          ]),
-        );
-      },
-    );
-  }
-
-  void _toggleShare(bool current) {
-    if (current) {
-      kShareMyDistance.value = false;
+  /// OS 공유 시트로 초대 문장을 보낸다. 못 열면(플러그인 없음·공유할 앱 없음) 복사로 대신한다.
+  Future<void> _shareInvite(BuildContext sheetCtx, String code) async {
+    Navigator.pop(sheetCtx);
+    try {
+      await InviteShare.send(code);
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: code));
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('가족 거리 공유를 중단했어요'), duration: Duration(milliseconds: 1600)),
+        const SnackBar(content: Text('공유 시트를 못 열어 코드를 복사했어요'), duration: Duration(milliseconds: 2000)),
       );
-    } else {
-      _openShareConsentSheet();
     }
   }
 
-  // 제3자 제공 동의 시트 — 위치정보법 요건(제공받는 자·목적·기간 고지 후 명시적 동의).
-  void _openShareConsentSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFAFCFAFF),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        padding: EdgeInsets.fromLTRB(24, 12, 24, 20 + MediaQuery.of(sheetCtx).padding.bottom),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(
-            child: Container(
-              width: 42, height: 5,
-              decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)),
-            ),
-          ),
-          const SizedBox(height: 18),
-          const Text('가족에게 내 산책 거리를 공유할까요?',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
-          const SizedBox(height: 14),
-          _consentRow('제공받는 자', '내가 속한 가족 그룹의 구성원'),
-          _consentRow('제공 목적', '가족 간 산책 거리·활동 공유'),
-          _consentRow('보유·이용 기간', '공유를 끄거나 그룹을 나갈 때까지'),
-          _consentRow('통지', '내 위치·거리가 제공될 때마다 알림으로 알려드려요'),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: () {
-              kShareMyDistance.value = true;
-              Navigator.pop(sheetCtx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('공유를 시작했어요 · 제공될 때마다 알림으로 알려드려요'),
-                  duration: Duration(milliseconds: 2000),
-                ),
-              );
-            },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(15)),
-              child: const Text('동의하고 공유 시작',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Center(
-            child: TextButton(
-              onPressed: () => Navigator.pop(sheetCtx),
-              child: const Text('다음에 할게요', style: TextStyle(fontSize: 13.5, color: T.textMuted)),
-            ),
-          ),
-        ]),
-      ),
+  void _copyInvite(BuildContext sheetCtx, String code) {
+    Clipboard.setData(ClipboardData(text: code));
+    Navigator.pop(sheetCtx);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('초대 코드가 복사되었어요'), duration: Duration(milliseconds: 1800)),
     );
   }
 
-  Widget _consentRow(String k, String v) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(
-            width: 92,
-            child: Text(k, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: T.textSecondary)),
-          ),
-          Expanded(child: Text(v, style: const TextStyle(fontSize: 12.5, height: 1.4, color: Color(0xCC463C64)))),
-        ]),
-      );
+  // "오늘 걸은 거리" 카드는 없다(#329). 서버가 거리를 주는 경로가 없어 "연동 전" 이라고 적어
+  // 두었는데, 미완성이 사용자에게 보였다. 거리 공유(위치정보 제3자 제공 동의 포함)는
+  // 위치 사업 제약(#235)이 풀린 뒤 다시 넣는다.
 
   // ───────────── 산책 주의사항 (가족 누구나 추가/삭제) ─────────────
   //
@@ -712,8 +597,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
           SizedBox(width: 7),
           Text('산책 주의사항',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
-          Spacer(),
-          Text('길게 눌러 삭제', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
         ]),
         const SizedBox(height: 12),
         if (lines.isEmpty)
@@ -740,6 +623,15 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   Expanded(
                     child: Text(lines[i],
                         style: const TextStyle(fontSize: 13.5, height: 1.45, color: T.textSecondary)),
+                  ),
+                  // "…" 메뉴 — 길게 누르기는 남기되 보이는 문이 하나 있어야 한다(#329).
+                  GestureDetector(
+                    onTap: _savingNote ? null : () => _openNoteMenu(i),
+                    behavior: HitTestBehavior.opaque,
+                    child: const Padding(
+                      padding: EdgeInsets.only(left: 8, top: 1),
+                      child: Icon(Icons.more_horiz_rounded, size: 18, color: T.textMuted),
+                    ),
                   ),
                 ]),
               ),
@@ -776,6 +668,54 @@ class _FamilyScreenState extends State<FamilyScreen> {
   }
 
   /// 한 줄을 지운다 — 확인을 받고, 남은 줄 전체를 다시 보낸다.
+  /// 주의사항 한 줄의 "…" 메뉴. 지우기는 [_removeNoteAt] 이 한 번 더 묻는다 — 가족 모두에게서
+  /// 사라지는 일이다.
+  Future<void> _openNoteMenu(int index) async {
+    final lines = _note.lines;
+    if (index >= lines.length) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFAFCFAFF),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(sheetCtx).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 42,
+            height: 5,
+            decoration: BoxDecoration(color: const Color(0x2E281E30), borderRadius: BorderRadius.circular(3)),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Text(lines[index],
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13, color: T.textMuted)),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.pop(sheetCtx, 'delete'),
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              child: Row(children: [
+                Icon(Icons.delete_outline_rounded, color: Color(0xFFFF6B7E)),
+                SizedBox(width: 12),
+                Text('지우기',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFFFF6B7E))),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+    if (!mounted || action != 'delete') return;
+    await _removeNoteAt(index);
+  }
+
   Future<void> _removeNoteAt(int index) async {
     final lines = _note.lines;
     if (index >= lines.length) return;

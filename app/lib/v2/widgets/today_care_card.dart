@@ -52,11 +52,16 @@ class TodayCareCard extends StatefulWidget {
   /// 테스트가 로그인 상태를 만들지 않고도 본인/남 두 경우를 그리게 하려는 자리다.
   final int? myUserId;
 
+  /// 가족이 없을 때 "만들기" 가 부른다. 없으면 [onOpenFamily] 로 간다 — 가족 화면에서
+  /// 한 번 더 "가족 그룹 만들기" 를 눌러야 하는 두 단계였다(#329).
+  final VoidCallback? onCreateFamily;
+
   const TodayCareCard({
     super.key,
     this.onOpenFamily,
     this.repository,
     this.myUserId,
+    this.onCreateFamily,
   });
 
   @override
@@ -148,10 +153,27 @@ class _TodayCareCardState extends State<TodayCareCard> {
 
     final already = _latestOf(type);
     if (already != null) {
-      final ok = await _confirmDuplicate(already);
-      // await 뒤의 첫 문장에서 가른다 — 이 State 가 사라졌으면 아무것도 하지 않는다.
-      if (!mounted) return;
-      if (!ok) return;
+      final me = widget.myUserId ?? AuthState.user?.id;
+      if (me != null && already.doneByUserId == me) {
+        // 내 기록이 있는 칸을 다시 누른 것 — 대개 잘못 눌렀거나 무르고 싶은 것이다(#329).
+        // 두 끼는 실제로 있으니 "한 번 더 기록" 도 같은 자리에서 고른다.
+        final choice = await _askRetap(already);
+        if (!mounted) return;
+        switch (choice) {
+          case _Retap.undo:
+            await _delete(group, type, already);
+            return;
+          case _Retap.cancel:
+            return;
+          case _Retap.again:
+            break;
+        }
+      } else {
+        final ok = await _confirmDuplicate(already);
+        // await 뒤의 첫 문장에서 가른다 — 이 State 가 사라졌으면 아무것도 하지 않는다.
+        if (!mounted) return;
+        if (!ok) return;
+      }
     }
 
     setState(() => _sending = type);
@@ -166,6 +188,44 @@ class _TodayCareCardState extends State<TodayCareCard> {
       setState(() => _sending = null);
       _showMessage(e.message);
     }
+  }
+
+  /// "오늘 14:20 에 내가 남긴 밥 기록이에요" — 지우기 / 한 번 더 기록 / 취소.
+  Future<_Retap> _askRetap(CareLogEntry mine) async {
+    final answer = await showDialog<_Retap>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFFFCFAFF),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          '이미 기록한 칸이에요',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
+        ),
+        content: Text(
+          retapWarning(mine),
+          style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, _Retap.cancel),
+            child: const Text('취소', style: TextStyle(color: T.textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, _Retap.again),
+            child: const Text('한 번 더 기록',
+                style: TextStyle(fontWeight: FontWeight.w700, color: T.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, _Retap.undo),
+            child: const Text(
+              '지우기',
+              style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFE07A4E)),
+            ),
+          ),
+        ],
+      ),
+    );
+    return answer ?? _Retap.cancel;
   }
 
   /// "오늘 14:20 아빠가 밥을 줬습니다. 그래도 기록할까요?"
@@ -221,7 +281,11 @@ class _TodayCareCardState extends State<TodayCareCard> {
 
     final ok = await _confirmDelete(latest);
     if (!mounted || !ok) return;
+    await _delete(group, type, latest);
+  }
 
+  /// 확인은 끝난 뒤다 — 서버로 지우고 살아 있는 카드가 전부 다시 읽게 한다.
+  Future<void> _delete(FamilyGroupSummary group, ServerCareType type, CareLogEntry latest) async {
     setState(() => _sending = type);
     try {
       await _repo.deleteCareLog(group.id, latest.id);
@@ -367,7 +431,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
           // 만들기 자체는 가족 화면이 한다. 여기서는 거기로 보낸다.
           if (failure == FamilyFailureKind.noGroup && widget.onOpenFamily != null)
             GestureDetector(
-              onTap: widget.onOpenFamily,
+              onTap: widget.onCreateFamily ?? widget.onOpenFamily,
               behavior: HitTestBehavior.opaque,
               child: const Text('만들기',
                   style: TextStyle(
@@ -491,3 +555,9 @@ String subjectParticle(String name) {
   if (code < 0xAC00 || code > 0xD7A3) return '가';
   return (code - 0xAC00) % 28 == 0 ? '가' : '이';
 }
+
+/// 내 기록이 있는 칸을 다시 눌렀을 때의 선택(#329).
+enum _Retap { undo, again, cancel }
+
+String retapWarning(CareLogEntry mine) =>
+    '오늘 ${mine.timeLabel} 에 내가 남긴 ${mine.type.label} 기록이에요. 잘못 눌렀다면 지우고, 한 번 더 한 거면 다시 기록해요.';
