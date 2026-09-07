@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -54,6 +55,22 @@ class StructureDocDriftTest {
 
     /** 백엔드 기저 패키지. 이 아래 1단 디렉터리가 곧 "패키지 목록" 이다. */
     private static final String BASE_PACKAGE = "src/main/java/com/heattrip/heat_trip_backend";
+
+    /**
+     * mermaid flowchart 의 <b>노드 정의</b> — {@code id[라벨]} · {@code id(라벨)} ·
+     * {@code id{라벨}} · {@code id([라벨])} · {@code id[[라벨]]}.
+     */
+    private static final Pattern MERMAID_NODE = Pattern.compile(
+            "(?<![\\w\"])([A-Za-z][A-Za-z0-9_]*)(\\[\\[|\\(\\[|\\(\\(|\\[|\\(|\\{)");
+
+    /** 여는 괄호마다 짝이 되는 닫는 괄호. */
+    private static final Map<String, String> MERMAID_NODE_CLOSERS = Map.of(
+            "[[", "]]", "([", "])", "((", "))", "[", "]", "(", ")", "{", "}");
+
+    /** 흐름도를 그리는 문서. {@code build.gradle} 이 입력으로 선언한 {@code docs/01-design} 안이다. */
+    private static final List<String> FLOWCHART_DOCS = List.of(
+            "01-design/user-flows.md",
+            "01-design/information-architecture.md");
 
     /** 탭 표를 <b>표 모양까지</b> 지키는 문서. 여기 한 곳만 조인다. */
     private static final String TAB_TABLE_DOC = "01-design/information-architecture.md";
@@ -144,7 +161,7 @@ class StructureDocDriftTest {
     // 그건 바로 위 검사가 잡는다.
 
     @Test
-    @DisplayName("화면 목록 문서 둘이 실제 화면 파일을 하나도 빠뜨리지 않는다")
+    @DisplayName("화면 목록 문서 셋이 실제 화면 파일을 하나도 빠뜨리지 않는다")
     void screenDocs_nameEveryScreenFile() {
         List<String> screens = screenFileNames();
 
@@ -152,7 +169,10 @@ class StructureDocDriftTest {
                 .as("화면을 하나도 못 찾았다면 아래 단언들이 조용히 통과한다")
                 .isNotEmpty();
 
-        for (String docPath : List.of("02-architecture/frontend-structure.md", "01-design/screen-spec.md")) {
+        for (String docPath : List.of(
+                "02-architecture/frontend-structure.md",
+                "01-design/screen-spec.md",
+                "01-design/user-flows.md")) {
             String doc = RepositoryDocs.requireDoc(docPath);
             List<String> missing = screens.stream().filter(name -> !doc.contains(name)).toList();
 
@@ -160,9 +180,45 @@ class StructureDocDriftTest {
                     .as("""
                             %s 가 실제 화면의 절반만 알고 있었다(#201). 문서에 없는 화면은 \
                             없는 것으로 취급되고, 그중 하나가 위치정보법 동의 게이트였다. \
-                            화면을 추가했으면 이 표에도 한 줄 적는다.""", docPath)
+                            화면을 추가했으면 이 표에도 한 줄 적는다. user-flows.md 가 셋째로 \
+                            들어온 것도 같은 일을 겪어서다 — 동네 고르기 화면이 빠진 채로 \
+                            "화면을 다 적었다" 고 말하고 있었다(#345).""", docPath)
                     .isEmpty();
         }
+    }
+
+    /**
+     * 흐름도의 노드 id 가 겹치면 mermaid 는 <b>두 노드를 하나로 합친다</b>.
+     *
+     * <p>#345 에서 실제로 그러고 있었다 — 플로우 4 의 {@code S} 가 스플래시와 위치 사전 안내
+     * 시트 둘이었고, 플로우 10 의 {@code S} 가 사전 안내 시트와 위치 이용중지 둘이었다.
+     * 그림은 아무 경고 없이 그려진다. 문장 검사로는 못 잡는다 — 틀린 <b>줄</b>이 없기 때문이다.
+     */
+    @Test
+    @DisplayName("흐름도에서 한 노드 이름이 두 화면을 겸하지 않는다")
+    void flowcharts_doNotMergeTwoNodesIntoOne() {
+        List<String> offenders = new ArrayList<>();
+
+        for (String docPath : FLOWCHART_DOCS) {
+            for (String chart : mermaidFlowcharts(RepositoryDocs.requireDoc(docPath))) {
+                Map<String, Collection<String>> labels = new LinkedHashMap<>();
+                for (String line : chart.split("\\R")) {
+                    collectNodeLabels(line, labels);
+                }
+                labels.forEach((id, texts) -> {
+                    if (texts.size() > 1) {
+                        offenders.add(docPath + " — \"" + id + "\" : " + texts);
+                    }
+                });
+            }
+        }
+
+        assertThat(offenders)
+                .as("""
+                        같은 노드 이름에 서로 다른 라벨이 붙었다. mermaid 는 둘을 한 상자로 \
+                        합쳐 그리고, 그러면 흐름도가 조용히 거짓말을 한다(#345). \
+                        한쪽의 이름을 바꾼다.""")
+                .isEmpty();
     }
 
     @Test
@@ -328,6 +384,44 @@ class StructureDocDriftTest {
     }
 
     /** {@code app/lib/v2/screens} 아래 모든 {@code .dart} 파일 이름(하위 디렉터리 포함). */
+    /** 문서 안의 mermaid {@code flowchart}/{@code graph} 블록들. ER·시퀀스는 노드 문법이 다르다. */
+    private static List<String> mermaidFlowcharts(String document) {
+        List<String> charts = new ArrayList<>();
+        Matcher matcher = Pattern.compile("```mermaid\\R(.*?)```", Pattern.DOTALL).matcher(document);
+        while (matcher.find()) {
+            String chart = matcher.group(1).stripLeading();
+            if (chart.startsWith("flowchart") || chart.startsWith("graph")) {
+                charts.add(chart);
+            }
+        }
+        return charts;
+    }
+
+    /**
+     * 한 줄에서 노드 정의를 걷어 {@code id → 라벨들} 에 담는다.
+     *
+     * <p>라벨 <b>안</b>을 다시 훑지 않는다(닫는 괄호 뒤부터 이어 본다) — 훑으면
+     * {@code T[GET /api/x/{id}]} 의 {@code id} 를 노드로 잘못 센다.
+     * 화살표 라벨({@code |…|})도 노드가 아니라 먼저 지운다.
+     */
+    private static void collectNodeLabels(String line, Map<String, Collection<String>> labels) {
+        String bare = line.replaceAll("\\|[^|]*\\|", " ");
+        Matcher matcher = MERMAID_NODE.matcher(bare);
+        int from = 0;
+        while (from <= bare.length() && matcher.find(from)) {
+            String closer = MERMAID_NODE_CLOSERS.get(matcher.group(2));
+            int end = bare.indexOf(closer, matcher.end());
+            if (end < 0) {
+                return;
+            }
+            String label = bare.substring(matcher.end(), end).trim();
+            if (!label.isEmpty()) {
+                labels.computeIfAbsent(matcher.group(1), key -> new LinkedHashSet<>()).add(label);
+            }
+            from = end + closer.length();
+        }
+    }
+
     private static List<String> screenFileNames() {
         Path repositoryRoot = TestProjectPaths.backendDir().getParent();
         assertThat(repositoryRoot).as("저장소 루트를 못 찾았다").isNotNull();
