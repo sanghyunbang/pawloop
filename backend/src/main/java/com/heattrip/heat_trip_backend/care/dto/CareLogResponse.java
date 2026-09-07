@@ -15,7 +15,7 @@ import java.time.Instant;
  *              #209 {@code Dogs-high-3}(가족 공유 가시성)이고, 이유는 {@link CareLog} 의
  *              javadoc 이다. 필드를 계약에 미리 둔 것은 그날 앱이 스키마를 바꾸지 않아도
  *              되게 하려는 것이다
- * @param type  {@code water|meal|walk|med|vet}. {@link CareType} 가 소문자 그대로 직렬화한다
+ * @param type  {@code water|meal|walk|med|vet|poop|pee}. {@link CareType} 가 소문자 그대로 직렬화한다
  * @param occurredAt <b>{@code Instant} 다 — {@code LocalDateTime} 이 아니다.</b> 이슈 #209.
  *
  *              <p>Jackson 이 {@code LocalDateTime} 을 <b>오프셋 없이</b> 직렬화하는데

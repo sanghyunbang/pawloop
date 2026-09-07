@@ -359,6 +359,34 @@ class CareSharingIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    @DisplayName("산책 중 남긴 배변·마킹이 그대로 저장되고 종류로 걸러진다 — 위치는 요청에 없다")
+    void poopAndPee_areStoredAndFilteredByType() throws Exception {
+        Account dad = account("보리아빠");
+        Account mom = account("보리엄마");
+        Family family = family(dad, "보리네 가족", mom);
+
+        JsonNode poop = body(postCare(dad, family.groupId(), "poop", null)
+                .andExpect(status().isCreated()));
+        postCare(dad, family.groupId(), "pee", null).andExpect(status().isCreated());
+        postCare(dad, family.groupId(), "water", null).andExpect(status().isCreated());
+
+        assertThat(poop.path("type").asText())
+                .as("표기는 한 벌이다 — 계약도 DB CHECK 도 앱 enum 도 소문자 poop 이다")
+                .isEqualTo("poop");
+        assertThat(poop.path("memo").isNull())
+                .as("한 손 기록은 메모를 안 받는다 — 걸으면서 타자를 칠 수 없다(#340)")
+                .isTrue();
+
+        assertThat(careLogs(dad, family.groupId(), "poop").size())
+                .as("""
+                        배변만 세는 화면이 있어야 '요즘 뜸하다' 를 말할 수 있다 — 마킹과 섞이면                         그 숫자가 뜻을 잃는다.""")
+                .isEqualTo(1);
+        assertThat(careLogs(mom, family.groupId(), null).size())
+                .as("산책은 한 사람이 나가도 기록은 가족이 같이 본다")
+                .isEqualTo(3);
+    }
+
     // ─────────────────── 완료 조건 4 — 산책 주의사항 ───────────────────
 
     @Test

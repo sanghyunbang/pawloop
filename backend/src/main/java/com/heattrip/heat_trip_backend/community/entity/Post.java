@@ -44,7 +44,7 @@ import java.time.LocalDateTime;
  * 2026-09 이전 계약은 값 자체가 한글 표시 문자열이었는데({@code "산책로 후기"} 등),
  * 그 값이 <b>query 파라미터로 나가고 이 컬럼에 들어간다.</b> 표시 문구를 저장하면
  * 게시판 이름을 다듬는 날 <b>쌓인 행을 전부 고쳐야 한다.</b> {@code CareType} 이 이미
- * 같은 모양이다 — 값은 {@code water|meal|walk|med|vet} 이고 "물/밥/산책/투약/병원" 은
+ * 같은 모양이다 — 값은 {@code water|meal|walk|med|vet|poop|pee} 이고 "물/밥/산책/…" 은
  * 앱이 붙인다.
  *
  * <p><b>{@code @Check} 를 걸지 않는다.</b> {@code CareLog.type} 은 걸었는데 여기는 안 거는

@@ -24,7 +24,11 @@ import com.heattrip.heat_trip_backend.care.entity.CareType;
  * <p><b>{@code doneBy} 도 여기 없다.</b> 수행자는 토큰의 사용자다 — 본문으로 받으면
  * 남의 이름으로 기록을 남길 수 있고, 그러면 화면의 "아빠가 줬습니다" 를 믿을 수 없다.
  *
- * @param type {@code water|meal|walk|med|vet}. 다른 값이면 400 — {@link CareType#of} 가
+ * <p><b>위치도 여기 없다 (#340).</b> 배변·마킹은 산책 중에 눌리지만 <b>어디서</b> 눌렀는지는
+ * 기기에만 남는다(A안 #235). 이 레코드에 좌표 필드를 더하지 않는 것이 그 약속의 자리다 —
+ * {@code CareContractSpecTest} 가 계약의 {@code CareLogInput} 속성 집합을 이 레코드와 견준다.
+ *
+ * @param type {@code water|meal|walk|med|vet|poop|pee}. 다른 값이면 400 — {@link CareType#of} 가
  *             역직렬화에서 던진다
  * @param memo 선택. 500자까지. 넘으면 400 이다
  */

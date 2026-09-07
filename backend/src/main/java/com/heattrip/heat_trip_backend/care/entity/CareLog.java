@@ -85,8 +85,13 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_carelog_dog", columnList = "dog_id, occurred_at")
         })
 // DB 가 마지막 방어선이다 (📌 #86 원칙 5). 애플리케이션의 CareType 검증이 뚫리거나
-// 누가 손으로 INSERT 해도 여섯 번째 종류는 들어가지 못한다.
-@Check(name = "ck_carelog_type", constraints = "type in ('water','meal','walk','med','vet')")
+// 누가 손으로 INSERT 해도 여덟 번째 종류는 들어가지 못한다.
+//
+// **이 문자열을 늘리는 것만으로는 운영 DB 가 안 바뀐다.** ddl-auto=validate 는 CHECK 를
+// 보지 않아 부팅은 그대로 뜨고, 첫 기록이 실패한다 — poop·pee 를 더할 때
+// mysql/post-start/29_care_type_poop.sql 을 함께 돌리는 이유다(#340).
+@Check(name = "ck_carelog_type",
+        constraints = "type in ('water','meal','walk','med','vet','poop','pee')")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)

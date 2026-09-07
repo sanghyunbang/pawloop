@@ -10,7 +10,7 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 /**
- * 케어 한 건의 종류 — 이슈 #76. 물·밥·산책·투약·병원 다섯이다.
+ * 케어 한 건의 종류 — 이슈 #76. 물·밥·산책·투약·병원 다섯에 배변·마킹 둘을 더해 일곱이다(#340).
  *
  * <h2>표기가 하나다 — {@code water} 다</h2>
  * <p>DB({@code care_log.type})와 JSON({@code CareLog.type}) 이 <b>같은 문자열</b>을 쓴다.
@@ -23,10 +23,20 @@ import java.util.stream.Collectors;
  * 만든다. 저장은 {@link Codec}, 직렬화는 {@link JsonValue}·{@link JsonCreator} 가 같은
  * 필드를 읽는다 — 문자열 리터럴이 이 파일 안에 한 벌만 있다.
  *
- * <h2>다섯뿐인 것이 지금의 계약이다</h2>
+ * <h2>일곱뿐인 것이 지금의 계약이다</h2>
  * <p>앱의 Dart {@code CareType} 에는 {@code snack}·{@code etc} 가 더 있지만 그건 화면 안에서만
  * 사는 값이고 서버 계약에는 없다. 건강·식사·병원 상세는 M4({@code care_log} 확장)이며,
  * 그때 여기에 상수를 더하고 CHECK 제약과 계약의 {@code enum} 을 함께 넓힌다.
+ *
+ * <h2>배변·마킹이 늦게 온 이유 (#340)</h2>
+ * <p>다섯은 <b>집에서 하는 일</b>이었다 — 물·밥·투약은 누가 했는지 겹치면 안 되는 것들이고,
+ * 그래서 이 표가 생겼다(#76). {@code poop}·{@code pee} 는 <b>산책 중에</b> 일어나고, 트래킹
+ * 화면에서 한 탭으로 들어온다. 종류를 늘리는 대신 새 표를 만들지 않은 이유는 두 가지다 —
+ * 하루치를 한 번에 읽는 자리가 이미 이 표이고, "오늘 무엇을 했나" 라는 질문이 같다.
+ *
+ * <p><b>어디서 눴는지는 여기 없다.</b> 위치는 기기에만 남는다(A안 #235) —
+ * {@code care_log} 에 좌표 컬럼을 더하지 않은 것이 그 결정이고,
+ * {@code CareLogRequest} 에 그 필드가 없는 것으로 계약에도 적혀 있다.
  */
 public enum CareType {
 
@@ -43,7 +53,13 @@ public enum CareType {
     MED("med"),
 
     /** 병원. */
-    VET("vet");
+    VET("vet"),
+
+    /** 배변 — 산책 중 한 탭으로 들어온다(#340). 횟수와 시각이 건강 신호가 된다. */
+    POOP("poop"),
+
+    /** 마킹(소변). 배변과 나눠 세야 "오늘 몇 번" 이 뜻을 가진다(#340). */
+    PEE("pee");
 
     private final String wire;
 
@@ -58,7 +74,7 @@ public enum CareType {
     }
 
     /**
-     * 계약이 정한 다섯 중 하나로 해석한다. 아닌 값은 <b>400</b> 이다.
+     * 계약이 정한 일곱 중 하나로 해석한다. 아닌 값은 <b>400</b> 이다.
      *
      * <p>{@link IllegalArgumentException} 을 던지면 {@code GlobalExceptionHandler} 가
      * 400 으로 옮긴다. 메시지에 <b>입력값을 되싣지 않는다</b> — 이 문구는 그대로 응답 본문이

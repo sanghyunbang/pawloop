@@ -113,7 +113,7 @@ erDiagram
         BIGINT   id PK
         BIGINT   dog_id FK   "nullable - ON DELETE SET NULL. 값은 아직 항상 NULL (#154)"
         BIGINT   group_id FK "nullable - 가족 그룹 공유"
-        VARCHAR  type        "water|meal|walk|med|vet"
+        VARCHAR  type        "water|meal|walk|med|vet|poop|pee (#340)"
         BIGINT   done_by FK  "수행자(users.id)"
         DATETIME occurred_at
         VARCHAR  memo
