@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +32,18 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
                and (c.userId = :userId or c.visibility = 'public')
             """)
     Optional<Course> findVisible(@Param("courseId") long courseId, @Param("userId") long userId);
+
+    /**
+     * 글에 붙은 코스들 — <b>공개된 것만</b> (#339).
+     *
+     * <p>목록이 한 번에 물어보는 이유는 N+1 을 만들지 않기 위해서다. 비공개로 되돌린 코스는
+     * 결과에서 빠지고, 그 글의 카드에는 그림이 없다.
+     */
+    @Query("""
+            select c from Course c
+             where c.id in :ids and c.visibility = 'public'
+            """)
+    List<Course> findPublicByIds(@Param("ids") Collection<Long> ids);
 
     /**
      * 공개 코스 한 벌 — 지도의 "이웃 코스" 가 쓴다.

@@ -11,6 +11,7 @@ import com.heattrip.heat_trip_backend.community.dto.PostResponse;
 import com.heattrip.heat_trip_backend.community.dto.ReactionSummaryResponse;
 import com.heattrip.heat_trip_backend.community.entity.Comment;
 import com.heattrip.heat_trip_backend.community.entity.Post;
+import com.heattrip.heat_trip_backend.walk.CourseAttachment;
 import com.heattrip.heat_trip_backend.community.entity.Reaction;
 import com.heattrip.heat_trip_backend.community.repository.CommentRepository;
 import com.heattrip.heat_trip_backend.community.repository.PostRepository;
@@ -32,6 +33,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -76,6 +78,9 @@ public class CommunityService {
     private static final int MAX_LIMIT = 100;
 
     private final PostRepository posts;
+
+    /** 코스는 walk 모듈의 표면 하나로만 만난다 — 엔티티를 들여다보지 않는다(#339). */
+    private final CourseAttachment courses;
     private final CommentRepository comments;
     private final ReactionRepository reactions;
 
@@ -98,12 +103,14 @@ public class CommunityService {
     private final Blocks blocks;
 
     public CommunityService(PostRepository posts, CommentRepository comments,
-                            ReactionRepository reactions, Reports reports, Blocks blocks) {
+                            ReactionRepository reactions, Reports reports, Blocks blocks,
+                            CourseAttachment courses) {
         this.posts = posts;
         this.comments = comments;
         this.reactions = reactions;
         this.reports = reports;
         this.blocks = blocks;
+        this.courses = courses;
     }
 
     // ─────────────────────────── 글 ───────────────────────────
@@ -140,12 +147,16 @@ public class CommunityService {
         // ChatMessages 가 같은 함정을 이미 피해 뒀다.
         Set<Long> blocked = blockedBy(viewerId);
 
+        // 붙은 코스도 한 장에 한 번 묻는다 — 글마다 물으면 20건 조회에 쿼리가 21개다(#339).
+        Map<Long, CourseAttachment.AttachedCourse> courseCards = cardsFor(rows);
+
         List<PostResponse> items = new ArrayList<>(rows.size());
         for (Post p : rows) {
             items.add(PostResponse.of(p,
                     commentCounts.getOrDefault(p.getId(), 0),
                     reactionsById.getOrDefault(p.getId(), emptySummary(viewerId)),
-                    isBlocked(blocked, p.getUser())));
+                    isBlocked(blocked, p.getUser()),
+                    toPostCourse(cardOf(p, courseCards))));
         }
 
         Post last = rows.get(rows.size() - 1);
@@ -159,7 +170,8 @@ public class CommunityService {
         return PostResponse.of(post,
                 countComments(List.of(postId)).getOrDefault(postId, 0),
                 summarizeOne(postId, viewerId),
-                isBlocked(blockedBy(viewerId), post.getUser()));
+                isBlocked(blockedBy(viewerId), post.getUser()),
+                toPostCourse(cardOf(post, cardsFor(List.of(post)))));
     }
 
     @Transactional
@@ -175,8 +187,10 @@ public class CommunityService {
                 // 작성 시점 스냅샷. 응답에는 안 싣는다 — users 행이 사라진 뒤 그 글을 누가
                 // 썼는지 아는 유일한 기록이다(PersonRefResponse javadoc).
                 .handle(displayNameOf(me))
+                .courseId(request.courseId() == null ? null : requireAttachable(request.courseId(), me).id())
                 .build());
-        return PostResponse.of(saved, 0, emptySummary(me.getId()));
+        return PostResponse.of(saved, 0, emptySummary(me.getId()), false,
+                toPostCourse(cardOf(saved, cardsFor(List.of(saved)))));
     }
 
     // ─────────────────────────── 댓글 ───────────────────────────
@@ -385,6 +399,73 @@ public class CommunityService {
         return PostResponse.of(post,
                 countComments(List.of(postId)).getOrDefault(postId, 0),
                 summarizeOne(postId, me.getId()));
+    }
+
+    /**
+     * 글에 코스를 붙인다 (#339). 이미 붙어 있으면 갈아 끼운다.
+     *
+     * <p>붙일 수 있는 것은 <b>내 것이면서 공개된 코스</b>뿐이다({@link CourseAttachment}).
+     * 비공개를 붙이면 남들에게 빈 자리로 보이므로, 서버가 몰래 공개로 바꾸지 않고 막는다.
+     */
+    @Transactional
+    public PostResponse attachCourse(User me, long postId, long courseId) {
+        Post post = requirePost(postId);
+        requireMine(post.getUser(), me.getId(), "글");
+        CourseAttachment.AttachedCourse card = requireAttachable(courseId, me);
+        post.attachCourse(card.id());
+        return PostResponse.of(post,
+                countComments(List.of(postId)).getOrDefault(postId, 0),
+                summarizeOne(postId, me.getId()),
+                false,
+                toPostCourse(card));
+    }
+
+    /** 붙은 코스를 뗀다. 코스 자체는 그대로다 — 글에서 그림만 빠진다. */
+    @Transactional
+    public PostResponse detachCourse(User me, long postId) {
+        Post post = requirePost(postId);
+        requireMine(post.getUser(), me.getId(), "글");
+        post.attachCourse(null);
+        return PostResponse.of(post,
+                countComments(List.of(postId)).getOrDefault(postId, 0),
+                summarizeOne(postId, me.getId()),
+                false,
+                null);
+    }
+
+    private CourseAttachment.AttachedCourse requireAttachable(long courseId, User me) {
+        return courses.forAttaching(courseId, me.getId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "내 코스가 아니거나 비공개 코스입니다. 공개로 바꾼 뒤 붙일 수 있어요."));
+    }
+
+    /** 이 글들에 붙은 코스 카드. 공개된 것만 오고, 없는 것은 빠진다. */
+    private Map<Long, CourseAttachment.AttachedCourse> cardsFor(List<Post> rows) {
+        Set<Long> ids = new LinkedHashSet<>();
+        for (Post p : rows) {
+            if (p.getCourseId() != null) {
+                ids.add(p.getCourseId());
+            }
+        }
+        return ids.isEmpty() ? Map.of() : courses.cards(ids);
+    }
+
+    /**
+     * 이 글에 붙은 카드. 붙은 것이 없으면 {@code null} 이다.
+     *
+     * <p>{@code map.get(post.getCourseId())} 를 바로 부르지 않는 이유: 붙은 코스가 없는 글은
+     * 키가 {@code null} 인데 {@link Map#of()} 가 주는 불변 맵은 <b>null 키 조회에서 NPE</b> 다.
+     * 코스 없는 글을 쓰는 순간 500 이 났다 — 테스트가 그것을 잡았다.
+     */
+    private static CourseAttachment.AttachedCourse cardOf(
+            Post post, Map<Long, CourseAttachment.AttachedCourse> cards) {
+        return post.getCourseId() == null ? null : cards.get(post.getCourseId());
+    }
+
+    private static PostResponse.PostCourse toPostCourse(CourseAttachment.AttachedCourse card) {
+        return card == null
+                ? null
+                : new PostResponse.PostCourse(card.id(), card.name(), card.distanceM(), card.path());
     }
 
     @Transactional

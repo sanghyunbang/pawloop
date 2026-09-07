@@ -167,6 +167,49 @@ class ReactionSummary {
 }
 
 /// 글 한 건 — 계약의 `Post`.
+/// 글에 붙은 코스 — 계약의 `Post.course` (#339).
+///
+/// [path] 는 **이미 잘라 낸 선을 더 줄인 것**(최대 40점)이다. 카드에 그릴 그림용이고, 온전한
+/// 선이 필요하면 `CourseRepository.one` 을 부른다.
+class PostCourse {
+  final int id;
+  final String name;
+  final int distanceM;
+  final List<List<double>> path;
+
+  const PostCourse({
+    required this.id,
+    required this.name,
+    required this.distanceM,
+    this.path = const [],
+  });
+
+  double get km => distanceM / 1000.0;
+
+  /// 선이 되려면 점이 둘은 있어야 한다.
+  bool get drawable => path.length >= 2;
+
+  static PostCourse? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final id = json['id'];
+    final name = json['name'];
+    if (id is! int || name is! String) return null;
+    final rawPath = json['path'];
+    return PostCourse(
+      id: id,
+      name: name,
+      distanceM: (json['distanceM'] as num?)?.toInt() ?? 0,
+      path: rawPath is List
+          ? rawPath
+              .whereType<List>()
+              .map((p) => p.whereType<num>().map((n) => n.toDouble()).toList())
+              .where((p) => p.length == 2)
+              .toList()
+          : const [],
+    );
+  }
+}
+
 class CommunityPost {
   final int id;
   final PersonRef author;
@@ -183,6 +226,10 @@ class CommunityPost {
   /// `contentId` 로 갈려 있었다 — ADR-0017 이 `contentId` 로 통일했다. #171 의 완료
   /// 조건은 `placeId` 라고 적었지만 그 이름은 계약에서 사라졌다.
   final String? contentId;
+
+  /// 붙어 있는 코스 (#339). 안 붙였거나, 붙인 뒤 **비공개로 되돌렸거나**, 코스를 지웠으면
+  /// `null` 이다 — 셋을 구분하지 않는다. 화면에는 "그림이 없다" 로 같다.
+  final PostCourse? course;
 
   final int commentCount;
   final ReactionSummary reactions;
@@ -215,6 +262,7 @@ class CommunityPost {
     this.hiddenByBlock = false,
     this.loc,
     this.contentId,
+    this.course,
   });
 
   /// 한 자리만 바꾼 사본.
@@ -232,6 +280,7 @@ class CommunityPost {
         body: body,
         loc: loc,
         contentId: contentId,
+        course: course,
         commentCount: commentCount ?? this.commentCount,
         reactions: reactions ?? this.reactions,
         createdAt: createdAt,
@@ -259,6 +308,7 @@ class CommunityPost {
       body: body,
       loc: json['loc'] as String?,
       contentId: json['contentId'] as String?,
+      course: PostCourse.tryParse(json['course']),
       commentCount: ReactionSummary._int(json['commentCount']),
       reactions: ReactionSummary.parse(json['reactions']),
       createdAt: createdAt,
@@ -478,6 +528,9 @@ class CommunityRepository {
     required String body,
     String? loc,
     String? contentId,
+
+    /// 붙일 코스 (#339). **내 것이면서 공개된 코스**만 붙는다 — 아니면 서버가 400 이다.
+    int? courseId,
   }) async {
     final uploadLoc = LocationUploadPolicy.placeNameForUpload(loc);
     final uploadContentId = LocationUploadPolicy.placeIdForUpload(contentId);
@@ -494,8 +547,33 @@ class CommunityRepository {
           if (uploadLoc != null && uploadLoc.isNotEmpty) 'loc': uploadLoc,
           if (uploadContentId != null && uploadContentId.isNotEmpty)
             'contentId': uploadContentId,
+          // 코스는 좌표가 아니다 — 서버가 이미 양 끝을 자른 선의 식별자다(#339).
+          if (courseId != null) 'courseId': courseId,
         },
       ),
+    );
+    final post = CommunityPost.tryParse(json);
+    if (post == null) throw const CommunityFailure(CommunityFailureKind.network);
+    return post;
+  }
+
+  /// 이미 쓴 글에 코스를 붙인다 (#339). 붙어 있으면 갈아 끼운다.
+  Future<CommunityPost> attachCourse(int postId, int courseId) async {
+    final json = await _send(
+      () => _authed.putJson(
+        Uri.parse('$baseUrl/api/community/posts/$postId/course'),
+        body: {'courseId': courseId},
+      ),
+    );
+    final post = CommunityPost.tryParse(json);
+    if (post == null) throw const CommunityFailure(CommunityFailureKind.network);
+    return post;
+  }
+
+  /// 붙은 코스를 뗀다. 코스 자체는 남는다.
+  Future<CommunityPost> detachCourse(int postId) async {
+    final json = await _send(
+      () => _authed.deleteJson(Uri.parse('$baseUrl/api/community/posts/$postId/course')),
     );
     final post = CommunityPost.tryParse(json);
     if (post == null) throw const CommunityFailure(CommunityFailureKind.network);

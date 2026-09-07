@@ -43,15 +43,34 @@ public record PostResponse(
         ReactionSummaryResponse reactions,
         Instant createdAt,
         Instant updatedAt,
-        boolean hiddenByBlock) {
+        boolean hiddenByBlock,
+
+        /**
+         * 붙어 있는 코스 (#339). 안 붙였거나, 붙은 뒤 <b>비공개로 되돌렸거나</b>, 코스가
+         * 지워졌으면 {@code null} 이다 — 그 셋을 구분하지 않는다. 화면에는 "그림이 없다" 로
+         * 같기 때문이다.
+         */
+        PostCourse course) {
+
+    /**
+     * 카드에 그릴 만큼의 코스. 선은 <b>이미 잘라 낸 것을 더 줄인 것</b>(최대 40점)이라
+     * 온전한 선이 필요하면 {@code GET /api/courses/&#123;id&#125;} 를 부른다.
+     */
+    public record PostCourse(long id, String name, int distanceM, java.util.List<java.util.List<Double>> path) {
+    }
 
     /** 가리기와 무관한 자리 — 방금 내가 쓰거나 고친 글이다. */
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions) {
-        return of(post, commentCount, reactions, false);
+        return of(post, commentCount, reactions, false, null);
     }
 
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
                                   boolean hiddenByBlock) {
+        return of(post, commentCount, reactions, hiddenByBlock, null);
+    }
+
+    public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
+                                  boolean hiddenByBlock, PostCourse course) {
         return new PostResponse(
                 post.getId(),
                 PersonRefResponse.of(post.getUser()),
@@ -64,6 +83,7 @@ public record PostResponse(
                 reactions,
                 post.createdAtInstant(),
                 post.updatedAtInstant(),
-                hiddenByBlock);
+                hiddenByBlock,
+                course);
     }
 }

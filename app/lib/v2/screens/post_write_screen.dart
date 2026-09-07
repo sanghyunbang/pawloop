@@ -27,6 +27,8 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/community_repository.dart';
+import '../data/course_repository.dart';
+import '../widgets/course_picker_sheet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import 'login_screen.dart';
@@ -104,6 +106,9 @@ class PostWriteScreen extends StatefulWidget {
   /// 테스트가 가짜 서버를 넣는 자리. 앱에서는 부른 화면이 자기 것을 넘긴다.
   final CommunityRepository? repository;
 
+  /// 코스 저장소. 테스트가 꽂는 자리다 (#339).
+  final CourseRepository? courses;
+
   /// 처음 골라 둘 게시판. 사용자가 바꿀 수 있다.
   final CommunityBoard? initialBoard;
 
@@ -123,6 +128,7 @@ class PostWriteScreen extends StatefulWidget {
   const PostWriteScreen({
     super.key,
     this.repository,
+    this.courses,
     this.initialBoard,
     this.loc,
     this.contentId,
@@ -150,6 +156,11 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
       (widget.contentId != null || widget.loc != null
           ? (widget.initialBoard ?? CommunityBoard.petPlace)
           : (widget.initialBoard ?? CommunityBoard.free));
+
+  /// 붙일 코스 (#339). 산책로 후기에서만 고를 수 있다 — 다른 게시판에 경로를 붙이는 것은
+  /// 뜻이 흐리다. 고쳐 쓰는 글에서는 이미 붙어 있는 것을 그대로 둔다(붙이기·떼기는
+  /// 별도 오퍼레이션이라 이 화면의 저장과 섞지 않는다).
+  Course? _course;
 
   bool _sending = false;
   String? _error;
@@ -217,6 +228,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
       final post = widget.isEditing
           ? await _saveEdit(title, body)
           : await _repo.createPost(
+              courseId: _board == CommunityBoard.walkReview ? _course?.id : null,
               board: _board,
               title: title,
               body: body,
@@ -277,6 +289,11 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                   ],
                   _label('게시판'),
                   _boardChips(),
+                  // 산책로 후기에만 붙인다 — 다른 게시판에 경로는 뜻이 흐리다(#339).
+                  if (_board == CommunityBoard.walkReview) ...[
+                    const SizedBox(height: 12),
+                    _courseRow(),
+                  ],
                   const SizedBox(height: 18),
                   _label('제목'),
                   TextField(
@@ -407,6 +424,59 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
       );
 
   /// 게시판 다섯. **'전체' 는 없다** — 그건 목록의 필터이지 글이 올라갈 곳이 아니다.
+  /// 산책로 후기일 때만 나오는 줄. 고른 코스가 있으면 이름과 거리를, 없으면 권유를 보여 준다.
+  Widget _courseRow() {
+    final course = _course;
+    return GestureDetector(
+      onTap: _pickCourse,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xCCFFFFFF),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0x1F8C7BFF)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.route_rounded, size: 17, color: Color(0xFFE07A4E)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: course == null
+                ? const Text('내 코스 붙이기 — 걸었던 길을 함께 보여 줘요',
+                    style: TextStyle(fontSize: 13.5, color: T.textSecondary))
+                : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(course.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text('${course.km.toStringAsFixed(2)}km · 공개',
+                        style: const TextStyle(fontSize: 12, color: T.textMuted)),
+                  ]),
+          ),
+          if (course != null)
+            GestureDetector(
+              onTap: () => setState(() => _course = null),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Text('빼기',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textMuted)),
+              ),
+            )
+          else
+            const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _pickCourse() async {
+    final picked = await CoursePickerSheet.open(context, courses: widget.courses);
+    if (picked == null || !mounted) return;
+    setState(() => _course = picked);
+  }
+
   Widget _boardChips() => Wrap(
         spacing: 8,
         runSpacing: 8,

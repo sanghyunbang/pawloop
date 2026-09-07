@@ -212,6 +212,7 @@ erDiagram
         VARCHAR  title
         TEXT     body
         DATETIME created_at
+        BIGINT   course_id FK "nullable - 붙은 코스. 코스를 지워도 글은 남는다 SET NULL (#339)"
     }
 
     comment {

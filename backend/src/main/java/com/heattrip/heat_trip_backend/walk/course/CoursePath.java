@@ -50,6 +50,29 @@ public final class CoursePath {
         return lengthMeters(trimmed) < MIN_REMAINING_METERS ? null : trimmed;
     }
 
+    /**
+     * 점을 [maxPoints] 개 이하로 줄인다 — 카드에 그릴 그림용 (#339).
+     *
+     * <p>모양만 남기면 되는 자리라 <b>같은 간격으로 골라낸다</b>(Douglas-Peucker 를 쓰지
+     * 않는다). 시작점과 끝점은 반드시 남긴다 — 그 둘이 없으면 선이 다른 곳에서 시작해
+     * 다른 곳에서 끝나는 것처럼 보인다.
+     *
+     * <p>피드 응답에 300점짜리 선을 스무 개 싣지 않기 위한 것이고, 상세에서 부르는
+     * {@code GET /api/courses/&#123;id&#125;} 는 여전히 온전한 선을 준다.
+     */
+    public static List<List<Double>> simplify(List<List<Double>> points, int maxPoints) {
+        if (points == null || points.size() <= maxPoints || maxPoints < 2) {
+            return points;
+        }
+        List<List<Double>> out = new ArrayList<>(maxPoints);
+        double step = (points.size() - 1) / (double) (maxPoints - 1);
+        for (int i = 0; i < maxPoints - 1; i++) {
+            out.add(points.get((int) Math.round(i * step)));
+        }
+        out.add(points.getLast());
+        return out;
+    }
+
     /** 선의 길이(m). 점이 하나 이하면 0 이다. */
     public static double lengthMeters(List<List<Double>> points) {
         if (points == null || points.size() < 2) {
