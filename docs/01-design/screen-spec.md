@@ -79,8 +79,8 @@
 - **NaverMap**(`flutter_naver_map`): 초기 중심 서울시청(37.5665, 126.9816), zoom 12(min 9 / max 18), 위치버튼 on, ko 로케일.
 - 상단 오버레이: 검색바(`이 지역에서 찾기...`, 더미) + 뷰 토글 + ProfileAvatar + 카테고리 칩.
 - **마커**(`_refreshMarkers`): 필터된 장소마다 카테고리색 원형 핀(`NOverlayImage.fromWidget`), 탭 시 바텀시트.
-  - 산책로 항목의 시트를 열면 → 선을 `GET /api/places/trails/{courseId}/route` 로 받아 폴리라인(`#2FB89B`)을 얹고 카메라를 선에 맞춘다(#291). 못 받으면 시작점 마커만 남는다.
-- 좌하단 **범례**(`_legend`): 카테고리 9종 색 도트 목록.
+  - 산책로 항목의 시트를 열면 → 선을 `GET /api/places/trails/{courseId}/route` 로 받아 폴리라인(카테고리색)을 얹고 카메라를 선에 맞춘다(#291). 못 받으면 시작점 마커만 남는다.
+- 좌하단 **범례**(`_legend`): 카테고리 9종 색 + 아이콘 목록(#328). 마커는 `NClusterableMarker` — 겹치면 숫자 하나로 접힌다.
 - 로딩 시 상단 "주변 장소 불러오는 중..." 카드.
 
 ### 장소 상세 바텀시트 (`_showPlaceSheet`)
