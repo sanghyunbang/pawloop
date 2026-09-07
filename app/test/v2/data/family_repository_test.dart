@@ -237,12 +237,22 @@ void main() {
     });
 
     test('초대 발급은 그룹이 아니라 방 경로다 — 초대코드는 방에 붙는다(ADR-0011)', () async {
-      final f = repositoryThatAnswers((_) => _json({'code': 'ABCDE-FGHIJ'}, status: 201));
+      // 서버 ChatInviteView 그대로 — code · roomId · expiresAt · maxUses · usedCount · createdAt.
+      final f = repositoryThatAnswers((_) => _json({
+            'code': 'ABCDE-FGHIJ',
+            'roomId': 42,
+            'expiresAt': '2026-09-14T12:00:00Z',
+            'maxUses': null,
+            'usedCount': 0,
+            'createdAt': '2026-09-07T12:00:00Z',
+          }, status: 201));
 
-      final code = await f.repo.issueInvite(42);
+      final invite = await f.repo.issueInvite(42);
 
       expect(f.seen.single.url.path, '/api/chat/rooms/42/invites');
-      expect(code, 'ABCDE-FGHIJ');
+      expect(invite.code, 'ABCDE-FGHIJ');
+      expect(invite.expiresAt, DateTime.utc(2026, 9, 14, 12), reason: '만료는 시트의 문구가 된다(#329)');
+      expect(invite.maxUses, isNull, reason: 'null 은 무제한이다 — 0 으로 읽으면 안 된다');
     });
   });
 

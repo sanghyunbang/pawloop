@@ -105,6 +105,9 @@ class TodayScreen extends StatelessWidget {
                   TodayCareCard(
                     onOpenFamily: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const FamilyScreen())),
+                    // "만들기" 는 이름 시트까지 한 번에(#329).
+                    onCreateFamily: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const FamilyScreen(openCreate: true))),
                   ),
                   const SizedBox(height: 12),
                   _ctas(context),

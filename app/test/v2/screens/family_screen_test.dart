@@ -214,4 +214,33 @@ void main() {
       findsOneWidget,
     );
   });
+
+  // ── "연동 전" 카드 없음 · 주의사항 "…" 메뉴 (#329) ──────────────────
+
+  testWidgets('"오늘 걸은 거리" 카드가 없다 — 미완성을 사용자에게 보이지 않는다', (tester) async {
+    await pumpScreen(tester, fixture().repo);
+
+    expect(find.text('오늘 걸은 거리'), findsNothing);
+    expect(find.textContaining('연동 전'), findsNothing);
+    expect(find.text('길게 눌러 삭제'), findsNothing, reason: '지우는 문은 줄마다 붙은 "…" 메뉴다');
+  });
+
+  testWidgets('주의사항 줄의 "…" → 지우기 → 확인이면 그 줄이 빠진 한 장이 PUT 된다', (tester) async {
+    final f = fixture(walkNoteBody: '계단 피하기\n리드줄 짧게');
+    await pumpScreen(tester, f.repo);
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('지우기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('삭제할까요?'), findsOneWidget, reason: '가족 모두에게서 사라지는 일이라 한 번 더 묻는다');
+    expect(f.writes, isEmpty);
+
+    await tester.tap(find.text('삭제'));
+    await tester.pumpAndSettle();
+
+    expect(f.writes.single.method, 'PUT');
+    expect(jsonDecode(f.writes.single.body), {'body': '리드줄 짧게'});
+  });
 }

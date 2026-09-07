@@ -237,6 +237,78 @@ void main() {
     expect(f.deletes, isEmpty, reason: '서버도 403 이지만 보내기 전에 여기서 멈춘다');
   });
 
+  // ── 다시 누르면 무른다 (#329) ──────────────────────────────────────
+
+  testWidgets('내 기록이 있는 칸을 다시 누르면 지울지 묻고, "지우기" 면 DELETE 가 나간다 — POST 는 없다',
+      (tester) async {
+    final f = fixture(logs: [
+      _log(id: 7, type: 'water', who: '나', at: '2026-08-30T15:40:00'),
+    ]);
+    await pumpCard(tester, f.repo, myUserId: 11);
+
+    await tester.tap(find.text('물'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('이미 기록한 칸이에요'), findsOneWidget);
+    expect(
+      find.text('오늘 15:40 에 내가 남긴 물 기록이에요. 잘못 눌렀다면 지우고, 한 번 더 한 거면 다시 기록해요.'),
+      findsOneWidget,
+    );
+    expect(find.text('그래도 기록'), findsNothing, reason: '내 기록에는 "이미 있음" 경고가 아니라 무르기다');
+    expect(f.deletes, isEmpty, reason: '고르기 전에는 보내지 않는다');
+
+    await tester.tap(find.text('지우기'));
+    await tester.pumpAndSettle();
+
+    expect(f.deletes, hasLength(1));
+    expect(f.deletes.single.url.path, '/api/groups/3/care-logs/7');
+    expect(f.posts, isEmpty);
+  });
+
+  testWidgets('"한 번 더 기록" 이면 POST 가 나간다 — 두 끼는 실제로 있다', (tester) async {
+    final f = fixture(logs: [
+      _log(id: 7, type: 'meal', who: '나', at: '2026-08-30T08:10:00'),
+    ]);
+    await pumpCard(tester, f.repo, myUserId: 11);
+
+    await tester.tap(find.text('밥'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('한 번 더 기록'));
+    await tester.pumpAndSettle();
+
+    expect(f.posts, hasLength(1));
+    expect(jsonDecode(f.posts.single.body), {'type': 'meal'});
+    expect(f.deletes, isEmpty);
+  });
+
+  testWidgets('"취소" 면 아무것도 보내지 않는다', (tester) async {
+    final f = fixture(logs: [
+      _log(id: 7, type: 'meal', who: '나', at: '2026-08-30T08:10:00'),
+    ]);
+    await pumpCard(tester, f.repo, myUserId: 11);
+
+    await tester.tap(find.text('밥'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('취소'));
+    await tester.pumpAndSettle();
+
+    expect(f.posts, isEmpty);
+    expect(f.deletes, isEmpty);
+  });
+
+  testWidgets('남의 기록이 있는 칸은 다시 눌러도 지우기가 없다 — "그래도 기록" 만 묻는다', (tester) async {
+    final f = fixture(logs: [
+      _log(id: 7, type: 'walk', who: '엄마', at: '2026-08-30T07:05:00'),
+    ]);
+    await pumpCard(tester, f.repo, myUserId: 22); // 엄마(11)가 아니다
+
+    await tester.tap(find.text('산책'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('그래도 기록'), findsOneWidget);
+    expect(find.text('지우기'), findsNothing, reason: '지울 수 있으면 산책 누락이 그 자리에서 생긴다');
+  });
+
   testWidgets('네트워크가 없으면 빈 카드가 아니라 실패 문구와 다시 시도를 그린다',
       (tester) async {
     final f = fixture(careLogsStatus: 500);

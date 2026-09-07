@@ -363,11 +363,13 @@ class FamilyRepository {
   ///
   /// **발급할 때마다 새 코드가 생기고 이전 코드는 죽지 않는다**(#75 에서 실측으로 확인된
   /// 동작이다). 그래서 화면에서 "새 코드 발급" 을 유출 대응 버튼처럼 광고하면 안 된다.
-  Future<String> issueInvite(int roomId) async {
+  ///
+  /// 코드만이 아니라 만료·횟수도 돌려준다 — 초대 시트가 그 **사실**로 말한다(#329).
+  Future<FamilyInvite> issueInvite(int roomId) async {
     final json = await _send(
       () => _authed.postJson(Uri.parse('$baseUrl/api/chat/rooms/$roomId/invites')),
     );
-    return '${(json as Map)['code'] ?? ''}';
+    return FamilyInvite.fromJson(json as Map);
   }
 
   /// 그 그룹의 산책 주의사항 한 장. 아직 없으면 본문이 빈 문자열이다(404 가 아니다).
@@ -443,5 +445,29 @@ class FamilyRepository {
       _ => FamilyFailureKind.network,
     };
     throw FamilyFailure(kind, FamilyFailure.messageFor(kind));
+  }
+}
+
+/// 발급된 초대 — 코드와 그 코드의 사실(만료·횟수). 서버 `ChatInviteView` 의 `code`·
+/// `expiresAt`·`maxUses` 다. 화면은 이 값으로만 말한다(#329).
+class FamilyInvite {
+  final String code;
+
+  /// 서버 시각(UTC). null 이면 만료 없음.
+  final DateTime? expiresAt;
+
+  /// null 이면 횟수 무제한.
+  final int? maxUses;
+
+  const FamilyInvite({required this.code, this.expiresAt, this.maxUses});
+
+  factory FamilyInvite.fromJson(Map json) {
+    final expires = json['expiresAt'];
+    final uses = json['maxUses'];
+    return FamilyInvite(
+      code: '${json['code'] ?? ''}',
+      expiresAt: expires is String ? DateTime.tryParse(expires) : null,
+      maxUses: uses is num ? uses.toInt() : null,
+    );
   }
 }
