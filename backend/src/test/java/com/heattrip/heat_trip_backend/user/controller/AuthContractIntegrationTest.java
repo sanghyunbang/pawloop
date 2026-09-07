@@ -265,11 +265,17 @@ class AuthContractIntegrationTest extends AbstractMySqlIntegrationTest {
         // 계약(components/schemas/User)의 속성 이름과 1:1 이다.
         assertThat(fieldNames(body))
                 .containsExactlyInAnyOrder("id", "email", "name", "nickname", "gender",
-                        "age", "travelType", "imageUrl", "provider", "createdAt", "updatedAt");
+                        "age", "travelType", "imageUrl", "provider", "createdAt", "updatedAt",
+                        // 사용자가 고른 동네 (#342). 안 골랐으면 null 이고, 키 자체는 있다 —
+                        // 계약이 `type: [object, "null"]` 로 선언했다.
+                        "neighborhood");
         assertThat(body.path("email").asText()).isEqualTo(email);
         assertThat(body.path("provider").asText())
                 .as("users.provider 컬럼은 #7 에서 생겼다 — '내려오지 않는다' 는 서술은 낡았다")
                 .isEqualTo("local");
+        assertThat(body.path("neighborhood").isNull())
+                .as("갓 가입한 사람은 동네를 안 골랐다 (#342)")
+                .isTrue();
         assertThat(body.has("isNew"))
                 .as("isNew 는 로그인 1회성 이벤트 속성이지 프로필의 영속 속성이 아니다 (#23)")
                 .isFalse();

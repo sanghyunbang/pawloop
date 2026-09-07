@@ -223,6 +223,23 @@ public class User {
     private String travelType;
     private String imageUrl;
 
+    /**
+     * 사용자가 <b>스스로 고른</b> 행정동 코드 열 자리 — 이슈 #342. 안 골랐으면 {@code null}.
+     *
+     * <p><b>위치정보가 아니다.</b> 단말이 측정한 좌표가 아니라 사람이 목록에서 고른 값이다.
+     * 그래서 위치기반서비스사업 신고 전(#235, A안)에도 서버가 들 수 있다. 개인정보이긴
+     * 하므로 처리방침의 수집 항목에 있고, 탈퇴하면 이 행과 함께 사라진다.
+     *
+     * <p>좌표 컬럼을 나란히 두지 않는 것이 그 선이다 — 지도의 중심 좌표는 앱이 내장 자산에서
+     * 읽고 서버는 받지도 저장하지도 않는다. {@code 30_users_neighborhood.sql} 의 사후 검증이
+     * 좌표 컬럼이 없는 것을 함께 잰다.
+     *
+     * <p>앞 다섯 자리가 시군구다({@code NeighborhoodCatalog}). 커뮤니티의 "우리 동네" 가
+     * 그 앞자리로 훑는다.
+     */
+    @Column(length = 10)
+    private String neighborhoodCode;
+
     private LocalDateTime createdAt; // 생성일
     private LocalDateTime updatedAt; // 수정일
 

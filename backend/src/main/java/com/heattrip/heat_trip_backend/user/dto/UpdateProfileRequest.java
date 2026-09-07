@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.user.dto;
 
 import com.heattrip.heat_trip_backend.user.entity.User;
 
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import lombok.*;
@@ -33,6 +34,19 @@ public class UpdateProfileRequest {
     private Integer age;        // null 이면 미수정
     private String travelType;  // null 이면 미수정
     private String imageUrl;    // null 이면 미수정 (S3 URL)
+
+    /**
+     * 내가 고른 동네의 행정동 코드 열 자리 — 이슈 #342.
+     *
+     * <p>{@code null} 은 이 클래스의 규칙대로 <b>안 바꿈</b>이고, <b>빈 문자열이면 지운다</b> —
+     * "동네 안 쓸래" 를 표현할 방법이 있어야 한다.
+     *
+     * <p>모양만 여기서 막고, <b>있는 시군구인지는 서버가 표로 확인한다</b>
+     * ({@code NeighborhoodCatalog}). 이름을 본문으로 받지 않는 이유도 같다 — 받으면
+     * 아무나 자기 동네를 "청와대" 라고 적어 글 카드에 띄울 수 있다.
+     */
+    @Pattern(regexp = "|[0-9]{10}", message = "동네 코드는 열 자리 숫자입니다.")
+    private String neighborhoodCode;
 
     // 마케팅 동의 변경은 여기 없다 — PUT /api/consents 에 MARKETING 행을 적는다(#190).
 }

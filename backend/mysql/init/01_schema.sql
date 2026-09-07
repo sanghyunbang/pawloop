@@ -383,11 +383,13 @@ CREATE TABLE `users` (
   `password` varchar(255) DEFAULT NULL,
   `travel_type` varchar(255) DEFAULT NULL,
   `username` varchar(255) DEFAULT NULL,
+  `neighborhood_code` varchar(10) DEFAULT NULL,
   `age_group` enum('OVER14','UNDER14') DEFAULT NULL,
   `gender` enum('FEMALE','MALE','OTHER') DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_users_provider_social_id` (`provider`,`social_id`),
-  UNIQUE KEY `UK6dotkott2kjsp8vw4d0m25fb7` (`email`)
+  UNIQUE KEY `UK6dotkott2kjsp8vw4d0m25fb7` (`email`),
+  KEY `idx_users_neighborhood` (`neighborhood_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `walk` (
