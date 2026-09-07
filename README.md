@@ -186,6 +186,15 @@ flutter run --dart-define=API_BASE=http://10.0.2.2:8080
 - **문서 — 계약 테스트** — 백엔드 잡이 안 켜진 문서 PR 에서만 돕니다. `DecisionLogTest`·`DocDriftTest`·`OpenApiAuthContractTest`·`PackageConventionDocTest`([#113](https://github.com/sanghyunbang/heattrip/issues/113)).
 - **`CI 통과`** 잡 하나가 최종 판정입니다. 브랜치 보호 규칙에는 이 잡만 등록하면 됩니다.
 
+### 로컬에서 같은 검사 돌리기
+
+```bash
+bash scripts/local-ci.sh            # 문서 · 서버 · 앱 전부
+bash scripts/local-ci.sh backend    # 하나만 (backend | app | docs)
+```
+
+`ci.yml` 과 **같은 명령**을 돌리고 로그를 `build/local-ci/` 에 남깁니다. 이 저장소는 private 이라 액션이 계정의 Actions 분(minutes, 월 3,000분)을 씁니다. 분이 떨어지면 잡이 **시작조차 못 하고** 1~2초 만에 실패합니다(단계 0개·로그 없음) — 그때는 코드를 의심하기 전에 [Billing](https://github.com/settings/billing) 을 먼저 보고, 이 스크립트로 근거를 남긴 뒤 머지합니다.
+
 테스트 정책과 기여 규약은 이슈로 관리합니다 — [규약 #4](https://github.com/sanghyunbang/heattrip/issues/4) · [테스트 정책 #21](https://github.com/sanghyunbang/heattrip/issues/21) · [로드맵 #20](https://github.com/sanghyunbang/heattrip/issues/20).
 
 ---
