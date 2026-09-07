@@ -691,6 +691,12 @@ public class ChatRoomService {
                 .clientMsgId(idempotencyKey)
                 .build());
 
+        // 보낸 사람의 읽음 위치를 이 메시지까지 올린다(#330). 내가 방금 보낸 말이 내 방 목록에
+        // 빨간 배지 1 로 뜨던 자리다. 미읽음은 last_seq − last_read_seq 뺄셈이라 발신자를
+        // 빼는 길은 COUNT 가 아니라 워터마크다. 보낼 수 있다는 것은 방을 열어 두었다는 것이므로
+        // 그 앞의 메시지도 읽은 것으로 친다 — 다른 채팅 앱들과 같다. GREATEST·LEAST 는
+        // raiseReadWatermark 안에 있어 뒤로 가거나 방을 넘지 않는다.
+        members.raiseReadWatermark(roomId, senderUserId, seq);
         metrics.messageSent(roomKind);
         // 저장 트랜잭션 안에서 알린다 — 듣는 쪽(알림, #83)은 AFTER_COMMIT 으로 받아 커밋 뒤에만 움직인다.
         events.publishEvent(new ChatMessagePosted(roomId, roomName, seq, saved.getId(), senderUserId, name,

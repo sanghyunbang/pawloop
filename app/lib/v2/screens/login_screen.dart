@@ -96,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (mounted) setState(() => _busy = false);
     messenger.showSnackBar(
-      const SnackBar(content: Text('로그인됐어요 🐾')),
+      const SnackBar(content: Text('로그인됐어요')),
     );
   }
 

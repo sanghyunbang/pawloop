@@ -105,19 +105,44 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
 
         JsonNode forMate = roomInList(mate, room.id());
         assertThat(forMate.path("lastSeq").asLong()).isEqualTo(3);
-        assertThat(forMate.path("lastReadSeq").asLong()).isZero();
-        assertThat(forMate.path("unread").asLong())
-                .as("아직 아무것도 안 읽었으니 방의 마지막 번호 그대로다")
+        assertThat(forMate.path("lastReadSeq").asLong())
+                .as("보내는 것은 읽는 것이다 — 내 메시지(3번)까지 읽음 위치가 올라간다(#330)")
                 .isEqualTo(3);
+        assertThat(forMate.path("unread").asLong()).isZero();
 
-        markRead(mate, room.id(), 3).andExpect(status().isOk());
+        JsonNode forOwner = roomInList(owner, room.id());
+        assertThat(forOwner.path("lastReadSeq").asLong())
+                .as("owner 는 자기 2번까지 읽은 셈이다")
+                .isEqualTo(2);
+        assertThat(forOwner.path("unread").asLong())
+                .as("owner 가 못 읽은 것은 mate 의 3번 하나다 — 3 − 2. 미읽음은 사람마다 다르다")
+                .isEqualTo(1);
 
-        assertThat(roomInList(mate, room.id()).path("unread").asLong())
+        markRead(owner, room.id(), 3).andExpect(status().isOk());
+
+        assertThat(roomInList(owner, room.id()).path("unread").asLong())
                 .as("읽음 커서가 마지막까지 갔으면 미읽음은 0 이다")
                 .isZero();
-        assertThat(roomInList(owner, room.id()).path("unread").asLong())
-                .as("owner 는 mate 의 메시지를 아직 안 읽었다 — 미읽음은 사람마다 다르다")
-                .isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("내가 보낸 직후 내 방 목록의 미읽음은 0 이다 — 내 말이 빨간 배지로 뜨지 않는다(#330)")
+    void myOwnMessageIsNeverUnreadForMe() throws Exception {
+        Account owner = account("보내는 사람");
+        Account mate = account("받는 사람");
+        Room room = roomWith(owner, mate);
+
+        send(owner, room.id(), "Bori walked 150m today", "own-1").andExpect(status().isCreated());
+
+        JsonNode mine = roomInList(owner, room.id());
+        assertThat(mine.path("lastSeq").asLong()).isEqualTo(1);
+        assertThat(mine.path("lastReadSeq").asLong())
+                .as("전송이 발신자의 읽음 위치를 그 메시지까지 올린다")
+                .isEqualTo(1);
+        assertThat(mine.path("unread").asLong()).isZero();
+        assertThat(roomInList(mate, room.id()).path("unread").asLong())
+                .as("받는 쪽에는 그대로 1 이다")
+                .isEqualTo(1);
     }
 
     @Test
