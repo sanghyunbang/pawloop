@@ -77,8 +77,13 @@ public class CommunityController {
     public PostPageResponse feed(@ViewerId Long viewerId,
                                  @RequestParam(required = false) String board,
                                  @RequestParam(required = false) String cursor,
-                                 @RequestParam(required = false) Integer limit) {
-        return community.page(viewerId, board, cursor, limit);
+                                 @RequestParam(required = false) Integer limit,
+                                 /*
+                                  * "우리 동네" (#342). 지금 받는 값은 mine 하나다 —
+                                  * 구 코드를 받지 않는 이유는 CommunityService 에 적었다.
+                                  */
+                                 @RequestParam(required = false) String neighborhood) {
+        return community.pageForNeighborhood(viewerId, board, cursor, limit, neighborhood);
     }
 
     @GetMapping("/posts/{postId}")

@@ -4,6 +4,7 @@
 // "거른다" 만이 아니라 **"이름 기준" 이라고 함께 적는다** 까지다.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -68,6 +69,10 @@ Future<void> _pumpWide(WidgetTester tester) async {
 }
 
 void main() {
+  // 지도가 내 동네를 기기에서 읽는다(#342). 목을 안 깔면 그 읽기가 안 끝나
+  // 화면이 멈춘다 — pumpAndSettle 이 시간 초과로 죽는다.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('이름에 24시가 있는 병원 시트에만 배지 — "이름 기준" 을 함께 적는다', (tester) async {
     await _pumpWide(tester);
 

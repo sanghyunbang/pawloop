@@ -16,6 +16,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -90,6 +91,10 @@ Future<void> _pumpWide(WidgetTester tester, Widget child) async {
 }
 
 void main() {
+  // 지도가 내 동네를 기기에서 읽는다(#342). 목을 안 깔면 그 읽기가 안 끝나
+  // 화면이 멈춘다 — pumpAndSettle 이 시간 초과로 죽는다.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('병원 칩을 누르면 칩 키로 다시 조회한다 — 받아 놓은 80곳 안에서 거르지 않는다',
       (tester) async {
     final repo = _FakeRepo();

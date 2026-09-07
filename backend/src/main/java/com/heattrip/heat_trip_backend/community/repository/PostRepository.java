@@ -25,14 +25,24 @@ public interface PostRepository extends JpaRepository<Post, Long> {
      *
      * <p>{@code board} 가 {@code null} 이면 전체다. 선택 필터를
      * {@code (:param is null or 컬럼 = :param)} 로 쓰는 것이 이 저장소의 모양이다.
+     *
+     * <p>{@code sgg} 는 <b>시군구 앞 다섯 자리</b>다 — "우리 동네"(#342). {@code null} 이면
+     * 전국이다. 앞자리 {@code like} 라 {@code idx_users_neighborhood} 의 범위를 탄다.
+     * <b>동네를 안 고른 사람의 글은 안 나온다</b>({@code is not null}) — 그게 없으면
+     * {@code like} 가 {@code null} 에 대해 unknown 이라 결과가 조용히 비거나 섞인다.
      */
     @Query("""
             select p from Post p
               left join fetch p.user u
              where (:board is null or p.board = :board)
+               and (:sgg is null
+                    or (u.neighborhoodCode is not null
+                        and u.neighborhoodCode like concat(:sgg, '%')))
              order by p.createdAt desc, p.id desc
             """)
-    List<Post> findPage(@Param("board") String board, Limit limit);
+    List<Post> findPage(@Param("board") String board,
+                        @Param("sgg") String sgg,
+                        Limit limit);
 
     /**
      * 다음 장. <b>커서보다 엄격히 뒤인 것만</b> 준다.
@@ -44,11 +54,15 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             select p from Post p
               left join fetch p.user u
              where (:board is null or p.board = :board)
+               and (:sgg is null
+                    or (u.neighborhoodCode is not null
+                        and u.neighborhoodCode like concat(:sgg, '%')))
                and (p.createdAt < :cursorAt
                     or (p.createdAt = :cursorAt and p.id < :cursorId))
              order by p.createdAt desc, p.id desc
             """)
     List<Post> findPageAfter(@Param("board") String board,
+                             @Param("sgg") String sgg,
                              @Param("cursorAt") LocalDateTime cursorAt,
                              @Param("cursorId") long cursorId,
                              Limit limit);

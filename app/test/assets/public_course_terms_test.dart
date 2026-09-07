@@ -40,11 +40,21 @@ void main() {
   });
 
   test('버전이 올랐다 — 내용이 바뀌면 다시 동의를 받는다', () {
-    expect(privacy, contains('버전: v1.5'),
-        reason: '공개 범위가 늘어난 것은 다시 알려야 하는 변경이다');
+    // v1.5 가 공개 코스(#339), v1.6 이 동네(#342)다. 수집 항목이 늘 때마다 올린다.
+    expect(privacy, contains('버전: v1.6'),
+        reason: '수집 항목이 늘어난 것은 다시 알려야 하는 변경이다');
 
     final screen = _read(File('lib/v2/screens/settings/legal_document_screen.dart'));
-    expect(screen, contains("ConsentKind.privacy, 'v1.5'"),
+    expect(screen, contains("ConsentKind.privacy, 'v1.6'"),
         reason: '문서만 올리고 상수를 안 올리면 아무에게도 다시 안 묻는다');
+  });
+
+  test('동네가 수집 항목에 있고, 보이는 단위가 구까지라고 적혀 있다 (#342)', () {
+    expect(privacy, contains('동네(읍·면·동, 선택)'),
+        reason: '서버가 드는 값을 안 적으면 목록이 거짓이 된다');
+    expect(privacy, contains('단말이 측정한 좌표가 아닙니다'),
+        reason: '이 기능이 위치기반서비스 신고 전에도 사는 이유가 그 한 문장이다');
+    expect(privacy, contains('시·군·구 단위로만'),
+        reason: '남에게 보이는 범위를 방침이 말해야 한다');
   });
 }

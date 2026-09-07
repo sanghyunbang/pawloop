@@ -22,6 +22,8 @@ import com.heattrip.heat_trip_backend.moderation.ReportSnapshotInput;
 import com.heattrip.heat_trip_backend.moderation.ReportTarget;
 import com.heattrip.heat_trip_backend.moderation.Reports;
 import com.heattrip.heat_trip_backend.community.repository.ReactionRepository;
+import com.heattrip.heat_trip_backend.user.NeighborhoodCatalog;
+import com.heattrip.heat_trip_backend.user.ViewerNeighborhood;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -102,15 +104,27 @@ public class CommunityService {
      */
     private final Blocks blocks;
 
+    /**
+     * 글쓴이의 동네 코드에 이름을 붙이는 표 (#342). 사용자 모듈의 공개 면이다 —
+     * 이 서비스는 이미 {@code Post.user} 로 그 모듈에 닿아 있다.
+     */
+    private final NeighborhoodCatalog neighborhoods;
+
+    /** 보는 사람이 고른 동네를 묻는 자리 (#342). 사용자 모듈의 공개 면이다. */
+    private final ViewerNeighborhood viewerNeighborhood;
+
     public CommunityService(PostRepository posts, CommentRepository comments,
                             ReactionRepository reactions, Reports reports, Blocks blocks,
-                            CourseAttachment courses) {
+                            CourseAttachment courses, NeighborhoodCatalog neighborhoods,
+                            ViewerNeighborhood viewerNeighborhood) {
         this.posts = posts;
         this.comments = comments;
         this.reactions = reactions;
         this.reports = reports;
         this.blocks = blocks;
         this.courses = courses;
+        this.neighborhoods = neighborhoods;
+        this.viewerNeighborhood = viewerNeighborhood;
     }
 
     // ─────────────────────────── 글 ───────────────────────────
@@ -121,6 +135,47 @@ public class CommunityService {
      * @param viewerId 보는 사람. {@code null} 이면 <b>게스트</b>이고 {@code mine} 은 {@code null} 이다
      */
     public PostPageResponse page(Long viewerId, String board, String cursor, Integer limit) {
+        return page(viewerId, board, cursor, limit, (String) null);
+    }
+
+    /**
+     * 글 목록 — {@code neighborhood} 파라미터를 해석해서 (#342).
+     *
+     * <p>지금 받는 값은 {@code mine} 하나다. <b>구 코드를 직접 받지 않는다</b> — 받으면
+     * 아무 구나 골라 훑을 수 있고, 그건 "우리 동네" 가 아니라 남의 동네 구경이다.
+     *
+     * <p>동네를 안 골랐거나 로그인 안 한 사람이 {@code mine} 을 부르면 <b>400</b> 이다.
+     * 조용히 전국을 주면 화면은 "우리 동네" 라고 적힌 채 전국 글을 보여 준다.
+     */
+    public PostPageResponse pageForNeighborhood(Long viewerId, String board, String cursor,
+                                                Integer limit, String neighborhood) {
+        if (neighborhood == null || neighborhood.isBlank()) {
+            return page(viewerId, board, cursor, limit, (String) null);
+        }
+        if (!"mine".equals(neighborhood)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "neighborhood 는 mine 만 받습니다.");
+        }
+        if (viewerId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "로그인하고 동네를 고르면 우리 동네 글을 볼 수 있습니다.");
+        }
+        String sgg = viewerNeighborhood.sggOf(viewerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "동네를 먼저 골라 주세요."));
+        return page(viewerId, board, cursor, limit, sgg);
+    }
+
+    /**
+     * 글 목록 한 장 — <b>동네로 좁혀서</b> (#342).
+     *
+     * @param sggPrefix 시군구 앞 다섯 자리. {@code null} 이면 전국이다. 이 값은 컨트롤러가
+     *                  <b>보는 사람의 저장된 동네</b>에서 뽑는다 — 쿼리로 받지 않는다.
+     *                  받으면 아무 구나 골라 훑을 수 있고, 그건 "우리 동네" 가 아니라
+     *                  남의 동네 구경이다
+     */
+    public PostPageResponse page(Long viewerId, String board, String cursor, Integer limit,
+                                 String sggPrefix) {
         String filter = normalizeBoardFilter(board);
         int size = clamp(limit);
 
@@ -128,8 +183,8 @@ public class CommunityService {
         // 바뀌고, 두 번 읽는 비용이 한 줄 더 읽는 비용보다 크다.
         Limit fetch = Limit.of(size + 1);
         List<Post> rows = CommunityCursor.parse(cursor)
-                .map(c -> posts.findPageAfter(filter, c.createdAt(), c.id(), fetch))
-                .orElseGet(() -> posts.findPage(filter, fetch));
+                .map(c -> posts.findPageAfter(filter, sggPrefix, c.createdAt(), c.id(), fetch))
+                .orElseGet(() -> posts.findPage(filter, sggPrefix, fetch));
 
         boolean hasMore = rows.size() > size;
         if (hasMore) {
@@ -156,7 +211,8 @@ public class CommunityService {
                     commentCounts.getOrDefault(p.getId(), 0),
                     reactionsById.getOrDefault(p.getId(), emptySummary(viewerId)),
                     isBlocked(blocked, p.getUser()),
-                    toPostCourse(cardOf(p, courseCards))));
+                    toPostCourse(cardOf(p, courseCards)),
+                    districtOf(p)));
         }
 
         Post last = rows.get(rows.size() - 1);
@@ -171,7 +227,8 @@ public class CommunityService {
                 countComments(List.of(postId)).getOrDefault(postId, 0),
                 summarizeOne(postId, viewerId),
                 isBlocked(blockedBy(viewerId), post.getUser()),
-                toPostCourse(cardOf(post, cardsFor(List.of(post)))));
+                toPostCourse(cardOf(post, cardsFor(List.of(post)))),
+                districtOf(post));
     }
 
     @Transactional
@@ -190,7 +247,23 @@ public class CommunityService {
                 .courseId(request.courseId() == null ? null : requireAttachable(request.courseId(), me).id())
                 .build());
         return PostResponse.of(saved, 0, emptySummary(me.getId()), false,
-                toPostCourse(cardOf(saved, cardsFor(List.of(saved)))));
+                toPostCourse(cardOf(saved, cardsFor(List.of(saved)))),
+                districtOf(saved));
+    }
+
+    /**
+     * 글쓴이의 시군구 이름 — <b>구까지만</b> (#342).
+     *
+     * <p>이름은 서버의 표에서만 나온다. 사용자가 보낸 문자열을 쓰면 아무나 자기 동네를
+     * "청와대" 라고 적어 남의 화면에 띄울 수 있다. 동네를 안 골랐거나 모르는 코드면
+     * {@code null} 이고, 화면은 그 자리를 비운다.
+     */
+    private String districtOf(Post post) {
+        User author = post.getUser();
+        if (author == null) return null;
+        return neighborhoods.find(author.getNeighborhoodCode())
+                .map(NeighborhoodCatalog.Sigungu::name)
+                .orElse(null);
     }
 
     // ─────────────────────────── 댓글 ───────────────────────────

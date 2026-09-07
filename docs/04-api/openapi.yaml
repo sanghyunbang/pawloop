@@ -1462,6 +1462,20 @@ paths:
           in: query
           description: 게시판(생략 시 전체)
           schema: { $ref: '#/components/schemas/Board' }
+        - name: neighborhood
+          in: query
+          description: |
+            **우리 동네만 보기** (#342). 지금 받는 값은 `mine` 하나입니다.
+
+            **구 코드를 직접 받지 않습니다** — 받으면 아무 구나 골라 훑을 수 있고, 그건
+            "우리 동네" 가 아니라 남의 동네 구경입니다. 서버는 **보는 사람이 저장해 둔 동네**의
+            시군구로만 좁힙니다.
+
+            로그인하지 않았거나 동네를 안 골랐으면 **400** 입니다 — 조용히 전국을 주면
+            화면은 "우리 동네" 라고 적힌 채 전국 글을 보여 줍니다.
+
+            동네를 안 고른 사람의 글은 이 목록에 **안 나옵니다.**
+          schema: { type: string, enum: [mine] }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -4003,6 +4017,15 @@ components:
         commentCount: { type: integer, example: 4 }
         reactions: { $ref: '#/components/schemas/ReactionSummary' }
         createdAt: { type: string, format: date-time }
+        authorDistrict:
+          type: [string, "null"]
+          example: "성동구"
+          description: |
+            글쓴이의 동네 — **구까지만** (#342). 안 골랐으면 `null` 입니다.
+
+            **동 이름은 안 실립니다.** 남의 사는 곳을 구보다 좁히면 그것만으로 사람을
+            찾아갈 수 있습니다. 이 값은 서버가 자기 시군구 표에서 붙이며, 글쓴이가 보낸
+            문자열이 아닙니다.
         hiddenByBlock:
           type: boolean
           default: false

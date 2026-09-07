@@ -242,6 +242,11 @@ class CommunityPost {
   /// 채팅의 `hiddenByBlock` 과 같은 규약이다.
   final bool hiddenByBlock;
 
+  /// 글쓴이의 동네 — **구까지만** (#342). 안 골랐으면 `null` 이다.
+  ///
+  /// 동 이름은 계약에 아예 없다. 남의 사는 곳을 구보다 좁히면 그것만으로 사람을 찾아갈 수 있다.
+  final String? authorDistrict;
+
   /// 마지막 수정 시각. **`null` 이면 한 번도 안 고친 글이다**(#211).
   ///
   /// 서버가 `createdAt` 을 복사해 채우지 않는다 — 그러면 모든 글에 '수정됨' 이 붙는다.
@@ -263,6 +268,7 @@ class CommunityPost {
     this.loc,
     this.contentId,
     this.course,
+    this.authorDistrict,
   });
 
   /// 한 자리만 바꾼 사본.
@@ -286,6 +292,7 @@ class CommunityPost {
         createdAt: createdAt,
         updatedAt: updatedAt,
         hiddenByBlock: hiddenByBlock,
+        authorDistrict: authorDistrict,
       );
 
   /// 모양이 아니면 `null`. 한 건이 깨졌다고 목록 전체를 버리지 않는다.
@@ -314,6 +321,7 @@ class CommunityPost {
       createdAt: createdAt,
       updatedAt: _dateTime(json['updatedAt']),
       hiddenByBlock: json['hiddenByBlock'] == true,
+      authorDistrict: json['authorDistrict'] as String?,
     );
   }
 }
@@ -477,16 +485,22 @@ class CommunityRepository {
   // ─────────────────────────── 읽기 (게스트도 된다) ───────────────────────────
 
   /// 글 목록. [board] 가 `null` 이면 전체다.
+  ///
+  /// [myNeighborhood] 를 켜면 **내가 고른 구**의 글만 온다(#342). 구 코드를 보내지 않는다 —
+  /// 서버가 내 저장된 동네로만 좁힌다. 동네를 안 골랐으면 서버가 400 이므로, 화면은 동네가
+  /// 있을 때만 이 토글을 보여 준다.
   Future<CommunityPage<CommunityPost>> feed({
     CommunityBoard? board,
     String? cursor,
     int? limit,
+    bool myNeighborhood = false,
   }) async {
     final uri = Uri.parse('$baseUrl/api/community/posts').replace(
       queryParameters: <String, String>{
         if (board != null) 'board': board.wire,
         if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
         if (limit != null) 'limit': '$limit',
+        if (myNeighborhood) 'neighborhood': 'mine',
       },
     );
     final json = await _send(() => _authed.getJson(uri));
