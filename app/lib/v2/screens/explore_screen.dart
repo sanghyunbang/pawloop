@@ -1,3 +1,4 @@
+import '../data/external_maps.dart';
 import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
@@ -49,6 +50,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// 현위치를 못 받아 서울시청 기준인가. 게스트(동의 전)·권한 거부·실패 모두 여기다.
   /// 화면에 그 말이 없으면 사용자는 왜 중구가 나오는지 모른다(#324).
   bool _fallbackCenter = true;
+  /// 시트에서 "지도에서 보기" 를 눌렀는데 지도 뷰가 아직 안 만들어졌을 때 — 만들어지면 그린다.
+  PetPlace? _pendingTrail;
   String? _catFilter; // null = 전체, 아니면 contenttypeid
 
   @override
@@ -85,7 +88,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
       _places = places;
       _loading = false;
     });
-    _refreshMarkers();
+    await _refreshMarkers();
+    if (_catFilter == 'trail') await _fitToPlaces();
   }
 
   List<PetPlace> get _filtered {
@@ -131,7 +135,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           Row(children: [
             const Icon(Icons.pets, size: 15, color: Color(0xFFFF8F63)),
             const SizedBox(width: 5),
-            Text('반려동반 가능 · ${_filtered.length}곳',
+            Text('${_headerLabel()} · ${_filtered.length}곳',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
             const Spacer(),
             Text(_sourceCaption(), style: const TextStyle(fontSize: 10.5, color: T.textMuted)),
@@ -145,55 +149,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
               style: const TextStyle(fontSize: 11, color: T.textMuted),
             ),
           ],
+          if (_farNotice != null) ...[
+            const SizedBox(height: 6),
+            Text(_farNotice!,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+          ],
           const SizedBox(height: 10),
           for (int i = 0; i < _filtered.length; i++) ...[
             _placeCard(_filtered[i]),
             const SizedBox(height: 12),
-            // P1 수익화 훅: 리스트 3번째 자리는 동네 제휴 업체 지면(슬롯만 설계, 채움은 P2).
-            if (i == 1) ...[_sponsorSlot(), const SizedBox(height: 12)],
           ],
         ],
       ],
     );
   }
 
-  // 제휴 업체 슬롯(placeholder) — 지면 설계용.
-  Widget _sponsorSlot() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0x66FFFFFF),
-        borderRadius: BorderRadius.circular(T.radius),
-        border: Border.all(color: const Color(0x338C7BFF)),
-      ),
-      child: Row(children: [
-        Container(
-          width: 44, height: 44, alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: const Color(0xFF9B7BFF).withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: const Icon(Icons.storefront_rounded, size: 22, color: Color(0xFF9B7BFF)),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-            Text('우리 동네 업체 자리', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
-            SizedBox(height: 3),
-            Text('동네 미용·호텔·훈련 등 제휴 업체가 여기에 소개될 예정이에요', style: TextStyle(fontSize: 11.5, color: T.textMuted)),
-          ]),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: const Color(0xFF9B7BFF).withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Text('제휴', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF9B7BFF))),
-        ),
-      ]),
-    );
-  }
 
   /// 한 벌을 **아예 못 받은** 상태인가 — "이 지역에 없음" 과 다르다 (이슈 #275).
   ///
@@ -247,6 +217,123 @@ class _ExploreScreenState extends State<ExploreScreen> {
         ),
       ]),
     );
+  }
+
+  /// 목록 머리 라벨 — 산책로를 "반려동반 가능" 이라고 부르지 않는다(#328).
+  String _headerLabel() => switch (_catFilter) {
+        'trail' => '가까운 산책로',
+        'vet' => '동물병원',
+        'shop' => '펫샵',
+        _ => '반려동반 가능',
+      };
+
+  /// 산책로 칩인데 가장 가까운 코스가 8km 밖이면 그 말을 한다 — 빈 지도·먼 목록의 이유(#328).
+  /// 목록은 거리순이라 첫 항목이 가장 가깝다(#321).
+  String? get _farNotice {
+    if (_catFilter != 'trail' || _filtered.isEmpty) return null;
+    final nearest = _filtered.first;
+    if (nearest.distM <= 8000) return null;
+    return '가장 가까운 코스는 ${nearest.distLabel} 밖이에요';
+  }
+
+  /// 산책로 칩: 카메라를 가까운 코스들에 맞춘다 — 코스가 화면 밖이면 지도가 비어 보였다(#328).
+  Future<void> _fitToPlaces() async {
+    final c = _mapCtrl;
+    final places = _filtered;
+    if (c == null || !mounted || places.isEmpty) return;
+    double minLat = places.first.lat, maxLat = minLat, minLng = places.first.lng, maxLng = minLng;
+    for (final p in places) {
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lat > maxLat) maxLat = p.lat;
+      if (p.lng < minLng) minLng = p.lng;
+      if (p.lng > maxLng) maxLng = p.lng;
+    }
+    if (minLat == maxLat && minLng == maxLng) {
+      await c.updateCamera(NCameraUpdate.withParams(target: NLatLng(minLat, minLng), zoom: 12));
+      return;
+    }
+    await c.updateCamera(NCameraUpdate.fitBounds(
+      NLatLngBounds(southWest: NLatLng(minLat, minLng), northEast: NLatLng(maxLat, maxLng)),
+      padding: const EdgeInsets.all(80),
+    ));
+  }
+
+  /// 겹친 핀을 숫자 하나로 접는다 — 성수동 쇼핑 핀 수십 개가 한 덩어리였다(#328).
+  void _clusterMarker(NClusterInfo info, NClusterMarker marker) {
+    marker.setSize(const Size(42, 42));
+    marker.setIconTintColor(const Color(0xFF8E7BFF));
+    marker.setCaption(NOverlayCaption(
+      text: '${info.size}',
+      color: Colors.white,
+      haloColor: Colors.transparent,
+      textSize: 13,
+    ));
+  }
+
+  /// 시트의 주 동작 — 전화 · 지도에서 보기(산책로) · 길찾기. 글쓰기는 그 아래 두 번째다(#328).
+  Widget _sheetActions(BuildContext sheetCtx, PetPlace p) {
+    Widget action(IconData icon, String label, Future<void> Function() onTap, {bool primary = false}) =>
+        Expanded(
+          child: GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              height: 46,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: primary
+                    ? const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+                      )
+                    : null,
+                color: primary ? null : const Color(0xFFF1ECF7),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(icon, size: 16, color: primary ? Colors.white : T.textSecondary),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w800, color: primary ? Colors.white : T.textSecondary)),
+              ]),
+            ),
+          ),
+        );
+    final messenger = ScaffoldMessenger.of(context);
+    final actions = <Widget>[
+      if (p.tel.isNotEmpty)
+        action(Icons.call_rounded, '전화', () async {
+          if (!await ExternalMaps.call(p.tel)) {
+            messenger.showSnackBar(const SnackBar(content: Text('전화 앱을 열 수 없어요')));
+          }
+        }, primary: true),
+      if (p.isTrail)
+        action(Icons.map_rounded, '지도에서 보기', () async {
+          Navigator.pop(sheetCtx);
+          if (view != 'map') {
+            // 지도 뷰가 만들어지면 onMapReady 가 그린다.
+            setState(() {
+              view = 'map';
+              _pendingTrail = p;
+            });
+          } else {
+            await _drawTrail(p);
+          }
+        }, primary: true),
+      action(Icons.directions_walk_rounded, '길찾기', () async {
+        if (!await ExternalMaps.directions(lat: p.lat, lng: p.lng, name: p.title)) {
+          messenger.showSnackBar(const SnackBar(content: Text('지도 앱을 열 수 없어요')));
+        }
+      }, primary: p.tel.isEmpty && !p.isTrail),
+    ];
+    return Row(children: [
+      for (var i = 0; i < actions.length; i++) ...[
+        if (i > 0) const SizedBox(width: 8),
+        actions[i],
+      ],
+    ]);
   }
 
   /// 목록 머리의 출처 한 마디 — 칩에 따라 다르다 (#291).
@@ -449,13 +536,35 @@ class _ExploreScreenState extends State<ExploreScreen> {
             minZoom: 9,
             maxZoom: 18,
           ),
-          onMapReady: (c) {
+          clusterOptions: NaverMapClusteringOptions(clusterMarkerBuilder: _clusterMarker),
+          onMapReady: (c) async {
             _mapCtrl = c;
             c.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
-            _refreshMarkers();
+            await _refreshMarkers();
+            if (_catFilter == 'trail') await _fitToPlaces();
+            final pending = _pendingTrail;
+            if (pending != null) {
+              _pendingTrail = null;
+              await _drawTrail(pending);
+            }
           },
         ),
       ),
+      if (!_loading && _farNotice != null)
+        Positioned(
+          top: 112, left: 16, right: 16,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xF0FFFFFF), borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 3))],
+              ),
+              child: Text(_farNotice!,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+            ),
+          ),
+        ),
       if (_loading)
         const Positioned(
           top: 112, left: 0, right: 0,
@@ -482,12 +591,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final markers = <NAddableOverlay>{};
     for (final p in _filtered) {
       final icon = await _markerIcon(p.petCategory);
-      final m = NMarker(id: p.contentId.isEmpty ? p.title : p.contentId, position: NLatLng(p.lat, p.lng), icon: icon);
+      // 겹치면 숫자로 접힌다 — `NaverMap.clusterOptions` 와 짝(#328).
+      final m = NClusterableMarker(id: p.contentId.isEmpty ? p.title : p.contentId, position: NLatLng(p.lat, p.lng), icon: icon);
       m.setOnTapListener((_) => _showPlaceSheet(p));
       markers.add(m);
     }
     if (markers.isNotEmpty) await c.addOverlayAll(markers);
-    // 필터를 바꿔도 카메라는 안 옮긴다 — 사용자가 보고 있는 곳이 기준이다.
+    // 필터를 바꿔도 카메라는 안 옮긴다 — 사용자가 보고 있는 곳이 기준이다. 산책로만 예외다
+    // (`_fitToPlaces`, #328): 가장 가까운 코스가 화면 밖이라 빈 지도가 됐었다.
   }
 
   /// 카테고리색 핀(플랫폼 통일 — Flutter 위젯 렌더).
@@ -538,19 +649,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
       child: Container(
         height: 46,
         alignment: Alignment.center,
+        // 두 번째 동작이다 — 주 동작(전화·길찾기·지도에서 보기)은 `_sheetActions` 에 있다(#328).
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
-          ),
+          color: const Color(0xFFF1ECF7),
           borderRadius: BorderRadius.circular(14),
         ),
         child: const Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.edit_outlined, size: 16, color: Colors.white),
+          Icon(Icons.edit_outlined, size: 16, color: T.textSecondary),
           SizedBox(width: 7),
           Text('이 장소로 글쓰기',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: T.textSecondary)),
         ]),
       ),
     );
@@ -570,7 +678,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     await c.addOverlay(NPolylineOverlay(
       id: 'trail-${p.trailCourseId}',
       coords: coords,
-      color: const Color(0xFF2FB89B),
+      color: p.petCategory.color,
       width: 6,
     ));
     double minLat = coords.first.latitude, maxLat = minLat, minLng = coords.first.longitude, maxLng = minLng;
@@ -652,6 +760,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
           ]),
           const SizedBox(height: 14),
+          _sheetActions(sheetCtx, p),
+          const SizedBox(height: 10),
           _writeAboutPlace(sheetCtx, p),
         ]),
       ),
@@ -670,11 +780,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: T.textSecondary)),
         const SizedBox(height: 8),
         SizedBox(
-          width: 150,
+          width: 168,
           child: Wrap(spacing: 10, runSpacing: 6, children: [
             for (final c in kPetCategories)
               Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 9, height: 9, decoration: BoxDecoration(shape: BoxShape.circle, color: c.color)),
+                // 색만으로 가르지 않는다 — 아이콘을 같이 그린다(#328).
+                Container(
+                  width: 14, height: 14, alignment: Alignment.center,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: c.color),
+                  child: Icon(c.icon, size: 9, color: Colors.white),
+                ),
                 const SizedBox(width: 4),
                 Text(c.label, style: const TextStyle(fontSize: 10.5, color: T.textSecondary)),
               ]),

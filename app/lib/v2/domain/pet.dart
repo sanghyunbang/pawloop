@@ -18,16 +18,18 @@ class PetCategory {
 /// 지도 카테고리. 숫자 key 는 KTO(관광공사) 반려동반의 contenttypeid, 문자 key 는
 /// 공공데이터 레이어(`kLayerKeys`)다 — 계약의 `PlaceCategory` 와 같은 아홉이다.
 const List<PetCategory> kPetCategories = [
-  PetCategory('12', '여행지', Color(0xFF57C98A), Icons.park_rounded),
-  PetCategory('39', '카페·식당', Color(0xFFFF7E6B), Icons.restaurant_rounded),
-  PetCategory('28', '레포츠', Color(0xFF33BFA6), Icons.directions_walk_rounded),
-  PetCategory('32', '숙박', Color(0xFF5B8DEF), Icons.hotel_rounded),
-  PetCategory('38', '쇼핑', Color(0xFF9B7BFF), Icons.storefront_rounded),
-  PetCategory('14', '문화', Color(0xFFEFA13C), Icons.museum_rounded),
+  PetCategory('12', '여행지', Color(0xFF3DBE6C), Icons.park_rounded),
+  PetCategory('39', '카페·식당', Color(0xFFFF6B6B), Icons.restaurant_rounded),
+  PetCategory('28', '레포츠', Color(0xFFF5A623), Icons.directions_walk_rounded),
+  PetCategory('32', '숙박', Color(0xFF3B82F6), Icons.hotel_rounded),
+  PetCategory('38', '쇼핑', Color(0xFF8B5CF6), Icons.storefront_rounded),
+  PetCategory('14', '문화', Color(0xFF9C6644), Icons.museum_rounded),
   // 공공데이터 레이어 (#291). 색은 design-system.md 의 카테고리 팔레트다.
-  PetCategory('vet', '동물병원', Color(0xFF4C9AFF), Icons.local_hospital_rounded),
-  PetCategory('shop', '펫샵', Color(0xFFB07BFF), Icons.shopping_bag_rounded),
-  PetCategory('trail', '산책로', Color(0xFF2FB89B), Icons.route_rounded),
+  // 아홉 색은 서로 RGB 거리 80 이상이어야 한다(`pet_category_colors_test`, #328) — 예전엔
+  // 여행지·레포츠·산책로가 모두 초록, 쇼핑·펫샵이 모두 보라라 핀을 가를 수 없었다.
+  PetCategory('vet', '동물병원', Color(0xFFD7263D), Icons.local_hospital_rounded),
+  PetCategory('shop', '펫샵', Color(0xFFD946EF), Icons.shopping_bag_rounded),
+  PetCategory('trail', '산책로', Color(0xFF0B7A75), Icons.route_rounded),
 ];
 
 /// KTO 가 아닌 출처의 키 — 서버의 `PlaceDto.LAYER_SOURCES` 와 같은 셋.
