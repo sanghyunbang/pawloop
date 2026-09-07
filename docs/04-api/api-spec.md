@@ -562,6 +562,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   "weekStart": "2026-06-24",            // 이번 주 월요일(KST). weekKm[0] 이 이 날
   "weekEnd": "2026-06-30",              // 일요일(포함) = weekStart + 6일
   "weekKm": [2.1, 2.9, 1.2, 0, 1.8, 3.1, 2.4],   // 월~일, km, 소수 둘째 자리 반올림
+  "weekMinutes": [25, 40, 15, 0, 22, 45, 30],    // 같은 축의 분 (#341). 하루 안에서는 초로 더한 뒤 분으로 내린다
   "totalKm": 13.5,
   "walkCount": 6,                       // 건수다 — 날 수가 아니다
   "avgKm": 2.25,

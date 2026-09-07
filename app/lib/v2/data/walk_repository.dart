@@ -233,6 +233,9 @@ class ServerWalkStats {
   /// **월요일부터** 길이 7. 주 경계는 KST 다(서버가 자른다).
   final List<double> weekKm;
 
+  /// 같은 요일 축의 **분**, 길이 7 (#341). 목표가 분 단위라 거리와 나란히 읽는다.
+  final List<int> weekMinutes;
+
   final double totalKm;
 
   /// 이번 주 산책 **건수**다. "산책한 날 수" 가 아니다.
@@ -249,6 +252,7 @@ class ServerWalkStats {
 
   const ServerWalkStats({
     required this.weekKm,
+    this.weekMinutes = const [0, 0, 0, 0, 0, 0, 0],
     required this.totalKm,
     required this.walkCount,
     required this.avgKm,
@@ -261,6 +265,7 @@ class ServerWalkStats {
   /// 아무것도 없는 상태. 서버를 못 부른 화면이 그릴 값이다.
   static const empty = ServerWalkStats(
     weekKm: [0, 0, 0, 0, 0, 0, 0],
+    weekMinutes: [0, 0, 0, 0, 0, 0, 0],
     totalKm: 0,
     walkCount: 0,
     avgKm: 0,
@@ -279,8 +284,18 @@ class ServerWalkStats {
       week.add(0);
     }
 
+    // 분도 같은 방식으로 길이 7 을 보장한다 — 화면이 요일을 돌면서 읽는다.
+    final rawMinutes = json['weekMinutes'];
+    final minutes = rawMinutes is List
+        ? rawMinutes.whereType<num>().map((n) => n.toInt()).toList()
+        : <int>[];
+    while (minutes.length < 7) {
+      minutes.add(0);
+    }
+
     return ServerWalkStats(
       weekKm: week.take(7).toList(),
+      weekMinutes: minutes.take(7).toList(),
       totalKm: (json['totalKm'] as num?)?.toDouble() ?? 0,
       walkCount: (json['walkCount'] as num?)?.toInt() ?? 0,
       avgKm: (json['avgKm'] as num?)?.toDouble() ?? 0,

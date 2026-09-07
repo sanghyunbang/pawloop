@@ -16,6 +16,11 @@ import java.util.List;
  *                  라고 가정하고 축 라벨을 그리지 않아도 된다
  * @param weekEnd   이번 주 일요일(KST 날짜, 포함). 항상 {@code weekStart + 6일}
  * @param weekKm    <b>월요일부터</b> 길이 7. 주 경계는 KST 다
+ * @param weekMinutes 같은 요일 축의 <b>분</b>, 길이 7 (#341). 거리만으로는 목표를 말할 수
+ *                  없다 — 권장 운동량이 "하루 30분" 처럼 <b>시간</b>으로 적혀 있어서다
+ *                  (PDSA·Kennel Club). 초는 버리고 분만 준다: 목표가 분 단위라
+ *                  초를 실어 보내면 화면이 매번 나눠야 하고, 그 나눗셈이 화면마다 다르면
+ *                  같은 주에 다른 숫자가 나온다
  * @param walkCount 이번 주 산책 <b>건수</b>다. "산책한 날 수" 가 아니다 — 하루에 두 번
  *                  걸으면 2 다. 예전 더미 화면은 {@code weekKm} 에서 0 이 아닌 요일을 세어
  *                  날 수를 보여 줬다
@@ -28,6 +33,7 @@ public record WalkStatsResponse(
         LocalDate weekStart,
         LocalDate weekEnd,
         List<Double> weekKm,
+        List<Integer> weekMinutes,
         double totalKm,
         int walkCount,
         double avgKm,

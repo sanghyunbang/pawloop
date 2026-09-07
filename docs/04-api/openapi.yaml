@@ -3771,7 +3771,7 @@ components:
         **두 기간이 한 응답에 들어 있습니다.** `week*` 는 이번 주(월~일), `allTime*` 는 전체
         기간입니다. 주 경계는 **KST 월요일 00:00** 입니다 — 서버 타임존이 아니라 한국 시각으로
         자릅니다.
-      required: [weekStart, weekEnd, weekKm, totalKm, walkCount, avgKm, allTimeKm, allTimeCount, allTimeMinutes]
+      required: [weekStart, weekEnd, weekKm, weekMinutes, totalKm, walkCount, avgKm, allTimeKm, allTimeCount, allTimeMinutes]
       properties:
         weekStart:
           type: string
@@ -3794,6 +3794,18 @@ components:
           maxItems: 7
           items: { type: number, format: double }
           example: [2.1, 2.9, 1.2, 0, 1.8, 3.1, 2.4]
+        weekMinutes:
+          type: array
+          description: |
+            같은 요일 축의 **분**. **월요일부터** 길이 7, 산책이 없는 요일은 0 (#341).
+
+            거리만으로는 목표를 말할 수 없습니다 — 권장 운동량이 "하루 30분" 처럼 **시간**으로
+            적혀 있어서입니다. 하루 안에서는 **초로 더한 뒤 분으로 내립니다**: 요일마다 분으로
+            내려 더하면 7분짜리 산책 다섯 번이 0분이 됩니다.
+          minItems: 7
+          maxItems: 7
+          items: { type: integer }
+          example: [25, 40, 15, 0, 22, 45, 30]
         totalKm: { type: number, format: double, description: 이번 주 합계 거리(km). 반올림 전 합계를 소수 둘째 자리에서 반올림합니다 — `weekKm` 을 더한 값과 마지막 자리가 다를 수 있습니다, example: 13.5 }
         walkCount:
           type: integer
