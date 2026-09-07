@@ -10,6 +10,8 @@ import '../theme/app_tokens.dart';
 import 'post_write_screen.dart';
 import '../domain/pet.dart';
 import '../domain/vet_hours.dart';
+import 'start_walk.dart';
+import '../data/walk_repository.dart';
 import '../data/pet_places_repository.dart';
 import '../data/place_catalog_repository.dart';
 import '../data/trail_route_repository.dart';
@@ -29,6 +31,12 @@ import '../widgets/profile_avatar.dart';
 /// 칩을 누르면 **칩 키를 붙여 다시 조회**한다. 가까운 80곳을 받아 놓고 그 안에서 거르면
 /// 병원 칩이 빈다 — 서울시청 근처는 백화점 매장 80곳이 어느 병원보다 가깝다(#291 실측).
 /// 서버·카탈로그는 거른 뒤에 자르므로 키만 붙이면 된다. 늦게 돌아온 옛 조회는 버린다.
+/// "여기서 산책 시작" 을 붙이는 카테고리 (#338).
+///
+/// 여행지·카페·식당·레포츠·산책로다. 병원·펫샵·숙박·쇼핑·문화는 뺐다 — 거기서 산책을
+/// 시작한다는 말이 어색하고, 어색한 버튼은 화면의 신뢰를 깎는다.
+const Set<String> kWalkStartCategories = {'12', '39', '28', 'trail'};
+
 class ExploreScreen extends StatefulWidget {
   final String initialView; // 'list' | 'map'
 
@@ -337,6 +345,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
         );
     final messenger = ScaffoldMessenger.of(context);
     final actions = <Widget>[
+      // 발견에서 기록으로 잇는 자리 (#338). 걸을 만한 곳에만 둔다 — 병원·펫샵·숙박에
+      // "여기서 산책 시작" 은 뜻이 없다.
+      if (kWalkStartCategories.contains(p.categoryKey))
+        action(Icons.directions_walk_rounded, '여기서 산책 시작', () async {
+          Navigator.pop(sheetCtx);
+          await startWalk(
+            context,
+            place: WalkPlaceRef(title: p.title, source: p.source, contentId: p.contentId),
+          );
+        }, primary: true),
       if (p.tel.isNotEmpty)
         action(Icons.call_rounded, '전화', () async {
           if (!await ExternalMaps.call(p.tel)) {

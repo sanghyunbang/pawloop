@@ -38,6 +38,7 @@ class _Walks implements WalkRepository {
     List<int>? pathT,
     String? memo,
     String? weather,
+    WalkPlaceRef? place,
   }) async {
     saved++;
     return ServerWalk(

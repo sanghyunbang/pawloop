@@ -35,7 +35,7 @@ Future<int Function()> _pump(WidgetTester t) async {
     home: Scaffold(
       body: Builder(
         builder: (ctx) => TextButton(
-          onPressed: () => startWalk(ctx, openTracking: (_, resume) async {
+          onPressed: () => startWalk(ctx, openTracking: (_, resume, place) async {
             opened++;
             _resumedWith = resume;
           }),

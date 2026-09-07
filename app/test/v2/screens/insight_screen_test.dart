@@ -9,8 +9,9 @@ import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/insight_screen.dart';
 
 class _Repo implements WalkRepository {
-  _Repo(this.weekKm);
+  _Repo(this.weekKm, {this.topPlaces = const []});
   final List<double> weekKm;
+  final List<WalkTopPlace> topPlaces;
 
   @override
   Future<ServerWalkPage> walks({int? dogId, String? cursor, int? limit}) async =>
@@ -25,6 +26,7 @@ class _Repo implements WalkRepository {
         allTimeKm: 0.15,
         allTimeCount: 1,
         allTimeMinutes: 1,
+        topPlaces: topPlaces,
       );
 
   @override
@@ -34,11 +36,13 @@ class _Repo implements WalkRepository {
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName} 은 이 테스트가 안 쓴다');
 }
 
-Future<void> _pump(WidgetTester t, List<double> weekKm) async {
+Future<void> _pump(WidgetTester t, List<double> weekKm, {List<WalkTopPlace> topPlaces = const []}) async {
   t.view.physicalSize = const Size(1080, 2400);
   t.view.devicePixelRatio = 1.0;
   addTearDown(t.view.reset);
-  await t.pumpWidget(MaterialApp(home: InsightScreen(feed: WalkFeed(repository: _Repo(weekKm)))));
+  await t.pumpWidget(MaterialApp(
+    home: InsightScreen(feed: WalkFeed(repository: _Repo(weekKm, topPlaces: topPlaces))),
+  ));
   await t.pumpAndSettle();
 }
 
@@ -73,10 +77,28 @@ void main() {
     expect(find.textContaining('m'), findsWidgets);
   });
 
-  testWidgets('자주 가는 곳이 비어 있으면 그 말을 한다', (t) async {
+  testWidgets('자주 가는 곳이 비어 있으면 무엇을 하면 쌓이는지 말한다', (t) async {
     await _pump(t, const [0, 0, 0, 0, 0, 0, 0]);
 
     expect(find.text('자주 가는 곳'), findsOneWidget);
     expect(find.textContaining('아직 없어요'), findsOneWidget);
+    expect(find.textContaining('장소를 고르면'), findsOneWidget);
+  });
+
+  testWidgets('서버가 센 값을 순서대로 그린다 — 더미 문자열이 아니다 (#338)', (t) async {
+    await _pump(t, const [0.2, 0, 0, 0, 0, 0, 0], topPlaces: const [
+      WalkTopPlace(
+        place: WalkPlaceRef(title: '서울숲', source: 'kto', contentId: '2733967'),
+        count: 6,
+      ),
+      WalkTopPlace(
+        place: WalkPlaceRef(title: 'DMZ 평화의 길', source: 'trail', contentId: 'trail:41'),
+        count: 2,
+      ),
+    ]);
+
+    expect(find.text('서울숲'), findsOneWidget);
+    expect(find.text('DMZ 평화의 길'), findsOneWidget);
+    expect(find.textContaining('아직 없어요'), findsNothing);
   });
 }

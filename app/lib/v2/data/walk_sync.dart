@@ -102,6 +102,7 @@ class WalkSync {
         pathT: withDog.pathT.isEmpty ? null : withDog.pathT,
         memo: withDog.memo,
         weather: withDog.weather,
+        place: withDog.place,
       );
       await _outbox.remove(withDog.clientWalkId);
       // 화면들이 이 신호를 듣고 다시 불러온다. 없으면 저장하고 홈으로 돌아와도

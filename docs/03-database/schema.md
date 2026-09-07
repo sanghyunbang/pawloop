@@ -172,10 +172,14 @@ CREATE TABLE walk (
   memo        VARCHAR(500) NULL,
   weather     VARCHAR(30)  NULL,
   client_walk_id VARCHAR(64) NOT NULL COMMENT '앱이 만드는 멱등키(UUID v4)',
+  place_source     VARCHAR(16)  NULL COMMENT '카탈로그 출처 kto|vet|shop|trail (#338). FK 없음 — 스냅숏',
+  place_content_id VARCHAR(64)  NULL COMMENT '카탈로그 contentId. place_source 와 짝',
+  place_name       VARCHAR(120) NULL COMMENT '화면에 나갈 이름. 손으로 적으면 이것만 채워진다',
   created_at  DATETIME(6) NOT NULL COMMENT 'UTC, 서버 시각 — 목록 커서의 기준',
   PRIMARY KEY (id),
   KEY idx_walk_dog (dog_id, started_at),
   KEY idx_walk_dog_created (dog_id, created_at, id) COMMENT '목록 커서. started_at 이 아닌 이유는 아래 참조',
+  KEY idx_walk_place (place_source, place_content_id) COMMENT '"자주 가는 곳" 을 묶어 세는 순서 (#338)',
   UNIQUE KEY uq_walk_client (dog_id, client_walk_id),
   CONSTRAINT fk_walk_dog FOREIGN KEY (dog_id)
     REFERENCES dog (id) ON DELETE CASCADE
@@ -194,6 +198,9 @@ CREATE TABLE walk (
 | `memo` | `VARCHAR(500)` | NULL | 메모 |
 | `weather` | `VARCHAR(30)` | NULL | 날씨 |
 | `client_walk_id` | `VARCHAR(64)` | NOT NULL, UNIQUE(dog_id, ·) | 멱등키. 재전송이 두 줄이 되지 않게 한다 |
+| `place_source` | `VARCHAR(16)` | NULL, INDEX(place_source, place_content_id) | 카탈로그 출처 `kto`·`vet`·`shop`·`trail` (#338). **FK 없음** — `place_catalog` 는 월 1회 통째로 갈아 끼우므로 FK 를 걸면 적재가 막히거나 참조가 깨진다. 값을 베껴 두는 스냅숏이다 |
+| `place_content_id` | `VARCHAR(64)` | NULL | 카탈로그 `contentId`. `place_source` 와 **짝** — 하나만 오면 400 |
+| `place_name` | `VARCHAR(120)` | NULL | 화면에 나갈 이름. 카탈로그에 없는 곳은 이것만 채워지고, 그때는 "자주 가는 곳" 에 안 들어간다 |
 
 > **시각은 전부 UTC 로 저장한다.** 애플리케이션이 `Instant` 를 UTC 벽시계로 눕혀 넣는다 — `LocalDateTime` 은 드라이버가 시간대 변환을 하지 않는 유일한 타입이라, JDBC URL 의 `serverTimezone` 이나 컨테이너 시계가 무엇이든 넣은 값이 그대로 나온다. **이 저장소의 JDBC URL 은 `Asia/Seoul` 인데 컨테이너 시계는 UTC 다**(실측). 주 경계 계산도 Java 가 한다 — `WEEKDAY()`·`CURDATE()` 는 세션 시간대를 읽고, #40 에서 그 함정이 00:00–09:00 KST 에만 터졌다.
 >

@@ -113,6 +113,36 @@ class ServerPet {
 }
 
 /// 저장된 산책 하나 — 계약의 `Walk`.
+/// 산책에 붙은 장소 — 계약의 `Walk.place` (#338).
+///
+/// [source] 와 [contentId] 는 **짝이다.** 카탈로그에서 고른 곳이면 둘 다 있고, 이름을 손으로
+/// 적었으면 둘 다 없다. 하나만 보내면 서버가 400 을 준다 — 반쪽짜리 참조는 이름만 있는 것과
+/// 같으면서 있는 척한다.
+class WalkPlaceRef {
+  final String? source;
+  final String? contentId;
+  final String title;
+
+  const WalkPlaceRef({required this.title, this.source, this.contentId});
+
+  /// 카탈로그에서 고른 곳인가 — "자주 가는 곳" 에 잡히는 것은 이것뿐이다.
+  bool get isCatalog => source != null && source!.isNotEmpty && contentId != null && contentId!.isNotEmpty;
+
+  static WalkPlaceRef? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final title = json['title'];
+    if (title is! String || title.isEmpty) return null;
+    String? text(Object? v) => v is String && v.isNotEmpty ? v : null;
+    return WalkPlaceRef(title: title, source: text(json['source']), contentId: text(json['contentId']));
+  }
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        if (source != null) 'source': source,
+        if (contentId != null) 'contentId': contentId,
+      };
+}
+
 class ServerWalk {
   final int id;
   final int dogId;
@@ -131,6 +161,9 @@ class ServerWalk {
   final String? memo;
   final String? weather;
 
+  /// 어디를 걸었나 (#338). 안 붙였으면 `null` 이다 — 빈 객체가 오지 않는다.
+  final WalkPlaceRef? place;
+
   const ServerWalk({
     required this.id,
     required this.dogId,
@@ -142,6 +175,7 @@ class ServerWalk {
     this.path,
     this.memo,
     this.weather,
+    this.place,
   });
 
   double get km => distanceM / 1000.0;
@@ -176,6 +210,7 @@ class ServerWalk {
       path: path,
       memo: json['memo'] as String?,
       weather: json['weather'] as String?,
+      place: WalkPlaceRef.tryParse(json['place']),
     );
   }
 }
@@ -208,6 +243,10 @@ class ServerWalkStats {
   final int allTimeCount;
   final int allTimeMinutes;
 
+  /// 자주 간 곳 상위 다섯, 전체 기간 (#338). **카탈로그에서 고른 곳만 센다** —
+  /// 손으로 적은 이름은 서버가 `PlaceRef` 를 만들 수 없어 여기 안 들어간다.
+  final List<WalkTopPlace> topPlaces;
+
   const ServerWalkStats({
     required this.weekKm,
     required this.totalKm,
@@ -216,6 +255,7 @@ class ServerWalkStats {
     required this.allTimeKm,
     required this.allTimeCount,
     required this.allTimeMinutes,
+    this.topPlaces = const [],
   });
 
   /// 아무것도 없는 상태. 서버를 못 부른 화면이 그릴 값이다.
@@ -247,7 +287,30 @@ class ServerWalkStats {
       allTimeKm: (json['allTimeKm'] as num?)?.toDouble() ?? 0,
       allTimeCount: (json['allTimeCount'] as num?)?.toInt() ?? 0,
       allTimeMinutes: (json['allTimeMinutes'] as num?)?.toInt() ?? 0,
+      topPlaces: WalkTopPlace.parseList(json['topPlaces']),
     );
+  }
+}
+
+/// "자주 가는 곳" 한 줄 — 계약의 `WalkStats.topPlaces[]` (#338).
+class WalkTopPlace {
+  final WalkPlaceRef place;
+  final int count;
+
+  const WalkTopPlace({required this.place, required this.count});
+
+  /// 모양이 다른 항목은 **버린다.** 하나가 이상하다고 목록 전체를 잃지 않는다.
+  static List<WalkTopPlace> parseList(Object? json) {
+    if (json is! List) return const [];
+    final out = <WalkTopPlace>[];
+    for (final item in json) {
+      if (item is! Map) continue;
+      final place = WalkPlaceRef.tryParse(item['place']);
+      final count = item['count'];
+      if (place == null || count is! num) continue;
+      out.add(WalkTopPlace(place: place, count: count.toInt()));
+    }
+    return out;
   }
 }
 
@@ -380,6 +443,9 @@ class WalkRepository {
     List<int>? pathT,
     String? memo,
     String? weather,
+
+    /// 어디를 걸었나 (#338). 카탈로그에서 고른 곳이면 출처·id 가 함께 간다.
+    WalkPlaceRef? place,
   }) async {
     final uploadPath = LocationUploadPolicy.pathForUpload(path);
     final uploadPathT = LocationUploadPolicy.pathTimesForUpload(pathT);
@@ -409,6 +475,10 @@ class WalkRepository {
             'pathT': uploadPathT,
           if (memo != null && memo.isNotEmpty) 'memo': memo,
           if (weather != null && weather.isNotEmpty) 'weather': weather,
+          // 장소는 좌표가 아니다 — 카탈로그의 이름·식별자라 정책(#235)과 무관하다.
+          if (place != null) 'placeName': place.title,
+          if (place != null && place.isCatalog) 'placeSource': place.source,
+          if (place != null && place.isCatalog) 'placeContentId': place.contentId,
         },
       ),
     );

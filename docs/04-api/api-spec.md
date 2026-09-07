@@ -568,7 +568,9 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   "allTimeKm": 128.4,
   "allTimeCount": 57,
   "allTimeMinutes": 2310,
-  "topPlaces": []                       // 항상 빈 배열. 채우는 날 [{ place: PlaceRef, count }] 상위 5
+  "topPlaces": [                        // 자주 간 곳 상위 5, 전체 기간, count 내림차순 (#338)
+    { "place": { "source": "kto", "contentId": "2733967", "title": "서울숲" }, "count": 6 }
+  ]                                     // 손으로 적은 이름은 여기 안 들어간다 — PlaceRef 를 못 만든다
 }
 ```
 

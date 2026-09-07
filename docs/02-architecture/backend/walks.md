@@ -184,3 +184,14 @@
 - **좌표계 변환(참고).** `walk.path`는 앱에서 이미 WGS84(4326)로 들어오므로 EPSG:5174→WGS84 변환 불필요(그 변환은 `place`의 LOCALDATA 병원/펫샵 삽입 시에만 해당). Walks에서는 SRID를 4326으로 고정만 하면 된다.
 
 ---
+
+## 장소 축 (#338)
+
+| 항목 | 내용 |
+| --- | --- |
+| 컬럼 | `walk.place_source varchar(16)` · `place_content_id varchar(64)` · `place_name varchar(120)` — 전부 NULL 허용. 마이그레이션 `26_walk_place.sql`, 인덱스 `idx_walk_place (place_source, place_content_id)` |
+| FK 없음 | `place_catalog` 는 공공데이터를 월 1회 통째로 갈아 끼운다. FK 를 걸면 적재가 남의 기록에 막히거나 적재 뒤 참조가 깨진다. 장소가 카탈로그에서 사라져도 "그날 거기를 걸었다" 는 남아야 하므로 **값을 베껴 둔다(스냅숏)** |
+| 짝 규칙 | `placeSource` 와 `placeContentId` 는 둘 다 있거나 둘 다 없다. 하나만 오면 400(`WalkRequest.hasHalfPlaceRef`) — 반쪽 참조는 이름만 있는 것과 같으면서 있는 척한다 |
+| 이름만 | 카탈로그에 없는 곳은 `placeName` 만 저장된다. 기록 카드에는 보이지만 **"자주 가는 곳" 에는 안 들어간다** — 계약의 `PlaceRef` 가 출처와 id 를 요구한다 |
+| 이름이 비면 | 출처와 id 도 버린다(`WalkService.save`). 이름 없는 참조는 화면에 그릴 것이 없다 |
+| 자주 가는 곳 | `WalkRepository.topPlaces` — `(place_source, place_content_id)` 로 묶어 세고 상위 다섯. **전체 기간**이다(이번 주로 자르면 대부분 한두 개만 남는다). 같은 횟수면 이름순으로 갈라 순서가 매번 달라지지 않게 한다. 이름은 묶음 안의 `max()` |

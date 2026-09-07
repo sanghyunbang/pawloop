@@ -400,10 +400,14 @@ CREATE TABLE `walk` (
   `memo` varchar(500) DEFAULT NULL,
   `path_t` json DEFAULT NULL,
   `path` linestring /*!80003 SRID 4326 */ DEFAULT NULL,
+  `place_source` varchar(16) DEFAULT NULL,
+  `place_content_id` varchar(64) DEFAULT NULL,
+  `place_name` varchar(120) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_walk_client` (`dog_id`,`client_walk_id`),
   KEY `idx_walk_dog` (`dog_id`,`started_at`),
   KEY `idx_walk_dog_created` (`dog_id`,`created_at`,`id`),
+  KEY `idx_walk_place` (`place_source`,`place_content_id`),
   CONSTRAINT `fk_walk_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

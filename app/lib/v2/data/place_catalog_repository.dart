@@ -160,6 +160,33 @@ class PlaceCatalogRepository {
     return out.length > cap ? out.sublist(0, cap) : out;
   }
 
+  /// 이름으로 찾는다 — **기기 안에서** (#338).
+  ///
+  /// 저장 화면의 "어디를 걸었나요?" 가 쓴다. 검색어를 서버로 보내지 않는다: 어디를 걸었는지는
+  /// 위치만큼이나 사생활이고, A안(#235)에서 좌표를 안 보내면서 "서울숲" 을 보내면 앞문을 잠그고
+  /// 뒷문을 여는 셈이다. 카탈로그 한 벌은 이미 기기에 있다.
+  ///
+  /// 순서는 (1) 이름이 검색어로 **시작하는 것** 먼저, (2) 그 다음 이름이 짧은 것.
+  /// "숲" 을 치면 "숲속작은도서관" 이 "서울숲" 보다 먼저 나오지 않게 하는 규칙이다.
+  Future<List<PetPlace>> search(String query, {int limit = 8}) async {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return const [];
+
+    final hits = <PetPlace>[];
+    for (final place in await all()) {
+      if (place.title.toLowerCase().contains(needle)) hits.add(place);
+    }
+    hits.sort((a, b) {
+      final aStarts = a.title.toLowerCase().startsWith(needle);
+      final bStarts = b.title.toLowerCase().startsWith(needle);
+      if (aStarts != bStarts) return aStarts ? -1 : 1;
+      final byLength = a.title.length.compareTo(b.title.length);
+      if (byLength != 0) return byLength;
+      return a.title.compareTo(b.title);
+    });
+    return hits.length > limit ? hits.sublist(0, limit) : hits;
+  }
+
   // ─────────────────────────── 갱신 ───────────────────────────
 
   /// 방금 실패했으면 쉰다.

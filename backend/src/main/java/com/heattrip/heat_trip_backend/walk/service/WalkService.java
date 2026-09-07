@@ -75,6 +75,9 @@ public class WalkService {
      */
     private static final Duration FUTURE_TOLERANCE = Duration.ofMinutes(5);
 
+    /** "자주 가는 곳" 에 싣는 개수. 계약이 maxItems 5 로 선언했다. */
+    private static final int TOP_PLACES = 5;
+
     /** 목록 한 장의 기본·최대 크기. 계약이 선언한 값이다. */
     private static final int DEFAULT_LIMIT = 20;
     private static final int MAX_LIMIT = 100;
@@ -118,6 +121,12 @@ public class WalkService {
                 .pathT(WalkPath.toPathTimes(request.path(), request.pathT()))
                 .memo(blankToNull(request.memo()))
                 .weather(blankToNull(request.weather()))
+                // 이름이 없으면 출처와 id 도 버린다 — 이름 없는 참조는 화면에 그릴 것이 없다(#338).
+                .placeName(blankToNull(request.placeName()))
+                .placeSource(request.placeName() == null || request.placeName().isBlank()
+                        ? null : blankToNull(request.placeSource()))
+                .placeContentId(request.placeName() == null || request.placeName().isBlank()
+                        ? null : blankToNull(request.placeContentId()))
                 .build();
 
         try {
@@ -149,6 +158,10 @@ public class WalkService {
         }
         if (request.endedAt() != null && request.endedAt().isBefore(request.startedAt())) {
             throw new IllegalArgumentException("종료 시각이 시작 시각보다 앞설 수 없습니다.");
+        }
+        if (request.hasHalfPlaceRef()) {
+            // 반쪽짜리 참조는 이름만 있는 것과 같으면서 있는 척한다 — 화면이 그 장소로 못 간다(#338).
+            throw new IllegalArgumentException("장소 출처와 식별자는 함께 보내야 합니다.");
         }
         // 경로의 모양·좌표 순서는 WalkPath 가 본다. 여기서 부르지 않는 이유는 저장 직전에
         // 한 번만 변환하기 위해서다 — 두 번 순회할 이유가 없다.
@@ -273,7 +286,22 @@ public class WalkService {
                 round(all.meters() / 1000.0),
                 all.walks(),
                 (int) (all.seconds() / 60),
-                List.of());
+                topPlaces(userId, dogId));
+    }
+
+    /**
+     * 자주 간 곳 상위 다섯 (#338).
+     *
+     * <p><b>카탈로그에서 고른 곳만 센다.</b> 손으로 적은 이름은 계약의 {@code PlaceRef} 를
+     * 만들 수 없어서(출처·id 가 없다) 여기 들어가지 못한다 — 기록 카드에는 그대로 보인다.
+     * 전체 기간이다. 이번 주로 자르면 대부분의 사람에게 늘 한두 개만 남는다.
+     */
+    private List<WalkStatsResponse.TopPlace> topPlaces(long userId, Long dogId) {
+        return walks.topPlaces(userId, dogId, Limit.of(TOP_PLACES)).stream()
+                .map(row -> new WalkStatsResponse.TopPlace(
+                        new WalkStatsResponse.PlaceRef(row.source(), row.contentId(), row.title()),
+                        (int) row.count()))
+                .toList();
     }
 
     // ─────────────────────────── 지그 ───────────────────────────

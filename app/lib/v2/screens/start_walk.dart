@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 import '../data/auth_state.dart';
 import 'login_screen.dart';
 import '../data/walk_in_progress.dart';
+import '../data/walk_repository.dart';
 import '../data/walk_safety_repository.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/walk_resume_prompt.dart';
@@ -41,9 +42,12 @@ import 'walk_tracking_screen.dart';
 /// 스냅숏으로 추적 화면을 연다 — 권한 시트는 건너뛴다(권한이 사라졌으면 추적 화면이 말한다).
 Future<void> startWalk(
   BuildContext context, {
-  Future<void> Function(BuildContext context, WalkInProgress? resume)? openTracking,
+  Future<void> Function(BuildContext context, WalkInProgress? resume, WalkPlaceRef? place)? openTracking,
   WalkInProgressStore resumeStore = const WalkInProgressStore(),
   DateTime Function()? now,
+
+  /// 지도에서 "여기서 산책 시작" 으로 왔으면 그 장소 (#338). 초안에 실려 저장까지 간다.
+  WalkPlaceRef? place,
 }) async {
   if (!AuthState.isAuthenticated) {
     final messenger = ScaffoldMessenger.of(context);
@@ -72,7 +76,7 @@ Future<void> startWalk(
   final leftover = await WalkResumePrompt.offer(context, store: resumeStore);
   if (!context.mounted) return;
   if (leftover != null) {
-    await (openTracking ?? _openTracking)(context, leftover);
+    await (openTracking ?? _openTracking)(context, leftover, place);
     return;
   }
   final state = await LocationPriming.stateFor();
@@ -94,7 +98,7 @@ Future<void> startWalk(
   if (!context.mounted) return;
   if (!await _confirmIfUnsafe(context, now: (now ?? DateTime.now)())) return;
   if (!context.mounted) return;
-  await (openTracking ?? _openTracking)(context, null);
+  await (openTracking ?? _openTracking)(context, null, place);
 }
 
 /// "피하세요" 판정이 살아 있으면(30분 안) 한 번 묻는다 — 막지 않는다(#336). 홈 카드가 받아 둔 값을
@@ -126,6 +130,7 @@ Future<bool> _confirmIfUnsafe(BuildContext context, {required DateTime now}) asy
   return go ?? false;
 }
 
-Future<void> _openTracking(BuildContext context, WalkInProgress? resume) => Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => WalkTrackingScreen(resume: resume)),
+Future<void> _openTracking(BuildContext context, WalkInProgress? resume, WalkPlaceRef? place) =>
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => WalkTrackingScreen(resume: resume, place: place)),
     );

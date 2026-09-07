@@ -5,6 +5,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../data/pet_places_repository.dart';
+import '../data/place_catalog_repository.dart';
 import '../data/walk_outbox.dart';
 import '../data/walk_repository.dart';
 import '../data/walk_sync.dart';
@@ -36,7 +38,17 @@ class CreateScreen extends StatefulWidget {
   final WalkRepository? repository;
   final WalkCareLink? careLink;
 
-  const CreateScreen({super.key, this.prefillPlace, this.draft, this.repository, this.careLink});
+  /// 이름 검색을 어디서 하나. 기본은 기기 안 카탈로그다 — 검색어가 서버로 안 나간다(#338).
+  final PlaceCatalogRepository? catalog;
+
+  const CreateScreen({
+    super.key,
+    this.prefillPlace,
+    this.draft,
+    this.repository,
+    this.careLink,
+    this.catalog,
+  });
   @override
   State<CreateScreen> createState() => _CreateScreenState();
 }
@@ -44,6 +56,16 @@ class CreateScreen extends StatefulWidget {
 class _CreateScreenState extends State<CreateScreen> {
   final _place = TextEditingController();
   final _memo = TextEditingController();
+
+  /// 카탈로그에서 **고른** 장소. 손으로 이름만 적으면 `null` 이고, 그때는 통계의
+  /// "자주 가는 곳" 에 안 들어간다(서버가 `PlaceRef` 를 못 만든다) — 시트에 그렇게 적혀 있다.
+  WalkPlaceRef? _placeRef;
+
+  /// 지금 이름 칸 아래 떠 있는 후보들. 기기 안 카탈로그에서 찾는다.
+  List<PetPlace> _suggestions = const [];
+  int _searchSeq = 0;
+
+  late final PlaceCatalogRepository _catalog = widget.catalog ?? PlaceCatalogRepository.instance;
 
   /// 초안이 있으면 그 값에서 시작한다. 없을 때만 손입력 기본값이다.
   late double km = widget.draft?.km ?? 2.0;
@@ -67,11 +89,20 @@ class _CreateScreenState extends State<CreateScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.prefillPlace != null) _place.text = widget.prefillPlace!;
+    // 초안이 장소를 들고 왔으면(지도에서 "여기서 산책 시작") 그것이 이긴다 — 식별자까지 있다.
+    final fromDraft = widget.draft?.place;
+    if (fromDraft != null) {
+      _placeRef = fromDraft;
+      _place.text = fromDraft.title;
+    } else if (widget.prefillPlace != null) {
+      _place.text = widget.prefillPlace!;
+    }
+    _place.addListener(_onPlaceTyped);
   }
 
   @override
   void dispose() {
+    _place.removeListener(_onPlaceTyped);
     _place.dispose();
     _memo.dispose();
     super.dispose();
@@ -81,6 +112,50 @@ class _CreateScreenState extends State<CreateScreen> {
     const w = ['월', '화', '수', '목', '금', '토', '일'];
     final n = DateTime.now();
     return '${n.month}월 ${n.day}일 (${w[n.weekday - 1]})';
+  }
+
+  /// 저장할 장소. 고른 것이 있으면 식별자까지, 손으로 적었으면 이름만, 비었으면 없다.
+  WalkPlaceRef? _placeToSave() {
+    final text = _place.text.trim();
+    if (text.isEmpty) return null;
+    final picked = _placeRef;
+    if (picked != null && picked.title == text) return picked;
+    return WalkPlaceRef(title: text);
+  }
+
+  /// 이름을 고치면 고른 장소는 풀린다 — 이름만 바꿔 놓고 남의 식별자를 달고 가지 않는다.
+  void _onPlaceTyped() {
+    final text = _place.text.trim();
+    if (_placeRef != null && text != _placeRef!.title) {
+      setState(() => _placeRef = null);
+    }
+    _search(text);
+  }
+
+  /// 기기 안 카탈로그에서 이름으로 찾는다. **검색어는 서버로 안 나간다**(#235·#338).
+  Future<void> _search(String query) async {
+    final seq = ++_searchSeq;
+    if (query.length < 2 || _placeRef != null) {
+      if (_suggestions.isNotEmpty && mounted) setState(() => _suggestions = const []);
+      return;
+    }
+    final found = await _catalog.search(query);
+    // 늦게 돌아온 옛 검색은 버린다 — 안 그러면 지운 글자의 결과가 다시 뜬다.
+    if (!mounted || seq != _searchSeq) return;
+    setState(() => _suggestions = found);
+  }
+
+  void _pickPlace(PetPlace place) {
+    setState(() {
+      _placeRef = WalkPlaceRef(
+        title: place.title,
+        source: place.source,
+        contentId: place.contentId,
+      );
+      _suggestions = const [];
+    });
+    _place.text = place.title;
+    FocusScope.of(context).unfocus();
   }
 
   /// 저장. **여기서 처음으로 기록이 서버로 나간다.**
@@ -109,6 +184,9 @@ class _CreateScreenState extends State<CreateScreen> {
       distanceM: _distanceEdited || widget.draft == null ? (km * 1000).round() : null,
       durationS: _minutesEdited || widget.draft == null ? minutes * 60 : null,
       memo: memo.isEmpty ? null : memo,
+      // 이름이 비면 장소도 없다 — 초안이 들고 온 것까지 버린다(dropPlace).
+      place: _placeToSave(),
+      dropPlace: _placeToSave() == null,
     );
 
     final WalkSyncResult result;
@@ -276,8 +354,50 @@ class _CreateScreenState extends State<CreateScreen> {
                 ),
               ),
             ),
+            if (_placeRef?.isCatalog ?? false)
+              const Icon(Icons.check_circle, size: 18, color: Color(0xFF3DBE6C)),
           ]),
         ),
+        if (_suggestions.isNotEmpty) ...[
+          const SizedBox(height: 7),
+          // 기기 안 카탈로그에서 찾은 것들. 고르면 식별자가 붙어 "자주 가는 곳" 에 쌓인다.
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xCCFFFFFF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0x1F8C7BFF)),
+            ),
+            child: Column(
+              children: [
+                for (final place in _suggestions)
+                  GestureDetector(
+                    onTap: () => _pickPlace(place),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+                      child: Row(children: [
+                        Icon(place.petCategory.icon, size: 15, color: place.petCategory.color),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(place.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13.5, color: T.textPrimary)),
+                        ),
+                        Text(place.petCategory.label,
+                            style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+                      ]),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+        if (_place.text.trim().isNotEmpty && !(_placeRef?.isCatalog ?? false)) ...[
+          const SizedBox(height: 6),
+          const Text('목록에서 고르면 "자주 가는 곳" 에 쌓여요. 직접 적은 이름은 이 기록에만 남아요.',
+              style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+        ],
         const SizedBox(height: 14),
         _label('날짜'),
         const SizedBox(height: 7),

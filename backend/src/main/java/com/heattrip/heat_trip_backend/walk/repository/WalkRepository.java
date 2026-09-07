@@ -127,6 +127,32 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
             """)
     WalkTotals sumAllTime(@Param("userId") long userId, @Param("dogId") Long dogId);
 
+    /**
+     * 자주 간 곳 — 이슈 #338.
+     *
+     * <p><b>카탈로그에서 고른 곳만 센다.</b> 손으로 적은 이름은 계약의 {@code PlaceRef} 를
+     * 만들 수 없어(출처·id 가 없다) 여기 안 들어간다. 그래서 세 컬럼이 모두 있는 행만 본다.
+     *
+     * <p>묶는 기준이 이름이 아니라 {@code (source, contentId)} 인 이유는 {@link TopPlaceRow}
+     * 에 적었다. 같은 횟수면 이름순으로 갈라 <b>순서가 매번 달라지지 않게</b> 한다 —
+     * 흔들리는 목록은 사용자가 "내가 뭘 잘못 눌렀나" 로 읽는다.
+     */
+    @Query("""
+            select new com.heattrip.heat_trip_backend.walk.repository.TopPlaceRow(
+                       w.placeSource, w.placeContentId, max(w.placeName), count(w))
+              from Walk w
+             where w.dog.user.id = :userId
+               and (:dogId is null or w.dog.id = :dogId)
+               and w.placeSource is not null
+               and w.placeContentId is not null
+               and w.placeName is not null
+             group by w.placeSource, w.placeContentId
+             order by count(w) desc, max(w.placeName) asc
+            """)
+    List<TopPlaceRow> topPlaces(@Param("userId") long userId,
+                                @Param("dogId") Long dogId,
+                                Limit limit);
+
     /** 삭제. 소유자 조건이 안에 있어서 남의 산책은 0행이 지워진다. */
     @Query("""
             delete from Walk w

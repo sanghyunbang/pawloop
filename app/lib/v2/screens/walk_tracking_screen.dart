@@ -16,6 +16,7 @@ import '../data/pet_places_repository.dart';
 import '../data/place_catalog_repository.dart';
 import '../data/walk_in_progress.dart';
 import '../data/walk_outbox.dart';
+import '../data/walk_repository.dart';
 import '../walk/route_image.dart';
 import '../walk/route_photo_saver.dart';
 import '../widgets/walk_finish_sheet.dart';
@@ -30,7 +31,11 @@ class WalkTrackingScreen extends StatefulWidget {
   /// 끊긴 산책의 스냅숏. 있으면 그 경로·거리·초에서 이어 간다(#335).
   final WalkInProgress? resume;
 
-  const WalkTrackingScreen({super.key, this.resume});
+  /// 어디서 시작했나 — 지도에서 "여기서 산책 시작" 으로 왔으면 채워진다(#338).
+  /// 초안에 실려 저장 화면까지 간다. 좌표가 아니라 카탈로그의 이름·식별자다.
+  final WalkPlaceRef? place;
+
+  const WalkTrackingScreen({super.key, this.resume, this.place});
   @override
   State<WalkTrackingScreen> createState() => _WalkTrackingScreenState();
 }
@@ -726,6 +731,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
         for (final p in _path) [p.longitude, p.latitude],
       ],
       pathT: List<int>.of(_pathT),
+      place: widget.place,
     );
   }
 
@@ -763,7 +769,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
             context,
             MaterialPageRoute(
               builder: (_) => CreateScreen(
-                prefillPlace: '오늘 산책',
+                prefillPlace: widget.place?.title,
                 draft: _draft(),
               ),
             ),
@@ -785,7 +791,9 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
     final fix = _fix;
     if (fix == null) return const _LocatingScreen();
     final denial = fix.denial;
-    if (denial != null) return WalkLocationDeniedScreen(denial: denial, onRetry: _retry);
+    if (denial != null) {
+      return WalkLocationDeniedScreen(denial: denial, onRetry: _retry, placeTitle: widget.place?.title);
+    }
 
     return PopScope(
       canPop: false,
@@ -1011,10 +1019,15 @@ class WalkLocationDeniedScreen extends StatelessWidget {
   final LocationDenial denial;
   final Future<void> Function() onRetry;
 
+  /// 지도에서 "여기서 산책 시작" 으로 왔으면 그 이름 (#338). 위치가 막혀 손으로 적더라도
+  /// 어디였는지는 이미 알고 있으므로 저장 화면에 미리 채워 준다.
+  final String? placeTitle;
+
   const WalkLocationDeniedScreen({
     super.key,
     required this.denial,
     required this.onRetry,
+    this.placeTitle,
   });
 
   /// 무엇이 막혔는지. 사용자가 화면에서 읽는 문장이다.
@@ -1140,7 +1153,7 @@ class WalkLocationDeniedScreen extends StatelessWidget {
                 onPressed: () => Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const CreateScreen(prefillPlace: '오늘 산책'),
+                    builder: (_) => CreateScreen(prefillPlace: placeTitle),
                   ),
                 ),
                 child: const Text(
