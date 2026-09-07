@@ -43,4 +43,24 @@ void main() {
     expect(find.widgetWithText(FilledButton, '우리 아이 등록하기'), findsOneWidget);
     expect(find.text('아직 등록된 아이가 없어요'), findsOneWidget);
   });
+
+  testWidgets('로그인했는데 아이가 없어도 설정과 로그아웃이 있다 — 등록 안내뿐이면 계정을 못 바꾼다(#371)',
+      (tester) async {
+    AuthState.signInForTest(const AuthUser(id: 1, nickname: 'walker'));
+    await tester.pumpWidget(const MaterialApp(home: MeScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('설정'), findsOneWidget);
+    expect(find.text('로그아웃'), findsOneWidget);
+  });
+
+  testWidgets('게스트의 빈 프로필에는 로그아웃이 없다', (tester) async {
+    AuthState.resetForTest();
+    AuthState.status.value = AuthStatus.unauthenticated;
+    await tester.pumpWidget(const MaterialApp(home: MeScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('로그아웃'), findsNothing);
+    expect(find.text('설정'), findsNothing);
+  });
 }
