@@ -50,7 +50,7 @@ flowchart TD
     C -.상단 뒤로가기.-> Z
     K -.-> F1[[장소 붙이기 #338]]:::todo
     E -.-> F2[[배변·물 한 탭 #340]]:::todo
-    E -.-> F3[[화면 꺼짐 · 포그라운드 서비스 #335]]:::todo
+    E --> BG[화면 꺼짐 — 포그라운드 서비스 알림<br/>5초마다 스냅숏 · 앱이 죽으면 '이어서 기록할까요?']
     classDef todo fill:#f5f0ff,stroke:#9B7BFF,stroke-dasharray:5 4,color:#463C64;
 ```
 

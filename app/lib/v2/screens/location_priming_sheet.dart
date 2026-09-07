@@ -123,6 +123,7 @@ class LocationPrimingSheet extends StatelessWidget {
         const _Line(Icons.route_rounded, '산책 경로를 그리고, 지도를 내 주변으로 맞추는 데 써요'),
         const _Line(Icons.phone_android_rounded, '경로는 이 기기에만 남고 서버로 올라가지 않아요'),
         const _Line(Icons.toggle_off_rounded, '프로필에서 언제든 끌 수 있어요'),
+        const _Line(Icons.notifications_none_rounded, '기록하는 동안 알림 한 줄이 떠요 — 화면을 꺼도 이어져요'),
         if (forever) ...[
           const SizedBox(height: 4),
           const Text(

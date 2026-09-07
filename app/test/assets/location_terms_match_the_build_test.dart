@@ -88,8 +88,13 @@ void main() {
     });
 
     test('버전과 시행일이 적혀 있다 — 개정 이력이 없으면 어느 것에 동의했는지 모른다', () {
-      expect(_read(), contains('버전: v1.2'));
-      expect(_read(), contains('시행일: 2026-09-12'));
+      expect(_read(), contains('버전: v1.3'));
+      expect(_read(), contains('시행일: 2026-09-14'));
+    });
+
+    test('화면이 꺼져 있어도 기록 중에는 읽는다고 적혀 있다 — 포그라운드 서비스를 넣은 빌드다(#335)', () {
+      expect(_read(), contains('화면이 꺼져 있거나 다른 앱을 보고 있어도'));
+      expect(_read(), contains('기록을 끝내면 읽기를 멈춥니다'));
     });
   });
 }

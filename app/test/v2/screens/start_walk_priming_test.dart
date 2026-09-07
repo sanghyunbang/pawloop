@@ -5,8 +5,22 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
+import 'package:heat_trip_flutter/v2/data/walk_in_progress.dart';
 import 'package:heat_trip_flutter/v2/screens/location_priming_sheet.dart';
 import 'package:heat_trip_flutter/v2/screens/start_walk.dart';
+
+WalkInProgress _leftover() => WalkInProgress(
+      startedAt: DateTime(2026, 9, 7, 15, 41),
+      seconds: 720,
+      distanceM: 320,
+      path: const [
+        [127.0410, 37.5445],
+      ],
+      pathT: const [0],
+      savedAt: DateTime.now(),
+    );
+
+WalkInProgress? _resumedWith;
 
 /// 홈의 "산책 시작" 자리. 추적 화면(권한을 실제로 묻는 곳) 대신 세는 함수를 꽂는다.
 Future<int Function()> _pump(WidgetTester t) async {
@@ -19,7 +33,10 @@ Future<int Function()> _pump(WidgetTester t) async {
     home: Scaffold(
       body: Builder(
         builder: (ctx) => TextButton(
-          onPressed: () => startWalk(ctx, openTracking: (_) async => opened++),
+          onPressed: () => startWalk(ctx, openTracking: (_, resume) async {
+            opened++;
+            _resumedWith = resume;
+          }),
           child: const Text('산책 시작'),
         ),
       ),
@@ -32,6 +49,7 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AuthState.signInForTest(const AuthUser(id: 1, nickname: 'walker'));
+    _resumedWith = null;
   });
   tearDown(() {
     AuthState.resetForTest();
@@ -126,5 +144,41 @@ void main() {
     await t.pumpAndSettle();
     expect(settings, 1);
     expect(opened(), 0);
+  });
+
+  // ── 끊긴 산책이 남아 있을 때 (#335) ──────────────────────────────────
+
+  testWidgets('끊긴 산책이 있으면 권한 시트 대신 "이어서 기록할까요?" 를 묻고, 이어서면 그 스냅숏으로 연다', (t) async {
+    await const WalkInProgressStore().save(_leftover());
+    LocationPriming.checkPermission = () async => LocationPermission.denied;
+    final opened = await _pump(t);
+
+    await t.tap(find.text('산책 시작'));
+    await t.pumpAndSettle();
+
+    expect(find.text('이어서 기록할까요?'), findsOneWidget);
+    expect(find.text('허용하기'), findsNothing, reason: '권한 시트는 그 뒤의 일이다');
+
+    await t.tap(find.text('이어서 기록'));
+    await t.pumpAndSettle();
+
+    expect(opened(), 1);
+    expect(_resumedWith, isNotNull);
+    expect(_resumedWith!.distanceM, 320);
+  });
+
+  testWidgets('"지우기" 면 스냅숏을 지우고 새 산책으로 간다 — 권한이 있으면 바로 연다', (t) async {
+    await const WalkInProgressStore().save(_leftover());
+    LocationPriming.checkPermission = () async => LocationPermission.whileInUse;
+    final opened = await _pump(t);
+
+    await t.tap(find.text('산책 시작'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('지우기'));
+    await t.pumpAndSettle();
+
+    expect(opened(), 1);
+    expect(_resumedWith, isNull, reason: '새 산책이다');
+    expect(await const WalkInProgressStore().load(), isNull);
   });
 }
