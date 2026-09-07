@@ -136,6 +136,11 @@ class MeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _accountLine(),
+              // 아이가 없어도 설정·로그아웃은 닿아야 한다(#371).
+              if (!guest) ...[
+                const SizedBox(height: 22),
+                _accountCard(context),
+              ],
             ],
           );
         },
@@ -414,24 +419,54 @@ class MeScreen extends StatelessWidget {
   }
 
   // ───────────── 메뉴 ─────────────
-  Widget _menuCard(BuildContext context, DogProfile dog) {
-    Widget row(IconData icon, String label, {Color? color, bool border = true, VoidCallback? onTap}) {
-      final c = color ?? T.textPrimary;
-      return GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
-          decoration: BoxDecoration(border: border ? const Border(bottom: BorderSide(color: Color(0x1A8C7BFF))) : null),
-          child: Row(children: [
-            Icon(icon, size: 21, color: color ?? T.textSecondary),
-            const SizedBox(width: 13),
-            Expanded(child: Text(label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: c))),
-            Icon(Icons.chevron_right, size: 20, color: color ?? const Color(0xFFBBB3CC)),
+  /// 메뉴 한 행 — [_menuCard] 와 아이가 없을 때의 [_accountCard] 가 같이 쓴다(#371).
+  Widget _row(IconData icon, String label, {Color? color, bool border = true, VoidCallback? onTap}) {
+    final c = color ?? T.textPrimary;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+        decoration: BoxDecoration(border: border ? const Border(bottom: BorderSide(color: Color(0x1A8C7BFF))) : null),
+        child: Row(children: [
+          Icon(icon, size: 21, color: color ?? T.textSecondary),
+          const SizedBox(width: 13),
+          Expanded(child: Text(label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: c))),
+          Icon(Icons.chevron_right, size: 20, color: color ?? const Color(0xFFBBB3CC)),
+        ]),
+      ),
+    );
+  }
+
+  /// 아이가 없어도 로그인한 계정에는 설정과 로그아웃이 있어야 한다(#371). 전에는 등록 안내뿐이라
+  /// 로그아웃할 길이 없었다 — 한 기기를 가족이 나눠 쓰면 앱 데이터를 지워야 계정을 바꿀 수 있었다.
+  Widget _accountCard(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(T.radius),
+        child: GlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(children: [
+            _row(Icons.settings_outlined, '설정',
+                onTap: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+            _row(Icons.logout, '로그아웃', color: const Color(0xFFFF6B7E), border: false,
+                onTap: () => _logout(context)),
           ]),
         ),
       );
-    }
+
+  /// messenger 를 await 전에 잡는다 — 로그아웃은 네트워크를 타고, 그 사이 이 화면이 사라져 있을 수 있다.
+  Future<void> _logout(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await AuthState.logout();
+    messenger.showSnackBar(const SnackBar(
+      content: Text('로그아웃되었습니다'),
+      duration: Duration(milliseconds: 1800),
+    ));
+  }
+
+  Widget _menuCard(BuildContext context, DogProfile dog) {
+    Widget row(IconData icon, String label, {Color? color, bool border = true, VoidCallback? onTap}) =>
+        _row(icon, label, color: color, border: border, onTap: onTap);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(T.radius),
@@ -458,16 +493,7 @@ class MeScreen extends StatelessWidget {
             builder: (_, status, __) => status == AuthStatus.authenticated ||
                     status == AuthStatus.onboarding
                 ? row(Icons.logout, '로그아웃', color: const Color(0xFFFF6B7E), border: false,
-                    // messenger 를 await 전에 잡는다 — 로그아웃은 네트워크를 타고,
-                    // 그 사이 이 화면이 사라져 있을 수 있다.
-                    onTap: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      await AuthState.logout();
-                      messenger.showSnackBar(const SnackBar(
-                        content: Text('로그아웃되었습니다'),
-                        duration: Duration(milliseconds: 1800),
-                      ));
-                    })
+                    onTap: () => _logout(context))
                 : row(Icons.login, '로그인 / 회원가입', color: const Color(0xFF5B8DEF), border: false,
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()))),
           ),
