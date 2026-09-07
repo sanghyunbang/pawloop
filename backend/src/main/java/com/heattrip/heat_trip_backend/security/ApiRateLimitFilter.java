@@ -235,6 +235,10 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
             return new Rule("walk-write", rateLimitProperties.getWalkWriteMaxRequests());
         }
         // 관광공사 프록시(#40). 인증 없는 공개 경로라 등재가 특히 중요하다 —
+        // 산책 안전 지수(#336) — permitAll 경로라 여기 없으면 한도가 무한이다.
+        if ("GET".equals(method) && "/api/walk-safety/now".equals(path)) {
+            return new Rule("walk-safety", rateLimitProperties.getWalkSafetyMaxRequests());
+        }
         // 표에 없으면 한도가 0 이 아니라 무한이다.
         if ("GET".equals(method) && "/api/places/nearby".equals(path)) {
             return new Rule("places", rateLimitProperties.getPlacesMaxRequests());

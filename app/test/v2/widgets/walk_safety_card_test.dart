@@ -11,32 +11,15 @@ import 'package:heat_trip_flutter/v2/data/walk_safety_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/widgets/walk_safety_card.dart';
 
-WalkSafetyRepository _repo({String temp = '22', String key = 'KEY'}) => WalkSafetyRepository(
-      client: MockClient((req) async {
-        if (req.url.path.contains('getUltraSrtNcst')) {
-          return http.Response(
-            jsonEncode({
-              'response': {
-                'header': {'resultCode': '00'},
-                'body': {
-                  'items': {
-                    'item': [
-                      {'category': 'T1H', 'obsrValue': temp},
-                      {'category': 'REH', 'obsrValue': '49'},
-                      {'category': 'PTY', 'obsrValue': '0'},
-                    ]
-                  }
-                }
-              }
-            }),
-            200,
+WalkSafetyRepository _repo({double temp = 22, int status = 200}) => WalkSafetyRepository(
+      client: MockClient((req) async => http.Response(
+            jsonEncode(status == 200
+                ? {'tempC': temp, 'humidity': 49, 'rain1hMm': 0.0, 'precipType': 0, 'pm10': null, 'pm25': null, 'station': null, 'observedAt': '2026-09-07T05:10:00Z'}
+                : {'error': {'code': 'UPSTREAM', 'message': '지금 기상 정보를 받지 못했습니다.'}}),
+            status,
             headers: const {'content-type': 'application/json; charset=utf-8'},
-          );
-        }
-        return http.Response('{"OpenAPI_ServiceResponse":{}}', 200,
-            headers: const {'content-type': 'application/json; charset=utf-8'});
-      }),
-      serviceKey: key,
+          )),
+      baseUrl: 'https://api.example.test',
       now: () => DateTime(2026, 9, 7, 14, 10),
     );
 
@@ -56,13 +39,12 @@ Future<void> _pump(WidgetTester t, WalkSafetyRepository repo, {bool located = tr
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    WalkSafetyRepository.resetForTest();
     WalkSafetyStore.resetForTest();
     kMyDog.value = null;
   });
 
-  testWidgets('키가 없으면 카드가 없다 — 가짜를 놓지 않는다', (t) async {
-    await _pump(t, _repo(key: ''));
+  testWidgets('서버가 503 이면 카드가 없다 — 가짜를 놓지 않는다', (t) async {
+    await _pump(t, _repo(status: 503));
     expect(find.byType(GestureDetector), findsNothing);
     expect(find.textContaining('°C'), findsNothing);
   });
@@ -81,7 +63,7 @@ void main() {
   });
 
   testWidgets('누르면 7초 룰과 시간대, 그리고 "참고" 라는 말이 뜬다', (t) async {
-    await _pump(t, _repo(temp: '31'));
+    await _pump(t, _repo(temp: 31));
 
     expect(find.text('지금은 피하고 저녁 7시 뒤에'), findsOneWidget);
     await t.tap(find.text('지금은 피하고 저녁 7시 뒤에'));
@@ -94,7 +76,7 @@ void main() {
   });
 
   testWidgets('아이가 바뀌면 같은 값으로 다시 판정한다 — 퍼그면 27°C 낮에 피하세요', (t) async {
-    await _pump(t, _repo(temp: '27'));
+    await _pump(t, _repo(temp: 27));
     expect(find.text('짧게 다녀오세요 · 바닥 7초 룰 확인'), findsOneWidget);
 
     kMyDog.value = const DogProfile(serverId: 2, name: 'Pug', breed: '퍼그', size: DogSize.small, ageMonths: 30);

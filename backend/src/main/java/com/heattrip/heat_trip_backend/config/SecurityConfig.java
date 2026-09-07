@@ -75,7 +75,10 @@ public class SecurityConfig {
             "/api/places/nearby",
             "/api/places/*",
             // 산책로의 선(#291). 셋째 경로다 — 지도는 로그인 전에도 보여야 한다.
-            "/api/places/trails/*/route"
+            "/api/places/trails/*/route",
+            // 산책 안전 지수(#336). 5km 격자 번호만 받는 GET 하나. **인증을 안 받는 것이 의도다** —
+            // 누구의 격자인지 서버가 모르게 둔다(A안 #235). 한도는 rate limit 의 walk-safety 버킷(IP).
+            "/api/walk-safety/now"
     );
 
     /**

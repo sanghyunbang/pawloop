@@ -41,6 +41,7 @@ com.heattrip.heat_trip_backend
 │  ── Pawloop 축 (반려동물·산책·가족·채팅) ──
 ├─ dog/                            # 반려동물 프로필                        (#145)
 ├─ walk/                           # 산책 기록·경로(LINESTRING)·통계·회고   (#145 · #187)
+├─ walksafety/                     # 산책 안전 지수 재료 — 기상청·에어코리아 서버 프록시, 격자만 받고 저장 없음 (#336)
 ├─ care/                           # 오늘의 케어 로그 · 산책 주의사항        (#76)
 ├─ group/                          # 가족 그룹                              (#73~#75)
 ├─ chat/                           # 채팅 도메인(방·메시지·신고·차단)        (#78~#82)
@@ -125,6 +126,7 @@ controller  →  service  →  repository(JPA)  →  entity
 | 그 밖의 `/auth/*` (`GET`·`PUT`·`DELETE /auth/me`, `POST /auth/logout`) | `authenticated` — `anyRequest()` 로 떨어진다 |
 | `/actuator/health/**`, `/actuator/info`, `/actuator/prometheus` | `permitAll` |
 | `/api/places/nearby`, `/api/places/*`, `/api/places/trails/*/route` | `permitAll` — 관광공사 프록시(#40) · 산책로의 선(#291). 지도는 로그인 전에도 보여야 한다. **`/api/places/**` 와일드카드는 쓰지 않는다** — 레이트리밋 표가 못 덮는 자리가 인증도 한도도 없는 경로가 된다 |
+| `GET /api/walk-safety/now` | `permitAll` — 산책 안전 지수 재료(#336). 5km 격자 번호만 받고 누구의 요청인지 모르게 둔다. IP 한도 `walk-safety` 버킷 |
 | `GET /api/community/posts`, `GET /api/community/posts/*`, `GET /api/community/posts/*/comments` | `permitAll` — 커뮤니티 읽기는 인증이 선택이다(ADR-0016 결정 3). 메서드까지 적는 이유는 같은 경로의 `POST` 를 열지 않기 위해서다 |
 | `/v3/api-docs/**`, `/swagger-ui.html`, `/swagger-ui/**` | `docsPublic` 플래그가 true일 때만 공개 (셋 다) |
 | `/public/**` | `authenticated` |

@@ -112,8 +112,16 @@ tags:
 
       **인가 경계** — 비인증 허용은 `/auth/signup`, `/auth/login`, `/auth/oauth/**`,
       `/auth/token/refresh`, 그리고 Spring Security 가 처리하는 `/oauth2/**`·`/login/oauth2/**` 뿐입니다.
+      (그 밖의 비인증 GET — 장소 `/api/places/*`, 커뮤니티 읽기, 산책 안전 지수 `/api/walk-safety/now` — 는
+      각 태그 설명에 이유가 있습니다.)
       `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 **반드시 bearerAuth 검증을 거쳐야 합니다.**
       (구현 참조: `SecurityConfig` 의 permitAll 목록에 `/auth/**` 를 통째로 넣지 말 것 — 이슈 #23)
+  - name: WalkSafety
+    description: |
+      산책 안전 지수의 재료(#336) — 기상청 초단기실황과 에어코리아 미세먼지를 **서버가 대신** 부릅니다.
+      앱은 5km 격자 번호(nx, ny)만 보내고 위경도는 보내지 않습니다. **인증이 없습니다** — 누구의
+      격자인지 서버가 모르게 두는 것이 위치를 서버에 안 보내는 A안(#235)의 뜻에 가깝습니다. 판정
+      (좋아요·짧게·피하세요·추워요)은 앱이 합니다.
   - name: Dogs
     description: |
       반려견 프로필. **주인은 등록한 계정 하나**이고(`dog.user_id`), 목록·상세·수정·삭제가 전부 그
@@ -895,6 +903,60 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /api/walk-safety/now:
+    get:
+      tags: [WalkSafety]
+      summary: 격자 하나의 지금 관측값 — 기온·습도·강수·미세먼지
+      description: |
+        기상청 초단기실황(`getUltraSrtNcst`, 매시 40분 발표)과 에어코리아 실시간 측정을 **서버가**
+        불러 한 묶음으로 돌려줍니다(#336). 격자 번호는 앱이 위경도에서 계산합니다(`kmaGrid()`,
+        5km) — 요청에 **위경도가 없고, 인증도 없습니다.** 서버는 격자별로 10분 캐시할 뿐 누가
+        어느 격자를 물었는지 남기지 않습니다.
+
+        - `pm10`·`pm25`·`station` 은 에어코리아 두 API 의 활용신청이 승인된 뒤에만 옵니다. 그 전에는
+          `null` 이고 앱은 "미세먼지 정보 없음" 으로 판정합니다.
+        - 기상청 실황을 못 받으면(키 없음 포함) `503` — 반쪽 값을 주지 않습니다. 앱은 카드를 그리지 않습니다.
+        - 한도: IP 기준 분당 30(`walk-safety` 버킷).
+      security: []
+      parameters:
+        - in: query
+          name: nx
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 149, example: 61 }
+          description: 기상청 격자 X
+        - in: query
+          name: ny
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 253, example: 126 }
+          description: 기상청 격자 Y
+      responses:
+        '200':
+          description: 관측값 한 묶음
+          headers:
+            Cache-Control:
+              schema: { type: string, example: 'max-age=600, public' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalkSafetyNow'
+        '400':
+          description: 격자 번호가 범위 밖
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: IP 한도 초과
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 기상청 실황을 못 받음(키 없음 포함)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/places/catalog:
     get:
       tags: [Places]
@@ -2673,6 +2735,19 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
 
   schemas:
+    WalkSafetyNow:
+      type: object
+      description: 산책 안전 지수의 재료 한 묶음(#336). 판정은 앱이 한다.
+      required: [tempC, observedAt]
+      properties:
+        tempC: { type: number, format: double, example: 26.2, description: 기온(°C) — 기상청 T1H }
+        humidity: { type: integer, nullable: true, example: 49, description: 습도(%) — REH }
+        rain1hMm: { type: number, format: double, nullable: true, example: 0, description: 1시간 강수량(mm) — RN1 }
+        precipType: { type: integer, nullable: true, example: 0, description: 강수형태 PTY — 0 없음 · 1 비 · 2 비/눈 · 3 눈 · 5 빗방울 · 6 빗방울눈날림 · 7 눈날림 }
+        pm10: { type: integer, nullable: true, example: 31, description: 미세먼지(㎍/㎥). 에어코리아 승인 전이면 null }
+        pm25: { type: integer, nullable: true, example: 18, description: 초미세먼지(㎍/㎥) }
+        station: { type: string, nullable: true, example: 성수, description: 미세먼지 측정소(격자 중심에서 가장 가까운 곳) }
+        observedAt: { type: string, format: date-time, example: '2026-09-07T05:10:00Z', description: 서버가 이 묶음을 만든 시각(UTC) }
     Error:
       type: object
       description: |

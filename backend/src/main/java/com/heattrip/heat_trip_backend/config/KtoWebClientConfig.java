@@ -123,6 +123,32 @@ public class KtoWebClientConfig {
                 .build();
     }
 
+    /**
+     * 기상청 단기예보 조회서비스(초단기실황) — 산책 안전 지수(#336). 문자열 이름으로 주입받는다
+     * ({@code walksafety} 모듈이 이 클래스를 타입으로 부르지 않게 — 모듈 경계).
+     */
+    public static final String KMA = "kmaWebClient";
+
+    /** 한국환경공단 에어코리아 — 측정소 목록·실시간 측정(#336). */
+    public static final String AIRKOREA = "airKoreaWebClient";
+
+    @Bean(KMA)
+    public WebClient kmaWebClient(
+            WebClient.Builder builder,
+            @Value("${app.kto.connect-timeout-ms:3000}") int connectTimeoutMs,
+            @Value("${app.kto.read-timeout-ms:5000}") int readTimeoutMs) {
+        return build(builder, "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0",
+                connectTimeoutMs, readTimeoutMs);
+    }
+
+    @Bean(AIRKOREA)
+    public WebClient airKoreaWebClient(
+            WebClient.Builder builder,
+            @Value("${app.kto.connect-timeout-ms:3000}") int connectTimeoutMs,
+            @Value("${app.kto.read-timeout-ms:5000}") int readTimeoutMs) {
+        return build(builder, "https://apis.data.go.kr/B552584", connectTimeoutMs, readTimeoutMs);
+    }
+
     private static HttpClient httpClient(int connectTimeoutMs, int readTimeoutMs) {
         return HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutMs)

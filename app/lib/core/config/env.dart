@@ -62,12 +62,6 @@ class Env {
   /// 주석이 "안내문만 표시한다" 고 적어 두었지만 그 안내문이 없었다 (이슈 #182).
   static bool get hasNaverMap => naverMapClientId.isNotEmpty;
 
-  /// 공공데이터포털 인증키(디코딩 키) — 기상청 초단기실황 · 에어코리아를 **기기에서 직접** 부른다(#336).
-  /// `app/.env` 의 `YOUR_DECODING_SERVICE_KEY` 를 빌드 때 `--dart-define=PUBLIC_DATA_SERVICE_KEY=…` 로
-  /// 넘긴다. 없으면 안전 지수 카드가 없다 — 가짜를 보여 주지 않는다.
-  static const publicDataServiceKey =
-      String.fromEnvironment('PUBLIC_DATA_SERVICE_KEY', defaultValue: '');
-
   // 관광공사 서비스키와 호출자 표기가 여기 있었다. **이제 앱에 없다** (이슈 #40).
   //
   // --dart-define 으로 넣어도 문자열은 바이너리에 남아서 strings 한 번이면 나온다.

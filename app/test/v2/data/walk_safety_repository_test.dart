@@ -1,4 +1,4 @@
-// 산책 안전 지수 데이터 — 기상청·에어코리아를 기기에서 부르고, 좌표는 어디에도 안 보낸다 (#336).
+// 산책 안전 지수 데이터 — 우리 서버에 격자 번호만, 인증 없이 (#336).
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -10,48 +10,30 @@ import 'package:heat_trip_flutter/v2/data/walk_safety.dart';
 import 'package:heat_trip_flutter/v2/data/walk_safety_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 
-http.Response _json(Object body) => http.Response(jsonEncode(body), 200,
+const _base = 'https://api.example.test';
+
+http.Response _json(Object body, {int status = 200}) => http.Response(jsonEncode(body), status,
     headers: const {'content-type': 'application/json; charset=utf-8'});
 
-Map<String, Object?> _kma({String temp = '26.2', String pty = '0'}) => {
-      'response': {
-        'header': {'resultCode': '00', 'resultMsg': 'NORMAL_SERVICE'},
-        'body': {
-          'items': {
-            'item': [
-              {'category': 'PTY', 'obsrValue': pty},
-              {'category': 'REH', 'obsrValue': '49'},
-              {'category': 'RN1', 'obsrValue': '0'},
-              {'category': 'T1H', 'obsrValue': temp},
-            ]
-          }
-        }
-      }
+Map<String, Object?> _now({double temp = 26.2, Object? pm25 = 18, Object? pm10 = 31, Object? station = '성수'}) => {
+      'tempC': temp,
+      'humidity': 49,
+      'rain1hMm': 0.0,
+      'precipType': 0,
+      'pm10': pm10,
+      'pm25': pm25,
+      'station': station,
+      'observedAt': '2026-09-07T05:10:00Z',
     };
 
-const _keyError = {
-  'OpenAPI_ServiceResponse': {
-    'cmmMsgHeader': {'errMsg': 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR', 'returnReasonCode': '30'}
-  }
-};
-
-({WalkSafetyRepository repo, List<Uri> calls}) fixture({
-  Object? kma,
-  Object? stations,
-  Object? air,
-  String key = 'KEY',
-}) {
-  final calls = <Uri>[];
+({WalkSafetyRepository repo, List<http.Request> calls}) fixture(Future<http.Response> Function(http.Request) handler) {
+  final calls = <http.Request>[];
   final client = MockClient((req) async {
-    calls.add(req.url);
-    final p = req.url.path;
-    if (p.contains('getUltraSrtNcst')) return _json(kma ?? _kma());
-    if (p.contains('getMsrstnList')) return _json(stations ?? _keyError);
-    if (p.contains('getMsrstnAcctntRltmMesureDnsty')) return _json(air ?? _keyError);
-    return http.Response('not found', 404);
+    calls.add(req);
+    return handler(req);
   });
   return (
-    repo: WalkSafetyRepository(client: client, serviceKey: key, now: () => DateTime(2026, 9, 7, 14, 10)),
+    repo: WalkSafetyRepository(client: client, baseUrl: _base, now: () => DateTime(2026, 9, 7, 14, 10)),
     calls: calls,
   );
 }
@@ -59,96 +41,47 @@ const _keyError = {
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    WalkSafetyRepository.resetForTest();
     WalkSafetyStore.resetForTest();
   });
 
-  test('기상청 기준 시각 — 매시 40분에 나오는 실황이라 40분 전을 시 단위로 내린다(KST)', () {
-    expect(WalkSafetyRepository.kmaBase(DateTime.utc(2026, 9, 7, 5, 10)), (date: '20260907', time: '1300'));
-    expect(WalkSafetyRepository.kmaBase(DateTime.utc(2026, 9, 7, 5, 45)), (date: '20260907', time: '1400'));
-    expect(WalkSafetyRepository.kmaBase(DateTime.utc(2026, 9, 6, 15, 20)), (date: '20260906', time: '2300'),
-        reason: '00:20 KST 에는 00:00 실황이 아직 없다(00:40 에 나온다) — 전날 23:00 실황을 쓴다');
-  });
-
-  test('키가 없으면 아무것도 부르지 않는다', () async {
-    final f = fixture(key: '');
-    expect(await f.repo.fetch(37.5445, 127.0410), isNull);
-    expect(f.calls, isEmpty);
-  });
-
-  test('기상청은 5km 격자 번호로 부른다 — 위경도가 요청에 없다', () async {
-    final f = fixture();
+  test('우리 서버에 5km 격자 번호만 보낸다 — 위경도도 인증 헤더도 없다', () async {
+    final f = fixture((_) async => _json(_now()));
     final r = await f.repo.fetch(37.5445, 127.0410);
 
     expect(r, isNotNull);
     expect(r!.tempC, 26.2);
-    final kma = f.calls.firstWhere((u) => u.path.contains('getUltraSrtNcst'));
-    expect(kma.host, 'apis.data.go.kr');
-    expect(kma.queryParameters['nx'], '61');
-    expect(kma.queryParameters['ny'], '126');
-    expect(kma.queryParameters['base_date'], '20260907');
-    expect(kma.queryParameters['base_time'], '1300');
-    expect(kma.queryParameters['serviceKey'], 'KEY');
-    for (final u in f.calls) {
-      expect(u.toString(), isNot(contains('37.5')), reason: '좌표가 그대로 나가면 안 된다');
-      expect(u.toString(), isNot(contains('127.0')));
-    }
+    expect(r.pm25, 18);
+    expect(r.station, '성수');
+    final req = f.calls.single;
+    expect(req.url.toString(), startsWith('$_base/api/walk-safety/now'));
+    expect(req.url.queryParameters, {'nx': '61', 'ny': '126'});
+    expect(req.headers.keys.map((k) => k.toLowerCase()), isNot(contains('authorization')),
+        reason: '누구의 격자인지 서버가 모르게 둔다');
+    expect(req.url.toString(), isNot(contains('37.5')));
+    expect(req.url.toString(), isNot(contains('127.0')));
   });
 
-  test('에어코리아가 승인 전(등록되지 않은 키)이면 PM 없이 돌아온다 — 카드는 기온으로 판정한다', () async {
-    final f = fixture();
-    final r = (await f.repo.fetch(37.5445, 127.0410))!;
+  test('서버 응답 파싱 — PM 이 null 이면 그대로 없음, tempC 가 없으면 전체가 null', () {
+    final r = parseWalkSafetyNow(_now(pm25: null, pm10: null, station: null), fallbackAt: DateTime(2026, 9, 7))!;
     expect(r.pm25, isNull);
     expect(r.pm10, isNull);
     expect(r.station, isNull);
     expect(WalkSafety.judge(r, hour: 14).reasons, contains('미세먼지 정보 없음'));
+    expect(parseWalkSafetyNow({'humidity': 49}, fallbackAt: DateTime(2026, 9, 7)), isNull);
+    expect(parseWalkSafetyNow({'error': {}}, fallbackAt: DateTime(2026, 9, 7)), isNull);
   });
 
-  test('에어코리아가 되면 가장 가까운 측정소 이름으로 부르고 PM 이 붙는다 · 목록은 캐시된다', () async {
-    final stations = {
-      'response': {
-        'body': {
-          'items': [
-            {'stationName': '성수', 'dmX': '37.5449', 'dmY': '127.0436'},
-            {'stationName': '중구', 'dmX': '37.5642', 'dmY': '126.9748'},
-          ]
-        }
-      }
-    };
-    final air = {
-      'response': {
-        'body': {
-          'items': [
-            {'stationName': '성수', 'dataTime': '2026-09-07 14:00', 'pm10Value': '31', 'pm25Value': '18'}
-          ]
-        }
-      }
-    };
-    final f = fixture(stations: stations, air: air);
-    final r = (await f.repo.fetch(37.5445, 127.0410))!;
-
-    expect(r.pm25, 18);
-    expect(r.pm10, 31);
-    expect(r.station, '성수');
-    final airCall = f.calls.firstWhere((u) => u.path.contains('getMsrstnAcctntRltmMesureDnsty'));
-    expect(airCall.queryParameters['stationName'], '성수');
-
-    // 두 번째 호출은 측정소 목록을 다시 받지 않는다.
-    await f.repo.fetch(37.5665, 126.9780);
-    expect(f.calls.where((u) => u.path.contains('getMsrstnList')).length, 1);
-    expect((await SharedPreferences.getInstance()).getString(WalkSafetyRepository.stationsKey), isNotNull);
-  });
-
-  test('기상청이 실패하면 전체가 null — 반쪽으로 판정하지 않는다', () async {
-    final f = fixture(kma: _keyError);
-    expect(await f.repo.fetch(37.5445, 127.0410), isNull);
+  test('503(기상청 없음)·연결 실패·깨진 본문이면 null — 카드가 없다', () async {
+    expect(await fixture((_) async => _json({'error': {'code': 'UPSTREAM'}}, status: 503)).repo.fetch(37.5, 127.0), isNull);
+    expect(await fixture((_) async => throw http.ClientException('끊김')).repo.fetch(37.5, 127.0), isNull);
+    expect(await fixture((_) async => http.Response('<html>', 200)).repo.fetch(37.5, 127.0), isNull);
   });
 
   group('WalkSafetyStore', () {
     const dog = DogProfile(serverId: 1, name: 'Bori', breed: '믹스', size: DogSize.medium, ageMonths: 30);
 
     test('받아서 판정하고, 30분 안에는 다시 받지 않는다', () async {
-      final f = fixture(kma: _kma(temp: '31'));
+      final f = fixture((_) async => _json(_now(temp: 31)));
       var located = 0;
       Future<({double lat, double lng})?> locate() async {
         located++;
@@ -166,8 +99,8 @@ void main() {
       expect(located, 2);
     });
 
-    test('위치가 없으면(게스트·권한 없음) 아무것도 없다', () async {
-      final f = fixture();
+    test('위치가 없으면(게스트·권한 없음) 아무것도 부르지 않는다', () async {
+      final f = fixture((_) async => _json(_now()));
       await WalkSafetyStore.refresh(repository: f.repo, locate: () async => null, now: () => DateTime(2026, 9, 7, 14));
       expect(WalkSafetyStore.latest.value, isNull);
       expect(f.calls, isEmpty);

@@ -1,152 +1,76 @@
-// 산책 안전 지수의 데이터 — 기상청·에어코리아를 **기기에서 직접** 부른다 (#336).
+// 산책 안전 지수의 데이터 — 우리 서버가 기상청·에어코리아를 대신 부른다 (#336).
 //
-// 좌표는 회사 서버로 가지 않는다(A안, #235). 기상청에는 5km 격자 번호(nx, ny)가, 에어코리아에는
-// 가장 가까운 측정소 **이름**이 간다 — 위경도 자체는 어느 쪽에도 보내지 않는다. 그 사실은
-// 위치기반서비스 이용약관 제3조 4)에 적혀 있다.
+// 키는 앱에 없다(#40: 바이너리에 남고 폐기하려면 재배포). 앱이 보내는 것은 **5km 격자 번호(nx, ny)뿐**
+// 이고, 요청에 인증도 없다 — 서버는 누구의 격자인지 모른다(A안 #235 와의 절충). 위경도는 어디에도
+// 보내지 않는다. 그 사실은 위치기반서비스 이용약관 제3조 4)에 적혀 있다.
 //
-// 키(`Env.publicDataServiceKey`)가 없으면 아무것도 부르지 않는다 — 가짜 카드를 보여 주지 않는다.
-// 에어코리아 두 API 는 공공데이터포털에서 따로 활용신청해야 한다. 승인 전에는 응답이
-// "등록되지 않은 서비스키" 라 PM 이 비어 오고, 판정은 기온으로만 한다("미세먼지 정보 없음").
+// 서버가 503 을 주면(기상청 실황 없음·서버에 키 없음) 카드가 없다 — 가짜를 보여 주지 않는다.
+// 에어코리아가 승인 전이면 PM 이 비어 오고, 판정은 기온으로만 한다("미세먼지 정보 없음").
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/config/env.dart';
 import '../domain/pet.dart';
 import 'walk_safety.dart';
 
 class WalkSafetyRepository {
-  WalkSafetyRepository({http.Client? client, String? serviceKey, DateTime Function()? now})
+  WalkSafetyRepository({http.Client? client, String? baseUrl, DateTime Function()? now})
       : _client = client ?? http.Client(),
-        serviceKey = serviceKey ?? Env.publicDataServiceKey,
+        baseUrl = baseUrl ?? Env.apiBase,
         _now = now ?? DateTime.now;
 
   final http.Client _client;
-  final String serviceKey;
+  final String baseUrl;
   final DateTime Function() _now;
 
-  static const String stationsKey = 'air_stations_v1';
-  static const Duration stationsTtl = Duration(hours: 24);
   static const Duration timeout = Duration(seconds: 8);
 
-  /// 메모리 캐시 — 앱을 켠 동안 측정소 목록은 한 번만 받는다.
-  static List<AirStation>? _stations;
-
-  bool get enabled => serviceKey.isNotEmpty;
-
-  /// 지금 값 한 묶음. 기상청이 실패하면 `null`(카드 없음). 에어코리아는 있으면 붙고 없으면 빈다.
+  /// 지금 값 한 묶음. 서버가 못 주면(503·연결 없음·깨진 본문) `null` — 카드 없음.
   Future<WalkSafetyReading?> fetch(double lat, double lng) async {
-    if (!enabled) return null;
-    final weather = await _kma(lat, lng);
-    if (weather == null) return null;
-    final air = await _air(lat, lng);
-    return WalkSafetyReading(
-      tempC: weather.tempC,
-      humidity: weather.humidity,
-      rain1hMm: weather.rain1hMm,
-      precipType: weather.precipType,
-      pm10: air?.pm10,
-      pm25: air?.pm25,
-      station: air?.station,
-      observedAt: _now(),
-    );
-  }
-
-  /// 초단기실황의 기준 시각. 매시 40분에 그 시각(HH00) 실황이 나온다 — 40분 전을 시 단위로 내린다.
-  /// 기상청 시각은 KST 다.
-  static ({String date, String time}) kmaBase(DateTime now) {
-    final kst = now.toUtc().add(const Duration(hours: 9)).subtract(const Duration(minutes: 40));
-    String two(int v) => v.toString().padLeft(2, '0');
-    return (date: '${kst.year}${two(kst.month)}${two(kst.day)}', time: '${two(kst.hour)}00');
-  }
-
-  Future<({double tempC, int? humidity, double? rain1hMm, int? precipType})?> _kma(double lat, double lng) async {
     final grid = kmaGrid(lat, lng);
-    final base = kmaBase(_now());
-    final uri = Uri.https('apis.data.go.kr', '/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst', {
-      'serviceKey': serviceKey,
-      'pageNo': '1',
-      'numOfRows': '10',
-      'dataType': 'JSON',
-      'base_date': base.date,
-      'base_time': base.time,
+    // 인증 헤더를 붙이지 않는다 — AuthedClient 가 아니라 맨 http 다. 누구의 격자인지 서버가 모른다.
+    final uri = Uri.parse('$baseUrl/api/walk-safety/now').replace(queryParameters: {
       'nx': '${grid.nx}',
       'ny': '${grid.ny}',
     });
-    final json = await _getJson(uri);
-    return parseKmaNowcast(json);
-  }
-
-  Future<({int? pm10, int? pm25, String station})?> _air(double lat, double lng) async {
-    final stations = await _loadStations();
-    final near = nearestStation(stations, lat, lng);
-    if (near == null) return null;
-    final uri = Uri.https('apis.data.go.kr', '/B552584/ArpltnInforInqireSvc/getMsrstnAcctntRltmMesureDnsty', {
-      'serviceKey': serviceKey,
-      'returnType': 'json',
-      'numOfRows': '1',
-      'pageNo': '1',
-      'stationName': near.name,
-      'dataTerm': 'DAILY',
-      'ver': '1.3',
-    });
-    final q = parseAirQuality(await _getJson(uri));
-    if (q == null) return null;
-    return (pm10: q.pm10, pm25: q.pm25, station: near.name);
-  }
-
-  Future<List<AirStation>> _loadStations() async {
-    final cached = _stations;
-    if (cached != null) return cached;
+    http.Response res;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(stationsKey);
-      if (raw != null) {
-        final decoded = jsonDecode(raw);
-        if (decoded is Map && decoded['at'] is String) {
-          final at = DateTime.tryParse(decoded['at'] as String);
-          if (at != null && _now().difference(at) < stationsTtl) {
-            final list = parseAirStations({'response': {'body': {'items': decoded['items']}}});
-            if (list.isNotEmpty) return _stations = list;
-          }
-        }
-      }
+      res = await _client.get(uri, headers: const {'Accept': 'application/json'}).timeout(timeout);
     } catch (e) {
-      if (kDebugMode) debugPrint('[WalkSafety] 측정소 캐시를 못 읽었다: $e');
-    }
-    final uri = Uri.https('apis.data.go.kr', '/B552584/MsrstnInfoInqireSvc/getMsrstnList', {
-      'serviceKey': serviceKey,
-      'returnType': 'json',
-      'numOfRows': '1000',
-      'pageNo': '1',
-    });
-    final json = await _getJson(uri);
-    final list = parseAirStations(json);
-    if (list.isEmpty) return const [];
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final items = (json as Map)['response']['body']['items'];
-      await prefs.setString(stationsKey, jsonEncode({'at': _now().toIso8601String(), 'items': items}));
-    } catch (e) {
-      if (kDebugMode) debugPrint('[WalkSafety] 측정소 캐시를 못 남겼다: $e');
-    }
-    return _stations = list;
-  }
-
-  Future<Object?> _getJson(Uri uri) async {
-    try {
-      final res = await _client.get(uri, headers: const {'Accept': 'application/json'}).timeout(timeout);
-      if (res.statusCode != 200) return null;
-      return jsonDecode(utf8.decode(res.bodyBytes));
-    } catch (e) {
-      if (kDebugMode) debugPrint('[WalkSafety] ${uri.path} 실패: $e');
+      if (kDebugMode) debugPrint('[WalkSafety] 서버 호출 실패: $e');
       return null;
     }
+    if (res.statusCode != 200) return null;
+    Object? json;
+    try {
+      json = jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (_) {
+      return null;
+    }
+    return parseWalkSafetyNow(json, fallbackAt: _now());
   }
+}
 
-  static void resetForTest() => _stations = null;
+/// 서버 `WalkSafetyNow`(openapi) → 관측값. `tempC` 가 없으면 `null` — 반쪽으로 판정하지 않는다.
+WalkSafetyReading? parseWalkSafetyNow(Object? json, {required DateTime fallbackAt}) {
+  if (json is! Map) return null;
+  final temp = json['tempC'];
+  if (temp is! num) return null;
+  int? asInt(Object? v) => v is num ? v.round() : null;
+  double? asDouble(Object? v) => v is num ? v.toDouble() : null;
+  final station = json['station'];
+  return WalkSafetyReading(
+    tempC: temp.toDouble(),
+    humidity: asInt(json['humidity']),
+    rain1hMm: asDouble(json['rain1hMm']),
+    precipType: asInt(json['precipType']),
+    pm10: asInt(json['pm10']),
+    pm25: asInt(json['pm25']),
+    station: station is String && station.isNotEmpty ? station : null,
+    observedAt: DateTime.tryParse('${json['observedAt']}')?.toLocal() ?? fallbackAt,
+  );
 }
 
 /// 최근 판정 한 장 — 홈 카드와 산책 시작이 같이 본다. 30분 지나면 다시 받는다.
@@ -161,7 +85,7 @@ class WalkSafetyStore {
 
   static bool isFresh(DateTime now) => fetchedAt != null && now.difference(fetchedAt!) < ttl;
 
-  /// 위치가 있고 키가 있으면 받아서 판정한다. 이미 받는 중이면 그 결과를 기다린다.
+  /// 위치가 있으면 받아서 판정한다. 이미 받는 중이면 그 결과를 기다린다.
   static Future<void> refresh({
     required WalkSafetyRepository repository,
     required Future<({double lat, double lng})?> Function() locate,
@@ -175,7 +99,6 @@ class WalkSafetyStore {
     if (pending != null) return pending;
     final run = () async {
       try {
-        if (!repository.enabled) return;
         final where = await locate();
         if (where == null) return;
         final r = await repository.fetch(where.lat, where.lng);
