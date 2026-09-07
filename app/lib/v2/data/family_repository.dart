@@ -29,17 +29,22 @@ import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
-/// 케어 다섯 종류. 계약(`openapi.yaml` 의 `CareType`)과 **같은 문자열**을 쓴다.
+/// 케어 일곱 종류. 계약(`openapi.yaml` 의 `CareType`)과 **같은 문자열**을 쓴다.
 ///
 /// `pet.dart` 의 `CareType`(물·밥·산책·투약·간식·기타)과 이름이 겹치지만 그쪽은
-/// 화면 안에서만 사는 더미 도메인이고, 서버 계약은 이 다섯이다. 둘을 하나로 합치는
+/// 화면 안에서만 사는 더미 도메인이고, 서버 계약은 이 일곱이다. 둘을 하나로 합치는
 /// 것은 `pet.dart` 의 더미를 걷어내는 이슈가 할 일이다.
+///
+/// 뒤의 둘(`poop`·`pee`)은 산책 중 한 탭으로 들어온다(#340) — `WalkMomentKind` 가 그
+/// 화면의 값이고 여기로 옮겨 담긴다. **어디서 눴는지는 안 실린다.**
 enum ServerCareType {
   water('water', '물'),
   meal('meal', '밥'),
   walk('walk', '산책'),
   med('med', '투약'),
-  vet('vet', '병원');
+  vet('vet', '병원'),
+  poop('poop', '배변'),
+  pee('pee', '마킹');
 
   /// DB·계약·이 앱이 공유하는 단 하나의 표기.
   final String wire;

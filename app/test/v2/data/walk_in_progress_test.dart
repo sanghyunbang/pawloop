@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/v2/data/walk_in_progress.dart';
+import 'dart:convert';
+import 'package:heat_trip_flutter/v2/domain/walk_moment.dart';
 
 WalkInProgress _walk({DateTime? savedAt}) => WalkInProgress(
       startedAt: DateTime(2026, 9, 7, 15, 41),
@@ -76,5 +78,40 @@ void main() {
     await store.save(_walk());
     await store.clear();
     expect(await store.load(now: DateTime(2026, 9, 7, 15, 55)), isNull);
+  });
+
+  // ── 산책 중 한 손 기록 (#340) ────────────────────────────
+
+  test('앱이 죽었다 살아나도 눌러 둔 것이 남는다', () {
+    final snap = WalkInProgress(
+      startedAt: DateTime(2026, 9, 7, 19),
+      seconds: 600,
+      distanceM: 800,
+      path: const [
+        [127.04, 37.54],
+      ],
+      pathT: const [0],
+      moments: const [WalkMoment(kind: WalkMomentKind.poop, tSec: 120, pathIndex: 0)],
+      savedAt: DateTime(2026, 9, 7, 19, 10),
+    );
+
+    final read = WalkInProgress.tryParse(jsonDecode(jsonEncode(snap.toJson())));
+
+    expect(read!.moments.single.kind, WalkMomentKind.poop);
+    expect(read.moments.single.pathIndex, 0);
+  });
+
+  test('moments 키가 없던 옛 스냅숏도 그대로 읽힌다', () {
+    final read = WalkInProgress.tryParse({
+      'startedAt': '2026-09-07T10:00:00.000',
+      'seconds': 60,
+      'distanceM': 100,
+      'path': const [],
+      'pathT': const [],
+      'savedAt': '2026-09-07T10:01:00.000',
+    });
+
+    expect(read, isNotNull);
+    expect(read!.moments, isEmpty);
   });
 }

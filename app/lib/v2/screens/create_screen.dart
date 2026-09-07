@@ -1,5 +1,6 @@
 import 'myrecords_screen.dart';
 import '../data/walk_care_link.dart';
+import '../domain/walk_moment.dart';
 import 'package:heat_trip_flutter/app/navigator_keys.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -216,7 +217,7 @@ class _CreateScreenState extends State<CreateScreen> {
         final retried = await WalkSync.open(repository: widget.repository).then((s) => s.flush());
         if (!mounted) return;
         setState(() => _saving = false);
-        if (retried > 0) _afterSaved();
+        if (retried > 0) _afterSaved(draft.moments);
         _toast(
           retried > 0 ? '산책이 기록됐어요' : '기록을 보관했어요 · 연결되면 올릴게요',
           seeRecords: retried > 0,
@@ -228,7 +229,7 @@ class _CreateScreenState extends State<CreateScreen> {
 
     setState(() => _saving = false);
     final saved = result.outcome == WalkSyncOutcome.saved;
-    if (saved) _afterSaved();
+    if (saved) _afterSaved(draft.moments);
     _toast(
       switch (result.outcome) {
         WalkSyncOutcome.saved => '산책이 기록됐어요',
@@ -244,8 +245,11 @@ class _CreateScreenState extends State<CreateScreen> {
 
   /// 서버에 저장된 뒤 — 오늘의 케어 "산책" 칸에도 남긴다(#326). 기다리지 않는다:
   /// 케어가 늦거나 실패해도 산책은 이미 저장됐고, 홈은 그 결과를 따로 다시 읽는다.
-  void _afterSaved() {
-    unawaited((widget.careLink ?? WalkCareLink()).recordWalk());
+  ///
+  /// [moments] 는 산책 중에 누른 배변·마킹·물이다(#340). 같은 자리로 보내는 이유는
+  /// 하루치를 세는 단위가 같아서다 — 가족이 없으면 셋 다 조용히 안 간다.
+  void _afterSaved([List<WalkMoment> moments = const []]) {
+    unawaited((widget.careLink ?? WalkCareLink()).recordWalk(moments: moments));
   }
 
   /// [seeRecords] 면 "보기" 가 붙는다 — 저장한 산책이 어디로 갔는지 홈이 말하지 않았다(#326).
@@ -435,6 +439,20 @@ class _CreateScreenState extends State<CreateScreen> {
                   style: TextStyle(fontSize: 12, color: T.textMuted)),
             ),
           ]),
+          // 산책 중에 누른 것들 (#340). 저장하면 오늘의 케어에도 같이 남는다.
+          if (!WalkMomentTally.of(widget.draft?.moments ?? const []).isEmpty) ...[
+            const SizedBox(height: 7),
+            Row(children: [
+              const Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF4CAF88)),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  '${WalkMomentTally.of(widget.draft!.moments).summary} · 오늘의 케어에도 남겨요',
+                  style: const TextStyle(fontSize: 12, color: T.textSecondary),
+                ),
+              ),
+            ]),
+          ],
         ],
         if (widget.draft == null) ...[
           const SizedBox(height: 5),

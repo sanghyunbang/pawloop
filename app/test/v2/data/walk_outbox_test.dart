@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/v2/data/walk_outbox.dart';
+import 'package:heat_trip_flutter/v2/domain/walk_moment.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/data/walk_sync.dart';
 
@@ -357,6 +358,68 @@ void main() {
       expect(sent, 1, reason: 'a 만 나가고 b 에서 멈춘다');
       expect(outbox.pending.map((d) => d.clientWalkId), ['b', 'c']);
     });
+  });
+
+  // ── 산책 중 한 손 기록 (#340) ────────────────────────────
+
+  test('눌러 둔 것들이 초안에 실려 저장되고 다시 읽힌다', () {
+    final draft = WalkDraft.fresh(
+      startedAt: DateTime(2026, 9, 7, 19),
+      endedAt: DateTime(2026, 9, 7, 19, 30),
+      distanceM: 1200,
+      durationS: 1800,
+      path: const [
+        [127.04, 37.54],
+        [127.05, 37.55],
+      ],
+      moments: const [
+        WalkMoment(kind: WalkMomentKind.poop, tSec: 300, pathIndex: 1),
+        WalkMoment(kind: WalkMomentKind.water, tSec: 900),
+      ],
+    );
+
+    final read = WalkDraft.tryParse(
+        jsonDecode(jsonEncode(draft.toJson())) as Map<String, dynamic>);
+
+    expect(read!.moments, hasLength(2));
+    expect(read.moments.first.kind, WalkMomentKind.poop);
+    expect(read.moments.first.pathIndex, 1);
+    expect(read.moments.last.pathIndex, isNull);
+  });
+
+  test('저장 화면이 이름·거리를 고쳐도 눌러 둔 것이 안 떨어진다', () {
+    final draft = WalkDraft.fresh(
+      startedAt: DateTime(2026, 9, 7, 19),
+      endedAt: DateTime(2026, 9, 7, 19, 30),
+      distanceM: 1200,
+      durationS: 1800,
+      path: const [],
+      moments: const [WalkMoment(kind: WalkMomentKind.pee, tSec: 120)],
+    );
+
+    final edited = draft.copyWith(memo: '오늘은 신났다', distanceM: 1300);
+
+    expect(edited.moments, hasLength(1),
+        reason: 'copyWith 에서 빠뜨리면 저장 화면을 지나는 순간 조용히 사라진다 — pathT 가 그랬다(#155)');
+  });
+
+  test('깨진 순간 하나가 산책을 통째로 버리지 않는다', () {
+    final read = WalkDraft.tryParse({
+      'clientWalkId': 'ck-1',
+      'startedAt': '2026-09-07T10:00:00.000Z',
+      'endedAt': '2026-09-07T10:30:00.000Z',
+      'distanceM': 900,
+      'durationS': 1800,
+      'path': const [],
+      'moments': const [
+        {'kind': 'grooming', 'tSec': 3},
+        {'kind': 'poop', 'tSec': 10},
+      ],
+    });
+
+    expect(read, isNotNull);
+    expect(read!.moments, hasLength(1));
+    expect(read.moments.single.kind, WalkMomentKind.poop);
   });
 }
 
