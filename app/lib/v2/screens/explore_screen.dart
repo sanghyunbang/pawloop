@@ -52,6 +52,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   bool _fallbackCenter = true;
   /// 시트에서 "지도에서 보기" 를 눌렀는데 지도 뷰가 아직 안 만들어졌을 때 — 만들어지면 그린다.
   PetPlace? _pendingTrail;
+  /// 클러스터 핀 그림 — 한 번 그려 두고 `_clusterMarker` 가 쓴다. 빌더는 동기라 여기서 못 그린다.
+  NOverlayImage? _clusterIcon;
   String? _catFilter; // null = 전체, 아니면 contenttypeid
 
   @override
@@ -239,7 +241,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// 산책로 칩: 카메라를 가까운 코스들에 맞춘다 — 코스가 화면 밖이면 지도가 비어 보였다(#328).
   Future<void> _fitToPlaces() async {
     final c = _mapCtrl;
-    final places = _filtered;
+    // 20개를 다 담으면 파주부터 수원까지 한 화면이다. 가까운 다섯이면 "어디쯤인지" 는 보인다.
+    final places = _filtered.take(5).toList();
     if (c == null || !mounted || places.isEmpty) return;
     double minLat = places.first.lat, maxLat = minLat, minLng = places.first.lng, maxLng = minLng;
     for (final p in places) {
@@ -260,14 +263,35 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   /// 겹친 핀을 숫자 하나로 접는다 — 성수동 쇼핑 핀 수십 개가 한 덩어리였다(#328).
   void _clusterMarker(NClusterInfo info, NClusterMarker marker) {
-    marker.setSize(const Size(42, 42));
-    marker.setIconTintColor(const Color(0xFF8E7BFF));
+    final icon = _clusterIcon;
+    if (icon != null) marker.setIcon(icon);
+    marker.setSize(const Size(44, 44));
+    // 숫자는 흰 글자 + 보라 후광 — 기본 핀 위에 흰 글자만 얹으면 안 보였다(에뮬레이터 확인).
     marker.setCaption(NOverlayCaption(
       text: '${info.size}',
       color: Colors.white,
-      haloColor: Colors.transparent,
+      haloColor: const Color(0xFF8E7BFF),
       textSize: 13,
     ));
+  }
+
+  /// 클러스터 핀 그림 하나 — 보라 원에 흰 테두리. 숫자는 캡션이 얹는다.
+  Future<void> _prepareClusterIcon() async {
+    if (_clusterIcon != null || !mounted) return;
+    _clusterIcon = await NOverlayImage.fromWidget(
+      context: context,
+      size: const Size(44, 44),
+      widget: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: const Color(0xFF8E7BFF),
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
+        ),
+      ),
+    );
   }
 
   /// 시트의 주 동작 — 전화 · 지도에서 보기(산책로) · 길찾기. 글쓰기는 그 아래 두 번째다(#328).
@@ -539,6 +563,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           clusterOptions: NaverMapClusteringOptions(clusterMarkerBuilder: _clusterMarker),
           onMapReady: (c) async {
             _mapCtrl = c;
+            await _prepareClusterIcon();
             c.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
             await _refreshMarkers();
             if (_catFilter == 'trail') await _fitToPlaces();
