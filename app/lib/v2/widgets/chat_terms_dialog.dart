@@ -1,34 +1,43 @@
+// 가족 채팅 첫 진입 규칙 대화상자 — 필요한 순간에, 짧게 (#82 · #330).
+//
+// 전에는 네 문단(신고 · 가리기 · 내보내기 · 탈퇴 뒤 표시)을 한꺼번에 보여 줬다. 걸어 보니
+// 길었다(#330). 지금은 **두 줄 요약**이 기본이고 "자세히" 를 누르면 네 줄이 펼쳐진다.
+// 전문은 설정 > 약관 및 정책에 있다.
 import 'package:flutter/material.dart';
 
 import '../theme/app_tokens.dart';
 
-/// 채팅에 처음 들어갈 때 뜨는 동의 창 — 이슈 #82 완료 조건 6.
-///
-/// ## 무엇을 말하는가
-///
-/// 약관 이름만 나열하지 않는다. **이 화면에서 실제로 일어나는 일**을 적는다 — 신고하면
-/// 어떻게 되는지, 가리기가 삭제와 어떻게 다른지, 탈퇴해도 메시지가 남는다는 것.
-///
-/// 나열만 하면 사용자는 읽지 않고 누르고, 나중에 "그런 말 없었다" 가 된다. 특히 **탈퇴해도
-/// 메시지가 남는다**는 것은 여기서 한 번은 말해야 하는 사실이다.
-///
-/// ## 취소가 있다
-///
-/// 동의하지 않으면 채팅에 안 들어간다. **강제로 동의시키지 않는다** — 그러면 그건 동의가
-/// 아니라 통보다. 방을 못 쓰게 되지만 앱의 나머지는 그대로 쓸 수 있다.
-class ChatTermsDialog extends StatelessWidget {
+class ChatTermsDialog extends StatefulWidget {
   const ChatTermsDialog({super.key});
 
-  /// 동의했으면 `true`. 취소하거나 바깥을 눌렀으면 `false`.
+  /// 두 줄 요약. 탈퇴 뒤에도 메시지가 남는다는 것은 접힌 상태에서도 말한다 —
+  /// 나중에 "그런 말 없었다" 가 안 되게.
+  static const String summary =
+      '함께 쓰는 공간이에요. 불쾌한 메시지는 길게 눌러 신고하거나 가릴 수 있고, '
+      '탈퇴해도 보낸 메시지는 대화방에 남아요.';
+
+  /// "자세히" 를 누르면 펼쳐지는 네 줄.
+  static const List<String> details = [
+    '불쾌한 메시지는 길게 눌러 신고할 수 있어요. 신고한 사실은 상대에게 알리지 않습니다.',
+    '특정 사람의 메시지를 가릴 수 있어요. 가려도 삭제되지 않고 다른 분 화면에는 그대로 남습니다.',
+    '방장은 멤버를 내보낼 수 있어요. 내보내면 초대코드를 다시 받아도 들어올 수 없습니다.',
+    '탈퇴해도 이미 보낸 메시지는 대화방에 남고, 보낸 사람은 "알 수 없음"으로 표시됩니다.',
+  ];
+
   static Future<bool> show(BuildContext context) async {
     final agreed = await showDialog<bool>(
       context: context,
-      // 바깥을 눌러 닫는 것을 막지 않는다. 막으면 "읽을 때까지 못 나간다" 가 되는데,
-      // 그건 동의를 받는 것이 아니라 가두는 것이다.
       builder: (_) => const ChatTermsDialog(),
     );
     return agreed ?? false;
   }
+
+  @override
+  State<ChatTermsDialog> createState() => _ChatTermsDialogState();
+}
+
+class _ChatTermsDialogState extends State<ChatTermsDialog> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -38,25 +47,37 @@ class ChatTermsDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              '함께 쓰는 공간이라 몇 가지를 먼저 알려 드려요.',
+          children: [
+            const Text(
+              ChatTermsDialog.summary,
               style: TextStyle(fontSize: 13.5, height: 1.5, color: T.textPrimary),
             ),
-            SizedBox(height: 14),
-            _Line('불쾌한 메시지는 길게 눌러 신고할 수 있어요. '
-                '신고한 사실은 상대에게 알리지 않습니다.'),
-            _Line('특정 사람의 메시지를 가릴 수 있어요. '
-                '가려도 삭제되지 않고 다른 분 화면에는 그대로 남습니다.'),
-            _Line('방장은 멤버를 내보낼 수 있어요. '
-                '내보내면 초대코드를 다시 받아도 들어올 수 없습니다.'),
-            _Line('탈퇴해도 이미 보낸 메시지는 대화방에 남고, '
-                '보낸 사람은 "알 수 없음"으로 표시됩니다.'),
-            SizedBox(height: 12),
-            Text(
-              '자세한 내용은 설정 > 약관 및 정책에서 볼 수 있어요.',
-              style: TextStyle(fontSize: 12, color: T.textMuted),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: Icon(
+                  _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                  size: 18,
+                ),
+                label: Text(_expanded ? '접기' : '자세히', style: const TextStyle(fontSize: 13)),
+              ),
             ),
+            if (_expanded) ...[
+              const SizedBox(height: 6),
+              for (final line in ChatTermsDialog.details) _Line(line),
+              const SizedBox(height: 4),
+              const Text(
+                '자세한 내용은 설정 > 약관 및 정책에서 볼 수 있어요.',
+                style: TextStyle(fontSize: 12, color: T.textMuted),
+              ),
+            ],
           ],
         ),
       ),

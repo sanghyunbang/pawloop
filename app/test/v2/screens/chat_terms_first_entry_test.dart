@@ -92,10 +92,17 @@ void main() {
     await _pump(tester, _CountingRepo().build());
 
     expect(
-      find.textContaining('탈퇴해도 이미 보낸 메시지는 대화방에 남고'),
+      find.textContaining('탈퇴해도 보낸 메시지는 대화방에 남아요'),
       findsOneWidget,
-      reason: '여기서 한 번은 말해야 나중에 "그런 말 없었다" 가 안 된다',
+      reason: '접힌 두 줄 요약에서도 한 번은 말해야 나중에 "그런 말 없었다" 가 안 된다(#330)',
     );
+    expect(find.textContaining('신고한 사실은 상대에게 알리지 않습니다'), findsNothing,
+        reason: '네 줄은 "자세히" 뒤에 나온다');
+
+    await tester.tap(find.text('자세히'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('탈퇴해도 이미 보낸 메시지는 대화방에 남고'), findsOneWidget);
     expect(find.textContaining('신고한 사실은 상대에게 알리지 않습니다'), findsOneWidget);
   });
 

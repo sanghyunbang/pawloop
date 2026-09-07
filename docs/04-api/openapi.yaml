@@ -2034,6 +2034,10 @@ paths:
       tags: [Chat]
       summary: 메시지 전송
       description: |
+        보낸 사람의 읽음 위치(`lastReadSeq`)가 이 메시지까지 올라갑니다 — 내가 보낸 말은 내 방 목록의
+        미읽음에 들지 않습니다(#330). 보낼 수 있다는 것은 방을 열어 두었다는 뜻이라 그 앞의 메시지도
+        읽은 것으로 칩니다.
+
         `clientMsgId` 는 **멱등키**입니다. 전송은 재시도 가능한 POST 인데 사용자가 답답해
         다시 누르면 같은 메시지가 두 번 들어갑니다 — 서버가
         `UNIQUE (room_id, sender_user_id, client_msg_id)` 로 받치고, **같은 사람이** 같은

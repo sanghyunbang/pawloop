@@ -366,9 +366,14 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       );
     }
     if (_messages.isEmpty && _pending.isEmpty) {
-      return const Center(
-        child: Text('아직 대화가 없어요. 먼저 인사해 보세요 🐾',
-            style: TextStyle(fontSize: 13.5, color: T.textMuted)),
+      // 시스템 이모지(🐾)는 기기마다 다르게 그려진다 — 앱의 이모지 자산으로(#330).
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Image.asset('assets/emoji/paw.png', width: 40, height: 40),
+          const SizedBox(height: 10),
+          const Text('아직 대화가 없어요. 먼저 인사해 보세요',
+              style: TextStyle(fontSize: 13.5, color: T.textMuted)),
+        ]),
       );
     }
     return ListView.builder(
