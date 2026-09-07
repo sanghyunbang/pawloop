@@ -7,6 +7,7 @@ import '../widgets/today_care_card.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../widgets/emergency_vets_sheet.dart';
 import '../widgets/walk_goal_row.dart';
+import '../widgets/walk_reminder_sync.dart';
 import '../widgets/walk_safety_card.dart';
 import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
@@ -226,6 +227,9 @@ class TodayScreen extends StatelessWidget {
         // 이번 주 목표와 연속 일수 (#341). 아이가 없거나 개가 아니면 줄 자체가 없다 —
         // 산책 권장량은 개에 대한 자료라 고양이에게 제안하면 근거 없는 숫자가 된다.
         if (!data.guest) WalkGoalRow(dog: dog, data: data),
+        // 아무것도 안 그린다 — 저녁 알림 예약을 이 자료에 맞춰 두는 자리다(#341).
+        // 홈이 자료를 다시 읽는 순간이 곧 "다시 걸어야 하는 순간" 이라 여기 붙인다.
+        WalkReminderSync(data: data, dogName: dog?.name),
       ]),
     );
   }
