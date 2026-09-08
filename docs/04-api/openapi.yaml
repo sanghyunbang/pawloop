@@ -3631,10 +3631,31 @@ components:
 
     Walk:
       type: object
-      required: [id, dogId, clientWalkId, startedAt, distanceM, durationS]
+      required: [id, dogId, dogIds, clientWalkId, startedAt, distanceM, durationS]
       properties:
         id: { type: integer, format: int64 }
-        dogId: { type: integer, format: int64 }
+        dogId:
+          type: integer
+          format: int64
+          description: |
+            **대표 아이.** `dogIds[0]` 과 같습니다 — 앱이 고른 목록의 첫 마리입니다.
+
+            여러 마리가 된 뒤에도(#343) 이 필드는 남습니다. 이미 나가 있는 앱이 이 값으로
+            화면을 그리고 있고, 멱등키 `(dog_id, client_walk_id)` 의 앞자리이며, 소유권이
+            이 연관을 타고 `dog.user_id` 로 갑니다.
+        dogIds:
+          type: array
+          description: |
+            **함께 나간 아이들** (#343). 항상 한 개 이상이고 **첫 번째가 `dogId`** 입니다.
+
+            한 마리만 데리고 나갔으면 원소가 하나입니다 — 빈 배열이나 `null` 이 아닙니다.
+            "여러 마리일 때만 있는 필드" 로 두면 화면이 두 갈래를 만들고, 그중 하나가
+            언젠가 안 그립니다.
+
+            통계와 목록의 `dogId` 필터는 **이 목록 전체**를 봅니다. 보리와 초코를 함께
+            데리고 나간 산책은 초코의 통계에도 잡힙니다.
+          items: { type: integer, format: int64 }
+          example: [7, 9]
         clientWalkId:
           type: string
           description: |
@@ -3719,6 +3740,24 @@ components:
       required: [dogId, clientWalkId, startedAt, distanceM, durationS]
       properties:
         dogId: { type: integer, format: int64 }
+        dogIds:
+          type: array
+          description: |
+            **함께 나간 아이들** (#343). **안 보내도 됩니다** — 안 보내면 `dogId` 하나로 봅니다.
+            이미 나가 있는 앱이 이 필드를 모르고, 그 앱의 산책이 400 이 되면 안 되기 때문입니다.
+
+            `dogId` 가 목록에 없으면 서버가 **맨 앞에 넣습니다.** 대표 아이를 빼고 보내는 것은
+            앱의 실수이지 "그 아이는 안 갔다" 는 뜻이 아닙니다 — `walk.dog_id` 는 어차피 그
+            값으로 저장됩니다.
+
+            **남의 아이가 하나라도 섞이면 404** 입니다. 통째로 거절합니다 — 일부만 저장하면
+            사용자는 두 마리를 적었는데 한 마리만 남은 것을 모릅니다.
+
+            **재전송(같은 `clientWalkId`)에서는 이 값을 다시 쓰지 않습니다.** 처음 저장한
+            것이 정본입니다.
+          items: { type: integer, format: int64 }
+          maxItems: 10
+          example: [7, 9]
         clientWalkId:
           type: string
           description: |

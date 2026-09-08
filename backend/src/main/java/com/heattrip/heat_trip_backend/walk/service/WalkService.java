@@ -104,9 +104,17 @@ public class WalkService {
         Dog dog = dogs.requireMineEntity(userId, request.dogId());
         validate(request);
 
+        // 함께 나간 아이들 — 대표 아이가 맨 앞이다 (#343). **하나하나 소유권을 확인한다.**
+        // 목록 어딘가에 남의 아이가 섞여 있으면 그 아이의 통계에 내 산책이 들어간다.
+        List<Dog> companions = request.resolvedDogIds().stream()
+                .map(id -> id.equals(dog.getId()) ? dog : dogs.requireMineEntity(userId, id))
+                .toList();
+
         Optional<Walk> existing =
                 walks.findByClientKey(dog.getId(), request.clientWalkId(), userId);
         if (existing.isPresent()) {
+            // 재전송이다. 아이 목록도 **다시 안 쓴다** — 처음 저장한 것이 정본이고,
+            // 여기서 덮으면 재전송 요청의 목록이 원본을 조용히 바꾼다.
             return new Saved(WalkResponse.withPath(existing.get()), false);
         }
 
@@ -128,6 +136,7 @@ public class WalkService {
                 .placeContentId(request.placeName() == null || request.placeName().isBlank()
                         ? null : blankToNull(request.placeContentId()))
                 .build();
+        companions.forEach(walk::walkWith);
 
         try {
             return new Saved(WalkResponse.withPath(walks.saveAndFlush(walk)), true);

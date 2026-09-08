@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **48개** 있다(전체 목록은 [부록 A](#부록-a-정본의-표-48개--어디에-적혀-있나)). 이 문서에 절이 있는 실재 표는 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§6 trail_route` · `§7 post` · `§8 comment` · `§9 reaction` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` · `§18 emotion_card` · `§19 card_comment` · `§20 card_reaction` · `§21 kto_call_budget` · `§22 place_cell` · `§23 pet_place_detail` · `§24 place_catalog` · `§25 report` · `§26 report_snapshot` · `§27 user_block` · `§28 user_consent` 스물여섯이다. 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 절이 없는 21개는 감정 여행·관광 수집 시절의 표라 부록 A 에만 적었다 — 지우지 않고 격리한다(#174). 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **48개** 있다(전체 목록은 [부록 A](#부록-a-정본의-표-48개--어디에-적혀-있나)). 이 문서에 절이 있는 실재 표는 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§6 trail_route` · `§7 post` · `§8 comment` · `§9 reaction` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` · `§18 emotion_card` · `§19 card_comment` · `§20 card_reaction` · `§21 kto_call_budget` · `§22 place_cell` · `§23 pet_place_detail` · `§24 place_catalog` · `§25 report` · `§26 report_snapshot` · `§27 user_block` · `§28 user_consent` · `§31 course` · `§32 walk_dog` 스물여덟이다. 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 절이 없는 21개는 감정 여행·관광 수집 시절의 표라 부록 A 에만 적었다 — 지우지 않고 격리한다(#174). 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -161,7 +161,9 @@ CREATE TABLE dog (
 
 ## 4. `walk` — 산책 기록 (GPS 경로) (**실재**)
 
-산책 1건. GPS 경로를 `LINESTRING`으로 저장하고 거리(`distance_m`)·시간(`duration_s`)·메모·날씨를 함께 보관. `dog` 1:N `walk`. 페이스는 `distance_m`/`duration_s`로 파생(비저장).
+산책 1건. GPS 경로를 `LINESTRING`으로 저장하고 거리(`distance_m`)·시간(`duration_s`)·메모·날씨를 함께 보관. 페이스는 `distance_m`/`duration_s`로 파생(비저장).
+
+> **함께 나간 아이들은 `walk_dog`(§32)가 든다 (#343).** `dog_id` 는 남지만 이제 **대표 아이**(앱이 고른 목록의 첫 마리)라는 뜻이다 — 두 마리를 함께 데리고 나간 산책은 `walk_dog` 에 두 줄이 된다. **아이별 통계·목록은 `dog_id` 가 아니라 `walk_dog` 를 본다.** `dog_id` 로 좁히면 둘째 아이의 산책이 통째로 사라지고, 오류가 안 나므로 아무도 모른다.
 
 > **[ADR-0015](../99-decisions/decision-log.md#adr-0015--산책-경로는-linestring-으로-저장하되-spatial-index-는-만들지-않는다) 로 두 줄이 바뀌었다.** 원래 이 절은 `path` 를 `NOT NULL` 로 두고 `SPATIAL INDEX spx_walk_path` 를 걸었다. 인덱스를 뺀 이유는 저장소에 **`walk` 를 공간으로 묻는 질의가 하나도 없어서**이고, `NOT NULL` 을 푼 이유는 MySQL 이 `SPATIAL INDEX` 에 `NOT NULL` 을 요구하는데 **경로 없는 산책이 실제로 있기 때문**이다 — 손으로 입력한 기록과 위치 권한을 거부한 기록이 그렇다. 없는 경로를 만들어 넣으면 화면이 거짓말을 한다.
 
@@ -194,7 +196,7 @@ CREATE TABLE walk (
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `dog_id` | `BIGINT` | FK→`dog.id`, NOT NULL, INDEX(dog_id,started_at) | 산책한 강아지 |
+| `dog_id` | `BIGINT` | FK→`dog.id`, NOT NULL, INDEX(dog_id,started_at) | **대표 아이** (#343). 함께 나간 아이 전부는 `walk_dog`(§32)에 있고, 이 아이도 거기 한 줄 들어간다. 지우지 않는 이유 셋: 멱등키 `uq_walk_client` 의 앞자리, 소유권이 이 연관을 타고 `dog.user_id` 로 감, 이미 쌓인 기록이 전부 이 컬럼으로 이어져 있음 |
 | `started_at` | `DATETIME` | NOT NULL | 시작 시각 |
 | `ended_at` | `DATETIME` | NULL | 종료 시각(진행 중이면 NULL) |
 | `distance_m` | `INT` | NOT NULL 기본 0 | 거리(m) |
@@ -214,6 +216,8 @@ CREATE TABLE walk (
 > **목록 커서는 `created_at` 기준이다(`started_at` 이 아니다).** `started_at` 은 앱이 보낸 값이라, 오프라인에 쌓아 둔 산책이 며칠 뒤 과거 시각으로 들어온다. 그걸 커서로 쓰면 **이미 발급된 커서보다 아래 날짜의 행이 영원히 건너뛰어진다.** `idx_walk_dog(dog_id, started_at)` 은 주간 통계 집계가 쓴다.
 >
 > **`SRID` 는 `SchemaDdlDriftTest` 가 못 잡는다.** `information_schema.columns.column_type` 이 `linestring` 뿐이라 SRID 가 들어 있지 않다(ADR-0015 실측). 마이그레이션 사후검증에서 `st_geometry_columns.srs_id` 로 따로 본다.
+
+---
 
 ---
 
@@ -1058,6 +1062,34 @@ CREATE TABLE `course` (
 
 ---
 
+## 32. `walk_dog` — 한 번의 산책에 여러 마리 (**실재**)
+
+`walk` 는 아이 **하나**에 묶여 있었다. 두 마리를 함께 데리고 나가면 한 마리 것으로 저장되거나 같은 산책을 두 번 적어야 했다 — 프로필은 "우리 아이들" 을 여러 마리 받는데 산책만 한 마리였다.
+
+```sql
+CREATE TABLE walk_dog (
+  dog_id  BIGINT NOT NULL,
+  walk_id BIGINT NOT NULL,
+  PRIMARY KEY (dog_id, walk_id),
+  KEY fk_walkdog_walk (walk_id),
+  CONSTRAINT fk_walkdog_dog  FOREIGN KEY (dog_id)  REFERENCES dog (id)  ON DELETE CASCADE,
+  CONSTRAINT fk_walkdog_walk FOREIGN KEY (walk_id) REFERENCES walk (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `dog_id` | `BIGINT` | PK(1/2), FK→`dog.id` CASCADE | 함께 나간 아이 |
+| `walk_id` | `BIGINT` | PK(2/2), FK→`walk.id` CASCADE | 그 산책 |
+
+> **PK 가 `(dog_id, walk_id)` 순서인 것은 Hibernate 가 정하는 순서이고**(`mysql/init/01_schema.sql` 이 엔티티에서 재생성된다), 마침 바라던 순서다 — 이 표에 가장 자주 오는 질문이 "이 아이의 산책" 이라 `dog_id` 가 앞이어야 인덱스를 탄다. 반대 방향은 MySQL 이 `fk_walkdog_walk` 에 자동으로 만드는 인덱스가 받는다.
+>
+> **양쪽 FK 가 모두 `CASCADE` 다.** 이 표에는 사실이 없다 — "이 산책에 이 아이가 있었다" 라는 이음매뿐이라, 산책이나 아이가 사라지면 남을 이유가 없다. `care_log` 가 `SET NULL` 인 것과 다른 이유가 여기 있다: 거기는 "누가 밥을 줬다" 라는 **사실**이라 사람이 사라져도 남아야 한다.
+>
+> **대표 아이도 여기 한 줄 들어간다.** 안 넣으면 "아이별 통계" 가 `walk.dog_id` 와 이 표를 합쳐 봐야 하고, 그 합치기를 잊는 질의가 언젠가 하나 생긴다. `33_walk_dog.sql` 이 이미 쌓인 산책까지 채운다 — 안 채우면 아이별 통계가 과거를 전부 0 으로 말한다.
+>
+> **`@ManyToMany` 가 아니라 엔티티다.** 이 저장소에 `@ManyToMany` 는 하나도 없고, `@JoinTable` 에 Hibernate 의 `@OnDelete` 를 붙이면 **소유자 쪽 한 짝에만** 붙어 새 DB 와 마이그레이션한 DB 의 규칙이 달라진다.
+
 ## 인덱스 · 공간 인덱스 요약
 
 | 테이블 | 인덱스 | 종류 | 목적 |
@@ -1072,6 +1104,8 @@ CREATE TABLE `course` (
 | `course` | `idx_course_user(user_id, created_at)` | 보조 | 내 코스 최근 순 |
 | `course` | `idx_course_public(visibility, created_at)` | 보조 | 공개 코스 한 벌(지도의 "이웃 코스") |
 | `walk` | `spx_walk_path(path)` | **SPATIAL** | GPS 경로 공간 연산 |
+| `walk_dog` | `PRIMARY(dog_id, walk_id)` | PK | "이 아이의 산책" — 아이별 통계·목록이 앞자리를 탄다(#343) |
+| `walk_dog` | `fk_walkdog_walk(walk_id)` | 보조(FK 자동) | "이 산책의 아이들" |
 | `place` | `uq_place_src(source, external_id)` | UNIQUE | POI 중복 방지 |
 | `place` | `idx_place_category(category)` | 보조 | 카테고리 필터 |
 | `place` | `spx_place_geom(geom)` | **SPATIAL** | 주변 장소 검색 |
@@ -1106,6 +1140,7 @@ CREATE TABLE `course` (
 | 표 | 상태 | 모듈 | 한 줄 |
 | --- | --- | --- | --- |
 | `course` | 실재 §31 | `walk` | 내가 걸은 길 중에 남긴 코스 — 양 끝 100m 를 자른 선(#339) |
+| `walk_dog` | 실재 §32 | `walk`·`dog` | 한 번의 산책에 함께 나간 아이들(#343). 아이별 통계·목록이 이 표를 본다 |
 | `care_log` | 실재 §17 | `care` | 케어 로그 |
 | `chat_message` | 실재 §15 | `chat` | 채팅 메시지 |
 | `chat_room` | 실재 §12 | `chat` | 채팅방(범용) |

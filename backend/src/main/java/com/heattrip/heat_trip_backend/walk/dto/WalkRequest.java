@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 /**
  * 계약의 {@code WalkInput} — 이슈 #145.
@@ -27,6 +29,22 @@ import java.util.List;
 public record WalkRequest(
         @NotNull(message = "어느 반려동물의 산책인지 알려 주세요.")
         Long dogId,
+
+        /**
+         * 함께 나간 아이들 — 이슈 #343. <b>안 보내도 된다.</b>
+         *
+         * <p>안 보내면 {@link #dogId} 하나로 본다. 이미 나가 있는 앱이 이 필드를 모르고,
+         * 그 앱의 산책이 400 이 되면 안 된다 — 하위 호환은 <b>서버가 지는 짐</b>이다.
+         *
+         * <p>{@link #dogId} 가 목록에 없으면 서버가 <b>맨 앞에 넣는다.</b> 대표 아이를
+         * 빼고 보내는 것은 앱의 실수이지 "그 아이는 안 갔다" 는 뜻이 아니다 —
+         * {@code walk.dog_id} 는 어차피 그 값으로 저장된다.
+         *
+         * <p>최대 열 마리다. 실제로 한 사람이 열 마리를 한 번에 데리고 나가는 일은 없고,
+         * 상한이 없으면 한 요청이 이음매 행 수천 개를 만들 수 있다.
+         */
+        @Size(max = 10, message = "함께 나간 아이는 10마리까지입니다.")
+        List<@NotNull(message = "아이 식별자가 비었습니다.") Long> dogIds,
 
         @NotBlank(message = "산책 식별자가 필요합니다.")
         @Size(min = 8, max = 64, message = "산책 식별자는 8자 이상 64자 이하여야 합니다.")
@@ -80,6 +98,19 @@ public record WalkRequest(
         /** 화면에 나갈 이름. 카탈로그에 없는 곳은 이것만 보낸다. */
         @Size(max = 120, message = "장소 이름은 120자를 넘을 수 없습니다.")
         String placeName) {
+
+    /**
+     * 실제로 저장할 아이들 — 대표 아이가 맨 앞이고 중복이 없다 (#343).
+     *
+     * <p>앱이 {@code dogIds} 를 안 보냈으면 대표 아이 하나짜리 목록이다.
+     */
+    public List<Long> resolvedDogIds() {
+        List<Long> given = dogIds == null ? List.of() : dogIds;
+        return Stream.concat(Stream.of(dogId), given.stream())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
 
     /** 출처와 id 는 둘 다 있거나 둘 다 없어야 한다. */
     public boolean hasHalfPlaceRef() {

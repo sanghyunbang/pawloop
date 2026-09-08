@@ -899,4 +899,211 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     private record Account(long id, String token) { }
+
+    // ─────────────── 여러 마리 · 가족 공동 산책 (이슈 #343) ───────────────
+    //
+    // 여기서 재는 가장 중요한 것: **두 마리를 함께 데리고 나간 산책이 두 아이의 통계에
+    // 모두 잡히는가.** 예전에는 `walk.dog_id` 하나뿐이라 둘째 아이의 통계에서 그 산책이
+    // 통째로 사라졌고, 오류가 없으므로 아무도 모른 채 지나간다.
+
+    @Test
+    @DisplayName("두 마리를 함께 보내면 두 아이의 통계에 모두 잡힌다 — 완료 조건 1")
+    void oneWalkCountsForEveryDogThatCameAlong() throws Exception {
+        Account me = account("두마리");
+        long bori = dog(me, "보리");
+        long choco = dog(me, "초코");
+
+        save(me, """
+                {"dogId":%d,"dogIds":[%d,%d],"clientWalkId":"%s","startedAt":"%s",
+                 "distanceM":3000,"durationS":1800}
+                """.formatted(bori, bori, choco, UUID.randomUUID(), thisWeekMondayOnePm()))
+                .andExpect(status().isCreated());
+
+        assertThat(statsOf(me, bori).path("allTimeKm").asDouble()).isEqualTo(3.0);
+        assertThat(statsOf(me, choco).path("allTimeKm").asDouble())
+                .as("함께 나갔는데 초코의 통계에서 사라지면 이 이슈를 안 고친 것이다")
+                .isEqualTo(3.0);
+        assertThat(statsOf(me, choco).path("allTimeCount").asInt()).isEqualTo(1);
+
+        assertThat(statsOf(me, null).path("allTimeCount").asInt())
+                .as("전체는 한 번 걸은 것이다 — 두 아이에 잡힌다고 두 번이 되면 안 된다")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("한 마리만 보내면 다른 아이의 통계에는 안 잡힌다 — 섞이지 않는다")
+    void aSoloWalkStaysWithItsDog() throws Exception {
+        Account me = account("한마리");
+        long bori = dog(me, "보리");
+        long choco = dog(me, "초코");
+
+        save(me, walkJson(bori, thisWeekMondayOnePm(), 3000, 1800))
+                .andExpect(status().isCreated());
+
+        assertThat(statsOf(me, bori).path("allTimeCount").asInt()).isEqualTo(1);
+        assertThat(statsOf(me, choco).path("allTimeCount").asInt()).isZero();
+    }
+
+    @Test
+    @DisplayName("응답의 dogIds 는 대표 아이가 맨 앞이다 — 계약이 그렇게 말한다")
+    void theLeadDogComesFirstInTheResponse() throws Exception {
+        Account me = account("순서");
+        long bori = dog(me, "보리");
+        long choco = dog(me, "초코");
+
+        JsonNode saved = body(save(me, """
+                {"dogId":%d,"dogIds":[%d,%d],"clientWalkId":"%s","startedAt":"%s",
+                 "distanceM":1200,"durationS":900}
+                """.formatted(choco, bori, choco, UUID.randomUUID(), Instant.now().minusSeconds(900)))
+                .andExpect(status().isCreated()));
+
+        assertThat(saved.path("dogId").asLong()).isEqualTo(choco);
+        assertThat(ids(saved.path("dogIds")))
+                .as("목록의 순서가 아니라 dogId 가 맨 앞이다")
+                .containsExactly(choco, bori);
+    }
+
+    @Test
+    @DisplayName("dogIds 를 안 보내면 대표 아이 하나짜리다 — 이미 나가 있는 앱이 그대로 돈다")
+    void keepsWorkingWithoutTheNewField() throws Exception {
+        Account me = account("옛앱");
+        long bori = dog(me, "보리");
+
+        JsonNode saved = body(save(me, walkJson(bori, Instant.now().minusSeconds(900), 1200, 900))
+                .andExpect(status().isCreated()));
+
+        assertThat(ids(saved.path("dogIds")))
+                .as("빈 배열이나 null 을 주면 화면이 '아이 없는 산책' 을 그린다")
+                .containsExactly(bori);
+    }
+
+    @Test
+    @DisplayName("dogIds 에 대표 아이가 빠져 있어도 서버가 맨 앞에 넣는다")
+    void putsTheLeadDogBackWhenTheAppForgetsIt() throws Exception {
+        Account me = account("빠뜨림");
+        long bori = dog(me, "보리");
+        long choco = dog(me, "초코");
+
+        JsonNode saved = body(save(me, """
+                {"dogId":%d,"dogIds":[%d],"clientWalkId":"%s","startedAt":"%s",
+                 "distanceM":1200,"durationS":900}
+                """.formatted(bori, choco, UUID.randomUUID(), Instant.now().minusSeconds(900)))
+                .andExpect(status().isCreated()));
+
+        assertThat(ids(saved.path("dogIds"))).containsExactly(bori, choco);
+    }
+
+    @Test
+    @DisplayName("같은 아이를 두 번 보내도 한 줄이다")
+    void ignoresADuplicateInTheList() throws Exception {
+        Account me = account("중복");
+        long bori = dog(me, "보리");
+
+        JsonNode saved = body(save(me, """
+                {"dogId":%d,"dogIds":[%d,%d],"clientWalkId":"%s","startedAt":"%s",
+                 "distanceM":1200,"durationS":900}
+                """.formatted(bori, bori, bori, UUID.randomUUID(), Instant.now().minusSeconds(900)))
+                .andExpect(status().isCreated()));
+
+        assertThat(ids(saved.path("dogIds"))).containsExactly(bori);
+    }
+
+    @Test
+    @DisplayName("남의 아이를 섞어 보내면 404 다 — 그 아이 통계에 내 산책이 들어가면 안 된다")
+    void rejectsSomeoneElsesDogInTheList() throws Exception {
+        Account me = account("나");
+        Account other = account("남");
+        long mine = dog(me, "보리");
+        long theirs = dog(other, "남의아이");
+
+        save(me, """
+                {"dogId":%d,"dogIds":[%d,%d],"clientWalkId":"%s","startedAt":"%s",
+                 "distanceM":1200,"durationS":900}
+                """.formatted(mine, mine, theirs, UUID.randomUUID(), Instant.now().minusSeconds(900)))
+                .andExpect(status().isNotFound());
+
+        assertThat(statsOf(other, theirs).path("allTimeCount").asInt())
+                .as("한 줄이라도 들어갔으면 남의 통계가 늘어난다")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("아이로 좁힌 목록에도 함께 나간 산책이 나온다")
+    void theListForOneDogIncludesSharedWalks() throws Exception {
+        Account me = account("목록");
+        long bori = dog(me, "보리");
+        long choco = dog(me, "초코");
+
+        save(me, """
+                {"dogId":%d,"dogIds":[%d,%d],"clientWalkId":"%s","startedAt":"%s",
+                 "distanceM":3000,"durationS":1800}
+                """.formatted(bori, bori, choco, UUID.randomUUID(), Instant.now().minusSeconds(1800)))
+                .andExpect(status().isCreated());
+
+        JsonNode page = body(mockMvc.perform(get("/api/walks").param("dogId", String.valueOf(choco))
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk()));
+
+        assertThat(page.path("items").size())
+                .as("초코도 함께 나갔다 — 목록에서 빠지면 기록이 사라진 것으로 읽힌다")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("재전송은 아이 목록을 다시 쓰지 않는다 — 처음 저장한 것이 정본이다")
+    void aResendDoesNotRewriteTheDogs() throws Exception {
+        Account me = account("재전송");
+        long bori = dog(me, "보리");
+        long choco = dog(me, "초코");
+        String key = UUID.randomUUID().toString();
+        Instant started = Instant.now().minusSeconds(900);
+
+        save(me, """
+                {"dogId":%d,"dogIds":[%d,%d],"clientWalkId":"%s","startedAt":"%s",
+                 "distanceM":1200,"durationS":900}
+                """.formatted(bori, bori, choco, key, started))
+                .andExpect(status().isCreated());
+
+        JsonNode again = body(save(me, """
+                {"dogId":%d,"dogIds":[%d],"clientWalkId":"%s","startedAt":"%s",
+                 "distanceM":1200,"durationS":900}
+                """.formatted(bori, bori, key, started))
+                .andExpect(status().isOk()));
+
+        assertThat(ids(again.path("dogIds")))
+                .as("재전송의 목록이 원본을 조용히 바꾸면 초코의 기록이 사라진다")
+                .containsExactly(bori, choco);
+    }
+
+    @Test
+    @DisplayName("열한 마리는 400 이다 — 한 요청이 이음매를 무한정 만들지 않게 한다")
+    void rejectsTooManyDogs() throws Exception {
+        Account me = account("열한마리");
+        long bori = dog(me, "보리");
+        String many = java.util.stream.IntStream.rangeClosed(1, 11)
+                .mapToObj(i -> String.valueOf(bori + i))
+                .collect(java.util.stream.Collectors.joining(","));
+
+        save(me, """
+                {"dogId":%d,"dogIds":[%s],"clientWalkId":"%s","startedAt":"%s",
+                 "distanceM":1200,"durationS":900}
+                """.formatted(bori, many, UUID.randomUUID(), Instant.now().minusSeconds(900)))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** 통계 한 번. [dogId] 가 {@code null} 이면 전체다. */
+    private JsonNode statsOf(Account account, Long dogId) throws Exception {
+        var request = get("/api/walks/stats/weekly")
+                .header("Authorization", "Bearer " + account.token());
+        if (dogId != null) {
+            request = request.param("dogId", String.valueOf(dogId));
+        }
+        return body(mockMvc.perform(request).andExpect(status().isOk()));
+    }
+
+    private static java.util.List<Long> ids(JsonNode array) {
+        java.util.List<Long> out = new java.util.ArrayList<>();
+        array.forEach(node -> out.add(node.asLong()));
+        return out;
+    }
 }
