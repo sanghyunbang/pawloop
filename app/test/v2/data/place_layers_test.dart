@@ -136,14 +136,15 @@ void main() {
       expect(vets, isEmpty, reason: '반경을 푸는 것은 산책로 칩뿐이다 — 병원은 그대로 8km 다');
     });
 
-    test('산책로는 가까운 순 $kTrailNearestLimit개에서 잘린다 — 반경 대신 이 수가 상한이다', () async {
-      final trails = List.generate(kTrailNearestLimit + 5, (i) => {
+    /// 북쪽으로 1.1km 씩 벌린 코스 [count]개. 번호가 클수록 멀다.
+    PlaceCatalogRepository trailsSpacedNorth(int count, {double from = 37.5445}) {
+      final trails = List.generate(count, (i) => {
             ...trailJson,
             'contentId': 'trail:T_ROUTE_$i',
             'title': '코스 $i',
-            'lat': 37.5445 + i * 0.01, // 북쪽으로 1.1km 씩 — 멀수록 번호가 크다
+            'lat': from + i * 0.01,
           });
-      final r = PlaceCatalogRepository(
+      return PlaceCatalogRepository(
         client: MockClient((_) async => http.Response.bytes(
               utf8.encode(jsonEncode(trails)),
               200,
@@ -152,13 +153,35 @@ void main() {
         baseUrl: 'https://example.test',
         cacheDirectory: () async => tempDir,
       );
+    }
+
+    test('산책로도 반경 안이 차 있으면 반경만 본다 — 40km 밖을 "가까운" 이라 안 부른다', () async {
+      // #346 전에는 산책로만 반경을 아예 안 봤다. 코리아둘레길이 도심에서 8km 안이 늘
+      // 비었기 때문이다. 동네 길 1,302개가 들어와 그 전제가 사라졌다.
+      final r = trailsSpacedNorth(kTrailNearestLimit + 5);
 
       final nearest = await r.nearby(lat: 37.5445, lng: 127.0374, contentTypeId: 'trail');
 
-      expect(nearest, hasLength(kTrailNearestLimit));
+      expect(nearest.every((p) => p.distM <= 8000), isTrue,
+          reason: '반경 안이 비지 않았으면 반경 밖은 안 준다');
+      expect(nearest.first.contentId, 'trail:T_ROUTE_0');
+      expect(nearest.length, lessThan(kTrailNearestLimit),
+          reason: '1.1km 씩 벌렸으니 8km 안은 여덟 남짓이다 — 스무 개를 채우려 넓히면 안 된다');
+    });
+
+    test('반경 안이 비면 그때만 넓혀 가까운 순 $kTrailNearestLimit개', () async {
+      // 전부 100km 넘게 북쪽에 둔다 — 반경 안이 하나도 없는 상황.
+      final r = trailsSpacedNorth(kTrailNearestLimit + 5, from: 38.6);
+
+      final nearest = await r.nearby(lat: 37.5445, lng: 127.0374, contentTypeId: 'trail');
+
+      expect(nearest, hasLength(kTrailNearestLimit),
+          reason: '빈 목록을 주는 대신 넓힌다 — 산책로는 "가는 곳" 이다(#291)');
       expect(nearest.first.contentId, 'trail:T_ROUTE_0');
       expect(nearest.last.contentId, 'trail:T_ROUTE_${kTrailNearestLimit - 1}',
-          reason: '거리순으로 자른다 — 반경이 없어도 먼 것이 앞에 오면 안 된다');
+          reason: '거리순으로 자른다 — 넓혀도 먼 것이 앞에 오면 안 된다');
+      expect(nearest.first.distM, greaterThan(8000),
+          reason: '이때 화면이 "가장 가까운 코스는 N km 밖이에요" 를 띄운다(#328)');
     });
   });
 }
