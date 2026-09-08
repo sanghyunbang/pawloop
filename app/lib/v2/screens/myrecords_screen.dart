@@ -4,6 +4,9 @@ import '../widgets/aurora.dart';
 import '../data/walk_feed.dart';
 import '../data/walk_outbox.dart';
 import '../data/walk_repository.dart';
+import '../domain/pet.dart';
+import '../walk/walk_share.dart';
+import '../walk/walk_share_card.dart';
 import '../widgets/walk_feed_builder.dart';
 import 'create_screen.dart';
 import 'walk_detail_screen.dart';
@@ -14,7 +17,10 @@ class MyRecordsScreen extends StatelessWidget {
   final WalkFeed? feed;
   final WalkRepository? repository;
 
-  const MyRecordsScreen({super.key, this.feed, this.repository});
+  /// 공유 시트를 여는 함수 (#344). **테스트만 넘긴다.**
+  final Future<void> Function(WalkShareCard card)? share;
+
+  const MyRecordsScreen({super.key, this.feed, this.repository, this.share});
 
   static const _warm = LinearGradient(
     begin: Alignment(-0.7, -1),
@@ -308,6 +314,13 @@ class MyRecordsScreen extends StatelessWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (sheetCtx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.ios_share_rounded, color: Color(0xFFE07A4E)),
+            title: const Text('공유하기'),
+            subtitle: const Text('숫자만 담긴 카드 한 장',
+                style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+            onTap: () => Navigator.pop(sheetCtx, 'share'),
+          ),
           if (w.walkId != null)
             ListTile(
               leading: const Icon(Icons.edit_note_rounded, color: T.textSecondary),
@@ -328,8 +341,46 @@ class MyRecordsScreen extends StatelessWidget {
       await _confirmDelete(context, w);
     } else if (action == 'memo') {
       _openDetail(context, w);
+    } else if (action == 'share') {
+      await _share(context, w);
     }
   }
+
+  /// 기록 하나를 카드 한 장으로 (#344).
+  ///
+  /// **선이 없다.** 서버가 준 기록에는 좌표가 없다 — A안(#235)에서 경로는 기기 밖으로
+  /// 나가지 않기 때문이다. 그래서 여기서 나오는 카드는 숫자만 있는 한 장이고, 시트의
+  /// 부제가 그것을 미리 말한다("숫자만 담긴 카드 한 장").
+  Future<void> _share(BuildContext context, _RecordView w) async {
+    final dog = kMyDog.value?.name;
+    final messenger = ScaffoldMessenger.of(context);
+    if (dog == null || dog.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('아이를 먼저 등록해 주세요'),
+        duration: Duration(milliseconds: 1600),
+      ));
+      return;
+    }
+    try {
+      await (share ?? WalkShare.share)(WalkShareCard(
+        dogName: dog,
+        accent: const Color(0xFFFF8F63),
+        dateLabel: '${w.date} ${_timeOf(w.startedAt)} 출발',
+        distanceLabel: '${w.km.toStringAsFixed(1)}km',
+        timeLabel: '${w.minutes}분',
+        paceLabel: w.pace,
+      ));
+    } on WalkShareException catch (e) {
+      // await 뒤의 context 는 죽어 있을 수 있다 — 미리 잡아 둔 messenger 를 쓴다 (#63).
+      messenger.showSnackBar(SnackBar(
+        content: Text(e.message),
+        duration: const Duration(milliseconds: 1600),
+      ));
+    }
+  }
+
+  static String _timeOf(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Widget _cardBody(BuildContext context, _RecordView w) {
     return GlassCard(

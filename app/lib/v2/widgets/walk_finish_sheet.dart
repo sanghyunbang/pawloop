@@ -18,6 +18,8 @@ import '../theme/app_tokens.dart';
 import '../domain/walk_moment.dart';
 import '../walk/route_image.dart';
 import '../walk/route_photo_saver.dart';
+import '../walk/walk_share.dart';
+import '../walk/walk_share_card.dart';
 import 'walk_summary_row.dart';
 
 /// 화면 트리 밖에서 PNG 를 만드는 함수 — 테스트가 가짜를 꽂는 자리.
@@ -37,6 +39,19 @@ class WalkFinishSheet extends StatefulWidget {
   final RoutePhotoSaver saver;
   final RouteRenderer renderer;
 
+  /// 공유 카드에 들어가는 우리 아이 (#344). 아이가 없으면 카드도 없다 —
+  /// "누구와 걸었나" 가 이 카드의 첫 줄이라 이름 없이 낼 것이 아니다.
+  final String? dogName;
+
+  /// 아이 아바타의 테두리색. 카드의 강조색이 된다.
+  final Color dogColor;
+
+  /// 사용자가 붙인 장소 (#338). 없으면 카드에 자리 자체가 없다.
+  final String? placeName;
+
+  /// 공유 시트를 여는 함수 — 테스트가 가짜를 꽂는 자리.
+  final Future<void> Function(WalkShareCard card) shareCard;
+
   /// "기록 저장하기" · "저장 안 함". 시트를 닫는 것까지 부르는 쪽이 한다.
   final VoidCallback onSave;
   final VoidCallback onDiscard;
@@ -55,6 +70,10 @@ class WalkFinishSheet extends StatefulWidget {
     required this.onDiscard,
     required this.warm,
     this.renderer = RouteImage.renderPng,
+    this.dogName,
+    this.dogColor = const Color(0xFFFF8F63),
+    this.placeName,
+    this.shareCard = WalkShare.share,
   });
 
   /// 사진 아래에 적는 날짜 — "2026.09.06 14:20 출발".
@@ -68,6 +87,9 @@ class WalkFinishSheet extends StatefulWidget {
 }
 
 class _WalkFinishSheetState extends State<WalkFinishSheet> {
+  /// 카드를 그리는 동안 두 번 누르는 것을 막는다.
+  bool _sharing = false;
+
   bool _saving = false;
   bool _saved = false;
 
@@ -151,7 +173,7 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
           if (widget.art.drawable) ...[
             _preview(),
             const SizedBox(height: 10),
-            _photoButton(),
+            _shareRow(),
             const SizedBox(height: 12),
           ] else ...[
             const Text(
@@ -198,6 +220,64 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
           ),
         ),
       );
+
+  /// 공유하기 · 사진 저장 두 줄 — 이슈 #344.
+  ///
+  /// 공유가 먼저다. 갤러리 저장은 공유 시트 안에도 있지만, 한 번에 갤러리로 가고 싶은
+  /// 사람의 길을 없애지는 않는다(#310 이 만든 길이다).
+  /// 아이가 있으면 두 칸, 없으면 예전 그대로 한 칸.
+  ///
+  /// **빈 `Expanded` 를 남기지 않는다.** 자리만 차지해도 사진 버튼이 오른쪽 반쪽으로
+  /// 밀려 나 예전과 다른 화면이 된다 — 아직 아이를 안 넣은 사람에게는 바뀔 이유가 없다.
+  /// (넘치지는 않는다. 넘칠 것이라 짐작하고 적었다가 되돌려 보고 초록이라 고쳤다.)
+  Widget _shareRow() {
+    final dog = widget.dogName;
+    if (dog == null || dog.isEmpty) return _photoButton();
+    return Row(children: [
+      Expanded(child: _shareButton(dog)),
+      Expanded(child: _photoButton()),
+    ]);
+  }
+
+  /// 카드 한 장을 만들어 OS 공유 시트로 (#344).
+  ///
+  /// **아이 이름이 없으면 아예 안 그린다**([_shareRow] 가 거른다). 카드의 첫 줄이 아이
+  /// 이름이라 이름 없이 낼 것이 아니다.
+  Widget _shareButton(String dog) {
+    return TextButton.icon(
+      onPressed: _sharing ? null : () => _share(dog),
+      icon: Icon(Icons.ios_share_rounded,
+          size: 18, color: _sharing ? T.textMuted : const Color(0xFFE07A4E)),
+      label: Text(
+        _sharing ? '만드는 중…' : '공유하기',
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          color: _sharing ? T.textMuted : const Color(0xFFE07A4E),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _share(String dogName) async {
+    setState(() => _sharing = true);
+    try {
+      await widget.shareCard(WalkShareCard(
+        dogName: dogName,
+        accent: widget.dogColor,
+        dateLabel: widget.art.dateLabel,
+        distanceLabel: widget.distanceLabel,
+        timeLabel: widget.timeLabel,
+        paceLabel: widget.paceLabel,
+        placeName: widget.placeName,
+        lngLat: widget.art.lngLat,
+      ));
+    } on WalkShareException catch (e) {
+      if (mounted) _toast(e.message);
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
 
   Widget _photoButton() => TextButton.icon(
         onPressed: _saving || _saved ? null : _savePhoto,

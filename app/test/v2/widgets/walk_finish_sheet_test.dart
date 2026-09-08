@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:heat_trip_flutter/v2/domain/walk_moment.dart';
 import 'package:heat_trip_flutter/v2/walk/route_image.dart';
 import 'package:heat_trip_flutter/v2/walk/route_photo_saver.dart';
+import 'package:heat_trip_flutter/v2/walk/walk_share.dart';
+import 'package:heat_trip_flutter/v2/walk/walk_share_card.dart';
 import 'package:heat_trip_flutter/v2/widgets/walk_finish_sheet.dart';
 
 const _path = [
@@ -16,10 +18,21 @@ const _path = [
 
 final _fakePng = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]);
 
-({Widget sheet, List<String> savedNames, List<Uint8List> savedBytes, List<String> events}) fixture({
+({
+  Widget sheet,
+  List<String> savedNames,
+  List<Uint8List> savedBytes,
+  List<String> events,
+  List<WalkShareCard> sharedCards,
+}) fixture({
   List<List<double>> path = _path,
   RoutePhotoException? saveFails,
   List<WalkMoment> moments = const [],
+  // 아이 이름이 없으면 공유 버튼이 아예 안 그려진다 (#344) — 예전 테스트들이
+  // 이름 없이 부르므로 기본값도 없음이다.
+  String? dogName,
+  String? placeName,
+  WalkShareException? shareFails,
   // 요약 세 값은 길이가 고정이 아니다 — 두 시간을 넘기면 `120:45`, 10km 를 넘기면 `12.24km`,
   // 아직 못 잰 페이스는 `-'--"` 다. 좁은 화면 테스트가 긴 쪽을 넣어 본다.
   String timeLabel = '18:40',
@@ -29,6 +42,7 @@ final _fakePng = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]);
   final names = <String>[];
   final bytes = <Uint8List>[];
   final events = <String>[];
+  final cards = <WalkShareCard>[];
   final sheet = WalkFinishSheet(
     timeLabel: timeLabel,
     distanceLabel: distanceLabel,
@@ -51,9 +65,17 @@ final _fakePng = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]);
     }),
     onSave: () => events.add('save'),
     onDiscard: () => events.add('discard'),
+    dogName: dogName,
+    placeName: placeName,
+    // 진짜 공유 시트는 OS 가 연다 — 여기서는 "무엇을 넘겼는가" 만 본다.
+    shareCard: (card) async {
+      cards.add(card);
+      final f = shareFails;
+      if (f != null) throw f;
+    },
     warm: const LinearGradient(colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)]),
   );
-  return (sheet: sheet, savedNames: names, savedBytes: bytes, events: events);
+  return (sheet: sheet, savedNames: names, savedBytes: bytes, events: events, sharedCards: cards);
 }
 
 Future<void> pumpSheet(WidgetTester tester, Widget sheet) async {
@@ -265,5 +287,71 @@ void main() {
     await pumpSheetAt(tester, f.sheet, widthDp: 360);
 
     expect(valueSizeOf(tester, '1.2km'), 20);
+  });
+
+  // ── 공유하기 (#344) ─────────────────────────────────────────
+  group('공유하기', () {
+    testWidgets('아이가 있으면 사진 저장 옆에 공유하기가 있다', (tester) async {
+      final f = fixture(dogName: '보리');
+      await pumpSheet(tester, f.sheet);
+
+      expect(find.text('공유하기'), findsOneWidget);
+      expect(find.text('경로 사진 저장'), findsOneWidget,
+          reason: '갤러리로 바로 가던 길(#310)을 없애지 않는다');
+    });
+
+    testWidgets('아이가 없으면 공유 버튼이 아예 없다 — 첫 줄이 빈 카드를 만들지 않는다',
+        (tester) async {
+      await pumpSheet(tester, fixture().sheet);
+
+      expect(find.text('공유하기'), findsNothing);
+      expect(find.text('경로 사진 저장'), findsOneWidget);
+    });
+
+    testWidgets('누르면 이 산책의 값과 좌표가 그대로 카드로 간다', (tester) async {
+      final f = fixture(dogName: '보리', placeName: '서울숲');
+      await pumpSheet(tester, f.sheet);
+
+      await tester.tap(find.text('공유하기'));
+      await tester.pumpAndSettle();
+
+      expect(f.sharedCards, hasLength(1));
+      final card = f.sharedCards.single;
+      expect(card.dogName, '보리');
+      expect(card.distanceLabel, '1.24km');
+      expect(card.timeLabel, '18:40');
+      expect(card.placeName, '서울숲');
+      expect(card.lngLat, _path,
+          reason: '자르기 전 좌표를 그대로 넘긴다 — 자르는 곳은 카드 한 군데다(#339)');
+    });
+
+    testWidgets('공유가 실패하면 문구를 띄우고 시트는 살아 있다', (tester) async {
+      final f = fixture(dogName: '보리', shareFails: const WalkShareException('공유 앱 없음'));
+      await pumpSheet(tester, f.sheet);
+
+      await tester.tap(find.text('공유하기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('공유 시트를 열지 못했어요'), findsOneWidget);
+      expect(find.text('공유하기'), findsOneWidget, reason: '버튼이 다시 눌리는 상태로 돌아와야 한다');
+    });
+
+    testWidgets('아이가 없으면 사진 버튼이 예전 그대로 가운데 있다', (tester) async {
+      // 공유 버튼 자리를 빈 `Expanded` 로 남겨 두면 사진 버튼이 오른쪽 반쪽의
+      // 가운데(폭의 75%)로 밀려 난다. 넘치지는 않아서 넘침 검사로는 안 잡힌다.
+      await pumpSheetAt(tester, fixture().sheet, widthDp: 360);
+
+      final button = tester.getCenter(find.widgetWithText(TextButton, '경로 사진 저장'));
+      final sheet = tester.getCenter(find.byType(WalkFinishSheet));
+
+      expect((button.dx - sheet.dx).abs(), lessThan(1.0),
+          reason: '버튼이 ${button.dx}, 시트 가운데가 ${sheet.dx} — 빈 칸이 남아 있다');
+    });
+
+    testWidgets('폭 360dp — 버튼이 둘이 되어도 가로로 안 넘친다', (tester) async {
+      await pumpSheetAt(tester, fixture(dogName: '보리').sheet, widthDp: 360);
+
+      expect(tester.takeException(), isNull);
+    });
   });
 }
