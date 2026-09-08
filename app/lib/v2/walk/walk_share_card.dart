@@ -75,6 +75,32 @@ class WalkShareCard {
   bool get hasRoute => (trimmedPath?.length ?? 0) >= 2;
 }
 
+/// 함께 나간 아이들을 카드 첫 줄에 쓸 한 문장으로 (#343).
+///
+/// 한 마리면 이름 그대로, 둘이면 `보리 · 초코`, 셋 이상이면 `보리 외 2마리` 다.
+/// **셋부터 줄이는 이유**: 카드 첫 줄은 62pt 라 이름 셋이 들어가면 말줄임으로 잘린다.
+/// 잘린 이름은 안 적느니만 못하다.
+String joinDogNames(List<String> names) {
+  final kept = names.where((n) => n.trim().isNotEmpty).map((n) => n.trim()).toList();
+  if (kept.isEmpty) return '';
+  if (kept.length == 1) return kept.first;
+  if (kept.length == 2) return '${kept[0]} · ${kept[1]}';
+  return '${kept.first} 외 ${kept.length - 1}마리';
+}
+
+/// 받침이 있으면 `과`, 없으면 `와`.
+///
+/// 이것이 없으면 "구름와 2.1km 걸었어요" 가 나간다 — 남에게 보내는 글이라 조사 하나가
+/// 그대로 흠이 된다. 한글이 아닌 이름(영문·숫자)은 `와` 로 둔다: 한국어 화자가 읽을 때
+/// 대개 그렇게 읽고, 어느 쪽이든 틀린 규칙이 없다.
+String withParticle(String name) {
+  if (name.isEmpty) return '와';
+  final last = name.codeUnitAt(name.length - 1);
+  if (last < 0xAC00 || last > 0xD7A3) return '와';
+  // 한글 음절 = 초성×588 + 중성×28 + 종성. 나머지가 0 이면 받침이 없다.
+  return (last - 0xAC00) % 28 == 0 ? '와' : '과';
+}
+
 /// 1080×1350 한 장. 화면 트리 없이 `dart:ui` 로 그린다 — 테스트에서도 그대로 돈다.
 class WalkShareCardPainter extends CustomPainter {
   final WalkShareCard card;

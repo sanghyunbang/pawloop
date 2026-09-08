@@ -42,6 +42,19 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
      * **`findByClientKey` 만 예외다.** 그것은 멱등키 `uq_walk_client (dog_id, client_walk_id)`
      * 를 찾는 자리라 `walk.dog_id` 그대로여야 한다 — 이음매로 바꾸면 함께 나간 다른 아이의
      * id 로도 같은 산책이 잡혀, 재전송이 아닌 것을 재전송으로 본다.
+     *
+     * ── `w.dog.id = :dogId or exists(...)` 인 이유 ─────────────────────
+     *
+     * 이음매만 보면 **이음매가 없는 산책이 통째로 사라진다.** 배포 순서가 그 창을 연다:
+     * 마이그레이션을 먼저 돌리고(문서가 그렇게 적었다) 새 코드를 배포하기 전까지, 옛 코드가
+     * 저장한 산책에는 이음매 행이 없다. 그 산책은 대표 아이의 통계에서도 영영 안 보인다 —
+     * **오류 없이** 조용히.
+     *
+     * 실제로 겪었다. 개발 서버가 옛 빌드로 떠 있는 줄 모르고 산책을 하나 저장했더니,
+     * `walk` 에는 있고 `walk_dog` 에는 없는 행이 생겼다.
+     *
+     * 대표 아이 조건을 함께 두면 그 창이 닫힌다. 자료가 온전할 때는 **아무것도 더 잡지
+     * 않는다** — 대표 아이는 어차피 이음매에도 한 줄 있다.
      */
 
     /**
@@ -57,7 +70,7 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
             select w from Walk w
               join fetch w.dog d
              where d.user.id = :userId
-               and (:dogId is null or exists (
+               and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
              order by w.createdAt desc, w.id desc
             """)
@@ -75,7 +88,7 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
             select w from Walk w
               join fetch w.dog d
              where d.user.id = :userId
-               and (:dogId is null or exists (
+               and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
                and (w.createdAt < :cursorAt
                     or (w.createdAt = :cursorAt and w.id < :cursorId))
@@ -119,7 +132,7 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
     @Query("""
             select w from Walk w
              where w.dog.user.id = :userId
-               and (:dogId is null or exists (
+               and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
                and w.startedAt >= :fromUtc and w.startedAt < :toUtc
             """)
@@ -141,7 +154,7 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
                        coalesce(sum(w.durationS), 0L))
               from Walk w
              where w.dog.user.id = :userId
-               and (:dogId is null or exists (
+               and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
             """)
     WalkTotals sumAllTime(@Param("userId") long userId, @Param("dogId") Long dogId);
@@ -161,7 +174,7 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
                        w.placeSource, w.placeContentId, max(w.placeName), count(w))
               from Walk w
              where w.dog.user.id = :userId
-               and (:dogId is null or exists (
+               and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
                and w.placeSource is not null
                and w.placeContentId is not null

@@ -113,7 +113,26 @@ public class LocalTrailAsset {
                 summaryOf(t));
     }
 
-    /** {@code 3.4km · 약 1시간 30분 · 시작 성수교} — 두루누비 요약과 같은 결. */
+    /**
+     * 카드 한 줄에 들어가는 요약 — {@code 3.4km · 약 1시간 30분}.
+     *
+     * <h3>경유지를 안 쓴다</h3>
+     * <p>예전에는 {@code waypoints} 의 앞 세 곳을 이어 붙이고 {@code →…} 로 잘랐다. 화면이
+     * 그 줄을 다시 한 줄로 자르므로 사용자에게는 <b>"화살표 화살표 있다가 끊긴"</b> 문장으로
+     * 보였다(실제로 사장님이 그렇게 신고했다).
+     *
+     * <p>고쳐 쓰기도 어렵다. 1,302개 원본의 구분자가 <b>일곱 가지</b>다 —
+     * {@code →}(1008) · {@code -}(208) · {@code ~}(52) · {@code ,}(48) · {@code ->}(13) ·
+     * {@code >} · {@code ∼}. 게다가 {@code 둘레길(연화산유원지~송이재입구~연화산유원지)} 처럼
+     * 괄호가 걸쳐 있어 어떤 기준으로 잘라도 <b>반쪽짜리 이름</b>이 남는다. 그래서 카드에서는
+     * 빼고, 확실한 두 값(거리·시간)만 적는다.
+     *
+     * <h3>여덟 시간을 넘는 시간은 안 적는다</h3>
+     * <p>1,302개 중 315개가 다섯 시간을 넘고 가장 긴 것은 <b>88시간</b>이다. 국토종주급 코스의
+     * 완주 시간이라 "이 길을 산책하는 데 걸리는 시간" 이 아니다. 카드에 "약 88시간" 이 뜨면
+     * 사용자는 값이 깨진 줄 안다. <b>지어내지 않고 빼는 쪽</b>을 고른다 — 거리는 그대로 남아
+     * 얼마나 긴 길인지는 말해 준다.
+     */
     static String summaryOf(JsonNode t) {
         List<String> parts = new ArrayList<>(3);
         if (t.hasNonNull("lengthKm")) {
@@ -123,16 +142,16 @@ public class LocalTrailAsset {
                     : String.format(Locale.KOREA, "%.1fkm", km));
         }
         if (t.hasNonNull("minutes")) {
-            parts.add("약 " + humanMinutes(t.path("minutes").asInt()));
-        }
-        String waypoints = t.path("waypoints").asText("");
-        if (!waypoints.isBlank()) {
-            // 경유지가 길면 앞의 셋만 — 카드 한 줄에 들어가야 한다.
-            String[] hops = waypoints.split("→");
-            parts.add(hops.length <= 3 ? waypoints : String.join("→", hops[0], hops[1], hops[2]) + "→…");
+            int minutes = t.path("minutes").asInt();
+            if (minutes > 0 && minutes <= MAX_SHOWN_MINUTES) {
+                parts.add("약 " + humanMinutes(minutes));
+            }
         }
         return parts.isEmpty() ? null : String.join(" · ", parts);
     }
+
+    /** 이 시간을 넘으면 카드에 안 적는다 — 산책 시간이 아니라 완주 시간이다. */
+    static final int MAX_SHOWN_MINUTES = 480;
 
     /** {@code 90} → {@code 1시간 30분}. 한 시간 미만은 분만. */
     static String humanMinutes(int minutes) {

@@ -95,7 +95,11 @@ public class PlaygroundAsset {
                 emptyToNull(node.path("tel").asText("")),
                 null,
                 null,
-                emptyToNull(node.path("org").asText("")));
+                // 요약을 비운다. 여기 넣던 `org` 는 **관리 부서 이름**이라
+                // "농업기술센터 농산유통과" 같은 값이 반려견 놀이터 카드에 그대로 떴다 —
+                // 실제로 걸어 본 사장님이 "무슨 농업 공사냐" 고 물었다. 데이터는 맞지만
+                // 사용자가 읽을 문장이 아니다. 전화번호는 그대로 두므로 문의할 길은 남는다.
+                null);
     }
 
     private static String emptyToNull(String s) {

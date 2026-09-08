@@ -72,4 +72,18 @@ class PlaygroundAssetTest {
     void categoryIsInTheContract() {
         assertThat(PlaceDto.LAYER_SOURCES).contains(PlaceDto.SOURCE_PLAYGROUND);
     }
+    @Test
+    @DisplayName("요약이 비어 있다 — 관리 부서 이름(\"농업기술센터 농산유통과\")을 카드에 적지 않는다")
+    void doesNotShowTheManagingDepartment() {
+        // 데이터는 맞지만 사용자가 읽을 문장이 아니다. 반려견 놀이터 카드에 농업 부서 이름이
+        // 뜨면 "무슨 농업 공사냐" 가 된다 — 실제로 그렇게 신고가 왔다.
+        assertThat(playgrounds)
+                .allSatisfy(p -> assertThat(p.summary()).isNull());
+    }
+
+    @Test
+    @DisplayName("전화번호는 그대로 있다 — 문의할 길까지 없애지는 않는다")
+    void keepsTheTelephone() {
+        assertThat(playgrounds).anySatisfy(p -> assertThat(p.tel()).isNotBlank());
+    }
 }

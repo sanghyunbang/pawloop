@@ -11,6 +11,7 @@ import '../theme/app_tokens.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
 import '../domain/pet.dart';
+import '../walk/walk_share_card.dart' show joinDogNames;
 import '../domain/walk_moment.dart';
 import '../data/location_service.dart';
 import '../data/location_upload_policy.dart';
@@ -799,6 +800,21 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   /// `_startedAt` 이 없으면 `null` 이다. 트래킹이 시작되지 않았다는 뜻이고
   /// (`_start` 가 위치 없이는 아무것도 시작하지 않는다), 그러면 저장 화면이 손입력으로
   /// 열린다. 지어낸 값을 조용히 올리는 것보다 낫다.
+  /// 공유 카드 첫 줄에 쓸 이름 (#343). 시작 전에 고른 아이들 전부다.
+  ///
+  /// **고른 목록이 비어 있으면**(한 마리라 안 물었다) 선택된 아이 하나를 쓴다.
+  /// 이름을 못 찾은 id 는 조용히 뺀다 — 지운 아이의 이름은 더 이상 없다(#156).
+  String? _companionNames() {
+    if (widget.dogIds.isEmpty) return kMyDog.value?.name;
+    final byId = {for (final p in kMyPets.value) p.serverId: p.name};
+    final names = [
+      for (final id in widget.dogIds)
+        if (byId[id] != null) byId[id]!,
+    ];
+    final joined = joinDogNames(names);
+    return joined.isEmpty ? kMyDog.value?.name : joined;
+  }
+
   WalkDraft? _draft() {
     final startedAt = _startedAt;
     if (startedAt == null) return null;
@@ -849,7 +865,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
         // 공유 카드 (#344) — 아이 이름과 장소는 이 화면이 이미 알고 있다.
         // 색은 앱의 코랄을 쓴다: DogProfile 에 아이별 색이 없다(#344 본문의
         // "아바타 테두리색" 은 아직 저장되는 값이 아니다).
-        dogName: kMyDog.value?.name,
+        dogName: _companionNames(),
         placeName: widget.place?.title,
         warm: _warm,
         onSave: () {
