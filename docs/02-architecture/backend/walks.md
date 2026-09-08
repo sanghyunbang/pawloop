@@ -195,3 +195,20 @@
 | 이름만 | 카탈로그에 없는 곳은 `placeName` 만 저장된다. 기록 카드에는 보이지만 **"자주 가는 곳" 에는 안 들어간다** — 계약의 `PlaceRef` 가 출처와 id 를 요구한다 |
 | 이름이 비면 | 출처와 id 도 버린다(`WalkService.save`). 이름 없는 참조는 화면에 그릴 것이 없다 |
 | 자주 가는 곳 | `WalkRepository.topPlaces` — `(place_source, place_content_id)` 로 묶어 세고 상위 다섯. **전체 기간**이다(이번 주로 자르면 대부분 한두 개만 남는다). 같은 횟수면 이름순으로 갈라 순서가 매번 달라지지 않게 한다. 이름은 묶음 안의 `max()` |
+---
+
+## 여러 마리 · 가족 공동 산책 (#343)
+
+| 항목 | 내용 |
+| --- | --- |
+| 표 | `walk_dog (dog_id, walk_id)` — 마이그레이션 `33_walk_dog.sql`, 스키마 문서 [§32](../../03-database/schema.md). **양쪽 FK 가 `ON DELETE CASCADE`** 다: 이 표에는 사실이 없고 "이 산책에 이 아이가 있었다" 라는 이음매뿐이다 |
+| `walk.dog_id` | 지우지 않는다. **대표 아이**(앱이 고른 목록의 첫 마리)로 남는다 — 멱등키 `uq_walk_client (dog_id, client_walk_id)` 의 앞자리이고, 소유권이 이 연관을 타고 `dog.user_id` 로 간다. 그 아이도 `walk_dog` 에 한 줄 들어간다 |
+| 채우기 | `33_walk_dog.sql` 이 **이미 쌓인 산책을 전부 채운다.** 안 채우면 아이별 통계가 과거를 전부 0 으로 말하고, 오류가 안 나므로 아무도 모른다. 사후 검증이 그것을 잰다 |
+| 엔티티 | `WalkDog`(`@IdClass`) — `@ManyToMany` 가 아니다. `@JoinTable` 에 Hibernate 의 `@OnDelete` 를 붙이면 **소유자 쪽 한 짝에만** 붙어, `01_schema.sql` 이 만드는 새 DB 와 마이그레이션한 DB 의 규칙이 달라진다 |
+| 조회 | 아이별 필터 다섯 곳(`findPage`·`findPageAfter`·`findStartedBetween`·`sumAllTime`·`topPlaces`)이 `w.dog.id = :dogId` 대신 `exists (walk_dog)` 를 본다. **`findByClientKey` 만 예외** — 이음매로 바꾸면 함께 나간 다른 아이의 id 로도 잡혀 재전송이 아닌 것을 재전송으로 본다 |
+| 요청 | `WalkInput.dogIds` 는 **선택**이다. 안 보내면 `dogId` 하나로 본다(이미 나가 있는 앱이 그대로 돈다). `dogId` 가 목록에 없으면 서버가 맨 앞에 넣고, 중복은 접는다. 최대 10마리 |
+| 남의 아이 | 하나라도 섞이면 **404 로 통째로 거절**한다. 일부만 저장하면 사용자는 두 마리를 적었는데 한 마리만 남은 것을 모른다 |
+| 재전송 | 같은 `clientWalkId` 로 다시 오면 아이 목록을 **다시 쓰지 않는다.** 처음 저장한 것이 정본이다 |
+| 응답 | `Walk.dogIds` 는 항상 한 개 이상이고 **첫 번째가 `dogId`** 다. `walk_dog` 의 순서는 DB 가 정하므로 `WalkResponse` 가 대표 아이를 맨 앞으로 세운다 |
+| N+1 | `Walk.companions` 에 `@BatchSize(30)`. 목록은 한 번에 20건까지라 한 페이지를 한 번에 덮는다 |
+| 케어 로그 | 산책 저장 뒤 `walk` 케어 로그를 남기는 것은 **앱**이다(`WalkCareLink`, #326) — 서버의 walk 모듈은 care 를 모른다. 거리(`1.2km`)는 그 로그의 `memo` 로 간다: 계약의 `CareLog` 에 거리 축이 없고, 더하면 그 표가 두 가지 일을 하게 된다 |

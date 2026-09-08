@@ -249,7 +249,8 @@ class _CreateScreenState extends State<CreateScreen> {
   /// [moments] 는 산책 중에 누른 배변·마킹·물이다(#340). 같은 자리로 보내는 이유는
   /// 하루치를 세는 단위가 같아서다 — 가족이 없으면 셋 다 조용히 안 간다.
   void _afterSaved([List<WalkMoment> moments = const []]) {
-    unawaited((widget.careLink ?? WalkCareLink()).recordWalk(moments: moments));
+    unawaited((widget.careLink ?? WalkCareLink())
+        .recordWalk(moments: moments, km: km));
   }
 
   /// [seeRecords] 면 "보기" 가 붙는다 — 저장한 산책이 어디로 갔는지 홈이 말하지 않았다(#326).
