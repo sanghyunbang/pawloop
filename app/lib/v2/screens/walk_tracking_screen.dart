@@ -833,6 +833,11 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
         art: art,
         walkedAt: walkedAt,
         saver: RoutePhotoSaver.gallery(),
+        // 공유 카드 (#344) — 아이 이름과 장소는 이 화면이 이미 알고 있다.
+        // 색은 앱의 코랄을 쓴다: DogProfile 에 아이별 색이 없다(#344 본문의
+        // "아바타 테두리색" 은 아직 저장되는 값이 아니다).
+        dogName: kMyDog.value?.name,
+        placeName: widget.place?.title,
         warm: _warm,
         onSave: () {
           Navigator.pop(sheetCtx);
