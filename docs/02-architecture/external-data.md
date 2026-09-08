@@ -327,9 +327,13 @@ flowchart LR
 | 키 | `app.public-data.service-key` ← `PUBLIC_DATA_SERVICE_KEY`(없으면 `TOUR_API_SECRET`, 같은 공공데이터포털 키). 비어 있으면 `GET /api/walk-safety/now` 가 503 이고 앱은 카드를 안 그린다 |
 | 경로 | `GET /api/walk-safety/now?nx=&ny=` — `walksafety` 모듈(`controller/service/dto`, [walk-safety.md](backend/walk-safety.md)). 응답 `WalkSafetyNow`([openapi](../04-api/openapi.yaml)) |
 | 기상청 | `GET https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?dataType=JSON&base_date=YYYYMMDD&base_time=HH00&nx=61&ny=126` — 매시 40분에 그 시각 실황이 나오므로 40분 전을 시 단위로 내려 부른다(`WalkSafetyService.kmaBase`, KST). 쓰는 항목 `T1H`(기온) · `REH`(습도) · `RN1`(1시간 강수) · `PTY`(강수형태). 기온이 없으면 503 |
-| 에어코리아 | `MsrstnInfoInqireSvc/getMsrstnList`(측정소 목록, `dmX`=위도 `dmY`=경도, 서버 24h 캐시) → 격자 중심(`KmaGrid.toLatLng`, 역변환)에서 가장 가까운 측정소 → `ArpltnInforInqireSvc/getMsrstnAcctntRltmMesureDnsty?stationName=…&dataTerm=DAILY&ver=1.3` → `pm10Value` · `pm25Value`("-" 면 null). **API 마다 활용신청이 따로** — 승인 전에는 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR` 가 오고 응답의 PM 이 null 이다 |
+| 에어코리아 | `MsrstnInfoInqireSvc/getMsrstnList`(측정소 목록, `dmX`=위도 `dmY`=경도, 서버 24h 캐시) → 격자 중심(`KmaGrid.toLatLng`, 역변환)에서 가장 가까운 측정소 → `ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty?stationName=…&dataTerm=DAILY&ver=1.3` → `pm10Value` · `pm25Value`("-" 면 null). **API 마다 활용신청이 따로다**(둘 다 2026-09-08 승인). 게이트웨이 오류 둘을 헷갈리면 안 된다 — `SERVICE_KEY_IS_NOT_REGISTERED_ERROR` 는 **승인 전**이고, `NO_OPENAPI_SERVICE_ERROR`(해당 오픈API 서비스가 없거나 폐기됨)는 **우리 주소가 틀린 것**이다. 화면에서는 둘이 똑같이 보인다(PM 이 null) |
 | 한도 | IP 분당 30(`walk-safety` 버킷, `ApiRateLimitFilter`). 기상청 쿼터는 격자 캐시로 격자 수에 묶인다 |
 | 앱 | `app/lib/v2/data/walk_safety.dart`(격자 순변환 `kmaGrid` · 판정 규칙, 순수) · `walk_safety_repository.dart`(우리 서버 호출 · 30분 판정 캐시) · `widgets/walk_safety_card.dart` |
+
+> **승인이 났는데도 미세먼지가 안 붙었다(2026-09-08).** 실시간 측정의 오퍼레이션 이름에 글자 둘이 더 붙어 있었다 — `getMsrstnAcct`**`nt`**`RltmMesureDnsty` 로 부르고 있었고 진짜 이름은 `getMsrstnAcctoRltmMesureDnsty` 다. 게이트웨이는 `NO_OPENAPI_SERVICE_ERROR` 를 돌려줬는데 그 응답이 **승인 대기와 똑같이 보였다** — 둘 다 PM 이 null 이다. 통합 테스트가 `AirKoreaClient` 를 통째로 가짜로 바꾸고 있어서 **요청 주소를 보는 눈이 하나도 없었다.** 지금은 `AirKoreaClientTest` 가 나가는 URI 를 잰다.
+>
+> **측정소 목록을 못 받으면 5분만 기억한다**(`WalkSafetyService.EMPTY_STATIONS_TTL`). 부팅 직후 인허가 레이어 적재(8,110행)와 같은 호스트를 두고 겹치면 5초 읽기 제한을 넘긴다 — 실측 5,812ms · `ReadTimeoutException`. 승인 전에는 빈 목록을 한 시간 기억하는 것이 맞았지만, 승인된 지금 빈 목록의 뜻은 "이번엔 못 받았다" 라서 한 시간을 기억하면 그 한 번의 겹침 때문에 미세먼지가 한 시간 사라진다.
 
 ## 8. 동물병원 진료시간 — **여는 데이터가 없다** (#337)
 

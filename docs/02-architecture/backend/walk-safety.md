@@ -23,7 +23,7 @@ walksafety/
   controller/WalkSafetyController      GET /api/walk-safety/now?nx=&ny= → 200 · 400 · 503
   service/WalkSafetyService            격자 캐시 · 기준 시각(kmaBase, 매시 40분) · 가장 가까운 측정소
   service/KmaNowcastClient             getUltraSrtNcst — WebClient "kmaWebClient"
-  service/AirKoreaClient               getMsrstnList · getMsrstnAcctntRltmMesureDnsty — "airKoreaWebClient"
+  service/AirKoreaClient               getMsrstnList · getMsrstnAcctoRltmMesureDnsty — "airKoreaWebClient"
   service/PublicDataJson               봉투 읽기(게이트웨이 오류·서비스 오류·XML 은 "없음")
   service/KmaGrid                      격자 역변환(칸 중심) · 하버사인 · 범위 검사
   dto/WalkSafetyNowResponse
@@ -37,7 +37,9 @@ walksafety/
 | --- | --- |
 | 격자 범위 밖 | 400 — 기상청을 부르지 않는다 |
 | 기상청 실황 없음(키 없음·게이트웨이 오류·기온 항목 없음·타임아웃) | 503 — 반쪽 값을 주지 않는다. 앱은 카드를 안 그린다 |
-| 에어코리아 승인 전·실패 | 200 인데 `pm10`·`pm25`·`station` 이 null — 앱은 "미세먼지 정보 없음" |
+| 에어코리아 실패 | 200 인데 `pm10`·`pm25`·`station` 이 null — 앱은 "미세먼지 정보 없음". 측정소 목록을 못 받은 경우는 **5분만** 그 상태를 기억한다(`EMPTY_STATIONS_TTL`) |
+
+> 두 API 는 2026-09-08 에 활용신청이 승인됐다. 그런데도 PM 이 안 붙으면 **승인이 아니라 주소를 의심한다** — 오퍼레이션 이름이 틀리면 게이트웨이가 `NO_OPENAPI_SERVICE_ERROR` 를 주고, 그 응답은 승인 대기와 화면에서 구별되지 않는다. `AirKoreaClientTest` 가 나가는 URI 를 재고, `scripts/check-external-keys.sh` 가 실제로 불러 본다.
 
 ## 4. 테스트
 

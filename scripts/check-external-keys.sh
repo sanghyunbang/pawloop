@@ -79,7 +79,10 @@ ask() {
   elif printf '%s' "$body" | grep -q "SERVICE_KEY_IS_NOT_REGISTERED_ERROR"; then
     verdict="… 활용신청 대기"; note="SERVICE_KEY_IS_NOT_REGISTERED_ERROR"
   elif printf '%s' "$body" | grep -q "NO_OPENAPI_SERVICE_ERROR"; then
-    verdict="… 활용신청 대기"; note="NO_OPENAPI_SERVICE_ERROR (이 키로 열린 API 가 아니다)"
+    # 승인 대기가 **아니다.** 게이트웨이가 "그런 오퍼레이션이 없다" 고 말하는 것이라
+    # 대개 우리 쪽 경로가 틀렸다. 2026-09-08 에 실제로 그랬다 — 에어코리아 실시간 측정의
+    # 이름이 getMsrstnAcct(nt)RltmMesureDnsty 였고, 승인이 난 뒤에도 계속 이 오류였다.
+    verdict="✗ 주소가 틀렸다"; note="NO_OPENAPI_SERVICE_ERROR — 승인 문제가 아니라 오퍼레이션 이름/경로를 본다"
   elif printf '%s' "$body" | grep -q "LIMITED_NUMBER_OF_SERVICE_REQUESTS"; then
     verdict="⚠ 한도 초과"; note="오늘 호출 한도를 다 썼다 — 승인 자체는 살아 있다"
   else
@@ -140,7 +143,7 @@ check_public_data() {
     pending '"stationName"'
 
   ask "에어코리아 대기오염정보" \
-    "$BASE/B552584/ArpltnInforInqireSvc/getMsrstnAcctntRltmMesureDnsty?serviceKey=$KEY&returnType=json&numOfRows=1&pageNo=1&stationName=%EC%A4%91%EA%B5%AC&dataTerm=DAILY&ver=1.3" \
+    "$BASE/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty?serviceKey=$KEY&returnType=json&numOfRows=1&pageNo=1&stationName=%EC%A4%91%EA%B5%AC&dataTerm=DAILY&ver=1.3" \
     pending '"pm10Value"'
 }
 
