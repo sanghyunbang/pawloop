@@ -122,7 +122,13 @@ public class PlaceCatalogService {
         }
         List<PlaceCatalog> rows = new ArrayList<>();
         rows.add(kto.get());
-        for (CatalogSource layer : List.of(CatalogSource.LOCALDATA, CatalogSource.DURUNUBI)) {
+        // 출처를 손으로 세지 않는다 — 열거형이 늘면 여기도 함께 는다. #346 에서 넷째
+        // (LOCALTRAIL)를 더했을 때 여기와 LayerPlaceIndex 둘 다 이름을 적어 두고 있었고,
+        // 그래서 자산 1,302개가 place_catalog 에는 담겼는데 이 응답에는 한 곳도 안 나왔다.
+        for (CatalogSource layer : CatalogSource.values()) {
+            if (layer == CatalogSource.KTO) {
+                continue; // 위에서 먼저 넣었다.
+            }
             snapshots.find(layer).filter(r -> r.getItemCount() > 0).ifPresent(rows::add);
         }
         if (rows.size() == 1) {

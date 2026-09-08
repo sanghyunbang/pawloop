@@ -230,7 +230,7 @@ CREATE TABLE `place_catalog` (
   `payload` longtext NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_place_catalog_source` (`source`),
-  CONSTRAINT `chk_place_catalog_source` CHECK ((`source` in (_utf8mb4'kto',_utf8mb4'localdata',_utf8mb4'durunubi')))
+  CONSTRAINT `chk_place_catalog_source` CHECK ((`source` in (_utf8mb4'kto',_utf8mb4'localdata',_utf8mb4'durunubi',_utf8mb4'localtrail')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `place_cell` (

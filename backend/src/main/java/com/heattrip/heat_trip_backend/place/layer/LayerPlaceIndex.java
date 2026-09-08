@@ -73,19 +73,23 @@ public class LayerPlaceIndex {
         return parsed;
     }
 
-    /** 두 레이어를 합친 점 전부. */
+    /**
+     * KTO 를 뺀 레이어를 전부 합친 점.
+     *
+     * <p><b>출처를 손으로 세지 않는다.</b> 전에는 둘을 이름으로 적어 뒀는데, #346 이
+     * 넷째({@link CatalogSource#LOCALTRAIL})를 더했을 때 여기를 안 고쳐서 자산 1,302개가
+     * {@code place_catalog} 에는 담겼는데 카탈로그 응답에는 한 곳도 안 나왔다. 열거형이
+     * 늘면 여기도 함께 는다.
+     */
     public List<PlaceDto> allLayers() {
-        List<PlaceDto> local = places(CatalogSource.LOCALDATA);
-        List<PlaceDto> trails = places(CatalogSource.DURUNUBI);
-        if (trails.isEmpty()) {
-            return local;
+        List<PlaceDto> all = new java.util.ArrayList<>();
+        for (CatalogSource source : CatalogSource.values()) {
+            if (source == CatalogSource.KTO) {
+                // KTO 는 레이어가 아니다 — 카탈로그 응답에서 따로 이어 붙는다.
+                continue;
+            }
+            all.addAll(places(source));
         }
-        if (local.isEmpty()) {
-            return trails;
-        }
-        List<PlaceDto> both = new java.util.ArrayList<>(local.size() + trails.size());
-        both.addAll(local);
-        both.addAll(trails);
-        return both;
+        return all;
     }
 }

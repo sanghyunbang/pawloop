@@ -63,6 +63,7 @@ public class LayerCatalogService {
     private final KtoCallBudget budget;
     private final UpstreamGate gate;
     private final LayerCatalogProperties properties;
+    private final LocalTrailAsset localTrails;
     private final Clock clock;
 
     public LayerCatalogService(CatalogSnapshotStore snapshots,
@@ -74,6 +75,7 @@ public class LayerCatalogService {
                                KtoCallBudget budget,
                                UpstreamGate gate,
                                LayerCatalogProperties properties,
+                               LocalTrailAsset localTrails,
                                Clock clock) {
         this.snapshots = snapshots;
         this.localData = localData;
@@ -84,18 +86,42 @@ public class LayerCatalogService {
         this.budget = budget;
         this.gate = gate;
         this.properties = properties;
+        this.localTrails = localTrails;
         this.clock = clock;
     }
 
-    /** 둘 다 시도한다. 하나가 실패해도 다른 하나는 간다 — 서로 다른 API 다. */
+    /** 셋 다 시도한다. 하나가 실패해도 나머지는 간다 — 서로 다른 출처다. */
     public void refreshAll() {
         refreshLocalData();
         refreshDurunubi();
+        refreshLocalTrails();
+    }
+
+    /**
+     * 동네 길을 자산에서 담는다 — 이슈 #346. <b>외부를 안 부른다.</b>
+     *
+     * <p>원본(전국길관광정보표준데이터)의 갱신주기가 "연간" 이라 저장소에 넣어 둔 파일을
+     * 읽는다. 그래서 예산도 게이트도 안 쓴다 — 실패할 외부가 없다.
+     *
+     * <p>여기가 없으면 산책로 칩에 코리아둘레길만 남는다. 서울숲에서 가장 가까운 코스가
+     * 19.7km 밖 DMZ 18km 코스였다(#328 실측).
+     */
+    public Optional<PlaceCatalog> refreshLocalTrails() {
+        List<PlaceDto> places = localTrails.load();
+        if (places.isEmpty()) {
+            // 자산이 없거나 깨졌다. 지난 한 벌을 지우지 않는다 — 빈 한 벌로 덮으면
+            // 그 순간부터 동네 길이 사라진다.
+            log.warn("동네 길 자산이 비었다 — 지난 한 벌을 그대로 둔다");
+            return Optional.empty();
+        }
+        return snapshots.store(CatalogSource.LOCALTRAIL, places, places.size());
     }
 
     /** 레이어 한 벌이 없거나 {@code refreshDays} 보다 오래됐는가 — 기동 예열과 스케줄러가 본다. */
     public boolean needsRefresh() {
-        return isMissingOrStale(CatalogSource.LOCALDATA) || isMissingOrStale(CatalogSource.DURUNUBI);
+        return isMissingOrStale(CatalogSource.LOCALDATA)
+                || isMissingOrStale(CatalogSource.DURUNUBI)
+                || isMissingOrStale(CatalogSource.LOCALTRAIL);
     }
 
     boolean isMissingOrStale(CatalogSource source) {
