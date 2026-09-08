@@ -16,7 +16,7 @@ import java.util.Optional;
 
 /**
  * 한국환경공단 에어코리아 — 측정소 목록({@code MsrstnInfoInqireSvc/getMsrstnList})과 측정소별
- * 실시간 측정({@code ArpltnInforInqireSvc/getMsrstnAcctntRltmMesureDnsty}).
+ * 실시간 측정({@code ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty}).
  *
  * <p>두 API 는 공공데이터포털에서 <b>따로 활용신청</b>해야 한다. 승인 전에는
  * {@code SERVICE_KEY_IS_NOT_REGISTERED_ERROR} 가 오고 여기서는 빈 목록/빈 값이 된다 —
@@ -54,7 +54,7 @@ public class AirKoreaClient {
         if (serviceKey.isEmpty() || stationName == null || stationName.isBlank()) {
             return Optional.empty();
         }
-        String raw = get("/ArpltnInforInqireSvc/getMsrstnAcctntRltmMesureDnsty?serviceKey=" + serviceKey
+        String raw = get("/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty?serviceKey=" + serviceKey
                 + "&returnType=json&numOfRows=1&pageNo=1&dataTerm=DAILY&ver=1.3"
                 + "&stationName=" + URLEncoder.encode(stationName, StandardCharsets.UTF_8), "실시간 측정");
         return raw == null ? Optional.empty() : PublicDataJson.parseAirQuality(objectMapper, raw);

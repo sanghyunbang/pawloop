@@ -27,6 +27,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WalkSafetyService {
     static final Duration NOW_TTL = Duration.ofMinutes(10);
     static final Duration STATIONS_TTL = Duration.ofHours(24);
+
+    /** 측정소 목록을 못 받았을 때. 짧다 — 이유는 {@code stationList} 의 주석. */
+    static final Duration EMPTY_STATIONS_TTL = Duration.ofMinutes(5);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH00");
@@ -114,8 +117,11 @@ public class WalkSafetyService {
             return cached.value();
         }
         List<PublicDataJson.Station> fresh = air.stations();
-        // 승인 전(빈 목록)은 짧게만 기억한다 — 승인되면 한 시간 안에 붙는다.
-        Duration ttl = fresh.isEmpty() ? Duration.ofHours(1) : STATIONS_TTL;
+        // 빈 목록은 **아주 짧게만** 기억한다. 활용신청이 승인된 지금(2026-09-08) 빈 목록의 뜻은
+        // "승인 전" 이 아니라 대개 "이번엔 못 받았다" 다 — 부팅 직후 인허가 레이어 적재(8,110행)와
+        // 같은 호스트를 두고 겹치면 5초 읽기 제한을 넘긴다(실측 5,812ms · ReadTimeoutException).
+        // 한 시간을 기억하면 그 한 번의 겹침 때문에 미세먼지가 한 시간 동안 사라진다.
+        Duration ttl = fresh.isEmpty() ? EMPTY_STATIONS_TTL : STATIONS_TTL;
         stations = new CachedStations(fresh, at.plus(ttl));
         return fresh;
     }
