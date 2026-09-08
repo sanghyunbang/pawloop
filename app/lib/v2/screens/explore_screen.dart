@@ -668,8 +668,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// 목록 머리의 출처 한 마디 — 칩에 따라 다르다 (#291).
   String _sourceCaption() => switch (_catFilter) {
         'vet' || 'shop' => '행정안전부 인허가 · 전국',
-        'trail' => '두루누비 · 가까운 코스 $kTrailNearestLimit개 (거리 제한 없음)',
-        null => '관광공사 · 인허가 · 두루누비',
+        'trail' => '지자체 걷는 길 · 두루누비',
+        null => '관광공사 · 인허가 · 걷는 길',
         _ => '관광공사',
       };
 
