@@ -115,4 +115,67 @@ void main() {
       );
     });
   });
+  // ── 함께 나간 아이 이름 (#343) ────────────────────────
+  //
+  // 두 마리와 나갔는데 카드가 한 마리만 말하면, 남에게 보낸 그 한 장이 사실과 다르다.
+  // 에뮬레이터에서 실제로 그렇게 나왔다 — 카드 첫 줄이 "보리" 뿐이었다.
+  group('이름 합치기', () {
+    test('한 마리면 이름 그대로', () {
+      expect(joinDogNames(['보리']), '보리');
+    });
+
+    test('두 마리면 가운뎃점으로 잇는다', () {
+      expect(joinDogNames(['보리', '초코']), '보리 · 초코');
+    });
+
+    test('셋부터는 줄인다 — 62pt 첫 줄에 셋은 안 들어가고, 잘린 이름은 안 적느니만 못하다', () {
+      expect(joinDogNames(['보리', '초코', '콩이']), '보리 외 2마리');
+      expect(joinDogNames(['보리', '초코', '콩이', '나비']), '보리 외 3마리');
+    });
+
+    test('빈 이름은 세지 않는다', () {
+      expect(joinDogNames(['보리', '', '  ']), '보리');
+      expect(joinDogNames(const []), '');
+    });
+  });
+
+  // ── 조사 (#344) ───────────────────────────────────────
+  //
+  // "구름와 2.1km 걸었어요" 는 남에게 보내는 글에 그대로 흠으로 남는다.
+  group('조사', () {
+    test('받침이 없으면 와', () {
+      expect(withParticle('보리'), '와');
+      expect(withParticle('초코'), '와');
+      expect(withParticle('나비'), '와');
+    });
+
+    test('받침이 있으면 과', () {
+      expect(withParticle('구름'), '과');
+      expect(withParticle('콩'), '과');
+      expect(withParticle('보름달'), '과');
+    });
+
+    test('한글이 아니면 와 — 한국어 화자가 대개 그렇게 읽는다', () {
+      expect(withParticle('Bori'), '와');
+      expect(withParticle('123'), '와');
+      expect(withParticle(''), '와');
+    });
+
+    test('곁들이는 글이 조사까지 맞는다', () async {
+      String? text;
+      WalkShare.sender = (png, n, t) async => text = t;
+
+      await WalkShare.share(WalkShareCard(
+        dogName: '구름',
+        accent: const Color(0xFFFF8F63),
+        dateLabel: '2026.09.08 14:20 출발',
+        distanceLabel: '1.2km',
+        timeLabel: '00:24',
+        paceLabel: "20'00\"",
+        lngLat: _line(1000),
+      ));
+
+      expect(text, '구름과 1.2km 걸었어요');
+    });
+  });
 }

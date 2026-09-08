@@ -56,7 +56,7 @@ class WalkShare {
       await sender(
         png,
         'pawloop_walk_${DateTime.now().millisecondsSinceEpoch}.png',
-        '${card.dogName}와 ${card.distanceLabel} 걸었어요',
+        '${card.dogName}${withParticle(card.dogName)} ${card.distanceLabel} 걸었어요',
       );
     } on Object catch (e) {
       throw WalkShareException(e);

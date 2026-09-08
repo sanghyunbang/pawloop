@@ -112,4 +112,41 @@ class LocalTrailAssetTest {
                 * Math.sin(dLng / 2) * Math.sin(dLng / 2);
         return 2 * r * Math.asin(Math.sqrt(h));
     }
+    @Test
+    @DisplayName("요약에 경유지가 없다 — 화살표가 이어지다 잘리는 문장이 카드에 나갔다")
+    void summaryHasNoWaypointChain() {
+        // 원본의 구분자가 일곱 가지라(→ · - · ~ · , · -> · > · ∼) 어떤 기준으로 잘라도
+        // 반쪽짜리 이름이 남는다. 그래서 카드에서는 아예 뺀다.
+        assertThat(trails)
+                .filteredOn(p -> p.summary() != null)
+                .allSatisfy(p -> assertThat(p.summary())
+                        .doesNotContain("→")
+                        .doesNotContain("->")
+                        .doesNotContain("…")
+                        .doesNotContain("~"));
+    }
+
+    @Test
+    @DisplayName("여덟 시간을 넘는 완주 시간은 안 적는다 — \"약 88시간\" 은 값이 깨진 것으로 읽힌다")
+    void doesNotShowUnreasonableDurations() {
+        assertThat(trails)
+                .filteredOn(p -> p.summary() != null && p.summary().contains("시간"))
+                .allSatisfy(p -> {
+                    java.util.regex.Matcher m = java.util.regex.Pattern
+                            .compile("약 (\\d+)시간").matcher(p.summary());
+                    if (m.find()) {
+                        assertThat(Integer.parseInt(m.group(1)))
+                                .as("요약: %s", p.summary())
+                                .isLessThanOrEqualTo(8);
+                    }
+                });
+    }
+
+    @Test
+    @DisplayName("거리는 남는다 — 얼마나 긴 길인지는 말해 준다")
+    void keepsTheLength() {
+        assertThat(trails)
+                .filteredOn(p -> p.summary() != null)
+                .anySatisfy(p -> assertThat(p.summary()).contains("km"));
+    }
 }

@@ -57,6 +57,10 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
     @Autowired
     private JWTProvider jwtProvider;
 
+    /** 이음매 행을 직접 지워 "배포 창" 을 만든다 (#343). 서비스에는 그 길이 없다. */
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate joinRows;
+
     // ─────────────── 완료 조건 1 — 끝낸 산책이 서버에 남는다 ───────────────
 
     @Test
@@ -1105,5 +1109,22 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
         java.util.List<Long> out = new java.util.ArrayList<>();
         array.forEach(node -> out.add(node.asLong()));
         return out;
+    }
+    @Test
+    @DisplayName("이음매가 없는 산책도 대표 아이 통계에 남는다 — 배포 창에서 옛 코드가 저장한 행")
+    void aWalkWithoutAJoinRowStillCountsForItsLeadDog() throws Exception {
+        Account me = account("배포창");
+        long bori = dog(me, "보리");
+        save(me, walkJson(bori, thisWeekMondayOnePm(), 3000, 1800))
+                .andExpect(status().isCreated());
+
+        // 마이그레이션은 돌았는데 새 코드가 아직 안 올라간 창에서 저장된 산책을 흉내 낸다 —
+        // `walk` 에는 있고 `walk_dog` 에는 없다. 실제로 개발 서버에서 이 행이 생겼다.
+        joinRows.update("delete from walk_dog");
+
+        assertThat(statsOf(me, bori).path("allTimeCount").asInt())
+                .as("이음매만 보면 이 산책이 오류 없이 조용히 사라진다")
+                .isEqualTo(1);
+        assertThat(statsOf(me, null).path("allTimeCount").asInt()).isEqualTo(1);
     }
 }
