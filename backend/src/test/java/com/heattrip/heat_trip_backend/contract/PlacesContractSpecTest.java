@@ -161,8 +161,9 @@ class PlacesContractSpecTest {
     @DisplayName("PlaceCategory 의 KTO 값과 PlaceDto.KNOWN_CATEGORIES 가 같은 집합이다")
     void categoryValuesHaveOneSource() {
         Set<String> fromContract = new LinkedHashSet<>(enumOf("PlaceCategory"));
-        // 레이어 키 셋은 미구현이라 서버가 만들지 않는다 — 계약에만 있는 것이 맞다.
-        fromContract.removeAll(Set.of("vet", "shop", "trail"));
+        // 레이어 키는 KTO 의 contentTypeId 가 아니다 — 서버가 source 로 채운다.
+        // 넷째(playground)는 #346 에서 왔다.
+        fromContract.removeAll(PlaceDto.LAYER_SOURCES);
 
         assertThat(fromContract)
                 .as("갈리면 KTO 가 준 값을 서버가 그대로 실어 보내고 앱이 라벨을 못 찾아 빈 칸이 된다."

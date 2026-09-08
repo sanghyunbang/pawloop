@@ -64,6 +64,7 @@ public class LayerCatalogService {
     private final UpstreamGate gate;
     private final LayerCatalogProperties properties;
     private final LocalTrailAsset localTrails;
+    private final PlaygroundAsset playgrounds;
     private final Clock clock;
 
     public LayerCatalogService(CatalogSnapshotStore snapshots,
@@ -76,6 +77,7 @@ public class LayerCatalogService {
                                UpstreamGate gate,
                                LayerCatalogProperties properties,
                                LocalTrailAsset localTrails,
+                               PlaygroundAsset playgrounds,
                                Clock clock) {
         this.snapshots = snapshots;
         this.localData = localData;
@@ -87,6 +89,7 @@ public class LayerCatalogService {
         this.gate = gate;
         this.properties = properties;
         this.localTrails = localTrails;
+        this.playgrounds = playgrounds;
         this.clock = clock;
     }
 
@@ -95,6 +98,22 @@ public class LayerCatalogService {
         refreshLocalData();
         refreshDurunubi();
         refreshLocalTrails();
+        refreshPlaygrounds();
+    }
+
+    /**
+     * 반려견 놀이터를 자산에서 담는다 — 이슈 #346. <b>외부를 안 부른다.</b>
+     *
+     * <p>전국 표준데이터가 없어 시·군·구 파일을 사람이 받아 합친 것을 읽는다
+     * ({@code backend/tools/build_playgrounds.py}). 갱신은 배포로 한다.
+     */
+    public Optional<PlaceCatalog> refreshPlaygrounds() {
+        List<PlaceDto> places = playgrounds.load();
+        if (places.isEmpty()) {
+            log.warn("놀이터 자산이 비었다 — 지난 한 벌을 그대로 둔다");
+            return Optional.empty();
+        }
+        return snapshots.store(CatalogSource.PLAYGROUND, places, places.size());
     }
 
     /**
@@ -121,7 +140,8 @@ public class LayerCatalogService {
     public boolean needsRefresh() {
         return isMissingOrStale(CatalogSource.LOCALDATA)
                 || isMissingOrStale(CatalogSource.DURUNUBI)
-                || isMissingOrStale(CatalogSource.LOCALTRAIL);
+                || isMissingOrStale(CatalogSource.LOCALTRAIL)
+                || isMissingOrStale(CatalogSource.PLAYGROUND);
     }
 
     boolean isMissingOrStale(CatalogSource source) {
