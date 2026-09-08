@@ -195,6 +195,17 @@ bash scripts/local-ci.sh backend    # 하나만 (backend | app | docs)
 
 `ci.yml` 과 **같은 명령**을 돌리고 로그를 `build/local-ci/` 에 남깁니다. 이 저장소는 private 이라 액션이 계정의 Actions 분(minutes, 월 3,000분)을 씁니다. 분이 떨어지면 잡이 **시작조차 못 하고** 1~2초 만에 실패합니다(단계 0개·로그 없음) — 그때는 코드를 의심하기 전에 [Billing](https://github.com/settings/billing) 을 먼저 보고, 이 스크립트로 근거를 남긴 뒤 머지합니다.
 
+### 이 DB 에 마이그레이션이 어디까지 들어갔는지 보기
+
+```bash
+bash scripts/check-migrations.sh                                  # backend/.env 의 dev DB
+DB_HOST=… DB_PORT=… DB_NAME=… DB_USER=… DB_PASS=… bash scripts/check-migrations.sh
+```
+
+**저장소에 스크립트가 있는 것과 DB 에 들어간 것은 다른 사실입니다.** dev 는 `ddl-auto=update` 라 Hibernate 가 표와 컬럼을 만들어 주지만 **`CHECK` 제약은 절대 안 건드리고**, 운영의 `validate` 도 `CHECK` 와 PK 는 안 봅니다. 그래서 `CHECK` 만 고치는 마이그레이션은 양쪽 어디서도 안 잡힙니다 — 2026-09-08 에 실제로 둘이 빠져 있었고([#399](https://github.com/sanghyunbang/heattrip/pull/399)), 하나는 부팅마다 병원·펫샵 8,110곳을 받아 놓고 버리고 있었습니다.
+
+마이그레이션마다 "들어갔으면 반드시 참인 사실" 을 DB 에 묻고, 빠진 것이 있으면 **돌려야 할 파일 이름**을 찍고 1 로 끝납니다. 비밀번호는 `MYSQL_PWD` 로만 넘기므로 명령줄에도 화면에도 안 남습니다. `MigrationChecksAreCompleteTest` 가 "빠뜨린 파일이 없다" 를 잠급니다.
+
 ### 외부 API 키가 아직 살아 있는지 보기
 
 ```bash

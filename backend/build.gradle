@@ -227,6 +227,12 @@ tasks.named('test') {
     inputs.files(fileTree(dir: file('../docs/02-architecture'), include: '*.md'))
             .withPropertyName('architectureDocs')
             .withPathSensitivity(PathSensitivity.RELATIVE)
+    // MigrationChecksAreCompleteTest 가 읽는 운영 스크립트. 여기가 빠지면 스크립트에서
+    // 검사 한 줄을 지워도 test 가 UP-TO-DATE 로 건너뛴다 — 그 테스트가 지키는 것이 바로
+    // "빠뜨린 마이그레이션이 없다" 라서, 안 도는 순간 지키는 것이 없어진다(#177 과 같은 함정).
+    inputs.files(fileTree(dir: file('../scripts'), include: '**/*.sh'))
+            .withPropertyName('opsScripts')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
 
     // 테스트는 'test' 프로파일로 돈다 → src/test/resources/application-test.properties.
     // 이게 없으면 jwt.secret 등 기본값 없는 플레이스홀더 10개가 해결되지 않아
