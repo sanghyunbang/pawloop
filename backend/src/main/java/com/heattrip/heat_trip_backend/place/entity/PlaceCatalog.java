@@ -53,7 +53,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "place_catalog",
         uniqueConstraints = @UniqueConstraint(name = "uk_place_catalog_source", columnNames = "source"))
-@Check(name = "chk_place_catalog_source", constraints = "source in ('kto','localdata','durunubi')")
+@Check(name = "chk_place_catalog_source", constraints = "source in ('kto','localdata','durunubi','localtrail')")
 @Getter
 @Setter
 @NoArgsConstructor

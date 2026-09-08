@@ -43,6 +43,10 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import com.heattrip.heat_trip_backend.place.layer.LocalTrailAsset;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import static org.mockito.Mockito.when;
 
 /**
  * 동물병원·펫샵·산책로 레이어가 카탈로그에 이어 붙고, 주변 조회와 산책로 선 경로가 돈다 — 이슈 #291.
@@ -248,8 +252,20 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
     @Autowired
     private KtoBudgetProperties budgetProperties;
 
+    /**
+     * 동네 길 자산을 <b>비운다</b> — 이슈 #346.
+     *
+     * <p>이 클래스가 재는 것은 <b>API 로 오는 레이어</b>(인허가·두루누비)의 적재와 이어
+     * 붙이기다. 저장소에 커밋된 실자산 1,302개가 함께 담기면 여기 숫자가 전부 바뀌고,
+     * 자산을 새로 만드는 날마다 이 테스트가 깨진다 — 그건 이 테스트가 지키는 것이 아니다.
+     * 자산 자체는 {@code LocalTrailAssetTest} 가 따로 잰다.
+     */
+    @MockitoBean
+    private LocalTrailAsset localTrails;
+
     @BeforeEach
     void reset() {
+        when(localTrails.load()).thenReturn(List.of());
         jdbc.update("delete from kto_call_budget");
         jdbc.update("delete from place_catalog");
         jdbc.update("delete from pet_place_detail");
@@ -368,6 +384,32 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(kto.nearbyCalls.get()).isZero();
     }
 
+    @Test
+    @DisplayName("동네 길 자산이 카탈로그 응답까지 간다 — 출처를 손으로 세면 여기가 빈다")
+    void localTrailsReachTheCatalog() throws Exception {
+        // 자산이 주는 모양 그대로 — 두루누비와 안 겹치는 trail:lt… 다.
+        when(localTrails.load()).thenReturn(List.of(
+                new PlaceDto("trail:ltaaaa1", "서울숲길", PlaceDto.SOURCE_TRAIL, PlaceDto.SOURCE_TRAIL,
+                        null, 37.5445, 127.0374, "서울특별시 성동구", null, null, null, "4.2km · 약 1시간"),
+                new PlaceDto("trail:ltaaaa2", "한강수변길", PlaceDto.SOURCE_TRAIL, PlaceDto.SOURCE_TRAIL,
+                        null, 37.5450, 127.0400, "서울특별시 성동구", null, null, null, "6.6km · 약 2시간")));
+
+        layers.refreshAll();
+
+        // #346 전에는 카탈로그를 잇는 곳 둘이 출처 이름을 손으로 적어 두고 있었다
+        // (PlaceCatalogService · LayerPlaceIndex). 그래서 place_catalog 에는 담겼는데
+        // 이 응답에는 한 곳도 안 나왔다. 열거형을 도는 지금은 저절로 따라온다.
+        mockMvc.perform(get("/api/places/catalog"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.contentId == 'trail:ltaaaa1')].title").value("서울숲길"))
+                .andExpect(jsonPath("$[?(@.contentId == 'trail:ltaaaa2')].title").value("한강수변길"));
+
+        // 주변 조회도 같은 한 벌을 본다 — 여기가 비면 산책로 칩이 코리아둘레길로 돌아간다.
+        mockMvc.perform(get("/api/places/nearby")
+                        .param("lat", "37.5445").param("lng", "127.0374").param("category", "trail"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.contentId == 'trail:ltaaaa1')].title").value("서울숲길"));
+    }
     @Test
     @DisplayName("카테고리가 없으면 KTO 셀과 레이어를 합쳐 거리순이다")
     void nearbyWithoutCategoryMergesEverything() throws Exception {

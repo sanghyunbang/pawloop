@@ -229,6 +229,9 @@ want 1 "$(check_has ck_carelog_type pee)" "ck_carelog_type 이 pee 를 받는다
 step "30_users_neighborhood.sql"
 want 1 "$(has_column users neighborhood_code)" "users.neighborhood_code"
 
+step "31_place_catalog_localtrail.sql"
+want 1 "$(check_has chk_place_catalog_source localtrail)" "chk_place_catalog_source 가 localtrail 을 받는다 (안 받으면 동네 길이 조용히 안 담긴다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

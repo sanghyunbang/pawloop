@@ -27,7 +27,19 @@ public enum CatalogSource {
     LOCALDATA(2, "localdata"),
 
     /** 관광공사 두루누비 걷기여행길 — 산책로({@code trail}). 월 1회. */
-    DURUNUBI(3, "durunubi");
+    DURUNUBI(3, "durunubi"),
+
+    /**
+     * 동네 길 — 전국길관광정보표준데이터(#346). 산책로({@code trail})로 나간다.
+     *
+     * <p>여기만 <b>외부를 안 부른다.</b> 원본의 갱신주기가 "연간" 이라 저장소에 넣어 둔
+     * 자산({@code data/local_trails.json})을 읽는다 — {@link
+     * com.heattrip.heat_trip_backend.place.layer.LocalTrailAsset}.
+     *
+     * <p>두루누비와 행을 나눈 이유: 두루누비가 아픈 날 동네 길까지 사라지면 안 된다.
+     * 사용자에게는 둘 다 산책로 한 종류다.
+     */
+    LOCALTRAIL(4, "localtrail");
 
     private final int id;
     private final String wireValue;
