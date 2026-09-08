@@ -42,7 +42,19 @@ class WalkTrackingScreen extends StatefulWidget {
   /// 내 경로와 색이 다르다 — 겹쳐 놓고도 어느 쪽이 지금 걷는 것인지 알아야 한다.
   final List<List<double>>? courseLine;
 
-  const WalkTrackingScreen({super.key, this.resume, this.place, this.courseLine});
+  /// 함께 나간 아이들의 서버 id — 이슈 #343. 시작 전에 "누구랑 나가요?" 로 고른 것이다.
+  ///
+  /// **비어 있을 수 있다.** 한 마리면 묻지 않으므로 비고, 그때는 전송이 대표 아이 하나로
+  /// 보낸다(계약이 `dogIds` 를 선택으로 받는다).
+  final List<int> dogIds;
+
+  const WalkTrackingScreen({
+    super.key,
+    this.resume,
+    this.place,
+    this.courseLine,
+    this.dogIds = const [],
+  });
   @override
   State<WalkTrackingScreen> createState() => _WalkTrackingScreenState();
 }
@@ -792,6 +804,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
     if (startedAt == null) return null;
 
     return WalkDraft.fresh(
+      dogIds: widget.dogIds,
       startedAt: startedAt,
       endedAt: DateTime.now(),
       distanceM: (_km * 1000).round(),

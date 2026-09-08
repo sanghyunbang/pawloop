@@ -29,6 +29,7 @@ class _Walks implements WalkRepository {
   @override
   Future<ServerWalk> saveWalk({
     required int dogId,
+    List<int> dogIds = const [],
     required String clientWalkId,
     required DateTime startedAt,
     DateTime? endedAt,

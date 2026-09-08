@@ -28,7 +28,9 @@ erDiagram
     chat_room ||--o{ chat_room_invite : "초대코드"
     chat_room ||--o{ chat_message     : "메시지(room_seq 순)"
 
-    dog      ||--o{ walk      : "산책 기록"
+    dog      ||--o{ walk      : "산책 기록 (대표 아이)"
+    walk     ||--|{ walk_dog  : "함께 나간 아이들 (#343)"
+    dog      ||--o{ walk_dog  : "이 아이가 낀 산책"
     dog      |o--o{ care_log  : "케어 기록 (nullable, ON DELETE SET NULL - #154)"
 
     place    ||--o{ post      : "태그 (계획 - place 표는 아직 없다)"
@@ -76,6 +78,11 @@ erDiagram
         BOOLEAN  neutered
         VARCHAR  avatar
         DATETIME deleted_at "nullable - 소프트 삭제(#156). 산책은 남는다"
+    }
+
+    walk_dog {
+        BIGINT   dog_id  PK,FK "PK 앞자리 — '이 아이의 산책' 이 가장 잦은 질문"
+        BIGINT   walk_id PK,FK "둘 다 ON DELETE CASCADE — 이음매라 남길 사실이 없다"
     }
 
     walk {
@@ -328,7 +335,8 @@ erDiagram
 | `users` | 실재 | 앱 사용자 계정. **지금 DB 에 실재하는 테이블**이다. 소셜 계정의 식별 키는 `(provider, social_id)` 쌍이며 이메일이 아니다(#7). `role` 은 토큰 발급이 쓰고, `email` 은 카카오 미동의 시 NULL 이다. 공급자 집합은 [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략). |
 | `refresh_token` | 실재 | 앱 세션의 refresh 토큰 원장(#9). RT 는 JWT 가 아니라 불투명 난수이고 SHA-256 해시로 저장한다. 회전·재사용 감지·전 기기 로그아웃이 이 테이블 위에서 돈다. **실재.** |
 | `dog` | 실재 | 사용자의 반려견 프로필. 견종·크기·생일·중성화 여부. `users` 1:N `dog`. |
-| `walk` | 실재 | 산책 기록 1건. GPS 경로를 `LINESTRING`으로, 거리·시간·페이스·메모 저장. `dog` 1:N `walk`. |
+| `walk` | 실재 | 산책 기록 1건. GPS 경로를 `LINESTRING`으로, 거리·시간·페이스·메모 저장. `dog_id` 는 **대표 아이**이고, 함께 나간 아이 전부는 `walk_dog` 에 있다(#343). |
+| `walk_dog` | 실재 | 한 번의 산책에 함께 나간 아이들(#343). `walk` N:M `dog`. 이음매뿐이라 양쪽 FK 가 CASCADE 다. **아이별 통계·목록이 이 표를 본다.** |
 | `course` | 실재 | 산책 기록 중에 "여기 좋다" 고 남긴 코스(#339). `walk.path` 에서 **양 끝 100m 를 잘라 낸 선**을 들고, 산책을 지워도 남는다(`walk_id` 가 NULL 이 된다). 기본은 비공개이고 공개한 것만 지도의 "이웃 코스" 에 나온다. 가까운 것 고르기는 기기에서 한다(A안 #235). |
 | `care_log` | 실재 | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. `dog_id` 는 `dog.id` 로 가는 FK 다(**#154**, `ON DELETE SET NULL` — 반려동물이 지워져도 기록은 남는다). 값은 아직 항상 `NULL` — 쓰기 경로가 `dogId` 를 안 받는다([schema.md §17](./schema.md)). |
 | `family_group` | 실재 | 가족 케어 그룹. **이름과 생성 시각만** 든다 — 초대코드도 멤버십도 여기 없다. 방은 `chat_room` 이 `origin_kind`/`origin_ref` 로 불투명하게 가리킨다. |

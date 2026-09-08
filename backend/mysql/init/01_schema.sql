@@ -133,6 +133,23 @@ CREATE TABLE `comment` (
   CONSTRAINT `fk_comment_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `course` (
+  `distance_m` int NOT NULL,
+  `duration_s` int NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `walk_id` bigint DEFAULT NULL,
+  `visibility` varchar(10) NOT NULL,
+  `name` varchar(60) NOT NULL,
+  `tags` varchar(60) DEFAULT NULL,
+  `note` varchar(200) DEFAULT NULL,
+  `path` linestring NOT NULL /*!80003 SRID 4326 */,
+  PRIMARY KEY (`id`),
+  KEY `idx_course_user` (`user_id`,`created_at`),
+  KEY `idx_course_public` (`visibility`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `device_token` (
   `created_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -246,6 +263,7 @@ CREATE TABLE `place_cell` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `post` (
+  `course_id` bigint DEFAULT NULL,
   `created_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `updated_at` datetime(6) DEFAULT NULL,
@@ -256,12 +274,9 @@ CREATE TABLE `post` (
   `title` varchar(200) NOT NULL,
   `handle` varchar(255) DEFAULT NULL,
   `body` text NOT NULL,
-  `course_id` bigint DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_post_board_created` (`board`,`created_at`,`id`),
   KEY `idx_post_user` (`user_id`),
-  KEY `fk_post_course` (`course_id`),
-  CONSTRAINT `fk_post_course` FOREIGN KEY (`course_id`) REFERENCES `course` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_post_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `chk_post_board` CHECK ((`board` in (_utf8mb4'walk_review',_utf8mb4'pet_place',_utf8mb4'health',_utf8mb4'free',_utf8mb4'brag')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -373,6 +388,7 @@ CREATE TABLE `users` (
   `created_at` datetime(6) DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `updated_at` datetime(6) DEFAULT NULL,
+  `neighborhood_code` varchar(10) DEFAULT NULL,
   `provider` varchar(20) DEFAULT NULL,
   `role` varchar(20) NOT NULL,
   `social_id` varchar(191) DEFAULT NULL,
@@ -383,13 +399,11 @@ CREATE TABLE `users` (
   `password` varchar(255) DEFAULT NULL,
   `travel_type` varchar(255) DEFAULT NULL,
   `username` varchar(255) DEFAULT NULL,
-  `neighborhood_code` varchar(10) DEFAULT NULL,
   `age_group` enum('OVER14','UNDER14') DEFAULT NULL,
   `gender` enum('FEMALE','MALE','OTHER') DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_users_provider_social_id` (`provider`,`social_id`),
-  UNIQUE KEY `UK6dotkott2kjsp8vw4d0m25fb7` (`email`),
-  KEY `idx_users_neighborhood` (`neighborhood_code`)
+  UNIQUE KEY `UK6dotkott2kjsp8vw4d0m25fb7` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `walk` (
@@ -400,14 +414,14 @@ CREATE TABLE `walk` (
   `ended_at` datetime(6) DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `started_at` datetime(6) NOT NULL,
+  `place_source` varchar(16) DEFAULT NULL,
   `weather` varchar(30) DEFAULT NULL,
   `client_walk_id` varchar(64) NOT NULL,
+  `place_content_id` varchar(64) DEFAULT NULL,
+  `place_name` varchar(120) DEFAULT NULL,
   `memo` varchar(500) DEFAULT NULL,
   `path_t` json DEFAULT NULL,
   `path` linestring /*!80003 SRID 4326 */ DEFAULT NULL,
-  `place_source` varchar(16) DEFAULT NULL,
-  `place_content_id` varchar(64) DEFAULT NULL,
-  `place_name` varchar(120) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_walk_client` (`dog_id`,`client_walk_id`),
   KEY `idx_walk_dog` (`dog_id`,`started_at`),
@@ -416,25 +430,13 @@ CREATE TABLE `walk` (
   CONSTRAINT `fk_walk_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE `course` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL,
-  `walk_id` bigint DEFAULT NULL,
-  `name` varchar(60) NOT NULL,
-  `note` varchar(200) DEFAULT NULL,
-  `tags` varchar(60) DEFAULT NULL,
-  `path` linestring /*!80003 SRID 4326 */ NOT NULL,
-  `distance_m` int NOT NULL,
-  `duration_s` int NOT NULL,
-  `visibility` varchar(10) NOT NULL DEFAULT 'private',
-  `created_at` datetime(6) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_course_user` (`user_id`,`created_at`),
-  KEY `idx_course_public` (`visibility`,`created_at`),
-  KEY `fk_course_walk` (`walk_id`),
-  CONSTRAINT `fk_course_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_course_walk` FOREIGN KEY (`walk_id`) REFERENCES `walk` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `ck_course_visibility` CHECK (`visibility` in ('private','public'))
+CREATE TABLE `walk_dog` (
+  `dog_id` bigint NOT NULL,
+  `walk_id` bigint NOT NULL,
+  PRIMARY KEY (`dog_id`,`walk_id`),
+  KEY `fk_walkdog_walk` (`walk_id`),
+  CONSTRAINT `fk_walkdog_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_walkdog_walk` FOREIGN KEY (`walk_id`) REFERENCES `walk` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `walk_note` (

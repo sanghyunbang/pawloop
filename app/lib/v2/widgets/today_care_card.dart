@@ -458,12 +458,55 @@ class _TodayCareCardState extends State<TodayCareCard> {
       );
     }
 
-    return Row(children: [
-      for (int i = 0; i < kCareCardColumns.length; i++) ...[
-        if (i > 0) const SizedBox(width: 6),
-        Expanded(child: _cell(kCareCardColumns[i])),
+    final alreadyWalked = _familyWalkLine();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // 가족이 오늘 이미 걸었으면 한 줄로 말한다 (#343). **막지 않는다** — 하루 두 번
+      // 걷는 집도 있다. 몰라서 두 번 나가는 것과 알고 두 번 나가는 것은 다르다.
+      if (alreadyWalked != null) ...[
+        Row(children: [
+          const Icon(Icons.directions_walk_rounded, size: 15, color: Color(0xFFE07A4E)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(alreadyWalked,
+                maxLines: 2,
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+          ),
+        ]),
+        const SizedBox(height: 9),
       ],
+      Row(children: [
+        for (int i = 0; i < kCareCardColumns.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(child: _cell(kCareCardColumns[i])),
+        ],
+      ]),
     ]);
+  }
+
+  /// "아빠가 아침에 1.2km 걸었어요" — 이슈 #343.
+  ///
+  /// **남이 걸었을 때만이다.** 내가 걸은 것은 내가 안다 — 그 줄은 방금 한 일을 다시
+  /// 읽어 주는 것이라 자리만 차지한다.
+  ///
+  /// 거리는 케어 로그의 메모에 실려 온다([WalkCareLink.kmLabel]). 없으면 거리 없이
+  /// 적는다 — 옛 기록과 손으로 누른 산책 칸에는 메모가 없다.
+  String? _familyWalkLine() {
+    final latest = _latestOf(ServerCareType.walk);
+    if (latest == null) return null;
+    final me = widget.myUserId ?? AuthState.user?.id;
+    if (me != null && latest.doneByUserId == me) return null;
+
+    final name = latest.doneByName.isEmpty ? '누군가' : latest.doneByName;
+    final distance = latest.memo == null || latest.memo!.isEmpty ? '' : '${latest.memo} ';
+    return '$name${subjectParticle(name)} ${_partOfDay(latest.occurredAt)}에 $distance걸었어요';
+  }
+
+  static String _partOfDay(DateTime at) {
+    if (at.hour < 6) return '새벽';
+    if (at.hour < 12) return '아침';
+    if (at.hour < 18) return '오후';
+    return '저녁';
   }
 
   Widget _cell(ServerCareType type) {
@@ -511,6 +554,15 @@ class _TodayCareCardState extends State<TodayCareCard> {
               maxLines: 1,
               style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
             ),
+            // 산책 칸에만 거리가 붙는다 (#343). 다른 종류의 메모는 사용자가 쓴 글이라
+            // 다섯 칸 폭에 넣으면 잘려서 뜻을 잃는다.
+            if (type == ServerCareType.walk && (done.memo ?? '').isNotEmpty)
+              Text(
+                done.memo!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, color: color),
+              ),
           ],
         ]),
       ),

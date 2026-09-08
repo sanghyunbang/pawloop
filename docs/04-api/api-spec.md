@@ -486,6 +486,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 // Request
 {
   "dogId": 7,
+  "dogIds": [7, 9],                    // 함께 나간 아이들 (#343). 안 보내면 [dogId] 로 본다
   "startedAt": "2026-06-30T07:10:00+09:00",
   "endedAt":   "2026-06-30T07:48:00+09:00",
   "distanceM": 2400,
@@ -507,7 +508,8 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 // 201 Created
 {
   "id": 1012,
-  "dogId": 7,
+  "dogId": 7,                          // 대표 아이 = dogIds[0]
+  "dogIds": [7, 9],                    // 항상 한 개 이상. 첫 번째가 dogId 다 (#343)
   "startedAt": "2026-06-30T07:10:00+09:00",
   "endedAt": "2026-06-30T07:48:00+09:00",
   "distanceM": 2400,
@@ -521,9 +523,17 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 검증: `endedAt` > `startedAt`, `distanceM ≥ 0`, `dogId`는 본인 소유.
 
+> **여러 마리 (#343).** `dogIds` 는 **선택**이다 — 안 보내면 `dogId` 하나로 본다(이미 나가 있는 앱이 그대로 돈다). `dogId` 가 목록에 없으면 서버가 맨 앞에 넣고, 중복은 접는다. **남의 아이가 하나라도 섞이면 404 이고 통째로 거절한다** — 일부만 저장하면 사용자는 두 마리를 적었는데 한 마리만 남은 것을 모른다. 최대 10마리.
+>
+> **재전송(같은 `clientWalkId`)은 아이 목록을 다시 쓰지 않는다.** 처음 저장한 것이 정본이다.
+>
+> 저장되는 곳은 `walk_dog`(schema.md §4-1)이고 `walk.dog_id` 는 **대표 아이**로 남는다. `33_walk_dog.sql` 이 이미 쌓인 산책까지 채우므로, 옛 기록도 그 아이의 통계에 그대로 잡힌다.
+
 ### 5.2 산책 목록 — ✅ 구현(#145)
 
 `GET /api/walks?dogId={id}&from=2026-06-01&to=2026-06-30&limit=20&cursor=...`
+
+> **`dogId` 필터는 `dogIds` 전체를 본다 (#343).** 보리와 초코를 함께 데리고 나간 산책은 `dogId=초코` 로 좁혀도 나온다 — 대표 아이만 보면 둘째 아이의 기록이 사라진 것으로 읽힌다. 통계(`/api/walks/stats/weekly?dogId=`)도 같다.
 
 ```json
 // 200 OK

@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.walk.entity;
 
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -12,10 +13,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 import org.locationtech.jts.geom.LineString;
@@ -29,6 +32,9 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * 산책 한 건 — 이슈 #145, 문서는 {@code docs/03-database/schema.md §4}.
@@ -104,6 +110,28 @@ public class Walk {
             foreignKey = @ForeignKey(name = "fk_walk_dog"))
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Dog dog;
+
+    /**
+     * 함께 나간 아이들 — 이슈 #343. {@link #dog} 도 <b>여기 한 줄로 들어 있다.</b>
+     *
+     * <h3>대표 아이를 빼지 않는 이유</h3>
+     * <p>빼면 "이 아이의 산책" 을 묻는 곳이 매번 {@code walk.dog_id} 와 이 표를 합쳐 봐야
+     * 하고, 그 합치기를 잊는 질의가 언젠가 하나 생긴다. 그때 통계는 오류 없이 <b>조용히
+     * 적게</b> 센다.
+     *
+     * <h3>{@code @BatchSize}</h3>
+     * <p>목록은 한 번에 20건까지 나간다. 이것이 없으면 응답 하나에 지연 로딩 20번이 따로
+     * 나간다(N+1). 30 은 한 페이지를 한 번에 덮는 값이다.
+     *
+     * <h3>{@code orphanRemoval} 은 켜지 않는다</h3>
+     * <p>이 목록에서 아이를 빼는 경로가 없다 — 산책을 저장할 때 한 번 정해지고 그 뒤로
+     * 바뀌지 않는다. 켜 두면 "회고 다시 쓰기" 같은 경로에서 컬렉션을 건드리는 실수가
+     * 곧바로 행 삭제가 된다.
+     */
+    @OneToMany(mappedBy = "walk", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @BatchSize(size = 30)
+    @Builder.Default
+    private Set<WalkDog> companions = new LinkedHashSet<>();
 
     /** 앱이 만든 멱등키. 재전송이 두 줄이 되지 않게 한다. */
     @Column(name = "client_walk_id", nullable = false, length = 64)
@@ -208,6 +236,29 @@ public class Walk {
      */
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    /**
+     * 함께 나간 아이를 더한다 — 이슈 #343.
+     *
+     * <p><b>저장 전에</b> 부른다. {@code cascade = ALL} 이라 {@code walk} 를 저장할 때
+     * 이음매 행도 같이 들어간다. 같은 아이를 두 번 넣어도 복합 PK 가 막지만, 그 전에
+     * 여기서 걸러 INSERT 자체를 안 만든다.
+     */
+    public void walkWith(Dog companion) {
+        if (companions.stream().noneMatch(c -> c.getDog().getId().equals(companion.getId()))) {
+            companions.add(WalkDog.of(this, companion));
+        }
+    }
+
+    /**
+     * 함께 나간 아이들의 id — 계약의 {@code Walk.dogIds}.
+     *
+     * <p>순서는 넣은 순서다({@link LinkedHashSet}) — 앱이 고른 순서이고, 그 첫 번째가
+     * {@code walk.dog_id}(대표 아이)다.
+     */
+    public List<Long> dogIds() {
+        return companions.stream().map(c -> c.getDog().getId()).toList();
+    }
 
     @PrePersist
     void onCreate() {

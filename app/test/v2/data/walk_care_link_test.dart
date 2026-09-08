@@ -127,4 +127,33 @@ void main() {
     expect(ok, isFalse);
     expect(f.posts, isEmpty);
   });
+  // ── 거리 한 조각 (#343) ────────────────────────────────
+  //
+  // 가족 화면이 "엄마 · 08:10 · 1.2km" 로 읽고, 홈이 "엄마가 아침에 1.2km 걸었어요" 로
+  // 읽는다. 계약의 `CareLog` 에 거리 축이 없어서 메모에 싣는다 — 케어 로그는 "물·밥·
+  // 산책" 을 세는 표이지 산책 기록이 아니다.
+
+  test('거리를 주면 메모로 실려 간다', () async {
+    final f = _fixture();
+
+    await WalkCareLink(repository: f.repo).recordWalk(km: 1.24);
+
+    final body = jsonDecode(f.posts.first.body) as Map<String, dynamic>;
+    expect(body['memo'], '1.2km');
+  });
+
+  test('거리가 없으면 메모도 없다 — 손입력 기록에는 거리가 없을 수 있다', () async {
+    final f = _fixture();
+
+    await WalkCareLink(repository: f.repo).recordWalk();
+
+    final body = jsonDecode(f.posts.first.body) as Map<String, dynamic>;
+    expect(body.containsKey('memo'), isFalse);
+  });
+
+  test('0에 가까우면 안 적는다 — "0.0km 걸었어요" 는 말이 안 된다', () {
+    expect(WalkCareLink.kmLabel(0), isNull);
+    expect(WalkCareLink.kmLabel(0.04), isNull);
+    expect(WalkCareLink.kmLabel(0.05), '0.1km');
+  });
 }

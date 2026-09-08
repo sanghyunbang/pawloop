@@ -93,6 +93,7 @@ class WalkSync {
     try {
       final walk = await _repo.saveWalk(
         dogId: resolved,
+        dogIds: withDog.dogIds,
         clientWalkId: withDog.clientWalkId,
         startedAt: withDog.startedAt,
         endedAt: withDog.endedAt,

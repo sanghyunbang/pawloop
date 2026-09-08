@@ -29,6 +29,21 @@ import java.util.Optional;
  */
 public interface WalkRepository extends JpaRepository<Walk, Long> {
 
+    /*
+     * ── 아이별 조회는 walk.dog_id 가 아니라 walk_dog 를 본다 (#343) ──────────────
+     *
+     * 한 번의 산책에 여러 마리가 들어올 수 있게 되면서, `w.dog.id = :dogId` 는 **두 번째
+     * 이후 아이의 산책을 통째로 빠뜨린다.** 초코와 보리를 함께 데리고 나간 산책은
+     * `walk.dog_id` 가 보리 하나뿐이라, 초코의 통계에서 그 산책이 사라진다.
+     *
+     * 그래서 `exists (walk_dog)` 로 묻는다. 대표 아이도 그 표에 한 줄 들어 있으므로
+     * (`33_walk_dog.sql` 이 기존 기록까지 채운다) 한 마리짜리 산책도 그대로 나온다.
+     *
+     * **`findByClientKey` 만 예외다.** 그것은 멱등키 `uq_walk_client (dog_id, client_walk_id)`
+     * 를 찾는 자리라 `walk.dog_id` 그대로여야 한다 — 이음매로 바꾸면 함께 나간 다른 아이의
+     * id 로도 같은 산책이 잡혀, 재전송이 아닌 것을 재전송으로 본다.
+     */
+
     /**
      * 목록 첫 장. 정렬은 {@code (createdAt, id)} 내림차순이다 — {@code startedAt} 이 아니다.
      *
@@ -42,7 +57,8 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
             select w from Walk w
               join fetch w.dog d
              where d.user.id = :userId
-               and (:dogId is null or d.id = :dogId)
+               and (:dogId is null or exists (
+                    select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
              order by w.createdAt desc, w.id desc
             """)
     List<Walk> findPage(@Param("userId") long userId,
@@ -59,7 +75,8 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
             select w from Walk w
               join fetch w.dog d
              where d.user.id = :userId
-               and (:dogId is null or d.id = :dogId)
+               and (:dogId is null or exists (
+                    select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
                and (w.createdAt < :cursorAt
                     or (w.createdAt = :cursorAt and w.id < :cursorId))
              order by w.createdAt desc, w.id desc
@@ -102,7 +119,8 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
     @Query("""
             select w from Walk w
              where w.dog.user.id = :userId
-               and (:dogId is null or w.dog.id = :dogId)
+               and (:dogId is null or exists (
+                    select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
                and w.startedAt >= :fromUtc and w.startedAt < :toUtc
             """)
     List<Walk> findStartedBetween(@Param("userId") long userId,
@@ -123,7 +141,8 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
                        coalesce(sum(w.durationS), 0L))
               from Walk w
              where w.dog.user.id = :userId
-               and (:dogId is null or w.dog.id = :dogId)
+               and (:dogId is null or exists (
+                    select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
             """)
     WalkTotals sumAllTime(@Param("userId") long userId, @Param("dogId") Long dogId);
 
@@ -142,7 +161,8 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
                        w.placeSource, w.placeContentId, max(w.placeName), count(w))
               from Walk w
              where w.dog.user.id = :userId
-               and (:dogId is null or w.dog.id = :dogId)
+               and (:dogId is null or exists (
+                    select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
                and w.placeSource is not null
                and w.placeContentId is not null
                and w.placeName is not null
