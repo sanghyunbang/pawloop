@@ -95,6 +95,17 @@ class SpecTestInputsDeclaredTest {
     }
 
     @Test
+    @DisplayName("운영 스크립트(scripts/*.sh)가 test 태스크의 입력으로 선언돼 있다")
+    void opsScripts_areDeclaredAsTestInputs() {
+        // MigrationChecksAreCompleteTest 가 scripts/check-migrations.sh 를 읽어 "빠뜨린
+        // 마이그레이션이 없다" 를 지킨다. 선언이 없으면 그 스크립트에서 검사 한 줄을 지워도
+        // test 가 UP-TO-DATE 로 건너뛴다 — 지키는 것이 없어진다.
+        assertThat(buildGradle)
+                .contains("file('../scripts')")
+                .contains("withPropertyName('opsScripts')");
+    }
+
+    @Test
     @DisplayName("docker-compose.yml 이 test 태스크의 입력으로 선언돼 있다")
     void dockerCompose_isDeclaredAsTestInput() {
         // MySqlComposeParityTest 가 컨테이너 플래그를 compose 와 대조한다(#26).
