@@ -137,10 +137,11 @@ class MeScreen extends StatelessWidget {
               const SizedBox(height: 16),
               _accountLine(),
               // 아이가 없어도 설정·로그아웃은 닿아야 한다(#371).
-              if (!guest) ...[
-                const SizedBox(height: 22),
-                _accountCard(context),
-              ],
+              // **게스트도 설정에는 닿아야 한다**(#404) — 약관은 스토어가 앱 안에서 볼 수
+              // 있기를 요구하고(#165), 내 동네(#342)와 저녁 알림(#341)은 기기에만 사는
+              // 값이라 계정과 상관이 없다. 로그아웃만 뺀다 — 로그인한 적이 없다.
+              const SizedBox(height: 22),
+              guest ? _settingsOnlyCard(context) : _accountCard(context),
             ],
           );
         },
@@ -437,6 +438,22 @@ class MeScreen extends StatelessWidget {
       ),
     );
   }
+
+  /// 게스트의 설정 한 줄 — 로그아웃이 없다(#404).
+  ///
+  /// 전에는 게스트 프로필에 "로그인 / 회원가입" 버튼뿐이라 **약관도 내 동네도 알림도
+  /// 열 방법이 없었다.** 셋 다 로그인과 상관없는 값이다.
+  Widget _settingsOnlyCard(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(T.radius),
+        child: GlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(children: [
+            _row(Icons.settings_outlined, '설정', border: false,
+                onTap: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+          ]),
+        ),
+      );
 
   /// 아이가 없어도 로그인한 계정에는 설정과 로그아웃이 있어야 한다(#371). 전에는 등록 안내뿐이라
   /// 로그아웃할 길이 없었다 — 한 기기를 가족이 나눠 쓰면 앱 데이터를 지워야 계정을 바꿀 수 있었다.

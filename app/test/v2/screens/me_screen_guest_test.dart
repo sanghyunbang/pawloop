@@ -54,13 +54,15 @@ void main() {
     expect(find.text('로그아웃'), findsOneWidget);
   });
 
-  testWidgets('게스트의 빈 프로필에는 로그아웃이 없다', (tester) async {
+  testWidgets('게스트의 빈 프로필에는 로그아웃이 없다 — 설정은 있다', (tester) async {
     AuthState.resetForTest();
     AuthState.status.value = AuthStatus.unauthenticated;
     await tester.pumpWidget(const MaterialApp(home: MeScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('로그아웃'), findsNothing);
-    expect(find.text('설정'), findsNothing);
+    expect(find.text('로그아웃'), findsNothing, reason: '로그인한 적이 없다');
+    // 전에는 설정도 없었다. 그래서 그냥 둘러보는 사람은 **약관도 내 동네도 알림도**
+    // 열 방법이 없었다(#404). 셋 다 로그인과 상관없는 값이라 길을 열었다.
+    expect(find.text('설정'), findsOneWidget);
   });
 }

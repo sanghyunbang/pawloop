@@ -34,6 +34,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/neighborhood_tile.dart';
+import '../data/auth_state.dart';
 import '../widgets/walk_reminder_tile.dart';
 import 'intro_screen.dart';
 import 'settings/account_delete_screen.dart';
@@ -44,6 +45,9 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 게스트는 지울 계정이 없다(#404). 나머지 넷은 그대로 보인다 — 약관은 스토어 요건이고
+    // 내 동네·알림은 기기에만 사는 값이다.
+    final guest = AuthState.isGuest;
     return Scaffold(
       backgroundColor: T.lilacTop,
       body: AuroraBackground(
@@ -91,18 +95,20 @@ class SettingsScreen extends StatelessWidget {
                                     onDone: () => Navigator.of(context).maybePop(),
                                   )))),
                     ]),
-                    const SizedBox(height: 18),
-                    _section('계정'),
-                    _card([
-                      _row(
-                        context,
-                        Icons.person_remove_outlined,
-                        '회원 탈퇴',
-                        () => Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => const AccountDeleteScreen())),
-                        danger: true,
-                      ),
-                    ]),
+                    if (!guest) ...[
+                      const SizedBox(height: 18),
+                      _section('계정'),
+                      _card([
+                        _row(
+                          context,
+                          Icons.person_remove_outlined,
+                          '회원 탈퇴',
+                          () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => const AccountDeleteScreen())),
+                          danger: true,
+                        ),
+                      ]),
+                    ],
                     const SizedBox(height: 24),
                     // 하단 고정 — #82 완료 조건 6 이 정한 자리다.
                     const OperatorContact(),
