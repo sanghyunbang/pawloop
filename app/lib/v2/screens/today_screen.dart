@@ -40,8 +40,8 @@ class TodayScreen extends StatelessWidget {
           bottom: false,
           child: ValueListenableBuilder<DogProfile?>(
             valueListenable: kMyDog,
-            builder: (_, dog, __) => Padding(
-              padding: EdgeInsets.fromLTRB(22, 14, 22, MediaQuery.of(context).padding.bottom + 118),
+            builder: (_, dog, __) => _fitOrScroll(
+              context,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -127,6 +127,35 @@ class TodayScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// 들어가면 지금 모양 그대로, 안 들어가면 스크롤로 받는다 — 이슈 #396.
+  ///
+  /// 홈은 `Column` 하나로 서 있고 히어로가 `Expanded` 로 남는 자리를 먹는다. 그 구조는
+  /// 글자 크기가 1.0배일 때만 맞는다 — 사용자가 기기 글자 크기를 키우면 아래 카드들이
+  /// 자라는데 줄 자리가 없어 **노란 줄무늬**가 뜬다(360dp 에서 1.5배 13px · 2.0배 312px).
+  ///
+  /// 그렇다고 통째로 `SingleChildScrollView` 에 넣으면 높이가 무한이 되어 `Expanded` 가
+  /// 죽는다. 그래서 **뷰포트만큼을 최소 높이로 걸고** 그 안에서만 `Expanded` 를 살린다 —
+  /// 들어갈 때는 예전과 같은 화면이고, 안 들어갈 때만 스크롤이 생긴다.
+  ///
+  /// 잘라내지 않는 이유: 맨 아래가 "급할 때 · 가까운 동물병원"(#337)이다. 잘리면 아플 때
+  /// 닿아야 하는 자리가 화면 밖으로 나간다.
+  Widget _fitOrScroll(BuildContext context, {required Widget child}) {
+    const top = 14.0;
+    final bottom = MediaQuery.of(context).padding.bottom + 118;
+    return LayoutBuilder(
+      builder: (context, viewport) {
+        final room = viewport.maxHeight.isFinite ? viewport.maxHeight - top - bottom : 0.0;
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(22, top, 22, bottom),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: room > 0 ? room : 0),
+            child: IntrinsicHeight(child: child),
+          ),
+        );
+      },
     );
   }
 
@@ -234,28 +263,36 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
+  /// 글자를 키우면 두 버튼이 **위아래로** 선다 — 이슈 #396.
+  ///
+  /// 나란히 두면 좁은 쪽("코스 찾기")이 360dp 에서 1.5배부터 넘친다(2.0배 59px). 줄여서
+  /// 넣거나 말줄임으로 자르는 길도 있지만, 글자를 키운 사람에게 글자를 다시 줄여 보이는
+  /// 것은 설정을 무시하는 것이고 "코스 …" 는 무엇을 누르는지 알 수 없다. 한 줄에 하나씩
+  /// 두면 폭이 두 배로 늘어 어떤 배율에서도 온전한 이름이 보인다.
+  static const _stackButtonsFrom = 1.3;
+
   Widget _ctas(BuildContext context) {
+    final walk = _btn(
+      icon: Icons.pets,
+      label: '산책 시작',
+      gradient: _warm,
+      // 미로그인이면 로그인부터 — 30분 걷고 나서 벽을 만나지 않게 한다.
+      onTap: () => startWalk(context),
+    );
+    final course = _btn(
+      icon: Icons.map_outlined,
+      label: '코스 찾기',
+      gradient: null,
+      onTap: () => RootTab.index.value = 1, // 지도 탭
+    );
+
+    if (MediaQuery.textScalerOf(context).scale(15) >= 15 * _stackButtonsFrom) {
+      return Column(children: [walk, const SizedBox(height: 11), course]);
+    }
     return Row(children: [
-      Expanded(
-        flex: 3,
-        child: _btn(
-          icon: Icons.pets,
-          label: '산책 시작',
-          gradient: _warm,
-          // 미로그인이면 로그인부터 — 30분 걷고 나서 벽을 만나지 않게 한다.
-          onTap: () => startWalk(context),
-        ),
-      ),
+      Expanded(flex: 3, child: walk),
       const SizedBox(width: 11),
-      Expanded(
-        flex: 2,
-        child: _btn(
-          icon: Icons.map_outlined,
-          label: '코스 찾기',
-          gradient: null,
-          onTap: () => RootTab.index.value = 1, // 지도 탭
-        ),
-      ),
+      Expanded(flex: 2, child: course),
     ]);
   }
 
@@ -293,7 +330,10 @@ class TodayScreen extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 54,
+        // 높이를 못 박지 않는다 — 글자가 커지면 버튼이 함께 커진다(#396). 54 는 그대로
+        // 최소값이라 1.0배 화면은 예전과 같다.
+        constraints: const BoxConstraints(minHeight: 54),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           gradient: gradient,
@@ -307,8 +347,15 @@ class TodayScreen extends StatelessWidget {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, size: 20, color: filled ? Colors.white : T.textSecondary),
           const SizedBox(width: 8),
-          Text(label,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: filled ? Colors.white : T.textSecondary)),
+          // 위아래로 서지 않는 배율에서도 마지막 안전장치를 둔다 — 넘치면 줄무늬가 아니라
+          // 말줄임이 낫다. 실제로는 _stackButtonsFrom 이 먼저 막는다.
+          Flexible(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w700, color: filled ? Colors.white : T.textSecondary)),
+          ),
         ]),
       ),
     );

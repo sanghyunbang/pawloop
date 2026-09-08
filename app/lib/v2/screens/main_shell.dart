@@ -93,11 +93,25 @@ class _ShellNav extends StatelessWidget {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Icon(icon, size: 23, color: idx == i ? accent : T.textMuted),
                   const SizedBox(height: 3),
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: idx == i ? FontWeight.w800 : FontWeight.w500,
-                          color: idx == i ? accent : T.textMuted)),
+                  // 탭 라벨의 배율만 1.3 에서 멈춘다 — 이슈 #396.
+                  //
+                  // 네 칸이 한 알약을 나눠 쓰므로 360dp 에서 한 칸이 59dp 다. 2.0배의
+                  // "커뮤니티" 는 거기 안 들어가 두 줄로 접히고, 알약 높이 66 을 24px
+                  // 넘겼다. 자르면 "커뮤…" 가 되어 무엇을 누르는지 알 수 없다.
+                  //
+                  // 본문은 배율을 그대로 따른다 — 여기만 멈춘다. 화면을 읽는 글자와
+                  // 길을 찾는 표지판은 다르고, Material 의 NavigationBar 도 같은 이유로
+                  // 라벨 배율을 제한한다.
+                  MediaQuery.withClampedTextScaling(
+                    maxScaleFactor: 1.3,
+                    child: Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: idx == i ? FontWeight.w800 : FontWeight.w500,
+                            color: idx == i ? accent : T.textMuted)),
+                  ),
                 ]),
               ),
             );
@@ -113,7 +127,8 @@ class _ShellNav extends StatelessWidget {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
                   child: Container(
-                    height: 66,
+                    // 못 박지 않는다 — 1.3배까지 라벨이 자라면 알약도 함께 자란다(#396).
+                    constraints: const BoxConstraints(minHeight: 66),
                     padding: const EdgeInsets.symmetric(horizontal: 18),
                     decoration: BoxDecoration(
                       color: const Color(0xAAFFFFFF),

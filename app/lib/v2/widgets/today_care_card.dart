@@ -349,17 +349,26 @@ class _TodayCareCardState extends State<TodayCareCard> {
         Row(children: [
           const Icon(Icons.diversity_1_rounded, size: 17, color: Color(0xFFFF8F63)),
           const SizedBox(width: 6),
-          const Text('오늘의 케어',
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
-          const Spacer(),
+          // Spacer 대신 Expanded 다 — 글자를 키우면 제목이 자라는데 Spacer 는 0 아래로
+          // 못 줄어들어 줄이 통째로 넘쳤다(360dp · 2.0배에서 38px, #396).
+          const Expanded(
+            child: Text('오늘의 케어',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
+          ),
           if (widget.onOpenFamily != null)
             GestureDetector(
               onTap: widget.onOpenFamily,
               behavior: HitTestBehavior.opaque,
-              child: const Row(children: [
-                Text('우리 가족',
-                    style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Flexible(
+                  child: Text('우리 가족',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                ),
                 Icon(Icons.chevron_right, size: 16, color: Color(0xFFE07A4E)),
               ]),
             ),
