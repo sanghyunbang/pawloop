@@ -19,12 +19,18 @@ import 'package:heat_trip_flutter/v2/domain/walk_moment.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/data/walk_sync.dart';
 
-WalkDraft draftOf({String? key, int distanceM = 2400, List<List<double>>? path}) {
+WalkDraft draftOf({
+  String? key,
+  int distanceM = 2400,
+  List<List<double>>? path,
+  List<int> dogIds = const [],
+}) {
   final fresh = WalkDraft.fresh(
     startedAt: DateTime(2026, 9, 1, 9, 0),
     endedAt: DateTime(2026, 9, 1, 9, 30),
     distanceM: distanceM,
     durationS: 1800,
+    dogIds: dogIds,
     path: path ??
         const [
           [126.9780, 37.5665],
@@ -38,6 +44,7 @@ WalkDraft draftOf({String? key, int distanceM = 2400, List<List<double>>? path})
     endedAt: fresh.endedAt,
     distanceM: fresh.distanceM,
     durationS: fresh.durationS,
+    dogIds: dogIds,
     path: fresh.path,
   );
 }
@@ -55,12 +62,16 @@ class _ScriptedRepository implements WalkRepository {
   /// 매 저장에 실린 점별 시각. `null` 이면 안 보낸 것이다 (#155).
   final List<List<int>?> sentPathT = [];
 
+  /// 매 저장에 실린 함께 나간 아이들 (#343). 빈 목록이면 안 보낸 것과 같다.
+  final List<List<int>> sentDogIds = [];
+
   @override
   Future<List<ServerPet>> pets() async => pets_;
 
   @override
   Future<ServerWalk> saveWalk({
     required int dogId,
+    List<int> dogIds = const [],
     required String clientWalkId,
     required DateTime startedAt,
     DateTime? endedAt,
@@ -75,6 +86,7 @@ class _ScriptedRepository implements WalkRepository {
     saveCalls++;
     savedKeys.add(clientWalkId);
     sentPathT.add(pathT);
+    sentDogIds.add(dogIds);
     final result = onSave?.call(clientWalkId);
     if (result is WalkFailure) throw result;
     return ServerWalk(
@@ -420,6 +432,68 @@ void main() {
     expect(read, isNotNull);
     expect(read!.moments, hasLength(1));
     expect(read.moments.single.kind, WalkMomentKind.poop);
+  });
+  // ── 여러 마리 (#343) ──────────────────────────────────────
+  //
+  // 초안에 실어 두는 이유는 장소(#338)와 같다 — 전송이 며칠 뒤일 수 있는데 그 사이에 고른
+  // 목록이 사라지면 다시 만들 수 없다. 비행기 모드에서 두 마리와 걸은 산책이 한 마리
+  // 것으로 올라가면 사용자는 알 길이 없다.
+  group('함께 나간 아이들', () {
+    test('앱을 껐다 켜도 목록이 남아 있다', () async {
+      final first = await WalkOutbox.open();
+      await first.put(draftOf(key: 'two-dogs', dogIds: const [7, 9]));
+
+      final second = await WalkOutbox.open();
+
+      expect(second.pending.single.dogIds, [7, 9]);
+    });
+
+    test('서버로 그대로 나간다', () async {
+      final repo = _ScriptedRepository(pets_: [
+        const ServerPet(
+            id: 7,
+            name: '보리',
+            species: ServerPetSpecies.dog,
+            size: ServerPetSize.small,
+            neutered: false)
+      ]);
+      final outbox = await WalkOutbox.open();
+
+      await WalkSync(repo, outbox).push(draftOf(key: 'two-dogs', dogIds: const [7, 9]));
+
+      expect(repo.sentDogIds.single, [7, 9]);
+    });
+
+    test('한 마리면 목록을 아예 안 보낸다 — 서버가 dogId 하나로 채운다', () async {
+      final repo = _ScriptedRepository(pets_: [
+        const ServerPet(
+            id: 7,
+            name: '보리',
+            species: ServerPetSpecies.dog,
+            size: ServerPetSize.small,
+            neutered: false)
+      ]);
+      final outbox = await WalkOutbox.open();
+
+      await WalkSync(repo, outbox).push(draftOf(key: 'solo'));
+
+      expect(repo.sentDogIds.single, isEmpty);
+    });
+
+    test('목록이 깨져 있으면 비운다 — 그 한 줄 때문에 산책을 잃지 않는다', () {
+      final draft = WalkDraft.tryParse({
+        'clientWalkId': 'broken-list',
+        'startedAt': DateTime(2026, 9, 1, 9, 0).toUtc().toIso8601String(),
+        'endedAt': DateTime(2026, 9, 1, 9, 30).toUtc().toIso8601String(),
+        'distanceM': 2400,
+        'durationS': 1800,
+        'path': const [],
+        'dogIds': 'seven',
+      });
+
+      expect(draft, isNotNull, reason: '초안을 통째로 버리면 걸은 기록이 사라진다');
+      expect(draft!.dogIds, isEmpty);
+    });
   });
 }
 

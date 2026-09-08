@@ -20,6 +20,8 @@ library;
 import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
+import '../domain/pet.dart';
+import '../widgets/walk_dog_picker.dart';
 import 'login_screen.dart';
 import '../data/walk_in_progress.dart';
 import '../data/walk_repository.dart';
@@ -51,6 +53,12 @@ Future<void> startWalk(
 
   /// "다시 걷기" 로 왔으면 따라 걸을 코스의 선 (#339). 지도에 연한 선으로 깔린다.
   List<List<double>>? courseLine,
+
+  /// 등록된 아이들. **테스트만 넘긴다** — 평소에는 [kMyPets] 를 읽는다.
+  List<DogProfile>? pets,
+
+  /// "누구랑 나가요?" 를 띄우는 함수 — 테스트가 가짜를 꽂는 자리 (#343).
+  Future<List<int>?> Function(BuildContext context, List<DogProfile> pets)? askDogs,
 }) async {
   if (!AuthState.isAuthenticated) {
     final messenger = ScaffoldMessenger.of(context);
@@ -101,7 +109,21 @@ Future<void> startWalk(
   if (!context.mounted) return;
   if (!await _confirmIfUnsafe(context, now: (now ?? DateTime.now)())) return;
   if (!context.mounted) return;
+
+  // 누구랑 나가나 (#343). **한 마리면 안 묻는다** — 대부분의 사용자가 한 마리이고,
+  // 그 사람에게는 시트 한 장이 산책 시작을 두 번 누르는 일로 만든다.
+  final myPets = pets ?? kMyPets.value;
+  var chosen = const <int>[];
+  if (WalkDogPicker.needed(myPets)) {
+    final picked = await (askDogs ?? WalkDogPicker.ask)(context, myPets);
+    // 닫았으면 시작하지 않는다. 빈 목록으로 밀어 넣으면 "누구 것도 아닌 산책" 이 된다.
+    if (picked == null) return;
+    if (!context.mounted) return;
+    chosen = picked;
+  }
+
   _courseLineForOpen = courseLine;
+  _dogIdsForOpen = chosen;
   await (openTracking ?? _openTracking)(context, null, place);
 }
 
@@ -137,12 +159,19 @@ Future<bool> _confirmIfUnsafe(BuildContext context, {required DateTime now}) asy
 /// 따라 걸을 선은 화면 인자로만 흐른다 — 초안·서버와 무관하다(#339).
 List<List<double>>? _courseLineForOpen;
 
+/// 함께 나갈 아이들 (#343). [_courseLineForOpen] 과 같은 자리를 쓴다 — `openTracking`
+/// 은 테스트가 꽂는 자리라 인자를 늘리면 그 시그니처가 함께 흔들린다.
+List<int> _dogIdsForOpen = const [];
+
 Future<void> _openTracking(BuildContext context, WalkInProgress? resume, WalkPlaceRef? place) {
   final line = _courseLineForOpen;
   _courseLineForOpen = null;
+  final dogs = _dogIdsForOpen;
+  _dogIdsForOpen = const [];
   return Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) => WalkTrackingScreen(resume: resume, place: place, courseLine: line),
+      builder: (_) =>
+          WalkTrackingScreen(resume: resume, place: place, courseLine: line, dogIds: dogs),
     ),
   );
 }

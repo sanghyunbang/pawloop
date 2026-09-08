@@ -448,6 +448,22 @@ class MyRecordsScreen extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(w.date, style: const TextStyle(fontSize: 12, color: Color(0xA8463C64))),
               ]),
+              // 함께 나간 아이들 (#343). **한 마리면 안 적는다** — 한 마리인 사람에게
+              // 매 카드마다 자기 아이 이름을 한 번 더 보여 줄 이유가 없다.
+              if (_companions(w) != null) ...[
+                const SizedBox(height: 3),
+                Row(children: [
+                  const Icon(Icons.pets_rounded, size: 12.5, color: Color(0xFFE07A4E)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(_companions(w)!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                  ),
+                ]),
+              ],
             ]),
           ),
         ]),
@@ -512,6 +528,21 @@ class MyRecordsScreen extends StatelessWidget {
     return '${t.month}월 ${t.day}일 (${w[t.weekday - 1]})';
   }
 
+  /// "보리 · 초코" — 두 마리 이상일 때만 (#343).
+  ///
+  /// 이름은 등록된 아이 목록에서 찾는다. **못 찾은 id 는 조용히 뺀다** — 지운 아이의
+  /// 산책은 계속 세지만(#156) 그 아이의 이름은 더 이상 없다. 거기에 "알 수 없음" 을
+  /// 적으면 사용자는 자기가 뭘 잘못한 줄 안다.
+  static String? _companions(_RecordView w) {
+    if (w.dogIds.length < 2) return null;
+    final byId = {for (final p in kMyPets.value) p.serverId: p.name};
+    final names = [
+      for (final id in w.dogIds)
+        if (byId[id] != null) byId[id]!,
+    ];
+    return names.length < 2 ? null : names.join(' · ');
+  }
+
   Widget _stat(IconData icon, String label) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -534,6 +565,10 @@ class _RecordView {
   final double km;
   final int minutes;
   final String memo;
+
+  /// 함께 나간 아이들의 서버 id (#343). 초안에는 아직 없어서 빈 목록이다 —
+  /// 전송 대기 카드에 아이 이름을 적으면, 그것이 곧 서버가 준 사실처럼 읽힌다.
+  final List<int> dogIds;
 
   /// 아직 서버에 없다. 카드에 "전송 대기" 뱃지가 붙는다.
   final bool pending;
@@ -568,6 +603,7 @@ class _RecordView {
     required this.minutes,
     required this.memo,
     required this.pending,
+    this.dogIds = const [],
     this.rejected = false,
     this.reason,
     this.walkId,
@@ -585,6 +621,7 @@ class _RecordView {
         minutes: w.minutes,
         memo: w.memo ?? '',
         pending: false,
+        dogIds: w.dogIds,
         walkId: w.id,
         clientWalkId: w.clientWalkId,
       );

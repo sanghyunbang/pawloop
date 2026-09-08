@@ -64,6 +64,17 @@ class WalkDraft {
   /// 아직 없으면 `null` 이고, 등록한 뒤 전송할 때 채워진다.
   final int? dogId;
 
+  /// 함께 나간 아이들의 **서버 id** — 이슈 #343.
+  ///
+  /// **비어 있을 수 있다.** 한 마리만 키우면 시작 전에 묻지 않으므로 비고, 그때는
+  /// [dogId] 하나로 보낸다(서버도 `dogIds` 를 선택으로 받는다). 아이가 둘 이상이면
+  /// `WalkDogPicker` 가 고른 것이 여기 담긴다.
+  ///
+  /// **초안에 실어 두는 이유**는 [place] 와 같다 — 전송이 며칠 뒤일 수 있는데 그 사이에
+  /// 고른 목록이 사라지면 다시 만들 수 없다. 비행기 모드에서 두 마리와 걸은 산책이
+  /// 한 마리 것으로 올라가면 사용자는 알 길이 없다.
+  final List<int> dogIds;
+
   /// 어디를 걸었나 (#338). 지도에서 "여기서 산책 시작" 으로 왔거나 저장 화면에서 골랐으면
   /// 채워진다. **초안에 실어 두는 이유**는 전송이 나중일 수 있기 때문이다 — 비행기 모드에서
   /// 저장한 산책이 며칠 뒤 올라갈 때 장소만 사라지면, 그 장소는 다시 만들 수 없다.
@@ -90,6 +101,7 @@ class WalkDraft {
     this.memo,
     this.weather,
     this.dogId,
+    this.dogIds = const [],
     this.place,
     this.moments = const [],
     this.lastError,
@@ -108,6 +120,7 @@ class WalkDraft {
     required List<List<double>> path,
     List<int> pathT = const [],
     int? dogId,
+    List<int> dogIds = const [],
     WalkPlaceRef? place,
     List<WalkMoment> moments = const [],
   }) =>
@@ -120,12 +133,14 @@ class WalkDraft {
         path: path,
         pathT: pathT,
         dogId: dogId,
+        dogIds: dogIds,
         place: place,
         moments: moments,
       );
 
   WalkDraft copyWith({
     int? dogId,
+    List<int>? dogIds,
     int? distanceM,
     int? durationS,
     String? memo,
@@ -150,6 +165,7 @@ class WalkDraft {
         memo: memo ?? this.memo,
         weather: weather ?? this.weather,
         dogId: dogId ?? this.dogId,
+        dogIds: dogIds ?? this.dogIds,
         place: dropPlace ? null : (place ?? this.place),
         // 저장 화면이 copyWith 로 이름·거리를 고칠 때 눌러 둔 것이 떨어지면 안 된다.
         moments: moments,
@@ -167,6 +183,7 @@ class WalkDraft {
         if (memo != null) 'memo': memo,
         if (weather != null) 'weather': weather,
         if (dogId != null) 'dogId': dogId,
+        if (dogIds.isNotEmpty) 'dogIds': dogIds,
         if (place != null) 'place': place!.toJson(),
         if (moments.isNotEmpty) 'moments': [for (final m in moments) m.toJson()],
         if (lastError != null) 'lastError': lastError,
@@ -212,6 +229,11 @@ class WalkDraft {
       memo: json['memo'] as String?,
       weather: json['weather'] as String?,
       dogId: (json['dogId'] as num?)?.toInt(),
+      // 목록이 깨졌으면 비운다 — 그러면 대표 아이 하나로 올라간다. 통째로 버리는 것보다
+      // 낫다(#155 의 pathT 와 같은 판단).
+      dogIds: json['dogIds'] is List
+          ? (json['dogIds'] as List).whereType<num>().map((n) => n.toInt()).toList()
+          : const [],
       // 장소는 모양이 다르면 없는 것으로 둔다 — 그것 하나 때문에 산책을 잃지 않는다.
       place: WalkPlaceRef.tryParse(json['place']),
       // 순간들도 같다 — 배변 한 줄이 깨졌다고 걸은 기록을 통째로 버리지 않는다(#340).

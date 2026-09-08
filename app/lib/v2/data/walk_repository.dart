@@ -145,7 +145,15 @@ class WalkPlaceRef {
 
 class ServerWalk {
   final int id;
+
+  /// **대표 아이.** [dogIds] 의 첫 번째와 같다.
   final int dogId;
+
+  /// 함께 나간 아이들 — 이슈 #343. **항상 한 개 이상**이고 첫 번째가 [dogId] 다.
+  ///
+  /// 옛 서버가 이 필드를 안 주면 `[dogId]` 로 채운다 — 빈 목록을 그대로 두면 화면이
+  /// "아이 없는 산책" 이라는, 있을 수 없는 상태를 그린다.
+  final List<int> dogIds;
 
   /// 앱이 만든 멱등키. **전송 대기 큐의 어느 항목이 저장된 것인지 맞춰 보는 데 쓴다.**
   final String clientWalkId;
@@ -167,6 +175,7 @@ class ServerWalk {
   const ServerWalk({
     required this.id,
     required this.dogId,
+    this.dogIds = const [],
     required this.clientWalkId,
     required this.startedAt,
     required this.distanceM,
@@ -198,9 +207,16 @@ class ServerWalk {
           .toList();
     }
 
+    final rawDogIds = json['dogIds'];
+    final dogIds = rawDogIds is List
+        ? rawDogIds.whereType<num>().map((n) => n.toInt()).toList()
+        : <int>[];
+
     return ServerWalk(
       id: id,
       dogId: dogId,
+      // 첫 번째가 대표 아이라는 것이 계약이다. 서버가 안 줬으면 그 아이 하나로 둔다.
+      dogIds: dogIds.isEmpty ? [dogId] : dogIds,
       clientWalkId: json['clientWalkId'] as String? ?? '',
       // 서버는 UTC 로 준다. 화면에 그릴 때 기기 시간대로 돌린다.
       startedAt: startedAt.toLocal(),
@@ -447,6 +463,11 @@ class WalkRepository {
   /// 서버가 400 으로 거절한다(계약이 그렇게 선언했고 서버가 검사한다).
   Future<ServerWalk> saveWalk({
     required int dogId,
+
+    /// 함께 나간 아이들 (#343). **비어 있으면 안 보낸다** — 계약이 선택으로 받고,
+    /// 서버가 `[dogId]` 로 채운다. 빈 배열을 보내도 같은 뜻이지만, 안 보내는 쪽이
+    /// "이 앱은 여러 마리를 모른다" 와 같은 모양이라 서버 쪽 갈래가 하나 준다.
+    List<int> dogIds = const [],
     required String clientWalkId,
     required DateTime startedAt,
     DateTime? endedAt,
@@ -470,6 +491,7 @@ class WalkRepository {
         Uri.parse('$baseUrl/api/walks'),
         body: {
           'dogId': dogId,
+          if (dogIds.isNotEmpty) 'dogIds': dogIds,
           'clientWalkId': clientWalkId,
           // 서버는 오프셋이 있는 값을 요구한다. toUtc() 를 빼면 Dart 가 오프셋 없는
           // 문자열을 만들고 서버가 400 을 준다.
