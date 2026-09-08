@@ -18,7 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 
-const _layerKeys = ['vet', 'shop', 'trail'];
+const _layerKeys = ['vet', 'shop', 'trail', 'playground'];
 
 const _dummyMarks = [
   '서울숲동물병원',
@@ -47,7 +47,7 @@ void main() {
     }
   });
 
-  test('병원·펫샵·산책로 칩이 실데이터 키로 돌아왔다 — 계약의 PlaceCategory 와 같은 아홉이다', () {
+  test('병원·펫샵·산책로·놀이터 칩이 실데이터 키로 돌아왔다 — 계약의 PlaceCategory 와 같은 열이다', () {
     final keys = kPetCategories.map((c) => c.key).toList();
     for (final k in _layerKeys) {
       expect(keys, contains(k), reason: '$k 칩은 #291 부터 실데이터다 — 서버가 카탈로그에 이어 붙인다');
@@ -61,6 +61,7 @@ void main() {
     expect(petCatByType('vet').label, '동물병원');
     expect(petCatByType('shop').label, '펫샵');
     expect(petCatByType('trail').label, '산책로');
+    expect(petCatByType('playground').label, '놀이터');
     expect(petCatByType('99').label, '기타');
     expect(petCatByType(null).label, '기타');
   });

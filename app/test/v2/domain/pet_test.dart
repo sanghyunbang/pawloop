@@ -89,7 +89,7 @@ void main() {
         expect(int.tryParse(c.key) != null || kLayerKeys.contains(c.key), isTrue,
             reason: '${c.key} 는 KTO 도 공공데이터 레이어도 모르는 key 다');
       }
-      expect(kLayerKeys, {'vet', 'shop', 'trail'});
+      expect(kLayerKeys, {'vet', 'shop', 'trail', 'playground'});
     });
   });
 

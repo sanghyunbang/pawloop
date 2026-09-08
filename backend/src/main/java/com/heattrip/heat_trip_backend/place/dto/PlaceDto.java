@@ -58,14 +58,23 @@ public record PlaceDto(
     /** 동물판매업(펫샵) — 행정안전부 인허가(#291). {@code contentId} = {@code shop:관리번호}. */
     public static final String SOURCE_SHOP = "shop";
 
-    /** 산책로 — 두루누비 걷기여행길(#291). {@code contentId} = {@code trail:crsIdx}. */
+    /** 산책로 — 두루누비 걷기여행길(#291)과 동네 길(#346). {@code contentId} = {@code trail:…}. */
     public static final String SOURCE_TRAIL = "trail";
+
+    /**
+     * 반려견 놀이터 — 지자체 현황(#346). {@code contentId} = {@code playground:해시}.
+     *
+     * <p>다른 레이어와 달리 <b>전국 표준데이터가 없다.</b> 시·군·구가 각자 올린 파일을
+     * 모아 자산으로 만든다({@code backend/tools/build_playgrounds.py}).
+     */
+    public static final String SOURCE_PLAYGROUND = "playground";
 
     /**
      * KTO 가 아닌 출처 — 계약 {@code PlaceCategory} 의 문자 값 셋과 같다. 이 값이 {@code category}
      * 로 오면 서버는 KTO 셀을 부르지 않고 레이어 한 벌에서 거른다({@code PlaceQueryService}).
      */
-    public static final Set<String> LAYER_SOURCES = Set.of(SOURCE_VET, SOURCE_SHOP, SOURCE_TRAIL);
+    public static final Set<String> LAYER_SOURCES =
+            Set.of(SOURCE_VET, SOURCE_SHOP, SOURCE_TRAIL, SOURCE_PLAYGROUND);
 
     /**
      * 계약의 {@code PlaceCategory} 가 아는 KTO 콘텐츠타입 — 이슈 #210({@code Places-low-1}).

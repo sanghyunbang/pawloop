@@ -44,6 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import com.heattrip.heat_trip_backend.place.layer.LocalTrailAsset;
+import com.heattrip.heat_trip_backend.place.layer.PlaygroundAsset;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.mockito.Mockito.when;
@@ -263,9 +264,14 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
     @MockitoBean
     private LocalTrailAsset localTrails;
 
+    /** 놀이터 자산도 같은 이유로 비운다 — {@code PlaygroundAssetTest} 가 따로 잰다. */
+    @MockitoBean
+    private PlaygroundAsset playgrounds;
+
     @BeforeEach
     void reset() {
         when(localTrails.load()).thenReturn(List.of());
+        when(playgrounds.load()).thenReturn(List.of());
         jdbc.update("delete from kto_call_budget");
         jdbc.update("delete from place_catalog");
         jdbc.update("delete from pet_place_detail");

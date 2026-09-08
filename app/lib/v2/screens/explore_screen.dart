@@ -506,10 +506,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
         // "지도를 움직여 보세요" 라고 하지 않는다 — 지도를 움직여도 다시 읽지 않는다
         // (`_load` 는 `_boot` 에서 한 번만 불린다). 시킨 대로 해도 소용없는 안내는 거짓이다.
         Text(
-          _catFilter == 'trail'
-              // 산책로는 반경을 안 본다 — 비었다면 카탈로그에 코스가 아직 없는 것이다.
-              ? '전국의 코스를 가까운 순으로 봤어요 · 잠시 뒤 다시 열어 보세요'
-              : '현위치 8km 안을 봤어요 · 필터를 바꿔보세요',
+          switch (_catFilter) {
+            // 놀이터는 지자체가 올린 파일을 모은 것이라 아직 지역이 성기다(#346).
+            // "필터를 바꿔보세요" 는 여기서 거짓이다 — 필터를 바꿔도 놀이터는 안 는다.
+            'playground' => '아직 자료를 올린 지자체가 적어요 · 다른 칩을 둘러보세요',
+            // #401 부터 산책로도 8km 를 먼저 본다. 반경 안이 비면 넓혀서 보여 주므로,
+            // 여기까지 왔다면 카탈로그에 코스가 아예 없는 것이다.
+            'trail' => '가까운 코스를 못 찾았어요 · 잠시 뒤 다시 열어 보세요',
+            _ => '현위치 8km 안을 봤어요 · 필터를 바꿔보세요',
+          },
           style: const TextStyle(fontSize: 12.5, color: Color(0xA8463C64)),
         ),
       ]),
@@ -521,6 +526,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         'trail' => '가까운 산책로',
         'vet' => '동물병원',
         'shop' => '펫샵',
+        'playground' => '반려견 놀이터',
         _ => '반려동반 가능',
       };
 
@@ -677,6 +683,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   String _sourceCaption() => switch (_catFilter) {
         'vet' || 'shop' => '행정안전부 인허가 · 전국',
         'trail' => '지자체 걷는 길 · 두루누비',
+        // 전국 표준데이터가 없어 지자체 파일을 모은 것이다(#346) — 아직 지역이 성기다.
+        'playground' => '지자체 현황 · 모으는 중',
         null => '관광공사 · 인허가 · 걷는 길',
         _ => '관광공사',
       };

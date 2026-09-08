@@ -30,10 +30,13 @@ const List<PetCategory> kPetCategories = [
   PetCategory('vet', '동물병원', Color(0xFFD7263D), Icons.local_hospital_rounded),
   PetCategory('shop', '펫샵', Color(0xFFD946EF), Icons.shopping_bag_rounded),
   PetCategory('trail', '산책로', Color(0xFF0B7A75), Icons.route_rounded),
+  // 반려견 놀이터 (#346). 목줄을 풀 수 있는 울타리 안이라 아이콘이 울타리다.
+  // 라임은 아홉 색 중 가장 가까운 여행지(#3DBE6C)와도 RGB 거리 128 이다.
+  PetCategory('playground', '놀이터', Color(0xFF80D000), Icons.fence_rounded),
 ];
 
 /// KTO 가 아닌 출처의 키 — 서버의 `PlaceDto.LAYER_SOURCES` 와 같은 셋.
-const Set<String> kLayerKeys = {'vet', 'shop', 'trail'};
+const Set<String> kLayerKeys = {'vet', 'shop', 'trail', 'playground'};
 
 /// 산책로 칩이 반경 밖까지 훑을 때 주는 코스 수 — 2026-09-06 결정(#291), #346 에서 좁혔다.
 ///

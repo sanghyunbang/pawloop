@@ -3577,11 +3577,21 @@ components:
     PlaceCategory:
       type: string
       description: >
-        프론트 카테고리 키. 숫자는 KTO contentTypeId. `vet`·`shop`·`trail` 은 공공데이터
-        레이어 — #291 부터 **실데이터**입니다(행정안전부 인허가 전국 · 두루누비 걷기여행길).
-        #282 가 가짜와 함께 내렸던 칩 셋이 그때 돌아왔습니다. 이 셋에서는 `Place.category`
-        와 `Place.source` 가 같은 값입니다.
-      enum: ['12', '14', '28', '32', '38', '39', 'vet', 'shop', 'trail']
+        프론트 카테고리 키. 숫자는 KTO contentTypeId. `vet`·`shop`·`trail`·`playground` 는
+        공공데이터 레이어 — #291 부터 **실데이터**입니다(행정안전부 인허가 전국 · 두루누비
+        걷기여행길). #282 가 가짜와 함께 내렸던 칩 셋이 그때 돌아왔습니다. 이 넷에서는
+        `Place.category` 와 `Place.source` 가 같은 값입니다.
+
+
+        `trail` 에는 출처가 **둘** 섞여 있습니다(#346) — 두루누비 걷기여행길과 지자체가
+        올린 동네 길입니다. `contentId` 로 가릅니다: `trail:T_CRS_…` 는 두루누비(선이
+        있어 `GET /places/trails/{id}/route` 가 200), `trail:lt…` 는 동네 길(선이 없어
+        같은 경로가 404)입니다.
+
+
+        `playground` 는 지자체 반려견 놀이터입니다(#346). **전국 표준데이터가 없어**
+        시·군·구 파일을 모은 것이라 아직 지역이 성깁니다.
+      enum: ['12', '14', '28', '32', '38', '39', 'vet', 'shop', 'trail', 'playground']
 
     TrailRoute:
       type: object
