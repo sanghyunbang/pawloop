@@ -56,8 +56,18 @@ class PetPlace {
 
   PetCategory get petCategory => petCatByType(categoryKey);
 
-  /// 산책로(두루누비)인가 — 시트를 열면 선을 따로 받아 그린다.
+  /// 산책로인가 — 두루누비와 동네 길(#346)이 같은 칩을 쓴다.
   bool get isTrail => source == 'trail';
+
+  /// 동네 길인가 — 전국길관광정보표준데이터에서 온 것(#346). `contentId` 가 `trail:lt…` 다.
+  bool get isLocalTrail => contentId.startsWith('trail:lt');
+
+  /// **선을 받을 수 있는가.** 두루누비만 GPX 가 있다.
+  ///
+  /// 동네 길의 원본에는 좌표가 아예 없고 경로가 `보신각 → 보성사 터` 꼴의 **글**이라
+  /// 그릴 선이 없다. 이걸 안 가르면 "지도에서 보기" 를 눌렀을 때 서버가 404 를 준다 —
+  /// 2026-09-08 에뮬레이터에서 실제로 그랬다.
+  bool get hasTrailRoute => isTrail && !isLocalTrail;
 
   /// 산책로 선을 받을 때 쓰는 코스 번호 — `contentId` 의 `trail:` 뒤.
   String get trailCourseId =>
@@ -67,7 +77,9 @@ class PetPlace {
   String get sourceLabel => switch (source) {
         'vet' => '동물병원 · 행정안전부 인허가',
         'shop' => '동물판매업 · 행정안전부 인허가',
-        'trail' => '걷기여행길 · 두루누비(한국관광공사)',
+        'trail' => isLocalTrail
+            ? '동네 길 · 지자체(공공데이터포털)'
+            : '걷기여행길 · 두루누비(한국관광공사)',
         _ => '반려동물 동반 가능 (관광공사)',
       };
 

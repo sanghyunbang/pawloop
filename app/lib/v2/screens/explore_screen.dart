@@ -610,13 +610,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 color: primary ? null : const Color(0xFFF1ECF7),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(icon, size: 16, color: primary ? Colors.white : T.textSecondary),
-                const SizedBox(width: 6),
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w800, color: primary ? Colors.white : T.textSecondary)),
-              ]),
+              // 넷이 설 때가 있다 — 동네 길은 관리기관 전화번호가 있어서 "여기서 산책 시작 ·
+              // 전화 · 길찾기" 셋에 하나가 더 붙는 화면이 나온다. 그때 393dp 에서 28px 넘쳤다
+              // (2026-09-08 에뮬레이터). 말줄임으로 자르면 무엇을 누르는지 알 수 없어
+              // **줄여서 넣는다** — 버튼 이름은 짧고, 안 잘리는 쪽이 낫다.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(icon, size: 16, color: primary ? Colors.white : T.textSecondary),
+                  const SizedBox(width: 6),
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w800, color: primary ? Colors.white : T.textSecondary)),
+                ]),
+              ),
             ),
           ),
         );
@@ -638,7 +645,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
             messenger.showSnackBar(const SnackBar(content: Text('전화 앱을 열 수 없어요')));
           }
         }, primary: true),
-      if (p.isTrail)
+      // 선이 있는 것만 — 동네 길은 원본에 경로가 글로만 있어 그릴 선이 없다(#346).
+      if (p.hasTrailRoute)
         action(Icons.map_rounded, '지도에서 보기', () async {
           Navigator.pop(sheetCtx);
           if (view != 'map') {
@@ -655,7 +663,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         if (!await ExternalMaps.directions(lat: p.lat, lng: p.lng, name: p.title)) {
           messenger.showSnackBar(const SnackBar(content: Text('지도 앱을 열 수 없어요')));
         }
-      }, primary: p.tel.isEmpty && !p.isTrail),
+      }, primary: p.tel.isEmpty && !p.hasTrailRoute),
     ];
     return Row(children: [
       for (var i = 0; i < actions.length; i++) ...[
@@ -699,7 +707,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
               const SizedBox(height: 6),
               Row(children: [
-                _catTag(cat),
+                // 배지가 먼저 줄어든다 — 거리는 짧고, 카드에서 가장 자주 읽는 값이다.
+                // 좁은 폭에서 배지가 안 줄어들어 줄이 통째로 넘쳤다(393dp 에서 8.5px).
+                Flexible(child: _catTag(cat)),
                 if (p.distLabel.isNotEmpty) ...[
                   const SizedBox(width: 7),
                   const Icon(Icons.near_me, size: 12, color: T.textMuted),
@@ -730,7 +740,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(cat.icon, size: 12, color: cat.color),
           const SizedBox(width: 4),
-          Text(cat.label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cat.color)),
+          Flexible(
+            child: Text(cat.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cat.color)),
+          ),
         ]),
       );
 
@@ -840,7 +855,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
           child: const Row(children: [
             Icon(Icons.search, size: 20, color: T.textMuted),
             SizedBox(width: 8),
-            Text('카페, 공원, 산책로...', style: TextStyle(fontSize: 14, color: T.textMuted)),
+            // 자리표시가 좁은 폭에서 줄을 넘겼다(393dp · 테스트 폰트에서 8.5px).
+            // 자리표시는 잘려도 뜻이 남는다 — 뒤의 "..." 가 이미 말줄임이다.
+            Flexible(
+              child: Text('카페, 공원, 산책로...',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, color: T.textMuted)),
+            ),
           ]),
         ),
       ),
