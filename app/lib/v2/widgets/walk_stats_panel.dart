@@ -39,6 +39,23 @@ class WalkStatsPanel extends StatelessWidget {
   /// 트래킹 화면이 처음 그릴 때의 펼침 여부. **펼침** — 위 머리말.
   static const bool expandedByDefault = true;
 
+  /// 이 배율부터 보조 안내("실시간 GPS")를 접는다.
+  ///
+  /// 1.3 은 홈의 두 버튼이 위아래로 서는 지점과 같은 값이다(#396) — 화면마다 다른 문턱을
+  /// 두면 같은 배율에서 어떤 곳은 접히고 어떤 곳은 안 접혀 사용자가 규칙을 못 읽는다.
+  static const double _hideHintFrom = 1.3;
+
+  /// 이 배율부터 **장식을 접는다** — 머리말의 보조 안내와 두 버튼의 아이콘.
+  ///
+  /// 아이콘을 먼저 접는 이유: 버튼이 무엇을 하는지는 <b>글자</b>가 말한다. 320dp·2.0배에서
+  /// 아이콘(21px)과 간격(6px)이 27px 을 먹고, 그것이 정확히 넘치던 폭이었다(17px 넘침).
+  /// 글자를 줄이거나 자르면 "일시…" 가 되어 무엇을 누르는지 알 수 없다.
+  ///
+  /// 글자도 [Flexible] 로 감싼 것은 **바닥**이다 — 더 긴 말이 들어오거나 더 좁은 기기가
+  /// 나와도 노란 줄무늬 대신 말줄임으로 끝난다.
+  static bool _hideHint(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(11) >= 11 * _hideHintFrom;
+
   final double km;
   final String timeLabel;
   final String paceLabel;
@@ -60,7 +77,7 @@ class WalkStatsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!expanded) return _pill();
-    return _expanded();
+    return _expanded(context);
   }
 
   /// 접힘: 작은 알약 — 상태·거리·시간. 탭하면 펼침.
@@ -110,7 +127,7 @@ class WalkStatsPanel extends StatelessWidget {
   }
 
   /// 펼침: 큰 스탯 + 일시정지/종료.
-  Widget _expanded() {
+  Widget _expanded(BuildContext context) {
     return Container(
       margin: EdgeInsets.fromLTRB(14, 0, 14, bottomInset + 14),
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
@@ -135,19 +152,36 @@ class WalkStatsPanel extends StatelessWidget {
                   decoration: BoxDecoration(shape: BoxShape.circle, color: _dot),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  paused ? '일시정지됨' : '산책 기록 중',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: paused ? T.textMuted : const Color(0xFFE07A4E),
+                // `Spacer` 를 겸한다 — 남는 폭을 먹고, **모자라면 이것이 줄어든다.**
+                // 예전에는 이 자리가 flex 가 아닌 `Text` + `Spacer` 였다. Row 는 flex 가
+                // 아닌 자식에게 폭을 무한대로 주므로 두 글자의 합이 Row 를 넘었고,
+                // `Spacer` 는 남은 공간이 음수여도 0 까지만 줄어든다 — 글자 2.0배 ·
+                // 360dp 에서 75px 넘쳤다(#402 실측).
+                Expanded(
+                  child: Text(
+                    paused ? '일시정지됨' : '산책 기록 중',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: paused ? T.textMuted : const Color(0xFFE07A4E),
+                    ),
                   ),
                 ),
-                const Spacer(),
                 // 이 패널은 실 GPS 로 트래킹 중일 때만 뜬다 — 위치가 없으면 지도
-                // 자체가 만들어지지 않는다.
-                const Text('실시간 GPS', style: TextStyle(fontSize: 11, color: T.textMuted)),
-                const SizedBox(width: 4),
+                // 자체가 만들어지지 않는다. 그래서 이 줄은 **보조 안내**다.
+                //
+                // 글자를 키운 사람에게는 접는다. `Expanded` 만으로도 안 넘치지만, 그러면
+                // 상태("산책 기록 중")가 "산…" 으로 잘린다 — 지금 기록 중인지 멈췄는지가
+                // 이 줄에서 가장 중요한 정보다. 보조를 먼저 접어 그 자리를 지킨다.
+                if (!_hideHint(context)) ...[
+                  const Text('실시간 GPS',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, color: T.textMuted)),
+                  const SizedBox(width: 4),
+                ],
                 const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: T.textMuted),
               ],
             ),
@@ -179,16 +213,22 @@ class WalkStatsPanel extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                          size: 21,
-                          color: T.textSecondary,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          paused ? '재개' : '일시정지',
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w700, color: T.textSecondary),
+                        if (!_hideHint(context)) ...[
+                          Icon(
+                            paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                            size: 21,
+                            color: T.textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Flexible(
+                          child: Text(
+                            paused ? '재개' : '일시정지',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w700, color: T.textSecondary),
+                          ),
                         ),
                       ],
                     ),
@@ -206,15 +246,21 @@ class WalkStatsPanel extends StatelessWidget {
                       gradient: _warm,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.stop_rounded, size: 21, color: Colors.white),
-                        SizedBox(width: 6),
-                        Text(
-                          '종료',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
+                        if (!_hideHint(context)) ...[
+                          const Icon(Icons.stop_rounded, size: 21, color: Colors.white),
+                          const SizedBox(width: 6),
+                        ],
+                        const Flexible(
+                          child: Text(
+                            '종료',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
+                          ),
                         ),
                       ],
                     ),
