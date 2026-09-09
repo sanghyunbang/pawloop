@@ -353,6 +353,7 @@ CREATE TABLE `report_snapshot` (
 CREATE TABLE `schedule` (
   `at_time` time(6) DEFAULT NULL,
   `on_date` date NOT NULL,
+  `repeat_until` date DEFAULT NULL,
   `version` int NOT NULL,
   `assignee` bigint DEFAULT NULL,
   `care_log_id` bigint DEFAULT NULL,
@@ -361,11 +362,13 @@ CREATE TABLE `schedule` (
   `dog_id` bigint DEFAULT NULL,
   `done_at` datetime(6) DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
+  `origin_id` bigint DEFAULT NULL,
   `owner_ref` bigint NOT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
   `updated_by` bigint DEFAULT NULL,
   `kind` varchar(10) NOT NULL,
   `owner_kind` varchar(10) NOT NULL,
+  `repeat_kind` varchar(10) NOT NULL,
   `status` varchar(10) NOT NULL,
   `title` varchar(100) NOT NULL,
   `memo` varchar(500) DEFAULT NULL,
@@ -374,14 +377,27 @@ CREATE TABLE `schedule` (
   KEY `idx_schedule_dog_date` (`dog_id`,`on_date`),
   KEY `fk_schedule_assignee` (`assignee`),
   KEY `fk_schedule_created_by` (`created_by`),
+  KEY `fk_schedule_origin` (`origin_id`),
   KEY `fk_schedule_updated_by` (`updated_by`),
   CONSTRAINT `fk_schedule_assignee` FOREIGN KEY (`assignee`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_schedule_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_schedule_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_schedule_origin` FOREIGN KEY (`origin_id`) REFERENCES `schedule` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_schedule_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `ck_schedule_kind` CHECK ((`kind` in (_utf8mb4'walk',_utf8mb4'vet',_utf8mb4'med',_utf8mb4'groom',_utf8mb4'bath',_utf8mb4'food',_utf8mb4'etc'))),
   CONSTRAINT `ck_schedule_owner_kind` CHECK ((`owner_kind` in (_utf8mb4'dog',_utf8mb4'group',_utf8mb4'room'))),
+  CONSTRAINT `ck_schedule_repeat` CHECK ((`repeat_kind` in (_utf8mb4'none',_utf8mb4'daily',_utf8mb4'weekly',_utf8mb4'monthly'))),
   CONSTRAINT `ck_schedule_status` CHECK ((`status` in (_utf8mb4'planned',_utf8mb4'done',_utf8mb4'skipped')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `schedule_exception` (
+  `on_date` date NOT NULL,
+  `schedule_id` bigint NOT NULL,
+  `kind` varchar(10) NOT NULL,
+  PRIMARY KEY (`on_date`,`schedule_id`),
+  KEY `fk_schedexc_schedule` (`schedule_id`),
+  CONSTRAINT `fk_schedexc_schedule` FOREIGN KEY (`schedule_id`) REFERENCES `schedule` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `ck_schedule_exception_kind` CHECK ((`kind` in (_utf8mb4'skip',_utf8mb4'override')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `trail_route` (

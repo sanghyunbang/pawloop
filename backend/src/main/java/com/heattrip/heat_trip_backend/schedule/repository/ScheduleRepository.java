@@ -32,6 +32,15 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
      *
      * <p>{@code refs} 가 비면 호출하지 않는다 — JPA 의 빈 {@code IN ()} 은 DB 마다 다르게
      * 처리된다. 서비스가 먼저 거른다.
+     *
+     * <h2>반복 규칙은 기간 밖에서도 걸린다</h2>
+     * <p>이슈 #421. 매주 화요일 규칙의 {@code on_date} 는 <b>시작한 날</b>이라 조회 기간보다
+     * 훨씬 앞일 수 있다 — 작년에 시작한 심장사상충 약이 그렇다. {@code on_date between} 만
+     * 보면 그 규칙이 한 줄도 안 나온다.
+     *
+     * <p>그래서 되풀이하는 행은 <b>시작일이 기간 끝보다 앞이고 종료일이 기간 시작보다
+     * 뒤인</b> 것을 전부 가져온다. 실제로 그 기간에 오는 날이 있는지는 서버가 펼치며
+     * 가른다({@code ScheduleExpansion}).
      */
     @Query("""
             select s from Schedule s
@@ -39,7 +48,13 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
               left join fetch s.assignee
              where s.ownerKind = :kind
                and s.ownerRef in :refs
-               and s.onDate between :from and :to
+               and (
+                     (s.repeatKind = com.heattrip.heat_trip_backend.schedule.entity.ScheduleRepeat.NONE
+                      and s.onDate between :from and :to)
+                  or (s.repeatKind <> com.heattrip.heat_trip_backend.schedule.entity.ScheduleRepeat.NONE
+                      and s.onDate <= :to
+                      and (s.repeatUntil is null or s.repeatUntil >= :from))
+                   )
              order by s.onDate asc, s.atTime asc nulls last, s.id asc
             """)
     List<Schedule> findRange(@Param("kind") ScheduleOwnerKind kind,

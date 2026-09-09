@@ -590,6 +590,238 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+
+    // ─────────────────── 반복 (#421) ───────────────────
+
+    @Test
+    @DisplayName("매주 화요일 규칙 하나가 한 달 조회에서 네 줄로 펼쳐진다")
+    void aWeeklyRuleExpandsAcrossTheMonth() throws Exception {
+        Account dad = account("아빠S");
+        long groupId = family(dad, "보리네 가족");
+        // 2026-12-01 은 화요일. 12월의 화요일은 1·8·15·22·29 다섯이다.
+        create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"med","title":"심장사상충",
+                 "onDate":"2026-12-01","repeatKind":"weekly"}
+                """.formatted(groupId)).andExpect(status().isCreated());
+
+        JsonNode listed = range(dad, "2026-12-01", "2026-12-31", null);
+
+        assertThat(dates(listed)).containsExactly(
+                "2026-12-01", "2026-12-08", "2026-12-15", "2026-12-22", "2026-12-29");
+        assertThat(listed.get(0).path("occurrence").asBoolean())
+                .as("펼친 하루에는 행이 없다 — 화면이 (id, onDate) 를 키로 삼아야 한다")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("작년에 시작한 규칙도 이번 달 조회에 나온다 — on_date 만 보면 한 줄도 안 나온다")
+    void aRuleThatStartedLongAgoStillShowsUp() throws Exception {
+        Account dad = account("아빠T");
+        long groupId = family(dad, "보리네 가족");
+        create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"med","title":"심장사상충",
+                 "onDate":"2025-12-02","repeatKind":"monthly"}
+                """.formatted(groupId)).andExpect(status().isCreated());
+
+        JsonNode listed = range(dad, "2026-12-01", "2026-12-31", null);
+
+        assertThat(dates(listed)).containsExactly("2026-12-02");
+    }
+
+    @Test
+    @DisplayName("종료일 뒤로는 안 나온다")
+    void nothingComesAfterTheEndDate() throws Exception {
+        Account dad = account("아빠U");
+        long groupId = family(dad, "보리네 가족");
+        create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"walk","title":"저녁 산책",
+                 "onDate":"2026-12-01","repeatKind":"daily","repeatUntil":"2026-12-03"}
+                """.formatted(groupId)).andExpect(status().isCreated());
+
+        JsonNode listed = range(dad, "2026-12-01", "2026-12-31", null);
+
+        assertThat(dates(listed))
+                .containsExactly("2026-12-01", "2026-12-02", "2026-12-03");
+    }
+
+    @Test
+    @DisplayName("31일 규칙은 30일까지인 달을 건너뛴다 — 사용자가 안 정한 날에 오면 안 된다")
+    void aMonthlyRuleSkipsShortMonths() throws Exception {
+        Account dad = account("아빠V");
+        long groupId = family(dad, "보리네 가족");
+        create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"food","title":"사료 주문",
+                 "onDate":"2026-10-31","repeatKind":"monthly"}
+                """.formatted(groupId)).andExpect(status().isCreated());
+
+        assertThat(dates(range(dad, "2026-11-01", "2026-11-30", null)))
+                .as("11월에는 31일이 없다")
+                .isEmpty();
+        assertThat(dates(range(dad, "2026-12-01", "2026-12-31", null)))
+                .containsExactly("2026-12-31");
+    }
+
+    @Test
+    @DisplayName("하루를 건너뛰면 그날만 빠지고 나머지는 그대로다")
+    void skippingOneDayLeavesTheRest() throws Exception {
+        Account dad = account("아빠W");
+        long groupId = family(dad, "보리네 가족");
+        long ruleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"bath","title":"목욕",
+                 "onDate":"2026-12-01","repeatKind":"weekly"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        mockMvc.perform(delete("/api/schedules/{id}", ruleId)
+                        .param("date", "2026-12-15")
+                        .header("Authorization", "Bearer " + dad.token()))
+                .andExpect(status().isNoContent());
+
+        assertThat(dates(range(dad, "2026-12-01", "2026-12-31", null)))
+                .as("\"이번 주만 안 함\" 이 반복을 지우는 일이 되면 안 된다")
+                .containsExactly("2026-12-01", "2026-12-08", "2026-12-22", "2026-12-29");
+    }
+
+    @Test
+    @DisplayName("하루만 고치면 그날만 바뀌고 규칙은 그대로다")
+    void overridingOneDayLeavesTheRuleAlone() throws Exception {
+        Account dad = account("아빠X");
+        long groupId = family(dad, "보리네 가족");
+        long ruleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"bath","title":"목욕",
+                 "onDate":"2026-12-01","atTime":"10:00","repeatKind":"weekly"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        JsonNode moved = body(mockMvc.perform(patch("/api/schedules/{id}", ruleId)
+                        .param("version", "0")
+                        .param("date", "2026-12-15")
+                        .header("Authorization", "Bearer " + dad.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"목욕(오후로)\",\"onDate\":\"2026-12-15\","
+                                + "\"atTime\":\"15:00\"}"))
+                .andExpect(status().isOk()));
+
+        assertThat(moved.path("id").asLong())
+                .as("옮긴 하루는 자기 행이다 — 규칙과 다른 id 여야 완료 표시가 그 하나에만 붙는다")
+                .isNotEqualTo(ruleId);
+        assertThat(moved.path("repeatKind").asText()).isEqualTo("none");
+
+        JsonNode listed = range(dad, "2026-12-01", "2026-12-31", null);
+        assertThat(dates(listed)).containsExactly(
+                "2026-12-01", "2026-12-08", "2026-12-15", "2026-12-22", "2026-12-29");
+        JsonNode fifteenth = listed.get(2);
+        assertThat(fifteenth.path("title").asText()).isEqualTo("목욕(오후로)");
+        assertThat(fifteenth.path("atTime").asText()).isEqualTo("15:00:00");
+        assertThat(fifteenth.path("occurrence").asBoolean())
+                .as("그날은 이제 진짜 행이다")
+                .isFalse();
+        assertThat(listed.get(0).path("title").asText())
+                .as("규칙은 그대로다")
+                .isEqualTo("목욕");
+    }
+
+    @Test
+    @DisplayName("완료 표시는 그날 하나에만 붙는다 — 규칙 전체가 완료되지 않는다")
+    void completingOneDayDoesNotCompleteTheRule() throws Exception {
+        Account dad = account("아빠Y");
+        long groupId = family(dad, "보리네 가족");
+        long ruleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"med","title":"심장사상충",
+                 "onDate":"2026-12-01","repeatKind":"weekly"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        mockMvc.perform(patch("/api/schedules/{id}", ruleId)
+                        .param("version", "0")
+                        .param("date", "2026-12-08")
+                        .header("Authorization", "Bearer " + dad.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"심장사상충\",\"onDate\":\"2026-12-08\","
+                                + "\"status\":\"done\"}"))
+                .andExpect(status().isOk());
+
+        JsonNode listed = range(dad, "2026-12-01", "2026-12-31", null);
+        assertThat(statuses(listed))
+                .as("한 번 먹였다고 앞으로 오는 날이 전부 완료되면 안 된다")
+                .containsExactly("planned", "done", "planned", "planned", "planned");
+        assertThat(careLogs(dad, groupId).size())
+                .as("그 하루가 진짜 행이 됐으므로 #420 의 연결도 그대로 걸린다")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("규칙을 통째로 지우면 예외와 옮겨 둔 하루가 함께 사라진다")
+    void deletingTheRuleTakesEverything() throws Exception {
+        Account dad = account("아빠Z");
+        long groupId = family(dad, "보리네 가족");
+        long ruleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"bath","title":"목욕",
+                 "onDate":"2026-12-01","repeatKind":"weekly"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+        mockMvc.perform(patch("/api/schedules/{id}", ruleId)
+                        .param("version", "0").param("date", "2026-12-15")
+                        .header("Authorization", "Bearer " + dad.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"목욕(옮김)\",\"onDate\":\"2026-12-16\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/schedules/{id}", ruleId)
+                        .header("Authorization", "Bearer " + dad.token()))
+                .andExpect(status().isNoContent());
+
+        assertThat(range(dad, "2026-12-01", "2026-12-31", null).size())
+                .as("옮겨 둔 하루만 남으면 그것이 무엇의 하루였는지 아무도 모른다")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("규칙이 안 오는 날은 건너뛸 수도 고칠 수도 없다 — 404 다")
+    void aDayTheRuleDoesNotComeIs404() throws Exception {
+        Account dad = account("아빠AA");
+        long groupId = family(dad, "보리네 가족");
+        long ruleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"bath","title":"목욕",
+                 "onDate":"2026-12-01","repeatKind":"weekly"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        // 12-02 는 수요일이라 이 규칙이 안 온다.
+        mockMvc.perform(delete("/api/schedules/{id}", ruleId)
+                        .param("date", "2026-12-02")
+                        .header("Authorization", "Bearer " + dad.token()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("되풀이가 아닌 일정에는 하루 지정이 안 통한다 — 404 다")
+    void aPlainScheduleHasNoOccurrences() throws Exception {
+        Account dad = account("아빠AB");
+        long groupId = family(dad, "보리네 가족");
+        long id = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"vet","title":"보리 병원",
+                 "onDate":"2026-12-01"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        mockMvc.perform(delete("/api/schedules/{id}", id)
+                        .param("date", "2026-12-01")
+                        .header("Authorization", "Bearer " + dad.token()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("반복을 안 보내면 안 바뀐다 — 제목만 고쳤는데 반복이 사라지면 안 된다")
+    void editingWithoutRepeatKeepsTheRule() throws Exception {
+        Account dad = account("아빠AC");
+        long groupId = family(dad, "보리네 가족");
+        long ruleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"bath","title":"목욕",
+                 "onDate":"2026-12-01","repeatKind":"weekly"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        JsonNode edited = body(update(dad, ruleId, 0,
+                "{\"title\":\"목욕(이름만)\",\"onDate\":\"2026-12-01\"}")
+                .andExpect(status().isOk()));
+
+        assertThat(edited.path("repeatKind").asText()).isEqualTo("weekly");
+    }
+
     // ─────────────────── 좌표가 없다 (A안 #235) ───────────────────
 
     @Test
@@ -695,6 +927,18 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
             request = request.param("dogId", String.valueOf(dogId));
         }
         return body(mockMvc.perform(request).andExpect(status().isOk()));
+    }
+
+private static List<String> dates(JsonNode array) {
+        List<String> out = new ArrayList<>();
+        array.forEach(node -> out.add(node.path("onDate").asText()));
+        return out;
+    }
+
+    private static List<String> statuses(JsonNode array) {
+        List<String> out = new ArrayList<>();
+        array.forEach(node -> out.add(node.path("status").asText()));
+        return out;
     }
 
     private static List<String> titles(JsonNode array) {

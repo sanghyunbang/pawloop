@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.schedule.dto;
 
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleKind;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleOwnerKind;
+import com.heattrip.heat_trip_backend.schedule.entity.ScheduleRepeat;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,6 +21,10 @@ import java.time.LocalTime;
  *                  이 흔하다. 없어도 된다("사료 주문")
  * @param atTime    시각. <b>없어도 된다</b> — "이번 주말 목욕". 0시로 채우지 않는다
  * @param assignee  맡기로 한 사람의 id. <b>없어도 된다</b> — 정하지 않은 일도 적어 둔다
+ * @param repeatKind  되풀이 주기(#421). 안 주면 {@code none} 이다. 요일·날짜를 따로 안
+ *                    받는다 — {@code weekly} 는 {@code onDate} 의 요일이고
+ *                    {@code monthly} 는 그 날짜다
+ * @param repeatUntil 되풀이가 끝나는 날. 안 주면 <b>끝이 없다</b>
  */
 public record ScheduleRequest(
         @NotNull(message = "일정 주인이 필요합니다.")
@@ -45,5 +50,9 @@ public record ScheduleRequest(
 
         LocalTime atTime,
 
-        Long assignee) {
+        Long assignee,
+
+        ScheduleRepeat repeatKind,
+
+        LocalDate repeatUntil) {
 }

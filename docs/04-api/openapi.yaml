@@ -2348,6 +2348,13 @@ paths:
           required: true
           description: 마지막으로 본 `version`. 서버의 것과 다르면 409 입니다
           schema: { type: integer, example: 3 }
+        - name: date
+          in: query
+          description: |
+            주면 **그 하루만** 고칩니다(#421). 반복 규칙에만 쓰고, 그날짜용 행이 하나 생기며
+            규칙은 그날을 건너뜁니다. 안 주면 규칙 자체를 고칩니다 — 앞으로 오는 날 전부가
+            바뀝니다. 규칙이 안 오는 날이거나 되풀이가 아닌 일정이면 **404** 입니다.
+          schema: { type: string, format: date, example: "2026-12-15" }
       requestBody:
         required: true
         content:
@@ -2374,6 +2381,15 @@ paths:
       summary: 일정 지우기
       description: |
         물리 삭제라 같은 id 로 다시 부르면 404 입니다. 남의 일정도, 없는 일정도 같은 404 입니다.
+
+        `date` 를 주면 **그 하루만 건너뜁니다**(#421) — 규칙은 그대로입니다. "이번 주만
+        안 함" 이 반복을 지우는 일이 되면 안 됩니다. 안 주면 그 일정(규칙이면 규칙 전체와
+        예외, 옮겨 둔 하루까지)이 사라집니다.
+      parameters:
+        - name: date
+          in: query
+          description: 그 하루만 건너뜁니다. 규칙이 안 오는 날이면 404 입니다
+          schema: { type: string, format: date, example: "2026-12-15" }
       responses:
         '204': { description: 지워짐 }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -4765,6 +4781,17 @@ components:
         일정의 종류 — 산책 · 병원 · 투약 · 미용 · 목욕 · 사료 · 그 밖. DB 의 `CHECK` 가 받는
         문자열과 **글자까지 같습니다**(`CareType` 과 같은 규약입니다).
 
+    ScheduleRepeat:
+      type: string
+      enum: [none, daily, weekly, monthly]
+      description: |
+        얼마나 자주 되풀이하나(#421). **요일·날짜를 따로 받지 않습니다** — `weekly` 는
+        `onDate` 의 요일이고 `monthly` 는 그 날짜입니다. 따로 두면 "매주 화요일인데 시작일은
+        수요일" 같은 모순을 저장할 수 있게 됩니다.
+
+        `monthly` 는 그 날짜가 없는 달을 **건너뜁니다** — 31일 규칙이 2월에 28일로 당겨지면
+        사용자가 안 정한 날에 알림이 옵니다.
+
     ScheduleStatus:
       type: string
       enum: [planned, done, skipped]
@@ -4838,6 +4865,17 @@ components:
             - type: "null"
           description: 마지막으로 고친 사람. 화면의 "○○님이 방금 고쳤어요" 가 이 값입니다
         updatedAt: { type: [string, "null"], format: date-time }
+        repeatKind: { $ref: '#/components/schemas/ScheduleRepeat' }
+        repeatUntil:
+          type: [string, "null"]
+          format: date
+          description: 되풀이가 끝나는 날. `null` 이면 끝이 없습니다
+        occurrence:
+          type: boolean
+          description: |
+            **펼쳐 낸 하루인가**(#421). `true` 면 이 줄에 해당하는 **행이 아직 없습니다** —
+            `id` 는 규칙의 것이고 여럿이 그것을 나눠 씁니다. 화면은 `(id, onDate)` 를 키로
+            삼아야 합니다. 고치거나 완료하면 그때 서버가 행을 만듭니다.
 
     ScheduleInput:
       type: object
@@ -4862,6 +4900,11 @@ components:
           format: int64
           description: |
             **그 주인을 볼 수 있는 사람**이어야 합니다. 아니면 404 입니다.
+        repeatKind: { $ref: '#/components/schemas/ScheduleRepeat' }
+        repeatUntil:
+          type: [string, "null"]
+          format: date
+          description: 안 주면 **끝이 없습니다**(#421)
 
     ScheduleUpdate:
       type: object
@@ -4880,6 +4923,14 @@ components:
         atTime: { type: [string, "null"], example: "15:00" }
         assignee: { type: [integer, "null"], format: int64 }
         status: { $ref: '#/components/schemas/ScheduleStatus' }
+        repeatKind:
+          allOf:
+            - $ref: '#/components/schemas/ScheduleRepeat'
+          description: |
+            안 보내면 **반복을 안 바꿉니다**(#421). `memo` 무리와 다른 답인 것이 의도입니다 —
+            반복은 화면이 늘 보내는 값이 아니고, 안 보냈다고 꺼 버리면 "제목만 고쳤는데
+            반복이 사라졌다" 가 됩니다.
+        repeatUntil: { type: [string, "null"], format: date }
 
     ScheduleConflict:
       type: object

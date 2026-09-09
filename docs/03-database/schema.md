@@ -1137,6 +1137,9 @@ CREATE TABLE schedule (
   status     VARCHAR(10)  NOT NULL,
   done_at    DATETIME(6)  NULL,
   care_log_id BIGINT      NULL,
+  repeat_kind VARCHAR(10) NOT NULL,
+  repeat_until DATE       NULL,
+  origin_id  BIGINT       NULL,
   version    INT          NOT NULL,
   created_by BIGINT       NOT NULL,
   updated_by BIGINT       NULL,
@@ -1151,7 +1154,9 @@ CREATE TABLE schedule (
   CONSTRAINT fk_schedule_updated_by FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL,
   CONSTRAINT ck_schedule_owner_kind CHECK (owner_kind IN ('dog','group','room')),
   CONSTRAINT ck_schedule_kind       CHECK (kind IN ('walk','vet','med','groom','bath','food','etc')),
-  CONSTRAINT ck_schedule_status     CHECK (status IN ('planned','done','skipped'))
+  CONSTRAINT fk_schedule_origin     FOREIGN KEY (origin_id)  REFERENCES schedule (id) ON DELETE CASCADE,
+  CONSTRAINT ck_schedule_status     CHECK (status IN ('planned','done','skipped')),
+  CONSTRAINT ck_schedule_repeat     CHECK (repeat_kind IN ('none','daily','weekly','monthly'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
@@ -1170,6 +1175,9 @@ CREATE TABLE schedule (
 | `status` | `VARCHAR(10)` | NOT NULL, CHECK | `planned`·`done`·`skipped` |
 | `done_at` | `DATETIME(6)` | NULL | 완료·건너뜀으로 바꾼 시각. `planned` 로 되돌리면 다시 `NULL` |
 | `care_log_id` | `BIGINT` | NULL, **FK 아님** | 완료로 바꾸면서 남긴 케어 기록의 id(#420). 되돌릴 때 그 줄을 거두는 열쇠다 |
+| `repeat_kind` | `VARCHAR(10)` | NOT NULL, CHECK | `none`·`daily`·`weekly`·`monthly`(#421). 요일·날짜는 `on_date` 에서 나온다 |
+| `repeat_until` | `DATE` | NULL | 되풀이가 끝나는 날. `NULL` 이면 끝이 없다 |
+| `origin_id` | `BIGINT` | NULL, FK→`schedule.id` **CASCADE** | 이 행이 어느 규칙의 하루를 대신하는가(#421) |
 | `version` | `INT` | NOT NULL | 낙관적 잠금(`@Version`) |
 | `created_by` | `BIGINT` | NOT NULL, FK→`users.id` **CASCADE** | 적은 사람 |
 | `updated_by` | `BIGINT` | NULL, FK→`users.id` **SET NULL** | 마지막으로 고친 사람 |
@@ -1193,9 +1201,43 @@ CREATE TABLE schedule (
 >
 > **일정을 지워도 그 케어 기록은 남는다.** 되돌리기(`planned` 로)와 다른 답인 것이 의도다 — 되돌리기는 "그 일이 일어나지 않았다" 는 말이지만, 지우기는 "이 계획을 더 안 본다" 는 말이다. 이미 다녀온 병원의 기록까지 사라지면 계획을 정리하다 사실을 잃는다.
 >
+> **반복은 규칙 한 줄이다** (#421). 1년치 심장사상충 약을 365행으로 만들어 두면, 규칙을 고칠 때 그 전부를 손봐야 하고 한 번 빠뜨리면 옛 값이 남은 행이 조용히 생긴다. 조회할 때 **서버가** 펼친다 — 앱이 펼치면 해석이 두 벌이 되고 그중 하나가 언젠가 다르게 센다(윤년·말일이 그 자리다).
+>
+> **요일·날짜 컬럼이 없다.** `weekly` 는 `on_date` 의 요일이고 `monthly` 는 그 날짜다. 따로 두면 "매주 화요일인데 시작일은 수요일" 같은 모순을 저장할 수 있게 되고, 그 행을 무엇으로 읽을지 아무도 못 정한다. 31일 규칙은 30일까지인 달을 **건너뛴다** — 말일로 당기면 사용자가 안 정한 날에 알림이 온다.
+>
 > **좌표 컬럼이 없다.** A안(#235)에서 좌표는 기기를 안 떠나고, 일정은 그것이 필요한 기능이 아니다. 장소가 필요해지는 날에는 `walk` 처럼 카탈로그 참조(출처 + contentId)를 쓴다.
 >
 > **인덱스 둘.** `idx_schedule_owner_date (owner_kind, owner_ref, on_date)` 가 달력이 묻는 유일한 질문("이 주인의 이 기간")이고, `idx_schedule_dog_date (dog_id, on_date)` 가 "보리 것만" 필터다 — `dog_id` 로 시작하지 않으면 앞 인덱스를 못 쓴다.
+
+## 34. `schedule_exception` — 반복의 하루짜리 예외 (**실재**)
+
+이 표가 없으면 반복을 쓸 수 없다. "이번 주 목욕만 하루 미루기" 가 불가능해지고, 사용자는 반복을 지우고 다시 만든다 — 그러면 지난 기록도 함께 사라진다.
+
+```sql
+CREATE TABLE schedule_exception (
+  on_date     DATE        NOT NULL,
+  schedule_id BIGINT      NOT NULL,
+  kind        VARCHAR(10) NOT NULL,
+  PRIMARY KEY (on_date, schedule_id),
+  KEY fk_schedexc_schedule (schedule_id),
+  CONSTRAINT fk_schedexc_schedule FOREIGN KEY (schedule_id) REFERENCES schedule (id) ON DELETE CASCADE,
+  CONSTRAINT ck_schedule_exception_kind CHECK (kind IN ('skip','override'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `on_date` | `DATE` | PK(1/2) | 어느 날인가. **사용자의 날짜**다(KST) |
+| `schedule_id` | `BIGINT` | PK(2/2), FK→`schedule.id` CASCADE | 어느 규칙의 예외인가 |
+| `kind` | `VARCHAR(10)` | NOT NULL, CHECK | `skip`(그날 안 함) 또는 `override`(그날짜용 행이 대신함) |
+
+> **`skip` 과 `override` 는 펼치기에서 같다** — 둘 다 그날은 규칙에서 빠진다. 다른 것은 `override` 면 그날짜용 행이 따로 하나 생긴다는 것뿐이고, 그 행은 자기 `on_date` 로 평범하게 조회되며 `schedule.origin_id` 로 규칙에 이어져 있다. 구분을 남기는 것은 **사람이 DB 를 들여다볼 때**를 위해서다 — 옮긴 행이 지워진 뒤 그 자리가 왜 비어 있는지 알 수 있어야 한다.
+>
+> **PK 컬럼 순서가 `(on_date, schedule_id)` 인 것은 Hibernate 가 정한 것**이다(`mysql/init/01_schema.sql` 이 엔티티에서 재생성된다). 바라던 순서는 아니지만 — 이 표에 오는 질문은 "이 규칙의 예외" 라 `schedule_id` 가 앞이면 좋다 — **정본을 따른다.** 반대로 적으면 새로 세운 DB 와 마이그레이션한 DB 의 인덱스가 갈리고 오류는 안 난다. 그 방향은 `fk_schedexc_schedule` 에 딸린 인덱스가 받는다(`walk_dog` 이 #343 에서 같은 자리였다).
+>
+> **한 규칙의 한 날짜에 예외는 하나뿐이다.** 대리 키를 두면 같은 날짜에 두 줄이 생길 수 있고, 그러면 펼치기가 그중 무엇을 볼지 정해야 한다.
+>
+> **규칙을 지우면 함께 사라진다.** 규칙이 없는 예외는 아무 일도 안 한다.
 
 > **같은 이름의 옛 표가 운영 DB 에 있었다.** 감정 여행 시절의 `schedule`(여행 일정 — `schedule_id, user_id, title, content, date_from, date_to`)이 코드 없이 표만 남아 있다(#94). `34_schedule.sql` 이 그것을 **지우지 않고** `schedule_legacy_journey` 로 옮긴다 — 사람이 적어 둔 행이고, 지우는 것은 마이그레이션이 결정할 일이 아니다. `journey.schedule_id` 의 FK 도 `RENAME TABLE` 이 함께 옮긴다.
 
@@ -1273,6 +1315,7 @@ CREATE TABLE schedule (
 | `report` | 실재 §25 | `moderation` | 신고 |
 | `report_snapshot` | 실재 §26 | `moderation` | 신고 대상 스냅샷 |
 | `schedule` | 실재 §33 | `schedule` | 앞으로 할 일(#418). 주인이 셋이라 `owner_kind`+`owner_ref` 를 불투명하게 든다 |
+| `schedule_exception` | 실재 §34 | `schedule` | 반복의 하루짜리 예외(#421). 건너뛴 날과 옮긴 날 |
 | `trail_route` | 실재 §6 | `place` | 산책로 코스의 선 — 두루누비 GPX 를 300점 이하로 줄인 `[[경도, 위도]]` JSON(#291) |
 | `user_block` | 실재 §27 | `moderation` | 가리기 |
 | `user_consent` | 실재 §28 | `consent` | 약관 동의 이력 |
