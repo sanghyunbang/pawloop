@@ -5,6 +5,8 @@ import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -56,5 +58,21 @@ public class KnownUsers {
      */
     public Optional<User> byId(Long userId) {
         return userId == null ? Optional.empty() : users.findById(userId);
+    }
+
+    /**
+     * 이 id 들의 사람 — <b>한 문장으로</b>. 이슈 #417.
+     *
+     * <p>{@link #byId} 를 목록에서 반복해 부르면 멤버 20명짜리 크루 하나를 여는 데 쿼리가
+     * 20개 나간다. {@code FamilyGroupService.nicknamesOf} 가 같은 이유로 {@code findAllById}
+     * 를 쓰는데, 그쪽은 {@code UserRepository} 를 직접 부른다 — 그건 이 표면이 생기기 전에
+     * 쓴 코드이고 지금도 모듈 위반으로 세어지고 있다. 새 코드는 여기로 온다.
+     *
+     * @param ids 비어 있으면 빈 목록이다 — 부르는 쪽이 그 경우를 따로 안 다뤄도 되게 한다
+     * @return 있는 것만. 탈퇴해 사라진 id 는 그냥 빠진다 — 부르는 쪽이 그 자리를
+     *         {@code User.UNKNOWN_DISPLAY_NAME} 으로 메운다
+     */
+    public List<User> byIds(Collection<Long> ids) {
+        return ids == null || ids.isEmpty() ? List.of() : users.findAllById(ids);
     }
 }

@@ -1242,6 +1242,47 @@ CREATE TABLE schedule_exception (
 > **같은 이름의 옛 표가 운영 DB 에 있었다.** 감정 여행 시절의 `schedule`(여행 일정 — `schedule_id, user_id, title, content, date_from, date_to`)이 코드 없이 표만 남아 있다(#94). `34_schedule.sql` 이 그것을 **지우지 않고** `schedule_legacy_journey` 로 옮긴다 — 사람이 적어 둔 행이고, 지우는 것은 마이그레이션이 결정할 일이 아니다. `journey.schedule_id` 의 FK 도 `RENAME TABLE` 이 함께 옮긴다.
 
 ## 인덱스 · 공간 인덱스 요약
+## 35. `crew` — 동네 반려인 모임 (**실재**)
+
+동네 모임 하나. **표는 이것 하나뿐이다** — 멤버십도 초대코드도 방(`chat_room`)의 것이다.
+
+```sql
+CREATE TABLE crew (
+  capacity          INT          NOT NULL,
+  created_at        DATETIME(6)  NOT NULL,
+  id                BIGINT       NOT NULL AUTO_INCREMENT,
+  updated_at        DATETIME(6)  NULL,
+  neighborhood_code VARCHAR(10)  NULL,
+  visibility        VARCHAR(10)  NOT NULL,
+  name              VARCHAR(30)  NOT NULL,
+  intro             VARCHAR(200) NULL,
+  PRIMARY KEY (id),
+  KEY idx_crew_public (visibility, neighborhood_code),
+  CONSTRAINT ck_crew_capacity   CHECK (capacity BETWEEN 2 AND 100),
+  CONSTRAINT ck_crew_visibility CHECK (visibility IN ('invite','public'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK, AUTO_INCREMENT | `chat_room.origin_ref` 가 이 값을 문자열로 든다 |
+| `name` | `VARCHAR(30)` | NOT NULL | 모임 이름. **방 이름도 이 값**이다 — 고치면 함께 바뀐다 |
+| `intro` | `VARCHAR(200)` | NULL | 한 줄 소개. 없어도 된다 |
+| `neighborhood_code` | `VARCHAR(10)` | NULL | 행정동 코드(#342). **좌표가 아니다** |
+| `visibility` | `VARCHAR(10)` | NOT NULL, CHECK | `invite`(기본) · `public` |
+| `capacity` | `INT` | NOT NULL, CHECK 2..100 | **방장이 정한 정원**. 방의 정원과 다른 숫자다 |
+| `created_at` / `updated_at` | `DATETIME(6)` | — | 서버가 찍는 UTC |
+
+> **`crew_member` 표를 안 만든다.** 크루의 멤버는 **그 크루 방의 멤버**이고 그것은 `chat_room_member` 다 — [ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72) 이 채팅을 범용 다중 방으로 정하면서 `chat_room.origin_kind`/`origin_ref` 를 열어 뒀고, 그 컬럼 주석이 이미 "가족방도 산책 크루 방도 같은 표에 산다" 고 적고 있었다. 표를 따로 만들면 멤버십이 **두 곳**에 생기고, 언젠가 "크루는 나갔는데 방에는 남아 있는" 계정이 만들어진다. `family_group` 이 같은 이유로 사용자 컬럼을 안 갖는다.
+>
+> **방장 컬럼도 없다.** 방장은 그 방의 `OWNER` 멤버(`chat_room_member.role`)다. 컬럼을 따로 두면 둘이 갈리는 날 "크루 화면에서는 방장인데 대화방에서는 못 내보내는" 사람이 생긴다.
+>
+> **`chat_room` 으로 나가는 FK 가 없다.** 방 쪽이 이미 `(origin_kind='CREW', origin_ref=crew.id)` 로 들고 있어 같은 사실이 두 곳에 살게 된다. 그리고 그 FK 를 엔티티가 들려면 `crew` 가 `chat.entity.ChatRoom` 을 import 해야 하는데 그건 모듈 경계를 넘는다(`ChatBoundaryArchitectureTest`) — SQL 에만 적으면 `01_schema.sql` 재생성에서 조용히 사라진다(`schedule.care_log_id` 가 같은 자리다).
+>
+> **`idx_crew_public (visibility, neighborhood_code)`** 가 "우리 동네 공개 크루" 를 받는다. 찾기는 시군구 **앞 다섯 자리** `LIKE` 라 이 인덱스를 그대로 탄다 — 열 자리를 맞추면 같은 구의 옆 동네 모임이 안 보인다.
+>
+> **정원 CHECK 는 Hibernate 의 `update` 도 prod 의 `validate` 도 안 본다.** 그래서 `37_crew.sql` 의 사후 검증과 `CrewMigrationExecutionTest` 가 그것을 잰다 — 없으면 아무 데서도 안 잡힌다.
+
 
 | 테이블 | 인덱스 | 종류 | 목적 |
 | --- | --- | --- | --- |
@@ -1301,6 +1342,7 @@ CREATE TABLE schedule_exception (
 | `chat_room_member` | 실재 §13 | `chat` | 방 멤버십 |
 | `comment` | 실재 §8 | `community` | 게시글 댓글 |
 | `device_token` | 실재 §29 | `push` | 기기 토큰 원장 — 푸시(#83) |
+| `crew` | 실재 §35 | `crew` | 동네 반려인 모임(#417). 멤버십은 `chat_room_member` 가 든다 — `crew_member` 를 안 만든다 |
 | `dog` | 실재 §3 | `dog` | 반려동물 프로필(소프트 삭제 `deleted_at`) |
 | `family_group` | 실재 §11 | `group` | 가족 케어 그룹 |
 | `kto_call_budget` | 실재 §21 | `place` | KTO 일 호출 예산 |

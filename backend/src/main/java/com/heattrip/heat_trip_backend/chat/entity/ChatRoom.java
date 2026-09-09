@@ -90,6 +90,16 @@ public class ChatRoom {
     private String name;
 
     /**
+     * 이름을 고친다. 검증은 {@code ChatRoomService#renameRoom} 이 한다 — 이슈 #417.
+     *
+     * <p>{@code @Setter} 를 안 붙이는 것이 요점이다. 붙이면 {@code originKind}·{@code lastSeq}
+     * 까지 밖에서 바꿀 수 있게 되고, 그 둘은 바뀌면 안 되는 값이다.
+     */
+    public void rename(String name) {
+        this.name = name;
+    }
+
+    /**
      * 방 종류를 화면에서 가르는 꼬리표 — '가족' · '산책 크루'.
      *
      * <p>{@link #originKind} 와 역할이 다르다. {@code originKind} 는 기계가 읽는 출처이고

@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -22,6 +24,18 @@ import java.util.Optional;
 public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
     Optional<ChatRoom> findByOriginKindAndOriginRef(String originKind, String originRef);
+
+    /**
+     * 같은 종류의 방 여럿을 <b>한 문장으로</b> — 이슈 #417.
+     *
+     * <p>목록 화면이 이것을 필요로 한다. 크루 카드 하나마다
+     * {@link #findByOriginKindAndOriginRef} 를 부르면 크루 50개짜리 동네 목록에 쿼리가 50개
+     * 나간다. 목록 경로에서 N+1 은 "느리다" 가 아니라 <b>커넥션 풀을 비운다.</b>
+     *
+     * <p>{@code originRefs} 가 비어 있으면 빈 목록이다 — 부르는 쪽이 그 경우를 따로 안 다뤄도
+     * 되게 한다. (JPA 는 빈 {@code IN} 을 벤더마다 다르게 번역하므로 서비스가 앞에서 막는다.)
+     */
+    List<ChatRoom> findByOriginKindAndOriginRefIn(String originKind, Collection<String> originRefs);
 
     /**
      * 이 방의 <b>멤버가 바뀌는 트랜잭션</b>을 한 줄로 세운다 — 이 저장소의 첫 명시적 락이다.

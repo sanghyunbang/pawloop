@@ -26,6 +26,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -184,6 +185,151 @@ public class ChatRoomService {
     }
 
     /**
+     * 방 이름을 고친다. <b>방장만.</b> 이슈 #417.
+     *
+     * <h2>왜 이 메서드가 여기 있어야 하는가</h2>
+     * <p>방 이름은 <b>출처 도메인의 이름을 베낀 값</b>이다 — 가족 그룹을 만들면 그룹 이름이,
+     * 크루를 만들면 크루 이름이 {@code chat_room.name} 에 들어간다. 그런데 그 이름을 고치는
+     * 경로가 여기 없으면, 크루 이름을 바꾼 사람의 <b>채팅 목록에는 옛 이름이 남는다.</b>
+     * 같은 모임이 화면 두 곳에서 다른 이름으로 보이고, 어느 쪽이 진짜인지 아무도 모른다.
+     *
+     * <p>출처 도메인이 {@code chat_room} 을 직접 UPDATE 하는 길은 막혀 있다 —
+     * {@code ChatBoundaryArchitectureTest} 가 밖에서 {@code chat.entity}·{@code chat.repository}
+     * 를 부르는 것을 금지한다. 그래서 표면을 하나 연다.
+     *
+     * <h2>{@code originKind} 를 안 본다</h2>
+     * <p>보는 순간 chat 이 출처를 해석하기 시작한다(ADR-0011). 여기서 재는 것은 <b>방장인가</b>
+     * 하나이고, "이 이름으로 바꿔도 되는가" 는 부르는 쪽의 질문이다.
+     *
+     * <h2>길이도 부르는 쪽이 잰다</h2>
+     * <p>여기서 재려면 <b>컬럼 길이를 숫자로 적어야 하고</b>, chat main 소스에 그런 숫자를
+     * 두는 것을 {@code ChatLimitsTest} 가 막는다 — 한도는 {@code FixedChatLimits} 한 곳에
+     * 살아야 하기 때문이다(그 테스트가 실제로 이 줄을 잡았다). 그리고 길이는 애초에
+     * <b>출처 도메인의 규칙</b>이다: 가족은 50자({@code FamilyGroupService.MAX_NAME_LENGTH}),
+     * 크루는 30자({@code CrewService.MAX_NAME_LENGTH})이고 둘 다 컬럼보다 짧다. 그 관계는
+     * {@code CrewNameFitsTheRoomColumnTest} 가 잰다 — 넘는 이름이 오면 500 이 나므로
+     * "안 재도 된다" 가 아니라 "재는 자리가 여기가 아니다" 다.
+     *
+     * @return 바뀐 방
+     * @throws ResponseStatusException 방장이 아니면 403
+     */
+    @Transactional
+    public ChatRoomView renameRoom(long roomId, long actorUserId, String name) {
+        requireOwner(roomId, actorUserId);
+
+        String trimmed = name == null ? "" : name.strip();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("방 이름은 비울 수 없습니다.");
+        }
+
+        ChatRoom room = rooms.findById(roomId)
+                .orElseThrow(() -> new NoSuchElementException("방을 찾을 수 없습니다."));
+        room.rename(trimmed);
+        return viewOf(rooms.saveAndFlush(room));
+    }
+
+    /**
+     * <b>초대코드 없이</b> 방에 들어온다 — 이슈 #417. 공개 크루의 참여가 이 경로다.
+     *
+     * <h2>이 메서드는 문을 하나 여는 것이라, 여는 폭을 좁힌다</h2>
+     * <p>{@link #joinByInviteCode} 는 "코드를 가진 사람" 이라는 <b>증거</b>를 요구한다. 여기엔
+     * 그 증거가 없다. 그러니 대신 두 가지를 요구한다.
+     * <ol>
+     *   <li><b>{@code allowedOriginKinds} 가 필수다.</b> {@code null}·빈 집합이면 예외다 —
+     *       {@link #joinByInviteCode} 에서 {@code null} 이 "제한 없음" 인 것과 <b>정반대</b>다.
+     *       부르는 쪽이 자기 종류를 대야 한다. 그래야 이 표면으로 남의 도메인 방
+     *       (가족방·상담방)에 들어가는 일이 구조적으로 불가능하다.</li>
+     *   <li><b>HTTP 표면이 없다.</b> {@code chatweb} 에 이 메서드를 부르는 컨트롤러를 두지
+     *       않는다. 부르는 곳은 출처 도메인 서비스뿐이고, "들어와도 되는가" 는 거기서 잰다
+     *       (크루는 <b>공개 크루인가</b>로 답한다).</li>
+     * </ol>
+     *
+     * <h2>격리 수준과 잠금은 {@link #joinByInviteCode} 와 같다</h2>
+     * <p>같은 표에 같은 방식으로 INSERT 하므로 같은 데드락을 만들 수 있다. 방을 먼저 잠그고
+     * ({@code chat_room → chat_room_member} 순서), {@code READ_COMMITTED} 로 내 차례의 최신을
+     * 읽는다. <b>부르는 쪽이 트랜잭션을 먼저 열었다면 그쪽 격리 수준이 이긴다</b> —
+     * 그래서 부르는 쪽도 {@code READ_COMMITTED} 로 열어야 하고, 크루가 그렇게 한다.
+     *
+     * <p>강퇴당한 사람은 못 들어온다(ADR-0011 결정 6). 공개 크루라도 마찬가지다 — 공개는
+     * "누구나 들어올 수 있다" 이지 "내보낸 사람도 돌아온다" 가 아니다.
+     *
+     * @param allowedOriginKinds 허용할 {@code origin_kind} 들. <b>비어 있으면 안 된다</b>
+     * @throws ResponseStatusException 방 종류가 다르거나(403) 재입장 금지면(403)
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ChatJoinResult joinRoom(long roomId, long userId, Set<String> allowedOriginKinds) {
+        if (allowedOriginKinds == null || allowedOriginKinds.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "코드 없이 들어오는 경로는 방 종류를 반드시 밝혀야 합니다.");
+        }
+
+        // ★ 직렬화 지점. joinByInviteCode 와 같은 순서로 잠근다.
+        ChatRoom lockedRoom = rooms.lockForMemberChange(roomId)
+                .orElseThrow(() -> new NoSuchElementException("방을 찾을 수 없습니다."));
+        ChatRoomView room = viewOf(lockedRoom);
+
+        if (!allowedOriginKinds.contains(room.originKind())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "이 방에는 참여할 수 없습니다.");
+        }
+
+        Optional<ChatRoomMember> existing = members.findByRoomIdAndUserId(roomId, userId);
+
+        if (existing.isPresent() && existing.get().getRemovedAt() == null) {
+            return new ChatJoinResult(room, true);
+        }
+        if (existing.isPresent() && existing.get().isRejoinBlocked()) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "이 방에는 다시 들어올 수 없습니다.");
+        }
+
+        int capacity = limits.maxMembersPerRoom(userId);
+        if (existing.isPresent()) {
+            return reviveWithinCapacity(existing.get().getId(), roomId, capacity, room);
+        }
+        if (members.insertMemberIfRoomHasSpace(
+                roomId, userId, ChatTime.nowUtc(clock), capacity) == 0) {
+            throw new ChatLimitViolationException(ChatErrorCode.ROOM_MEMBER_LIMIT);
+        }
+
+        return new ChatJoinResult(room, false);
+    }
+
+    /**
+     * <b>스스로 나간다.</b> 강퇴({@link #removeMember})와 다른 동작이다 — 이슈 #417.
+     *
+     * <p>차이는 하나이고 그 하나가 전부다 — <b>재입장 금지를 안 건다.</b> 나갔다가 마음이
+     * 바뀌면 다시 들어올 수 있어야 한다. {@code ChatRoomMemberRepository#leave} javadoc 이
+     * 둘을 한 메서드로 묶으면 안 되는 이유를 적었다.
+     *
+     * <p>{@code ChatMemberController} 가 "나가기는 이 이슈의 범위가 아니다" 라고 적어 둔
+     * 자리다. 크루가 그것을 필요로 해서 여기서 채운다 — 다만 <b>HTTP 표면은 아직 크루 쪽에만
+     * 연다.</b> {@code DELETE /api/chat/rooms/{roomId}/members/me} 는 계약에 선언만 돼 있고,
+     * 그 경로를 여는 것은 방을 나간 사람의 가족 그룹이 어떻게 되는지를 함께 정해야 한다.
+     *
+     * <h2>방장은 못 나간다</h2>
+     * <p>나가면 <b>방장이 없는 방</b>이 남는다. 그 방은 초대코드도 못 내고 강퇴도 못 하고
+     * 이름도 못 고친다 — {@link #openRoom} 이 방과 방장을 한 문장에서 만드는 이유와 같다.
+     * 방을 정리하는 것은 "나가기" 가 아니라 다른 동작이고, 아직 없다.
+     *
+     * @return 이번에 실제로 나갔으면 {@code true}, 이미 나가 있었으면 {@code false}
+     * @throws ResponseStatusException 그 방의 멤버가 아니거나(404) 방장이면(400)
+     */
+    @Transactional
+    public boolean leaveRoom(long roomId, long userId) {
+        ChatRoomMember me = members.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "이 방의 멤버가 아닙니다."));
+
+        if (me.getRole() == ChatRoomMemberRole.OWNER) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "방장은 방을 나갈 수 없습니다.");
+        }
+
+        return members.leave(roomId, userId, ChatTime.nowUtc(clock)) == 1;
+    }
+
+    /**
      * 이 사람이 살아 있는 멤버로 있는, 같은 종류의 방들 — 참여 순서대로.
      *
      * <p>멤버십 표가 {@code chat_room_member} 하나이므로(ADR-0011 결정 1) "내가 속한 가족" 을
@@ -194,6 +340,65 @@ public class ChatRoomService {
         return members.findLiveMembershipsByOriginKind(userId, originKind).stream()
                 .map(member -> viewOf(member.getRoom()))
                 .toList();
+    }
+
+    /**
+     * 출처 쌍 여럿의 방을 <b>한 번에</b> — 이슈 #417.
+     *
+     * <p>{@link #findRoom} 을 목록에서 반복해 부르면 N+1 이다
+     * ({@code ChatRoomRepository#findByOriginKindAndOriginRefIn} javadoc). 이것도 조회일 뿐
+     * 확인-후-쓰기의 근거가 아니다.
+     *
+     * @return 찾은 것만. 순서는 보장하지 않는다 — 순서는 부르는 쪽의 질문이다
+     */
+    @Transactional(readOnly = true)
+    public List<ChatRoomView> findRooms(String originKind, Collection<String> originRefs) {
+        if (originRefs == null || originRefs.isEmpty()) {
+            return List.of();
+        }
+        return rooms.findByOriginKindAndOriginRefIn(originKind, originRefs).stream()
+                .map(ChatRoomService::viewOf)
+                .toList();
+    }
+
+    /**
+     * 방마다 지금 몇 명인가 — <b>한 문장</b>이다. 이슈 #417.
+     *
+     * <p>{@link #liveMembers} 를 세려고 부르면 사람 목록을 통째로 실어 와 크기만 쓴다. 방
+     * 50개짜리 목록에서는 그것이 <b>수백 행</b>이다. {@code myRooms} 가 이미 같은 문장으로
+     * 세고 있었고(#79), 여기서는 그 문장을 목록 경로에 열어 준다.
+     *
+     * @return 살아 있는 멤버가 있는 방만 담긴다 — 없는 방은 <b>키가 아예 없다</b>.
+     *         부르는 쪽이 {@code getOrDefault(id, 0)} 으로 읽어야 한다
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Integer> liveMemberCounts(Collection<Long> roomIds) {
+        if (roomIds == null || roomIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Integer> counts = new HashMap<>();
+        for (Object[] row : members.countLiveMembersOfRooms(roomIds)) {
+            counts.put((Long) row[0], ((Number) row[1]).intValue());
+        }
+        return counts;
+    }
+
+    /**
+     * 이 사람이 같은 종류의 방들에서 갖는 역할 — 방 id → {@code OWNER}/{@code MEMBER}. #417.
+     *
+     * <p>{@link #roomsOfMember} 와 <b>같은 한 문장</b>을 쓴다. 목록 카드가 "참여" 를 그릴지
+     * "들어가기" 를 그릴지, 그리고 고치기 버튼을 줄지를 이 지도 하나로 정한다 —
+     * {@link #isLiveMember} 를 카드마다 부르면 그것이 N+1 이다.
+     *
+     * <p>키에 없으면 그 방의 멤버가 아니다.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, String> myRolesIn(String originKind, long userId) {
+        Map<Long, String> roles = new HashMap<>();
+        for (ChatRoomMember member : members.findLiveMembershipsByOriginKind(userId, originKind)) {
+            roles.put(member.getRoom().getId(), member.getRole().name());
+        }
+        return roles;
     }
 
     /**

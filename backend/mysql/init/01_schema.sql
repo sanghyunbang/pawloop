@@ -150,6 +150,21 @@ CREATE TABLE `course` (
   KEY `idx_course_public` (`visibility`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `crew` (
+  `capacity` int NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `neighborhood_code` varchar(10) DEFAULT NULL,
+  `visibility` varchar(10) NOT NULL,
+  `name` varchar(30) NOT NULL,
+  `intro` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_crew_public` (`visibility`,`neighborhood_code`),
+  CONSTRAINT `ck_crew_capacity` CHECK ((`capacity` between 2 and 100)),
+  CONSTRAINT `ck_crew_visibility` CHECK ((`visibility` in (_utf8mb4'invite',_utf8mb4'public')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `device_token` (
   `created_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
