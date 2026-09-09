@@ -3940,6 +3940,54 @@ components:
             properties:
               place: { $ref: '#/components/schemas/PlaceRef' }
               count: { type: integer, example: 3 }
+        summary:
+          allOf: [{ $ref: '#/components/schemas/WeekSummary' }]
+          description: |
+            "이번 주 요약" 이 쓰는 **계산 결과**입니다 (#359 1단계). **문장은 앱이 만듭니다.**
+
+            여기 담는 것은 **앱이 스스로 못 구하는 것뿐**입니다. 빠진 요일은 이미 있는
+            `weekKm`·`weekMinutes` 로 세면 되고, 달성률의 목표는 사용자가 기기에서 고치는
+            값이라(#341) 서버가 모릅니다. 서버가 아는 것은 **지난주 숫자**와 **시간대별
+            집계** 둘입니다 — 둘 다 이번 주 응답만으로는 만들 수 없습니다.
+
+            **문장을 서버가 만들지 않는 이유**: 문구는 화면의 것이고 자주 바뀝니다. 서버가
+            완성된 문장을 주면 문구 하나를 고치는 데 배포가 필요하고, 앱 버전마다 다른
+            문장을 줘야 하는 날이 옵니다.
+
+    WeekSummary:
+      type: object
+      required: [lastWeekKm, lastWeekMinutes, lastWeekCount, byPartOfDay]
+      properties:
+        lastWeekKm:
+          type: number
+          format: double
+          description: 지난주 거리(km). 이번 주와 **같은 요일 기준**(KST 월~일)입니다.
+          example: 8.4
+        lastWeekMinutes: { type: integer, example: 120 }
+        lastWeekCount: { type: integer, example: 4 }
+        byPartOfDay:
+          type: array
+          description: |
+            시간대별 **이번 주** 집계. **항상 넷**이고 순서가 고정입니다 —
+            `dawn`(00~05) · `morning`(06~11) · `afternoon`(12~17) · `evening`(18~23).
+
+            0 인 시간대도 **빠지지 않고 0 으로** 옵니다. 빠진 칸을 앱이 "없는 것" 과
+            "0인 것" 으로 갈라 다루지 않게 하기 위해서입니다.
+
+            새벽을 따로 두는 이유: 교대 근무나 더운 여름의 산책이 실제로 그 시간에 있습니다.
+            그것을 "저녁" 에 합치면 "저녁에 자주 나가시네요" 라는 **틀린 문장**이 나갑니다.
+          minItems: 4
+          maxItems: 4
+          items:
+            type: object
+            required: [part, count, km, minutes]
+            properties:
+              part:
+                type: string
+                enum: [dawn, morning, afternoon, evening]
+              count: { type: integer, example: 3 }
+              km: { type: number, format: double, example: 6.0 }
+              minutes: { type: integer, example: 90 }
 
     Board:
       type: string

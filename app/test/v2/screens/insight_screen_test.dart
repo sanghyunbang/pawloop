@@ -6,12 +6,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/data/walk_feed.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
+import 'package:heat_trip_flutter/v2/domain/weekly_summary.dart';
 import 'package:heat_trip_flutter/v2/screens/insight_screen.dart';
 
 class _Repo implements WalkRepository {
-  _Repo(this.weekKm, {this.topPlaces = const []});
+  _Repo(this.weekKm, {this.topPlaces = const [], this.weekMinutes, this.summary});
   final List<double> weekKm;
   final List<WalkTopPlace> topPlaces;
+
+  /// 요일별 분. 안 주면 걸은 요일마다 30분으로 채운다 — 요약이 분을 읽는다(#359).
+  final List<int>? weekMinutes;
+
+  /// 서버가 주는 "이번 주 요약" 계산 결과 (#359).
+  final WeekSummaryData? summary;
 
   @override
   Future<ServerWalkPage> walks({int? dogId, String? cursor, int? limit}) async =>
@@ -20,6 +27,7 @@ class _Repo implements WalkRepository {
   @override
   Future<ServerWalkStats> stats({int? dogId}) async => ServerWalkStats(
         weekKm: weekKm,
+        weekMinutes: weekMinutes ?? [for (final km in weekKm) km > 0 ? 30 : 0],
         totalKm: weekKm.fold(0.0, (a, b) => a + b),
         walkCount: weekKm.where((k) => k > 0).length,
         avgKm: 0.15,
@@ -27,6 +35,7 @@ class _Repo implements WalkRepository {
         allTimeCount: 1,
         allTimeMinutes: 1,
         topPlaces: topPlaces,
+        summary: summary ?? WeekSummaryData.empty,
       );
 
   @override
@@ -36,12 +45,23 @@ class _Repo implements WalkRepository {
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName} 은 이 테스트가 안 쓴다');
 }
 
-Future<void> _pump(WidgetTester t, List<double> weekKm, {List<WalkTopPlace> topPlaces = const []}) async {
+Future<void> _pump(
+  WidgetTester t,
+  List<double> weekKm, {
+  List<WalkTopPlace> topPlaces = const [],
+  List<int>? weekMinutes,
+  WeekSummaryData? summary,
+}) async {
   t.view.physicalSize = const Size(1080, 2400);
   t.view.devicePixelRatio = 1.0;
   addTearDown(t.view.reset);
   await t.pumpWidget(MaterialApp(
-    home: InsightScreen(feed: WalkFeed(repository: _Repo(weekKm, topPlaces: topPlaces))),
+    home: InsightScreen(
+      feed: WalkFeed(
+        repository: _Repo(weekKm,
+            topPlaces: topPlaces, weekMinutes: weekMinutes, summary: summary),
+      ),
+    ),
   ));
   await t.pumpAndSettle();
 }
@@ -67,7 +87,7 @@ void main() {
     expect(find.text('베타'), findsNothing);
     expect(find.textContaining('🐾'), findsNothing);
     expect(find.text('이번 주 요약'), findsOneWidget);
-    expect(find.textContaining('이번 주는 1회'), findsOneWidget, reason: '문장 자체는 자료에서 나온다');
+    expect(find.textContaining('이번 주 1회'), findsOneWidget, reason: '문장 자체는 자료에서 나온다');
   });
 
   testWidgets('0.15km 한 건이면 세로축이 "0 0 0 0" 이 아니라 m 눈금이다', (t) async {
@@ -100,5 +120,33 @@ void main() {
     expect(find.text('서울숲'), findsOneWidget);
     expect(find.text('DMZ 평화의 길'), findsOneWidget);
     expect(find.textContaining('아직 없어요'), findsNothing);
+  });
+  // ── 이번 주 요약 (#359 1단계) ────────────────────────────
+  //
+  // 문장은 `WeeklySummary` 가 만든다 — 여기서는 **화면이 그것을 그리는가**만 본다.
+  // 문장 규칙 자체는 `weekly_summary_test.dart` 가 잰다.
+
+  testWidgets('지난주 기록이 있으면 화면에 비교 줄이 나온다', (t) async {
+    await _pump(
+      t,
+      const [2, 0, 2, 0, 0, 0, 0],
+      weekMinutes: const [30, 0, 30, 0, 0, 0, 0],
+      summary: const WeekSummaryData(lastWeekKm: 2.0, lastWeekMinutes: 30, lastWeekCount: 1),
+    );
+
+    expect(find.textContaining('지난주보다 2.0km 더 걸었어요'), findsOneWidget);
+  });
+
+  testWidgets('서버가 요약을 안 줘도 화면이 죽지 않는다 — 옛 서버와 붙어도 그린다', (t) async {
+    await _pump(t, const [2, 0, 0, 0, 0, 0, 0]);
+
+    expect(find.textContaining('이번 주 1회'), findsOneWidget);
+    expect(find.textContaining('지난주'), findsNothing, reason: '없는 비교를 지어내지 않는다');
+  });
+
+  testWidgets('기록이 없으면 숫자 대신 한 줄만 말한다', (t) async {
+    await _pump(t, const [0, 0, 0, 0, 0, 0, 0]);
+
+    expect(find.text('이번 주는 아직 기록이 없어요. 오늘 한 바퀴 어때요.'), findsOneWidget);
   });
 }

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
+import '../domain/walk_goal.dart';
+import '../domain/weekly_summary.dart';
+import '../data/walk_goal_store.dart';
 import '../widgets/aurora.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../data/walk_feed.dart';
@@ -42,36 +45,50 @@ class _InsightScreenState extends State<InsightScreen> {
 
   double get _maxKm => _weekKm.fold(0.0, (a, b) => b > a ? b : a);
 
-  /// 주간 요약 문구.
+  /// 이 아이의 주간 목표 — 달성률 줄에 쓴다. 기기에 있는 값이라 서버가 모른다(#341).
   ///
-  /// **하드코딩된 주장을 지웠다.** 예전 문구는 "주말에 가장 활발했고 … 서울숲 평지 코스
-  /// 위주를 추천해요" 였는데, 둘 다 근거가 없었다. 실제로 화요일에만 걸은 주에도
-  /// "주말에 가장 활발" 이라고 말했다(실측). 옆의 숫자가 실데이터가 되면서 그 문장이
-  /// **분석처럼 읽히기 시작했다** — 더미였을 때보다 나쁘다.
-  ///
-  /// 지금 말하는 것은 **자료에서 나오는 것뿐**이다: 횟수·거리·평균, 그리고 가장 많이
-  /// 걸은 요일. 코스 추천은 `Walk` 에 장소 축이 생기는 날 다시 본다.
-  String get _weeklyReport {
-    if (_walkCount == 0) {
-      return '이번 주는 아직 기록이 없어요. 오늘 한 바퀴 어때요.';
-    }
+  /// **개가 아니면 `null` 이다.** 산책 권장량은 개에 대한 자료다(`WalkGoal.recommendedFor`).
+  /// 그때는 달성률 줄이 아예 없다 — 근거 없는 숫자를 목표라고 부르지 않는다.
+  WalkGoal? _goal;
 
-    final buffer = StringBuffer(
-      '이번 주는 $_walkCount회 · ${_totalKm.toStringAsFixed(1)}km 걸었어요. ',
-    );
-
-    // 가장 많이 걸은 요일. 같은 값이 여럿이면 앞선 요일을 고른다 — 순위를 지어내지 않는다.
-    var best = 0;
-    for (var i = 1; i < _weekKm.length; i++) {
-      if (_weekKm[i] > _weekKm[best]) best = i;
-    }
-    if (_weekKm[best] > 0) {
-      buffer.write('${kWeekDayLabels[best]}요일에 가장 많이 걸었고, ');
-    }
-
-    buffer.write('평균 ${_avgKm.toStringAsFixed(1)}km 예요.');
-    return buffer.toString();
+  @override
+  void initState() {
+    super.initState();
+    _loadGoal();
   }
+
+  Future<void> _loadGoal() async {
+    final pet = kMyDog.value;
+    if (pet == null) return;
+    final saved = await const WalkGoalStore().read(petId: pet.serverId);
+    if (!mounted) return;
+    setState(() => _goal = saved ??
+        WalkGoal.recommendedFor(
+          species: pet.species,
+          size: pet.size,
+          ageMonths: pet.ageMonths,
+        ));
+  }
+
+  /// 주간 요약 — 이슈 #359 1단계. **규칙으로 계산한다.**
+  ///
+  /// 예전에는 여기서 문자열을 조립했다: "이번 주는 3회 · 6.2km 걸었어요. 화요일에 가장
+  /// 많이 걸었고, 평균 2.1km 예요." 사실이지만 **아무것도 말해 주지 않는다** — 사용자가
+  /// 이미 옆의 막대에서 읽은 숫자를 문장으로 다시 적은 것뿐이다.
+  ///
+  /// 지금은 셋을 더한다: 우리 아이 기준 목표 대비 · 빠진 요일 · 지난주 대비. 그리고 하나를
+  /// 제안한다. 계산은 [WeeklySummary] 한 곳에 있다 — 화면은 그 결과를 그리기만 한다.
+  ///
+  /// LLM 두 문장은 2단계이고 키가 필요하다(#359). 그때까지 이 자리는 **"AI" 라고 부르지
+  /// 않는다**(#332).
+  WeeklySummary get _summary => WeeklySummary.of(
+        walkCount: _walkCount,
+        totalKm: _totalKm,
+        weekKm: _weekKm,
+        weekMinutes: _data.stats.weekMinutes,
+        summary: _data.stats.summary,
+        goal: _goal,
+      );
 
   /// 오늘이 몇 번째 막대인가. **월요일이 0 이다.**
   ///
@@ -256,7 +273,7 @@ class _InsightScreenState extends State<InsightScreen> {
           ),
           const SizedBox(height: 9),
           Text(
-            _weeklyReport,
+            _summary.text,
             style: const TextStyle(
               fontSize: 13,
               height: 1.55,

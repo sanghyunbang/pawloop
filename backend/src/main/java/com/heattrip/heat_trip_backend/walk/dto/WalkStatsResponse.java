@@ -40,7 +40,44 @@ public record WalkStatsResponse(
         double allTimeKm,
         int allTimeCount,
         int allTimeMinutes,
-        List<TopPlace> topPlaces) {
+        List<TopPlace> topPlaces,
+
+        /**
+         * "이번 주 요약" 이 쓰는 계산 결과 — 이슈 #359 1단계. <b>문장은 앱이 만든다.</b>
+         *
+         * <p>여기 담는 것은 <b>앱이 스스로 못 구하는 것뿐</b>이다. 빠진 요일은 이미 있는
+         * {@link #weekKm}·{@link #weekMinutes} 로 세면 되고, 달성률의 목표는 사용자가
+         * 기기에서 고치는 값이라(#341) 서버가 모른다. 서버가 아는 것은 <b>전주 숫자</b>와
+         * <b>시간대별 집계</b> 둘이다 — 둘 다 이번 주 응답만으로는 만들 수 없다.
+         *
+         * <p><b>문장을 서버가 만들지 않는 이유.</b> 문구는 화면의 것이고 자주 바뀐다.
+         * 서버가 완성된 문장을 주면 문구 하나를 고치는 데 배포가 필요하고, 앱 버전마다
+         * 다른 문장을 줘야 하는 날이 온다.
+         */
+        WeekSummary summary) {
+
+    /**
+     * 계약의 {@code WalkStats.summary} — 이슈 #359.
+     *
+     * @param lastWeekKm      지난주 거리(km). 이번 주와 <b>같은 요일 기준</b>(KST 월~일)
+     * @param lastWeekMinutes 지난주 분
+     * @param lastWeekCount   지난주 산책 건수
+     * @param byPartOfDay     시간대별 이번 주 집계. <b>항상 넷</b>이고 순서가 고정이다 —
+     *                        {@code dawn}(00~05) · {@code morning}(06~11) ·
+     *                        {@code afternoon}(12~17) · {@code evening}(18~23).
+     *                        0 인 시간대도 뺀 게 아니라 0 으로 온다: 빠진 칸을 앱이
+     *                        "없는 것" 과 "0인 것" 으로 갈라 다루지 않게 한다
+     */
+    public record WeekSummary(
+            double lastWeekKm,
+            int lastWeekMinutes,
+            int lastWeekCount,
+            List<PartOfDayCount> byPartOfDay) {
+    }
+
+    /** 시간대 한 칸. {@code part} 는 계약이 선언한 넷 중 하나다. */
+    public record PartOfDayCount(String part, int count, double km, int minutes) {
+    }
 
     /**
      * 계약의 {@code WalkStats.topPlaces[]}.

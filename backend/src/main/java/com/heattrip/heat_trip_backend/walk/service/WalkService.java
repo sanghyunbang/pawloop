@@ -304,7 +304,72 @@ public class WalkService {
                 round(all.meters() / 1000.0),
                 all.walks(),
                 (int) (all.seconds() / 60),
-                topPlaces(userId, dogId));
+                topPlaces(userId, dogId),
+                summaryOf(userId, dogId, weekStart, week));
+    }
+
+    /**
+     * "이번 주 요약" 이 쓰는 계산 결과 — 이슈 #359 1단계.
+     *
+     * <p><b>서버가 아는 것만 담는다.</b> 빠진 요일은 이미 나가는 {@code weekKm} 으로 세면
+     * 되고, 달성률의 목표는 사용자가 기기에서 고치는 값이라(#341) 서버가 모른다. 여기
+     * 담는 둘은 이번 주 응답만으로는 만들 수 없는 것이다 — 지난주 숫자와 시간대별 집계.
+     *
+     * <p><b>지난주를 한 번 더 읽는다.</b> 한 사람의 일주일치는 수십 행이라 싸다. 이번 주
+     * 조회와 같은 질의를 범위만 바꿔 부르므로 아이별 필터(#343)도 그대로 따라간다.
+     */
+    private WalkStatsResponse.WeekSummary summaryOf(
+            long userId, Long dogId, ZonedDateTime weekStart, List<Walk> week) {
+
+        LocalDateTime lastFromUtc = Walk.utc(weekStart.minusWeeks(1).toInstant());
+        LocalDateTime lastToUtc = Walk.utc(weekStart.toInstant());
+        List<Walk> lastWeek = walks.findStartedBetween(userId, dogId, lastFromUtc, lastToUtc);
+
+        double lastKm = 0;
+        long lastSeconds = 0;
+        for (Walk walk : lastWeek) {
+            lastKm += walk.getDistanceM() / 1000.0;
+            lastSeconds += walk.getDurationS();
+        }
+
+        int[] counts = new int[PARTS_OF_DAY.size()];
+        double[] kms = new double[PARTS_OF_DAY.size()];
+        long[] seconds = new long[PARTS_OF_DAY.size()];
+        for (Walk walk : week) {
+            int slot = partOfDayIndex(walk.startedAtInstant().atZone(KST).getHour());
+            counts[slot]++;
+            kms[slot] += walk.getDistanceM() / 1000.0;
+            seconds[slot] += walk.getDurationS();
+        }
+
+        List<WalkStatsResponse.PartOfDayCount> parts = new ArrayList<>(PARTS_OF_DAY.size());
+        for (int i = 0; i < PARTS_OF_DAY.size(); i++) {
+            parts.add(new WalkStatsResponse.PartOfDayCount(
+                    PARTS_OF_DAY.get(i), counts[i], round(kms[i]), (int) (seconds[i] / 60)));
+        }
+
+        return new WalkStatsResponse.WeekSummary(
+                round(lastKm), (int) (lastSeconds / 60), lastWeek.size(), parts);
+    }
+
+    /** 계약이 선언한 시간대 넷. <b>순서가 곧 응답의 순서</b>다. */
+    static final List<String> PARTS_OF_DAY =
+            List.of("dawn", "morning", "afternoon", "evening");
+
+    /**
+     * KST 시(0~23) → 시간대 칸.
+     *
+     * <p>새벽을 따로 두는 이유: 교대 근무나 더운 여름의 산책이 실제로 그 시간에 있다.
+     * 그것을 "저녁" 에 합치면 "저녁에 자주 나가시네요" 라는 틀린 문장이 나간다.
+     */
+    static int partOfDayIndex(int hour) {
+        if (hour < 6) {
+            return 0;
+        }
+        if (hour < 12) {
+            return 1;
+        }
+        return hour < 18 ? 2 : 3;
     }
 
     /**
