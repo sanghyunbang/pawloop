@@ -21,7 +21,10 @@ import 'package:heat_trip_flutter/v2/screens/me_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/settings_screen.dart';
 
 Future<void> _pump(WidgetTester tester, Widget child) async {
-  tester.view.physicalSize = const Size(1080, 2400);
+  // 높이를 넉넉히 준다. 설정 화면은 절이 늘어나는 자리라(#420 이 일정 알림 카드를 더했다)
+  // 폰 한 화면에 맞춰 두면, 절을 더할 때마다 맨 아래 항목이 "없다" 로 보인다 — 화면 밖인
+  // 것과 없는 것이 구별되지 않는다.
+  tester.view.physicalSize = const Size(1080, 6000);
   tester.view.devicePixelRatio = 2.75;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(home: child));

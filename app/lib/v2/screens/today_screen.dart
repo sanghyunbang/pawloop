@@ -4,6 +4,7 @@ import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/today_care_card.dart';
+import '../widgets/today_schedule_line.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../widgets/emergency_vets_sheet.dart';
 import '../widgets/walk_goal_row.dart';
@@ -112,6 +113,11 @@ class TodayScreen extends StatelessWidget {
                     // "만들기" 는 이름 시트까지 한 번에(#329).
                     onCreateFamily: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const FamilyScreen(openCreate: true))),
+                  ),
+                  // 오늘 할 일 한 줄 — 케어 카드 **아래**다(#420). 케어는 "이미 한 것",
+                  // 이 줄은 "앞으로 할 것" 이라 시간 순서가 그렇다. 없으면 줄 자체가 없다.
+                  TodayScheduleLine(
+                    onOpen: () => RootTab.index.value = 2,
                   ),
                   const SizedBox(height: 12),
                   _ctas(context),

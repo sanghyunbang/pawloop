@@ -355,6 +355,7 @@ CREATE TABLE `schedule` (
   `on_date` date NOT NULL,
   `version` int NOT NULL,
   `assignee` bigint DEFAULT NULL,
+  `care_log_id` bigint DEFAULT NULL,
   `created_at` datetime(6) NOT NULL,
   `created_by` bigint NOT NULL,
   `dog_id` bigint DEFAULT NULL,

@@ -98,6 +98,26 @@ void main() {
     RootTab.index.value = 0;
   });
 
+  // 넘침이 아니라 **겹침**이다 — RenderFlex 예외가 안 나므로 위의 검사들이 전부 초록인 채로
+  // 지나간다. #420 에서 에뮬레이터 화면을 보고 잡았다.
+  //
+  // 원인은 이랬다: 다섯 칸을 한 Row 에 늘어놓고 가운데에 56 을 끼우면 왼쪽이 셋이라 그
+  // 빈칸이 화면 중앙보다 오른쪽으로 밀린다. 그런데 기록 버튼은 화면 **중앙**에 절대
+  // 배치라, 밀린 만큼 버튼이 세 번째 칸("일정") 위를 덮었다.
+  for (final width in [320.0, 360.0, 393.0]) {
+    testWidgets('${width.toInt()}dp — 기록 버튼이 어느 탭도 덮지 않는다', (tester) async {
+      await _pumpShell(tester, width: width, scale: 1.0);
+
+      final fab = tester.getRect(find.byIcon(Icons.directions_walk_rounded));
+      for (final label in _labels) {
+        final tab = tester.getRect(find.text(label));
+        final overlaps = fab.left < tab.right && tab.left < fab.right;
+        expect(overlaps, isFalse,
+            reason: '"$label" 이 기록 버튼 아래 깔린다 — 누르면 산책이 시작된다');
+      }
+    });
+  }
+
   testWidgets('왼쪽부터 홈 · 지도 · 일정 · (기록) · 커뮤니티 · 채팅 순이다', (tester) async {
     await _pumpShell(tester, width: 360, scale: 1.0);
 

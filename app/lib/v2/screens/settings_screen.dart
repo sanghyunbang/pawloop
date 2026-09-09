@@ -35,6 +35,7 @@ import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/neighborhood_tile.dart';
 import '../data/auth_state.dart';
+import '../widgets/schedule_reminder_tile.dart';
 import '../widgets/walk_reminder_tile.dart';
 import 'intro_screen.dart';
 import 'settings/account_delete_screen.dart';
@@ -83,6 +84,11 @@ class SettingsScreen extends StatelessWidget {
                     // 로그인·토큰과 상관이 없다.
                     _section('알림'),
                     _card(const [WalkReminderTile()]),
+                    const SizedBox(height: 10),
+                    // 일정 알림 (#420). 산책 알림과 같은 절이지만 카드를 나눈 것은,
+                    // 둘이 서로 다른 것을 켜고 끄기 때문이다 — 한 카드에 두면 스위치
+                    // 하나가 둘을 다 켜는 것처럼 보인다.
+                    _card(const [ScheduleReminderTile()]),
                     const SizedBox(height: 18),
                     // 첫 실행 소개는 한 번만 나온다(#323). 닫아 버린 안내를 나중에 다시
                     // 찾을 수 있어야 한다 — 그 자리가 여기다.

@@ -6,6 +6,7 @@ import 'explore_screen.dart';
 import 'feed_screen.dart';
 import 'chat_list_screen.dart';
 import 'schedule_screen.dart';
+import '../data/local_notification_sink.dart';
 import 'start_walk.dart';
 import 'walk_tracking_screen.dart';
 import '../data/walk_in_progress.dart';
@@ -51,7 +52,9 @@ class MainShell extends StatelessWidget {
               );
               break;
             case 2:
-              screen = const ScheduleScreen();
+              // 알림 싱크는 여기서 물려 준다 — 화면이 스스로 만들면 위젯 테스트가 그것을
+              // 갈아끼울 수 없고, 진짜는 테스트 바인딩에 채널이 없어 던진다(#420).
+              screen = ScheduleScreen(reminderSink: LocalNotificationSink());
               break;
             case 3:
               screen = const FeedScreen();
@@ -144,15 +147,30 @@ class _ShellNav extends StatelessWidget {
                       border: Border.all(color: const Color(0xC7FFFFFF)),
                       boxShadow: const [BoxShadow(color: Color(0x2E5A4690), blurRadius: 30, offset: Offset(0, 12))],
                     ),
+                    // 왼쪽 셋 · 오른쪽 둘 — 기록 버튼 오른쪽에 셋을 두면 왼쪽이 둘이라
+                    // 알약의 무게가 한쪽으로 쏠린다(#419).
+                    //
+                    // **양쪽을 같은 폭의 Expanded 로 감싸는 것이 핵심이다.** 다섯 칸을 한
+                    // Row 에 늘어놓고 가운데에 56 을 끼우면, 왼쪽이 셋이라 그 빈칸이 화면
+                    // 중앙보다 오른쪽으로 밀린다. 그런데 기록 버튼은 화면 **중앙**에 절대
+                    // 배치라, 밀린 만큼 버튼이 세 번째 칸("일정") 위를 덮는다 — 에뮬레이터
+                    // 화면에서 실제로 그러고 있었다(#420에서 눈으로 잡았다). 넘침이 아니라
+                    // 겹침이라 RenderFlex 예외도 안 난다.
                     child: Row(children: [
-                      // 왼쪽 셋 · 오른쪽 둘 — 기록 버튼 오른쪽에 셋을 두면 왼쪽이 둘이라
-                      // 알약의 무게가 한쪽으로 쏠린다(#419).
-                      item(Icons.home_rounded, '홈', 0),
-                      item(Icons.map_outlined, '지도', 1),
-                      item(Icons.event_note_outlined, '일정', 2),
+                      Expanded(
+                        child: Row(children: [
+                          item(Icons.home_rounded, '홈', 0),
+                          item(Icons.map_outlined, '지도', 1),
+                          item(Icons.event_note_outlined, '일정', 2),
+                        ]),
+                      ),
                       const SizedBox(width: 56),
-                      item(Icons.forum_outlined, '커뮤니티', 3),
-                      item(Icons.chat_bubble_outline, '채팅', 4),
+                      Expanded(
+                        child: Row(children: [
+                          item(Icons.forum_outlined, '커뮤니티', 3),
+                          item(Icons.chat_bubble_outline, '채팅', 4),
+                        ]),
+                      ),
                     ]),
                   ),
                 ),

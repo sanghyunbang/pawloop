@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.schedule.service;
 
+import com.heattrip.heat_trip_backend.care.CareLogging;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.chat.ChatRoomView;
 import com.heattrip.heat_trip_backend.dog.DogOwnership;
@@ -41,6 +42,17 @@ import java.util.List;
  * <p>{@code family_group} 을 보지 않는다(ADR-0011 결정 1). {@code CareService} 가 같은 자리에서
  * 같은 길을 쓴다 — {@link ChatRoomService#findRoom} 과 {@link ChatRoomService#isLiveMember}.
  *
+ * <h2>완료하면 케어 기록이 함께 남는다</h2>
+ * <p>이슈 #420. 없으면 사람이 <b>같은 일을 두 곳에 두 번 적는다</b> — 일정에서 체크하고,
+ * 오늘의 케어에서 병원 버튼을 또 누른다. 그러면 "오늘 병원 두 번" 이 기록에 남는다.
+ *
+ * <p>조건이 둘이다. <b>가족 소유</b>여야 하고({@code care_log} 가 그룹 축이다) 종류가
+ * <b>케어여야 한다</b>({@link ScheduleKind#careWire}). 아이 소유 일정은 남기지 않는다 —
+ * 넣을 그룹이 없다.
+ *
+ * <p>되돌리면 그 줄을 <b>거둔다</b>. 안 거두면 취소한 일이 오늘의 케어에 남고, 그건 이
+ * 연결이 막으려던 "두 번 적기" 를 반대 방향으로 되살린다.
+ *
  * <h2>기간에 상한이 있다</h2>
  * <p>달력은 한 달을 본다. 상한이 없으면 한 요청이 몇 년치를 끌어오고, 그건 느린 것이 아니라
  * <b>메모리를 먹는</b> 문제다. 92일이면 석 달치라 "이번 달 ± 한 달" 이 한 번에 들어온다.
@@ -55,17 +67,20 @@ public class ScheduleService {
     private final DogOwnership dogs;
     private final ChatRoomService chatRooms;
     private final KnownUsers users;
+    private final CareLogging careLogging;
     private final Clock clock;
 
     public ScheduleService(ScheduleRepository schedules,
                            DogOwnership dogs,
                            ChatRoomService chatRooms,
                            KnownUsers users,
+                           CareLogging careLogging,
                            Clock clock) {
         this.schedules = schedules;
         this.dogs = dogs;
         this.chatRooms = chatRooms;
         this.users = users;
+        this.careLogging = careLogging;
         this.clock = clock;
     }
 
@@ -123,14 +138,55 @@ public class ScheduleService {
 
         if (request.status() != null && request.status() != schedule.getStatus()) {
             schedule.markStatus(request.status(), ScheduleTime.nowUtc(clock), me);
+            syncCareLog(schedule, me);
         }
 
         return ScheduleResponse.of(schedules.saveAndFlush(schedule));
     }
 
+    /**
+     * 지운다. <b>케어 기록은 거두지 않는다</b> — 이슈 #420.
+     *
+     * <p>되돌리기({@code planned} 로)와 다른 답인 것이 의도다. 되돌리기는 "그 일이 일어나지
+     * 않았다" 는 말이지만, 지우기는 <b>"이 계획을 더 안 본다"</b> 는 말이다. 이미 다녀온
+     * 병원의 기록까지 함께 사라지면, 계획을 정리하다 사실을 잃는다.
+     */
     @Transactional
     public void delete(long userId, long scheduleId) {
         schedules.delete(mine(userId, scheduleId));
+    }
+
+    /**
+     * 상태가 바뀐 뒤 케어 기록을 맞춘다 — 이슈 #420.
+     *
+     * <p><b>완료면 남기고, 아니면 거둔다.</b> {@code skipped} 도 거두는 쪽이다 — "건너뛰었다"
+     * 는 하지 않았다는 뜻이라, 그것이 오늘의 케어에 남으면 안 된다.
+     *
+     * <p>이 메서드는 <b>던지지 않는다.</b> 케어 기록은 곁다리이고, 그것 때문에 일정 완료
+     * 자체가 실패하면 사용자는 자기가 한 일을 못 적는다.
+     */
+    private void syncCareLog(Schedule schedule, User actor) {
+        if (schedule.getOwnerKind() != ScheduleOwnerKind.GROUP) {
+            // 아이 소유 일정은 넣을 그룹이 없다. care_log 는 그룹 축이다.
+            return;
+        }
+        long groupId = schedule.getOwnerRef();
+
+        Long existing = schedule.getCareLogId();
+        if (existing != null) {
+            careLogging.withdraw(groupId, existing, actor.getId());
+            schedule.linkCareLog(null);
+        }
+
+        if (schedule.getStatus() != ScheduleStatus.DONE) {
+            return;
+        }
+        String careWire = schedule.getKind().careWire();
+        if (careWire == null) {
+            // 미용·목욕·사료·그 밖은 케어 종류가 아니다 — ScheduleKind.careWire javadoc.
+            return;
+        }
+        careLogging.recordFor(groupId, careWire, actor).ifPresent(schedule::linkCareLog);
     }
 
     // ─────────────────────────── 읽기 ───────────────────────────

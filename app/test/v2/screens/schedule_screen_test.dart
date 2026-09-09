@@ -9,12 +9,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
 import 'package:heat_trip_flutter/v2/data/schedule_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
+import 'package:heat_trip_flutter/v2/domain/schedule_reminder.dart';
 import 'package:heat_trip_flutter/v2/screens/schedule_screen.dart';
 
 const _base = 'https://api.example.test';
@@ -114,10 +116,29 @@ Map<String, Object?> schedule({
   );
 }
 
+/// 알림을 실제로 걸지 않고 받아만 둔다. 진짜 싱크는 `flutter_local_notifications` 를
+/// 부르고, 테스트 바인딩에는 그 채널이 없어 던진다.
+class _ThrowingSink implements ScheduleReminderSink {
+  @override
+  Future<void> replaceAll(List<ScheduleReminder> reminders) async {
+    throw StateError('알림 채널이 없다');
+  }
+}
+
+class _RecordingSink implements ScheduleReminderSink {
+  final List<List<ScheduleReminder>> calls = [];
+
+  @override
+  Future<void> replaceAll(List<ScheduleReminder> reminders) async {
+    calls.add(reminders);
+  }
+}
+
 Future<void> pumpScreen(
   WidgetTester tester,
-  ({ScheduleRepository repo, FamilyRepository family, List<http.Request> sent}) f,
-) async {
+  ({ScheduleRepository repo, FamilyRepository family, List<http.Request> sent}) f, {
+  ScheduleReminderSink? sink,
+}) async {
   // 달력 + 목록이 한 번에 만들어지도록 키 큰 뷰포트를 준다. 800×600 에서는 아래쪽
   // 목록이 아예 안 만들어져 "없다" 와 "화면 밖이다" 가 구별되지 않는다.
   tester.view.physicalSize = const Size(1200, 4000);
@@ -129,6 +150,7 @@ Future<void> pumpScreen(
       repository: f.repo,
       familyRepository: f.family,
       today: _today,
+      reminderSink: sink,
     ),
   ));
   await tester.pumpAndSettle();
@@ -363,6 +385,46 @@ void main() {
       final patched = f.sent.lastWhere((r) => r.method == 'PATCH');
       expect(patched.url.queryParameters['version'], '0');
       expect(jsonDecode(patched.body)['status'], 'done');
+    });
+  });
+
+  group('알림 (#420)', () {
+    testWidgets('설정이 "없음" 이면 하나도 안 건다 — 기본값이다', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final sink = _RecordingSink();
+      final f = fixture(items: [schedule(id: 1, title: '보리 병원', onDate: '2026-10-20')]);
+      await pumpScreen(tester, f, sink: sink);
+
+      expect(sink.calls.single, isEmpty,
+          reason: '묻지 않고 알림을 보내는 앱이 되면 안 된다');
+    });
+
+    testWidgets('켜 두면 이 달의 앞으로 할 일에 예약이 걸린다', (tester) async {
+      SharedPreferences.setMockInitialValues(
+          {'v2.schedule_reminder': '{"when":"morning_of"}'});
+      final sink = _RecordingSink();
+      final f = fixture(items: [
+        schedule(id: 1, title: '보리 병원', onDate: '2026-10-20'),
+        schedule(id: 2, title: '지난 병원', onDate: '2026-10-01'),
+        schedule(id: 3, title: '끝낸 것', onDate: '2026-10-22', status: 'done'),
+      ]);
+      await pumpScreen(tester, f, sink: sink);
+
+      final planned = sink.calls.last;
+      expect(planned.map((r) => r.body), ['보리 병원 · 10:30'],
+          reason: '지나간 것과 이미 한 것은 안 건다');
+    });
+
+    testWidgets('싱크가 던져도 달력은 그대로 그려진다 — 알림은 곁다리다', (tester) async {
+      SharedPreferences.setMockInitialValues(
+          {'v2.schedule_reminder': '{"when":"morning_of"}'});
+      final f = fixture(items: [schedule(id: 1, title: '보리 병원', onDate: '2026-10-20')]);
+      await pumpScreen(tester, f, sink: _ThrowingSink());
+
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+      expect(find.text('보리 병원'), findsOneWidget);
     });
   });
 

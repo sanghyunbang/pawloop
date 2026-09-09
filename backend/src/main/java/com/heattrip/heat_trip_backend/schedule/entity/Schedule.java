@@ -152,6 +152,21 @@ public class Schedule {
     @Column(name = "done_at")
     private LocalDateTime doneAt;
 
+    /**
+     * 완료로 바꾸면서 남긴 케어 기록의 id — 이슈 #420. 되돌릴 때 그 줄을 거두는 열쇠다.
+     *
+     * <p><b>FK 가 아니다.</b> {@code care_log} 를 가리키는 FK 를 걸려면 이 엔티티가
+     * {@code care.entity.CareLog} 를 들어야 하고, 그건 모듈 경계를 넘는다({@code owner_ref}
+     * 가 같은 이유로 FK 가 아니다). 대신 사람이 케어 칸에서 그 줄을 먼저 지웠을 수 있다는
+     * 전제로 다룬다 — 거두기는 없는 id 를 조용히 지나간다({@code CareLogging.withdraw}).
+     *
+     * <p>{@code null} 이 두 가지를 뜻한다 — <b>아직 완료가 아니거나, 케어로 남길 종류가
+     * 아니거나</b>({@code groom}·{@code bath}·{@code food}·{@code etc}). 둘을 가를 필요가
+     * 아직 없다. 가르게 되는 날에는 {@code status} 를 함께 보면 된다.
+     */
+    @Column(name = "care_log_id")
+    private Long careLogId;
+
     @Version
     @Column(name = "version", nullable = false)
     private Integer version;
@@ -222,5 +237,10 @@ public class Schedule {
         this.status = next;
         this.doneAt = next == ScheduleStatus.PLANNED ? null : now;
         this.updatedBy = editor;
+    }
+
+    /** 완료로 바꾸면서 남긴 케어 기록을 기억한다 — 이슈 #420. 거둘 때 {@code null} 로 지운다. */
+    public void linkCareLog(Long careLogId) {
+        this.careLogId = careLogId;
     }
 }
