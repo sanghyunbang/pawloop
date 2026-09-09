@@ -78,6 +78,7 @@ Map<String, Object?> schedule({
 ({ScheduleRepository repo, FamilyRepository family, List<http.Request> sent}) fixture({
   List<Map<String, Object?>> items = const [],
   bool hasGroup = true,
+  List<Map<String, Object?>> members = const [],
   http.Response Function(http.Request request)? onPatch,
   http.Response Function(http.Request request)? onPost,
 }) {
@@ -87,7 +88,7 @@ Map<String, Object?> schedule({
       sent.add(request);
       if (request.url.path == '/api/groups/me') {
         return hasGroup
-            ? _json({'id': 3, 'name': '보리네 가족', 'roomId': 9, 'members': const []})
+            ? _json({'id': 3, 'name': '보리네 가족', 'roomId': 9, 'members': members})
             : _json({'error': {}}, status: 404);
       }
       if (request.url.path.startsWith('/api/schedules')) {
@@ -386,6 +387,178 @@ void main() {
       expect(patched.url.queryParameters['version'], '0');
       expect(jsonDecode(patched.body)['status'], 'done');
     });
+  });
+
+group('반복과 고치기 (#421)', () {
+    testWidgets('펼친 하루를 누르면 "이 날만 / 앞으로 전부" 를 먼저 묻는다', (tester) async {
+      final f = fixture(items: [
+        {...schedule(id: 1, title: '목욕', onDate: '2026-10-20'),
+          'repeatKind': 'weekly', 'occurrence': true},
+      ]);
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('목욕'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('되풀이하는 일정이에요'), findsOneWidget);
+      expect(find.text('10월 20일만 고치기'), findsOneWidget);
+      expect(find.text('앞으로 전부 고치기'), findsOneWidget);
+    });
+
+    testWidgets('"이 날만" 을 고르면 ?date= 가 붙고 반복 칸이 안 보인다', (tester) async {
+      final f = fixture(
+        items: [
+          {...schedule(id: 1, title: '목욕', onDate: '2026-10-20'),
+            'repeatKind': 'weekly', 'occurrence': true},
+        ],
+        onPatch: (_) => _json(schedule(id: 9, title: '목욕(옮김)', onDate: '2026-10-20')),
+      );
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('목욕'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('10월 20일만 고치기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('10월 20일 하루만 바꿉니다'), findsOneWidget);
+      expect(find.text('반복'), findsNothing,
+          reason: '하루짜리 행이 될 것이라 규칙이 없다');
+
+      await tester.tap(find.widgetWithText(FilledButton, '저장'));
+      await tester.pumpAndSettle();
+
+      final patched = f.sent.lastWhere((r) => r.method == 'PATCH');
+      expect(patched.url.queryParameters['date'], '2026-10-20');
+      expect(jsonDecode(patched.body).containsKey('repeatKind'), isFalse,
+          reason: '안 보내면 서버가 반복을 안 바꾼다');
+    });
+
+    testWidgets('"앞으로 전부" 를 고르면 ?date= 가 없고 반복을 고칠 수 있다', (tester) async {
+      final f = fixture(
+        items: [
+          {...schedule(id: 1, title: '목욕', onDate: '2026-10-20'),
+            'repeatKind': 'weekly', 'occurrence': true},
+        ],
+        onPatch: (_) => _json(schedule(id: 1, title: '목욕', onDate: '2026-10-20')),
+      );
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('목욕'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('앞으로 전부 고치기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('반복'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, '저장'));
+      await tester.pumpAndSettle();
+
+      final patched = f.sent.lastWhere((r) => r.method == 'PATCH');
+      expect(patched.url.queryParameters.containsKey('date'), isFalse);
+      expect(jsonDecode(patched.body)['repeatKind'], 'weekly');
+    });
+
+    testWidgets('되풀이하는 줄은 목록에 그렇다고 적힌다', (tester) async {
+      final f = fixture(items: [
+        {...schedule(id: 1, title: '심장사상충', onDate: '2026-10-20', kind: 'med'),
+          'repeatKind': 'monthly', 'occurrence': true},
+      ]);
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('매월'), findsOneWidget,
+          reason: '안 적으면 "왜 매달 있지" 를 사용자가 푼다');
+    });
+
+    testWidgets('평범한 일정은 안 묻고 바로 고치기로 간다', (tester) async {
+      final f = fixture(items: [schedule(id: 1, title: '보리 병원', onDate: '2026-10-20')]);
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('보리 병원'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('되풀이하는 일정이에요'), findsNothing);
+      expect(find.text('일정 고치기'), findsOneWidget);
+    });
+  });
+
+  group('담당자 (#421)', () {
+    testWidgets('가족 구성원을 담당으로 고를 수 있다', (tester) async {
+      final f = fixture(
+        members: [
+          {'userId': 11, 'nickname': '아빠'},
+          {'userId': 12, 'nickname': '엄마'},
+        ],
+        onPost: (_) => _json(schedule(id: 9, title: '보리 병원'), status: 201),
+      );
+      await pumpScreen(tester, f);
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+      expect(find.text('담당'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField).first, '보리 병원');
+      await tester.tap(find.widgetWithText(GestureDetector, '엄마').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '저장'));
+      await tester.pumpAndSettle();
+
+      final posted = jsonDecode(f.sent.lastWhere((r) => r.method == 'POST').body) as Map;
+      expect(posted['assignee'], 12);
+    });
+
+    testWidgets('가족이 없으면 담당 칸 자체가 없다 — 물을 사람이 없다', (tester) async {
+      final f = fixture(hasGroup: false);
+      await pumpScreen(tester, f);
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text('담당'), findsNothing);
+    });
+  });
+
+  testWidgets('되풀이로 저장하면 서버에 다시 물어본다 — 안 그러면 시작일 하루만 보인다', (tester) async {
+    // 저장 응답은 규칙 한 줄뿐이다. 그것만 목록에 끼워 넣으면 달력에 시작일 하루만 점이
+    // 찍힌다 — 매주로 저장했는데 다음 주가 안 보인다(에뮬레이터에서 눈으로 잡았다).
+    final expanded = [
+      {...schedule(id: 9, title: '보리 목욕', onDate: '2026-10-07'),
+        'repeatKind': 'weekly', 'occurrence': true},
+      {...schedule(id: 9, title: '보리 목욕', onDate: '2026-10-14'),
+        'repeatKind': 'weekly', 'occurrence': true},
+    ];
+    var posted = false;
+    final f = fixture(
+      items: expanded,
+      onPost: (_) {
+        posted = true;
+        return _json({...schedule(id: 9, title: '보리 목욕', onDate: '2026-10-07'),
+          'repeatKind': 'weekly'}, status: 201);
+      },
+    );
+    await pumpScreen(tester, f);
+    final before = f.sent.where((r) => r.method == 'GET').length;
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '보리 목욕');
+    await tester.tap(find.widgetWithText(GestureDetector, '매주').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '저장'));
+    await tester.pumpAndSettle();
+
+    expect(posted, isTrue);
+    expect(f.sent.where((r) => r.method == 'GET').length, greaterThan(before),
+        reason: '저장 뒤 그 달을 다시 물어야 펼쳐진 날이 보인다');
+    await tester.tap(find.bySemanticsLabel('10월 14일 · 일정 1건'));
+    await tester.pumpAndSettle();
+    expect(find.text('보리 목욕'), findsOneWidget);
   });
 
   group('알림 (#420)', () {

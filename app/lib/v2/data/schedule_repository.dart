@@ -95,6 +95,8 @@ class ScheduleRepository {
     String? memo,
     TimeOfDay? atTime,
     int? assignee,
+    ScheduleRepeat repeatKind = ScheduleRepeat.none,
+    DateTime? repeatUntil,
   }) async {
     final json = await _send(() => _authed.postJson(
           Uri.parse('$baseUrl/api/schedules'),
@@ -108,6 +110,9 @@ class ScheduleRepository {
             if (memo != null && memo.isNotEmpty) 'memo': memo,
             if (atTime != null) 'atTime': Schedule.formatTime(atTime),
             if (assignee != null) 'assignee': assignee,
+            if (repeatKind.repeats) 'repeatKind': repeatKind.wire,
+            if (repeatKind.repeats && repeatUntil != null)
+              'repeatUntil': Schedule.formatDate(repeatUntil),
           },
         ));
     final schedule = Schedule.tryParse(json);
@@ -133,9 +138,14 @@ class ScheduleRepository {
     TimeOfDay? atTime,
     int? assignee,
     ScheduleStatus? status,
+    ScheduleRepeat? repeatKind,
+    DateTime? repeatUntil,
+    DateTime? onlyDay,
   }) async {
-    final uri = Uri.parse('$baseUrl/api/schedules/$scheduleId')
-        .replace(queryParameters: {'version': '$version'});
+    final uri = Uri.parse('$baseUrl/api/schedules/$scheduleId').replace(queryParameters: {
+      'version': '$version',
+      if (onlyDay != null) 'date': Schedule.formatDate(onlyDay),
+    });
     final json = await _send(() => _authed.patchJson(uri, body: {
           'kind': kind.wire,
           'title': title,
@@ -145,6 +155,9 @@ class ScheduleRepository {
           if (atTime != null) 'atTime': Schedule.formatTime(atTime),
           if (assignee != null) 'assignee': assignee,
           if (status != null) 'status': status.wire,
+          if (repeatKind != null) 'repeatKind': repeatKind.wire,
+          if (repeatKind != null && repeatKind.repeats && repeatUntil != null)
+            'repeatUntil': Schedule.formatDate(repeatUntil),
         }));
     final schedule = Schedule.tryParse(json);
     if (schedule == null) throw const ScheduleFailure(ScheduleFailureKind.network);
@@ -152,6 +165,10 @@ class ScheduleRepository {
   }
 
   /// 완료·건너뜀 표시. 한 칸만 바꾸지만 계약이 부분 수정이라 나머지도 함께 보낸다.
+  /// 완료·건너뜀 표시. 한 칸만 바꾸지만 계약이 부분 수정이라 나머지도 함께 보낸다.
+  ///
+  /// **펼쳐 낸 하루면 그 하루만** 바꾼다(`?date=`, #421) — 서버가 그때 행을 만든다. 안
+  /// 그러면 한 번 먹였다고 앞으로 오는 날이 전부 완료된다.
   Future<Schedule> mark(Schedule schedule, ScheduleStatus next) => update(
         scheduleId: schedule.id,
         version: schedule.version,
@@ -163,10 +180,18 @@ class ScheduleRepository {
         atTime: schedule.atTime,
         assignee: schedule.assignee?.userId,
         status: next,
+        onlyDay: schedule.occurrence ? schedule.onDate : null,
       );
 
-  Future<void> delete(int scheduleId) async {
-    await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/schedules/$scheduleId')));
+  /// 지운다.
+  ///
+  /// [onlyDay] 를 주면 **그 하루만 건너뛴다**(#421) — 규칙은 그대로다. "이번 주만 안 함"
+  /// 이 반복을 지우는 일이 되면 안 된다.
+  Future<void> delete(int scheduleId, {DateTime? onlyDay}) async {
+    final uri = Uri.parse('$baseUrl/api/schedules/$scheduleId').replace(
+        queryParameters:
+            onlyDay == null ? null : {'date': Schedule.formatDate(onlyDay)});
+    await _send(() => _authed.deleteJson(uri));
   }
 
   /// 한 번의 왕복. **상태 코드를 실패의 종류로 옮기는 곳이 여기 하나다.**

@@ -4,6 +4,7 @@ import com.heattrip.heat_trip_backend.schedule.ScheduleTime;
 import com.heattrip.heat_trip_backend.schedule.entity.Schedule;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleKind;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleOwnerKind;
+import com.heattrip.heat_trip_backend.schedule.entity.ScheduleRepeat;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleStatus;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
@@ -22,6 +23,11 @@ import java.time.LocalTime;
  * @param doneAt    <b>오프셋이 붙는다</b> — 서버가 찍는 순간이라 UTC 다. 반대로
  *                  {@code onDate}·{@code atTime} 은 사람이 고른 벽시계라 변환하지 않는다
  *                  ({@link ScheduleTime})
+ * @param repeatKind 되풀이 주기(#421). 규칙이 아니면 {@code none}
+ * @param repeatUntil 되풀이가 끝나는 날. {@code null} 이면 끝이 없다
+ * @param occurrence <b>펼쳐 낸 하루인가</b>. {@code true} 면 이 응답에 해당하는 <b>행이
+ *                   아직 없다</b> — {@code id} 는 규칙의 것이고 여럿이 그것을 나눠 쓴다.
+ *                   화면은 {@code (id, onDate)} 를 키로 삼아야 한다
  */
 public record ScheduleResponse(
         Long id,
@@ -38,7 +44,10 @@ public record ScheduleResponse(
         Instant doneAt,
         Integer version,
         Person updatedBy,
-        Instant updatedAt) {
+        Instant updatedAt,
+        ScheduleRepeat repeatKind,
+        LocalDate repeatUntil,
+        boolean occurrence) {
 
     /** 사람 한 명 — id 와 이름. 없거나 탈퇴했으면 이 객체 자체가 {@code null} 이다. */
     public record Person(Long userId, String nickname) {
@@ -60,7 +69,26 @@ public record ScheduleResponse(
                 ScheduleTime.toInstant(s.getDoneAt()),
                 s.getVersion(),
                 person(s.getUpdatedBy()),
-                ScheduleTime.toInstant(s.getUpdatedAt()));
+                ScheduleTime.toInstant(s.getUpdatedAt()),
+                s.getRepeatKind(),
+                s.getRepeatUntil(),
+                false);
+    }
+
+    /**
+     * 규칙에서 <b>펼쳐 낸 하루</b> — 이슈 #421.
+     *
+     * <p>{@code onDate} 만 그날로 갈아 끼우고 나머지는 규칙의 값 그대로다. 특히
+     * {@code status} 는 늘 규칙의 것({@code planned})이다 — 하루를 완료하면 그때 행이
+     * 생기고, 그 행이 이 자리를 대신한다. 규칙 자체는 완료되지 않는다.
+     */
+    public static ScheduleResponse occurrenceOf(Schedule rule, LocalDate day) {
+        ScheduleResponse base = of(rule);
+        return new ScheduleResponse(
+                base.id(), base.ownerKind(), base.ownerRef(), base.dogId(), base.kind(),
+                base.title(), base.memo(), day, base.atTime(), base.assignee(),
+                base.status(), base.doneAt(), base.version(), base.updatedBy(),
+                base.updatedAt(), base.repeatKind(), base.repeatUntil(), true);
     }
 
     private static Person person(User user) {

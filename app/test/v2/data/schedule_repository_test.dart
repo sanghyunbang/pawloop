@@ -291,6 +291,99 @@ void main() {
     });
   });
 
+group('반복 (#421)', () {
+    test('반복을 안 주면 아무것도 안 보낸다 — 서버 기본이 none 이다', () async {
+      final f = fixture((_) async => _json(_schedule(), status: 201));
+
+      await f.repo.create(
+        ownerKind: ScheduleOwnerKind.group,
+        ownerRef: 3,
+        kind: ScheduleKind.vet,
+        title: '보리 병원',
+        onDate: DateTime(2026, 12, 1),
+      );
+
+      final body = jsonDecode(f.sent.single.body) as Map;
+      expect(body.containsKey('repeatKind'), isFalse);
+      expect(body.containsKey('repeatUntil'), isFalse);
+    });
+
+    test('종료일은 반복이 켜져 있을 때만 간다 — 안 그러면 서버가 안 쓰는 값이 오간다', () async {
+      final f = fixture((_) async => _json(_schedule(), status: 201));
+
+      await f.repo.create(
+        ownerKind: ScheduleOwnerKind.group,
+        ownerRef: 3,
+        kind: ScheduleKind.bath,
+        title: '목욕',
+        onDate: DateTime(2026, 12, 1),
+        repeatKind: ScheduleRepeat.none,
+        repeatUntil: DateTime(2026, 12, 31),
+      );
+
+      final body = jsonDecode(f.sent.single.body) as Map;
+      expect(body.containsKey('repeatUntil'), isFalse);
+    });
+
+    test('펼친 하루를 완료하면 그 하루만 — ?date= 가 붙는다', () async {
+      final f = fixture((_) async => _json(_schedule()));
+      final occurrence = Schedule.tryParse({
+        ..._schedule(id: 5, onDate: '2026-12-08'),
+        'repeatKind': 'weekly',
+        'occurrence': true,
+      })!;
+
+      await f.repo.mark(occurrence, ScheduleStatus.done);
+
+      final request = f.sent.single;
+      expect(request.url.queryParameters['date'], '2026-12-08',
+          reason: '안 붙이면 한 번 먹였다고 앞으로 오는 날이 전부 완료된다');
+    });
+
+    test('평범한 일정을 완료하면 ?date= 가 없다', () async {
+      final f = fixture((_) async => _json(_schedule()));
+      final plain = Schedule.tryParse(_schedule(id: 5))!;
+
+      await f.repo.mark(plain, ScheduleStatus.done);
+
+      expect(f.sent.single.url.queryParameters.containsKey('date'), isFalse);
+    });
+
+    test('하루만 건너뛰기는 DELETE 에 ?date= 를 붙인다', () async {
+      final f = fixture((_) async => http.Response('', 204));
+
+      await f.repo.delete(5, onlyDay: DateTime(2026, 12, 15));
+
+      final request = f.sent.single;
+      expect(request.method, 'DELETE');
+      expect(request.url.queryParameters['date'], '2026-12-15');
+    });
+
+    test('규칙 통째로 지우기는 ?date= 가 없다', () async {
+      final f = fixture((_) async => http.Response('', 204));
+
+      await f.repo.delete(5);
+
+      expect(f.sent.single.url.queryParameters.containsKey('date'), isFalse);
+    });
+
+    test('펼친 하루의 키는 id 가 아니라 (id, 날짜) 다', () {
+      final first = Schedule.tryParse(
+          {..._schedule(id: 5, onDate: '2026-12-01'), 'occurrence': true})!;
+      final second = Schedule.tryParse(
+          {..._schedule(id: 5, onDate: '2026-12-08'), 'occurrence': true})!;
+
+      expect(first.key, isNot(second.key),
+          reason: 'id 만 보면 완료 표시 하나가 그 규칙의 모든 날에 번진다');
+    });
+
+    test('모르는 주기는 반복 안 함으로 읽는다 — 목록에서 사라지면 안 된다', () {
+      final s = Schedule.tryParse({..._schedule(), 'repeatKind': 'yearly'})!;
+
+      expect(s.repeatKind, ScheduleRepeat.none);
+    });
+  });
+
   group('모르는 값', () {
     test('처음 보는 kind 는 "그 밖" 으로 그린다 — 안 보이면 사라진 것으로 읽힌다', () {
       final s = Schedule.tryParse(_schedule(kind: 'training'))!;

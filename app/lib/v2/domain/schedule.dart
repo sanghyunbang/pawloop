@@ -31,6 +31,32 @@ enum ScheduleOwnerKind {
   }
 }
 
+/// 얼마나 자주 되풀이하나 — 이슈 #421.
+///
+/// **요일·날짜를 따로 안 든다** — `weekly` 는 `onDate` 의 요일이고 `monthly` 는 그 날짜다.
+/// 서버가 같은 규칙으로 펼치므로 앱은 규칙을 해석하지 않는다. 앱이 펼치면 해석이 두 벌이
+/// 되고, 그중 하나가 언젠가 다르게 센다(윤년·말일이 그 자리다).
+enum ScheduleRepeat {
+  none('none', '반복 안 함'),
+  daily('daily', '매일'),
+  weekly('weekly', '매주'),
+  monthly('monthly', '매월');
+
+  const ScheduleRepeat(this.wire, this.label);
+
+  final String wire;
+  final String label;
+
+  bool get repeats => this != ScheduleRepeat.none;
+
+  static ScheduleRepeat parse(Object? value) {
+    for (final r in values) {
+      if (r.wire == value) return r;
+    }
+    return ScheduleRepeat.none;
+  }
+}
+
 /// 일정의 종류. `wire` 는 DB 의 `CHECK` 가 받는 문자열과 글자까지 같다.
 enum ScheduleKind {
   walk('walk', '산책', Icons.directions_walk_rounded, Color(0xFF7FC8A9)),
@@ -125,6 +151,18 @@ class Schedule {
   /// 서버가 찍은 순간이라 오프셋이 붙어 오고, 여기서 기기 시각으로 눕힌다.
   final DateTime? updatedAt;
 
+  /// 되풀이 주기 — 이슈 #421.
+  final ScheduleRepeat repeatKind;
+
+  /// 되풀이가 끝나는 날. `null` 이면 끝이 없다.
+  final DateTime? repeatUntil;
+
+  /// **펼쳐 낸 하루인가.** `true` 면 이 줄에 해당하는 **행이 아직 없다** — [id] 는 규칙의
+  /// 것이고 여럿이 그것을 나눠 쓴다. 그래서 목록의 키는 `(id, onDate)` 여야 한다.
+  ///
+  /// 고치거나 완료하면 그때 서버가 행을 만든다(`?date=`).
+  final bool occurrence;
+
   const Schedule({
     required this.id,
     required this.ownerKind,
@@ -140,7 +178,17 @@ class Schedule {
     this.assignee,
     this.updatedBy,
     this.updatedAt,
+    this.repeatKind = ScheduleRepeat.none,
+    this.repeatUntil,
+    this.occurrence = false,
   });
+
+  /// 목록에서 이 줄을 가리키는 키. **id 하나로는 부족하다** — 펼친 하루들이 그것을
+  /// 나눠 쓴다([occurrence]).
+  String get key => '$id@${formatDate(onDate)}';
+
+  /// 되풀이하는 규칙인가. 화면이 "이 날만 / 앞으로 전부" 를 묻는 기준이다.
+  bool get repeats => repeatKind.repeats;
 
   bool get isAllDay => atTime == null;
 
@@ -175,6 +223,9 @@ class Schedule {
       version: (json['version'] as num?)?.toInt() ?? 0,
       updatedBy: SchedulePerson.tryParse(json['updatedBy']),
       updatedAt: DateTime.tryParse('${json['updatedAt']}')?.toLocal(),
+      repeatKind: ScheduleRepeat.parse(json['repeatKind']),
+      repeatUntil: parseDate(json['repeatUntil']),
+      occurrence: json['occurrence'] == true,
     );
   }
 

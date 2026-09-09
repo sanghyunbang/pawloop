@@ -11,8 +11,12 @@ import com.heattrip.heat_trip_backend.schedule.dto.ScheduleRequest;
 import com.heattrip.heat_trip_backend.schedule.dto.ScheduleResponse;
 import com.heattrip.heat_trip_backend.schedule.dto.ScheduleUpdateRequest;
 import com.heattrip.heat_trip_backend.schedule.entity.Schedule;
+import com.heattrip.heat_trip_backend.schedule.entity.ScheduleRepeat;
+import com.heattrip.heat_trip_backend.schedule.entity.ScheduleException;
+import com.heattrip.heat_trip_backend.schedule.entity.ScheduleExceptionKind;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleOwnerKind;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleStatus;
+import com.heattrip.heat_trip_backend.schedule.repository.ScheduleExceptionRepository;
 import com.heattrip.heat_trip_backend.schedule.repository.ScheduleRepository;
 import com.heattrip.heat_trip_backend.user.KnownUsers;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -25,7 +29,12 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 일정표 — 이슈 #418, 부모 #416.
@@ -53,6 +62,14 @@ import java.util.List;
  * <p>되돌리면 그 줄을 <b>거둔다</b>. 안 거두면 취소한 일이 오늘의 케어에 남고, 그건 이
  * 연결이 막으려던 "두 번 적기" 를 반대 방향으로 되살린다.
  *
+ * <h2>반복은 규칙 한 줄이고, 조회가 펼친다</h2>
+ * <p>이슈 #421. 1년치 심장사상충 약을 365행으로 만들어 두지 않는다 — 규칙을 고치면 그
+ * 전부를 손봐야 하고, 그 손보기를 한 번 빠뜨리면 옛 값이 남은 행이 조용히 생긴다.
+ *
+ * <p>펼친 하루에는 <b>행이 없다</b>. 그 하루를 고치거나 완료하면 그때 비로소 행이 생기고
+ * ({@link #overrideOneDay}), 규칙은 {@code schedule_exception} 으로 그날을 건너뛴다.
+ * 그래서 <b>완료 표시는 그날 하나에만</b> 붙고 규칙 전체가 완료되지 않는다.
+ *
  * <h2>기간에 상한이 있다</h2>
  * <p>달력은 한 달을 본다. 상한이 없으면 한 요청이 몇 년치를 끌어오고, 그건 느린 것이 아니라
  * <b>메모리를 먹는</b> 문제다. 92일이면 석 달치라 "이번 달 ± 한 달" 이 한 번에 들어온다.
@@ -64,6 +81,7 @@ public class ScheduleService {
     public static final int MAX_RANGE_DAYS = 92;
 
     private final ScheduleRepository schedules;
+    private final ScheduleExceptionRepository exceptions;
     private final DogOwnership dogs;
     private final ChatRoomService chatRooms;
     private final KnownUsers users;
@@ -71,12 +89,14 @@ public class ScheduleService {
     private final Clock clock;
 
     public ScheduleService(ScheduleRepository schedules,
+                           ScheduleExceptionRepository exceptions,
                            DogOwnership dogs,
                            ChatRoomService chatRooms,
                            KnownUsers users,
                            CareLogging careLogging,
                            Clock clock) {
         this.schedules = schedules;
+        this.exceptions = exceptions;
         this.dogs = dogs;
         this.chatRooms = chatRooms;
         this.users = users;
@@ -102,6 +122,10 @@ public class ScheduleService {
                 .atTime(request.atTime())
                 .assignee(assigneeOrNull(request.assignee(), request.ownerKind(), request.ownerRef()))
                 .status(ScheduleStatus.PLANNED)
+                .repeatKind(request.repeatKind() == null
+                        ? ScheduleRepeat.NONE : request.repeatKind())
+                .repeatUntil(request.repeatKind() != null && request.repeatKind().repeats()
+                        ? request.repeatUntil() : null)
                 .createdBy(me)
                 .build());
         return ScheduleResponse.of(saved);
@@ -125,6 +149,21 @@ public class ScheduleService {
             throw new StaleScheduleException(ScheduleResponse.of(schedule));
         }
 
+        return apply(schedule, me, request);
+    }
+
+    /**
+     * 요청을 그대로 적용한다 — <b>버전을 안 본다</b>.
+     *
+     * <p>{@link #update} 에서 갈라 낸 이유는 {@link #overrideOneDay} 때문이다. 거기서는
+     * 방금 만든 행에 요청을 얹는데, 그 행은 <b>1밀리초 전에 없던 것</b>이라 남이 고쳤을 수
+     * 없다. 그런데도 버전을 보면, 그 사이에 예외 저장이 flush 를 일으켜 버전이 올라가
+     * <b>이유 없는 409</b> 가 난다(실측으로 걸렸다 — #420 의 두 번 오르기와 같은 자리다).
+     *
+     * <p>잠금은 {@link #overrideOneDay} 가 <b>규칙의 버전</b>으로 이미 걸었다.
+     */
+    private ScheduleResponse apply(Schedule schedule, User me, ScheduleUpdateRequest request) {
+        long userId = me.getId();
         schedule.edit(
                 request.kind() == null ? schedule.getKind() : request.kind(),
                 request.title() == null || request.title().isBlank()
@@ -136,12 +175,102 @@ public class ScheduleService {
                 assigneeOrNull(request.assignee(), schedule.getOwnerKind(), schedule.getOwnerRef()),
                 me);
 
+        if (request.repeatKind() != null) {
+            // memo 무리와 다른 답이다 — 안 보냈다고 반복을 꺼 버리면 "제목만 고쳤는데
+            // 반복이 사라졌다" 가 된다(ScheduleUpdateRequest javadoc).
+            schedule.repeatEvery(request.repeatKind(), request.repeatUntil());
+        }
+
         if (request.status() != null && request.status() != schedule.getStatus()) {
             schedule.markStatus(request.status(), ScheduleTime.nowUtc(clock), me);
             syncCareLog(schedule, me);
         }
 
         return ScheduleResponse.of(schedules.saveAndFlush(schedule));
+    }
+
+    /**
+     * 규칙의 <b>하루만</b> 고친다 — 이슈 #421.
+     *
+     * <p>그날짜용 행을 하나 만들고, 규칙에는 {@code override} 예외를 남겨 그날을 건너뛰게
+     * 한다. 그 행은 되풀이하지 않는 평범한 일정이라 자기 날짜로 조회되고, 완료·되돌리기가
+     * 그 하나에만 붙는다.
+     *
+     * <p><b>버전은 규칙의 것을 본다.</b> 펼친 하루에는 자기 버전이 없기 때문이다. 그래서
+     * 화요일 것을 고치는 사이 누가 규칙을 고치면 409 를 받는다 — 서로 다른 날을 고치는
+     * 두 사람도 마찬가지다. 덮어쓰는 것보다 한 번 더 묻는 쪽이 낫다고 보았다.
+     *
+     * @param day 규칙이 <b>실제로 오는 날</b>이어야 한다. 아니면 404 다 — 오지도 않는 날에
+     *            예외를 만들면 그 줄이 영원히 아무 일도 안 한다
+     */
+    @Transactional
+    public ScheduleResponse overrideOneDay(User me, long scheduleId, int version, LocalDate day,
+                                           ScheduleUpdateRequest request) {
+        long userId = me.getId();
+        Schedule rule = requireRuleComingOn(userId, scheduleId, day);
+
+        if (rule.getVersion() != version) {
+            throw new StaleScheduleException(ScheduleResponse.of(rule));
+        }
+
+        Schedule copy = schedules.save(Schedule.builder()
+                .ownerKind(rule.getOwnerKind())
+                .ownerRef(rule.getOwnerRef())
+                .dog(rule.getDog())
+                .kind(rule.getKind())
+                .title(rule.getTitle())
+                .memo(rule.getMemo())
+                .onDate(day)
+                .atTime(rule.getAtTime())
+                .assignee(rule.getAssignee())
+                .status(ScheduleStatus.PLANNED)
+                .repeatKind(ScheduleRepeat.NONE)
+                .createdBy(me)
+                .build());
+        copy.replacesOneDayOf(rule);
+
+        exceptions.save(ScheduleException.builder()
+                .schedule(rule)
+                .onDate(day)
+                .kind(ScheduleExceptionKind.OVERRIDE)
+                .build());
+
+        // 만든 행에 요청을 그대로 적용한다 — 버전은 안 본다(apply 의 javadoc).
+        return apply(copy, me, request);
+    }
+
+    /**
+     * 규칙의 <b>하루만</b> 건너뛴다 — 이슈 #421. 대신할 행을 안 만든다.
+     *
+     * <p>규칙 자체는 그대로다. "이번 주만 안 함" 이 반복을 지우는 일이 되면 안 된다.
+     */
+    @Transactional
+    public void skipOneDay(long userId, long scheduleId, LocalDate day) {
+        Schedule rule = requireRuleComingOn(userId, scheduleId, day);
+
+        // 이미 예외가 있으면 그대로 둔다 — 건너뛴 날을 또 건너뛰는 것은 아무 일도 아니다.
+        if (exceptions.findOne(rule.getId(), day).isEmpty()) {
+            exceptions.save(ScheduleException.builder()
+                    .schedule(rule)
+                    .onDate(day)
+                    .kind(ScheduleExceptionKind.SKIP)
+                    .build());
+        }
+    }
+
+    /** 내 규칙이고 그날 실제로 오는가. 아니면 <b>같은 404</b> 다. */
+    private Schedule requireRuleComingOn(long userId, long scheduleId, LocalDate day) {
+        Schedule rule = mine(userId, scheduleId);
+        if (!rule.isRule()) {
+            throw notFound();
+        }
+        Set<LocalDate> already = exceptions.findOne(rule.getId(), day)
+                .map(e -> Set.of(e.getOnDate()))
+                .orElse(Set.of());
+        if (ScheduleExpansion.datesOf(rule, day, day, already).isEmpty()) {
+            throw notFound();
+        }
+        return rule;
     }
 
     /**
@@ -211,13 +340,56 @@ public class ScheduleService {
                     : ofGroups(List.of(ownerRef), from, to));
         }
 
-        return found.stream()
+        List<Schedule> mine = found.stream()
                 .filter(s -> dogId == null
                         || (s.getDog() != null && dogId.equals(s.getDog().getId())))
-                // 종류가 섞이면 순서가 두 목록의 이어 붙이기가 된다 — 날짜순으로 다시 세운다.
-                .sorted(ScheduleService::byDateThenTime)
-                .map(ScheduleResponse::of)
                 .toList();
+
+        return expand(mine, from, to).stream()
+                // 종류가 섞이면 순서가 두 목록의 이어 붙이기가 된다 — 날짜순으로 다시 세운다.
+                .sorted(Comparator.comparing(ScheduleResponse::onDate)
+                        .thenComparing(ScheduleResponse::atTime,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(ScheduleResponse::id))
+                .toList();
+    }
+
+    /**
+     * 규칙을 기간 안의 날짜들로 펼친다 — 이슈 #421.
+     *
+     * <p>되풀이가 아닌 행은 그대로 한 줄이다. 되풀이하는 행은 {@link ScheduleExpansion} 이
+     * 고른 날짜마다 한 줄이 되고, 그 줄들은 <b>행이 아니다</b> —
+     * {@code ScheduleResponse.occurrence} 가 그것을 말한다.
+     *
+     * <p>예외는 <b>한 번에</b> 읽는다. 규칙마다 물으면 한 달 조회의 쿼리가 규칙 수만큼
+     * 늘어난다.
+     */
+    private List<ScheduleResponse> expand(List<Schedule> rows, LocalDate from, LocalDate to) {
+        List<Long> ruleIds = rows.stream()
+                .filter(Schedule::isRule)
+                .map(Schedule::getId)
+                .toList();
+
+        Map<Long, Set<LocalDate>> skipped = new HashMap<>();
+        if (!ruleIds.isEmpty()) {
+            for (ScheduleException e : exceptions.findRange(ruleIds, from, to)) {
+                skipped.computeIfAbsent(e.getSchedule().getId(), id -> new HashSet<>())
+                        .add(e.getOnDate());
+            }
+        }
+
+        List<ScheduleResponse> out = new ArrayList<>();
+        for (Schedule row : rows) {
+            if (!row.isRule()) {
+                out.add(ScheduleResponse.of(row));
+                continue;
+            }
+            Set<LocalDate> mine = skipped.getOrDefault(row.getId(), Set.of());
+            for (LocalDate day : ScheduleExpansion.datesOf(row, from, to, mine)) {
+                out.add(ScheduleResponse.occurrenceOf(row, day));
+            }
+        }
+        return out;
     }
 
     private static int byDateThenTime(Schedule a, Schedule b) {

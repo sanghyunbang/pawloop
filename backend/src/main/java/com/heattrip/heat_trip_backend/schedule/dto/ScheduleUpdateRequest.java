@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.schedule.dto;
 
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleKind;
+import com.heattrip.heat_trip_backend.schedule.entity.ScheduleRepeat;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleStatus;
 
 import jakarta.validation.constraints.Size;
@@ -31,6 +32,10 @@ import java.time.LocalTime;
  * 별도 경로로 연다.
  *
  * @param status 안 보내면 상태를 안 바꾼다. 보내면 그것만 바꿔도 된다
+ * @param repeatKind 안 보내면 <b>반복을 안 바꾼다</b>(#421). {@code memo} 무리와 다른
+ *                   답인 것이 의도다 — 반복은 화면이 늘 보내는 값이 아니고, 안 보냈다고
+ *                   꺼 버리면 "제목만 고쳤는데 반복이 사라졌다" 가 된다
+ * @param repeatUntil {@code repeatKind} 를 보낼 때만 함께 본다. 그때 안 주면 끝이 없다
  */
 public record ScheduleUpdateRequest(
         Long dogId,
@@ -49,5 +54,9 @@ public record ScheduleUpdateRequest(
 
         Long assignee,
 
-        ScheduleStatus status) {
+        ScheduleStatus status,
+
+        ScheduleRepeat repeatKind,
+
+        LocalDate repeatUntil) {
 }

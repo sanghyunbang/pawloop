@@ -41,6 +41,11 @@ import java.util.List;
  * <p>{@code ownerKind} 를 생략하면 <b>내가 볼 수 있는 전부</b>가 온다 — 내 아이들 것과 우리
  * 가족 것. 달력의 기본이 그것이라, 화면이 두 번 부르게 만들지 않는다.
  *
+ * <h2>반복은 {@code date} 로 하루를 가리킨다</h2>
+ * <p>이슈 #421. {@code PATCH}·{@code DELETE} 에 {@code ?date=} 를 주면 <b>그 하루만</b>
+ * 이고, 안 주면 규칙 전체다. 경로를 따로 파지 않은 이유는 하나다 — 같은 자원의 같은
+ * 동작이고, 다른 것은 "어디까지 미치는가" 뿐이다.
+ *
  * <p>인증 주체는 {@code @CurrentUser} 가 해석한다.
  */
 @RestController
@@ -90,18 +95,40 @@ public class ScheduleController {
      * @param version 마지막으로 본 값. <b>본문이 아니라 쿼리인 이유</b>는
      *                {@link ScheduleUpdateRequest} 의 javadoc 에 있다 — 부분 수정 본문에는
      *                필수 필드를 둘 수 없다(ADR-0017 규약 4)
+     * @param date    주면 <b>그 하루만</b> 고친다(#421). 반복 규칙에만 쓰고, 그날짜용 행이
+     *                하나 생기며 규칙은 그날을 건너뛴다. 안 주면 규칙 자체를 고친다 —
+     *                즉 <b>앞으로 오는 날 전부</b>가 바뀐다
      */
     @PatchMapping("/{scheduleId}")
     public ScheduleResponse update(@CurrentUser User user,
                                    @PathVariable long scheduleId,
                                    @RequestParam int version,
+                                   @RequestParam(required = false)
+                                   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
                                    @Valid @RequestBody ScheduleUpdateRequest request) {
-        return schedules.update(user, scheduleId, version, request);
+        return date == null
+                ? schedules.update(user, scheduleId, version, request)
+                : schedules.overrideOneDay(user, scheduleId, version, date, request);
     }
 
+    /**
+     * 지운다.
+     *
+     * @param date 주면 <b>그 하루만</b> 건너뛴다(#421) — 규칙은 그대로다. "이번 주만 안 함"
+     *             이 반복을 지우는 일이 되면 안 된다. 안 주면 그 일정(규칙이면 규칙 전체와
+     *             예외까지)이 사라진다
+     */
     @DeleteMapping("/{scheduleId}")
-    public ResponseEntity<Void> delete(@CurrentUser User user, @PathVariable long scheduleId) {
-        schedules.delete(user.getId(), scheduleId);
+    public ResponseEntity<Void> delete(@CurrentUser User user,
+                                       @PathVariable long scheduleId,
+                                       @RequestParam(required = false)
+                                       @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                                       LocalDate date) {
+        if (date == null) {
+            schedules.delete(user.getId(), scheduleId);
+        } else {
+            schedules.skipOneDay(user.getId(), scheduleId, date);
+        }
         return ResponseEntity.noContent().build();
     }
 

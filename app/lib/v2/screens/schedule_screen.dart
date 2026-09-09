@@ -87,6 +87,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   int? _groupId;
   bool _groupResolved = false;
 
+  /// 담당자로 고를 수 있는 사람들. 가족이 없으면 비어 있다.
+  List<ScheduleMember> _members = const [];
+
   static DateTime _dayOf(DateTime t) => DateTime(t.year, t.month, t.day);
 
   @override
@@ -103,10 +106,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
     if (!_groupResolved) {
       try {
-        _groupId = (await _family.myGroup()).id;
+        final group = await _family.myGroup();
+        _groupId = group.id;
+        _members = group.members
+            .map((m) => ScheduleMember(userId: m.userId, nickname: m.nickname))
+            .toList();
       } on FamilyFailure {
         // 가족이 없는 것은 오류가 아니다 — 혼자 쓰면 아이 소유 일정이 된다.
         _groupId = null;
+        _members = const [];
       }
       _groupResolved = true;
     }
@@ -526,10 +534,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (dog != null) dog,
       if (s.assignee != null) '${s.assignee!.nickname} 담당',
       if (!s.isAllDay) Schedule.formatTime(s.atTime!),
+      // 되풀이하는 것은 그렇다고 말한다 — 안 적으면 "왜 매주 있지" 를 사용자가 푼다.
+      if (s.repeats) s.repeatKind.label,
     ];
     final done = !s.status.isOpen;
 
-    return Container(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openEditSheet(s),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
       decoration: BoxDecoration(
@@ -567,6 +580,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           ),
         ),
       ]),
+      ),
     );
   }
 
@@ -621,8 +635,73 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     messenger?.showSnackBar(SnackBar(content: Text(text)));
   }
 
+  /// 바뀐 줄 하나를 갈아 끼운다.
+  ///
+  /// **키가 `(id, onDate)` 다**(#421). 되풀이하는 규칙은 여러 날이 같은 id 를 나눠 쓰므로,
+  /// id 만 보면 완료 표시 하나가 그 규칙의 모든 날에 번진다.
   static List<Schedule> _replace(List<Schedule> items, Schedule updated) =>
-      items.map((s) => s.id == updated.id ? updated : s).toList();
+      items.map((s) => s.key == updated.key ? updated : s).toList();
+
+
+  /// 고치기 시트를 연다 — 이슈 #421.
+  ///
+  /// **펼쳐 낸 하루면 먼저 묻는다** — "이 날만" 인지 "앞으로 전부" 인지. 안 물으면 사용자가
+  /// 이번 주 목욕을 옮기려다 매주 목욕의 시각을 통째로 바꾼다.
+  Future<void> _openEditSheet(Schedule s) async {
+    bool onlyThisDay = false;
+    if (s.occurrence) {
+      final scope = await showModalBottomSheet<String>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('되풀이하는 일정이에요',
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.today_outlined),
+              title: Text('${s.onDate.month}월 ${s.onDate.day}일만 고치기'),
+              subtitle: const Text('나머지 날은 그대로예요'),
+              onTap: () => Navigator.of(sheetContext).pop('day'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.repeat_rounded),
+              title: const Text('앞으로 전부 고치기'),
+              subtitle: const Text('반복 규칙 자체를 바꿔요'),
+              onTap: () => Navigator.of(sheetContext).pop('rule'),
+            ),
+            const SizedBox(height: 8),
+          ]),
+        ),
+      );
+      if (scope == null || !mounted) return;
+      onlyThisDay = scope == 'day';
+    }
+
+    final pets = kMyPets.value.where((p) => p.serverId != null).toList();
+    final saved = await showModalBottomSheet<Schedule>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ScheduleSheet(
+        repository: _repo,
+        groupId: _groupId,
+        pets: pets,
+        members: _members,
+        day: s.onDate,
+        editing: s,
+        onlyThisDay: onlyThisDay,
+      ),
+    );
+    if (saved == null || !mounted) return;
+    // 무엇이 바뀌었는지(규칙인지 하루인지) 화면이 스스로 셀 수 없다 — 다시 불러온다.
+    await _load();
+  }
 
   Future<void> _openCreateSheet() async {
     final pets = kMyPets.value.where((p) => p.serverId != null).toList();
@@ -639,10 +718,21 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         repository: _repo,
         groupId: _groupId,
         pets: pets,
+        members: _members,
         day: _selected,
       ),
     );
     if (created == null || !mounted) return;
+
+    if (created.repeats) {
+      // 되풀이하는 규칙은 **서버가 펼친다**(#421). 돌려받은 것은 규칙 한 줄뿐이라, 그것만
+      // 목록에 끼워 넣으면 달력에 시작일 하루만 점이 찍힌다 — 매주로 저장했는데 다음 주가
+      // 안 보인다(에뮬레이터에서 눈으로 잡았다).
+      setState(() => _selected = created.onDate);
+      await _load();
+      return;
+    }
+
     setState(() {
       _items = [..._items, created];
       _selected = created.onDate;
@@ -650,7 +740,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 }
 
-/// 새 일정 한 장 — 종류 → 제목 → 날짜/시각 → 아이 → 메모.
+/// 일정 한 장 — 종류 → 제목 → 날짜/시각 → 아이 → 담당 → 반복 → 메모.
+///
+/// **만들기와 고치기가 같은 시트다.** 두 벌로 두면 칸이 늘 때마다 두 곳을 고쳐야 하고,
+/// 한쪽을 빠뜨리면 "만들 때는 되는데 고칠 때는 안 되는" 칸이 생긴다.
 ///
 /// **주인을 안 묻는다** — 화면 파일 머리말에 이유가 있다.
 class ScheduleSheet extends StatefulWidget {
@@ -660,7 +753,17 @@ class ScheduleSheet extends StatefulWidget {
   final int? groupId;
 
   final List<DogProfile> pets;
+
+  /// 담당자로 고를 수 있는 사람들. 가족이 없으면 비어 있고, 그때 담당 칸이 안 보인다.
+  final List<ScheduleMember> members;
+
   final DateTime day;
+
+  /// 고치는 중이면 그 일정. `null` 이면 새로 만드는 것이다.
+  final Schedule? editing;
+
+  /// 고치기가 **이 하루에만** 미치는가(#421). 펼쳐 낸 하루를 고칠 때 참이다.
+  final bool onlyThisDay;
 
   const ScheduleSheet({
     super.key,
@@ -668,20 +771,34 @@ class ScheduleSheet extends StatefulWidget {
     required this.groupId,
     required this.pets,
     required this.day,
+    this.members = const [],
+    this.editing,
+    this.onlyThisDay = false,
   });
 
   @override
   State<ScheduleSheet> createState() => _ScheduleSheetState();
 }
 
-class _ScheduleSheetState extends State<ScheduleSheet> {
-  final _title = TextEditingController();
-  final _memo = TextEditingController();
+/// 담당자 후보 한 명. 가족 화면이 이미 들고 있는 것과 같은 값이다.
+class ScheduleMember {
+  final int userId;
+  final String nickname;
 
-  ScheduleKind _kind = ScheduleKind.vet;
-  late DateTime _date = widget.day;
-  TimeOfDay? _time;
-  int? _dogId;
+  const ScheduleMember({required this.userId, required this.nickname});
+}
+
+class _ScheduleSheetState extends State<ScheduleSheet> {
+  late final _title = TextEditingController(text: widget.editing?.title ?? '');
+  late final _memo = TextEditingController(text: widget.editing?.memo ?? '');
+
+  late ScheduleKind _kind = widget.editing?.kind ?? ScheduleKind.vet;
+  late DateTime _date = widget.editing?.onDate ?? widget.day;
+  late TimeOfDay? _time = widget.editing?.atTime;
+  late int? _dogId = widget.editing?.dogId;
+  late int? _assignee = widget.editing?.assignee?.userId;
+  late ScheduleRepeat _repeat = widget.editing?.repeatKind ?? ScheduleRepeat.none;
+  late DateTime? _repeatUntil = widget.editing?.repeatUntil;
 
   bool _saving = false;
   String? _error;
@@ -690,7 +807,7 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
   void initState() {
     super.initState();
     // 가족이 없으면 아이가 주인이라 하나는 골라져 있어야 한다.
-    if (widget.groupId == null && widget.pets.isNotEmpty) {
+    if (widget.groupId == null && _dogId == null && widget.pets.isNotEmpty) {
       _dogId = widget.pets.first.serverId;
     }
   }
@@ -703,6 +820,11 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
   }
 
   bool get _ownedByGroup => widget.groupId != null;
+
+  bool get _editing => widget.editing != null;
+
+  /// 이 하루만 고치는 중이면 반복을 못 바꾼다 — 하루짜리 행이 될 것이라 규칙이 없다.
+  bool get _canSetRepeat => !widget.onlyThisDay;
 
   @override
   Widget build(BuildContext context) {
@@ -724,12 +846,20 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
                   color: T.textFaint, borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 14),
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
-              child: Text('일정 적기',
-                  style: TextStyle(
+              child: Text(_editing ? '일정 고치기' : '일정 적기',
+                  style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w800, color: T.textPrimary)),
             ),
+            if (widget.onlyThisDay) ...[
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('${_date.month}월 ${_date.day}일 하루만 바꿉니다',
+                    style: const TextStyle(fontSize: 12, color: T.textSecondary)),
+              ),
+            ],
             const SizedBox(height: 12),
 
             _label('종류'),
@@ -777,6 +907,38 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
             ]),
             const SizedBox(height: 14),
 
+            if (_canSetRepeat) ...[
+              _label('반복'),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final r in ScheduleRepeat.values)
+                  _chip(r.label, _repeat == r, () => setState(() {
+                        _repeat = r;
+                        if (!r.repeats) _repeatUntil = null;
+                      })),
+              ]),
+              if (_repeat.repeats) ...[
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _pickRepeatUntil,
+                      // 끝이 없어도 된다 — 조회가 기간으로 잘리므로 안전하다.
+                      child: Text(_repeatUntil == null
+                          ? '끝없이'
+                          : '${_repeatUntil!.month}월 ${_repeatUntil!.day}일까지'),
+                    ),
+                  ),
+                  if (_repeatUntil != null)
+                    IconButton(
+                      tooltip: '종료일 지우기',
+                      onPressed: () => setState(() => _repeatUntil = null),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                ]),
+              ],
+              const SizedBox(height: 14),
+            ],
+
             if (widget.pets.isNotEmpty) ...[
               _label('아이'),
               Wrap(spacing: 8, runSpacing: 8, children: [
@@ -785,6 +947,18 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
                 for (final p in widget.pets)
                   _chip(p.name, _dogId == p.serverId,
                       () => setState(() => _dogId = p.serverId)),
+              ]),
+              const SizedBox(height: 14),
+            ],
+
+            // 가족이 없으면 담당을 물을 사람이 없다 — 칸 자체를 안 그린다.
+            if (widget.members.isNotEmpty) ...[
+              _label('담당'),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _chip('안 정함', _assignee == null, () => setState(() => _assignee = null)),
+                for (final m in widget.members)
+                  _chip(m.nickname, _assignee == m.userId,
+                      () => setState(() => _assignee = m.userId)),
               ]),
               const SizedBox(height: 14),
             ],
@@ -876,7 +1050,21 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
       firstDate: DateTime(_date.year - 1),
       lastDate: DateTime(_date.year + 2),
     );
-    if (picked != null) setState(() => _date = DateTime(picked.year, picked.month, picked.day));
+    if (picked != null) {
+      setState(() => _date = DateTime(picked.year, picked.month, picked.day));
+    }
+  }
+
+  Future<void> _pickRepeatUntil() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _repeatUntil ?? _date,
+      firstDate: _date,
+      lastDate: DateTime(_date.year + 5),
+    );
+    if (picked != null) {
+      setState(() => _repeatUntil = DateTime(picked.year, picked.month, picked.day));
+    }
   }
 
   Future<void> _pickTime() async {
@@ -903,23 +1091,47 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
       _error = null;
     });
     try {
-      final created = await widget.repository.create(
-        ownerKind: _ownedByGroup ? ScheduleOwnerKind.group : ScheduleOwnerKind.dog,
-        ownerRef: _ownedByGroup ? widget.groupId! : _dogId!,
-        kind: _kind,
-        title: title,
-        onDate: _date,
-        dogId: _dogId,
-        memo: _memo.text.trim(),
-        atTime: _time,
-      );
+      final editing = widget.editing;
+      final saved = editing == null
+          ? await widget.repository.create(
+              ownerKind:
+                  _ownedByGroup ? ScheduleOwnerKind.group : ScheduleOwnerKind.dog,
+              ownerRef: _ownedByGroup ? widget.groupId! : _dogId!,
+              kind: _kind,
+              title: title,
+              onDate: _date,
+              dogId: _dogId,
+              memo: _memo.text.trim(),
+              atTime: _time,
+              assignee: _assignee,
+              repeatKind: _repeat,
+              repeatUntil: _repeatUntil,
+            )
+          : await widget.repository.update(
+              scheduleId: editing.id,
+              version: editing.version,
+              kind: _kind,
+              title: title,
+              onDate: _date,
+              dogId: _dogId,
+              memo: _memo.text.trim(),
+              atTime: _time,
+              assignee: _assignee,
+              // 이 하루만 고치는 중이면 반복을 안 보낸다 — 하루짜리 행이 될 것이라
+              // 규칙이 없다. 안 보내면 서버가 안 바꾼다.
+              repeatKind: _canSetRepeat ? _repeat : null,
+              repeatUntil: _canSetRepeat ? _repeatUntil : null,
+              onlyDay: widget.onlyThisDay ? editing.onDate : null,
+            );
       if (!mounted) return;
-      Navigator.of(context).pop(created);
+      Navigator.of(context).pop(saved);
     } on ScheduleFailure catch (e) {
       if (!mounted) return;
       setState(() {
         _saving = false;
         _error = switch (e.kind) {
+          ScheduleFailureKind.conflict =>
+            '다른 분이 방금 고쳤어요. 닫고 다시 열어 주세요',
           ScheduleFailureKind.notFound => '이 아이나 가족의 일정은 만들 수 없어요',
           ScheduleFailureKind.invalid => e.message ?? '아직 만들 수 없는 일정이에요',
           _ => '연결이 불안정해요. 잠시 뒤 다시 해 주세요',

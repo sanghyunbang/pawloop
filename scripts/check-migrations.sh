@@ -244,6 +244,10 @@ want 1 "$(has_table schedule)" "schedule 표 (없으면 부팅이 validate 에�
 step "35_schedule_care_log.sql"
 want 1 "$(has_column schedule care_log_id)" "schedule.care_log_id (없으면 부팅이 validate 에서 죽는다)"
 
+step "36_schedule_repeat.sql"
+want 1 "$(has_column schedule repeat_kind)" "schedule.repeat_kind (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(has_table schedule_exception)" "schedule_exception 표 (없으면 하루만 건너뛰기가 안 된다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

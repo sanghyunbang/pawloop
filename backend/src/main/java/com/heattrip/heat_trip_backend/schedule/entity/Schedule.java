@@ -88,6 +88,8 @@ import java.time.LocalTime;
 @Check(name = "ck_schedule_kind",
         constraints = "kind in ('walk','vet','med','groom','bath','food','etc')")
 @Check(name = "ck_schedule_status", constraints = "status in ('planned','done','skipped')")
+@Check(name = "ck_schedule_repeat",
+        constraints = "repeat_kind in ('none','daily','weekly','monthly')")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -153,6 +155,41 @@ public class Schedule {
     private LocalDateTime doneAt;
 
     /**
+     * 얼마나 자주 되풀이하나 — 이슈 #421. 규칙은 <b>한 줄</b>이고 조회할 때 서버가 펼친다.
+     *
+     * <p>요일·날짜를 따로 안 든다 — {@code weekly} 는 {@link #onDate} 의 요일이고
+     * {@code monthly} 는 그 날짜다({@link ScheduleRepeat} javadoc).
+     */
+    @Convert(converter = ScheduleRepeat.Codec.class)
+    @Column(name = "repeat_kind", nullable = false, length = 10)
+    private ScheduleRepeat repeatKind;
+
+    /**
+     * 언제까지 되풀이하나. <b>{@code null} 이면 끝이 없다</b>.
+     *
+     * <p>무한이 안전한 이유는 조회가 기간으로 잘리기 때문이다 — 92일 상한이 이미 있어
+     * 한 요청이 무한을 펼칠 일이 없다({@code ScheduleService.MAX_RANGE_DAYS}).
+     */
+    @Column(name = "repeat_until")
+    private LocalDate repeatUntil;
+
+    /**
+     * 이 행이 <b>어느 규칙의 하루를 대신하는가</b> — 이슈 #421.
+     *
+     * <p>"이번 주 목욕만 하루 미루기" 를 하면 그날짜용 행이 하나 생기고 규칙은
+     * {@code schedule_exception} 으로 그날을 건너뛴다. 그 둘을 잇는 것이 이 컬럼이다.
+     *
+     * <p><b>규칙을 지우면 함께 사라진다</b>({@code ON DELETE CASCADE}). 옮겨 둔 하루만
+     * 남으면 그것이 무엇의 하루였는지 아무도 모른다.
+     *
+     * <p>{@code null} 이 보통이다 — 평범한 일정과 규칙 자신이 그렇다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "origin_id", foreignKey = @ForeignKey(name = "fk_schedule_origin"))
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    private Schedule origin;
+
+    /**
      * 완료로 바꾸면서 남긴 케어 기록의 id — 이슈 #420. 되돌릴 때 그 줄을 거두는 열쇠다.
      *
      * <p><b>FK 가 아니다.</b> {@code care_log} 를 가리키는 FK 를 걸려면 이 엔티티가
@@ -203,6 +240,9 @@ public class Schedule {
         if (status == null) {
             status = ScheduleStatus.PLANNED;
         }
+        if (repeatKind == null) {
+            repeatKind = ScheduleRepeat.NONE;
+        }
     }
 
     @PreUpdate
@@ -225,6 +265,26 @@ public class Schedule {
         this.dog = dog;
         this.assignee = assignee;
         this.updatedBy = editor;
+    }
+
+    /**
+     * 되풀이 규칙을 바꾼다 — 이슈 #421. {@link #edit} 와 나눈 이유는
+     * {@link #markStatus} 를 나눈 것과 같다: 한 메서드로 두면 "제목만 고치려다 반복이
+     * 함께 꺼지는" 호출이 생긴다.
+     */
+    public void repeatEvery(ScheduleRepeat repeatKind, LocalDate repeatUntil) {
+        this.repeatKind = repeatKind == null ? ScheduleRepeat.NONE : repeatKind;
+        this.repeatUntil = this.repeatKind.repeats() ? repeatUntil : null;
+    }
+
+    /** 이 행이 대신하는 규칙 — {@link #origin} 참조. 만들 때 한 번만 정한다. */
+    public void replacesOneDayOf(Schedule rule) {
+        this.origin = rule;
+    }
+
+    /** 되풀이하는 규칙인가. 펼치기가 이것으로 가른다. */
+    public boolean isRule() {
+        return repeatKind != null && repeatKind.repeats();
     }
 
     /**
