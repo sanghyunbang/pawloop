@@ -58,6 +58,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\31_place_catalog_localtrail.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\32_place_catalog_playground.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\33_walk_dog.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\34_schedule.sql
 ```
 
 | 파일 | 무엇을 |
@@ -95,6 +96,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `31_place_catalog_localtrail.sql` | `chk_place_catalog_source` 를 넷으로 넓힙니다 — `+ 'localtrail'` (#346). **동네 길**(전국길관광정보표준데이터 1,302개)이 그 값으로 담깁니다. 이 출처만 **외부를 안 부릅니다** — 원본의 갱신주기가 "연간" 이라 저장소의 `data/local_trails.json` 을 읽습니다(#342 의 행정동 목록과 같은 판단). 24 뒤에 돌립니다(`chk_place_catalog_singleton` 이 남아 있으면 스크립트가 스스로 멈춥니다). **안 돌리면 부팅은 그대로 뜨고 동네 길만 조용히 안 담깁니다** — `ddl-auto` 는 CHECK 를 안 건드려 `update` 도 `validate` 도 못 잡습니다. `bash scripts/check-migrations.sh` 가 묻습니다. DOWN 은 헤더 주석에 있습니다. |
 | `33_walk_dog.sql` | `walk_dog` 표를 만들고 **이미 쌓인 산책을 전부 채웁니다** (#343). 한 번의 산책에 여러 마리를 답니다 — `walk.dog_id` 는 **대표 아이**로 남고 아이별 통계·목록은 이 표를 봅니다. 채우기를 빼면 아이별 통계가 과거를 전부 0 으로 말하므로 스크립트가 사후검증에서 스스로 멈춥니다. **안 돌리면 부팅이 `validate` 에서 죽습니다** — 엔티티에 있는 표가 DB 에 없습니다. `bash scripts/check-migrations.sh` 가 묻습니다. DOWN 은 헤더 주석에 있습니다(한 마리짜리 기록은 하나도 안 잃습니다). |
 | `32_place_catalog_playground.sql` | `chk_place_catalog_source` 를 다섯으로 넓힙니다 — `+ 'playground'` (#346). **반려견 놀이터**가 그 값으로 담깁니다. 31 과 같이 **외부를 안 부릅니다** — 전국 표준데이터가 없어 지자체 CSV 를 사람이 받아 합친 `data/playgrounds.json` 을 읽습니다(`backend/tools/build_playgrounds.py`). 31 뒤에 돌립니다(CHECK 에 `localtrail` 이 없으면 스크립트가 스스로 멈춥니다). **안 돌리면 부팅은 그대로 뜨고 놀이터만 조용히 안 담깁니다.** `bash scripts/check-migrations.sh` 가 묻습니다. DOWN 은 헤더 주석에 있습니다. |
+| `34_schedule.sql` | **일정표** 를 만듭니다 — #418. 지금까지 앱은 **지나간 일만** 알았습니다(`care_log` 는 `occurred_at` 이 서버 시계라 미래를 못 넣고, `walk` 은 끝난 산책입니다). 앞으로 할 일을 적을 자리가 한 곳도 없어서 가족이 병원 일정을 채팅으로 조율했고 그 결정이 스크롤 위로 사라졌습니다. 주인이 셋(**아이** · **가족 그룹** · **크루**)이라 `chat_room` 과 같은 방식으로 `owner_kind` + `owner_ref` 를 **불투명하게** 듭니다(ADR-0011) — 그래서 이 두 컬럼에는 **FK 가 없고** 소유권은 서버가 확인합니다. FK 넷의 규칙이 서로 다릅니다: `dog` 와 `assignee` 는 **SET NULL**(아이를 보내도, 담당자가 탈퇴해도 그 계획은 남습니다), `created_by` 는 CASCADE(그 사람의 계획입니다), `updated_by` 는 SET NULL. `at_time` 은 **NULL 을 받습니다** — 못 받으면 "이번 주말 목욕" 이 `00:00` 이 되고 화면이 사용자가 안 정한 시각을 그립니다. **같은 이름의 옛 표가 운영 DB 에 있습니다** — 감정 여행 시절의 여행 일정표입니다(#94가 코드만 지웠습니다). 스크립트가 그것을 **지우지 않고** `schedule_legacy_journey` 로 옮기고, `journey.schedule_id` 의 FK 도 `RENAME TABLE` 이 함께 옮깁니다. 옮겨 둘 자리가 이미 차 있으면 멈춥니다. 컬럼 타입은 `mysql/init/01_schema.sql` 과 **글자까지 같아야 합니다** — `time` 과 `time(6)` 의 차이가 `validate` 에서 부팅을 막습니다. **안 돌리면 부팅이 `validate` 에서 죽습니다** — 엔티티에 있는 표가 DB 에 없습니다. `bash scripts/check-migrations.sh` 가 묻습니다. 01·`dog` 뒤에, 새 코드 배포 **전**. DOWN 은 `DROP TABLE schedule` 이고 사람들이 적어 둔 일정을 전부 잃습니다. |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 

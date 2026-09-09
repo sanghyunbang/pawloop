@@ -65,6 +65,21 @@ public class GlobalExceptionHandler {
         static ErrorResponse of(String code, String message) {
             return new ErrorResponse(new ErrorBody(code, message, correlationId()));
         }
+
+        /**
+         * 같은 봉투를 <b>컨트롤러가 직접</b> 만들어야 할 때. (이슈 #418)
+         *
+         * <p>거의 모든 오류는 여기 있는 {@code @ExceptionHandler} 들이 만든다. 예외는
+         * 오류에 <b>본문을 더 실어야</b> 하는 자리다 — 일정 편집 충돌(409)은 봉투와 함께
+         * <b>최신 값</b>을 준다. 그런 응답은 컨트롤러가 자기 record 로 조립하는데, 그때
+         * {@code code} 문자열을 손으로 적으면 같은 상태에 서로 다른 코드가 붙는다
+         * ({@link #codeOf} javadoc 이 적어 둔 실제 사고다).
+         *
+         * <p>그래서 <b>상태를 주면 코드를 여기서 파생</b>시킨다. 어휘의 출처는 계속 한 곳이다.
+         */
+        public static ErrorResponse of(HttpStatus status, String message) {
+            return of(codeOf(status), message);
+        }
     }
 
     /**

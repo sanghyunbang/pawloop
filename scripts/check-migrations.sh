@@ -238,6 +238,9 @@ want 1 "$(check_has chk_place_catalog_source playground)" "chk_place_catalog_sou
 step "33_walk_dog.sql"
 want 1 "$(has_table walk_dog)" "walk_dog 표 (없으면 부팅이 validate 에서 죽는다)"
 
+step "34_schedule.sql"
+want 1 "$(has_table schedule)" "schedule 표 (없으면 부팅이 validate 에서 죽는다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

@@ -350,6 +350,39 @@ CREATE TABLE `report_snapshot` (
   CONSTRAINT `chk_report_snapshot_target_type` CHECK ((`target_type` in (_utf8mb4'community_post',_utf8mb4'community_comment',_utf8mb4'chat_message',_utf8mb4'chat_room')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `schedule` (
+  `at_time` time(6) DEFAULT NULL,
+  `on_date` date NOT NULL,
+  `version` int NOT NULL,
+  `assignee` bigint DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `created_by` bigint NOT NULL,
+  `dog_id` bigint DEFAULT NULL,
+  `done_at` datetime(6) DEFAULT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `owner_ref` bigint NOT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `updated_by` bigint DEFAULT NULL,
+  `kind` varchar(10) NOT NULL,
+  `owner_kind` varchar(10) NOT NULL,
+  `status` varchar(10) NOT NULL,
+  `title` varchar(100) NOT NULL,
+  `memo` varchar(500) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_schedule_owner_date` (`owner_kind`,`owner_ref`,`on_date`),
+  KEY `idx_schedule_dog_date` (`dog_id`,`on_date`),
+  KEY `fk_schedule_assignee` (`assignee`),
+  KEY `fk_schedule_created_by` (`created_by`),
+  KEY `fk_schedule_updated_by` (`updated_by`),
+  CONSTRAINT `fk_schedule_assignee` FOREIGN KEY (`assignee`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_schedule_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_schedule_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_schedule_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `ck_schedule_kind` CHECK ((`kind` in (_utf8mb4'walk',_utf8mb4'vet',_utf8mb4'med',_utf8mb4'groom',_utf8mb4'bath',_utf8mb4'food',_utf8mb4'etc'))),
+  CONSTRAINT `ck_schedule_owner_kind` CHECK ((`owner_kind` in (_utf8mb4'dog',_utf8mb4'group',_utf8mb4'room'))),
+  CONSTRAINT `ck_schedule_status` CHECK ((`status` in (_utf8mb4'planned',_utf8mb4'done',_utf8mb4'skipped')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `trail_route` (
   `length_m` int NOT NULL,
   `point_count` int NOT NULL,

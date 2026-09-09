@@ -31,6 +31,8 @@ erDiagram
     dog      ||--o{ walk      : "산책 기록 (대표 아이)"
     walk     ||--|{ walk_dog  : "함께 나간 아이들 (#343)"
     dog      ||--o{ walk_dog  : "이 아이가 낀 산책"
+    dog      ||--o{ schedule  : "이 아이의 앞으로 할 일 (#418)"
+    users    ||--o{ schedule  : "적은 사람 / 맡은 사람"
     dog      |o--o{ care_log  : "케어 기록 (nullable, ON DELETE SET NULL - #154)"
 
     place    ||--o{ post      : "태그 (계획 - place 표는 아직 없다)"
@@ -83,6 +85,24 @@ erDiagram
     walk_dog {
         BIGINT   dog_id  PK,FK "PK 앞자리 — '이 아이의 산책' 이 가장 잦은 질문"
         BIGINT   walk_id PK,FK "둘 다 ON DELETE CASCADE — 이음매라 남길 사실이 없다"
+    }
+
+    schedule {
+        BIGINT   id PK
+        VARCHAR  owner_kind "dog|group|room - FK 아님. chat_room 과 같은 방식(ADR-0011)"
+        BIGINT   owner_ref  "그 도메인의 id - 소유권은 서버가 확인한다"
+        BIGINT   dog_id FK  "nullable, SET NULL - owner 와 별개다"
+        VARCHAR  kind       "walk|vet|med|groom|bath|food|etc"
+        VARCHAR  title
+        VARCHAR  memo
+        DATE     on_date    "사용자의 날짜(KST)"
+        TIME     at_time    "nullable - 비면 하루 종일. 0시로 채우지 않는다"
+        BIGINT   assignee FK "nullable, SET NULL - 탈퇴해도 그 일은 남는다"
+        VARCHAR  status     "planned|done|skipped"
+        DATETIME done_at    "planned 로 되돌리면 다시 NULL"
+        INT      version    "낙관적 잠금 - 뒤에 온 편집이 409 를 받는다"
+        BIGINT   created_by FK "CASCADE - 그 사람의 계획이다"
+        BIGINT   updated_by FK "nullable, SET NULL"
     }
 
     walk {
@@ -337,6 +357,7 @@ erDiagram
 | `dog` | 실재 | 사용자의 반려견 프로필. 견종·크기·생일·중성화 여부. `users` 1:N `dog`. |
 | `walk` | 실재 | 산책 기록 1건. GPS 경로를 `LINESTRING`으로, 거리·시간·페이스·메모 저장. `dog_id` 는 **대표 아이**이고, 함께 나간 아이 전부는 `walk_dog` 에 있다(#343). |
 | `walk_dog` | 실재 | 한 번의 산책에 함께 나간 아이들(#343). `walk` N:M `dog`. 이음매뿐이라 양쪽 FK 가 CASCADE 다. **아이별 통계·목록이 이 표를 본다.** |
+| `schedule` | 실재 | **앞으로 할 일**(#418). 주인이 셋(아이 · 가족 그룹 · 크루)이라 `owner_kind`+`owner_ref` 를 **불투명하게** 든다 — `chat_room` 과 같은 방식이고 **그 두 컬럼에는 FK 가 없다**(ADR-0011). `dog_id` 는 `owner_ref` 와 **별개**이고 `SET NULL` 이다 — 아이를 보내도 계획은 남는다. |
 | `course` | 실재 | 산책 기록 중에 "여기 좋다" 고 남긴 코스(#339). `walk.path` 에서 **양 끝 100m 를 잘라 낸 선**을 들고, 산책을 지워도 남는다(`walk_id` 가 NULL 이 된다). 기본은 비공개이고 공개한 것만 지도의 "이웃 코스" 에 나온다. 가까운 것 고르기는 기기에서 한다(A안 #235). |
 | `care_log` | 실재 | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. `dog_id` 는 `dog.id` 로 가는 FK 다(**#154**, `ON DELETE SET NULL` — 반려동물이 지워져도 기록은 남는다). 값은 아직 항상 `NULL` — 쓰기 경로가 `dogId` 를 안 받는다([schema.md §17](./schema.md)). |
 | `family_group` | 실재 | 가족 케어 그룹. **이름과 생성 시각만** 든다 — 초대코드도 멤버십도 여기 없다. 방은 `chat_room` 이 `origin_kind`/`origin_ref` 로 불투명하게 가리킨다. |

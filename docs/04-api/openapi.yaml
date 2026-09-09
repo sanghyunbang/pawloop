@@ -157,6 +157,23 @@ tags:
     description: 게시판 · 댓글 · 반응
   - name: Bookmarks
     description: 저장한 장소
+  - name: Schedules
+    description: |
+      일정표 — 앞으로 할 일(#418, 부모 #416). 지금까지 앱은 **지나간 일만** 알았습니다
+      (`care_log` 는 서버 시계라 미래를 못 넣고, `walk` 은 끝난 산책입니다). 그래서 가족은
+      병원 일정을 채팅으로 조율했고 그 결정은 스크롤 위로 사라졌습니다.
+
+      **주인이 셋입니다** — 아이(`dog`) · 가족 그룹(`group`) · 크루(`room`, #417). 셋이 한 표에
+      살고, `ownerKind` 를 생략하면 **내가 볼 수 있는 전부**가 한 목록으로 옵니다. 달력의 기본이
+      합쳐 보기라 화면이 두 번 부르게 만들지 않습니다. `room` 은 값만 열어 두었고 서버가 아직
+      **400** 으로 거절합니다 — 확인할 멤버십이 #417 전에는 없습니다.
+
+      **거절은 전부 404 입니다.** 남의 아이 일정도, 안 든 그룹의 일정도, 없는 id 도 같은 404 입니다.
+      403 을 주면 "그 id 는 있다" 를 알려 주게 되고, 그러면 id 를 훑어 남의 가족 구성을 짐작할 수
+      있습니다. 예외는 **편집 충돌(409)** 하나입니다 — 그건 권한이 아니라 "지금 값이 달라졌다" 는
+      사실이라 화면이 알아야 합니다.
+
+      **좌표가 없습니다** — 요청에도 응답에도 없고 표에도 컬럼이 없습니다(A안 #235).
   - name: Groups
     description: |
       가족 그룹 · 오늘의 케어 공유 · 산책 주의사항
@@ -2204,6 +2221,160 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
 
   # ─────────────────────────── Chat ───────────────────────────
+  /api/schedules:
+    get:
+      tags: [Schedules]
+      summary: 기간 안의 일정
+      description: |
+        달력이 묻는 것은 늘 "이 기간" 이라 **페이지 커서를 두지 않습니다** — 한 달치가 수십 건이라
+        자를 것이 없고, 커서를 두면 화면이 달을 넘길 때마다 커서를 버려야 합니다.
+
+        **`ownerKind` 를 생략하면 내가 볼 수 있는 전부**가 옵니다 — 내 아이들 것과 우리 가족 것이
+        한 목록입니다. 주면 `ownerRef` 도 있어야 하고, 그 주인을 못 보는 사람에게는 **404** 입니다.
+
+        `dogId` 는 `ownerKind` 와 **겹쳐 쓸 수 있습니다** — "우리 가족 일정 중 보리 것". 아이에 안
+        묶인 일정("사료 주문")은 이 필터에 안 걸립니다.
+
+        **정렬은 날짜 → 시각 → id 이고, 시각 없는 것("하루 종일")이 그날의 뒤입니다.** 두 주인의
+        목록을 이어 붙이면 순서가 종류순이 되므로 서버가 다시 세웁니다.
+
+        **기간이 92일을 넘으면 400** 입니다. 상한이 없으면 한 요청이 몇 년치를 끌어오고, 그건 느린
+        것이 아니라 메모리를 먹는 문제입니다. 92일이면 "이번 달 ± 한 달" 이 한 번에 들어옵니다.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: 시작 날짜(포함)
+          schema: { type: string, format: date, example: "2026-10-01" }
+        - name: to
+          in: query
+          required: true
+          description: 끝 날짜(포함). `from` 보다 앞이거나 92일을 넘으면 400
+          schema: { type: string, format: date, example: "2026-10-31" }
+        - name: ownerKind
+          in: query
+          description: 생략하면 내가 볼 수 있는 전부. 주면 `ownerRef` 도 필요합니다
+          schema: { $ref: '#/components/schemas/ScheduleOwnerKind' }
+        - name: ownerRef
+          in: query
+          description: 그 주인의 id
+          schema: { type: integer, format: int64 }
+        - name: dogId
+          in: query
+          description: 그 아이 것만. `ownerKind` 와 겹쳐 쓸 수 있습니다
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: 기간 안의 일정
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Schedule' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Schedules]
+      summary: 일정 만들기
+      description: |
+        **`ownerKind`+`ownerRef` 의 소유권을 서버가 확인합니다** — 내 아이거나, 내가 든 가족
+        그룹이어야 합니다. 아니면 404 입니다.
+
+        `dogId` 는 `ownerRef` 와 **별개**입니다 — "가족 소유인데 보리 것" 이 흔합니다. 없어도
+        됩니다("사료 주문").
+
+        `atTime` 은 **없어도 됩니다** — "이번 주말 목욕". 0시로 채우지 않습니다.
+
+        `assignee` 는 **그 주인을 볼 수 있는 사람**이어야 합니다. 아무나 담당으로 적으면 남의
+        화면에 그 사람이 모르는 일정이 뜹니다 — 아니면 404 입니다.
+
+        상태는 항상 `planned` 로 시작합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleInput' }
+      responses:
+        '201':
+          description: 만들어짐
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/schedules/{scheduleId}:
+    parameters:
+      - name: scheduleId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      tags: [Schedules]
+      summary: 일정 고치기
+      description: |
+        `PUT` 이 아니라 `PATCH` 인 이유: 화면이 한 칸만 고치는 일이 흔합니다(담당자만 바꾸기,
+        완료 표시만 하기).
+
+        **`version` 이 필수입니다** — 쿼리로 받습니다. 서버의 것과 다르면 **409** 와 함께
+        **최신 값**을 줍니다(`ScheduleConflict`). 조용히 덮어쓰면 아빠가 옮긴 병원 시각이
+        엄마의 옛 화면으로 되돌아갑니다.
+
+        **왜 본문이 아니라 쿼리인가.** 이 본문은 부분 수정이라 스키마에 `required` 를 둘 수
+        없습니다(ADR-0017 규약 4 — 생성 스키마를 재사용하면 부분 수정이 계약대로는 불가능해진
+        사고에서 나온 규약입니다). 그런데 잠금 값은 반드시 있어야 합니다 — 선택으로 두면 앱이
+        안 보내는 순간 잠금이 사라집니다. 둘 중 필수인 쪽을 본문 밖으로 냈습니다.
+
+        **`memo`·`atTime`·`dogId`·`assignee` 는 안 보내면 비웁니다.** "비우는 것" 과 "안 바꾸는
+        것" 이 둘 다 `null` 로 오기 때문입니다 — 담당자를 뗄 길이 없는 쪽이 더 나쁘고, 화면은
+        늘 전체를 보냅니다. `kind`·`title`·`onDate` 는 반대로 **안 보내면 안 바꿉니다**(비울 수
+        없는 값들입니다).
+
+        **주인은 못 바꿉니다.** `ownerKind`·`ownerRef` 가 이 본문에 없습니다 — 아이 일정을 가족
+        일정으로 옮기는 것은 권한이 바뀌는 일이라, 고치기와 같은 문으로 두면 그 검사를 빠뜨리기
+        쉽습니다.
+
+        `status` 를 `done`·`skipped` 로 바꾸면 `doneAt` 이 찍히고, `planned` 로 되돌리면
+        **지워집니다** — 안 지우면 "아직 안 한 일" 에 완료 시각이 붙어 있게 됩니다.
+      parameters:
+        - name: version
+          in: query
+          required: true
+          description: 마지막으로 본 `version`. 서버의 것과 다르면 409 입니다
+          schema: { type: integer, example: 3 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleUpdate' }
+      responses:
+        '200':
+          description: 고쳐짐
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            다른 사람이 먼저 고쳤습니다. **`error` 봉투는 평소와 같고**(앱의 공통 오류 처리가
+            `error.code` 로 분기합니다) 그 옆에 최신 값이 함께 옵니다.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleConflict' }
+    delete:
+      tags: [Schedules]
+      summary: 일정 지우기
+      description: |
+        물리 삭제라 같은 id 로 다시 부르면 404 입니다. 남의 일정도, 없는 일정도 같은 404 입니다.
+      responses:
+        '204': { description: 지워짐 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /api/chat/rooms:
     get:
       tags: [Chat]
@@ -4571,6 +4742,161 @@ components:
           format: int64
           description: 방의 현재 마지막 `room_seq`
         hasMore: { type: boolean }
+
+    ScheduleOwnerKind:
+      type: string
+      enum: [dog, group, room]
+      description: |
+        일정의 주인이 어느 도메인인가. `chat_room.origin_kind` 와 같은 방식입니다
+        ([ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72)) — 세 도메인을 가리키는
+        컬럼이라 **DB 에 FK 가 없고** 소유권은 서버가 확인합니다.
+
+        `room`(크루, #417)은 값만 미리 열어 두었습니다. 지금 보내면 **400** 입니다 — 확인할
+        멤버십이 아직 없고, 확인 없이 통과시키면 아무나 남의 크루 일정을 만들 수 있습니다.
+
+    ScheduleKind:
+      type: string
+      enum: [walk, vet, med, groom, bath, food, etc]
+      description: |
+        일정의 종류 — 산책 · 병원 · 투약 · 미용 · 목욕 · 사료 · 그 밖. DB 의 `CHECK` 가 받는
+        문자열과 **글자까지 같습니다**(`CareType` 과 같은 규약입니다).
+
+    ScheduleStatus:
+      type: string
+      enum: [planned, done, skipped]
+      description: |
+        `skipped` 가 `done` 과 따로 있는 이유: "건너뛰었다" 는 지운 것과 다릅니다 — 약을 안 먹인
+        날이 달력에 남아야 다음에 그것을 봅니다.
+
+    SchedulePerson:
+      type: object
+      description: 사람 한 명. 없거나 탈퇴했으면 이 객체 자체가 `null` 입니다
+      required: [userId, nickname]
+      properties:
+        userId: { type: integer, format: int64, example: 7 }
+        nickname: { type: string, example: "아빠" }
+
+    Schedule:
+      type: object
+      description: |
+        앞으로 할 일 하나(`schedule` — schema.md §33).
+      required: [id, ownerKind, ownerRef, kind, title, onDate, status, version]
+      properties:
+        id: { type: integer, format: int64 }
+        ownerKind: { $ref: '#/components/schemas/ScheduleOwnerKind' }
+        ownerRef:
+          type: integer
+          format: int64
+          description: 그 도메인의 id
+        dogId:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            어느 아이 것인가. **`ownerRef` 와 별개**입니다. 아이를 지워도 계획은 남으므로
+            (`ON DELETE SET NULL`) 지난 일정에서 `null` 이 될 수 있습니다.
+        kind: { $ref: '#/components/schemas/ScheduleKind' }
+        title: { type: string, maxLength: 100, example: "보리 병원" }
+        memo: { type: [string, "null"], maxLength: 500, example: "광견병 접종" }
+        onDate:
+          type: string
+          format: date
+          example: "2026-10-03"
+          description: |
+            **사용자의 날짜**입니다(KST). 시각과 달리 시간대 변환을 하지 않습니다 — "10월 3일
+            병원" 은 어느 시간대에서 보든 10월 3일입니다.
+        atTime:
+          type: [string, "null"]
+          example: "10:30:00"
+          description: |
+            **`null` 이면 "하루 종일"** 입니다. 0시로 채우지 않습니다 — 채우면 화면이
+            "00:00 목욕" 이라고 적게 되고, 그건 사용자가 안 정한 것을 정한 것처럼 보이게 합니다.
+        assignee:
+          oneOf:
+            - $ref: '#/components/schemas/SchedulePerson'
+            - type: "null"
+          description: |
+            맡기로 한 사람. id 가 아니라 사람인 이유는 화면이 "아빠 담당" 을 그리려면 이름이
+            필요하고, id 만 주면 목록마다 한 번 더 물어야 하기 때문입니다. 정하지 않았거나
+            탈퇴했으면 `null` 입니다.
+        status: { $ref: '#/components/schemas/ScheduleStatus' }
+        doneAt:
+          type: [string, "null"]
+          format: date-time
+          example: "2026-10-03T01:30:00Z"
+          description: 완료·건너뜀으로 바꾼 시각. `planned` 로 되돌리면 다시 `null` 입니다
+        version:
+          type: integer
+          description: |
+            고칠 때 그대로 되돌려 보내야 하는 값. 다르면 409 입니다.
+        updatedBy:
+          oneOf:
+            - $ref: '#/components/schemas/SchedulePerson'
+            - type: "null"
+          description: 마지막으로 고친 사람. 화면의 "○○님이 방금 고쳤어요" 가 이 값입니다
+        updatedAt: { type: [string, "null"], format: date-time }
+
+    ScheduleInput:
+      type: object
+      required: [ownerKind, ownerRef, kind, title, onDate]
+      properties:
+        ownerKind: { $ref: '#/components/schemas/ScheduleOwnerKind' }
+        ownerRef: { type: integer, format: int64 }
+        dogId:
+          type: [integer, "null"]
+          format: int64
+          description: 없어도 됩니다 — "사료 주문" 은 아이 하나에 안 묶입니다
+        kind: { $ref: '#/components/schemas/ScheduleKind' }
+        title: { type: string, maxLength: 100, example: "보리 병원" }
+        memo: { type: [string, "null"], maxLength: 500 }
+        onDate: { type: string, format: date, example: "2026-10-03" }
+        atTime:
+          type: [string, "null"]
+          example: "10:30"
+          description: 없어도 됩니다 — "이번 주말 목욕"
+        assignee:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            **그 주인을 볼 수 있는 사람**이어야 합니다. 아니면 404 입니다.
+
+    ScheduleUpdate:
+      type: object
+      description: |
+        부분 수정 본문. **잠금 값(`version`)은 여기 없고 쿼리로 갑니다** — 경로 설명 참조.
+
+        `memo`·`atTime`·`dogId`·`assignee` 는 **안 보내면 비우고**,
+        `kind`·`title`·`onDate`·`status` 는 **안 보내면 안 바꿉니다**.
+      minProperties: 1
+      properties:
+        dogId: { type: [integer, "null"], format: int64 }
+        kind: { $ref: '#/components/schemas/ScheduleKind' }
+        title: { type: string, maxLength: 100 }
+        memo: { type: [string, "null"], maxLength: 500 }
+        onDate: { type: string, format: date }
+        atTime: { type: [string, "null"], example: "15:00" }
+        assignee: { type: [integer, "null"], format: int64 }
+        status: { $ref: '#/components/schemas/ScheduleStatus' }
+
+    ScheduleConflict:
+      type: object
+      description: |
+        편집 충돌(409)의 본문. **`error` 봉투를 깨지 않습니다** — 앱의 공통 오류 처리가
+        `error.code` 로 분기하므로 최신 값은 봉투 **안**이 아니라 **옆**에 붙습니다.
+      required: [error, current]
+      properties:
+        error:
+          type: object
+          description: 평소와 같은 오류 봉투의 안쪽. `code` 는 `CONFLICT` 입니다
+          properties:
+            code: { type: string, example: "CONFLICT" }
+            message: { type: string, example: "다른 사람이 먼저 고쳤습니다." }
+            traceId: { type: [string, "null"] }
+        current:
+          allOf:
+            - $ref: '#/components/schemas/Schedule'
+          description: |
+            **지금 서버에 있는 값**. 화면이 다시 묻지 않고 "○○님이 방금 고쳤어요" 를 그 자리에서
+            그릴 수 있게 합니다 — 다시 물으면 그 사이에 또 바뀔 수 있습니다.
 
     WalkNote:
       type: object
