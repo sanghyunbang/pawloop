@@ -43,4 +43,17 @@ public interface DogOwnership {
      * @throws org.springframework.web.server.ResponseStatusException 내 것이 아니면 404
      */
     Dog requireMineEntity(Long userId, Long dogId);
+
+    /**
+     * 이 사람의 아이 id 전부 — 이슈 #418 이 이 표면에 더했다. 지운 아이는 안 들어간다(#156).
+     *
+     * <p><b>왜 여기인가.</b> 일정표의 기본이 "합쳐 보기" 다 — 내 아이들 것과 우리 가족 것이
+     * 한 목록으로 나온다. 그러려면 "내 아이가 누구누구인가" 를 물어야 하는데,
+     * {@code DogRepository} 를 직접 부르면 소유권 판정이 두 곳에 생긴다({@link #requireMine}
+     * 의 javadoc 이 경계하는 것이 정확히 그것이다).
+     *
+     * <p>{@code DogResponse} 목록을 주는 조회는 이미 있지만 그것은 화면용 모양이다. 여기
+     * 필요한 것은 <b>id 뿐</b>이라, 이름·품종까지 실어 나르지 않는다.
+     */
+    java.util.List<Long> myDogIds(long userId);
 }

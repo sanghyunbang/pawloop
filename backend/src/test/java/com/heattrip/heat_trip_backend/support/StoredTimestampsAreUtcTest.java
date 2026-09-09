@@ -90,7 +90,10 @@ class StoredTimestampsAreUtcTest {
             Dog.class, CareLog.class, Walk.class,
             Post.class, Comment.class, Reaction.class, Block.class,
             // #83 — 기기 토큰과 알림 설정.
-            DeviceToken.class, PushPreference.class);
+            DeviceToken.class, PushPreference.class,
+            // #418 — 일정표. on_date·at_time 은 사람이 고른 벽시계라 UTC 로 안 눕힌다
+            // (ScheduleTime javadoc). 이 검사가 보는 것은 created_at·updated_at·done_at 이다.
+            com.heattrip.heat_trip_backend.schedule.entity.Schedule.class);
 
     /**
      * 훅이 있는데 <b>일부러 목록에 안 넣는</b> 엔티티. 이름을 여기 적는 이유는 "몰라서 빠진 것"
@@ -119,7 +122,7 @@ class StoredTimestampsAreUtcTest {
     void nowUtc_ignoresTheJvmDefaultZone() {
         withDefaultZone(FORCED, () -> {
             for (String label : List.of("ChatTime", "UserTime", "DogTime", "CareTime",
-                    "CommunityTime", "ModerationTime", "PushTime")) {
+                    "CommunityTime", "ModerationTime", "PushTime", "ScheduleTime")) {
                 LocalDateTime written = switch (label) {
                     case "ChatTime" -> ChatTime.nowUtc();
                     case "UserTime" -> UserTime.nowUtc();
@@ -127,6 +130,8 @@ class StoredTimestampsAreUtcTest {
                     case "CareTime" -> CareTime.nowUtc();
                     case "CommunityTime" -> CommunityTime.nowUtc();
                     case "PushTime" -> PushTime.nowUtc();
+                    case "ScheduleTime" ->
+                            com.heattrip.heat_trip_backend.schedule.ScheduleTime.nowUtc();
                     default -> ModerationTime.nowUtc();
                 };
 

@@ -1062,34 +1062,135 @@ CREATE TABLE `course` (
 
 ---
 
-## 32. `walk_dog` — 한 번의 산책에 여러 마리 (**실재**)
-
-`walk` 는 아이 **하나**에 묶여 있었다. 두 마리를 함께 데리고 나가면 한 마리 것으로 저장되거나 같은 산책을 두 번 적어야 했다 — 프로필은 "우리 아이들" 을 여러 마리 받는데 산책만 한 마리였다.
-
-```sql
-CREATE TABLE walk_dog (
-  dog_id  BIGINT NOT NULL,
-  walk_id BIGINT NOT NULL,
-  PRIMARY KEY (dog_id, walk_id),
-  KEY fk_walkdog_walk (walk_id),
-  CONSTRAINT fk_walkdog_dog  FOREIGN KEY (dog_id)  REFERENCES dog (id)  ON DELETE CASCADE,
-  CONSTRAINT fk_walkdog_walk FOREIGN KEY (walk_id) REFERENCES walk (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-```
-
-| 컬럼 | 타입 | 제약 | 설명 |
-| --- | --- | --- | --- |
-| `dog_id` | `BIGINT` | PK(1/2), FK→`dog.id` CASCADE | 함께 나간 아이 |
-| `walk_id` | `BIGINT` | PK(2/2), FK→`walk.id` CASCADE | 그 산책 |
-
-> **PK 가 `(dog_id, walk_id)` 순서인 것은 Hibernate 가 정하는 순서이고**(`mysql/init/01_schema.sql` 이 엔티티에서 재생성된다), 마침 바라던 순서다 — 이 표에 가장 자주 오는 질문이 "이 아이의 산책" 이라 `dog_id` 가 앞이어야 인덱스를 탄다. 반대 방향은 MySQL 이 `fk_walkdog_walk` 에 자동으로 만드는 인덱스가 받는다.
->
-> **양쪽 FK 가 모두 `CASCADE` 다.** 이 표에는 사실이 없다 — "이 산책에 이 아이가 있었다" 라는 이음매뿐이라, 산책이나 아이가 사라지면 남을 이유가 없다. `care_log` 가 `SET NULL` 인 것과 다른 이유가 여기 있다: 거기는 "누가 밥을 줬다" 라는 **사실**이라 사람이 사라져도 남아야 한다.
->
-> **대표 아이도 여기 한 줄 들어간다.** 안 넣으면 "아이별 통계" 가 `walk.dog_id` 와 이 표를 합쳐 봐야 하고, 그 합치기를 잊는 질의가 언젠가 하나 생긴다. `33_walk_dog.sql` 이 이미 쌓인 산책까지 채운다 — 안 채우면 아이별 통계가 과거를 전부 0 으로 말한다.
->
-> **`@ManyToMany` 가 아니라 엔티티다.** 이 저장소에 `@ManyToMany` 는 하나도 없고, `@JoinTable` 에 Hibernate 의 `@OnDelete` 를 붙이면 **소유자 쪽 한 짝에만** 붙어 새 DB 와 마이그레이션한 DB 의 규칙이 달라진다.
-
+## 32. `walk_dog` — 한 번의 산책에 여러 마리 (**실재**)
+
+
+
+`walk` 는 아이 **하나**에 묶여 있었다. 두 마리를 함께 데리고 나가면 한 마리 것으로 저장되거나 같은 산책을 두 번 적어야 했다 — 프로필은 "우리 아이들" 을 여러 마리 받는데 산책만 한 마리였다.
+
+
+
+```sql
+
+CREATE TABLE walk_dog (
+
+  dog_id  BIGINT NOT NULL,
+
+  walk_id BIGINT NOT NULL,
+
+  PRIMARY KEY (dog_id, walk_id),
+
+  KEY fk_walkdog_walk (walk_id),
+
+  CONSTRAINT fk_walkdog_dog  FOREIGN KEY (dog_id)  REFERENCES dog (id)  ON DELETE CASCADE,
+
+  CONSTRAINT fk_walkdog_walk FOREIGN KEY (walk_id) REFERENCES walk (id) ON DELETE CASCADE
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+```
+
+
+
+| 컬럼 | 타입 | 제약 | 설명 |
+
+| --- | --- | --- | --- |
+
+| `dog_id` | `BIGINT` | PK(1/2), FK→`dog.id` CASCADE | 함께 나간 아이 |
+
+| `walk_id` | `BIGINT` | PK(2/2), FK→`walk.id` CASCADE | 그 산책 |
+
+
+
+> **PK 가 `(dog_id, walk_id)` 순서인 것은 Hibernate 가 정하는 순서이고**(`mysql/init/01_schema.sql` 이 엔티티에서 재생성된다), 마침 바라던 순서다 — 이 표에 가장 자주 오는 질문이 "이 아이의 산책" 이라 `dog_id` 가 앞이어야 인덱스를 탄다. 반대 방향은 MySQL 이 `fk_walkdog_walk` 에 자동으로 만드는 인덱스가 받는다.
+
+>
+
+> **양쪽 FK 가 모두 `CASCADE` 다.** 이 표에는 사실이 없다 — "이 산책에 이 아이가 있었다" 라는 이음매뿐이라, 산책이나 아이가 사라지면 남을 이유가 없다. `care_log` 가 `SET NULL` 인 것과 다른 이유가 여기 있다: 거기는 "누가 밥을 줬다" 라는 **사실**이라 사람이 사라져도 남아야 한다.
+
+>
+
+> **대표 아이도 여기 한 줄 들어간다.** 안 넣으면 "아이별 통계" 가 `walk.dog_id` 와 이 표를 합쳐 봐야 하고, 그 합치기를 잊는 질의가 언젠가 하나 생긴다. `33_walk_dog.sql` 이 이미 쌓인 산책까지 채운다 — 안 채우면 아이별 통계가 과거를 전부 0 으로 말한다.
+
+>
+
+> **`@ManyToMany` 가 아니라 엔티티다.** 이 저장소에 `@ManyToMany` 는 하나도 없고, `@JoinTable` 에 Hibernate 의 `@OnDelete` 를 붙이면 **소유자 쪽 한 짝에만** 붙어 새 DB 와 마이그레이션한 DB 의 규칙이 달라진다.
+
+
+
+## 33. `schedule` — 앞으로 할 일 (**실재**)
+
+지금까지 앱은 **지나간 일만** 알았다. `care_log` 는 "누가 언제 했다" 이고(`occurred_at` 이 서버 시계라 미래를 못 넣는다), `walk` 은 끝난 산책이다. 앞으로 할 일을 적을 자리가 한 곳도 없어서, 가족은 병원 일정을 **채팅으로** 조율하고 그 결정은 스크롤 위로 사라졌다(`docs/00-product/feature-family-care.md` S3 가 그 장면을 적고 있고, 같은 문서가 문제로 꼽은 것이 "전달 누락·중복 질문" 이다).
+
+```sql
+CREATE TABLE schedule (
+  id         BIGINT       NOT NULL AUTO_INCREMENT,
+  owner_kind VARCHAR(10)  NOT NULL,
+  owner_ref  BIGINT       NOT NULL,
+  dog_id     BIGINT       NULL,
+  kind       VARCHAR(10)  NOT NULL,
+  title      VARCHAR(100) NOT NULL,
+  memo       VARCHAR(500) NULL,
+  on_date    DATE         NOT NULL,
+  at_time    TIME(6)      NULL,
+  assignee   BIGINT       NULL,
+  status     VARCHAR(10)  NOT NULL,
+  done_at    DATETIME(6)  NULL,
+  version    INT          NOT NULL,
+  created_by BIGINT       NOT NULL,
+  updated_by BIGINT       NULL,
+  created_at DATETIME(6)  NOT NULL,
+  updated_at DATETIME(6)  NULL,
+  PRIMARY KEY (id),
+  KEY idx_schedule_owner_date (owner_kind, owner_ref, on_date),
+  KEY idx_schedule_dog_date   (dog_id, on_date),
+  CONSTRAINT fk_schedule_dog        FOREIGN KEY (dog_id)     REFERENCES dog (id)   ON DELETE SET NULL,
+  CONSTRAINT fk_schedule_assignee   FOREIGN KEY (assignee)   REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT fk_schedule_created_by FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_schedule_updated_by FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT ck_schedule_owner_kind CHECK (owner_kind IN ('dog','group','room')),
+  CONSTRAINT ck_schedule_kind       CHECK (kind IN ('walk','vet','med','groom','bath','food','etc')),
+  CONSTRAINT ck_schedule_status     CHECK (status IN ('planned','done','skipped'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK, AI | |
+| `owner_kind` | `VARCHAR(10)` | NOT NULL, CHECK | 일정의 주인이 어느 도메인인가 — `dog` · `group` · `room` |
+| `owner_ref` | `BIGINT` | NOT NULL, **FK 아님** | 그 도메인의 id. 소유권은 서버가 확인한다 |
+| `dog_id` | `BIGINT` | NULL, FK→`dog.id` **SET NULL** | 어느 아이 것인가. `owner_ref` 와 **별개다** |
+| `kind` | `VARCHAR(10)` | NOT NULL, CHECK | `walk`·`vet`·`med`·`groom`·`bath`·`food`·`etc` |
+| `title` | `VARCHAR(100)` | NOT NULL | |
+| `memo` | `VARCHAR(500)` | NULL | |
+| `on_date` | `DATE` | NOT NULL | **사용자의 날짜**(KST). 시각과 달리 시간대 변환을 하지 않는다 |
+| `at_time` | `TIME(6)` | NULL | `NULL` 이면 **"하루 종일"** 이다 |
+| `assignee` | `BIGINT` | NULL, FK→`users.id` **SET NULL** | 맡기로 한 사람 |
+| `status` | `VARCHAR(10)` | NOT NULL, CHECK | `planned`·`done`·`skipped` |
+| `done_at` | `DATETIME(6)` | NULL | 완료·건너뜀으로 바꾼 시각. `planned` 로 되돌리면 다시 `NULL` |
+| `version` | `INT` | NOT NULL | 낙관적 잠금(`@Version`) |
+| `created_by` | `BIGINT` | NOT NULL, FK→`users.id` **CASCADE** | 적은 사람 |
+| `updated_by` | `BIGINT` | NULL, FK→`users.id` **SET NULL** | 마지막으로 고친 사람 |
+| `created_at` / `updated_at` | `DATETIME(6)` | | |
+
+> **`owner_kind` + `owner_ref` 는 `chat_room` 과 같은 방식이다.** 일정의 주인이 셋이다 — **아이**("보리 심장사상충 약") · **가족 그룹**("토요일 병원, 아빠 담당") · **크루**("토요일 합동 산책", #417). 셋을 표 셋으로 나누면 "합쳐 보기" 가 매번 `UNION` 이 되고, 화면 하나가 그중 하나를 빠뜨리는 날이 온다. `chat_room` 이 이미 이 문제를 `origin_kind`/`origin_ref` 로 풀었다([ADR-0011](../99-decisions/decision-log.md)) — 같은 방식을 쓴다.
+>
+> **그래서 이 두 컬럼에는 FK 가 없다.** 세 도메인을 가리키는 컬럼 하나에 FK 를 걸 수 없다. `chat_room` 이 같은 이유로 안 걸고, 그 대신 서비스가 소유권을 확인한다. `room` 은 값만 미리 열어 두었고 **서버가 아직 400 으로 거절한다** — 확인할 멤버십이 없는 채로 통과시키면 아무나 남의 크루 일정을 만들 수 있다.
+>
+> **`dog_id` 는 `owner_ref` 와 별개다.** "가족 소유인데 보리 것" 이 흔하다. `owner` 로만 두면 어느 아이 것인지 적을 자리가 없고, `dog_id` 로만 두면 "사료 주문" 처럼 아이 하나에 안 묶이는 일을 못 적는다. 그래서 조회가 둘을 **겹쳐 쓸 수 있다** — "우리 가족 일정 중 보리 것".
+>
+> **지우기 규칙이 넷 다 다르다.** `dog` 와 `assignee` 는 `SET NULL` — 아이를 보내도 그날 병원에 갔다는 계획은 남고, 담당자가 탈퇴해도 그 일이 남아 있다는 사실은 남아야 한다(`care_log.dog_id` 가 #154 에서 고른 것과 같은 답이다). `created_by` 만 `CASCADE` 다 — 그 사람의 계획이다.
+>
+> **`at_time` 이 `NULL` 일 수 있다.** 시각 없는 일정이 많다 — "이번 주말 목욕". 0시로 채워 넣으면 화면이 **"00:00 목욕"** 이라고 적게 되고, 그건 사용자가 안 정한 것을 정한 것처럼 보이게 한다.
+>
+> **`version` — 낙관적 잠금.** 가족 여럿이 같은 일정을 고친다. 실시간 공동 편집은 안 한다(소켓 #84 가 아직 없고, 일정은 초당 여러 번 고치는 것이 아니다). 대신 뒤에 온 쪽이 **409** 를 받고 최신 값을 본다 — 조용히 덮어쓰면 아빠가 옮긴 병원 시각이 엄마의 옛 화면으로 되돌아간다.
+>
+> **좌표 컬럼이 없다.** A안(#235)에서 좌표는 기기를 안 떠나고, 일정은 그것이 필요한 기능이 아니다. 장소가 필요해지는 날에는 `walk` 처럼 카탈로그 참조(출처 + contentId)를 쓴다.
+>
+> **인덱스 둘.** `idx_schedule_owner_date (owner_kind, owner_ref, on_date)` 가 달력이 묻는 유일한 질문("이 주인의 이 기간")이고, `idx_schedule_dog_date (dog_id, on_date)` 가 "보리 것만" 필터다 — `dog_id` 로 시작하지 않으면 앞 인덱스를 못 쓴다.
+
+> **같은 이름의 옛 표가 운영 DB 에 있었다.** 감정 여행 시절의 `schedule`(여행 일정 — `schedule_id, user_id, title, content, date_from, date_to`)이 코드 없이 표만 남아 있다(#94). `34_schedule.sql` 이 그것을 **지우지 않고** `schedule_legacy_journey` 로 옮긴다 — 사람이 적어 둔 행이고, 지우는 것은 마이그레이션이 결정할 일이 아니다. `journey.schedule_id` 의 FK 도 `RENAME TABLE` 이 함께 옮긴다.
+
 ## 인덱스 · 공간 인덱스 요약
 
 | 테이블 | 인덱스 | 종류 | 목적 |
@@ -1128,6 +1229,8 @@ CREATE TABLE walk_dog (
 | `care_log` | `idx_carelog_dog(dog_id, occurred_at)` | 보조 | `dog` 삭제 시 `SET NULL` 이 훑는 자리 · 반려동물별 케어 기록(#154) |
 | `device_token` | `uk_device_token_token(token)` | UNIQUE | 같은 기기(토큰)는 한 행 — 등록이 upsert 인 이유(#83) |
 | `device_token` | `idx_device_token_user(user_id, revoked_at)` | 보조 | 사용자의 살아 있는 토큰 조회 · 전 기기 폐기(#83) |
+| `schedule` | `idx_schedule_owner_date(owner_kind, owner_ref, on_date)` | 보조 | 달력이 묻는 유일한 질문 — "이 주인의 이 기간"(#418) |
+| `schedule` | `idx_schedule_dog_date(dog_id, on_date)` | 보조 | "보리 것만" 필터. `dog_id` 로 시작하지 않으면 위 인덱스를 못 쓴다(#418) |
 
 > 공간 컬럼(`walk.path`, `place.geom`)은 모두 `SRID 4326` + `NOT NULL` + `SPATIAL INDEX`. 초기에는 MySQL 공간형 단일 저장소로 운영하고, 대량 GPS 시계열·장소검색(ES/Redis)은 규모 확장 시 옵션이다. 관계 개요는 [ERD](./erd.md) 참조.
 
@@ -1161,11 +1264,14 @@ CREATE TABLE walk_dog (
 | `refresh_token` | 실재 §2 | `user` | refresh 토큰 원장 |
 | `report` | 실재 §25 | `moderation` | 신고 |
 | `report_snapshot` | 실재 §26 | `moderation` | 신고 대상 스냅샷 |
+| `schedule` | 실재 §33 | `schedule` | 앞으로 할 일(#418). 주인이 셋이라 `owner_kind`+`owner_ref` 를 불투명하게 든다 |
 | `trail_route` | 실재 §6 | `place` | 산책로 코스의 선 — 두루누비 GPX 를 300점 이하로 줄인 `[[경도, 위도]]` JSON(#291) |
 | `user_block` | 실재 §27 | `moderation` | 가리기 |
 | `user_consent` | 실재 §28 | `consent` | 약관 동의 이력 |
 | `users` | 실재 §1 | `user` | 앱 사용자 계정 |
 
-정본에서 빠졌지만 운영 DB 에 남아 있는 표(#94, 2026-09-06): `bookmarks` · `card_comment` · `card_reaction` · `cat3_category_mapping` · `collection_items` · `collections` · `emotion_card` · `emotion_categories` · `emotion_feedbacks` · `emotion_reviews` · `feedback` · `journey` · `journey_photos` · `place_descriptions` · `place_features` · `place_hashtags` · `place_kakao_links` · `place_simple_tags` · `place_star_ratings` · `place_trait_snapshots` · `place_traits` · `places` · `schedule`. 코드가 없으니 새 행은 생기지 않는다.
+정본에서 빠졌지만 운영 DB 에 남아 있는 표(#94, 2026-09-06): `bookmarks` · `card_comment` · `card_reaction` · `cat3_category_mapping` · `collection_items` · `collections` · `emotion_card` · `emotion_categories` · `emotion_feedbacks` · `emotion_reviews` · `feedback` · `journey` · `journey_photos` · `place_descriptions` · `place_features` · `place_hashtags` · `place_kakao_links` · `place_simple_tags` · `place_star_ratings` · `place_trait_snapshots` · `place_traits` · `places` · `schedule_legacy_journey`. 코드가 없으니 새 행은 생기지 않는다.
+
+> `schedule` 이 이 목록에서 빠지고 `schedule_legacy_journey` 가 들어온 것은 #418 이 그 이름을 다시 쓰기 때문이다. **지운 것이 아니라 옮겼다** — `34_schedule.sql` 이 `RENAME TABLE` 로 옆에 세워 두고, 그 표를 가리키던 `journey.schedule_id` 의 FK 도 MySQL 이 함께 옮긴다(마이그레이션 실행 테스트가 그것을 잰다). 되돌리기는 이름을 되돌리는 것이고 값은 한 줄도 안 잃는다.
 | `walk` | 실재 §4 | `walk` | 산책 기록(GPS 경로) |
 | `walk_note` | 실재 §16 | `care` | 산책 주의사항(그룹당 한 장) |
