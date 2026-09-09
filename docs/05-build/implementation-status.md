@@ -4,7 +4,7 @@
 
 - **기준 커밋/시점**: `app/lib/v2/` 현재 상태
 - **엔트리**: `app/lib/main.dart` → go_router(`app/lib/app/app_router.dart`) → `/home` = `v2/screens/main_shell.dart`(`MainShell`)
-- **네비**: 플로팅 글래스 알약 5탭 — 홈 / 지도 / **[산책 기록 FAB]** / 커뮤니티 / **채팅** (`main_shell.dart:108-111`). 통계(`insight_screen`)는 탭이 아니라 `me_screen`·`today_screen` **둘**에서 진입한다
+- **네비**: 플로팅 글래스 알약 5탭 — 홈 / 지도 / **일정** / **[산책 기록 FAB]** / 커뮤니티 / **채팅** (`main_shell.dart`). 일정은 #419 가 더했고 그때 커뮤니티·채팅의 번호가 하나씩 밀렸다 — 라벨과 번호의 짝은 `shell_tabs_overflow_test.dart` 가 잠근다. 통계(`insight_screen`)는 탭이 아니라 `me_screen`·`today_screen` **둘**에서 진입한다
 - **상태 표기**: `구현완료`(UI+동작) · `실연동`(외부 데이터 연동됨) · `더미`(하드코딩·시뮬) · `미구현`
 
 ---
@@ -36,6 +36,7 @@
 | **지도 (탐색)** | `explore_screen.dart` `ExploreScreen` | ✅ 실연동 | 리스트/지도 토글, 카테고리 필터 칩 아홉, 네이버맵 마커·바텀시트, 카테고리 색핀, 범례, 산책로 선(#291) | 검색창 비동작(플레이스홀더). 산책로 선은 지도 키 있는 빌드에서만 그린다 |
 | **산책 트래킹** | `walk_tracking_screen.dart` `WalkTrackingScreen` | ✅ 구현완료 | 실 위치 스트림으로 경로 폴리라인, 라이브 스탯, 일시정지/재개/종료 → 저장 화면으로 **초안 전달** | 위치를 못 쓰면 이유를 말하는 화면을 띄우고 직접 입력으로 넘긴다 — 가짜 경로를 그리지 않는다(#160) |
 | **산책 통계** | `insight_screen.dart` `InsightScreen` | ✅ 구현완료 | fl_chart 주간 거리 막대(**실제 오늘** 강조), 요약(총거리·횟수·평균), 주간 문구 | 자주 가는 곳은 **항상 빈 상태** — `Walk` 에 장소 축이 없다(계약의 `topPlaces` 도 같다) |
+| **일정** | `schedule_screen.dart` `ScheduleScreen` | ✅ 서버 연동 | 월 달력(종류별 점) · 그날 목록(하루 종일 묶음) · 필터 칩(전체·아이별·가족) · 만들기 시트 · 완료 체크 | `GET/POST /api/schedules`, `PATCH /api/schedules/{id}?version=N`(#419 · 서버 #418). 주인(`ownerKind`)은 사용자가 안 고른다 — 가족이 있으면 `group`, 없으면 `dog` 이고 시트가 그 결과를 한 줄로 말한다. 409 를 받으면 최신 값으로 바꾸고 "○○님이 방금 고쳤어요" 를 말한다. 고치기 시트·담당자 고르기는 #420 |
 | **커뮤니티 (피드)** | `feed_screen.dart` `FeedScreen` | ✅ 서버 연동 | 카드/리스트 토글, 게시판 필터 시트, 반응 칩, 글 카드/행, 커서 더 보기, 당겨서 새로고침 | `GET /api/community/posts`(#171). 게시판은 `CommunityBoard` enum 이 ASCII 키(`walk_review`)와 한글 라벨을 함께 든다. 못 부르면 빈 목록이 아니라 "불러오지 못했어요" + 다시 시도. 글쓰기 진입은 `writePost()` 하나를 지난다(#172). 상세에서 내 글을 지우면 `true` 를 들고 나와 목록이 새로고침한다(#211) |
 | **글 상세** | `post_detail_screen.dart` `PostDetailScreen` | ✅ 서버 연동 | 본문, 반응 셋(동시 선택), 댓글 스레드, 댓글 입력 | 반응은 멱등 `POST`/`DELETE .../reactions/{type}` 이고 **응답의 집계를 그대로 그린다**(로컬에서 안 센다). 게스트는 `reactions.mine == null` 로 판별하고 입력칸 대신 안내를 그린다 — 쓰고 나서 401 을 내면 쓴 글자를 잃는다 |
 | **강아지 프로필** | `me_screen.dart` `MeScreen` | ✅ 구현완료 | 프로필 헤더, 산책 활동 요약(→기록), 메뉴(편집/기록/북마크/로그아웃) | 북마크는 스낵바만(미구현). 로그아웃은 `POST /auth/logout`(전 기기 폐기) 후 로그인 화면으로 — #12 |
@@ -84,7 +85,8 @@
 | 댓글 | ✅ 서버 | 오래된 것부터. 게스트에게는 입력칸 대신 안내 |
 | 글쓰기 | ✅ | `post_write_screen.dart`(#172). 진입점 셋이 `writePost()` 하나를 지나고 거기서 미로그인을 안내한다. 지도 장소 시트에서 오면 `loc`·`contentId` 를 물고 온다 |
 | 삭제(글·댓글) | ✅ 서버 | `DELETE .../posts/{id}` · `.../posts/{id}/comments/{id}`(#211). **내가 쓴 것만** — `PostDetailScreen._isMine` 이 `PersonRef.userId` 와 내 id 를 견줘 버튼을 그리고, 진짜 판정은 서버가 한다. 글 삭제만 한 번 묻는다(남의 댓글까지 사라진다). 탈퇴한 사람의 글은 아무도 못 지운다 — 그건 관리이고 [#166](https://github.com/sanghyunbang/heattrip/issues/166) 의 결정이다 |
-| 글 수정 | ✅ | `PATCH .../posts/{id}`(#211) + 앱 편집 화면(#243). **글쓰기 화면을 편집 모드로 재사용**한다 — 두 벌이면 상한도 문구도 갈린다. **안 바뀐 키는 안 보낸다**(`PostPatch`, `minProperties: 1`) — 다 실으면 그 사이 다른 기기에서 고친 값을 조용히 되돌린다. 하나도 안 고쳤으면 요청을 안 보낸다. `loc`·`contentId` 는 못 바꾼다(계약이 뺐다) — 화면이 읽기 전용으로 보여만 준다 |
+| 글 수정 | ✅ | `PATCH .../posts/{id}`(#211) + 앱 편집 화면(#243). **글쓰기 화면을 편집 모드로 재사용**한다 — 두 벌이면 상한도 문구도 갈린다. **안 바뀐 키는 안 보낸다**(`PostPatch`, `minProperties: 1`) — 다 실으면 그 사이 다른 기기에서 고친 값을 조용히 되돌린다. 하나도 안 고쳤으면 요청을 안 보낸다. `loc`·`contentId` 는 못 바꾼다(계약이 뺐다) — 화면이 읽기 전용으로 보여만 준다 |
+
 | '수정됨' 표시 | ✅ | `Post.updatedAt` 이 `null` 이면 한 번도 안 고친 글이다. **값이 실제로 달라진 경우에만** 서버가 찍는다 — 같은 값을 다시 보내는 것은 수정이 아니다. 댓글에는 없다(수정 경로가 계약에 없다) |
 
 ### 3.4 프로필/계정
@@ -140,4 +142,5 @@
 6. ~~**커뮤니티 글쓰기**~~: 작성 화면(#172)·삭제·수정(#211)까지 실었다. 서버에 없는 것은 관리(#166)뿐이고, 앱에 없는 것은 편집 화면이다.
 7. **채팅 서버화**: 화면 셋(`chat_list_screen`·`family_chat_screen`·`family_screen`)이 이미 있고 탭 3번을 차지하는데 서버가 없다. 방·멤버십·메시지 3테이블 + 폴링 API(M2.5~M2.6). **여기서 `id` 커서를 쓰면 안 된다** — 이유는 [ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72).
 
-> 참조: [ERD](../03-database/erd.md), [외부 데이터 연동](../02-architecture/external-data.md) (경로는 문서 세트 기준, 없으면 생성 예정)
+> 참조: [ERD](../03-database/erd.md), [외부 데이터 연동](../02-architecture/external-data.md) (경로는 문서 세트 기준, 없으면 생성 예정)
+

@@ -43,14 +43,17 @@ lib/
 
 ### 2.1 `screens/` — 화면
 
-`ValueNotifier` 하나(`RootTab.index`)로 스와핑되는 **4개 탭** + 가운데 **기록(+) FAB** + 여러 **푸시 라우트**로 구성된다.
+`ValueNotifier` 하나(`RootTab.index`)로 스와핑되는 **5개 탭** + 가운데 **기록(+) FAB** + 여러 **푸시 라우트**로 구성된다.
+
+> **다섯째("일정")는 #419 가 더했다.** 왼쪽 셋(홈·지도·일정) · 오른쪽 둘(커뮤니티·채팅)로 나눈 것은 기록 버튼 오른쪽에 셋을 두면 왼쪽이 둘이라 알약의 무게가 쏠리기 때문이다. **커뮤니티·채팅의 번호가 하나씩 밀렸다** — `shell_tabs_overflow_test.dart` 가 라벨과 번호의 짝을 잠근다.
 
 | 파일 | 역할 | 진입 경로 |
 | --- | --- | --- |
 | `main_shell.dart` | 네비게이션 셸. 탭 스와핑 + 플로팅 글래스 바텀네비 + 산책 FAB | 루트 (`home`) |
 | `today_screen.dart` | 홈(오늘) — 강아지 히어로 · 오늘 산책 요약 · 근처 동반장소 | 탭 0 |
 | `explore_screen.dart` | 지도 — KTO 반려동반 장소 + 병원/펫샵/산책로(실데이터, #291) + 필터 (리스트/지도 토글). 산책로 시트를 열면 선을 그린다 | 탭 1 |
-| `feed_screen.dart` | 커뮤니티 — 게시글 카드/리스트 (더미) | 탭 2 |
+| `schedule_screen.dart` | 일정 — 월 달력(종류별 점) · 그날 목록 · 필터 칩 · 만들기 시트 (#419) | 탭 2 |
+| `feed_screen.dart` | 커뮤니티 — 게시글 카드/리스트 (더미) | 탭 3 |
 | `insight_screen.dart` | 통계 — 이번 주 요약 + 주간 거리 막대(fl_chart). 자주 가는 곳은 빈 상태 | `me_screen` → push |
 | `walk_tracking_screen.dart` | 실시간 산책 트래킹 (실 GPS, 경로 폴리라인 + 라이브 스탯) | FAB·홈 CTA → `startWalk()` |
 | `create_screen.dart` | 산책 기록 작성 → `POST /api/walks` | 트래킹 종료 후 push (초안 동반) · 기록 목록에서 손입력 |
@@ -63,7 +66,7 @@ lib/
 | `walk_detail_screen.dart` | 산책 회고 — 글을 나중에 고친다 → `PUT /api/walks/{id}/memo` | 기록 카드 탭 (#187) |
 | `family_screen.dart` | 우리 가족 — 그룹·구성원·오늘의 케어 | me → push |
 | `family_chat_screen.dart` | 가족 채팅방 (폴링) | family → push |
-| `chat_list_screen.dart` | 방 목록 · 미읽음 | 탭 3 |
+| `chat_list_screen.dart` | 방 목록 · 미읽음 | 탭 4 |
 | `invite_join_screen.dart` | 초대 코드로 방 참여 | 링크·코드 입력 |
 | `settings_screen.dart` | 설정 — 약관 넷 · 내 동네 · 저녁 알림 · 회원 탈퇴 · 운영자 연락처 | me → push (#165) |
 | `neighborhood_picker_screen.dart` | 내 동네 고르기 — 시도→시군구→동 세 단계 · 검색 · "현재 위치로 찾기"(기기 안) | 설정 → push (#342) |
@@ -130,7 +133,7 @@ Provider/Riverpod/Bloc 없이 **정적 전역 `ValueNotifier`** 를 두고, 화�
 | 전역 상태 | 위치 | 타입 | 역할 | 변경 지점 |
 | --- | --- | --- | --- | --- |
 | `kMyDog` | `domain/pet.dart` | `ValueNotifier<DogProfile>` | 현재 반려견 프로필 | `edit_screen.dart`가 `kMyDog.value = kMyDog.value.copyWith(...)`로 갱신 → 홈/프로필 자동 반영 |
-| `RootTab.index` | `screens/main_shell.dart` | `ValueNotifier<int>` | 현재 탭(0~3) | 바텀네비 탭·`today_screen`의 "지도 보기"·result 화면의 "더 둘러보기" |
+| `RootTab.index` | `screens/main_shell.dart` | `ValueNotifier<int>` | 현재 탭(0~4) | 바텀네비 탭·`today_screen`의 "지도 보기"·result 화면의 "더 둘러보기" |
 | `RootTab.exploreView` | `screens/main_shell.dart` | `ValueNotifier<String>` | 지도 리스트/지도 뷰('list'/'map') | 홈에서 지도 진입 시 초기 뷰 지정 |
 | `AppThemeCtl.index` | `theme/themes.dart` | `ValueNotifier<int>` | 배경 테마(0~4) | `AuroraBackground`가 구독 → 앱 전체 배경 |
 | `AppThemeCtl.avatarBorder` | `theme/themes.dart` | `ValueNotifier<Color>` | 아바타 테두리 색 | `edit_screen.dart`에서 선택 |
@@ -145,7 +148,7 @@ Provider/Riverpod/Bloc 없이 **정적 전역 `ValueNotifier`** 를 두고, 화�
 
 라우트는 다섯뿐이다(`app/app_router.dart`: splash·consent·onboarding·home·auth). `/home` 이 `MainShell` 이고, 그 안의 화면 전환은 두 방식이다.
 
-1. **탭 전환 (선언적)** — `MainShell.body`가 `ValueListenableBuilder<int>(RootTab.index)`로 `switch(i)` 하여 홈/지도/커뮤니티/채팅 위젯을 교체. 바텀네비는 본문 위에 `Stack` 오버레이(배경 끊김 없이 항상 표시).
+1. **탭 전환 (선언적)** — `MainShell.body`가 `ValueListenableBuilder<int>(RootTab.index)`로 `switch(i)` 하여 홈/지도/일정/커뮤니티/채팅 위젯을 교체. 바텀네비는 본문 위에 `Stack` 오버레이(배경 끊김 없이 항상 표시).
 2. **세부 화면 (명령형)** — `Navigator.of(context).push(MaterialPageRoute(...))`. 산책 트래킹·기록 작성·글 상세·프로필 편집 등은 스택에 push.
 
 ```mermaid
@@ -155,14 +158,15 @@ flowchart TD
   subgraph Tabs[RootTab.index 로 스와핑]
     T0[TodayScreen · 홈]
     T1[ExploreScreen · 지도]
-    T2[FeedScreen · 커뮤니티]
-    T3[ChatListScreen · 채팅]
+    T2[ScheduleScreen · 일정]
+    T3[FeedScreen · 커뮤니티]
+    T4[ChatListScreen · 채팅]
   end
-  Shell --> T0 & T1 & T2 & T3
+  Shell --> T0 & T1 & T2 & T3 & T4
 
   Shell -->|가운데 FAB| WT[WalkTrackingScreen]
   WT -->|산책 종료| CR[CreateScreen · 기록 작성]
-  T2 -->|글 탭| PD[PostDetailScreen]
+  T3 -->|글 탭| PD[PostDetailScreen]
   T0 -->|프로필/메뉴| ME[MeScreen]
   ME --> ED[EditScreen · 프로필 편집]
   ME --> MR[MyRecordsScreen]

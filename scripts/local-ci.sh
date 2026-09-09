@@ -33,7 +33,19 @@ FAILED=()
 
 run_backend() {
   echo "── backend — test + jacoco 게이트 ──────────────────────────"
-  (cd "$ROOT/backend" && ./gradlew test jacocoTestReport jacocoTestCoverageVerification --console=plain) \
+  # -Dorg.gradle.vfs.watch=false 를 붙이는 이유 — #419 실측.
+  #
+  # 문서를 gradle 밖의 도구로 고친 뒤 이 검사를 돌렸더니 **옛 결과가 다시 나왔다**. 같은
+  # 트리에서 데몬만 새로 띄우니 초록이었다(문서 검사 2 실패 → 0). 파일 감시가 외부
+  # 프로세스의 쓰기를 놓치면 test 태스크가 UP-TO-DATE 로 보이고, 그러면 출력이 캐시에서
+  # 복원된다 — build.gradle 의 입력 선언 주석이 같은 함정을 적어 뒀다("cleanTest 도 안
+  # 통했다(캐시에서 복원)").
+  #
+  # 감시를 끄면 매번 파일을 다시 훑는다. 조금 느려지는 대신 이 스크립트가 **지금 트리**를
+  # 재는 것이 보장된다. 초록도 빨강도 믿을 수 없으면 그건 검사가 아니다.
+  (cd "$ROOT/backend" \
+    && ./gradlew test jacocoTestReport jacocoTestCoverageVerification \
+         -Dorg.gradle.vfs.watch=false --console=plain) \
     > "$OUT/backend.log" 2>&1
   local code=$?
   if [ $code -ne 0 ]; then

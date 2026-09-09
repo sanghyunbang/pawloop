@@ -1,6 +1,6 @@
 # 정보구조(IA) — Pawloop(포루프)
 
-> 5탭(홈 / 지도 / 산책 FAB / 커뮤니티 / 채팅) 셸 + 각 탭의 하위 화면 트리와 네비게이션 규칙. 실제 구현(`app/lib/v2/`) 기준으로 작성.
+> 6슬롯(홈 / 지도 / 일정 / 산책 FAB / 커뮤니티 / 채팅) 셸 + 각 탭의 하위 화면 트리와 네비게이션 규칙. 실제 구현(`app/lib/v2/`) 기준으로 작성.
 
 관련 문서: [화면 목록](./screen-spec.md) · [디자인 시스템](./design-system.md) · [ERD](../03-database/erd.md)
 
@@ -9,7 +9,7 @@
 ## 1. 한눈에 보기
 
 - **진입점**: `main.dart` → `go_router`(`initialLocation: '/home'`) → `MainShell`(`app/lib/v2/screens/main_shell.dart`).
-- **셸 구조**: 하단에 떠 있는 글래스 알약 네비(4탭) + 가운데 솟은 **산책 기록(+) FAB**. 총 **5개 진입 슬롯**.
+- **셸 구조**: 하단에 떠 있는 글래스 알약 네비(5탭) + 가운데 솟은 **산책 기록(+) FAB**. 총 **6개 진입 슬롯**. 왼쪽 셋(홈·지도·일정) · 오른쪽 둘(커뮤니티·채팅)로 나눈다 — FAB 오른쪽에 셋을 두면 알약의 무게가 한쪽으로 쏠린다(#419).
 - **탭 전환 방식**: 탭은 화면을 **push하지 않고** `RootTab.index`(`ValueNotifier<int>`)로 본문만 교체(IndexedStack 유사). 상세/작성 화면만 `Navigator.push`로 위에 쌓임.
 - **글로벌 진입**: 모든 메인 탭 우상단의 **프로필 아바타**(`ProfileAvatar`)를 탭하면 어디서든 `MeScreen`(내 프로필)을 push.
 
@@ -17,7 +17,7 @@
 
 ---
 
-## 2. 최상위 네비게이션 (5탭 셸)
+## 2. 최상위 네비게이션 (5탭 + FAB 셸)
 
 ```mermaid
 graph TD
@@ -26,8 +26,9 @@ graph TD
     Root -->|탭 0| Home["🏠 홈<br/>TodayScreen"]
     Root -->|탭 1| Map["🗺️ 지도<br/>ExploreScreen"]
     Root -->|가운데 FAB| Walk["✏️ 산책 기록<br/>WalkTrackingScreen"]
-    Root -->|탭 2| Community["💬 커뮤니티<br/>FeedScreen"]
-    Root -->|탭 3| Chat["💬 채팅<br/>ChatListScreen"]
+    Root -->|탭 2| Schedule["🗓️ 일정<br/>ScheduleScreen"]
+    Root -->|탭 3| Community["💬 커뮤니티<br/>FeedScreen"]
+    Root -->|탭 4| Chat["💬 채팅<br/>ChatListScreen"]
 
     Root -.우상단 아바타.-> Me["👤 내 프로필<br/>MeScreen (push)"]
 
@@ -44,8 +45,9 @@ graph TD
 | 탭 0 | 홈 | `TodayScreen` | `today_screen.dart` | `RootTab.index=0` |
 | 탭 1 | 지도 | `ExploreScreen` | `explore_screen.dart` | `RootTab.index=1` |
 | FAB(가운데) | (산책 기록) | `WalkTrackingScreen` | `walk_tracking_screen.dart` | `Navigator.push` |
-| 탭 2 | 커뮤니티 | `FeedScreen` | `feed_screen.dart` | `RootTab.index=2` |
-| 탭 3 | 채팅 | `ChatListScreen` | `chat_list_screen.dart` | `RootTab.index=3` |
+| 탭 2 | 일정 | `ScheduleScreen` | `schedule_screen.dart` | `RootTab.index=2` |
+| 탭 3 | 커뮤니티 | `FeedScreen` | `feed_screen.dart` | `RootTab.index=3` |
+| 탭 4 | 채팅 | `ChatListScreen` | `chat_list_screen.dart` | `RootTab.index=4` |
 
 > **통계(`InsightScreen`)는 탭이 아니다.** 진입점이 **둘**이다 — `me_screen`(마이 화면 메뉴)과 `today_screen`(홈의 오늘 산책 요약). 2026-08 에 탭에서 내려갔고 그 자리에 채팅이 들어왔다(#78~#81).
 | 글로벌 | 내 프로필 | `MeScreen` | `me_screen.dart` | 아바타 탭 → `push` |

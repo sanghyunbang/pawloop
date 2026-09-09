@@ -1,0 +1,887 @@
+// 일정표 — 달력 · 그날 목록 · 만들기 시트 (이슈 #419, 서버는 #418).
+//
+// ## 주인을 사용자가 안 고른다
+//
+// 계약에는 주인이 셋이지만(아이 · 가족 그룹 · 크루) 시트에 "이건 누구 것인가요" 를 물으면
+// 사용자가 **가시성을 고르는 질문**을 받게 된다 — 아이 소유 일정은 그 아이의 주인만 보고,
+// 가족 소유 일정은 가족이 함께 본다. 그건 화면이 알아서 정할 수 있는 것이다.
+//
+//   * 가족 그룹이 있으면 → `group` 이다. 일정표를 쓰는 이유가 "가족이 함께 본다" 라서다.
+//   * 없으면 → `dog` 이고, 그때는 아이를 고르는 것이 필수다(`ownerRef` 가 그 아이다).
+//
+// 시트가 그 결과를 한 줄로 말한다 — "우리 가족이 함께 봅니다" / "이 일정은 나만 봅니다".
+// 고르게 하지 않되 숨기지도 않는다.
+//
+// ## 달력 칸에 숫자를 안 적는다
+//
+// 종류별 **점**만 찍는다. 한 칸이 좁아서 "3" 같은 숫자를 적으면 무엇이 셋인지 알 수 없고,
+// 점 세 개면 색으로 병원인지 산책인지가 바로 보인다. 넷 이상이면 `+` 하나로 접는다.
+import 'package:flutter/material.dart';
+
+import '../data/family_repository.dart';
+import '../data/schedule_repository.dart';
+import '../domain/pet.dart';
+import '../domain/schedule.dart';
+import '../theme/app_tokens.dart';
+
+/// 목록을 무엇으로 거를까. `전체` 가 기본이다 — 달력의 기본이 합쳐 보기다.
+class ScheduleFilter {
+  /// `null` 이면 전부.
+  final int? dogId;
+
+  /// 가족 것만.
+  final bool groupOnly;
+
+  const ScheduleFilter({this.dogId, this.groupOnly = false});
+
+  static const all = ScheduleFilter();
+
+  bool get isAll => dogId == null && !groupOnly;
+}
+
+class ScheduleScreen extends StatefulWidget {
+  /// 테스트가 갈아 끼운다. 없으면 진짜를 만든다.
+  final ScheduleRepository? repository;
+  final FamilyRepository? familyRepository;
+
+  /// "오늘". 테스트가 고정하지 않으면 기기 시계다.
+  final DateTime? today;
+
+  const ScheduleScreen({
+    super.key,
+    this.repository,
+    this.familyRepository,
+    this.today,
+  });
+
+  @override
+  State<ScheduleScreen> createState() => _ScheduleScreenState();
+}
+
+class _ScheduleScreenState extends State<ScheduleScreen> {
+  late final ScheduleRepository _repo = widget.repository ?? ScheduleRepository();
+  late final FamilyRepository _family = widget.familyRepository ?? FamilyRepository();
+
+  late final DateTime _today = _dayOf(widget.today ?? DateTime.now());
+
+  late DateTime _month = DateTime(_today.year, _today.month);
+  late DateTime _selected = _today;
+
+  ScheduleFilter _filter = ScheduleFilter.all;
+
+  List<Schedule> _items = const [];
+  bool _loading = true;
+  ScheduleFailureKind? _failure;
+
+  /// 우리 가족 그룹. 없으면 `null` 이고, 그때 새 일정은 아이 소유가 된다.
+  int? _groupId;
+  bool _groupResolved = false;
+
+  static DateTime _dayOf(DateTime t) => DateTime(t.year, t.month, t.day);
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failure = null;
+    });
+
+    if (!_groupResolved) {
+      try {
+        _groupId = (await _family.myGroup()).id;
+      } on FamilyFailure {
+        // 가족이 없는 것은 오류가 아니다 — 혼자 쓰면 아이 소유 일정이 된다.
+        _groupId = null;
+      }
+      _groupResolved = true;
+    }
+
+    try {
+      final items = await _repo.range(
+        from: _month,
+        to: _lastDayOfMonth(_month),
+        ownerKind: _filter.groupOnly ? ScheduleOwnerKind.group : null,
+        ownerRef: _filter.groupOnly ? _groupId : null,
+        dogId: _filter.dogId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _loading = false;
+      });
+    } on ScheduleFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _failure = e.kind;
+        _loading = false;
+      });
+    }
+  }
+
+  static DateTime _lastDayOfMonth(DateTime month) =>
+      DateTime(month.year, month.month + 1, 0);
+
+  void _goMonth(int delta) {
+    setState(() {
+      _month = DateTime(_month.year, _month.month + delta);
+      // 고른 날이 이 달 밖이면 1일로 옮긴다 — 안 옮기면 목록이 늘 비어 보인다.
+      if (_selected.year != _month.year || _selected.month != _month.month) {
+        _selected = _month;
+      }
+    });
+    _load();
+  }
+
+  List<Schedule> get _visible => _items.toList()..sort(Schedule.compare);
+
+  List<Schedule> get _ofSelectedDay =>
+      _visible.where((s) => s.isOn(_selected)).toList();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: T.lilacTop,
+      body: SafeArea(
+        bottom: false,
+        // 아이 목록은 셸의 `PetLoader` 가 채운다(#159) — 이 화면보다 **늦게** 올 수 있다.
+        // 값을 한 번만 읽으면 그날 처음 연 사람에게는 필터 칩이 영영 "전체" 하나뿐이고,
+        // 목록의 아이 이름도 안 뜬다.
+        child: ValueListenableBuilder<List<DogProfile>>(
+          valueListenable: kMyPets,
+          builder: (_, __, ___) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _header(),
+              _filterChips(),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 140),
+                  children: [
+                    _calendar(),
+                    const SizedBox(height: 14),
+                    _dayList(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      // 떠 있는 알약 네비(높이 66 + 아래 여백 8)가 화면 바닥을 덮고 있다. 기본 자리에
+      // 두면 버튼이 그 위에 겹쳐 "채팅" 탭을 가린다 — 그만큼 올려 둔다.
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 92),
+        child: FloatingActionButton(
+          onPressed: _openCreateSheet,
+          backgroundColor: T.sigEnd,
+          tooltip: '일정 추가',
+          child: const Icon(Icons.add_rounded, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────── 머리말 ───────────────────────
+
+  Widget _header() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 6),
+        child: Row(children: [
+          Expanded(
+            child: Text('${_month.year}년 ${_month.month}월',
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          ),
+          IconButton(
+            onPressed: () => _goMonth(-1),
+            icon: const Icon(Icons.chevron_left_rounded),
+            tooltip: '지난 달',
+            color: T.textSecondary,
+          ),
+          IconButton(
+            onPressed: () => _goMonth(1),
+            icon: const Icon(Icons.chevron_right_rounded),
+            tooltip: '다음 달',
+            color: T.textSecondary,
+          ),
+        ]),
+      );
+
+  Widget _filterChips() {
+    final pets = kMyPets.value.where((p) => p.serverId != null).toList();
+    Widget chip(String label, bool selected, VoidCallback onTap) => Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? T.sigEnd : T.cardBg,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: selected ? T.sigEnd : T.cardBorder),
+              ),
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: selected ? Colors.white : T.textSecondary)),
+            ),
+          ),
+        );
+
+    void pick(ScheduleFilter next) {
+      setState(() => _filter = next);
+      _load();
+    }
+
+    return SizedBox(
+      height: 46,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          chip('전체', _filter.isAll, () => pick(ScheduleFilter.all)),
+          for (final pet in pets)
+            chip(pet.name, _filter.dogId == pet.serverId,
+                () => pick(ScheduleFilter(dogId: pet.serverId))),
+          if (_groupId != null)
+            chip('가족', _filter.groupOnly,
+                () => pick(const ScheduleFilter(groupOnly: true))),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────── 달력 ───────────────────────
+
+  Widget _calendar() {
+    final first = DateTime(_month.year, _month.month);
+    // 일요일부터 시작한다. DateTime.weekday 는 월=1 … 일=7 이라 일요일이 0 이 되게 옮긴다.
+    final lead = first.weekday % 7;
+    final days = _lastDayOfMonth(_month).day;
+    final cells = <Widget>[];
+
+    for (var i = 0; i < lead; i++) {
+      cells.add(const SizedBox());
+    }
+    for (var d = 1; d <= days; d++) {
+      final day = DateTime(_month.year, _month.month, d);
+      cells.add(_dayCell(day));
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
+      decoration: BoxDecoration(
+        color: T.cardBg,
+        borderRadius: BorderRadius.circular(T.radius),
+        border: Border.all(color: T.cardBorder),
+        boxShadow: T.cardShadow,
+      ),
+      child: Column(children: [
+        Row(
+          children: [
+            for (final name in const ['일', '월', '화', '수', '목', '금', '토'])
+              Expanded(
+                child: Center(
+                  child: Text(name,
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w700, color: T.textMuted)),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        GridView.count(
+          crossAxisCount: 7,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 0.82,
+          children: cells,
+        ),
+      ]),
+    );
+  }
+
+  Widget _dayCell(DateTime day) {
+    final ofDay = _visible.where((s) => s.isOn(day)).toList();
+    final isSelected = _dayOf(day) == _dayOf(_selected);
+    final isToday = _dayOf(day) == _today;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _selected = day),
+      child: Semantics(
+        button: true,
+        selected: isSelected,
+        // 한 칸을 **하나의 노드**로 읽는다. 안 묶으면 스크린리더가 "20" 다음에 아무 뜻
+        // 없는 점 셋을 따로 읽고, 그날에 무엇이 있는지는 끝내 말하지 않는다.
+        container: true,
+        excludeSemantics: true,
+        label: '${day.month}월 ${day.day}일'
+            '${ofDay.isEmpty ? '' : ' · 일정 ${ofDay.length}건'}',
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isSelected ? T.sigEnd : Colors.transparent,
+              border: isToday && !isSelected
+                  ? Border.all(color: T.sigEnd, width: 1.4)
+                  : null,
+            ),
+            child: Text('${day.day}',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isSelected || isToday ? FontWeight.w800 : FontWeight.w500,
+                    color: isSelected ? Colors.white : T.textPrimary)),
+          ),
+          const SizedBox(height: 3),
+          // 숫자를 안 적는다 — 한 칸이 좁아 무엇이 셋인지 알 수 없다. 색이 종류를 말한다.
+          SizedBox(
+            height: 6,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (final s in ofDay.take(3))
+                  Container(
+                    width: 5,
+                    height: 5,
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: s.status.isOpen ? s.kind.color : T.textFaint,
+                    ),
+                  ),
+                if (ofDay.length > 3)
+                  const Text('+',
+                      style: TextStyle(
+                          fontSize: 9, height: 1, color: T.textMuted)),
+              ],
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // ─────────────────────── 그날 목록 ───────────────────────
+
+  Widget _dayList() {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_failure != null) {
+      return _notice(
+        _failure == ScheduleFailureKind.network
+            ? '일정을 불러오지 못했어요'
+            : '이 일정은 볼 수 없어요',
+        action: '다시 시도',
+        onTap: _load,
+      );
+    }
+
+    final ofDay = _ofSelectedDay;
+    if (ofDay.isEmpty) {
+      // 이 달에 아무것도 없는 것과, 이 날만 비어 있는 것은 다른 말이다. 둘을 같은 문구로
+      // 뭉치면 20일에 병원 예약을 적어 둔 사람이 15일을 눌렀을 때 **"아직 적어 둔 일정이
+      // 없어요"** 를 보게 되고, 그건 자기가 적은 것이 사라졌다는 뜻으로 읽힌다.
+      return _items.isEmpty ? _emptyState() : _quietDay();
+    }
+
+    final timed = ofDay.where((s) => !s.isAllDay).toList();
+    final allDay = ofDay.where((s) => s.isAllDay).toList();
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 8),
+        child: Text('${_selected.month}월 ${_selected.day}일',
+            style: const TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
+      ),
+      for (final s in timed) _row(s),
+      if (allDay.isNotEmpty) ...[
+        const Padding(
+          padding: EdgeInsets.only(left: 4, top: 10, bottom: 6),
+          child: Text('하루 종일',
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: T.textMuted)),
+        ),
+        for (final s in allDay) _row(s),
+      ],
+    ]);
+  }
+
+  Widget _emptyState() => Container(
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+        decoration: BoxDecoration(
+          color: T.cardBg,
+          borderRadius: BorderRadius.circular(T.radius),
+          border: Border.all(color: T.cardBorder),
+        ),
+        child: Column(children: [
+          const Icon(Icons.event_available_outlined, size: 34, color: T.textFaint),
+          const SizedBox(height: 10),
+          const Text('아직 적어 둔 일정이 없어요',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 4),
+          const Text('병원 예약부터 적어 볼까요',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: T.textSecondary)),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: _openCreateSheet,
+            style: FilledButton.styleFrom(backgroundColor: T.sigEnd),
+            child: const Text('일정 적기'),
+          ),
+        ]),
+      );
+
+  Widget _quietDay() => Container(
+        padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 20),
+        decoration: BoxDecoration(
+          color: T.cardBg,
+          borderRadius: BorderRadius.circular(T.radius),
+          border: Border.all(color: T.cardBorder),
+        ),
+        child: Column(children: [
+          Text('${_selected.month}월 ${_selected.day}일은 비어 있어요',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w700, color: T.textPrimary)),
+          const SizedBox(height: 4),
+          const Text('점이 찍힌 날에 이 달의 일정이 있어요',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: T.textMuted)),
+        ]),
+      );
+
+  Widget _notice(String text, {String? action, VoidCallback? onTap}) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        decoration: BoxDecoration(
+          color: T.cardBg,
+          borderRadius: BorderRadius.circular(T.radius),
+          border: Border.all(color: T.cardBorder),
+        ),
+        child: Column(children: [
+          Text(text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, color: T.textSecondary)),
+          if (action != null) ...[
+            const SizedBox(height: 10),
+            TextButton(onPressed: onTap, child: Text(action)),
+          ],
+        ]),
+      );
+
+  Widget _row(Schedule s) {
+    final dog = _petName(s.dogId);
+    final parts = <String>[
+      if (dog != null) dog,
+      if (s.assignee != null) '${s.assignee!.nickname} 담당',
+      if (!s.isAllDay) Schedule.formatTime(s.atTime!),
+    ];
+    final done = !s.status.isOpen;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+      decoration: BoxDecoration(
+        color: T.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: T.cardBorder),
+      ),
+      child: Row(children: [
+        Icon(s.kind.icon, size: 20, color: done ? T.textFaint : s.kind.color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(s.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: done ? T.textMuted : T.textPrimary,
+                  decoration: done ? TextDecoration.lineThrough : null,
+                )),
+            if (parts.isNotEmpty)
+              Text(parts.join(' · '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: T.textMuted)),
+          ]),
+        ),
+        IconButton(
+          onPressed: () => _toggle(s),
+          tooltip: done ? '아직 안 함으로' : '완료로',
+          icon: Icon(
+            done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            color: done ? T.auroraMint : T.textFaint,
+          ),
+        ),
+      ]),
+    );
+  }
+
+  String? _petName(int? dogId) {
+    if (dogId == null) return null;
+    for (final p in kMyPets.value) {
+      if (p.serverId == dogId) return p.name;
+    }
+    return null;
+  }
+
+  // ─────────────────────── 쓰기 ───────────────────────
+
+  Future<void> _toggle(Schedule s) async {
+    final next =
+        s.status.isOpen ? ScheduleStatus.done : ScheduleStatus.planned;
+    try {
+      final updated = await _repo.mark(s, next);
+      if (!mounted) return;
+      setState(() => _items = _replace(_items, updated));
+    } on ScheduleFailure catch (e) {
+      if (!mounted) return;
+      _handleFailure(e);
+    }
+  }
+
+  /// 충돌은 "실패" 가 아니다 — 남이 먼저 고친 것이고, 그 최신 값이 함께 온다.
+  ///
+  /// 조용히 덮어쓰지 않는다. 화면을 최신 값으로 바꾸고 누가 고쳤는지를 말한다.
+  void _handleFailure(ScheduleFailure e) {
+    if (e.kind == ScheduleFailureKind.conflict) {
+      final current = e.current;
+      if (current != null) {
+        setState(() => _items = _replace(_items, current));
+      }
+      final who = current?.updatedBy?.nickname;
+      _say(who == null
+          ? '다른 분이 방금 고쳤어요. 최신 내용으로 바꿨어요.'
+          : '$who님이 방금 고쳤어요. 최신 내용으로 바꿨어요.');
+      return;
+    }
+    _say(switch (e.kind) {
+      ScheduleFailureKind.notFound => '이미 지워진 일정이에요.',
+      ScheduleFailureKind.invalid => e.message ?? '이 일정은 아직 만들 수 없어요.',
+      _ => '연결이 불안정해요. 잠시 뒤 다시 해 주세요.',
+    });
+  }
+
+  void _say(String text) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  static List<Schedule> _replace(List<Schedule> items, Schedule updated) =>
+      items.map((s) => s.id == updated.id ? updated : s).toList();
+
+  Future<void> _openCreateSheet() async {
+    final pets = kMyPets.value.where((p) => p.serverId != null).toList();
+    if (_groupId == null && pets.isEmpty) {
+      _say('먼저 아이를 등록하거나 가족을 만들어 주세요.');
+      return;
+    }
+
+    final created = await showModalBottomSheet<Schedule>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ScheduleSheet(
+        repository: _repo,
+        groupId: _groupId,
+        pets: pets,
+        day: _selected,
+      ),
+    );
+    if (created == null || !mounted) return;
+    setState(() {
+      _items = [..._items, created];
+      _selected = created.onDate;
+    });
+  }
+}
+
+/// 새 일정 한 장 — 종류 → 제목 → 날짜/시각 → 아이 → 메모.
+///
+/// **주인을 안 묻는다** — 화면 파일 머리말에 이유가 있다.
+class ScheduleSheet extends StatefulWidget {
+  final ScheduleRepository repository;
+
+  /// 우리 가족. `null` 이면 이 일정은 아이 소유가 되고, 그때 아이 고르기가 필수다.
+  final int? groupId;
+
+  final List<DogProfile> pets;
+  final DateTime day;
+
+  const ScheduleSheet({
+    super.key,
+    required this.repository,
+    required this.groupId,
+    required this.pets,
+    required this.day,
+  });
+
+  @override
+  State<ScheduleSheet> createState() => _ScheduleSheetState();
+}
+
+class _ScheduleSheetState extends State<ScheduleSheet> {
+  final _title = TextEditingController();
+  final _memo = TextEditingController();
+
+  ScheduleKind _kind = ScheduleKind.vet;
+  late DateTime _date = widget.day;
+  TimeOfDay? _time;
+  int? _dogId;
+
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // 가족이 없으면 아이가 주인이라 하나는 골라져 있어야 한다.
+    if (widget.groupId == null && widget.pets.isNotEmpty) {
+      _dogId = widget.pets.first.serverId;
+    }
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _memo.dispose();
+    super.dispose();
+  }
+
+  bool get _ownedByGroup => widget.groupId != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: T.lilacTop,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: T.textFaint, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 14),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('일정 적기',
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            ),
+            const SizedBox(height: 12),
+
+            _label('종류'),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final k in ScheduleKind.values)
+                _chip(k.label, _kind == k, () => setState(() => _kind = k)),
+            ]),
+            const SizedBox(height: 14),
+
+            _label('제목'),
+            TextField(
+              controller: _title,
+              maxLength: ScheduleRepository.maxTitleLength,
+              decoration: const InputDecoration(
+                hintText: '예) 보리 광견병 접종',
+                counterText: '',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            _label('언제'),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _pickDate,
+                  child: Text('${_date.month}월 ${_date.day}일'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _pickTime,
+                  // 시각은 **없어도 되는 값**이라 기본이 "하루 종일" 이다.
+                  child: Text(_time == null ? '하루 종일' : Schedule.formatTime(_time!)),
+                ),
+              ),
+              if (_time != null)
+                IconButton(
+                  tooltip: '시각 지우기',
+                  onPressed: () => setState(() => _time = null),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                ),
+            ]),
+            const SizedBox(height: 14),
+
+            if (widget.pets.isNotEmpty) ...[
+              _label('아이'),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                if (_ownedByGroup)
+                  _chip('안 정함', _dogId == null, () => setState(() => _dogId = null)),
+                for (final p in widget.pets)
+                  _chip(p.name, _dogId == p.serverId,
+                      () => setState(() => _dogId = p.serverId)),
+              ]),
+              const SizedBox(height: 14),
+            ],
+
+            _label('메모'),
+            TextField(
+              controller: _memo,
+              maxLines: 2,
+              maxLength: ScheduleRepository.maxMemoLength,
+              decoration: const InputDecoration(
+                hintText: '안 적어도 돼요',
+                counterText: '',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _ownedByGroup ? '우리 가족이 함께 봅니다' : '이 일정은 나만 봅니다',
+                style: const TextStyle(fontSize: 12, color: T.textMuted),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(_error!,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFFD1495B))),
+              ),
+            ],
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _saving ? null : _save,
+                style: FilledButton.styleFrom(backgroundColor: T.sigEnd),
+                child: Text(_saving ? '저장 중…' : '저장'),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(text,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: T.textSecondary)),
+        ),
+      );
+
+  Widget _chip(String label, bool selected, VoidCallback onTap) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected ? T.sigEnd : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: selected ? T.sigEnd : T.cardBorder),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : T.textSecondary)),
+        ),
+      );
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(_date.year - 1),
+      lastDate: DateTime(_date.year + 2),
+    );
+    if (picked != null) setState(() => _date = DateTime(picked.year, picked.month, picked.day));
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _time ?? const TimeOfDay(hour: 10, minute: 0),
+    );
+    if (picked != null) setState(() => _time = picked);
+  }
+
+  Future<void> _save() async {
+    final title = _title.text.trim();
+    if (title.isEmpty) {
+      setState(() => _error = '제목을 적어 주세요');
+      return;
+    }
+    if (!_ownedByGroup && _dogId == null) {
+      setState(() => _error = '아이를 골라 주세요');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final created = await widget.repository.create(
+        ownerKind: _ownedByGroup ? ScheduleOwnerKind.group : ScheduleOwnerKind.dog,
+        ownerRef: _ownedByGroup ? widget.groupId! : _dogId!,
+        kind: _kind,
+        title: title,
+        onDate: _date,
+        dogId: _dogId,
+        memo: _memo.text.trim(),
+        atTime: _time,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(created);
+    } on ScheduleFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = switch (e.kind) {
+          ScheduleFailureKind.notFound => '이 아이나 가족의 일정은 만들 수 없어요',
+          ScheduleFailureKind.invalid => e.message ?? '아직 만들 수 없는 일정이에요',
+          _ => '연결이 불안정해요. 잠시 뒤 다시 해 주세요',
+        };
+      });
+    }
+  }
+}

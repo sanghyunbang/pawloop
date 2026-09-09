@@ -929,7 +929,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | 홈 오늘의 케어 카드 · family_screen (멤버·케어·주의사항) | ~~`kCareToday`, `kFamilyMembers`, `kWalkNotes`~~ → **서버 연동 완료**(#76). 남은 더미는 `kFamilyInviteCode`·`FamilyMember.todayKm` | `GET /api/groups/me`, `GET/POST /api/groups/{id}/care-logs`, `GET/PUT /api/groups/{id}/walk-notes` |
 | chat_list_screen (방 목록·미읽음) | `kChatRooms`(로컬) | `GET /api/chat/rooms` |
 | family_chat_screen (방 안 대화) | `kChatMessages`(로컬) | `GET/POST /api/chat/rooms/{id}/messages`, `POST /api/chat/rooms/{id}/read` |
-| 일정 탭 (아직 없음 — #419) | — | `GET/POST /api/schedules`, `PATCH /api/schedules/{id}?version=N`, `DELETE /api/schedules/{id}` |
+| 일정 탭 (`schedule_screen.dart`) | **서버 연동 완료**(#419) | `GET/POST /api/schedules`, `PATCH /api/schedules/{id}?version=N`, `DELETE /api/schedules/{id}` |
 
 ---
 
@@ -1093,4 +1093,4 @@ _본 문서는 SSOT. 엔드포인트 변경 시 [ERD](../03-database/erd.md) 및
 
 `DELETE /api/schedules/{scheduleId}` · 인증 필요. 물리 삭제라 같은 id 로 다시 부르면 404 다. 남의 일정도, 없는 일정도 같은 404 다.
 
-프론트: 일정 탭(#419 — 아직 안 붙었다).
+프론트: 일정 탭(`schedule_screen.dart`, #419) — 월 달력에 종류별 점을 찍고, 날짜를 누르면 그날 목록이 펼쳐진다. 주인(`ownerKind`)은 **사용자가 안 고른다** — 가족 그룹이 있으면 `group`, 없으면 `dog` 이고 시트가 그 결과를 한 줄로 말한다("우리 가족이 함께 봅니다"). 가시성을 고르는 질문을 사용자에게 넘기지 않기 위해서다.
