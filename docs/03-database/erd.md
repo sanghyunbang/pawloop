@@ -20,6 +20,7 @@ erDiagram
     users ||--o{ care_log  : "수행(done_by)"
 
     family_group ||--o| chat_room    : "origin_kind/origin_ref — FK 아님"
+    crew         ||--o| chat_room    : "origin_kind='CREW'/origin_ref — FK 아님 (#417)"
     family_group ||--o| walk_note    : "산책 주의사항 (그룹당 한 장)"
     family_group |o--o{ care_log     : "케어 공유"
     users ||--o{ walk_note : "마지막 수정(updated_by)"
@@ -92,6 +93,17 @@ erDiagram
         DATE     on_date PK "PK 앞자리 — Hibernate 가 정한 순서다"
         BIGINT   schedule_id PK,FK "규칙을 지우면 함께 사라진다"
         VARCHAR  kind "skip|override — 펼치기에서는 둘이 같다"
+    }
+
+    crew {
+        BIGINT   id PK
+        VARCHAR  name              "방 이름도 이 값이다 - 고치면 함께 바뀐다"
+        VARCHAR  intro             "nullable - 이름만으로 충분한 모임이 있다"
+        VARCHAR  neighborhood_code "행정동 코드(#342) - 좌표가 아니다. nullable"
+        VARCHAR  visibility        "invite(기본)|public"
+        INT      capacity          "2..100, 기본 20 - 방장이 정한다. 방의 정원과 다른 숫자다"
+        DATETIME created_at
+        DATETIME updated_at
     }
 
     schedule {
@@ -371,6 +383,7 @@ erDiagram
 | `schedule` | 실재 | **앞으로 할 일**(#418). 주인이 셋(아이 · 가족 그룹 · 크루)이라 `owner_kind`+`owner_ref` 를 **불투명하게** 든다 — `chat_room` 과 같은 방식이고 **그 두 컬럼에는 FK 가 없다**(ADR-0011). `dog_id` 는 `owner_ref` 와 **별개**이고 `SET NULL` 이다 — 아이를 보내도 계획은 남는다. |
 | `course` | 실재 | 산책 기록 중에 "여기 좋다" 고 남긴 코스(#339). `walk.path` 에서 **양 끝 100m 를 잘라 낸 선**을 들고, 산책을 지워도 남는다(`walk_id` 가 NULL 이 된다). 기본은 비공개이고 공개한 것만 지도의 "이웃 코스" 에 나온다. 가까운 것 고르기는 기기에서 한다(A안 #235). |
 | `care_log` | 실재 | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. `dog_id` 는 `dog.id` 로 가는 FK 다(**#154**, `ON DELETE SET NULL` — 반려동물이 지워져도 기록은 남는다). 값은 아직 항상 `NULL` — 쓰기 경로가 `dogId` 를 안 받는다([schema.md §17](./schema.md)). |
+| `crew` | 실재 | **동네 반려인 모임**(#417). 이름·소개·동네·공개 범위·정원 다섯만 든다. **`crew_member` 를 안 만든다** — 크루의 멤버는 그 크루 방의 멤버이고 그것은 `chat_room_member` 다(ADR-0011). 방장도 컬럼이 아니라 그 방의 `OWNER` 멤버다. `chat_room` 으로 나가는 FK 도 없다 — 방 쪽이 `(origin_kind='CREW', origin_ref)` 로 이미 들고 있다. |
 | `family_group` | 실재 | 가족 케어 그룹. **이름과 생성 시각만** 든다 — 초대코드도 멤버십도 여기 없다. 방은 `chat_room` 이 `origin_kind`/`origin_ref` 로 불투명하게 가리킨다. |
 | `chat_room` | 실재 | 채팅방. **가족 그룹 종속이 아니다** — 산책 크루 방도 같은 표에 산다. `UNIQUE(origin_kind, origin_ref)` 가 같은 출처에 방이 둘 생기는 것을 막고, `last_seq` 가 `room_seq` 발급기이자 미읽음 뺄셈의 좌변이다. |
 | `chat_room_member` | 실재 | 방 멤버십. **멤버십 표는 이것 하나다**(`group_member` 를 따로 만들지 않는다). 강퇴는 행 삭제가 아니라 `removed_at`+`rejoin_blocked`, 미읽음은 `last_read_seq` 뺄셈. |

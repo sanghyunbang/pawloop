@@ -300,6 +300,47 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
                 && path.startsWith("/api/community/")) {
             return new Rule("community-write", rateLimitProperties.getCommunityWriteMaxRequests());
         }
+        // ── 크루 (이슈 #417) ─────────────────────────────────
+        //
+        // `POST /api/crews` 하나가 **행을 셋** 만든다 — crew·chat_room·chat_room_member.
+        // `POST /api/groups` 와 정확히 같은 모양이라 같은 버킷을 쓴다. 그 경로가 표에 없던
+        // 동안 실제로 무제한이었다는 기록이 위에 있다.
+        //
+        // 참여 둘도 넣는다. 행을 하나씩 만들고(또는 되살리고), 초대 코드 참여는 **크루 id 를
+        // 모르는 사람도 부를 수 있는** 경로다. 여기가 비면 코드를 긁어 가며 두드릴 수 있다.
+        //
+        // 고치기(PATCH)도 넣는다. 행은 안 늘지만 이름을 바꿀 때마다 chat_room 까지 UPDATE 가
+        // 나가고, 그 값은 남의 채팅 목록에 보인다.
+        //
+        // **읽기 둘(GET /api/crews · GET /api/crews/{id})은 넣지 않았다.** 표에 없는 경로는
+        // 한도가 0 이 아니라 무한이다 — 미룬 것이지 안전한 것이 아니다. 숫자를 정하려면
+        // 앱이 목록을 언제 얼마나 부르는지부터 정해져야 한다.
+        if ("POST".equals(method) && "/api/crews".equals(path)) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        if ("PATCH".equals(method) && path.matches("^/api/crews/\\d+$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        if ("POST".equals(method) && path.matches("^/api/crews/\\d+/members/me$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        if ("POST".equals(method) && path.startsWith("/api/crews/join/")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        if ("DELETE".equals(method) && path.matches("^/api/crews/\\d+/members/(me|\\d+)$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        // ── 일정 (이슈 #418~#421) ────────────────────────────
+        //
+        // **#418 이 이 표를 안 고쳤다.** 그동안 `POST /api/schedules` 는 한도가 무한이었고,
+        // 요청 한 건이 schedule 행 하나를 만든다. 크루를 올리면서 같은 자리를 함께 막는다 —
+        // 성격이 `POST /api/groups` 와 같아 버킷도 같다.
+        //
+        // 읽기(GET /api/schedules)는 넣지 않았다. 달력이 달을 넘길 때마다 부르는 경로라
+        // 숫자를 먼저 정해야 한다.
+        if (WRITE_METHODS.contains(method) && path.startsWith("/api/schedules")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         if (path.startsWith("/media")) {
             return new Rule("upload", rateLimitProperties.getUploadMaxRequests());
         }

@@ -236,6 +236,34 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
              @Param("now") LocalDateTime now);
 
     /**
+     * <b>스스로 나간다.</b> 강퇴({@link #kick})와 문장이 닮았지만 뜻이 다르다 — 이슈 #417.
+     *
+     * <h2>{@code rejoin_blocked} 를 안 건드리는 것이 이 문장의 전부다</h2>
+     * <p>{@link #kick} 과 한 메서드로 묶고 싶어진다. 컬럼 셋 중 둘이 같기 때문이다. 그런데
+     * 묶으면 <b>"내보낸 것인가 나간 것인가" 가 파라미터 하나로 숨는다.</b> 그 파라미터를
+     * 잘못 준 날, 제 발로 나간 사람이 다시 못 들어오게 된다. 그리고 그 사람은 <b>왜 못
+     * 들어오는지 화면 어디에서도 알 수 없다</b> — 금지를 푸는 것은 방장뿐이고, 방장은
+     * 자기가 아무도 안 내보냈다고 알고 있다.
+     *
+     * <p>{@code removed_by} 에 자기 id 가 들어간다. {@code null} 로 두면 "누가 뺐는지 모르는
+     * 행" 이 되고, 나중에 그 행을 보는 사람이 강퇴와 구별할 수 없다.
+     *
+     * <p>{@code where ... removed_at is null} 이 조건부 UPDATE 다 — 두 번 눌러도 두 번째는
+     * 0 이고, 그 0 은 오류가 아니라 "이미 나가 있다" 다({@link #kick} 과 같은 모양).
+     *
+     * @return 이번에 실제로 나간 행 수. 이미 나가 있었으면 0
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update ChatRoomMember m
+               set m.removedAt = :now, m.removedBy = :userId
+             where m.room.id = :roomId and m.userId = :userId and m.removedAt is null
+            """)
+    int leave(@Param("roomId") Long roomId,
+              @Param("userId") Long userId,
+              @Param("now") LocalDateTime now);
+
+    /**
      * 재입장 금지를 푼다 — 방장이 나중에 푸는 자리(#82).
      *
      * <p><b>되돌리는 것은 금지뿐이고 멤버십은 아니다.</b> 풀어도 방에 자동으로 돌아오지
