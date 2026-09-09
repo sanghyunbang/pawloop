@@ -5,6 +5,7 @@ import 'today_screen.dart';
 import 'explore_screen.dart';
 import 'feed_screen.dart';
 import 'chat_list_screen.dart';
+import 'schedule_screen.dart';
 import 'start_walk.dart';
 import 'walk_tracking_screen.dart';
 import '../data/walk_in_progress.dart';
@@ -24,7 +25,7 @@ class RootTab {
   }
 }
 
-/// 메인 네비게이션 셸 — 오늘/탐색/커뮤니티/흐름 탭 + 가운데 기록(+) 버튼.
+/// 메인 네비게이션 셸 — 홈/지도/일정/커뮤니티/채팅 탭 + 가운데 기록(+) 버튼.
 class MainShell extends StatelessWidget {
   /// 끊긴 산책 스냅숏 저장소. 테스트가 갈아 끼운다(#335).
   final WalkInProgressStore resumeStore;
@@ -50,9 +51,12 @@ class MainShell extends StatelessWidget {
               );
               break;
             case 2:
-              screen = const FeedScreen();
+              screen = const ScheduleScreen();
               break;
             case 3:
+              screen = const FeedScreen();
+              break;
+            case 4:
               screen = const ChatListScreen();
               break;
             default:
@@ -95,9 +99,13 @@ class _ShellNav extends StatelessWidget {
                   const SizedBox(height: 3),
                   // 탭 라벨의 배율만 1.3 에서 멈춘다 — 이슈 #396.
                   //
-                  // 네 칸이 한 알약을 나눠 쓰므로 360dp 에서 한 칸이 59dp 다. 2.0배의
+                  // 네 칸이 한 알약을 나눠 쓰므로 360dp 에서 한 칸이 59dp 였다. 2.0배의
                   // "커뮤니티" 는 거기 안 들어가 두 줄로 접히고, 알약 높이 66 을 24px
                   // 넘겼다. 자르면 "커뮤…" 가 되어 무엇을 누르는지 알 수 없다.
+                  //
+                  // #419 가 다섯째("일정")를 더하면서 한 칸이 더 좁아졌다 — 그래서 이
+                  // 멈춤이 더 중요해졌지 덜해지지 않았다. 새 라벨을 두 글자로 고른 것도
+                  // 같은 이유다.
                   //
                   // 본문은 배율을 그대로 따른다 — 여기만 멈춘다. 화면을 읽는 글자와
                   // 길을 찾는 표지판은 다르고, Material 의 NavigationBar 도 같은 이유로
@@ -137,11 +145,14 @@ class _ShellNav extends StatelessWidget {
                       boxShadow: const [BoxShadow(color: Color(0x2E5A4690), blurRadius: 30, offset: Offset(0, 12))],
                     ),
                     child: Row(children: [
+                      // 왼쪽 셋 · 오른쪽 둘 — 기록 버튼 오른쪽에 셋을 두면 왼쪽이 둘이라
+                      // 알약의 무게가 한쪽으로 쏠린다(#419).
                       item(Icons.home_rounded, '홈', 0),
                       item(Icons.map_outlined, '지도', 1),
+                      item(Icons.event_note_outlined, '일정', 2),
                       const SizedBox(width: 56),
-                      item(Icons.forum_outlined, '커뮤니티', 2),
-                      item(Icons.chat_bubble_outline, '채팅', 3),
+                      item(Icons.forum_outlined, '커뮤니티', 3),
+                      item(Icons.chat_bubble_outline, '채팅', 4),
                     ]),
                   ),
                 ),

@@ -24,8 +24,9 @@
 | 12 | 못 보낸 산책 초안의 재전송 | 산책 저장 실패 | `create_screen.dart` · `today_screen.dart` · `myrecords_screen.dart` |
 | 13 | 주간 목표 · 연속 일수 · 저녁 알림 | 홈 요약 카드 · 설정 | `today_screen.dart`(목표 줄) · `settings_screen.dart`(알림) |
 | 14 | 내 동네 고르기 → 커뮤니티 · 지도의 기준 | 설정 · 온보딩 | `neighborhood_picker_screen.dart` → `feed_screen.dart` · `explore_screen.dart` |
+| 15 | 일정 적기 → 달력에서 보기 → 완료 표시 | 일정 탭 | `schedule_screen.dart`(월 달력 · 그날 목록 · 만들기 시트) |
 
-네비게이션 골격은 `main_shell.dart` 의 다섯 자리다: **홈 · 지도 · [가운데 산책 FAB] · 커뮤니티 · 채팅**. 통계·기록·가족·설정은 탭이 아니라 프로필(`me_screen.dart`)에서 들어간다. `pin_picker_screen.dart` 는 파일은 있으나 지금 어디에서도 열리지 않는다(#322 에서 확인 — 지울지는 따로 정한다).
+네비게이션 골격은 `main_shell.dart` 의 여섯 자리다: **홈 · 지도 · 일정 · [가운데 산책 FAB] · 커뮤니티 · 채팅**. 일정은 #419 가 더했다 — 왼쪽 셋 · 오른쪽 둘로 나눈 것은 FAB 오른쪽에 셋을 두면 알약의 무게가 쏠리기 때문이다. 통계·기록·가족·설정은 탭이 아니라 프로필(`me_screen.dart`)에서 들어간다. `pin_picker_screen.dart` 는 파일은 있으나 지금 어디에서도 열리지 않는다(#322 에서 확인 — 지울지는 따로 정한다).
 
 ---
 
