@@ -436,17 +436,34 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 `GET /api/places/catalog` — 요청에 아무것도 안 실린다. A안 빌드(좌표를 서버로 안 보내는 빌드)가 쓰는 길이고, 앱은 한 벌을 기기에 두고 거리를 기기에서 잰다(계약 참조).
 
-**#291 부터 한 배열에 출처가 넷이다.** KTO 반려동반(`source=kto`) 뒤에 동물병원(`vet`)·펫샵(`shop`) — 행정안전부 인허가, 전국 — 과 산책로(`trail`) — 두루누비 걷기여행길 — 가 이어 붙는다. 서버는 출처별로 한 벌씩 따로 받아 둔다(`place_catalog` 행 셋, `24_place_catalog_layers.sql`).
+**#346 부터 한 배열에 출처가 다섯이다.** KTO 반려동반(`source=kto`) 뒤에 동물병원(`vet`)·펫샵(`shop`) — 행정안전부 인허가, 전국 — 과 산책로(`trail`) — 두루누비 + **동네 길** — 과 **놀이터(`playground`)** 가 이어 붙는다. 서버는 출처별로 한 벌씩 따로 받아 둔다(`place_catalog` 행 다섯, `24_place_catalog_layers.sql` · `31_place_catalog_localtrail.sql` · `32_place_catalog_playground.sql`).
 
 | 출처 | 어디서 | 얼마나 자주 | 예산 풀 |
 |---|---|---|---|
 | `kto` | `KorPetTourService2/areaBasedList2` | 매일 04:40 예열(#279) | `catalog` 50/일 |
 | `vet` · `shop` | `apis.data.go.kr/1741000/animal_hospitals/info` · `/animal_sales/info` — 영업 중(`SALS_STTS_CD=01`)만, 좌표 EPSG:5174 → WGS84 | 매월 1일 05:20 · 기동 시 없으면 한 번 | `localdata` 500/일 |
-| `trail` | `apis.data.go.kr/B551011/Durunubi/courseList` + 코스별 GPX 파일 | 같음 | `durunubi` 100/일 (GPX 는 안 센다) |
+| `trail`(두루누비) | `apis.data.go.kr/B551011/Durunubi/courseList` + 코스별 GPX 파일 | 같음 | `durunubi` 100/일 (GPX 는 안 센다) |
+| `trail`(**동네 길**) | **외부를 안 부른다** — 저장소의 `data/local_trails.json` 1,302개 (#346) | 배포 · 기동 시 없으면 한 번 | 없음 |
+| `playground` | **외부를 안 부른다** — 저장소의 `data/playgrounds.json` (#346) | 같음 | 없음 |
 
 - 세 API 는 **같은 서비스키**(`TOUR_API_SECRET`)를 쓰지만 공공데이터포털에서 API 마다 **활용신청**이 따로다(자동 승인). 안 돼 있으면 게이트웨이가 `30`(키 미등록)을 주고 그날 풀을 닫는다 — KTO 한 벌은 그와 무관하게 나간다.
 - KTO 한 벌이 없으면 레이어가 있어도 `[]` 다. 레이어가 없으면 KTO 한 벌만 나간다.
 - `ETag` 는 이어 붙인 벌들의 해시를 다시 해시한 값이다.
+
+#### 동네 길과 놀이터는 왜 자산인가 (#346)
+
+두 출처만 **외부를 안 부릅니다.** 저장소에 커밋한 파일을 읽어 한 벌로 담는 것이 전부입니다.
+
+- **동네 길** — 원본(전국길관광정보표준데이터 15017321)의 갱신주기가 **연간**입니다. 매일 부를 이유가 없고, 원본에 **좌표가 없어**(주소 문자열뿐) 지오코딩을 한 번 해서 넣어 둡니다(`backend/tools/build_local_trails.py`). 두루누비만으로는 서울숲에서 가장 가까운 코스가 **19.7km 밖 DMZ 18km 코스**였습니다(#328 실측). 지금은 8km 안에 89개, 길이 중앙값 2.2km 입니다.
+- **놀이터** — **전국 표준데이터가 아예 없습니다.** 지자체가 파일로 따로 올립니다. 사람이 받아 합친 것을 읽습니다(`backend/tools/build_playgrounds.py`).
+
+`contentId` 는 `trail:lt<해시>` · `playground:<해시>` 라 두루누비(`trail:<crsIdx>`)와 안 겹칩니다.
+
+**갱신은 배포로 합니다.** 자산이 비었거나 못 읽으면 **지난 한 벌을 그대로 둡니다** — 빈 한 벌로 덮으면 그 순간부터 지도에서 그 칩이 통째로 빕니다(`LayerCatalogService` 와 `CatalogSnapshotStore` 가 각각 막습니다).
+
+**서울시 둘레길 선형은 안 씁니다** — 공공누리 **제4유형**(상업적 이용금지 + 변경금지)입니다. 데이터셋 식별자와 이유는 [external-data.md](../02-architecture/external-data.md) 한 곳에만 적습니다 — `RestrictedGeoDataTest` 가 **그 파일 말고 저장소 어디에도** 그 식별자가 없는 것을 잠그기 때문입니다.
+
+카드에 무엇을 적는지(요약 문구)는 [places.md](../02-architecture/backend/places.md) 에 있습니다.
 
 ### 4.5 산책로 코스의 선 — ✅ 구현(#291)
 
