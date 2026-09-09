@@ -182,4 +182,61 @@ void main() {
 
     expect(valueSizeOf(tester, '00:42'), 24);
   });
+  // ── 머리말 줄 (#402) ──────────────────────────────────────
+  //
+  // `● 산책 기록 중` … `실시간 GPS ⌄` 줄이다. #395 는 아래 숫자 세 칸과 접힘 알약을
+  // 고쳤고 이 줄은 손대지 않아, 글자 2.0배에서 360dp 기준 **75px** 넘쳤다(이슈 실측).
+  //
+  // 원인은 두 `Text` 가 flex 가 아니었던 것이다 — Row 는 flex 가 아닌 자식에게 폭을
+  // 무한대로 주고, `Spacer` 는 남은 공간이 음수여도 0 까지만 줄어든다.
+
+  group('머리말 줄', () {
+    for (final width in [320.0, 360.0, 375.0, 393.0, 412.0, 430.0]) {
+      testWidgets('폭 ${width.toInt()}dp · 글자 2.0배에서 안 넘친다', (tester) async {
+        useWidth(tester, width);
+        await tester.pumpWidget(_wrap(
+          expanded: true,
+          km: 12.24,
+          timeLabel: '120:45',
+          paceLabel: "120'03\"",
+          textScale: 2.0,
+        ));
+
+        expect(tester.takeException(), isNull,
+            reason: '넘치면 프레임워크가 예외를 남긴다 — 노란 줄무늬는 그 예외의 그림이다');
+      });
+    }
+
+    testWidgets('배율이 커지면 보조 안내가 먼저 접힌다 — 상태 글자를 지킨다', (tester) async {
+      useWidth(tester, 360);
+      await tester.pumpWidget(_wrap(expanded: true, textScale: 2.0));
+
+      expect(find.text('실시간 GPS'), findsNothing,
+          reason: '보조를 남기면 "산책 기록 중" 이 "산…" 으로 잘린다');
+      expect(find.text('산책 기록 중'), findsOneWidget);
+    });
+
+    testWidgets('보통 배율에서는 보조 안내가 그대로 있다', (tester) async {
+      useWidth(tester, 360);
+      await tester.pumpWidget(_wrap(expanded: true));
+
+      expect(find.text('실시간 GPS'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('일시정지 상태에서도 안 넘친다 — 글자가 한 자 더 길다', (tester) async {
+      useWidth(tester, 320);
+      await tester.pumpWidget(_wrap(
+        expanded: true,
+        paused: true,
+        km: 12.24,
+        timeLabel: '120:45',
+        paceLabel: "120'03\"",
+        textScale: 2.0,
+      ));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('일시정지됨'), findsOneWidget);
+    });
+  });
 }
