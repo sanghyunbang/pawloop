@@ -1127,4 +1127,132 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
                 .isEqualTo(1);
         assertThat(statsOf(me, null).path("allTimeCount").asInt()).isEqualTo(1);
     }
+    // ─────────────── 이번 주 요약 (이슈 #359 1단계) ───────────────
+    //
+    // 문장은 앱이 만든다. 서버가 주는 것은 **앱이 스스로 못 구하는 것 둘**뿐이다 —
+    // 지난주 숫자와 시간대별 집계. 빠진 요일은 이미 나가는 weekKm 으로 세면 되고,
+    // 달성률의 목표는 사용자가 기기에서 고치는 값이라 서버가 모른다(#341).
+
+    @Test
+    @DisplayName("세 번 걸으면 그 시간대 한 칸에 셋이 모이고 나머지 셋은 0 이다 — 완료 조건 2")
+    void weeklySummaryBucketsWalksByPartOfDay() throws Exception {
+        Account me = account("시간대집계");
+        long dogId = dog(me, "보리");
+
+        // **지금에서 거꾸로 잡는다.** 요일을 고정하면(예: "화·목·토") 그 요일이 아직 안 온
+        // 주에 미래 시각이 되어 400 이 난다 — 이 파일이 2026-09-07 에 실제로 그렇게
+        // 빨개졌다. 5분 간격이면 시간대 칸을 넘을 일도 사실상 없다.
+        Instant justNow = Instant.now().minus(Duration.ofMinutes(5));
+        for (int minutesAgo : new int[] {0, 5, 10}) {
+            save(me, walkJson(dogId, justNow.minus(Duration.ofMinutes(minutesAgo)), 2000, 1800))
+                    .andExpect(status().isCreated());
+        }
+
+        JsonNode stats = statsOf(me, null);
+        JsonNode parts = stats.path("summary").path("byPartOfDay");
+
+        assertThat(parts.size())
+                .as("넷이 고정이다 — 0 인 시간대도 빠지지 않는다")
+                .isEqualTo(4);
+        assertThat(names(parts)).containsExactly("dawn", "morning", "afternoon", "evening");
+
+        // 어느 칸인지는 시계가 정한다. **셋이 한 칸에 모였는가**가 이 테스트의 질문이다.
+        assertThat(countsOf(parts))
+                .as("셋이 흩어지면 시간대 나누기가 틀린 것이다")
+                .containsExactlyInAnyOrder(0, 0, 0, 3);
+        assertThat(sumOf(parts, "km")).isEqualTo(6.0);
+        assertThat(sumOf(parts, "minutes")).isEqualTo(90.0);
+        assertThat(stats.path("walkCount").asInt()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("요일 축은 오늘 한 칸에만 쌓인다 — weekKm 의 자리가 요일이다")
+    void weeklySummaryKeepsTheWeekdayAxis() throws Exception {
+        Account me = account("요일축");
+        long dogId = dog(me, "보리");
+        save(me, walkJson(dogId, Instant.now().minus(Duration.ofMinutes(5)), 2000, 1800))
+                .andExpect(status().isCreated());
+
+        JsonNode weekKm = statsOf(me, null).path("weekKm");
+
+        int today = java.time.ZonedDateTime.now(KST).getDayOfWeek().getValue() - 1;
+        for (int i = 0; i < 7; i++) {
+            assertThat(weekKm.get(i).asDouble())
+                    .as("%d번 칸(오늘은 %d번)", i, today)
+                    .isEqualTo(i == today ? 2.0 : 0.0);
+        }
+    }
+
+    @Test
+    @DisplayName("지난주 숫자가 따로 온다 — 이번 주 응답만으로는 '전주 대비' 를 못 만든다")
+    void weeklySummaryCarriesLastWeek() throws Exception {
+        Account me = account("전주대비");
+        long dogId = dog(me, "보리");
+
+        // 정확히 7일 전 — 이번 주와 같은 요일·같은 시각이라 항상 지난주 안이다.
+        save(me, walkJson(dogId,
+                Instant.now().minus(Duration.ofDays(7)).minus(Duration.ofMinutes(5)), 3000, 2400))
+                .andExpect(status().isCreated());
+        save(me, walkJson(dogId, Instant.now().minus(Duration.ofMinutes(5)), 2000, 1800))
+                .andExpect(status().isCreated());
+
+        JsonNode stats = statsOf(me, null);
+
+        assertThat(stats.path("summary").path("lastWeekCount").asInt()).isEqualTo(1);
+        assertThat(stats.path("summary").path("lastWeekKm").asDouble()).isEqualTo(3.0);
+        assertThat(stats.path("summary").path("lastWeekMinutes").asInt()).isEqualTo(40);
+        assertThat(stats.path("walkCount").asInt())
+                .as("지난주 산책이 이번 주에 섞이면 안 된다")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("산책이 하나도 없어도 요약이 온다 — 화면이 null 을 만나면 카드가 통째로 빈다")
+    void weeklySummaryIsPresentWhenEmpty() throws Exception {
+        Account me = account("빈요약");
+
+        JsonNode summary = statsOf(me, null).path("summary");
+
+        assertThat(summary.isMissingNode()).isFalse();
+        assertThat(summary.path("lastWeekCount").asInt()).isZero();
+        assertThat(summary.path("byPartOfDay").size()).isEqualTo(4);
+        assertThat(countsOf(summary.path("byPartOfDay"))).containsExactly(0, 0, 0, 0);
+    }
+
+    @Test
+    @DisplayName("아이별로 좁히면 요약도 그 아이 것이다")
+    void weeklySummaryFollowsTheDogFilter() throws Exception {
+        Account me = account("아이별요약");
+        long bori = dog(me, "보리");
+        long choco = dog(me, "초코");
+
+        save(me, walkJson(bori, Instant.now().minus(Duration.ofMinutes(5)), 2000, 1800))
+                .andExpect(status().isCreated());
+
+        assertThat(countsOf(statsOf(me, bori).path("summary").path("byPartOfDay")))
+                .containsExactlyInAnyOrder(0, 0, 0, 1);
+        assertThat(countsOf(statsOf(me, choco).path("summary").path("byPartOfDay")))
+                .containsExactly(0, 0, 0, 0);
+    }
+
+    private static java.util.List<String> names(JsonNode parts) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        parts.forEach(node -> out.add(node.path("part").asText()));
+        return out;
+    }
+
+    private static java.util.List<Integer> countsOf(JsonNode parts) {
+        java.util.List<Integer> out = new java.util.ArrayList<>();
+        parts.forEach(node -> out.add(node.path("count").asInt()));
+        return out;
+    }
+
+    private static double sumOf(JsonNode parts, String field) {
+        double total = 0;
+        for (JsonNode node : parts) {
+            total += node.path(field).asDouble();
+        }
+        return total;
+    }
+
 }

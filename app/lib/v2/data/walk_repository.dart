@@ -27,6 +27,7 @@ import 'package:http/http.dart' as http;
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
+import '../domain/weekly_summary.dart';
 import 'location_upload_policy.dart';
 
 /// 반려동물의 종 — 계약의 `PetSpecies`.
@@ -266,6 +267,10 @@ class ServerWalkStats {
   /// 손으로 적은 이름은 서버가 `PlaceRef` 를 만들 수 없어 여기 안 들어간다.
   final List<WalkTopPlace> topPlaces;
 
+  /// "이번 주 요약" 이 쓰는 계산 결과 (#359). 서버가 안 줬으면 [WeekSummaryData.empty] 다 —
+  /// `null` 을 위로 흘리면 화면이 두 갈래를 만들고 그중 하나가 언젠가 안 그린다.
+  final WeekSummaryData summary;
+
   const ServerWalkStats({
     required this.weekKm,
     this.weekMinutes = const [0, 0, 0, 0, 0, 0, 0],
@@ -276,6 +281,7 @@ class ServerWalkStats {
     required this.allTimeCount,
     required this.allTimeMinutes,
     this.topPlaces = const [],
+    this.summary = WeekSummaryData.empty,
   });
 
   /// 아무것도 없는 상태. 서버를 못 부른 화면이 그릴 값이다.
@@ -319,6 +325,7 @@ class ServerWalkStats {
       allTimeCount: (json['allTimeCount'] as num?)?.toInt() ?? 0,
       allTimeMinutes: (json['allTimeMinutes'] as num?)?.toInt() ?? 0,
       topPlaces: WalkTopPlace.parseList(json['topPlaces']),
+      summary: WeekSummaryData.parse(json['summary']),
     );
   }
 }
