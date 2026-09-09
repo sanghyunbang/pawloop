@@ -20,9 +20,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../domain/schedule_reminder.dart';
 import 'walk_reminder.dart';
 
-class LocalNotificationSink implements WalkReminderSink {
+class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink {
   LocalNotificationSink({FlutterLocalNotificationsPlugin? plugin})
       : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
@@ -32,6 +33,17 @@ class LocalNotificationSink implements WalkReminderSink {
 
   /// 알림 하나만 쓴다 — 저녁 산책 알림은 언제나 최대 한 건이다(완료 조건 4).
   static const int notificationId = 341;
+
+  /// 지난번에 건 일정 알림의 id 들. 다음 번에 이것부터 거둔다.
+  ///
+  /// **메모리에만 둔다.** 앱을 껐다 켜면 비어 있고, 그러면 옛 예약이 남는다 — 그래도 그
+  /// 예약은 자기 시각에 한 번 울리고 사라지므로 잘못된 알림이 되지 않는다. 저장소에 두면
+  /// 그 목록이 실제 예약과 갈리는 날이 오고, 그건 고치기가 더 어렵다.
+  final Set<int> _scheduleIds = <int>{};
+
+  static const _scheduleChannelId = 'schedule_reminder';
+  static const _scheduleChannelName = '일정 알림';
+  static const _scheduleChannelDescription = '적어 둔 일정을 전날 저녁이나 당일 아침에 알려 줍니다.';
 
   static const _channelId = 'walk_reminder';
   static const _channelName = '산책 알림';
@@ -80,6 +92,40 @@ class LocalNotificationSink implements WalkReminderSink {
   Future<void> cancelAll() async {
     await _ensureReady();
     await _plugin.cancel(notificationId);
+  }
+
+  @override
+  Future<void> replaceAll(List<ScheduleReminder> reminders) async {
+    await _ensureReady();
+    for (final id in _scheduleIds) {
+      await _plugin.cancel(id);
+    }
+    _scheduleIds
+      ..clear()
+      ..addAll(reminders.map((r) => r.id));
+
+    for (final r in reminders) {
+      await _plugin.zonedSchedule(
+        r.id,
+        r.title,
+        r.body,
+        tz.TZDateTime.from(r.at, tz.local),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _scheduleChannelId,
+            _scheduleChannelName,
+            channelDescription: _scheduleChannelDescription,
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    }
+    if (kDebugMode) {
+      debugPrint('[ScheduleReminder] 예약 ${reminders.length}건');
+    }
   }
 
   @override

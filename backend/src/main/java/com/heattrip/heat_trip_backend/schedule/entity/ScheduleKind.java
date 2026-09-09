@@ -56,6 +56,29 @@ public enum ScheduleKind {
         this.wire = wire;
     }
 
+    /**
+     * 이 종류를 완료했을 때 케어 기록으로 남길 값 — 이슈 #420. 케어가 아니면 {@code null}.
+     *
+     * <h2>왜 여기인가</h2>
+     * <p>"어떤 일정이 케어인가" 는 <b>일정의 지식</b>이다. {@code care} 가 알면 그 모듈이
+     * 일정의 어휘를 들게 되고, 일정 종류를 하나 늘릴 때마다 남의 모듈을 고쳐야 한다.
+     *
+     * <p>돌려주는 것이 {@code CareType} 이 아니라 <b>문자열</b>인 것도 같은 이유다 — 그
+     * 타입은 {@code care.entity} 라 하위 패키지이고, 여기서 들면 모듈 경계를 넘는다. 두
+     * 도메인이 이미 공유하는 것은 {@code wire} 값이다({@code CareLogging} javadoc).
+     *
+     * <h2>넷은 케어가 아니다</h2>
+     * <p>{@code groom}(미용) · {@code bath}(목욕) · {@code food}(사료 주문) · {@code etc} 는
+     * 케어 종류가 <b>아니다</b> — {@code care_log} 의 CHECK 가 받는 일곱에 없다. 억지로
+     * {@code etc} 같은 값을 만들어 넣으면 "오늘의 케어" 가 물·밥·산책이 아닌 것으로 채워진다.
+     */
+    public String careWire() {
+        return switch (this) {
+            case WALK, VET, MED -> wire;
+            case GROOM, BATH, FOOD, ETC -> null;
+        };
+    }
+
     @JsonValue
     public String wire() {
         return wire;

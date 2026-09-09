@@ -1136,6 +1136,7 @@ CREATE TABLE schedule (
   assignee   BIGINT       NULL,
   status     VARCHAR(10)  NOT NULL,
   done_at    DATETIME(6)  NULL,
+  care_log_id BIGINT      NULL,
   version    INT          NOT NULL,
   created_by BIGINT       NOT NULL,
   updated_by BIGINT       NULL,
@@ -1168,6 +1169,7 @@ CREATE TABLE schedule (
 | `assignee` | `BIGINT` | NULL, FK→`users.id` **SET NULL** | 맡기로 한 사람 |
 | `status` | `VARCHAR(10)` | NOT NULL, CHECK | `planned`·`done`·`skipped` |
 | `done_at` | `DATETIME(6)` | NULL | 완료·건너뜀으로 바꾼 시각. `planned` 로 되돌리면 다시 `NULL` |
+| `care_log_id` | `BIGINT` | NULL, **FK 아님** | 완료로 바꾸면서 남긴 케어 기록의 id(#420). 되돌릴 때 그 줄을 거두는 열쇠다 |
 | `version` | `INT` | NOT NULL | 낙관적 잠금(`@Version`) |
 | `created_by` | `BIGINT` | NOT NULL, FK→`users.id` **CASCADE** | 적은 사람 |
 | `updated_by` | `BIGINT` | NULL, FK→`users.id` **SET NULL** | 마지막으로 고친 사람 |
@@ -1184,6 +1186,12 @@ CREATE TABLE schedule (
 > **`at_time` 이 `NULL` 일 수 있다.** 시각 없는 일정이 많다 — "이번 주말 목욕". 0시로 채워 넣으면 화면이 **"00:00 목욕"** 이라고 적게 되고, 그건 사용자가 안 정한 것을 정한 것처럼 보이게 한다.
 >
 > **`version` — 낙관적 잠금.** 가족 여럿이 같은 일정을 고친다. 실시간 공동 편집은 안 한다(소켓 #84 가 아직 없고, 일정은 초당 여러 번 고치는 것이 아니다). 대신 뒤에 온 쪽이 **409** 를 받고 최신 값을 본다 — 조용히 덮어쓰면 아빠가 옮긴 병원 시각이 엄마의 옛 화면으로 되돌아간다.
+>
+> **`care_log_id` 에 FK 를 안 건다** (#420). 걸려면 `Schedule` 엔티티가 `care.entity.CareLog` 를 들어야 하고 그건 모듈 경계를 넘는다 — `owner_ref` 가 같은 이유로 FK 가 아니다. `01_schema.sql` 은 엔티티에서 재생성되므로 마이그레이션에만 FK 를 적어 두면 **다음 재생성에서 조용히 사라진다.** 대신 사람이 케어 칸에서 그 줄을 먼저 지웠을 수 있다는 전제로 다룬다 — 거두기는 없는 id 를 조용히 지나간다.
+>
+> **인덱스도 안 만든다.** 이 컬럼으로 찾지 않는다 — 늘 `schedule` 한 줄을 이미 들고 있고 거기서 id 를 꺼내 쓸 뿐이라, 인덱스는 쓰이지 않으면서 쓰기만 느리게 한다.
+>
+> **일정을 지워도 그 케어 기록은 남는다.** 되돌리기(`planned` 로)와 다른 답인 것이 의도다 — 되돌리기는 "그 일이 일어나지 않았다" 는 말이지만, 지우기는 "이 계획을 더 안 본다" 는 말이다. 이미 다녀온 병원의 기록까지 사라지면 계획을 정리하다 사실을 잃는다.
 >
 > **좌표 컬럼이 없다.** A안(#235)에서 좌표는 기기를 안 떠나고, 일정은 그것이 필요한 기능이 아니다. 장소가 필요해지는 날에는 `walk` 처럼 카탈로그 참조(출처 + contentId)를 쓴다.
 >

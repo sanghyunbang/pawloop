@@ -146,6 +146,55 @@ public class CareService {
     }
 
     /**
+     * 다른 기능이 한 일을 케어 기록으로 남긴다 — 이슈 #420. 표면은 {@code care.CareLogging} 이다.
+     *
+     * <p>{@link #record} 와 다른 점은 <b>본문(요청 DTO)을 안 받는다</b>는 것뿐이다. 종류는
+     * 부르는 쪽이 정하고 메모는 없다 — 일정의 제목을 메모로 베껴 넣지 않는다. 베끼면 같은
+     * 문장이 두 표에 살게 되고, 한쪽을 고쳐도 다른 쪽이 남는다.
+     *
+     * <p>수행자·시각은 {@link #record} 와 같은 규칙이다 — 토큰의 사용자와 서버 시계다.
+     */
+    @Transactional
+    public CareLogResponse recordLinked(long groupId, CareType type, User actor) {
+        FamilyGroup group = requireMemberGroup(groupId, actor.getId());
+
+        // saveAndFlush 가 아니라 save 다. flush 는 **영속성 컨텍스트 전체**를 밀어내는데,
+        // 부르는 쪽(일정 완료)은 그 시점에 이미 자기 엔티티를 더럽혀 뒀다. 여기서 밀면 그
+        // 엔티티가 한 번 더 써지고 @Version 이 한 요청에 두 번 오른다 — 한 번 고쳤는데
+        // 버전이 2 오르면 다음 편집이 이유 없이 409 를 받는다(실측으로 확인했다).
+        //
+        // id 는 그래도 채워진다 — IDENTITY 라 Hibernate 가 그 한 행만 즉시 INSERT 한다.
+        CareLog saved = careLogs.save(CareLog.builder()
+                .group(group)
+                .type(type)
+                .doneBy(actor)
+                .occurredAt(LocalDateTime.now(clock))
+                .build());
+
+        return CareLogResponse.of(saved);
+    }
+
+    /**
+     * 다른 기능이 남긴 기록을 거둔다 — 이슈 #420. 표면은 {@code care.CareLogging} 이다.
+     *
+     * <p><b>{@link #deleteLog} 와 달리 "본인 기록만" 을 안 본다.</b> 사람이 케어 칸에서
+     * 지우는 것이 아니라 <b>그 일이 일어나지 않았다고 되돌리는 것</b>이기 때문이다 — 아빠가
+     * 완료로 바꿔 생긴 줄을 엄마가 되돌릴 수 있어야 한다. 되돌릴 권한은 그 일정에 대한
+     * 권한이고 부르는 쪽이 확인한다. 여기서는 <b>그룹 멤버인지</b>만 본다.
+     *
+     * <p><b>없으면 조용히 지나간다.</b> 사람이 케어 칸에서 먼저 지웠을 수 있고, 그때 되돌리기가
+     * 실패하면 사용자는 이유를 알 수 없다.
+     */
+    @Transactional
+    public void withdrawLinkedLog(long groupId, long careLogId, long actorUserId) {
+        requireMemberGroup(groupId, actorUserId);
+
+        careLogs.findById(careLogId)
+                .filter(found -> found.groupId() != null && found.groupId() == groupId)
+                .ifPresent(careLogs::delete);
+    }
+
+    /**
      * 케어 기록 하나를 지운다 — #209 {@code Groups-medium-1}. 잘못 찍은 "밥 줌" 을 되돌리는 문이다.
      * 서버가 같은 종류의 두 번째 기록을 거절하지 않으므로({@link #record}) 되돌릴 문이 있어야 한다.
      *

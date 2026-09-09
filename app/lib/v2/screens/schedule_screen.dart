@@ -22,6 +22,7 @@ import '../data/family_repository.dart';
 import '../data/schedule_repository.dart';
 import '../domain/pet.dart';
 import '../domain/schedule.dart';
+import '../domain/schedule_reminder.dart';
 import '../theme/app_tokens.dart';
 
 /// 목록을 무엇으로 거를까. `전체` 가 기본이다 — 달력의 기본이 합쳐 보기다.
@@ -44,6 +45,13 @@ class ScheduleScreen extends StatefulWidget {
   final ScheduleRepository? repository;
   final FamilyRepository? familyRepository;
 
+  /// 알림을 실제로 거는 자리. **위젯 테스트는 반드시 갈아끼운다** — 진짜는
+  /// `flutter_local_notifications` 를 부르고, 테스트 바인딩에는 그 채널이 없어 던진다.
+  final ScheduleReminderSink? reminderSink;
+
+  /// 알림 설정 저장소.
+  final ScheduleReminderStore reminderStore;
+
   /// "오늘". 테스트가 고정하지 않으면 기기 시계다.
   final DateTime? today;
 
@@ -52,6 +60,8 @@ class ScheduleScreen extends StatefulWidget {
     this.repository,
     this.familyRepository,
     this.today,
+    this.reminderSink,
+    this.reminderStore = const ScheduleReminderStore(),
   });
 
   @override
@@ -114,6 +124,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         _items = items;
         _loading = false;
       });
+      await _refreshReminders();
     } on ScheduleFailure catch (e) {
       if (!mounted) return;
       setState(() {
@@ -125,6 +136,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   static DateTime _lastDayOfMonth(DateTime month) =>
       DateTime(month.year, month.month + 1, 0);
+
+  /// 이 달의 일정으로 알림을 다시 건다 — 이슈 #420.
+  ///
+  /// **이 화면을 열 때만 걸린다.** 사용자가 일정 탭을 한 번도 안 열면 예약도 없다. 서버가
+  /// 보내는 푸시(#83)가 서기 전까지는 그것이 한계고, 만들기 시트가 그 사실을 말한다.
+  ///
+  /// 실패해도 조용하다 — 알림은 곁다리이고, 그것 때문에 달력이 안 그려지면 안 된다.
+  Future<void> _refreshReminders() async {
+    final sink = widget.reminderSink;
+    if (sink == null) return;
+    try {
+      final when = await widget.reminderStore.read();
+      await sink.replaceAll(planReminders(
+        schedules: _items,
+        when: when,
+        // `widget.today` 는 테스트가 고정하는 값이다. 여기서 `DateTime.now()` 를 그대로
+        // 쓰면 "지나간 일정에는 안 건다" 가 테스트 안에서 성립하지 않는다 — 테스트의
+        // 10월과 기계의 9월이 다른 달이기 때문이다(실측으로 걸렸다).
+        now: widget.today ?? DateTime.now(),
+      ));
+    } catch (_) {
+      // 알림을 못 걸어도 화면은 그대로다.
+    }
+  }
 
   void _goMonth(int delta) {
     setState(() {
@@ -774,6 +809,14 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
                 _ownedByGroup ? '우리 가족이 함께 봅니다' : '이 일정은 나만 봅니다',
                 style: const TextStyle(fontSize: 12, color: T.textMuted),
               ),
+            ),
+            const SizedBox(height: 4),
+            // 알림이 기기 로컬이라는 한계를 여기서 말한다(#420). 안 말하면 사용자는
+            // "아빠 담당" 이라고 적어 두고 아빠가 알림을 받을 거라고 믿는다.
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('알림은 이 기기에만 옵니다 — 설정에서 켤 수 있어요',
+                  style: TextStyle(fontSize: 12, color: T.textMuted)),
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),

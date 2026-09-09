@@ -395,6 +395,201 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+
+    // ─────────────────── 완료하면 케어 기록이 함께 남는다 (#420) ───────────────────
+
+    @Test
+    @DisplayName("가족 일정을 완료로 바꾸면 오늘의 케어에 한 줄이 생긴다 — 같은 일을 두 번 안 적게")
+    void markingDoneWritesACareLog() throws Exception {
+        Account dad = account("아빠J");
+        long groupId = family(dad, "보리네 가족");
+        long scheduleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"vet","title":"보리 병원",
+                 "onDate":"2026-10-03"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        update(dad, scheduleId, 0,
+                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"done\"}")
+                .andExpect(status().isOk());
+
+        JsonNode logs = careLogs(dad, groupId);
+        assertThat(logs.size()).isEqualTo(1);
+        assertThat(logs.get(0).path("type").asText()).isEqualTo("vet");
+        assertThat(logs.get(0).path("doneBy").path("userId").asLong())
+                .as("수행자는 담당자가 아니라 **실제로 누른 사람**이다 — care_log 가 이미 그 규칙이다")
+                .isEqualTo(dad.id());
+    }
+
+    @Test
+    @DisplayName("되돌리면 그 줄이 사라진다 — 취소한 일이 오늘의 케어에 남으면 안 된다")
+    void revertingRemovesTheCareLog() throws Exception {
+        Account dad = account("아빠K");
+        long groupId = family(dad, "보리네 가족");
+        long scheduleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"walk","title":"저녁 산책",
+                 "onDate":"2026-10-03"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        update(dad, scheduleId, 0,
+                "{\"title\":\"저녁 산책\",\"onDate\":\"2026-10-03\",\"status\":\"done\"}")
+                .andExpect(status().isOk());
+        assertThat(careLogs(dad, groupId).size()).isEqualTo(1);
+
+        update(dad, scheduleId, 1,
+                "{\"title\":\"저녁 산책\",\"onDate\":\"2026-10-03\",\"status\":\"planned\"}")
+                .andExpect(status().isOk());
+
+        assertThat(careLogs(dad, groupId).size()).isZero();
+    }
+
+    @Test
+    @DisplayName("건너뜀도 케어 기록을 안 남긴다 — 건너뛴 것은 한 것이 아니다")
+    void skippingLeavesNoCareLog() throws Exception {
+        Account dad = account("아빠L");
+        long groupId = family(dad, "보리네 가족");
+        long scheduleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"med","title":"심장사상충",
+                 "onDate":"2026-10-03"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        update(dad, scheduleId, 0,
+                "{\"title\":\"심장사상충\",\"onDate\":\"2026-10-03\",\"status\":\"skipped\"}")
+                .andExpect(status().isOk());
+
+        assertThat(careLogs(dad, groupId).size()).isZero();
+    }
+
+    @Test
+    @DisplayName("완료한 뒤 건너뜀으로 바꾸면 남았던 줄을 거둔다")
+    void movingFromDoneToSkippedWithdrawsTheLog() throws Exception {
+        Account dad = account("아빠M");
+        long groupId = family(dad, "보리네 가족");
+        long scheduleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"vet","title":"보리 병원",
+                 "onDate":"2026-10-03"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        update(dad, scheduleId, 0,
+                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"done\"}")
+                .andExpect(status().isOk());
+        update(dad, scheduleId, 1,
+                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"skipped\"}")
+                .andExpect(status().isOk());
+
+        assertThat(careLogs(dad, groupId).size()).isZero();
+    }
+
+    @Test
+    @DisplayName("미용·목욕·사료·그 밖은 케어 기록을 안 남긴다 — 케어 종류가 아니다")
+    void nonCareKindsWriteNothing() throws Exception {
+        Account dad = account("아빠N");
+        long groupId = family(dad, "보리네 가족");
+
+        for (String kind : List.of("groom", "bath", "food", "etc")) {
+            long id = body(create(dad, """
+                    {"ownerKind":"group","ownerRef":%d,"kind":"%s","title":"%s 하기",
+                     "onDate":"2026-10-03"}
+                    """.formatted(groupId, kind, kind)).andExpect(status().isCreated()))
+                    .path("id").asLong();
+            update(dad, id, 0, """
+                    {"title":"%s 하기","onDate":"2026-10-03","status":"done"}
+                    """.formatted(kind)).andExpect(status().isOk());
+        }
+
+        assertThat(careLogs(dad, groupId).size())
+                .as("care_log 의 CHECK 가 받는 일곱에 없는 값이다 — 억지로 넣으면 오늘의 케어가 "
+                        + "물·밥·산책이 아닌 것으로 채워진다")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("아이 소유 일정은 케어 기록을 안 남긴다 — 넣을 그룹이 없다")
+    void dogOwnedSchedulesWriteNoCareLog() throws Exception {
+        Account mom = account("엄마O");
+        long groupId = family(mom, "보리네 가족");
+        long dogId = dog(mom, "보리");
+        long scheduleId = body(create(mom, """
+                {"ownerKind":"dog","ownerRef":%d,"dogId":%d,"kind":"vet","title":"보리 병원",
+                 "onDate":"2026-10-03"}
+                """.formatted(dogId, dogId)).andExpect(status().isCreated())).path("id").asLong();
+
+        update(mom, scheduleId, 0,
+                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"done\"}")
+                .andExpect(status().isOk());
+
+        assertThat(careLogs(mom, groupId).size()).isZero();
+    }
+
+    @Test
+    @DisplayName("아빠가 완료한 것을 엄마가 되돌릴 수 있다 — 되돌릴 권한은 그 일정의 권한이다")
+    void anotherMemberCanRevertAndTheLogGoes() throws Exception {
+        Account dad = account("아빠P");
+        Account mom = account("엄마P");
+        long groupId = family(dad, "보리네 가족", mom);
+        long scheduleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"vet","title":"보리 병원",
+                 "onDate":"2026-10-03"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        update(dad, scheduleId, 0,
+                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"done\"}")
+                .andExpect(status().isOk());
+        assertThat(careLogs(mom, groupId).size()).isEqualTo(1);
+
+        // 케어 칸의 삭제는 "본인 기록만" 이지만, 되돌리기는 그 규칙을 안 본다 — 아빠가 찍은
+        // 줄을 엄마가 거둘 수 있어야 한다(CareLogging.withdraw javadoc).
+        update(mom, scheduleId, 1,
+                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"planned\"}")
+                .andExpect(status().isOk());
+
+        assertThat(careLogs(mom, groupId).size()).isZero();
+    }
+
+    @Test
+    @DisplayName("일정을 지워도 케어 기록은 남는다 — 계획을 정리하다 사실을 잃지 않는다")
+    void deletingTheScheduleKeepsTheCareLog() throws Exception {
+        Account dad = account("아빠Q");
+        long groupId = family(dad, "보리네 가족");
+        long scheduleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"vet","title":"보리 병원",
+                 "onDate":"2026-10-03"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+        update(dad, scheduleId, 0,
+                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"done\"}")
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/schedules/{id}", scheduleId)
+                        .header("Authorization", "Bearer " + dad.token()))
+                .andExpect(status().isNoContent());
+
+        assertThat(careLogs(dad, groupId).size())
+                .as("이미 다녀온 병원의 기록까지 사라지면, 계획을 정리하다 사실을 잃는다")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("케어 칸에서 그 줄을 먼저 지워도 되돌리기가 실패하지 않는다")
+    void revertingSurvivesAnAlreadyDeletedLog() throws Exception {
+        Account dad = account("아빠R");
+        long groupId = family(dad, "보리네 가족");
+        long scheduleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"vet","title":"보리 병원",
+                 "onDate":"2026-10-03"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+        update(dad, scheduleId, 0,
+                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"done\"}")
+                .andExpect(status().isOk());
+
+        long careLogId = careLogs(dad, groupId).get(0).path("id").asLong();
+        mockMvc.perform(delete("/api/groups/{g}/care-logs/{c}", groupId, careLogId)
+                        .header("Authorization", "Bearer " + dad.token()))
+                .andExpect(status().isNoContent());
+
+        update(dad, scheduleId, 1,
+                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"planned\"}")
+                .andExpect(status().isOk());
+    }
+
     // ─────────────────── 좌표가 없다 (A안 #235) ───────────────────
 
     @Test
@@ -420,6 +615,13 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
     // ─────────────────── 지그 ───────────────────
 
     private record Account(long id, String token) { }
+
+    private JsonNode careLogs(Account account, long groupId) throws Exception {
+        return body(mockMvc.perform(get("/api/groups/{groupId}/care-logs", groupId)
+                        .header("Authorization", "Bearer " + account.token()))
+                .andExpect(status().isOk()));
+    }
+
 
     private Account account(String nickname) {
         long serial = ACCOUNT_SEQUENCE.incrementAndGet();
