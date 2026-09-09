@@ -37,6 +37,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -526,5 +527,101 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(row.getItemCount()).isEqualTo(1);
         assertThat(row.getTotalCount()).isEqualTo(1);
         assertThat(jdbc.queryForObject("select count(*) from trail_route", Integer.class)).isEqualTo(1);
+    }
+    // ─────────────── 갱신 배치 — 자산 두 벌 (#346) ───────────────
+    //
+    // 동네 길과 놀이터는 **외부를 안 부른다.** 저장소에 커밋한 파일을 읽어 한 벌로 담는
+    // 것이 전부다(원본 갱신주기가 "연간" 이고, 놀이터는 전국 표준데이터가 아예 없다).
+    //
+    // 그래서 여기서 재는 것은 "받아 오는가" 가 아니라 **담기는가**다.
+    //   · 자산에 있는 개수가 그대로 한 벌이 되는가
+    //   · 두 번 돌려도 행이 안 늘어나는가
+    //   · 자산이 비었을 때 **지난 한 벌을 안 지우는가** — 빈 한 벌로 덮으면 그 순간
+    //     지도에서 동네 길이 통째로 사라진다
+    //   · 예산도 외부 호출도 안 쓰는가
+
+    @Test
+    @DisplayName("동네 길 갱신이 자산 개수 그대로 한 벌을 담는다 — 외부는 한 번도 안 부른다")
+    void localTrailRefreshStoresTheWholeAsset() {
+        List<PlaceDto> asset = new LocalTrailAsset(MAPPER).load();
+        when(localTrails.load()).thenReturn(asset);
+
+        layers.refreshLocalTrails();
+
+        PlaceCatalog stored = catalogRows.findById(CatalogSource.LOCALTRAIL.id()).orElseThrow();
+        assertThat(stored.getItemCount())
+                .as("자산 %d개가 그대로 담겨야 한다", asset.size())
+                .isEqualTo(asset.size());
+        assertThat(stored.getTotalCount()).isEqualTo(asset.size());
+        assertThat(kto.catalogCalls.get() + kto.nearbyCalls.get()
+                + localData.pageCalls.get() + durunubi.pageCalls.get())
+                .as("자산에서 읽는 갱신이 외부를 부르면 예산이 새는 것이다")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("놀이터 갱신도 같다 — 자산 개수 그대로")
+    void playgroundRefreshStoresTheWholeAsset() {
+        List<PlaceDto> asset = new PlaygroundAsset(MAPPER).load();
+        when(playgrounds.load()).thenReturn(asset);
+
+        layers.refreshPlaygrounds();
+
+        PlaceCatalog stored = catalogRows.findById(CatalogSource.PLAYGROUND.id()).orElseThrow();
+        assertThat(stored.getItemCount()).isEqualTo(asset.size());
+    }
+
+    @Test
+    @DisplayName("두 번 돌려도 행이 하나다 — 배포마다 도는 배치라 쌓이면 안 된다")
+    void refreshingTwiceKeepsOneRow() {
+        List<PlaceDto> asset = new LocalTrailAsset(MAPPER).load();
+        when(localTrails.load()).thenReturn(asset);
+
+        layers.refreshLocalTrails();
+        layers.refreshLocalTrails();
+
+        assertThat(jdbc.queryForObject(
+                "select count(*) from place_catalog where source = 'localtrail'", Integer.class))
+                .isEqualTo(1);
+        assertThat(catalogRows.findById(CatalogSource.LOCALTRAIL.id()).orElseThrow().getItemCount())
+                .isEqualTo(asset.size());
+    }
+
+    @Test
+    @DisplayName("자산이 비면 지난 한 벌을 그대로 둔다 — 빈 한 벌로 덮으면 동네 길이 사라진다")
+    void anEmptyAssetDoesNotWipeTheStoredBatch() {
+        List<PlaceDto> asset = new LocalTrailAsset(MAPPER).load();
+        when(localTrails.load()).thenReturn(asset);
+        layers.refreshLocalTrails();
+
+        // 파일이 깨졌거나 못 읽은 상황.
+        when(localTrails.load()).thenReturn(List.of());
+        layers.refreshLocalTrails();
+
+        assertThat(catalogRows.findById(CatalogSource.LOCALTRAIL.id()).orElseThrow().getItemCount())
+                .as("빈 한 벌로 덮으면 그 순간부터 지도에서 동네 길이 통째로 사라진다")
+                .isEqualTo(asset.size());
+    }
+
+    @Test
+    @DisplayName("담은 한 벌이 카탈로그 응답의 동네 길 개수와 같다 — 담기만 하고 안 나가면 소용없다")
+    void theStoredBatchReachesTheResponse() throws Exception {
+        List<PlaceDto> asset = new LocalTrailAsset(MAPPER).load();
+        when(localTrails.load()).thenReturn(asset);
+        layers.refreshLocalTrails();
+        // KTO 한 벌이 없으면 응답이 [] 다(위 테스트가 그것을 잰다). 한 벌을 먼저 만든다.
+        mockMvc.perform(get(CATALOG)).andExpect(status().isOk());
+
+        JsonNode body = MAPPER.readTree(mockMvc.perform(get(CATALOG))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8));
+
+        long served = 0;
+        for (JsonNode place : body) {
+            if (place.path("contentId").asText("").startsWith("trail:lt")) {
+                served++;
+            }
+        }
+        assertThat(served).isEqualTo(asset.size());
     }
 }

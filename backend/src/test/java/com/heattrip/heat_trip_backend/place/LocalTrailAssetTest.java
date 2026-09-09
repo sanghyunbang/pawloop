@@ -71,6 +71,39 @@ class LocalTrailAssetTest {
     }
 
     @Test
+    @DisplayName("서울숲 8km 안 길이 중앙값이 6km 이하다 — 개수만으로는 '걸을 만한가' 를 못 잰다")
+    void nearbyTrailsAreWalkable() {
+        // 완료 조건이 개수와 중앙값 **둘 다**인 이유: 8km 안에 50km 짜리 종주 코스만 다섯 개
+        // 있어도 개수 검사는 통과한다. 그건 이 자산이 고치려던 상태(#328)와 같다.
+        List<Double> lengths = nearbyLengthsKm();
+
+        assertThat(lengths)
+                .as("길이를 읽을 수 있는 길이 8km 안에 있어야 중앙값을 낼 수 있다")
+                .isNotEmpty();
+        assertThat(median(lengths))
+                .as("서울숲 8km 안 %d개의 길이 중앙값", lengths.size())
+                .isLessThanOrEqualTo(6.0);
+    }
+
+    /** 서울숲 8km 안 동네 길의 길이(km). 요약의 맨 앞 토막이 길이다 — {@code 6.5km · …}. */
+    private List<Double> nearbyLengthsKm() {
+        return trails.stream()
+                .filter(p -> haversineKm(SEOUL_FOREST_LAT, SEOUL_FOREST_LNG, p.lat(), p.lng()) <= 8)
+                .map(PlaceDto::summary)
+                .filter(s -> s != null && s.contains("km"))
+                .map(s -> Double.parseDouble(s.substring(0, s.indexOf("km"))))
+                .sorted()
+                .toList();
+    }
+
+    private static double median(List<Double> sorted) {
+        int n = sorted.size();
+        return n % 2 == 1
+                ? sorted.get(n / 2)
+                : (sorted.get(n / 2 - 1) + sorted.get(n / 2)) / 2;
+    }
+
+    @Test
     @DisplayName("두루누비와 id 가 안 겹친다 — 겹치면 한쪽이 지도에서 사라진다")
     void idsDoNotCollideWithDurunubi() {
         assertThat(trails).allSatisfy(p ->
