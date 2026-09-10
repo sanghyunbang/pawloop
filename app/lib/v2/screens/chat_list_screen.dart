@@ -287,15 +287,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   /// 방 색. **서버의 `tag` 는 자유 문자열이라 모르는 값이 올 수 있다** — 그때도 화면이
   /// 그려져야 하므로 기본값을 둔다.
+  /// 방 종류별 색. `tag` 는 서버가 주는 **사람이 읽는 라벨**이다(`chat_room.tag`).
+  ///
+  /// '크루' 는 #417 이 실제로 쓰는 값이고, '산책 크루' 는 그 전에 문서·더미가 쓰던 값이라
+  /// 둘 다 받는다 — 옛 값을 지우면 예전에 만들어진 방이 회색으로 떨어진다.
   static Color _accentFor(String tag) => switch (tag) {
         '가족' => const Color(0xFFFF8F63),
-        '산책 크루' => const Color(0xFF57C98A),
+        '크루' || '산책 크루' => const Color(0xFF57C98A),
         _ => const Color(0xFF8E7BFF),
       };
 
   static IconData _iconFor(String tag) => switch (tag) {
         '가족' => Icons.diversity_1_rounded,
-        '산책 크루' => Icons.directions_walk_rounded,
+        '크루' || '산책 크루' => Icons.directions_walk_rounded,
         _ => Icons.forum_rounded,
       };
 

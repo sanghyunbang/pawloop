@@ -39,4 +39,30 @@ void main() {
       '12월 1일까지 써요 · 3명까지 쓸 수 있어요',
     );
   });
+
+  test('크루 문장은 가족 문장과 다르다 — 받는 사람이 어디에 넣을지 알아야 한다', () {
+    final crew = InviteShare.crewMessage('PAW-1234', '성수동 아침 산책');
+
+    expect(crew, contains('성수동 아침 산책'));
+    expect(crew, contains('PAW-1234'));
+    expect(crew, contains('크루'));
+    expect(crew.contains('가족'), isFalse,
+        reason: '"가족에 초대해요" 를 보고 크루 코드를 가족 화면에 넣으면 403 이고, '
+            '그 사람은 왜 안 되는지 모른다');
+  });
+
+  test('sendCrew 는 크루 문장과 크루 제목으로 나간다', () async {
+    String? sent;
+    String? subjectSeen;
+    InviteShare.sender = (text, {String? subject}) async {
+      sent = text;
+      subjectSeen = subject;
+    };
+    addTearDown(InviteShare.resetForTest);
+
+    await InviteShare.sendCrew('PAW-1234', '성수동 아침 산책');
+
+    expect(sent, InviteShare.crewMessage('PAW-1234', '성수동 아침 산책'));
+    expect(subjectSeen, '포루프 크루 초대');
+  });
 }
