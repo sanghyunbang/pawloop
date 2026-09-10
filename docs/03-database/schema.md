@@ -1242,6 +1242,54 @@ CREATE TABLE schedule_exception (
 > **같은 이름의 옛 표가 운영 DB 에 있었다.** 감정 여행 시절의 `schedule`(여행 일정 — `schedule_id, user_id, title, content, date_from, date_to`)이 코드 없이 표만 남아 있다(#94). `34_schedule.sql` 이 그것을 **지우지 않고** `schedule_legacy_journey` 로 옮긴다 — 사람이 적어 둔 행이고, 지우는 것은 마이그레이션이 결정할 일이 아니다. `journey.schedule_id` 의 FK 도 `RENAME TABLE` 이 함께 옮긴다.
 
 ## 인덱스 · 공간 인덱스 요약
+## 36. `crew_favor` — 품앗이 (**실재**)
+
+"12/24 오후, 보리 두 시간만 봐 주실 분"(#417). **금액도 평점도 후기도 없다** — 이슈가 그은 선이다: 돈이 오가면 우리가 중개자가 되고 사고 시 배상·신고 의무가 따라온다.
+
+```sql
+CREATE TABLE crew_favor (
+  id          BIGINT       NOT NULL AUTO_INCREMENT,
+  crew_id     BIGINT       NOT NULL,
+  asked_by    BIGINT       NULL,
+  taken_by    BIGINT       NULL,
+  dog_id      BIGINT       NULL,
+  on_date     DATE         NOT NULL,
+  slot        VARCHAR(10)  NOT NULL,
+  note        VARCHAR(200) NULL,
+  status      VARCHAR(10)  NOT NULL,
+  schedule_id BIGINT       NULL,
+  created_at  DATETIME(6)  NOT NULL,
+  updated_at  DATETIME(6)  NULL,
+  PRIMARY KEY (id),
+  KEY idx_crew_favor_crew (crew_id, on_date),
+  CONSTRAINT fk_crew_favor_crew  FOREIGN KEY (crew_id)  REFERENCES crew (id)  ON DELETE CASCADE,
+  CONSTRAINT fk_crew_favor_asker FOREIGN KEY (asked_by) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT fk_crew_favor_taker FOREIGN KEY (taken_by) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT fk_crew_favor_dog   FOREIGN KEY (dog_id)   REFERENCES dog (id)   ON DELETE SET NULL,
+  CONSTRAINT ck_crew_favor_slot   CHECK (slot IN ('morning','afternoon','evening')),
+  CONSTRAINT ck_crew_favor_status CHECK (status IN ('open','taken'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `crew_id` | `BIGINT` | FK→`crew.id` CASCADE | 크루가 사라지면 부탁도 사라진다 |
+| `asked_by` / `taken_by` | `BIGINT` | FK→`users.id` SET NULL | **탈퇴해도 약속은 남는다** |
+| `dog_id` | `BIGINT` | FK→`dog.id` SET NULL | **부탁한 사람**의 아이. 없어도 된다 |
+| `on_date` | `DATE` | NOT NULL | 사람이 고른 날짜(KST) — UTC 로 안 눕힌다 |
+| `slot` | `VARCHAR(10)` | NOT NULL, CHECK | `morning`·`afternoon`·`evening`. **시각이 아니다** |
+| `note` | `VARCHAR(200)` | NULL | "두 시간만 부탁드려요" |
+| `status` | `VARCHAR(10)` | NOT NULL, CHECK | `open`·`taken` **둘뿐이다** |
+| `schedule_id` | `BIGINT` | NULL, **FK 없음** | 맡으면 생기는 크루 일정 |
+
+> **끝났는지는 이 표가 모른다.** 맡으면 크루 소유 일정 한 줄이 생기고(`owner_kind='room'`, `owner_ref=crew.id`), **그 줄의 완료 표시가 "했다" 를 말한다.** 여기에 상태를 하나 더 두면 같은 사실이 두 곳에 살고 한쪽만 고쳐진다. "취소됨" 도 없다 — 거둬들이면 행이 사라진다.
+>
+> **`schedule_id` 에 FK 가 없다.** 걸려면 엔티티가 `schedule.entity.Schedule` 을 들어야 하고 그건 모듈 경계를 넘는다. SQL 에만 적으면 `01_schema.sql` 재생성에서 조용히 사라진다(`schedule.care_log_id` 가 #420 에서 같은 자리였다). 크루를 지울 때 그 줄까지 거두는 것은 **서비스**가 한다.
+>
+> **FK 넷의 삭제 규칙이 서로 다르다.** `crew_id` 만 CASCADE 다 — 사람·아이가 CASCADE 로 잘못 서면 **한 사람이 탈퇴할 때 남의 약속이 함께 사라진다.** 오류도 안 나고, 사라진 뒤에는 무엇이 있었는지 아무도 모른다. `38_crew_favor.sql` 의 사후 검증과 `CrewFavorMigrationExecutionTest` 가 그것을 잰다.
+>
+> **시간대가 시각이 아닌 이유.** 부탁은 "오후" 이지 "14시 00분" 이 아니다. 시각을 받으면 부탁하는 사람이 없는 정밀도를 지어내고 맡는 사람은 그 시각에 묶인다. 그래서 크루 일정에도 `at_time` 을 안 채우고 시간대는 메모로 간다 — 0시로 채우면 달력이 "새벽 12시" 로 그린다.
+
 ## 35. `crew` — 동네 반려인 모임 (**실재**)
 
 동네 모임 하나. **표는 이것 하나뿐이다** — 멤버십도 초대코드도 방(`chat_room`)의 것이다.
@@ -1342,7 +1390,8 @@ CREATE TABLE crew (
 | `chat_room_member` | 실재 §13 | `chat` | 방 멤버십 |
 | `comment` | 실재 §8 | `community` | 게시글 댓글 |
 | `device_token` | 실재 §29 | `push` | 기기 토큰 원장 — 푸시(#83) |
-| `crew` | 실재 §35 | `crew` | 동네 반려인 모임(#417). 멤버십은 `chat_room_member` 가 든다 — `crew_member` 를 안 만든다 |
+| `crew_favor` | 실재 §36 | `crew` | **품앗이**(#417). 맡으면 크루 소유 일정 한 줄이 생기고 `schedule_id` 가 그것을 든다. 금액도 평점도 없다 |
+| `crew` | 실재 §35 | `crew` || `crew` | 실재 §35 | `crew` | 동네 반려인 모임(#417). 멤버십은 `chat_room_member` 가 든다 — `crew_member` 를 안 만든다 |
 | `dog` | 실재 §3 | `dog` | 반려동물 프로필(소프트 삭제 `deleted_at`) |
 | `family_group` | 실재 §11 | `group` | 가족 케어 그룹 |
 | `kto_call_budget` | 실재 §21 | `place` | KTO 일 호출 예산 |

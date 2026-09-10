@@ -14,6 +14,7 @@ import com.heattrip.heat_trip_backend.schedule.entity.Schedule;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleRepeat;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleException;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleExceptionKind;
+import com.heattrip.heat_trip_backend.schedule.entity.ScheduleKind;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleOwnerKind;
 import com.heattrip.heat_trip_backend.schedule.entity.ScheduleStatus;
 import com.heattrip.heat_trip_backend.schedule.repository.ScheduleExceptionRepository;
@@ -129,6 +130,59 @@ public class ScheduleService {
                 .createdBy(me)
                 .build());
         return ScheduleResponse.of(saved);
+    }
+
+    /**
+     * 크루가 정한 일을 달력에 한 줄로 — 이슈 #417(품앗이). 표면은 {@link com.heattrip.heat_trip_backend.schedule.CrewSchedules}.
+     *
+     * <h2>{@link #create} 를 안 쓰는 이유</h2>
+     * <p>그쪽은 <b>요청을 보낸 사람</b>의 눈으로 판정한다 — 아이가 내 것인지 묻고
+     * ({@code dogOrNull}), 담당자가 그 주인을 볼 수 있는지 묻는다. 품앗이의 아이는
+     * <b>부탁한 사람</b>의 것이라 맡은 사람 눈으로는 남의 아이다. 소유권은 부탁을 올릴 때
+     * 이미 확인했으므로 행을 그대로 받는다.
+     *
+     * <p>담당자는 여기서 다시 잰다 — 그 크루의 멤버가 아닌 사람을 담당자로 적으면 남의
+     * 달력에 그 사람이 모르는 일이 뜬다. 한 번 더 묻는 값이 그 한 줄이다.
+     *
+     * <p>{@code createdBy} 도 맡은 사람이다. 부탁한 사람으로 적으면 "누가 이 줄을 만들었나"
+     * 가 사실과 달라진다 — 줄을 만든 것은 맡겠다고 한 쪽이다.
+     */
+    @Transactional
+    public long createCrewLine(long crewId, LocalDate onDate, String title, String memo,
+                               Dog dog, User assignee) {
+        requireOwner(assignee.getId(), ScheduleOwnerKind.ROOM, crewId);
+
+        Schedule saved = schedules.save(Schedule.builder()
+                .ownerKind(ScheduleOwnerKind.ROOM)
+                .ownerRef(crewId)
+                .dog(dog)
+                .kind(ScheduleKind.ETC)
+                .title(title.strip())
+                .memo(blankToNull(memo))
+                .onDate(onDate)
+                .assignee(assignee)
+                .status(ScheduleStatus.PLANNED)
+                .repeatKind(ScheduleRepeat.NONE)
+                .createdBy(assignee)
+                .build());
+        return saved.getId();
+    }
+
+    /**
+     * 크루 줄을 거둔다. <b>없으면 아무 일도 안 한다</b> — 품앗이를 무르는 것이 그 때문에
+     * 실패하면 사용자는 자기가 안 하기로 한 일을 못 무른다.
+     *
+     * <p>권한을 안 잰다. 부르는 곳이 {@code crew} 하나이고, 거기서 이미 "맡은 사람인가" 를
+     * 쟀다. 여기서 또 재려면 그 사람이 누구인지를 받아야 하는데, 그러면 표면이 넓어진다.
+     */
+    @Transactional
+    public void removeCrewLine(Long scheduleId) {
+        if (scheduleId == null) {
+            return;
+        }
+        schedules.findById(scheduleId)
+                .filter(s -> s.getOwnerKind() == ScheduleOwnerKind.ROOM)
+                .ifPresent(schedules::delete);
     }
 
     /**
@@ -332,12 +386,17 @@ public class ScheduleService {
         List<Schedule> found = new ArrayList<>();
         if (ownerKind == null) {
             found.addAll(ofDogs(userId, myDogIds(userId), from, to));
-            found.addAll(ofGroups(myGroupIds(userId), from, to));
+            found.addAll(ofRooms(ScheduleOwnerKind.GROUP,
+                    myOwnerRefs(userId, FamilyGroupService.ORIGIN_KIND), from, to));
+            // 크루 일정(#417). 품앗이를 맡으면 여기 한 줄이 남고, 그 줄은 **내 달력**에
+            // 보여야 한다 — 크루 화면에만 두면 그날 아침에 그것을 아무도 안 본다.
+            found.addAll(ofRooms(ScheduleOwnerKind.ROOM,
+                    myOwnerRefs(userId, ScheduleOwnerKind.CREW_ORIGIN_KIND), from, to));
         } else {
             requireOwner(userId, ownerKind, ownerRef);
             found.addAll(ownerKind == ScheduleOwnerKind.DOG
                     ? ofDogs(userId, List.of(ownerRef), from, to)
-                    : ofGroups(List.of(ownerRef), from, to));
+                    : ofRooms(ownerKind, List.of(ownerRef), from, to));
         }
 
         List<Schedule> mine = found.stream()
@@ -412,10 +471,12 @@ public class ScheduleService {
                 : schedules.findRange(ScheduleOwnerKind.DOG, mine, from, to);
     }
 
-    private List<Schedule> ofGroups(List<Long> groupIds, LocalDate from, LocalDate to) {
-        return groupIds.isEmpty()
+    /** 방을 낀 주인들(가족·크루)의 일정. 둘의 차이는 {@code owner_kind} 하나다. */
+    private List<Schedule> ofRooms(ScheduleOwnerKind kind, List<Long> ownerRefs,
+                                   LocalDate from, LocalDate to) {
+        return ownerRefs.isEmpty()
                 ? List.of()
-                : schedules.findRange(ScheduleOwnerKind.GROUP, groupIds, from, to);
+                : schedules.findRange(kind, ownerRefs, from, to);
     }
 
     // ─────────────────────────── 권한 ───────────────────────────
@@ -423,8 +484,9 @@ public class ScheduleService {
     /**
      * 이 사람이 이 주인의 일정을 만들고 볼 수 있는가.
      *
-     * <p>{@code room}(크루, #417)은 <b>아직 거절한다</b>. 값은 열려 있지만 그것을 확인할
-     * 멤버십이 아직 없다 — 확인 없이 통과시키면 아무나 남의 크루 일정을 만들 수 있다.
+     * <p>{@code room}(크루, #417)도 가족과 <b>같은 판정</b>이다 — 그 방의 살아 있는 멤버인가.
+     * 다른 것은 {@code origin_kind} 문자열 하나뿐이라, 이 모듈은 크루를 모른 채로 답한다
+     * ({@link ScheduleOwnerKind} javadoc — 모듈 고리를 안 만드는 이유).
      */
     private void requireOwner(long userId, ScheduleOwnerKind kind, Long ref) {
         if (kind == null || ref == null) {
@@ -432,15 +494,15 @@ public class ScheduleService {
         }
         switch (kind) {
             case DOG -> dogs.requireMine(userId, ref);
-            case GROUP -> requireGroupMember(userId, ref);
-            case ROOM -> throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "크루 일정은 아직 만들 수 없습니다.");
+            case GROUP -> requireRoomMember(userId, FamilyGroupService.ORIGIN_KIND, ref);
+            case ROOM -> requireRoomMember(userId, ScheduleOwnerKind.CREW_ORIGIN_KIND, ref);
         }
     }
 
-    private void requireGroupMember(long userId, long groupId) {
+    /** 그 출처의 방에 살아 있는 멤버인가. 아니거나 방이 없으면 <b>같은 404</b> 다. */
+    private void requireRoomMember(long userId, String originKind, long ownerRef) {
         ChatRoomView room = chatRooms
-                .findRoom(FamilyGroupService.ORIGIN_KIND, String.valueOf(groupId))
+                .findRoom(originKind, String.valueOf(ownerRef))
                 .orElseThrow(ScheduleService::notFound);
         if (!chatRooms.isLiveMember(room.id(), userId)) {
             throw notFound();
@@ -474,8 +536,9 @@ public class ScheduleService {
      * 받는 이유는 조회가 {@code IN} 이라 하나든 여럿이든 같은 모양이고, 여럿이 되는 날
      * 여기만 고치면 되기 때문이다.
      */
-    private List<Long> myGroupIds(long userId) {
-        return chatRooms.roomsOfMember(FamilyGroupService.ORIGIN_KIND, userId).stream()
+    /** 내가 든 그 종류의 방들이 가리키는 출처 id — 가족 그룹 id 이거나 크루 id 다. */
+    private List<Long> myOwnerRefs(long userId, String originKind) {
+        return chatRooms.roomsOfMember(originKind, userId).stream()
                 .map(ChatRoomView::originRef)
                 .map(ScheduleService::toLongOrNull)
                 .filter(java.util.Objects::nonNull)

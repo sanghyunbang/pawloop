@@ -165,6 +165,32 @@ CREATE TABLE `crew` (
   CONSTRAINT `ck_crew_visibility` CHECK ((`visibility` in (_utf8mb4'invite',_utf8mb4'public')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `crew_favor` (
+  `on_date` date NOT NULL,
+  `asked_by` bigint DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `crew_id` bigint NOT NULL,
+  `dog_id` bigint DEFAULT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `schedule_id` bigint DEFAULT NULL,
+  `taken_by` bigint DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `slot` varchar(10) NOT NULL,
+  `status` varchar(10) NOT NULL,
+  `note` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_crew_favor_crew` (`crew_id`,`on_date`),
+  KEY `fk_crew_favor_asker` (`asked_by`),
+  KEY `fk_crew_favor_dog` (`dog_id`),
+  KEY `fk_crew_favor_taker` (`taken_by`),
+  CONSTRAINT `fk_crew_favor_asker` FOREIGN KEY (`asked_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_crew_favor_crew` FOREIGN KEY (`crew_id`) REFERENCES `crew` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_crew_favor_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_crew_favor_taker` FOREIGN KEY (`taken_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `ck_crew_favor_slot` CHECK ((`slot` in (_utf8mb4'morning',_utf8mb4'afternoon',_utf8mb4'evening'))),
+  CONSTRAINT `ck_crew_favor_status` CHECK ((`status` in (_utf8mb4'open',_utf8mb4'taken')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `device_token` (
   `created_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,

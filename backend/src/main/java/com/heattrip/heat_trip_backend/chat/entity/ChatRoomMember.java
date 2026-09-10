@@ -107,6 +107,16 @@ public class ChatRoomMember {
     @Column(name = "role", nullable = false, length = 10)
     private ChatRoomMemberRole role = ChatRoomMemberRole.MEMBER;
 
+    /**
+     * 역할을 옮긴다 — 방장 넘기기(#417). 판정은 {@code ChatRoomService#transferOwner} 다.
+     *
+     * <p>{@code @Setter} 를 안 붙이는 것이 요점이다. 붙이면 {@code removedAt}·
+     * {@code rejoinBlocked} 까지 밖에서 바꿀 수 있게 되고, 그 둘은 강퇴의 알맹이다.
+     */
+    public void changeRole(ChatRoomMemberRole next) {
+        this.role = next;
+    }
+
     @Column(name = "joined_at", nullable = false)
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     private LocalDateTime joinedAt;

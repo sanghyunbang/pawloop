@@ -96,6 +96,9 @@ public class CrewService {
     private final KnownUsers knownUsers;
     private final NeighborhoodCatalog neighborhoods;
 
+    /** 크루를 지울 때 품앗이의 달력 줄까지 거두는 자리 — {@link #delete} javadoc. */
+    private final CrewFavorService favors;
+
     // ─────────────────────────── 만들기 ───────────────────────────
 
     /**
@@ -264,6 +267,58 @@ public class CrewService {
         chatRooms.removeMember(roomOrNotFound(crewId).id(), me.getId(), targetUserId);
     }
 
+    /**
+     * 방장을 넘긴다. <b>방장만.</b> 이슈 #417.
+     *
+     * <p>{@link #leave} 가 방장을 막기 때문에 이것이 있어야 한다 — 막는 쪽만 만들고 푸는
+     * 쪽을 안 만들면 크루를 만든 사람은 영영 못 나간다. 넘기고 나면 평범한 멤버라 나갈 수
+     * 있다.
+     *
+     * <p>판정은 전부 {@code chat} 이 한다 — 역할이 사는 곳이 거기다.
+     */
+    @Transactional
+    public CrewResponse transferOwner(long crewId, User me, long targetUserId) {
+        Crew crew = crewOrNotFound(crewId);
+        ChatRoomView room = roomOrNotFound(crewId);
+
+        chatRooms.transferOwner(room.id(), me.getId(), targetUserId);
+
+        // 넘긴 뒤의 나는 방장이 아니다. 역할 지도를 다시 읽어야 화면이 그것을 바로 안다.
+        return detail(crew, room, roleOf(room.id(), me.getId()));
+    }
+
+    /**
+     * 크루를 지운다. <b>방장이 혼자 남았을 때만.</b> 이슈 #417.
+     *
+     * <h2>왜 "혼자일 때만" 인가</h2>
+     * <p>방을 지우면 대화가 함께 사라진다. 남의 대화를 지우는 버튼은 만들면 안 된다.
+     * 혼자일 때는 그 문제가 없고, <b>그때가 실제로 필요한 때</b>다 — 아무도 안 들어온 모임을
+     * 만든 사람이 그것을 치우고 싶은 것이다. 사람이 있으면 넘기면 된다
+     * ({@link #transferOwner}).
+     *
+     * <h2>순서가 있다</h2>
+     * <ol>
+     *   <li><b>품앗이의 달력 줄부터 거둔다.</b> {@code crew_favor} 는 {@code ON DELETE
+     *       CASCADE} 로 함께 사라지지만 <b>일정은 다른 표</b>다 — 안 거두면 없는 크루의
+     *       약속이 사람들 달력에 남는다.</li>
+     *   <li><b>방을 지운다.</b> 여기서 "혼자인가" 가 판정된다 — 세는 곳이 그곳이라 세는
+     *       순간과 지우는 순간이 안 갈라진다. 아니면 409 로 여기서 멈춘다.</li>
+     *   <li><b>크루 행을 지운다.</b></li>
+     * </ol>
+     *
+     * <p>2번이 던지면 트랜잭션이 통째로 되돌아가므로 1번의 거둠도 없던 일이 된다.
+     */
+    @Transactional
+    public void delete(long crewId, User me) {
+        Crew crew = crewOrNotFound(crewId);
+        ChatRoomView room = roomOrNotFound(crewId);
+
+        favors.removeAllOf(crewId);
+        chatRooms.deleteRoomIfSoleMember(room.id(), me.getId());
+        crews.delete(crew);
+    }
+
+    // ─────────────────────────── 참여 · 나가기 ───────────────────────────
     // ─────────────────────────── 참여 · 나가기 ───────────────────────────
 
     /**

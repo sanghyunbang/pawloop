@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -97,6 +98,31 @@ public class CrewController {
         return crews.edit(crewId, user, patch);
     }
 
+    /**
+     * 방장을 넘긴다. <b>방장만.</b>
+     *
+     * <p>{@code PUT} 인 이유: 방장은 <b>한 자리</b>이고 이 요청은 그 자리를 통째로 정한다.
+     * {@code POST} 로 두면 "방장을 하나 더 만든다" 로 읽힌다.
+     */
+    @PutMapping("/{crewId}/owner/{userId}")
+    public CrewResponse transferOwner(@CurrentUser User user,
+                                      @PathVariable long crewId,
+                                      @PathVariable long userId) {
+        return crews.transferOwner(crewId, user, userId);
+    }
+
+    /**
+     * 크루를 지운다. <b>방장이 혼자 남았을 때만</b> — 아니면 409 다.
+     *
+     * <p>대화가 함께 사라지므로 사람이 남아 있으면 못 지운다. 그때는 넘기고 나간다.
+     */
+    @DeleteMapping("/{crewId}")
+    public ResponseEntity<Void> delete(@CurrentUser User user, @PathVariable long crewId) {
+        crews.delete(crewId, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 공개 크루에 바로 들어온다. 이미 든 사람에게도 200 이다. */
     /** 공개 크루에 바로 들어온다. 이미 든 사람에게도 200 이다. */
     @PostMapping("/{crewId}/members/me")
     public CrewResponse join(@CurrentUser User user, @PathVariable long crewId) {

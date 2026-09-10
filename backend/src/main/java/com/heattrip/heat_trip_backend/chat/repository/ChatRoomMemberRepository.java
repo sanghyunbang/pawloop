@@ -287,4 +287,23 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
              where m.id = :id and m.removedAt is not null
             """)
     int reviveIfRemoved(@Param("id") Long id);
+
+    /**
+     * 방을 지울 때 그 방의 멤버 행을 <b>통째로</b> 지운다 — 이슈 #417.
+     *
+     * <h2>DB 의 CASCADE 가 있는데 왜 이 문장이 필요한가</h2>
+     * <p>{@code fk_chat_member_room} 은 {@code ON DELETE CASCADE} 라 방 행이 사라지면 DB 는
+     * 알아서 정리한다. 그런데 막히는 것은 DB 가 아니라 <b>세션</b>이다 — 방장 판정이 읽어 둔
+     * {@code ChatRoomMember} 가 관리 상태로 남아 있고, 그것이 지워진 방을 가리킨 채 플러시되면
+     * Hibernate 가 {@code TransientObjectException} 으로 멈춘다(실측: 500).
+     *
+     * <p>{@code clearAutomatically = true} 가 그 참조를 끊는다 — 벌크 삭제 뒤 영속성 컨텍스트를
+     * 통째로 비우므로, 그다음에 읽는 방은 아무도 안 가리키는 새 행이다.
+     *
+     * <p>강퇴로 나간 행({@code removed_at} 이 찬 것)도 함께 지운다. 방이 없어지면 재입장 금지도
+     * 뜻이 없다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from ChatRoomMember m where m.room.id = :roomId")
+    int deleteAllOfRoom(@Param("roomId") Long roomId);
 }

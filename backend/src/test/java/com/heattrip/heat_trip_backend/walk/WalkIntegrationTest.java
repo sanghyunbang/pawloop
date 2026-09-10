@@ -1141,10 +1141,18 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
 
         // **지금에서 거꾸로 잡는다.** 요일을 고정하면(예: "화·목·토") 그 요일이 아직 안 온
         // 주에 미래 시각이 되어 400 이 난다 — 이 파일이 2026-09-07 에 실제로 그렇게
-        // 빨개졌다. 5분 간격이면 시간대 칸을 넘을 일도 사실상 없다.
-        Instant justNow = Instant.now().minus(Duration.ofMinutes(5));
-        for (int minutesAgo : new int[] {0, 5, 10}) {
-            save(me, walkJson(dogId, justNow.minus(Duration.ofMinutes(minutesAgo)), 2000, 1800))
+        // 빨개졌다.
+        //
+        // **간격이 5분이 아니라 몇 초인 이유**: 5분씩 벌리면 자정 직후에 앞의 둘이 어제(=다른
+        // 시간대 칸)로 넘어간다. 2026-09-11 00:0x 에 실제로 그렇게 빨개졌다 — 셋이
+        // `[1, 0, 0, 2]` 로 흩어졌다. 원래 주석은 "5분 간격이면 시간대 칸을 넘을 일도 사실상
+        // 없다" 고 적고 있었는데, 하루에 15분씩 그 일이 벌어진다.
+        //
+        // 몇 초로 줄여도 경계를 밟을 수는 있지만 창이 하루 15분에서 몇 초로 줄어든다.
+        // 완전히 없애려면 시계를 주입해야 하고, 그건 이 통합 검사의 모양을 바꾸는 일이다.
+        Instant justNow = Instant.now().minus(Duration.ofSeconds(3));
+        for (int secondsAgo : new int[] {0, 1, 2}) {
+            save(me, walkJson(dogId, justNow.minus(Duration.ofSeconds(secondsAgo)), 2000, 1800))
                     .andExpect(status().isCreated());
         }
 
@@ -1170,7 +1178,9 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
     void weeklySummaryKeepsTheWeekdayAxis() throws Exception {
         Account me = account("요일축");
         long dogId = dog(me, "보리");
-        save(me, walkJson(dogId, Instant.now().minus(Duration.ofMinutes(5)), 2000, 1800))
+        // 5분 전이면 자정 직후에 **어제** 가 된다 — 2026-09-11 00:0x 에 실제로 빨개졌다
+        // ("3번 칸(오늘은 4번)"). 몇 초로 줄여 그 창을 좁힌다.
+        save(me, walkJson(dogId, Instant.now().minus(Duration.ofSeconds(3)), 2000, 1800))
                 .andExpect(status().isCreated());
 
         JsonNode weekKm = statsOf(me, null).path("weekKm");
@@ -1191,9 +1201,11 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
 
         // 정확히 7일 전 — 이번 주와 같은 요일·같은 시각이라 항상 지난주 안이다.
         save(me, walkJson(dogId,
-                Instant.now().minus(Duration.ofDays(7)).minus(Duration.ofMinutes(5)), 3000, 2400))
+                Instant.now().minus(Duration.ofDays(7)).minus(Duration.ofSeconds(3)), 3000, 2400))
                 .andExpect(status().isCreated());
-        save(me, walkJson(dogId, Instant.now().minus(Duration.ofMinutes(5)), 2000, 1800))
+        // 오늘 쪽도 몇 초 전이다 — 5분이면 자정 직후에 어제가 되고, 그러면 "이번 주" 가
+        // 한 칸 밀린다(위 두 검사와 같은 창).
+        save(me, walkJson(dogId, Instant.now().minus(Duration.ofSeconds(3)), 2000, 1800))
                 .andExpect(status().isCreated());
 
         JsonNode stats = statsOf(me, null);
