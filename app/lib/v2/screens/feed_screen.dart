@@ -8,6 +8,8 @@ import '../widgets/post_course_card.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
+import '../data/crew_repository.dart';
+import 'crew_section.dart';
 import 'post_detail_screen.dart';
 import 'post_write_screen.dart';
 
@@ -25,15 +27,36 @@ class FeedScreen extends StatefulWidget {
   /// 내 동네를 읽는 자리 (#342). **테스트만 넘긴다.**
   final NeighborhoodStore? neighborhoods;
 
-  const FeedScreen({super.key, this.repository, this.neighborhoods});
+  /// 크루 갈래가 쓸 서버 (#417). **테스트만 넘긴다** — 안 넘기면 갈래를 열 때 진짜
+  /// 리포지토리가 선다. 여기 자리를 만드는 이유는 하나다: 이 자리가 없으면 "탭을 안
+  /// 늘리고 커뮤니티 안에 넣었다" 를 끝까지 걸어 보는 검사를 쓸 수 없고, 그러면 갈래가
+  /// 통째로 검사 밖에 남는다.
+  final CrewRepository? crews;
+
+  const FeedScreen({
+    super.key,
+    this.repository,
+    this.neighborhoods,
+    this.crews,
+  });
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
+/// 커뮤니티 안의 갈래 둘.
+enum _Section { posts, crews }
+
 class _FeedScreenState extends State<FeedScreen> {
   late final CommunityRepository _repo =
       widget.repository ?? CommunityRepository();
+
+  /// 지금 보고 있는 갈래. 커뮤니티 안에서 **이야기와 크루**가 자리를 나눈다(#417).
+  ///
+  /// 탭을 여섯째로 늘리지 않은 이유는 라벨이 접히기 때문이다 — #396 에서 다섯 탭이
+  /// 360dp·글자 1.5배에서 이미 한계였다. 사장님이 "소모임은 커뮤니티에 넣을 수 있지
+  /// 않나" 라고 한 것도 같은 자리다.
+  _Section _section = _Section.posts;
 
   /// `null` 이면 전체.
   CommunityBoard? _board;
@@ -165,26 +188,84 @@ class _FeedScreenState extends State<FeedScreen> {
                         fontWeight: FontWeight.w800,
                         color: T.textPrimary)),
                 const Spacer(),
-                _viewToggle(),
-                const SizedBox(width: 10),
+                // 카드/리스트 토글은 **글 목록의 것**이다. 크루 갈래에서 남겨 두면
+                // 아무것도 안 바꾸는 버튼이 되고, 그런 버튼은 한 번 눌러 본 사람에게
+                // 화면이 고장 난 것으로 보인다.
+                if (_section == _Section.posts) ...[
+                  _viewToggle(),
+                  const SizedBox(width: 10),
+                ],
                 const ProfileAvatar(),
               ]),
             ),
             const SizedBox(height: 4),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 15),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('우리 아이들 이야기',
-                    style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
+                child: Text(
+                    _section == _Section.posts ? '우리 아이들 이야기' : '동네 반려인 모임',
+                    style: const TextStyle(fontSize: 13, color: Color(0xB3463C64))),
               ),
             ),
             const SizedBox(height: 10),
-            _boardFilter(),
-            const SizedBox(height: 8),
-            Expanded(child: _body()),
+            _sectionTabs(),
+            const SizedBox(height: 10),
+            if (_section == _Section.posts) ...[
+              _boardFilter(),
+              const SizedBox(height: 8),
+              Expanded(child: _body()),
+            ] else
+              // 갈래를 떠나면 이 위젯이 통째로 사라지고, 돌아오면 새로 선다 — 그래서
+              // 목록이 다시 뜬다. 그 사이 남이 만든 크루를 안 보여 주지 않으려면 그 편이
+              // 맞다. 대신 고른 범위(내 크루/우리 동네)도 함께 초기화된다.
+              Expanded(
+                child: CrewSection(
+                  key: const Key('crew-section'),
+                  repository: widget.crews,
+                  neighborhoods: widget.neighborhoods,
+                ),
+              ),
           ]),
         ),
+      ),
+    );
+  }
+
+  /// 이야기 | 크루. **알약 두 개**이고 보드 필터와 모양을 맞춘다 — 같은 줄에 사는
+  /// 다른 종류의 필터가 서로 다르게 생기면 어느 쪽이 더 위인지 안 읽힌다.
+  Widget _sectionTabs() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(children: [
+        _sectionTab(_Section.posts, '이야기'),
+        const SizedBox(width: 8),
+        _sectionTab(_Section.crews, '크루'),
+      ]),
+    );
+  }
+
+  Widget _sectionTab(_Section section, String label) {
+    final on = _section == section;
+    return GestureDetector(
+      key: Key('community-section-${section.name}'),
+      onTap: () {
+        if (_section == section) return;
+        setState(() => _section = section);
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+        decoration: BoxDecoration(
+          color: on ? T.sigEnd.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: on ? T.sigEnd : Colors.transparent),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: on ? T.textPrimary : T.textMuted)),
       ),
     );
   }

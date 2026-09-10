@@ -22,6 +22,15 @@ class InviteShare {
 
   static Future<void> send(String code) => sender(message(code), subject: '포루프 가족 초대');
 
+  /// 크루 초대 문장. **가족 문장과 나눈다** — 받는 사람이 "가족에 초대해요" 를 보고
+  /// 크루 코드를 가족 화면에 넣으면 403 이고, 그 사람은 왜 안 되는지 모른다.
+  static String crewMessage(String code, String crewName) =>
+      '포루프 크루 "$crewName" 에 초대해요 · 초대 코드 $code · 앱의 커뮤니티 > 크루에서 '
+      '"초대 코드로 참여" 에 넣어 주세요';
+
+  static Future<void> sendCrew(String code, String crewName) =>
+      sender(crewMessage(code, crewName), subject: '포루프 크루 초대');
+
   static void resetForTest() => sender = _sharePlus;
 }
 

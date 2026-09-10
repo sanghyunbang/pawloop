@@ -336,6 +336,8 @@
 | 지도(리스트·지도) | `explore_screen.dart` | 탭 1 | 기기 카탈로그(24h 갱신) — 관광공사 반려동반 · 인허가 병원/펫샵 · 두루누비 산책로 전부 실데이터(#291·#317·#321). 거리 계산은 기기 안 |
 | 일정 | `schedule_screen.dart` | 탭 2 | `GET /api/schedules?from=&to=` — 한 달치. 주인을 안 주면 내가 볼 수 있는 전부가 한 목록으로 온다(#419) |
 | 커뮤니티 | `feed_screen.dart` | 탭 3 | `GET /api/community/posts` 커서 페이지 — 서버(#170·#171) |
+| 크루 목록 | `crew_section.dart` | 탭 3 **안의 갈래** | `GET /api/crews?scope=mine\|neighborhood`(#417). 우리 동네는 **시군구 앞 다섯 자리**로 찾는다 — 좌표를 안 쓴다(A안 #235) |
+| 크루 홈 | `crew_home_screen.dart` | 크루 카드 탭 | `GET /api/crews/{id}`. 안 든 공개 크루는 **인원 수까지만** 보이고 멤버는 안 온다 |
 | 채팅 방 목록 | `chat_list_screen.dart` | 탭 4 | `GET /api/chat/rooms` |
 | 산책 트래킹 | `walk_tracking_screen.dart` | 홈 CTA / 중앙 FAB (**둘 다 `startWalk()` 를 지난다**) | 실 GPS. **위치를 못 잡으면 이유를 말하는 화면**을 띄우고 아무것도 그리지 않는다(#160) |
 | 산책 기록 작성 | `create_screen.dart` | 트래킹 완료 / 내 기록 | `POST /api/walks`. 초안 없이 열리면 "직접 입력" 이라고 말한다 |
