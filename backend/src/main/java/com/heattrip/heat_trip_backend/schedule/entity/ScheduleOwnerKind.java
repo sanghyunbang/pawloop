@@ -20,10 +20,16 @@ import java.util.stream.Collectors;
  * <p>{@code chat_room} 이 이미 이 문제를 {@code origin_kind} + {@code origin_ref} 로 풀었다
  * (ADR-0011). 같은 방식을 쓴다 — 어느 도메인인지와 그 도메인의 id 를 <b>불투명하게</b> 든다.
  *
- * <h2>{@code room} 은 자리만 열어 뒀다</h2>
- * <p>크루(#417)가 서기 전까지 이 값으로는 아무것도 만들 수 없다 — 서비스가 <b>거절한다</b>.
- * 값만 미리 두는 이유는 나중에 CHECK 제약을 넓히는 마이그레이션을 한 번 더 돌리지 않기
- * 위해서다. {@code chk_place_catalog_source} 를 두 번 넓히며 배운 것이다(#346).
+ * <h2>{@code room} 이 열렸다 — 그런데 이 모듈은 크루를 모른다</h2>
+ * <p>#417 품앗이가 이 값을 쓴다. 판정은 "그 크루 방의 살아 있는 멤버인가" 하나이고,
+ * 그것은 {@code chat_room} 만 알면 답할 수 있다 — 그래서 {@code schedule} 은
+ * <b>{@code crew} 를 부르지 않는다.</b>
+ *
+ * <p>부르면 <b>고리가 생긴다</b>: {@code crew} 는 품앗이를 맡을 때 일정 한 줄을 남기려고
+ * {@code schedule} 을 부른다. 두 모듈이 서로를 부르면 {@code ModuleCycleTest} 가 잡는다.
+ * 그래서 출처 이름({@link #CREW_ORIGIN_KIND})만 여기서 들고, 그 문자열이 크루 쪽과 같은지는
+ * {@code CrewOriginKindMatchesScheduleTest} 가 잰다 — 같이 안 움직이면 크루 일정이
+ * 조용히 404 가 된다.
  */
 public enum ScheduleOwnerKind {
 
@@ -33,8 +39,20 @@ public enum ScheduleOwnerKind {
     /** 가족 그룹의 일정. {@code owner_ref} 는 {@code family_group.id} 다. */
     GROUP("group"),
 
-    /** 크루의 일정 (#417). <b>아직 못 쓴다</b> — 서비스가 거절한다. */
+    /**
+     * 크루의 일정 (#417). {@code owner_ref} 는 <b>{@code crew.id}</b> 다 — 방 id 가 아니다.
+     *
+     * <p>{@code GROUP} 이 {@code family_group.id} 를 드는 것과 같은 자리다. 방 id 를 들면
+     * 화면이 크루를 찾으려고 방을 한 번 더 되짚어야 한다.
+     */
     ROOM("room");
+
+    /**
+     * 크루 방이 {@code chat_room.origin_kind} 에 적는 이름. <b>{@code CrewService.ORIGIN_KIND}
+     * 와 같아야 한다</b> — 클래스 javadoc 참조. 여기 적어 두는 이유는 그 상수를 가져오면
+     * 모듈 고리가 생기기 때문이다.
+     */
+    public static final String CREW_ORIGIN_KIND = "CREW";
 
     private final String wire;
 

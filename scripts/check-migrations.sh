@@ -252,6 +252,10 @@ step "37_crew.sql"
 want 1 "$(has_table crew)" "crew 표 (없으면 부팅이 validate 에서 죽는다)"
 want 1 "$(check_has ck_crew_visibility invite)" "ck_crew_visibility 가 invite 를 받는다 (없으면 아무 문자열이나 공개 범위가 된다)"
 
+step "38_crew_favor.sql"
+want 1 "$(has_table crew_favor)" "crew_favor 표 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(check_has ck_crew_favor_slot afternoon)" "ck_crew_favor_slot 이 afternoon 을 받는다 (없으면 아무 문자열이나 시간대가 된다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

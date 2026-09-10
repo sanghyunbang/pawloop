@@ -752,6 +752,81 @@ public class ChatRoomService {
     }
 
     /**
+     * 방장을 넘긴다. <b>{@code OWNER} 만.</b> 이슈 #417.
+     *
+     * <h2>왜 필요한가</h2>
+     * <p>{@link #leaveRoom} 이 방장을 막는다 — 나가면 초대코드도 못 내고 강퇴도 못 하는 방이
+     * 남기 때문이다. 그런데 넘길 길이 없으면 <b>방을 만든 사람은 영영 못 나간다.</b> 막는
+     * 쪽만 만들고 푸는 쪽을 안 만들면 그 사람은 갇힌다.
+     *
+     * <h2>둘 다 살아 있는 멤버여야 한다</h2>
+     * <p>나간 사람에게 넘기면 <b>방장이 없는 방</b>이 그대로 만들어진다 — 막으려던 상태를
+     * 다른 문으로 만드는 셈이다.
+     *
+     * <p>자기에게 넘기는 것은 아무 일도 아니다 — 400 으로 돌려보낸다. 조용히 통과시키면
+     * 화면이 "넘겼습니다" 라고 말하는데 아무것도 안 바뀐다.
+     *
+     * @throws ResponseStatusException 방장이 아니면 403 · 대상이 그 방에 없으면 404 ·
+     *                                 자기 자신이면 400
+     */
+    @Transactional
+    public void transferOwner(long roomId, long actorUserId, long targetUserId) {
+        requireOwner(roomId, actorUserId);
+
+        if (actorUserId == targetUserId) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "이미 방장입니다.");
+        }
+
+        ChatRoomMember target = members.findByRoomIdAndUserId(roomId, targetUserId)
+                .filter(member -> member.getRemovedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "이 방의 멤버가 아닙니다."));
+        ChatRoomMember previous = members.findByRoomIdAndUserId(roomId, actorUserId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "이 방의 멤버가 아닙니다."));
+
+        target.changeRole(ChatRoomMemberRole.OWNER);
+        previous.changeRole(ChatRoomMemberRole.MEMBER);
+        members.saveAll(List.of(target, previous));
+    }
+
+    /**
+     * 방을 지운다 — <b>방장이 혼자 남았을 때만.</b> 이슈 #417.
+     *
+     * <h2>왜 "혼자일 때만" 인가</h2>
+     * <p>방을 지우면 {@code ON DELETE CASCADE} 로 <b>메시지가 함께 사라진다.</b> 남의 대화를
+     * 지우는 버튼은 만들면 안 된다 — 방장이 화가 난 날 누를 수 있는 버튼이 되고, 그날
+     * 사라지는 것은 다른 사람들의 기록이다.
+     *
+     * <p>혼자일 때는 그 문제가 없다. 그리고 그때가 <b>실제로 필요한 때</b>다: 아무도 안
+     * 들어온 모임을 만든 사람이 그것을 치우고 싶은 것이다. 사람이 있으면 넘기면 된다
+     * ({@link #transferOwner}).
+     *
+     * <p>판정을 여기 두는 이유는 <b>멤버 수를 아는 곳이 여기</b>이기 때문이다. 부르는 쪽이
+     * 세어서 넘기면 세는 순간과 지우는 순간이 갈라진다.
+     *
+     * @throws ResponseStatusException 방장이 아니면 403 · 다른 사람이 남아 있으면 409
+     */
+    @Transactional
+    public void deleteRoomIfSoleMember(long roomId, long actorUserId) {
+        requireOwner(roomId, actorUserId);
+
+        if (members.countByRoomIdAndRemovedAtIsNull(roomId) > 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "아직 다른 분이 있어요. 방장을 넘기고 나가 주세요.");
+        }
+
+        // 멤버 행을 먼저 지우고 세션을 비운다 — DB 의 CASCADE 로는 안 풀리는 문제다
+        // ({@code ChatRoomMemberRepository#deleteAllOfRoom} javadoc). 메시지·초대는 세션에
+        // 없으므로 방 행이 사라질 때 DB 가 함께 지운다.
+        members.deleteAllOfRoom(roomId);
+        rooms.findById(roomId).ifPresent(rooms::delete);
+    }
+
+    /**
+     * 재입장 금지를 푼다. <b>{@code OWNER} 만.</b> (#82)
+    /**
      * 재입장 금지를 푼다. <b>{@code OWNER} 만.</b> (#82)
      *
      * <p>강퇴 확인 문구가 "방 설정에서 다시 풀 수 있습니다" 라고 <b>약속한다.</b> 그 약속을

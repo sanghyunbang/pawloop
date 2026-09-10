@@ -300,14 +300,17 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
-    @DisplayName("크루(room) 일정은 아직 400 이다 — 값만 열어 두고 멤버십은 #417 이 만든다")
-    void rejectsCrewSchedulesForNow() throws Exception {
+    @DisplayName("안 든 크루의 일정은 404 다 — 남의 아이·안 든 그룹과 같은 답이다")
+    void crewSchedulesNeedMembership() throws Exception {
         Account someone = account("크루원");
 
+        // 없는 크루도, 안 든 크루도 같은 404 다 — 403 을 주면 "그 id 는 존재한다" 가 샌다.
+        // 크루 멤버가 실제로 만드는 경로는 CrewFavorIntegrationTest 가 끝까지 걸어 본다
+        // (품앗이를 맡으면 owner_kind=room 한 줄이 생기고 그것이 달력에 뜬다, #417).
         create(someone, """
-                {"ownerKind":"room","ownerRef":1,"kind":"walk","title":"합동 산책",
+                {"ownerKind":"room","ownerRef":999999,"kind":"walk","title":"합동 산책",
                  "onDate":"2026-10-10"}
-                """).andExpect(status().isBadRequest());
+                """).andExpect(status().isNotFound());
     }
 
     // ─────────────────── 담당자 ───────────────────

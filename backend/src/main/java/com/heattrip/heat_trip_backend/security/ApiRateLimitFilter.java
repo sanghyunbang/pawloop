@@ -312,22 +312,17 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         // 고치기(PATCH)도 넣는다. 행은 안 늘지만 이름을 바꿀 때마다 chat_room 까지 UPDATE 가
         // 나가고, 그 값은 남의 채팅 목록에 보인다.
         //
-        // **읽기 둘(GET /api/crews · GET /api/crews/{id})은 넣지 않았다.** 표에 없는 경로는
+        // **읽기(GET /api/crews·/{id}·/{id}/favors)는 넣지 않았다.** 표에 없는 경로는
         // 한도가 0 이 아니라 무한이다 — 미룬 것이지 안전한 것이 아니다. 숫자를 정하려면
         // 앱이 목록을 언제 얼마나 부르는지부터 정해져야 한다.
-        if ("POST".equals(method) && "/api/crews".equals(path)) {
-            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
-        }
-        if ("PATCH".equals(method) && path.matches("^/api/crews/\\d+$")) {
-            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
-        }
-        if ("POST".equals(method) && path.matches("^/api/crews/\\d+/members/me$")) {
-            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
-        }
-        if ("POST".equals(method) && path.startsWith("/api/crews/join/")) {
-            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
-        }
-        if ("DELETE".equals(method) && path.matches("^/api/crews/\\d+/members/(me|\\d+)$")) {
+        // **메서드를 열거하지 않고 쓰기 전부를 잡는다.** 처음에는 경로 다섯을 하나씩 적었는데,
+        // #417 이 품앗이·방장 넘기기·크루 지우기를 더하면서 그 다섯이 곧바로 낡았다 —
+        // 표에 없는 경로는 한도가 0 이 아니라 **무한**이다. 커뮤니티가 같은 이유로 접두사
+        // 하나로 잡는다.
+        //
+        // `!GET` 으로 뒤집지 않는 이유는 OPTIONS 다 — CORS 예비 요청이 쓰기 버킷을 태우면
+        // 사용자가 아무것도 안 했는데 크루 만들기가 막힌다.
+        if (WRITE_METHODS.contains(method) && path.startsWith("/api/crews")) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
         // ── 일정 (이슈 #418~#421) ────────────────────────────

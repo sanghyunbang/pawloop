@@ -96,7 +96,8 @@ class StoredTimestampsAreUtcTest {
             com.heattrip.heat_trip_backend.schedule.entity.Schedule.class,
             // #417 — 크루. created_at·updated_at 둘 다 서버가 찍는 순간이라 UTC 로 눕힌다
             // (CrewTime). 사람이 고른 벽시계가 이 표에는 하나도 없다.
-            com.heattrip.heat_trip_backend.crew.entity.Crew.class);
+            com.heattrip.heat_trip_backend.crew.entity.Crew.class,
+            com.heattrip.heat_trip_backend.crew.entity.CrewFavor.class);
 
     /**
      * 훅이 있는데 <b>일부러 목록에 안 넣는</b> 엔티티. 이름을 여기 적는 이유는 "몰라서 빠진 것"

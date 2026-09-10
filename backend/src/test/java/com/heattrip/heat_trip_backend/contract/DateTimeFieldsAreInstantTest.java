@@ -60,6 +60,7 @@ class DateTimeFieldsAreInstantTest {
             Map.entry("Post", com.heattrip.heat_trip_backend.community.dto.PostResponse.class),
             Map.entry("Group", com.heattrip.heat_trip_backend.group.dto.GroupResponse.class),
             Map.entry("Crew", com.heattrip.heat_trip_backend.crew.dto.CrewResponse.class),
+            Map.entry("CrewFavor", com.heattrip.heat_trip_backend.crew.dto.CrewFavorResponse.class),
             Map.entry("Schedule",
                     com.heattrip.heat_trip_backend.schedule.dto.ScheduleResponse.class),
             Map.entry("GroupMember", com.heattrip.heat_trip_backend.group.dto.GroupMemberResponse.class),
