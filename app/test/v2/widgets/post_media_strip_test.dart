@@ -5,19 +5,47 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:heat_trip_flutter/v2/domain/post_media.dart';
 import 'package:heat_trip_flutter/v2/widgets/post_media_strip.dart';
 
-PostMedia _media({int id = 1, String kind = 'image', int? durationMs}) => PostMedia.tryParse({
+PostMedia _media({
+  int id = 1,
+  String kind = 'image',
+  int? durationMs,
+  int width = 1280,
+  int height = 720,
+}) =>
+    PostMedia.tryParse({
       'id': id,
       'kind': kind,
       'url': 'https://cdn.example.test/posts/7/$id.${kind == 'video' ? 'mp4' : 'jpg'}',
       'posterUrl': kind == 'video' ? 'https://cdn.example.test/posts/7/$id.jpg' : null,
-      'width': 1280,
-      'height': 720,
+      'width': width,
+      'height': height,
       'durationMs': durationMs,
     })!;
 
 Widget _host(Widget child) => MaterialApp(home: Scaffold(body: Padding(padding: const EdgeInsets.all(18), child: child)));
 
 void main() {
+  testWidgets('세로 영상 한 장은 카드에서 4:5 까지만 자리를 잡는다 — 카드가 한 화면에 들어온다 (#440)',
+      (tester) async {
+    await tester.pumpWidget(
+        _host(PostMediaStrip(media: [_media(kind: 'video', width: 720, height: 1280, durationMs: 8000)])));
+    await tester.pumpAndSettle();
+
+    final box = tester.getSize(find.byType(AspectRatio));
+    expect(box.height / box.width, closeTo(5 / 4, 1e-6),
+        reason: '9:16 을 원본대로 두면 폭의 1.78배가 된다 — 인스타그램·페이스북·레딧처럼 4:5 로 자른다');
+    expect(find.byIcon(Icons.play_circle_fill_rounded), findsOneWidget,
+        reason: '잘라도 재생 표시는 그대로다');
+  });
+
+  testWidgets('정사각·가로 사진은 원본 비율 그대로다 — 4:3 이면 4:3', (tester) async {
+    await tester.pumpWidget(_host(PostMediaStrip(media: [_media(width: 1600, height: 1200)])));
+    await tester.pumpAndSettle();
+
+    final box = tester.getSize(find.byType(AspectRatio));
+    expect(box.width / box.height, closeTo(4 / 3, 1e-6));
+  });
+
   testWidgets('영상 칸에는 길이가 붙는다 — 0:08', (tester) async {
     await tester.pumpWidget(_host(PostMediaStrip(media: [_media(kind: 'video', durationMs: 8000)])));
     await tester.pumpAndSettle();
