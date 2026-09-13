@@ -301,6 +301,10 @@ void main() {
 
     await tester.enterText(find.byType(TextField).first, emojiTitle);
     await tester.enterText(find.byType(TextField).last, '본문');
+    // 사진 칸이 맨 위로 오면서(#451) 기본 표면(800×600)에서는 올리기 버튼이 화면 밖이다 —
+    // 목록이 안 만든 위젯은 찾을 수 없으니 먼저 끌어 올린다.
+    await tester.dragUntilVisible(find.text('올리기'), find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('올리기'));
     await tester.pumpAndSettle();
 

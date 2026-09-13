@@ -335,6 +335,18 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                     _placeCard(),
                     const SizedBox(height: 14),
                   ],
+                  // **사진부터**(#451 3번, 인스타·반려견 판의 순서) — 글쓰기의 첫 칸이 사진·영상이다.
+                  // 고르는 순간 올라가기 시작하고, 글을 저장할 때는 올라간 id 만 싣는다 (#429).
+                  _label('사진 · 영상'),
+                  PostMediaField(
+                    repository: _media,
+                    picker: _picker,
+                    initial: widget.editing?.media ?? const [],
+                    prepare: widget.prepare ?? ImagePrep.prepare,
+                    prepareVideo: widget.prepareVideo ?? VideoPrep.prepare,
+                    onChanged: (sel) => setState(() => _mediaSel = sel),
+                  ),
+                  const SizedBox(height: 18),
                   _label('게시판'),
                   _boardChips(),
                   // 산책로 후기에만 붙인다 — 다른 게시판에 경로는 뜻이 흐리다(#339).
@@ -363,16 +375,6 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                         fontSize: 14.5, height: 1.55, color: T.textPrimary),
                     decoration: _decoration(
                         '우리 아이와 있었던 일, 다녀온 곳, 궁금한 것을 적어보세요'),
-                  ),
-                  const SizedBox(height: 14),
-                  // 고르는 순간 올라가기 시작한다. 글을 저장할 때는 올라간 id 만 싣는다 (#429).
-                  PostMediaField(
-                    repository: _media,
-                    picker: _picker,
-                    initial: widget.editing?.media ?? const [],
-                    prepare: widget.prepare ?? ImagePrep.prepare,
-                    prepareVideo: widget.prepareVideo ?? VideoPrep.prepare,
-                    onChanged: (sel) => setState(() => _mediaSel = sel),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 2),
