@@ -530,10 +530,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   Widget _row(Schedule s) {
     final dog = _petName(s.dogId);
+    final crew = s.ownerKind == ScheduleOwnerKind.room;
+    final memo = s.memo?.trim() ?? '';
     final parts = <String>[
+      // 크루 일정은 그렇다고 말한다 — 내 아이 일정 사이에 "보리 봐 주기" 만 있으면 누구
+      // 것인지 모른다(#417).
+      if (crew) '크루',
       if (dog != null) dog,
       if (s.assignee != null) '${s.assignee!.nickname} 담당',
       if (!s.isAllDay) Schedule.formatTime(s.atTime!),
+      // 크루 일정은 시각 대신 **시간대를 메모에** 든다("오후 · 두 시간만") — 품앗이가 정하는
+      // 것은 시각이 아니라서다. 안 적으면 그날 아침에 언제인지가 안 보인다.
+      if (crew && memo.isNotEmpty) memo,
       // 되풀이하는 것은 그렇다고 말한다 — 안 적으면 "왜 매주 있지" 를 사용자가 푼다.
       if (s.repeats) s.repeatKind.label,
     ];

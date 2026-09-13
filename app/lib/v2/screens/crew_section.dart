@@ -449,6 +449,9 @@ class _CrewSectionState extends State<CrewSection> {
         CrewFailureKind.notFound => '그런 코드가 없어요.',
         CrewFailureKind.network => '연결이 끊겼어요. 잠시 뒤 다시 시도해 주세요.',
         CrewFailureKind.invalid => failure.message ?? '코드를 다시 확인해 주세요.',
+        // 참여 경로에서는 안 온다 — 품앗이 맡기·크루 지우기의 409 다(#417).
+        CrewFailureKind.taken || CrewFailureKind.notAlone =>
+          failure.message ?? '요청을 처리하지 못했어요.',
       };
 
   Future<void> _openNeighborhoodPicker() async {
