@@ -55,7 +55,7 @@ lib/
 | `schedule_screen.dart` | 일정 — 월 달력(종류별 점) · 그날 목록 · 필터 칩 · 만들기/고치기 시트 (#419·#421). 화면을 열 때 알림 예약을 다시 건다(#420). 되풀이하는 하루를 고칠 때는 "이 날만 / 앞으로 전부" 를 먼저 묻는다 | 탭 2 |
 | `feed_screen.dart` | 커뮤니티 — 게시글 카드/리스트 (더미) | 탭 3 |
 | `crew_section.dart` | 크루 목록 — 커뮤니티 탭 **안의 갈래**(#417). 내 크루 · 우리 동네 두 범위 · 만들기 · 초대 코드로 참여. 화면이 아니라 본문 조각이라 `Scaffold` 를 안 만든다 | 탭 3 안 |
-| `crew_home_screen.dart` | 크루 홈 — 소개 · 멤버 · 대화방으로 가기 · 초대 코드 보내기(방장) · 나가기 · 강퇴(방장) | `crew_section` → push |
+| `crew_home_screen.dart` | 크루 홈 — 소개 · 멤버 · 대화방으로 가기 · 초대 코드 보내기(방장) · 나가기 · 강퇴(방장) · **품앗이**(목록 · 부탁 올리기 시트 `widgets/crew_favor_sheet.dart` · 제가 할게요 · 무르기 · 거둬들이기) · 방장 넘기기 · 크루 지우기(혼자일 때만) | `crew_section` → push |
 | `insight_screen.dart` | 통계 — 이번 주 요약 + 주간 거리 막대(fl_chart). 자주 가는 곳은 빈 상태 | `me_screen` → push |
 | `walk_tracking_screen.dart` | 실시간 산책 트래킹 (실 GPS, 경로 폴리라인 + 라이브 스탯) | FAB·홈 CTA → `startWalk()` |
 | `create_screen.dart` | 산책 기록 작성 → `POST /api/walks` | 트래킹 종료 후 push (초안 동반) · 기록 목록에서 손입력 |
@@ -116,6 +116,7 @@ lib/
 - `profile_avatar.dart` — 강아지 프로필 아바타(테두리색 선택 반영).
 - `walk_finish_sheet.dart` — 산책 완료 바텀시트(`WalkFinishSheet`, #310). 요약 셋 + **경로 미리보기** + "경로 사진 저장" + 기록 저장/저장 안 함. 트래킹 화면이 geolocator·네이버 지도를 물고 있어 위젯 테스트로 못 띄우므로 시트를 밖으로 꺼냈다.
 - `post_media_field.dart` — 글쓰기의 사진 칸(#429): 고르는 순간 올리기 시작하고 밖으로는 `PostMediaSelection`(올라간 id 순서 · 올리는 중인가 · 실패가 있는가)을 낸다. 글쓰기 화면은 올리는 중이면 저장을 잠근다. `post_media_strip.dart` 는 카드·상세의 격자(한 장 크게 · 둘 나란히 · 2×2 에 `+N`), `post_media_viewer.dart` 는 전체 보기 대화상자 — 화면이 아니라 위젯이라 라우트 없이 `showDialog` 로 뜬다.
+- `crew_favor_sheet.dart` — 크루 홈의 부탁 올리기 시트(#417): 날짜(오늘부터) · 시간대(오전·오후·저녁, **기본값 없음** — 미리 골라 두면 안 바꾼 채 올리는 사람이 생긴다) · 내 아이(`kMyPets` 중 서버 id 가 있는 것만, 한 마리면 미리 골라짐) · 한 줄. 금액 칸이 없다 — 결제·평점·보증·중개는 안 한다는 이슈의 선을 시트 첫 줄이 말한다.
 - `today_care_card.dart` · `message_actions_sheet.dart` 등 — 각 화면 문서 참조.
 
 ### 2.4-1 `walk/` — 경로 그림과 갤러리 저장 (#310)

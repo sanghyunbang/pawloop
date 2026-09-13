@@ -2,22 +2,33 @@
 //
 // ## 돌아갈 때 무엇이 달라졌는지 알려 준다
 //
-// 이 화면에서 하는 일 넷(참여·나가기·고치기·강퇴)이 전부 **목록을 바꾼다.** 그래서
-// `pop(true)` 로 "달라졌다" 를 들고 나간다 — 목록이 그것을 보고 서버에 다시 묻는다.
-// 앱이 지레짐작해서 목록을 고치면, 요청이 실패했을 때 화면이 거짓말을 한다.
+// 참여·나가기·고치기·강퇴·넘기기·지우기가 전부 **목록을 바꾼다.** 그래서 `pop(true)` 로
+// "달라졌다" 를 들고 나간다 — 목록이 그것을 보고 서버에 다시 묻는다. 앱이 지레짐작해서
+// 목록을 고치면, 요청이 실패했을 때 화면이 거짓말을 한다. 품앗이는 목록을 안 바꾼다.
 //
 // ## 안 든 사람에게 보이는 것은 인원 수까지다
 //
 // 공개 크루는 안 든 사람도 본다(안 그러면 들어갈지 말지 정할 수가 없다). 그런데 서버가
 // 그때 `members` 를 **빈 배열**로 준다 — 누가 있는지는 안에서만이다. 화면은 그 빈 배열을
 // "아직 아무도 없다" 로 그리면 안 된다. 인원 수는 따로 오고 있다.
+//
+// 품앗이도 같은 선이다 — **든 사람에게만 묻는다.** 부탁에는 아이 이름과 "그날 집을 비운다"
+// 가 적혀서 서버도 안 든 사람에게는 404 다.
+//
+// ## 방장 자리의 버튼은 하나다 — 혼자면 지우기, 둘 이상이면 넘기기
+//
+// 사람이 있을 때 지우기를 그리면 눌러도 409 다(남의 대화를 지우는 버튼은 없다, 서버 PR #428).
+// 혼자일 때 넘기기를 그리면 넘길 사람이 없다. 그래도 판정은 서버가 한다 — 화면이 낡았으면
+// (그 사이 누가 들어왔으면) 409 를 받고 다시 불러온다.
 import 'package:flutter/material.dart';
 
 import '../data/crew_repository.dart';
 import '../data/invite_share.dart';
 import '../domain/crew.dart';
+import '../domain/crew_favor.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../widgets/crew_favor_sheet.dart';
 import 'family_chat_screen.dart';
 
 class CrewHomeScreen extends StatefulWidget {
@@ -45,6 +56,11 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
   /// 지금 왕복 중인가. 두 번 눌러 두 번 들어가는 것을 막는다.
   bool _busy = false;
 
+  /// 품앗이. **든 크루에서만** 받는다 — 파일 머리말 참조.
+  List<CrewFavor> _favors = const [];
+  bool _favorsLoading = false;
+  CrewFailure? _favorsFailure;
+
   @override
   void initState() {
     super.initState();
@@ -63,11 +79,34 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
         _crew = crew;
         _loading = false;
       });
+      if (crew.mine) await _loadFavors();
     } on CrewFailure catch (e) {
       if (!mounted) return;
       setState(() {
         _failure = e;
         _loading = false;
+      });
+    }
+  }
+
+  /// 부탁 목록만 다시 받는다. 크루 자체는 그대로다 — 맡기·무르기는 인원을 안 바꾼다.
+  Future<void> _loadFavors() async {
+    setState(() {
+      _favorsLoading = true;
+      _favorsFailure = null;
+    });
+    try {
+      final favors = await _repo.favors(widget.crewId);
+      if (!mounted) return;
+      setState(() {
+        _favors = favors;
+        _favorsLoading = false;
+      });
+    } on CrewFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _favorsFailure = e;
+        _favorsLoading = false;
       });
     }
   }
@@ -149,17 +188,12 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
           ],
           _membersCard(crew),
           const SizedBox(height: 14),
+          _favorsCard(),
+          const SizedBox(height: 14),
           if (!crew.owner)
             _wideButton('크루 나가기', _leave, filled: false, danger: true)
           else
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                '방장은 크루를 나갈 수 없어요. 넘기기·지우기는 아직 준비 중이에요.',
-                key: Key('crew-owner-cannot-leave'),
-                style: TextStyle(fontSize: 12, color: T.textMuted),
-              ),
-            ),
+            ..._ownerActions(crew),
         ] else ...[
           _joinCard(crew),
         ],
@@ -283,6 +317,179 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
     );
   }
 
+  /// 품앗이 카드. **든 사람에게만** 있다 — 파일 머리말 참조.
+  Widget _favorsCard() {
+    return GlassCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Expanded(
+            child: Text('품앗이',
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          ),
+          TextButton.icon(
+            key: const Key('crew-favor-add'),
+            onPressed: _busy ? null : _openFavorSheet,
+            style: TextButton.styleFrom(
+              foregroundColor: T.textSecondary,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('부탁하기',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+          ),
+        ]),
+        const Text('아이 맡길 일이 생기면 여기에 적어요 · 맡으면 크루 달력에 남아요',
+            style: TextStyle(fontSize: 11.5, color: T.textMuted, height: 1.3)),
+        const SizedBox(height: 10),
+        if (_favorsLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(10),
+              child: SizedBox(
+                  width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          )
+        else if (_favorsFailure != null)
+          Row(children: [
+            const Expanded(
+              child: Text('부탁을 불러오지 못했어요',
+                  key: Key('crew-favors-failure'),
+                  style: TextStyle(fontSize: 12.5, color: T.textSecondary)),
+            ),
+            TextButton(onPressed: _loadFavors, child: const Text('다시 시도')),
+          ])
+        else if (_favors.isEmpty)
+          const Text('아직 부탁이 없어요',
+              key: Key('crew-favors-empty'),
+              style: TextStyle(fontSize: 12.5, color: T.textSecondary))
+        else
+          for (final favor in _favors) _favorRow(favor),
+      ]),
+    );
+  }
+
+  Widget _favorRow(CrewFavor favor) {
+    final who =
+        favor.mine ? '내 부탁' : '${favor.askedBy?.nickname ?? '알 수 없음'} 님의 부탁';
+    final String? state = favor.takenByMe
+        ? '내가 맡았어요 · 달력에 남았어요'
+        : favor.isOpen
+            ? null
+            : '${favor.takenBy?.nickname ?? '알 수 없음'} 님이 맡았어요';
+
+    // 버튼은 하나다. 올린 사람은 거둬들이기, 맡은 사람은 무르기, 그 밖의 사람은 열려 있을
+    // 때만 "제가 할게요" — 남이 맡은 것에는 버튼이 없다. 서버의 권한과 같은 모양이다.
+    final Widget action;
+    if (favor.mine) {
+      action = _smallButton('거둬들이기',
+          key: Key('crew-favor-cancel-${favor.id}'),
+          onTap: () => _cancelFavor(favor),
+          danger: true);
+    } else if (favor.takenByMe) {
+      action = _smallButton('무르기',
+          key: Key('crew-favor-release-${favor.id}'), onTap: () => _releaseFavor(favor));
+    } else if (favor.isOpen) {
+      action = _smallButton('제가 할게요',
+          key: Key('crew-favor-take-${favor.id}'),
+          onTap: () => _takeFavor(favor),
+          filled: true);
+    } else {
+      action = const SizedBox.shrink();
+    }
+
+    return Container(
+      key: Key('crew-favor-${favor.id}'),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(favor.whenLabel,
+                key: Key('crew-favor-when-${favor.id}'),
+                style: const TextStyle(
+                    fontSize: 13.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            if (favor.detailLabel case final detail?) ...[
+              const SizedBox(height: 2),
+              Text(detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, color: T.textSecondary)),
+            ],
+            const SizedBox(height: 3),
+            Text([who, if (state != null) state].join(' · '),
+                key: Key('crew-favor-state-${favor.id}'),
+                style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+          ]),
+        ),
+        const SizedBox(width: 8),
+        action,
+      ]),
+    );
+  }
+
+  Widget _smallButton(
+    String label, {
+    required Key key,
+    required VoidCallback onTap,
+    bool filled = false,
+    bool danger = false,
+  }) {
+    final enabled = !_busy;
+    return GestureDetector(
+      key: key,
+      onTap: enabled ? onTap : null,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: filled && enabled ? T.sig : null,
+          color: filled
+              ? (enabled ? null : T.textFaint.withValues(alpha: 0.4))
+              : Colors.white.withValues(alpha: 0.8),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+                color: filled
+                    ? Colors.white
+                    : (danger ? const Color(0xFFD2604F) : T.textSecondary))),
+      ),
+    );
+  }
+
+  /// 방장 자리의 버튼. **혼자면 지우기, 둘 이상이면 넘기기**다 — 파일 머리말 참조.
+  List<Widget> _ownerActions(Crew crew) {
+    final alone = crew.members.every((m) => m.isOwner);
+    if (alone) {
+      return [
+        _wideButton('크루 지우기', _delete, filled: false, danger: true),
+        const SizedBox(height: 8),
+        _ownerNote('아직 나 혼자예요. 지우면 대화방과 품앗이도 함께 사라져요.'),
+      ];
+    }
+    return [
+      _wideButton('방장 넘기기', () => _transfer(crew), filled: false),
+      const SizedBox(height: 8),
+      _ownerNote('방장은 크루를 나갈 수 없어요. 넘기면 나갈 수 있고, 혼자 남으면 지울 수 있어요.'),
+    ];
+  }
+
+  /// 버튼만 두면 왜 하나뿐인지 아무도 모른다 — 한 줄이 그것을 말한다.
+  Widget _ownerNote(String text) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(text,
+            key: const Key('crew-owner-note'),
+            style: const TextStyle(fontSize: 12, color: T.textMuted, height: 1.35)),
+      );
+
   Widget _wideButton(
     String label,
     VoidCallback? onTap, {
@@ -397,6 +604,142 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
     });
   }
 
+  // ─────────────────────────── 품앗이 ───────────────────────────
+
+  Future<void> _openFavorSheet() async {
+    final posted = await showCrewFavorSheet(
+      context,
+      repository: _repo,
+      crewId: widget.crewId,
+    );
+    if (!mounted || posted == null) return;
+    // 서버에 다시 안 묻는다 — 올린 것을 날짜 순서에 끼워 넣으면 같은 목록이다.
+    setState(() => _favors = [..._favors, posted]..sort(CrewFavor.compare));
+    _say('부탁을 올렸어요');
+  }
+
+  Future<void> _takeFavor(CrewFavor favor) => _run(() async {
+        try {
+          final taken = await _repo.takeFavor(widget.crewId, favor.id);
+          if (!mounted) return;
+          setState(() => _favors = _replaceFavor(taken));
+          _say('맡았어요 · 크루 달력에 남겼어요');
+        } on CrewFailure catch (e) {
+          // 그 사이 남이 맡았거나 거둬들여졌다 — 화면이 낡은 것이다. 목록을 다시 받는다.
+          if (e.kind == CrewFailureKind.notFound) {
+            if (!mounted) return;
+            await _loadFavors();
+            if (mounted) _say('그 부탁은 이미 사라졌어요. 목록을 새로 받았어요.');
+            return;
+          }
+          if (e.kind == CrewFailureKind.taken && mounted) await _loadFavors();
+          rethrow;
+        }
+      });
+
+  Future<void> _releaseFavor(CrewFavor favor) async {
+    final ok = await _confirm(
+      title: '맡은 것을 무를까요',
+      body: '부탁이 다시 열리고, 내 달력의 줄은 사라져요.',
+      action: '무르기',
+    );
+    if (ok != true) return;
+    await _run(() async {
+      final released = await _repo.releaseFavor(widget.crewId, favor.id);
+      if (!mounted) return;
+      setState(() => _favors = _replaceFavor(released));
+      _say('물렀어요 · 부탁이 다시 열렸어요');
+    });
+  }
+
+  Future<void> _cancelFavor(CrewFavor favor) async {
+    final taker = favor.takenBy?.nickname;
+    final ok = await _confirm(
+      title: '부탁을 거둬들일까요',
+      body: favor.isOpen
+          ? '목록에서 사라져요. 다시 올릴 수는 있어요.'
+          : '${taker == null ? '맡은 분이 있어요' : '$taker 님이 맡았어요'}. '
+              '거둬들이면 그분 달력에서도 사라져요.',
+      action: '거둬들이기',
+    );
+    if (ok != true) return;
+    await _run(() async {
+      await _repo.cancelFavor(widget.crewId, favor.id);
+      if (!mounted) return;
+      setState(() => _favors = _favors.where((f) => f.id != favor.id).toList());
+      _say('부탁을 거둬들였어요');
+    });
+  }
+
+  List<CrewFavor> _replaceFavor(CrewFavor updated) =>
+      [for (final f in _favors) f.id == updated.id ? updated : f];
+
+  // ─────────────────────────── 방장 넘기기 · 크루 지우기 ───────────────────────────
+
+  Future<void> _transfer(Crew crew) async {
+    final others = crew.members.where((m) => !m.isOwner).toList();
+    final target = await showDialog<CrewMember>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        backgroundColor: T.lilacTop,
+        title: const Text('누구에게 넘길까요',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text('넘기면 나는 일반 멤버가 돼요 — 고치기·초대·내보내기를 못 하고, 대신 나갈 수 있어요.',
+                style: TextStyle(fontSize: 12.5, color: T.textMuted, height: 1.35)),
+          ),
+          for (final member in others)
+            SimpleDialogOption(
+              key: Key('crew-transfer-${member.userId}'),
+              onPressed: () => Navigator.of(ctx).pop(member),
+              child: Text(member.nickname,
+                  style: const TextStyle(
+                      fontSize: 14.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
+            ),
+        ],
+      ),
+    );
+    if (target == null || !mounted) return;
+    final ok = await _confirm(
+      title: '${target.nickname} 님에게 넘길까요',
+      body: '방장 자리는 하나예요. 되돌리려면 그분이 다시 넘겨 줘야 해요.',
+      action: '넘기기',
+    );
+    if (ok != true) return;
+    await _run(() async {
+      final updated = await _repo.transferOwner(widget.crewId, target.userId);
+      if (!mounted) return;
+      setState(() {
+        _crew = updated;
+        _changed = true;
+      });
+      _say('${target.nickname} 님이 방장이 됐어요');
+    });
+  }
+
+  Future<void> _delete() async {
+    final ok = await _confirm(
+      title: '크루를 지울까요',
+      body: '대화방과 품앗이, 달력에 남긴 줄까지 함께 사라져요. 되돌릴 수 없어요.',
+      action: '지우기',
+    );
+    if (ok != true) return;
+    await _run(() async {
+      try {
+        await _repo.delete(widget.crewId);
+      } on CrewFailure catch (e) {
+        // 그 사이 누가 들어왔다 — 화면이 낡은 것이다. 다시 받으면 넘기기 버튼으로 바뀐다.
+        if (e.kind == CrewFailureKind.notAlone && mounted) await _load();
+        rethrow;
+      }
+      if (!mounted) return;
+      _changed = true;
+      Navigator.of(context).pop(true);
+    });
+  }
+
   /// 한 번에 하나만. 실패는 **종류대로** 말한다.
   Future<void> _run(Future<void> Function() action) async {
     if (_busy) return;
@@ -416,6 +759,8 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
         CrewFailureKind.inviteDead => '코드가 만료됐어요. 다시 발급해 주세요.',
         CrewFailureKind.forbidden => failure.message ?? '권한이 없어요.',
         CrewFailureKind.notFound => '크루를 찾을 수 없어요.',
+        CrewFailureKind.taken => '이미 다른 분이 맡았어요. 목록을 새로 받았어요.',
+        CrewFailureKind.notAlone => '다른 멤버가 남아 있어요. 방장을 넘기고 나가는 길이 있어요.',
         CrewFailureKind.network => '연결이 끊겼어요. 잠시 뒤 다시 시도해 주세요.',
         CrewFailureKind.invalid => failure.message ?? '요청을 처리하지 못했어요.',
       };
