@@ -223,7 +223,7 @@ class _CrewCreateSheetState extends State<_CrewCreateSheet> {
                 decoration: BoxDecoration(
                   color: _visibility == v
                       ? T.accentLine
-                      : Colors.white.withValues(alpha: 0.6),
+                      : T.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                       color: _visibility == v ? T.accent : Colors.transparent),
@@ -301,7 +301,7 @@ class _CrewCreateSheetState extends State<_CrewCreateSheet> {
       tooltip: semantic,
       icon: Icon(icon, size: 20, color: onTap == null ? T.textFaint : T.textSecondary),
       style: IconButton.styleFrom(
-        backgroundColor: Colors.white.withValues(alpha: 0.7),
+        backgroundColor: T.surface,
         shape: const CircleBorder(),
       ),
     );

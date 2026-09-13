@@ -161,7 +161,7 @@ class _CrewSectionState extends State<CrewSection> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
         decoration: BoxDecoration(
-          color: on ? T.sigEnd.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.6),
+          color: on ? T.sigEnd.withValues(alpha: 0.2) : T.surface,
           borderRadius: BorderRadius.circular(11),
           border: Border.all(color: on ? T.sigEnd : Colors.transparent),
         ),
@@ -186,7 +186,7 @@ class _CrewSectionState extends State<CrewSection> {
       tooltip: tooltip,
       icon: Icon(icon, size: 19, color: T.textSecondary),
       style: IconButton.styleFrom(
-        backgroundColor: Colors.white.withValues(alpha: 0.7),
+        backgroundColor: T.surface,
         shape: const CircleBorder(),
       ),
     );

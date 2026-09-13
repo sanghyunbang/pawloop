@@ -207,7 +207,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               _filterChips(),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 40),
+                  // 아래 140 — 떠 있는 알약(66 + 여백)이 목록 끝을 덮지 않게.
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 140),
                   children: [
                     _calendar(),
                     const SizedBox(height: 14),
@@ -230,7 +231,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget _header() => Padding(
         padding: const EdgeInsets.fromLTRB(4, 12, 16, 10),
         child: Row(children: [
-          // 탭이 아니라 밀린 화면이다(#446) — 뒤로 가는 길이 있어야 한다.
+          // 탭이면 뒤로 갈 곳이 없고, 어디선가 밀려 들어왔으면 뒤로 가는 길이 있어야 한다.
           if (Navigator.of(context).canPop())
             IconButton(
               onPressed: () => Navigator.of(context).pop(),

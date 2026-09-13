@@ -46,9 +46,9 @@ class MeScreen extends StatelessWidget {
                     height: 40,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: const Color(0xB3FFFFFF),
+                      color: T.surface,
                       borderRadius: BorderRadius.circular(13),
-                      border: Border.all(color: const Color(0x80FFFFFF)),
+                      border: Border.all(color: T.cardBorder),
                     ),
                     child: const Icon(Icons.arrow_back, size: 22, color: T.textPrimary),
                   ),
@@ -285,7 +285,7 @@ class MeScreen extends StatelessWidget {
                     width: 54, height: 54, alignment: Alignment.center,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0x66FFFFFF),
+                      color: T.surface,
                       border: Border.all(color: T.warmStart.withValues(alpha: 0.6), width: 1.5),
                     ),
                     child: const Icon(Icons.add, size: 24, color: T.warmText),
@@ -539,7 +539,7 @@ class MeScreen extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('우리 아이 정보 관리', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Colors.white)),
               SizedBox(height: 2),
-              Text('견종 · 나이 · 크기를 수정할 수 있어요', style: TextStyle(fontSize: 12, color: Color(0xE6FFFFFF))),
+              Text('견종 · 나이 · 크기를 수정할 수 있어요', style: TextStyle(fontSize: 12, color: T.cardBg)),
             ]),
           ),
           Icon(Icons.chevron_right, size: 20, color: Colors.white),

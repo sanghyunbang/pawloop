@@ -74,9 +74,10 @@ class GlassCard extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: const Color(0xD6FFFFFF),
+            // 토큰이다(#447) — 흰 바탕에서는 반투명이 아니라 외곽선이 카드를 만든다.
+            color: T.cardBg,
             borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: const Color(0xCCFFFFFF)),
+            border: Border.all(color: T.cardBorder),
             boxShadow: T.cardShadow,
           ),
           child: child,

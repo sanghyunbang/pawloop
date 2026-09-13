@@ -127,8 +127,8 @@ lib/
 
 ### 2.5 `theme/` — 디자인 토큰 + 배경 테마
 
-- `app_tokens.dart` → 클래스 `T`: 텍스트 색(`textPrimary/Secondary/Muted/Faint`), 글래스 카드(`cardBg`·`cardBorder`·`radius`), 바탕(`bgTop`/`bgBottom`), 오라 블롭 색, 강조색 `accent`, 시그니처 그라데이션 `sig`(#FF9E7D→#D89BFF), 따뜻한 그라데이션 `warm`(#FFA96B→#FF7E8A)과 `warmText`·`warmMid`, `cardShadow`. 인라인 브랜드 색은 없다(#447).
-- `themes.dart` → `AppThemeDef` + `kThemes`(라일락/블루/민트/코랄/모노 5종 배경 테마) + `kAvatarBorders`(아바타 테두리 색 후보) + 전역 컨트롤러 `AppThemeCtl`.
+- `app_tokens.dart` → 클래스 `T`: 텍스트 색(`textPrimary/Secondary/Muted/Faint`), 글래스 카드(`cardBg`·`cardBorder`·`radius`), 바탕(`bgTop`/`bgBottom`), 오라 블롭 색, 강조색 `accent`, 시그니처 그라데이션 `sig`(#FF9E7D→#E04A2B), 따뜻한 그라데이션 `warm`(#FF8F4D→#E04A2B)과 `warmText`·`warmMid`, `cardShadow`. 인라인 브랜드 색은 없다(#447).
+- `themes.dart` → `AppThemeDef` + `kThemes`(화이트(기본)/라일락/블루/민트/코랄/모노 6종 배경 테마) + `kAvatarBorders`(아바타 테두리 색 후보) + 전역 컨트롤러 `AppThemeCtl`.
 
 ---
 

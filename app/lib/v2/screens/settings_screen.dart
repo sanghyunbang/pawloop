@@ -144,7 +144,7 @@ class SettingsScreen extends StatelessWidget {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0x66FFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(13),
               ),
               child: const Icon(Icons.arrow_back, size: 20, color: T.textPrimary),

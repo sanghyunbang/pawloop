@@ -325,7 +325,7 @@ class _PostMediaFieldState extends State<PostMediaField> {
 
   ButtonStyle get _buttonStyle => OutlinedButton.styleFrom(
         foregroundColor: T.textSecondary,
-        backgroundColor: const Color(0x99FFFFFF),
+        backgroundColor: T.surface,
         side: const BorderSide(color: T.accentLine),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         minimumSize: const Size(0, 40),

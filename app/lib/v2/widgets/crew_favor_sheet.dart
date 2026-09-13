@@ -177,7 +177,7 @@ class _CrewFavorSheetState extends State<CrewFavorSheet> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.75),
+                    color: T.surface,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(children: [
@@ -244,7 +244,7 @@ class _CrewFavorSheetState extends State<CrewFavorSheet> {
                   hintStyle: const TextStyle(fontSize: 13.5, color: T.textFaint),
                   counterText: '',
                   filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.75),
+                  fillColor: T.surface,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
@@ -309,7 +309,7 @@ class _CrewFavorSheetState extends State<CrewFavorSheet> {
             ? const EdgeInsets.symmetric(horizontal: 14, vertical: 8)
             : const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: on ? T.sigEnd.withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.6),
+          color: on ? T.sigEnd.withValues(alpha: 0.18) : T.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: on ? T.sigEnd : Colors.transparent),
         ),

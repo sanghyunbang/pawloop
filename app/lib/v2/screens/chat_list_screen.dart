@@ -336,9 +336,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
           height: 50,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: const Color(0xCCFFFFFF),
+            color: T.surface,
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: const Color(0x80FFFFFF)),
+            border: Border.all(color: T.cardBorder),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: const [
             Icon(Icons.vpn_key_outlined, size: 18, color: T.textSecondary),

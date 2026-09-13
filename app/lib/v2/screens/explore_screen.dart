@@ -219,7 +219,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         child: Container(
           padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
-            color: const Color(0xE6FFFFFF),
+            color: T.cardBg,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Row(children: [
@@ -775,7 +775,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           margin: const EdgeInsets.only(right: 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           decoration: BoxDecoration(
-            color: on ? color : const Color(0xC9FFFFFF),
+            color: on ? color : T.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: on ? Colors.transparent : T.line),
           ),
@@ -810,7 +810,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: _neighbourCourses ? teal : const Color(0xC9FFFFFF),
+          color: _neighbourCourses ? teal : T.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: _neighbourCourses ? Colors.transparent : const Color(0x330B7A75)),
         ),
@@ -834,7 +834,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: _only24h ? red : const Color(0xC9FFFFFF),
+          color: _only24h ? red : T.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: _only24h ? Colors.transparent : const Color(0x33D7263D)),
         ),
@@ -856,9 +856,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
           height: 46,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: const Color(0xC2FFFFFF),
+            color: T.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0x66FFFFFF)),
+            border: Border.all(color: T.cardBorder),
           ),
           child: const Row(children: [
             Icon(Icons.search, size: 20, color: T.textMuted),
@@ -898,8 +898,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xC2FFFFFF), borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0x66FFFFFF)),
+        color: T.surface, borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: T.cardBorder),
       ),
       child: Row(children: [seg('list', Icons.view_agenda_outlined), seg('map', Icons.map_outlined)]),
     );
@@ -977,7 +977,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
-                color: const Color(0xF0FFFFFF), borderRadius: BorderRadius.circular(12),
+                color: T.cardBg, borderRadius: BorderRadius.circular(12),
                 boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 3))],
               ),
               child: Text(_farNotice!,
@@ -1197,7 +1197,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return Container(
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: const Color(0xF0FFFFFF), borderRadius: BorderRadius.circular(13),
+        color: T.cardBg, borderRadius: BorderRadius.circular(13),
         boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 3))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

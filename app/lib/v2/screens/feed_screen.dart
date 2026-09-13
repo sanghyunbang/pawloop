@@ -278,7 +278,7 @@ class _FeedScreenState extends State<FeedScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         decoration: BoxDecoration(
-          color: on ? T.sigEnd.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.6),
+          color: on ? T.sigEnd.withValues(alpha: 0.2) : T.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: on ? T.sigEnd : Colors.transparent),
         ),
@@ -438,9 +438,9 @@ class _FeedScreenState extends State<FeedScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
               decoration: BoxDecoration(
-                color: const Color(0xCCFFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: const Color(0x66FFFFFF)),
+                border: Border.all(color: T.cardBorder),
               ),
               child: Text(_loadingMore ? '불러오는 중…' : '더 보기',
                   style: const TextStyle(
@@ -472,9 +472,9 @@ class _FeedScreenState extends State<FeedScreen> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xC2FFFFFF),
+        color: T.surface,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: const Color(0x66FFFFFF)),
+        border: Border.all(color: T.cardBorder),
       ),
       child: Row(children: [
         seg('card', Icons.view_agenda_outlined),
@@ -499,7 +499,7 @@ class _FeedScreenState extends State<FeedScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: _myNeighborhood ? teal : const Color(0xCCFFFFFF),
+          color: _myNeighborhood ? teal : T.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: _myNeighborhood ? Colors.transparent : const Color(0x330B7A75)),
         ),
@@ -537,9 +537,9 @@ class _FeedScreenState extends State<FeedScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xCCFFFFFF),
+                    color: T.surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0x66FFFFFF)),
+                    border: Border.all(color: T.cardBorder),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     const Icon(Icons.tune, size: 16, color: T.textSecondary),
@@ -825,9 +825,9 @@ class _FeedScreenState extends State<FeedScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0x80FFFFFF),
+        color: T.surface,
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: const Color(0x66FFFFFF)),
+        border: Border.all(color: T.cardBorder),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Text(reaction.label,

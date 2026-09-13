@@ -20,6 +20,9 @@ class AppThemeDef {
 }
 
 const List<AppThemeDef> kThemes = [
+  // 기본 — 흰 바탕, 블롭 없음(#447, 사장님: "배경은 시각적 부담 없는 흰색으로"). 오라 테마들은
+  // 고르기 옵션으로 남는다.
+  AppThemeDef('화이트', Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF)),
   AppThemeDef('라일락', Color(0xFFF3E8F9), Color(0xFFE4D6F0), Color(0xFFFFC79E), Color(0xFFD4B0FF), Color(0xFF9EE2C4)),
   AppThemeDef('블루', Color(0xFFE8EFFA), Color(0xFFDBE3F4), Color(0xFF9EC3FF), Color(0xFFA8B6FF), Color(0xFF9FE0E6)),
   AppThemeDef('민트', Color(0xFFE6F3EC), Color(0xFFD6EAE1), Color(0xFF9DE9C9), Color(0xFFA8DCF2), Color(0xFFDCE9A6)),
@@ -29,7 +32,7 @@ const List<AppThemeDef> kThemes = [
 
 /// 프로필 테두리 색 후보.
 const List<Color> kAvatarBorders = [
-  Color(0xFF8E7BFF), // 라일락
+  Color(0xFFE04A2B), // 코랄레드 — 강조색(#447)
   Color(0xFFFF7A59), // 코랄
   Color(0xFF33BFA6), // 민트
   Color(0xFF5B79F5), // 블루
@@ -43,5 +46,5 @@ class AppThemeCtl {
   static AppThemeDef get current => kThemes[index.value];
 
   /// 프로필 아바타 테두리 색.
-  static final ValueNotifier<Color> avatarBorder = ValueNotifier<Color>(const Color(0xFF8E7BFF));
+  static final ValueNotifier<Color> avatarBorder = ValueNotifier<Color>(const Color(0xFFE04A2B));
 }

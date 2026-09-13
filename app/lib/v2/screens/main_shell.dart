@@ -5,7 +5,8 @@ import 'today_screen.dart';
 import 'explore_screen.dart';
 import 'feed_screen.dart';
 import 'chat_list_screen.dart';
-import 'start_walk.dart';
+import 'schedule_screen.dart';
+import '../data/local_notification_sink.dart';
 import 'walk_tracking_screen.dart';
 import '../data/walk_in_progress.dart';
 import '../widgets/walk_resume_prompt.dart';
@@ -24,7 +25,7 @@ class RootTab {
   }
 }
 
-/// 메인 네비게이션 셸 — 홈 · 지도 · [산책] · 커뮤니티 · 채팅. 일정은 홈에서 연다(#446).
+/// 메인 네비게이션 셸 — 홈 · 지도 · 일정 · 커뮤니티 · 채팅. 다섯 칸 같은 폭(#446). 산책은 홈의 "산책 시작" 이 맡는다.
 class MainShell extends StatelessWidget {
   /// 끊긴 산책 스냅숏 저장소. 테스트가 갈아 끼운다(#335).
   final WalkInProgressStore resumeStore;
@@ -50,9 +51,14 @@ class MainShell extends StatelessWidget {
               );
               break;
             case 2:
-              screen = const FeedScreen();
+              // 알림 싱크는 여기서 물려 준다 — 화면이 스스로 만들면 위젯 테스트가 그것을
+              // 갈아끼울 수 없고, 진짜는 테스트 바인딩에 채널이 없어 던진다(#420).
+              screen = ScheduleScreen(reminderSink: LocalNotificationSink());
               break;
             case 3:
+              screen = const FeedScreen();
+              break;
+            case 4:
               screen = const ChatListScreen();
               break;
             default:
@@ -124,46 +130,9 @@ class _ShellNav extends StatelessWidget {
               ),
             );
 
-        // 산책은 **탭이 아니다** — 누르면 화면을 미는 동작이다(HIG: "탭 바는 이동용").
-        // 그래서 탭 번호가 없고, 다른 칸과 **같은 폭**의 가운데 칸을 쓴다. 예전처럼 바 위로
-        // 솟게 두면 하나만 튀어나와 좌우가 안 맞아 보였다(#446, 사장님이 짚었다).
-        Widget walkCell() => Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                // today_screen 의 "산책 시작" 과 같은 문을 지난다.
-                onTap: () => startWalk(context),
-                child: Semantics(
-                  button: true,
-                  label: '산책 시작',
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: T.sig,
-                        boxShadow: [
-                          BoxShadow(color: T.sigGlow, blurRadius: 14, offset: Offset(0, 5)),
-                        ],
-                      ),
-                      child: const Icon(Icons.directions_walk_rounded,
-                          color: Colors.white, size: 20),
-                    ),
-                    const SizedBox(height: 3),
-                    MediaQuery.withClampedTextScaling(
-                      maxScaleFactor: 1.3,
-                      child: const Text('산책',
-                          maxLines: 1,
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: T.textSecondary)),
-                    ),
-                  ]),
-                ),
-              ),
-            );
-
+        // 산책은 바에 없다 — 사장님 결정(2026-09-14, #446): 일정 탭은 필수라 가운데 산책까지
+        // 두면 여섯이 되고, Apple·Material 둘 다 다섯이 한계다. 산책은 홈의 "산책 시작" 이
+        // 맡는다. 다섯 칸 전부 Expanded 라 좌우가 대칭이고 가운데가 일정이다.
         final bottom = MediaQuery.of(context).padding.bottom;
         // 떠 있는 유리 알약 — 유리는 이 이동 층에만 쓴다. 카드에는 안 쓴다(HIG "재질").
         return Padding(
@@ -180,21 +149,22 @@ class _ShellNav extends StatelessWidget {
                 constraints: const BoxConstraints(minHeight: 66),
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
                 decoration: BoxDecoration(
-                  // 흰색 55% — 예전 67% 는 거의 불투명했다. 뒤가 비쳐야 유리다.
-                  color: const Color(0x8CFFFFFF),
+                  // 흰색 88% — 흰 바탕 위에서는 외곽선이 알약을 만들고, 스크롤 밑의
+                  // 콘텐츠가 살짝 비친다(유리).
+                  color: const Color(0xE0FFFFFF),
                   borderRadius: BorderRadius.circular(26),
-                  border: Border.all(color: const Color(0xB3FFFFFF)),
+                  border: Border.all(color: T.cardBorder),
                   boxShadow: const [
                     BoxShadow(color: T.barShadow, blurRadius: 30, offset: Offset(0, 12)),
                   ],
                 ),
-                // 다섯 칸 전부 Expanded — 같은 폭이라 좌우 2+2 가 대칭이다.
+                // 다섯 칸 전부 Expanded — 같은 폭이라 좌우가 대칭이다.
                 child: Row(children: [
                   item(Icons.home_rounded, '홈', 0),
                   item(Icons.map_outlined, '지도', 1),
-                  walkCell(),
-                  item(Icons.forum_outlined, '커뮤니티', 2),
-                  item(Icons.chat_bubble_outline, '채팅', 3),
+                  item(Icons.event_note_outlined, '일정', 2),
+                  item(Icons.forum_outlined, '커뮤니티', 3),
+                  item(Icons.chat_bubble_outline, '채팅', 4),
                 ]),
               ),
             ),

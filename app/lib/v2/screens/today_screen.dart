@@ -13,8 +13,6 @@ import '../widgets/walk_safety_card.dart';
 import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
 import 'main_shell.dart';
-import 'schedule_screen.dart';
-import '../data/local_notification_sink.dart';
 import 'start_walk.dart';
 import 'family_screen.dart';
 import 'insight_screen.dart';
@@ -51,8 +49,7 @@ class TodayScreen extends StatelessWidget {
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        // 날짜 줄이 달력의 문이다(#446). 일정 탭이 메뉴바에서 빠지면서 — 탭 다섯에
-                        // 가운데 산책까지 두면 좌우가 3:2 로 안 맞았다 — 홈이 그 자리를 맡는다.
+                        // 날짜 줄도 달력의 문이다(#446) — 탭이 있어도 오늘 날짜를 누르면 오늘로 간다.
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => openSchedule(context),
@@ -197,10 +194,10 @@ class TodayScreen extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: i == sel ? T.warmMid.withValues(alpha: 0.16) : const Color(0x80FFFFFF),
+              color: i == sel ? T.warmMid.withValues(alpha: 0.16) : T.surface,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: i == sel ? T.warmMid : const Color(0x66FFFFFF),
+                color: i == sel ? T.warmMid : T.cardBorder,
                 width: i == sel ? 1.6 : 1,
               ),
             ),
@@ -362,9 +359,9 @@ class TodayScreen extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           gradient: gradient,
-          color: filled ? null : const Color(0xCCFFFFFF),
+          color: filled ? null : T.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: filled ? Colors.transparent : const Color(0x80FFFFFF)),
+          border: Border.all(color: filled ? Colors.transparent : T.cardBorder),
           boxShadow: filled
               ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 14, offset: const Offset(0, 8))]
               : null,
@@ -388,10 +385,6 @@ class TodayScreen extends StatelessWidget {
 
 }
 
-/// 일정표를 **민다** — 탭이 아니라서(#446). 홈의 날짜 줄과 "오늘 할 일" 줄이 이 문을 쓴다.
-///
-/// 알림 싱크는 여기서 물려 준다 — 화면이 스스로 만들면 위젯 테스트가 그것을 갈아끼울 수
-/// 없고, 진짜는 테스트 바인딩에 채널이 없어 던진다(#420).
-Future<void> openSchedule(BuildContext context) => Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ScheduleScreen(reminderSink: LocalNotificationSink())),
-    );
+/// 일정 탭으로 간다. 홈의 날짜 줄과 "오늘 할 일" 줄이 이 문을 쓴다 — 일정은 탭이다(#446,
+/// 사장님: "일정 탭은 필수").
+void openSchedule(BuildContext context) => RootTab.index.value = 2;
