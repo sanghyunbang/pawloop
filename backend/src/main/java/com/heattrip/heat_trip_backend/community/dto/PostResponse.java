@@ -3,12 +3,13 @@ package com.heattrip.heat_trip_backend.community.dto;
 import com.heattrip.heat_trip_backend.community.entity.Post;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * 글 하나 — 계약의 {@code Post}.
  *
  * <p>계약의 {@code required} 는 {@code [id, author, board, title, body, commentCount,
- * reactions, createdAt]} 이다. {@code loc}·{@code contentId} 만 {@code null} 이 될 수 있다. *
+ * reactions, createdAt, media]} 다. {@code loc}·{@code contentId} 만 {@code null} 이 될 수 있다. *
  * <h2>{@code createdAt} 은 {@code Instant} 다 — {@code LocalDateTime} 이 아니다</h2>
  * <p>Jackson 이 {@code LocalDateTime} 을 <b>오프셋 없이</b> 직렬화한다
  * ({@code "2026-09-03T00:25:33.92"}). 계약은 {@code format: date-time} 이라고 선언해 뒀는데
@@ -30,6 +31,11 @@ import java.time.Instant;
  * <p><b>{@code null} 이 "한 번도 안 고쳤다" 이다</b>(#211). {@code createdAt} 을 복사해 채우지
  * 않는다 — 그러면 화면이 모든 글에 '수정됨' 을 붙인다. {@code Comment} 에는 없다. 댓글 수정
  * 경로가 계약에 없어서다.
+ *
+ * <h2>{@code media} 는 항상 있다 — 비어 있을 수 있을 뿐 (#429)</h2>
+ * <p>사진 없는 글은 {@code []} 다. {@code null} 을 안 쓰는 이유는 앱이 "없다" 와 "안 왔다" 를
+ * 가를 이유가 없어서다. 순서는 올린 순서다. 영상이면 {@code posterUrl} 이 썸네일이고
+ * {@code url} 이 재생할 파일이다.
  */
 public record PostResponse(
         long id,
@@ -58,36 +64,54 @@ public record PostResponse(
          * <p>동 이름을 안 싣는 것이 이 필드의 요점이다. 남의 사는 곳을 구보다 좁히면
          * 그것만으로 사람을 찾아갈 수 있다.
          */
-        String authorDistrict) {
+        String authorDistrict,
+
+        /** 붙은 사진·영상 (#429). 올린 순서. 없으면 빈 목록이다. */
+        List<PostMedia> media) {
 
     /**
      * 카드에 그릴 만큼의 코스. 선은 <b>이미 잘라 낸 것을 더 줄인 것</b>(최대 40점)이라
      * 온전한 선이 필요하면 {@code GET /api/courses/&#123;id&#125;} 를 부른다.
      */
-    public record PostCourse(long id, String name, int distanceM, java.util.List<java.util.List<Double>> path) {
+    public record PostCourse(long id, String name, int distanceM, List<List<Double>> path) {
+    }
+
+    /**
+     * 카드에 그릴 만큼의 미디어 — 계약의 {@code PostMedia}.
+     *
+     * @param kind       {@code image} 또는 {@code video}
+     * @param posterUrl  영상의 썸네일. 사진은 {@code null}
+     * @param width      픽셀 폭. 앱이 올릴 때 준 값이라 없을 수 있다 — 없으면 화면이 정사각형 자리를 잡는다
+     * @param durationMs 영상 길이. 사진은 {@code null}
+     */
+    public record PostMedia(long id, String kind, String url, String posterUrl,
+                            Integer width, Integer height, Integer durationMs) {
     }
 
     /** 가리기와 무관한 자리 — 방금 내가 쓰거나 고친 글이다. */
-    public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions) {
-        return of(post, commentCount, reactions, false, null, null);
+    public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
+                                  List<PostMedia> media) {
+        return of(post, commentCount, reactions, false, null, null, media);
     }
 
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
-                                  boolean hiddenByBlock) {
-        return of(post, commentCount, reactions, hiddenByBlock, null, null);
+                                  boolean hiddenByBlock, List<PostMedia> media) {
+        return of(post, commentCount, reactions, hiddenByBlock, null, null, media);
     }
 
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
-                                  boolean hiddenByBlock, PostCourse course) {
-        return of(post, commentCount, reactions, hiddenByBlock, course, null);
+                                  boolean hiddenByBlock, PostCourse course, List<PostMedia> media) {
+        return of(post, commentCount, reactions, hiddenByBlock, course, null, media);
     }
 
     /**
      * @param authorDistrict 글쓴이의 시군구 이름. 서비스가 {@code NeighborhoodCatalog} 로
      *                       찾아 넣는다 — 사용자가 보낸 문자열이 아니다(#342).
+     * @param media          붙은 사진·영상. {@code null} 이면 빈 목록으로 나간다
      */
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
-                                  boolean hiddenByBlock, PostCourse course, String authorDistrict) {
+                                  boolean hiddenByBlock, PostCourse course, String authorDistrict,
+                                  List<PostMedia> media) {
         return new PostResponse(
                 post.getId(),
                 PersonRefResponse.of(post.getUser()),
@@ -102,6 +126,7 @@ public record PostResponse(
                 post.updatedAtInstant(),
                 hiddenByBlock,
                 course,
-                authorDistrict);
+                authorDistrict,
+                media == null ? List.of() : List.copyOf(media));
     }
 }

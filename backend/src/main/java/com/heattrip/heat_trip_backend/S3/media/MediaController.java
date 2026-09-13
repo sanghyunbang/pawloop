@@ -72,20 +72,36 @@ public class MediaController {
         @RequestParam(name = "category") UploadCategory category, // [F] Enum → 문서에서 선택형
         @RequestParam(name = "refType", required = false) String refType, // [G] 도메인 연결 메타
         @RequestParam(name = "refId",   required = false) String refId,
+        @Parameter(description = "Pixel width — only with a single file (#429)")
+        @RequestParam(name = "width",  required = false) @Min(1) Integer width,
+        @Parameter(description = "Pixel height — only with a single file (#429)")
+        @RequestParam(name = "height", required = false) @Min(1) Integer height,
         @CurrentUser User me // [H] 인증 주체. 해석은 CurrentUserArgumentResolver 한 곳뿐이다 (이슈 #5)
     ) {
-        var saved = mediaService.uploadMany(files, category, me.getId().toString(), refType, refId); // [I] 업로드+저장
-        var body = saved.stream().map(m -> new MediaItemResponse(
-            m.getId(),
-            m.getObjectKey(),                                 // S3 object key
-            mediaService.publicUrl(m.getObjectKey()),         // [J] CDN 공개 URL 조립
-            m.getContentType(),
-            m.getSize(),
-            m.getCategory(),
-            m.getRefType(),
-            m.getRefId()
-        )).toList();
-        return ResponseEntity.ok(body); // [K] 200 OK + DTO 리스트
+        // 영상은 이 문으로 안 들어온다 — api.heattrip.link 앞의 Cloudflare 가 100MB 에서 끊는다.
+        // 서명 URL 로 S3 에 직접 올리는 경로가 따로 있다(#429). 여기서 막지 않으면 100MB 짜리
+        // 본문이 서버 메모리를 지나다 터널에서 죽고, 사용자는 "네트워크 오류" 만 본다.
+        if (category.isVideo()) {
+            throw new IllegalArgumentException("영상은 이 경로로 올릴 수 없습니다. 서명 URL 로 올려 주세요.");
+        }
+        // 크기는 파일 하나에 하나다. 여러 장에 한 쌍을 주면 어느 장의 것인지 모른다.
+        if ((width != null || height != null) && files.size() != 1) {
+            throw new IllegalArgumentException("width·height 는 파일이 하나일 때만 줄 수 있습니다.");
+        }
+        if ((width == null) != (height == null)) {
+            throw new IllegalArgumentException("width·height 는 함께 줘야 합니다.");
+        }
+        var saved = mediaService.uploadMany(files, category, me.getId().toString(), refType, refId,
+                width, height); // [I] 업로드+저장
+        return ResponseEntity.ok(saved.stream().map(this::toItem).toList()); // [K] 200 OK + DTO 리스트
+    }
+
+    /** [J] CDN 공개 URL 을 여기서 조립한다 — DTO 는 저장소를 모른다. */
+    private MediaItemResponse toItem(MediaObject m) {
+        return MediaItemResponse.of(
+                m,
+                mediaService.publicUrl(m.getObjectKey()),
+                m.getPosterKey() == null ? null : mediaService.publicUrl(m.getPosterKey()));
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -176,16 +192,7 @@ public class MediaController {
         @CurrentUser User me
     ) {
         var m = mediaService.replace(mediaId, file, me.getId().toString());
-        return ResponseEntity.ok(new MediaItemResponse(
-            m.getId(),
-            m.getObjectKey(),
-            mediaService.publicUrl(m.getObjectKey()),
-            m.getContentType(),
-            m.getSize(),
-            m.getCategory(),
-            m.getRefType(),
-            m.getRefId()
-        ));
+        return ResponseEntity.ok(toItem(m));
     }
 
     // ─────────────────────────────────────────────────────────────────────

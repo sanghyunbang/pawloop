@@ -256,6 +256,11 @@ step "38_crew_favor.sql"
 want 1 "$(has_table crew_favor)" "crew_favor 표 (없으면 부팅이 validate 에서 죽는다)"
 want 1 "$(check_has ck_crew_favor_slot afternoon)" "ck_crew_favor_slot 이 afternoon 을 받는다 (없으면 아무 문자열이나 시간대가 된다)"
 
+step "39_post_media.sql"
+want 1 "$(has_column media_objects status)" "media_objects.status 컬럼 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(check_has ck_media_status pending)" "ck_media_status 가 pending 을 받는다 (없으면 아무 문자열이나 상태가 된다)"
+want 1 "$(has_index media_objects idx_media_orphan)" "idx_media_orphan (없으면 고아 청소가 표 전체를 훑는다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

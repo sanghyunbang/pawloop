@@ -684,12 +684,13 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
   "title": "서울숲 아침 산책 코스 추천",
   "body": "이른 아침엔 사람이 적어서 대형견도 편해요. 잔디마당은 목줄 필수!",
   "contentId": "126508",              // nullable — Place.contentId 와 같은 키
-  "loc": "서울숲"                      // nullable — 표시용 문자열
+  "loc": "서울숲",                     // nullable — 표시용 문자열
+  "mediaIds": [312, 313]              // 선택 — POST /media 가 돌려준 id (#429). 최대 10
 }
-// 201 Created → 6.2 상세 반환
+// 201 Created → 6.2 상세 반환. media[] 에 붙은 사진이 올린 순서로 든다
 ```
 
-검증: `title` 1~100자, `body` 1~5000자, `board` ∈ enum.
+검증: `title` 1~100자, `body` 1~5000자, `board` ∈ enum. `mediaIds` 는 **내가 올렸고 · 아직 어디에도 안 붙었고 · `ready` 인 것**만 붙고, 하나라도 아니면 400 이고 글도 안 생긴다(§18).
 
 ### 6.4 글 수정 — ✅ 구현(#211)
 
@@ -703,6 +704,8 @@ PATCH /api/community/posts/{postId}   # 200, 고쳐진 Post 전체
 
 **`board`·`title`·`body` 셋만 바꿉니다.** 보낸 키만 바뀌고, 하나도 안 보내면 `400` 입니다 — 아무 일도 안 하면서 `200` 을 주면 "고쳐졌다" 로 읽힙니다. 공백만 보내도 `400` 입니다.
 
+**`mediaIds` 는 통째로 갈아 끼웁니다**(#429). 키가 없으면 안 바꾸고, `[]` 면 전부 뗍니다. 목록에서 빠진 것은 지워집니다 — S3 객체까지. 새로 든 것은 §6.3 과 같은 조건(내 것 · 아직 안 붙음 · `ready`)이고, 하나라도 아니면 `400` 이고 아무것도 안 바뀝니다.
+
 **`loc`·`contentId` 는 이 요청으로 못 바꿉니다.** 그 둘은 비울 수 있어야 하는데(장소 연결 해제), 그러려면 JSON 의 "키가 없음" 과 "명시적 `null`" 을 구별해야 합니다 — 저장소 최초의 `PATCH` 를 그 결정과 함께 들이지 않았습니다. 장소 연결은 지우고 다시 쓰면 됩니다.
 
 **`Post.updatedAt` 이 여기서 생깁니다.** `null` 이면 한 번도 안 고친 글이고, **값이 실제로 바뀐 경우에만** 찍힙니다 — 같은 값을 다시 보내는 것은 수정이 아닙니다. `Comment` 에는 없습니다. 댓글 수정 경로가 계약에 없습니다.
@@ -714,6 +717,8 @@ DELETE /api/community/posts/{postId}   # 204
 ```
 
 **내가 쓴 글만 지웁니다.** 댓글과 반응이 함께 사라집니다 — `fk_comment_post`·`fk_reaction_post` 가 `ON DELETE CASCADE` 입니다. 부모 없는 행을 남기면 어느 목록에도 안 뜨면서 자리만 차지합니다(`14_community.sql` §D).
+
+**붙은 사진·영상도 함께 사라집니다 — S3 객체까지**(#429). DB 의 CASCADE 로는 안 됩니다: `media_objects` 는 `post` 로 나가는 FK 가 없고(`ref_type`·`ref_id` 는 불투명한 쌍), 있어도 버킷의 파일은 DB 가 모릅니다. 서비스가 `MediaAttachment.detachAll` 로 지웁니다.
 
 **남의 글은 `404` 가 아니라 `403`** 입니다. `Dogs`·`Walks` 는 404 로 합치지만(ADR-0017 규약 3 — "남의 것과 없는 것이 구별되지 않는다") 커뮤니티는 반대입니다 — 글은 누구나 읽을 수 있어서 **존재가 이미 공개**라, 404 로 숨겨도 방금 `GET` 으로 본 것을 숨기는 셈이고 아무것도 못 가립니다. 대신 사용자가 "지웠는데 사라지지 않았다" 로 읽습니다.
 
@@ -978,6 +983,34 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 지우면 그 크루의 **품앗이와 그것이 만든 달력 줄까지** 사라진다.
 
 
+
+## 18. 미디어 (Media) — ✅ 서버 구현(#429)
+
+커뮤니티 글에 붙는 사진·영상. **업로드가 먼저고 글이 나중입니다** — 여기서 받은 `id` 를 `PostInput.mediaIds`(§6.3) 나 `PostPatch.mediaIds`(§6.4) 에 싣습니다.
+
+| 메서드 | 경로 | 하는 일 |
+|:---|:---|:---|
+| `POST` | `/media` (multipart) | 사진 올리기. **한 요청에 한 장**이 기본이고 `width`·`height` 를 함께 줍니다(파일이 하나일 때만). 장당 **10MB** 를 넘으면 `400`. `category=POST_VIDEO` 는 `400` — 영상은 서명 URL 로 갑니다 |
+| `DELETE` | `/media/{mediaId}` | 내가 올린 것 지우기 — S3 객체까지. **내 것이 아니면 `404`**(남의 것과 없는 것을 구별해 주지 않습니다, ADR-0017 규약 3) |
+
+```json
+// POST /media  (multipart/form-data: files=<jpeg>, category=POST_IMAGE, width=1600, height=1200)
+// 200
+[{ "id": 312, "key": "posts/7/2026/09/….jpg", "url": "https://cdn…/posts/7/2026/09/….jpg",
+   "contentType": "image/jpeg", "size": 412331, "category": "POST_IMAGE",
+   "refType": null, "refId": null, "status": "ready",
+   "posterUrl": null, "width": 1600, "height": 1200, "durationMs": null }]
+```
+
+**올린 것은 아직 어디에도 안 붙은 상태입니다**(`refType: null`). 글을 만들면 서버가 `ref_type='POST'`·`ref_id=post.id` 를 채웁니다 — **내가 올렸고 · 아직 안 붙었고 · `ready` 인 것**만, 조건부 UPDATE 의 영향 행 수로 판정합니다(📌 #86 원칙 5). 같은 사진을 두 글에 동시에 붙여도 하나만 이깁니다. 하루 안에 글에 안 붙으면 서버가 새벽 4:10 에 거둡니다(`MediaOrphanSweeper`).
+
+**위치 메타데이터는 기기에서 지우고 올립니다.** 폰 카메라는 EXIF 에 촬영 좌표를 넣고, 그대로 올리면 좌표가 단말을 떠납니다(#235 A안). 앱이 긴 변 1600px 로 다시 인코딩해 올리며 그때 EXIF 가 통째로 사라집니다 — `UPLOAD_LOCATION` 과 무관하게 무조건입니다. 서버는 다시 인코딩하지 않습니다(Mac mini 한 대). 자세한 근거는 `docs/00-product/legal-lbs-compliance.md` §7.
+
+**2026-09-13 이전에는 이 경로가 폰 사진을 못 받았습니다.** `spring.servlet.multipart` 상한이 Spring 기본값(파일당 1MB)이었는데 폰 사진은 3~8MB 입니다 — 실제 사진으로 쓰인 적이 없어서 아무도 못 봤습니다.
+
+**영상은 이 문으로 안 옵니다.** `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을 100MB 까지만 받습니다. 영상은 세 단계로 갑니다 — ① 크기·형식을 알려 서명 URL 과 `id`(`status: pending`)를 받고 ② 앱이 S3 에 직접 올리고 ③ 다 올렸다고 알리면 서버가 S3 에 실제 크기·형식을 묻고 `ready` 로 바꿉니다. **다음 PR** 이고, 그 경로 둘은 그때 계약에 올립니다(여기 미리 적으면 `ApiSpecStatusMarkersTest` 가 "✅ 절에 계약 밖 경로" 로 막습니다 — 맞는 지적입니다). 표의 자리(`status`·`poster_key`·`duration_ms`)는 `39_post_media.sql` 이 함께 팠습니다.
+
+옛 경로 넷 — 공개 URL 조립 · presigned 발급 · 파일 교체 · 참조 단위 일괄 삭제 — 은 감정 여행 시절 것이라 계약에 안 올렸습니다. 앱이 안 씁니다. 핸들러는 `MediaController` 에 남아 있습니다.
 
 ## 11. 프론트↔API 매핑 요약
 

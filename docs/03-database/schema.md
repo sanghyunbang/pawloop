@@ -1375,6 +1375,61 @@ CREATE TABLE crew (
 
 ---
 
+## 37. `media_objects` — 업로드 객체 원장 (**실재**)
+
+S3 에 올린 파일 하나에 행 하나. 감정 여행 시절(여정·리뷰·프로필 사진)부터 있던 표이고, #429 가 커뮤니티 글의 사진·영상을 여기에 얹었다 — **표를 새로 안 만들었다.** `ref_type`·`ref_id` 가 "어느 도메인의 무엇에 붙었나" 를 불투명한 쌍으로 들게 처음부터 만들어져 있었고, 업로드·삭제·URL 조립이 다 있었다. 같은 원장을 둘로 나누면 삭제와 청소가 두 벌이 된다.
+
+```sql
+CREATE TABLE media_objects (
+  id            BIGINT        NOT NULL AUTO_INCREMENT,
+  category      ENUM('JOURNEY_IMAGE','POST_IMAGE','POST_VIDEO','PROFILE_IMAGE','REVIEW_IMAGE') NOT NULL,
+  owner_id      VARCHAR(255)  NOT NULL COMMENT 'users.id 를 문자열로 — 아래 각주',
+  ref_type      VARCHAR(255)  NULL COMMENT '어디에 붙었나. POST 면 커뮤니티 글. NULL 이면 아직 안 붙었다',
+  ref_id        VARCHAR(255)  NULL COMMENT '무엇에 붙었나. ref_type=POST 면 post.id. FK 는 없다 — 아래 각주',
+  media_key     VARCHAR(512)  NOT NULL COMMENT 'S3 object key. URL 은 런타임에 CloudFront 도메인과 조립한다',
+  original_name VARCHAR(255)  NULL,
+  content_type  VARCHAR(255)  NULL,
+  size          BIGINT        NOT NULL,
+  status        VARCHAR(10)   NOT NULL COMMENT 'pending|ready — 영상은 앱이 S3 에 직접 올려서 중간 상태가 있다',
+  poster_key    VARCHAR(512)  NULL COMMENT '영상 썸네일의 S3 키. 사진은 NULL',
+  width         INT           NULL COMMENT '앱이 준 픽셀 폭. 서버는 이미지를 안 연다',
+  height        INT           NULL,
+  duration_ms   INT           NULL COMMENT '영상 길이. 사진은 NULL',
+  created_at    DATETIME(6)   NOT NULL,
+  updated_at    DATETIME(6)   NULL,
+  deleted_at    DATETIME(6)   NULL COMMENT '감정 여행 시절의 소프트 삭제 자리. 지금 코드는 안 쓴다 — 지울 때 행을 지운다',
+  PRIMARY KEY (id),
+  UNIQUE KEY UK3pkjswl54cvrded30nci3u45t (media_key),
+  KEY idx_media_owner (owner_id),
+  KEY idx_media_ref (ref_type, ref_id),
+  KEY idx_media_orphan (ref_type, created_at),
+  CONSTRAINT ck_media_status CHECK (status IN ('pending','ready'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `category` | `ENUM` | NOT NULL | `JOURNEY_IMAGE`·`PROFILE_IMAGE`·`REVIEW_IMAGE` 는 감정 여행 시절 값이다. 운영 DB 에 그 값의 행이 남아 있어 못 뺀다. **순서는 알파벳순이다** — 아래 각주 |
+| `owner_id` | `VARCHAR(255)` | NOT NULL, INDEX | 올린 사람. `users.id` 를 문자열로 적는다 |
+| `ref_type` · `ref_id` | `VARCHAR(255)` | nullable, INDEX(ref_type, ref_id) | 어디의 무엇에 붙었나. 글이면 `('POST', post.id)`. **둘 다 `NULL` 이면 아직 안 붙은 것**이고 하루 뒤 청소 대상이다 |
+| `media_key` | `VARCHAR(512)` | NOT NULL, **UNIQUE** | S3 키. 같은 키를 두 번 올리는 경합은 이 제약이 오류 하나로 끝낸다(📌 #86 원칙 5) |
+| `status` | `VARCHAR(10)` | NOT NULL, **CHECK** `pending|ready` | 파일이 S3 에 있는가. `pending` 은 글에 안 붙는다 |
+| `poster_key` | `VARCHAR(512)` | nullable | 영상 썸네일. 앱이 만들어 따로 올린다 |
+| `width` · `height` · `duration_ms` | `INT` | nullable | 앱이 준 값. 피드가 자리를 미리 잡는다 — 없으면 정사각형 |
+
+> **각주 — `post` 로 나가는 FK 가 없는 이유.** `ref_type`·`ref_id` 는 `chat_room.origin_kind`·`origin_ref` 와 같은 **불투명한 쌍**이다(ADR-0011 의 방식). FK 를 걸려면 `S3` 의 엔티티가 `community.entity.Post` 를 들어야 하고 그건 모듈 경계를 넘는다 — 화살표는 `community → S3` 한 방향이어야 한다(`S3/MediaAttachment`). 글을 지울 때 사진을 함께 지우는 것은 **서비스**가 한다(`CommunityService.deletePost` → `MediaAttachment.detachAll`). DB 의 CASCADE 로는 어차피 안 된다 — 버킷의 파일은 DB 가 모른다.
+>
+> **각주 — `status` 가 왜 있나.** 사진은 서버가 받아 S3 에 놓지만 영상은 **앱이 S3 에 직접** 올린다. `api.heattrip.link` 앞의 Cloudflare 무료 요금제가 요청 본문을 100MB 까지만 받기 때문이다. 그러면 "자리는 잡았는데 아직 안 올라온" 상태가 생기고 그것이 `pending` 이다. "붙었다" 는 상태가 아니다 — `ref_type` 이 말한다. 여기에 또 두면 같은 사실이 두 곳에 산다(`crew_favor.status` 와 같은 판단).
+>
+> **각주 — 붙지 않은 것은 하루 뒤 거둔다.** 업로드가 글보다 먼저라, 글을 안 쓰고 나간 사람의 파일이 `ref_type IS NULL` 로 남는다. `MediaOrphanSweeper` 가 새벽 4:10 에 `ref_type IS NULL AND created_at < 어제` 를 묻고 행과 S3 객체를 지운다 — `idx_media_orphan` 이 그 질문의 인덱스다. **`POST_*` 카테고리만** 본다. 벌크 삭제라 두 인스턴스가 동시에 돌아도 같다(📌 #86 원칙 2).
+>
+> **각주 — `owner_id` 가 문자열인 이유.** 감정 여행 시절의 흔적이다. 이슈 #5 이전에는 JWT subject(이메일 또는 `kakao_1234567890`)가 들어갔고 지금은 `users.id` 다. 소유권 검사는 `String.equals` 라 옛 행은 진짜 주인에게도 안 맞는다 — 보안 구멍은 아니다(옛 값은 숫자와 겹칠 수 없다). 백필 여부는 [migration.md](./migration.md) §3-1.
+>
+> **각주 — enum 의 순서.** Hibernate 가 `@Enumerated(STRING)` 을 MySQL `enum(...)` 으로 뽑는데, 상수를 **알파벳순으로 정렬해** 뽑는다 — 선언 순서가 아니다(2026-09-13 실측. 옛 셋이 우연히 알파벳순이라 몰랐다). 값을 더하려면 컬럼 타입을 다시 쓰는데(`39_post_media.sql` 의 `MODIFY`), 그 순서도 알파벳순이어야 정본 재생성과 갈리지 않는다. `SchemaDdlDriftTest` 가 `column_type` 문자열을 그대로 비교한다. 순서가 바뀌어도 MySQL 은 있는 행의 값을 **이름으로** 옮긴다 — `PROFILE_IMAGE` 는 그대로 `PROFILE_IMAGE` 다.
+
+---
+
 ## 부록 A. 정본의 표 26개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
@@ -1391,11 +1446,11 @@ CREATE TABLE crew (
 | `comment` | 실재 §8 | `community` | 게시글 댓글 |
 | `device_token` | 실재 §29 | `push` | 기기 토큰 원장 — 푸시(#83) |
 | `crew_favor` | 실재 §36 | `crew` | **품앗이**(#417). 맡으면 크루 소유 일정 한 줄이 생기고 `schedule_id` 가 그것을 든다. 금액도 평점도 없다 |
-| `crew` | 실재 §35 | `crew` || `crew` | 실재 §35 | `crew` | 동네 반려인 모임(#417). 멤버십은 `chat_room_member` 가 든다 — `crew_member` 를 안 만든다 |
+| `crew` | 실재 §35 | `crew` | 동네 반려인 모임(#417). 멤버십은 `chat_room_member` 가 든다 — `crew_member` 를 안 만든다 |
 | `dog` | 실재 §3 | `dog` | 반려동물 프로필(소프트 삭제 `deleted_at`) |
 | `family_group` | 실재 §11 | `group` | 가족 케어 그룹 |
 | `kto_call_budget` | 실재 §21 | `place` | KTO 일 호출 예산 |
-| `media_objects` | 레거시 | `S3` | 업로드 객체 원장(S3 objectKey) |
+| `media_objects` | 실재 §37 | `S3` · `community` | 업로드 객체 원장(S3 key). #429 가 커뮤니티 글의 사진·영상을 여기에 얹었다 — `ref_type=POST`. 안 붙은 것은 하루 뒤 거둔다 |
 | `pet_place_detail` | 실재 §23 | `place` | 장소 상세 캐시 |
 | `place_catalog` | 실재 §24 | `place` | 장소 한 벌 — 출처별 한 행(kto·localdata·durunubi, #291) |
 | `place_cell` | 실재 §22 | `place` | 주변 장소 셀 스냅샷 |

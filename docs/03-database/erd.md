@@ -45,6 +45,7 @@ erDiagram
 
     post     ||--o{ comment   : "댓글"
     post     ||--o{ reaction  : "반응"
+    post     ||--o{ media_objects : "첨부 사진·영상 (ref_type POST, ref_id post.id - DB FK 없음, #429)"
 
     users ||--o{ report        : "신고한다 (FK 없음 - 탈퇴가 신고를 못 지운다)"
     report ||--o{ report_snapshot : "대상 스냅샷 (CASCADE)"
@@ -298,6 +299,21 @@ erDiagram
         DATETIME created_at
     }
 
+    media_objects {
+        BIGINT   id PK
+        VARCHAR  category    "JOURNEY_IMAGE|PROFILE_IMAGE|REVIEW_IMAGE|POST_IMAGE|POST_VIDEO"
+        VARCHAR  owner_id    "users.id 를 문자열로 - 감정 여행 시절의 흔적"
+        VARCHAR  ref_type    "POST 면 글. NULL 이면 아직 안 붙었다"
+        VARCHAR  ref_id      "post.id - FK 는 없다"
+        VARCHAR  media_key   "S3 object key. UNIQUE"
+        VARCHAR  status      "pending|ready - 영상은 앱이 S3 에 직접 올려 중간 상태가 있다"
+        VARCHAR  poster_key  "영상 썸네일. 사진은 NULL"
+        INT      width
+        INT      height
+        INT      duration_ms
+        DATETIME created_at
+    }
+
     bookmark {
         BIGINT   id PK
         BIGINT   user_id FK
@@ -402,7 +418,7 @@ erDiagram
 | `course` | 실재 | 산책 기록 중에 "여기 좋다" 고 남긴 코스(#339). `walk.path` 에서 **양 끝 100m 를 잘라 낸 선**을 들고, 산책을 지워도 남는다(`walk_id` 가 NULL 이 된다). 기본은 비공개이고 공개한 것만 지도의 "이웃 코스" 에 나온다. 가까운 것 고르기는 기기에서 한다(A안 #235). |
 | `care_log` | 실재 | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. `dog_id` 는 `dog.id` 로 가는 FK 다(**#154**, `ON DELETE SET NULL` — 반려동물이 지워져도 기록은 남는다). 값은 아직 항상 `NULL` — 쓰기 경로가 `dogId` 를 안 받는다([schema.md §17](./schema.md)). |
 | `crew_favor` | 실재 | **품앗이**(#417) — "12/24 오후, 보리 두 시간만 봐 주실 분". **금액도 평점도 후기도 없다** — 돈이 오가면 중개자가 된다. 맡으면 크루 소유 일정 한 줄이 생기고(`owner_kind='room'`) 그 줄의 완료 표시가 "했다" 를 말한다 — 그래서 이 표에는 "끝남" 상태가 없다. |
-| `crew` | 실재 || `crew` | 실재 | **동네 반려인 모임**(#417). 이름·소개·동네·공개 범위·정원 다섯만 든다. **`crew_member` 를 안 만든다** — 크루의 멤버는 그 크루 방의 멤버이고 그것은 `chat_room_member` 다(ADR-0011). 방장도 컬럼이 아니라 그 방의 `OWNER` 멤버다. `chat_room` 으로 나가는 FK 도 없다 — 방 쪽이 `(origin_kind='CREW', origin_ref)` 로 이미 들고 있다. |
+| `crew` | 실재 | **동네 반려인 모임**(#417). 이름·소개·동네·공개 범위·정원 다섯만 든다. **`crew_member` 를 안 만든다** — 크루의 멤버는 그 크루 방의 멤버이고 그것은 `chat_room_member` 다(ADR-0011). 방장도 컬럼이 아니라 그 방의 `OWNER` 멤버다. `chat_room` 으로 나가는 FK 도 없다 — 방 쪽이 `(origin_kind='CREW', origin_ref)` 로 이미 들고 있다. |
 | `family_group` | 실재 | 가족 케어 그룹. **이름과 생성 시각만** 든다 — 초대코드도 멤버십도 여기 없다. 방은 `chat_room` 이 `origin_kind`/`origin_ref` 로 불투명하게 가리킨다. |
 | `chat_room` | 실재 | 채팅방. **가족 그룹 종속이 아니다** — 산책 크루 방도 같은 표에 산다. `UNIQUE(origin_kind, origin_ref)` 가 같은 출처에 방이 둘 생기는 것을 막고, `last_seq` 가 `room_seq` 발급기이자 미읽음 뺄셈의 좌변이다. |
 | `chat_room_member` | 실재 | 방 멤버십. **멤버십 표는 이것 하나다**(`group_member` 를 따로 만들지 않는다). 강퇴는 행 삭제가 아니라 `removed_at`+`rejoin_blocked`, 미읽음은 `last_read_seq` 뺄셈. |
@@ -414,6 +430,7 @@ erDiagram
 | `post` | 실재 | 커뮤니티 게시글. 게시판(board) 분류, 장소(`place`) 선택 태그 가능. `users` 1:N `post`. |
 | `comment` | 실재 | 게시글 댓글. `post` 1:N, `users` 1:N. |
 | `reaction` | 실재 | 게시글 반응(도움돼요/귀여워요/공감). `post` 1:N, `users` 1:N. |
+| `media_objects` | 실재 | 업로드 객체 원장 — S3 에 올린 파일 하나에 행 하나(#429). 감정 여행 시절부터 있던 표에 커뮤니티 글의 사진·영상을 얹었다: `ref_type=POST`·`ref_id=post.id` 로 붙고 **FK 는 없다**(불투명한 쌍, 모듈 경계). 안 붙은 채 하루 지난 것은 서버가 거둔다. `status` 는 영상 때문에 있다 — 앱이 S3 에 직접 올려서 "아직 안 올라온" 상태가 생긴다. |
 | `bookmark` | 계획 | 사용자가 저장한 장소. `users`·`place` 각각 1:N (사용자-장소 조합 유니크 권장). |
 | `kto_call_budget` | 실재 | KTO 일 호출 예산. `PRIMARY KEY(day, pool)` 이 1,000콜 한도를 지키는 유일한 장치다(#40). [schema.md §21](./schema.md). |
 | `place_cell` | 실재 | 주변 장소 셀 스냅샷 — 좌표를 0.02° 격자로 접은 키로 KTO 응답을 통째로 보관(#40). [schema.md §22](./schema.md). |

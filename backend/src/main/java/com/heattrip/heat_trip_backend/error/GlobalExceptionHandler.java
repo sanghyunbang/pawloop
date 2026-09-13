@@ -118,6 +118,22 @@ public class GlobalExceptionHandler {
      * 그게 없으면 클라이언트가 무엇이 틀렸는지 알 방법이 없다. <b>그러므로 이 예외를 던질 때
      * 식별자·토큰·이메일을 메시지에 넣지 마라</b> — 그 순간 응답으로 나간다(#6).
      */
+    /**
+     * 업로드가 {@code spring.servlet.multipart.max-file-size} 를 넘었다 — 이슈 #429.
+     *
+     * <p>413 이 아니라 <b>400</b> 인 이유는 {@code ChatBodySizeLimitFilter} 와 같다 — 같은
+     * 경로에서 "너무 크다" 를 거절하는 자리가 이미 400({@code ImageValidator} 의 용량 검사)이고,
+     * 크기에 따라 다른 코드를 내면 앱이 두 가지를 다뤄야 한다. 이 핸들러가 없으면 아래
+     * {@code Exception.class} 에 잡혀 500 으로 나간다 — 사용자 입력이 잘못된 것을 서버 잘못이라
+     * 말하는 셈이다.
+     */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadTooLarge(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(HttpStatus.BAD_REQUEST, "파일이 너무 큽니다. 사진은 한 장에 10MB 까지예요."));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class) // [C] 해당 타입 예외만 처리
     public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

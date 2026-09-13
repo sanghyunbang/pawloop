@@ -14,7 +14,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * <p>2026-09-05 에 {@code PlaceCatalogWarmupScheduler}(#279) 가 더해졌다 — 프로퍼티
  * {@code app.kto.catalog-warmup-enabled} 로 켜고 끄며, 테스트 프로파일에서는 빈 자체가
- * 안 뜬다. 다른 {@code @Scheduled} 를 되살릴 때는 이 목록이 바뀐다는 것을 알고 되살릴 것.
+ * 안 뜬다. 2026-09-13 에 {@code S3.media.MediaOrphanSweeper}(#429) 가 더해졌다 — 새벽 4:10,
+ * 붙지 않은 글 미디어를 거둔다. 다른 {@code @Scheduled} 를 되살릴 때는 이 목록이 바뀐다는
+ * 것을 알고 되살릴 것.
  */
 @Configuration
 @EnableScheduling
