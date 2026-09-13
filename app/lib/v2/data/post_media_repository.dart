@@ -16,6 +16,15 @@
 //
 // `CommunityFailure` 와 같은 모양이다. 400 은 서버가 이유를 준다(너무 크다 · 형식이 아니다) —
 // 그 문구를 그대로 쓴다. 지어내지 않는다.
+//
+// ## 영상은 세 단계다 (서버 #435)
+//
+// 영상은 서버를 안 지난다 — `api.heattrip.link` 앞의 Cloudflare 가 본문을 100MB 에서 끊는다.
+// ① `POST /media/videos` 로 자리를 잡고(서명 PUT, 15분) ② 그 URL 로 S3 에 **직접** 올리고
+// ③ `POST /media/{id}/complete` 에 포스터를 실어 끝낸다. ② 는 `AuthedClient` 를 **안 탄다** —
+// 서명 URL 에 `Authorization` 을 얹으면 S3 가 "인증이 둘" 이라고 거절한다. 그래서 토큰 없는
+// 클라이언트가 따로 있다([PostMediaRepository.new] 의 `plainClient`).
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -24,6 +33,7 @@ import 'package:http_parser/http_parser.dart';
 
 import '../../core/config/env.dart';
 import '../../core/net/authed_client.dart';
+import 'video_prep.dart';
 
 /// 올라간 사진 하나 — 계약의 `MediaItem` 중 앱이 쓰는 것.
 class UploadedPostMedia {
@@ -47,6 +57,30 @@ class UploadedPostMedia {
       width: json['width'] is num ? (json['width'] as num).toInt() : null,
       height: json['height'] is num ? (json['height'] as num).toInt() : null,
     );
+  }
+}
+
+/// 영상 세 단계의 첫 답 — 계약의 `VideoUploadTicket`.
+class VideoUploadTicket {
+  /// `complete` 에 쓰고, 그다음 `PostInput.mediaIds` 에 싣는 값.
+  final int id;
+  final String key;
+
+  /// 서명 PUT URL. 15분 뒤에는 S3 가 403 을 준다.
+  final Uri uploadUrl;
+
+  const VideoUploadTicket({required this.id, required this.key, required this.uploadUrl});
+
+  /// 계약의 키(`id`·`key`·`uploadUrl`)에서. 모양이 아니면 `null`.
+  static VideoUploadTicket? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final id = json['id'];
+    final key = json['key'];
+    final url = json['uploadUrl'];
+    if (id is! num || key is! String || url is! String) return null;
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) return null;
+    return VideoUploadTicket(id: id.toInt(), key: key, uploadUrl: uri);
   }
 }
 
@@ -103,12 +137,19 @@ class PostMediaRepository {
   /// 서버가 받는 카테고리. 다른 셋은 감정 여행 시절 것이다.
   static const String category = 'POST_IMAGE';
 
+  /// S3 로 직접 올리는 시간. 720p 60초는 수십 MB 다 — 카페 wifi 로 몇 분이다.
+  static const Duration videoPutTimeout = Duration(minutes: 5);
+
   final String baseUrl;
   final AuthedClient _authed;
 
-  PostMediaRepository({String? baseUrl, AuthedClient? client})
+  /// 토큰을 **안 붙이는** 길 — S3 서명 URL 로 갈 때만 쓴다.
+  final http.Client _plain;
+
+  PostMediaRepository({String? baseUrl, AuthedClient? client, http.Client? plainClient})
       : baseUrl = (baseUrl ?? Env.apiBase).replaceAll(RegExp(r'/+$'), ''),
-        _authed = client ?? AuthedClient.instance;
+        _authed = client ?? AuthedClient.instance,
+        _plain = plainClient ?? http.Client();
 
   /// 한 장 올린다. `ImagePrep` 을 지난 JPEG 만 여기 온다 — 원본을 넣는 길은 없다.
   ///
@@ -167,6 +208,119 @@ class PostMediaRepository {
     throw const PostMediaFailure(PostMediaFailureKind.network);
   }
 
+  // ─────────────────────────── 영상 — 세 단계 (#429, 서버 #435) ───────────────────────────
+
+  /// 영상 하나를 세 단계로 올린다 — ① 자리 잡기 ② S3 에 직접 PUT ③ 포스터와 함께 끝내기.
+  ///
+  /// `VideoPrep` 을 지난 파일만 여기 온다 — 위치 상자가 덮인 720p 다. [onProgress] 는 ② 의
+  /// 진행률(0..1)이다. 어느 단계에서 실패했든 다시 부르면 **처음부터**다 — 자리를 새로 잡는다.
+  /// 남은 `pending` 자리는 하루 뒤 서버가 거둔다.
+  Future<UploadedPostMedia> uploadVideo(
+    PreparedVideo video, {
+    void Function(double fraction)? onProgress,
+  }) async {
+    if (video.size > VideoLimits.maxBytes) {
+      throw PostMediaFailure(PostMediaFailureKind.rejected,
+          message: '영상이 너무 커요 · ${VideoLimits.maxBytes ~/ (1024 * 1024)}MB 까지 올릴 수 있어요');
+    }
+    final ticket = await _reserveVideo(video);
+    await _putToS3(ticket.uploadUrl, video, onProgress);
+    return _completeVideo(ticket.id, video.poster);
+  }
+
+  /// ① `POST /media/videos` — 계약 `VideoUploadRequest` 의 키 그대로. 크기를 모르면 `width`·
+  /// `height` 를 안 싣는다(둘은 함께여야 한다).
+  Future<VideoUploadTicket> _reserveVideo(PreparedVideo video) async {
+    final http.Response res;
+    try {
+      res = await _authed.postJson(Uri.parse('$baseUrl/media/videos'), body: {
+        'contentType': video.contentType,
+        'size': video.size,
+        if (video.width != null && video.height != null) ...{
+          'width': video.width,
+          'height': video.height,
+        },
+        'durationMs': video.durationMs,
+      }).timeout(timeout);
+    } catch (_) {
+      throw const PostMediaFailure(PostMediaFailureKind.network);
+    }
+    final body = _decode(res.bodyBytes);
+    _throwIfFailed(res.statusCode, body);
+    final ticket = VideoUploadTicket.tryParse(body);
+    if (ticket == null) throw const PostMediaFailure(PostMediaFailureKind.network);
+    return ticket;
+  }
+
+  /// ② 서명 URL 로 파일을 흘린다. **토큰을 안 붙인다.** 파일을 조각으로 읽어 보내므로 수십 MB 를
+  /// 통째로 메모리에 올리지 않는다.
+  Future<void> _putToS3(Uri uploadUrl, PreparedVideo video, void Function(double)? onProgress) async {
+    final request = http.StreamedRequest('PUT', uploadUrl)
+      // 서명에 묶인 값이다 — 다르면 S3 가 SignatureDoesNotMatch 로 거절한다.
+      ..headers['Content-Type'] = video.contentType
+      ..contentLength = video.size;
+    unawaited(_feed(request, video, onProgress));
+
+    final http.StreamedResponse res;
+    try {
+      res = await _plain.send(request).timeout(videoPutTimeout);
+      await res.stream.drain<void>();
+    } catch (_) {
+      throw const PostMediaFailure(PostMediaFailureKind.network);
+    }
+    if (res.statusCode == 403) {
+      // 서명이 만료됐거나(15분) Content-Type 이 다르다. 다시 부르면 자리를 새로 잡는다.
+      throw const PostMediaFailure(PostMediaFailureKind.rejected,
+          message: '올리는 데 너무 오래 걸렸어요 · 다시 시도해 주세요');
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw const PostMediaFailure(PostMediaFailureKind.network);
+    }
+  }
+
+  static Future<void> _feed(
+    http.StreamedRequest request,
+    PreparedVideo video,
+    void Function(double)? onProgress,
+  ) async {
+    var sent = 0;
+    try {
+      await for (final chunk in video.openRead()) {
+        request.sink.add(chunk);
+        sent += chunk.length;
+        onProgress?.call(video.size <= 0 ? 1 : (sent / video.size).clamp(0, 1).toDouble());
+      }
+    } catch (e, st) {
+      request.sink.addError(e, st);
+    } finally {
+      await request.sink.close();
+    }
+  }
+
+  /// ③ `POST /media/{id}/complete` — 포스터 한 장을 multipart 로. 서버가 S3 에 HEAD 로 확인하고
+  /// `ready` 로 바꾼다. 409 는 "아직 S3 에 없다" — 서버 문구를 그대로 든다.
+  Future<UploadedPostMedia> _completeVideo(int id, Uint8List poster) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/media/$id/complete'))
+      ..files.add(http.MultipartFile.fromBytes(
+        'poster',
+        poster,
+        filename: 'poster.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      ));
+    final http.Response res;
+    try {
+      final streamed = await _authed.send(request).timeout(timeout);
+      res = await http.Response.fromStream(streamed);
+    } catch (_) {
+      throw const PostMediaFailure(PostMediaFailureKind.network);
+    }
+    final body = _decode(res.bodyBytes);
+    _throwIfFailed(res.statusCode, body);
+    final item = UploadedPostMedia.tryParse(body);
+    if (item == null) throw const PostMediaFailure(PostMediaFailureKind.network);
+    return item;
+  }
+
   /// 상태 코드를 실패의 종류로 옮기는 곳은 여기 하나다.
   static void _throwIfFailed(int status, Object? body) {
     if (status >= 200 && status < 300) return;
@@ -175,6 +329,8 @@ class PostMediaRepository {
       400 => PostMediaFailure(PostMediaFailureKind.rejected, message: message),
       401 => const PostMediaFailure(PostMediaFailureKind.unauthorized),
       404 => PostMediaFailure(PostMediaFailureKind.notFound, message: message),
+      // 아직 그 상태가 아니다(영상이 S3 에 없다). 서버가 이유를 준다 — 다시 시도하면 자리를 새로 잡는다.
+      409 => PostMediaFailure(PostMediaFailureKind.rejected, message: message),
       429 => const PostMediaFailure(PostMediaFailureKind.rateLimited),
       _ => const PostMediaFailure(PostMediaFailureKind.network),
     };

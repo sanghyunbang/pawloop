@@ -62,17 +62,36 @@ class PostMedia {
     this.durationMs,
   });
 
-  /// 자리를 잡을 가로세로비. 크기를 모르면 1 이다 — 사진이 도착할 때마다 화면이 뛰지 않게
-  /// **미리** 잡는 것이 이 값의 목적이다. 너무 길거나 납작한 것은 카드 안에서 잘라 그린다.
+  /// 피드 카드에서 허용하는 가장 세로인 비율 — **4:5**(#440).
+  ///
+  /// 인스타그램(피드 1.91:1 ~ 4:5, 그보다 세로면 4:5 로 자름) · 페이스북(단일 사진 4:5 상한,
+  /// 릴스도 피드에서는 4:5) · 레딧(4:5 보다 세로면 피드에서 자르고 "See full image") 이 같은
+  /// 답이다. 세로 영상 포스터(9:16)를 원본 비율로 두면 360dp 폰에서 사진만 640dp 라 카드가
+  /// 한 화면에 안 들어온다 — 사장님이 짚은 것이 그것이다. 전체 보기는 원본 그대로다.
+  static const double minFeedAspectRatio = 4 / 5;
+
+  /// 가장 가로인 비율 — 인스타그램의 1.91:1 그대로. 파노라마는 가운데를 보여 준다.
+  static const double maxFeedAspectRatio = 1.91;
+
+  /// 카드에서 자리를 잡을 가로세로비. 크기를 모르면 1 이다 — 사진이 도착할 때마다 화면이
+  /// 뛰지 않게 **미리** 잡는 것이 이 값의 목적이다. [minFeedAspectRatio]~[maxFeedAspectRatio]
+  /// 밖은 그 끝으로 잘라 카드 안에서 가운데를 그린다(`BoxFit.cover`).
   double get aspectRatio {
     final w = width;
     final h = height;
     if (w == null || h == null || w <= 0 || h <= 0) return 1;
-    return (w / h).clamp(0.6, 1.8).toDouble();
+    return (w / h).clamp(minFeedAspectRatio, maxFeedAspectRatio).toDouble();
   }
 
   /// 카드에 그릴 그림. 영상이면 썸네일이고, 썸네일이 없으면 `null` — 그때는 어두운 칸이다.
   String? get thumbnailUrl => kind.isVideo ? posterUrl : url;
+
+  /// 영상 길이 표시 — `0:08` · `1:00`. 사진이거나 길이를 모르면 `null`.
+  String? get durationLabel {
+    final ms = durationMs;
+    if (!kind.isVideo || ms == null || ms < 0) return null;
+    return formatMediaDuration(ms);
+  }
 
   /// 모양이 아니면 `null`. 한 칸이 깨졌다고 글 전체를 버리지 않는다.
   static PostMedia? tryParse(Object? json) {
@@ -120,4 +139,11 @@ class PostMedia {
 
   @override
   int get hashCode => Object.hash(id, kind, url, posterUrl, width, height, durationMs);
+}
+
+/// `m:ss`. 내림이다 — 7.9초는 `0:07` 이다. 올림이면 59.1초짜리가 `1:00` 이 되어 60초 상한을
+/// 넘는 것처럼 보인다.
+String formatMediaDuration(int ms) {
+  final seconds = ms ~/ 1000;
+  return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
 }
