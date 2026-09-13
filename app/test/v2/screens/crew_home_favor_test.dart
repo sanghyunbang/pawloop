@@ -21,6 +21,7 @@ import 'package:heat_trip_flutter/v2/data/crew_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/domain/schedule.dart';
 import 'package:heat_trip_flutter/v2/screens/crew_home_screen.dart';
+import 'package:heat_trip_flutter/v2/widgets/form_kit.dart';
 
 const _base = 'https://api.example.test';
 
@@ -374,6 +375,16 @@ void main() {
           isNull,
           reason: '시간대에 기본값이 없다 — 미리 골라 두면 안 바꾼 채 올리는 사람이 생긴다');
       expect(find.byKey(const Key('crew-favor-dog-7')), findsOneWidget);
+      // 시트는 폼 부품이다(#445) — 흰 입력칸(아웃라인 없음) · 알약 칩 · 그라데이션 버튼.
+      expect(find.byType(GlassField), findsOneWidget);
+      expect(find.byType(PillChip), findsNWidgets(3 + 2), reason: '시간대 셋 + 아이 하나 + "아이 없이"');
+      expect(find.byType(PrimaryButton), findsOneWidget);
+      expect(tester
+              .widget<TextField>(find.descendant(
+                  of: find.byKey(const Key('crew-favor-note')), matching: find.byType(TextField)))
+              .decoration!
+              .border,
+          InputBorder.none);
 
       await tester.tap(find.byKey(const Key('crew-favor-slot-evening')));
       await tester.pumpAndSettle();

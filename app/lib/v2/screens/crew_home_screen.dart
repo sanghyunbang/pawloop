@@ -341,7 +341,10 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
           ),
         ]),
-        const Text('아이 맡길 일이 생기면 여기에 적어요 · 맡으면 크루 달력에 남아요',
+        // 한 줄까지만(#445) — 나머지 설명은 부탁 올리기 시트와 확인 대화상자가 한다.
+        const Text('맡길 일을 적어요 · 맡으면 크루 달력에 남아요',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 11.5, color: T.textMuted, height: 1.3)),
         const SizedBox(height: 10),
         if (_favorsLoading)

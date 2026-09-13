@@ -23,7 +23,7 @@ import 'package:flutter/material.dart';
 import '../data/crew_repository.dart';
 import '../domain/crew_favor.dart';
 import '../domain/pet.dart';
-import '../theme/app_tokens.dart';
+import 'form_kit.dart';
 
 /// 부탁 올리기 시트를 띄운다.
 ///
@@ -149,179 +149,77 @@ class _CrewFavorSheetState extends State<CrewFavorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: T.bgTop,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    // 틀·입력칸·칩·버튼은 폼 부품이다(#445). 설명은 한 줄 — 길면 대화상자로 옮긴다.
+    return SheetFrame(
+      title: '부탁 올리기',
+      subtitle: '시각·장소는 대화방에서 정해요 · 돈은 안 오가요',
+      children: [
+        const FormLabel('언제'),
+        PickerButton(
+          key: const Key('crew-favor-date'),
+          icon: Icons.event_outlined,
+          label: _isToday ? '오늘 · ${CrewFavor.dayLabel(_date)}' : CrewFavor.dayLabel(_date),
+          onPressed: _sending ? null : _pickDate,
         ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('부탁 올리기',
-                  style: TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
-              const SizedBox(height: 4),
-              const Text('시각과 장소는 대화방에서 정해요 · 돈이 오가는 약속은 여기서 안 해요',
-                  style: TextStyle(fontSize: 12.5, color: T.textMuted, height: 1.35)),
-              const SizedBox(height: 14),
-              _label('언제'),
-              const SizedBox(height: 6),
-              GestureDetector(
-                key: const Key('crew-favor-date'),
-                onTap: _sending ? null : _pickDate,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: T.surface,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(children: [
-                    const Icon(Icons.calendar_today_rounded, size: 16, color: T.textMuted),
-                    const SizedBox(width: 10),
-                    Text(
-                      _isToday
-                          ? '오늘 · ${CrewFavor.dayLabel(_date)}'
-                          : CrewFavor.dayLabel(_date),
-                      key: const Key('crew-favor-date-label'),
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700, color: T.textPrimary),
-                    ),
-                  ]),
-                ),
+        const SizedBox(height: 8),
+        Row(children: [
+          for (final slot in CrewFavorSlot.values) ...[
+            Expanded(
+              child: PillChip(
+                key: Key('crew-favor-slot-${slot.wire}'),
+                label: slot.label,
+                selected: _slot == slot,
+                onTap: _sending ? null : () => setState(() => _slot = slot),
+                stretch: true,
               ),
-              const SizedBox(height: 8),
-              Row(children: [
-                for (final slot in CrewFavorSlot.values) ...[
-                  Expanded(
-                    child: _chip(
-                      key: Key('crew-favor-slot-${slot.wire}'),
-                      label: slot.label,
-                      on: _slot == slot,
-                      onTap: () => setState(() => _slot = slot),
-                    ),
-                  ),
-                  if (slot != CrewFavorSlot.values.last) const SizedBox(width: 8),
-                ],
-              ]),
-              if (_sendable.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                _label('누구를'),
-                const SizedBox(height: 6),
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final pet in _sendable)
-                    _chip(
-                      key: Key('crew-favor-dog-${pet.serverId}'),
-                      label: pet.name,
-                      on: _dogId == pet.serverId,
-                      onTap: () => setState(() => _dogId = pet.serverId),
-                      tight: true,
-                    ),
-                  _chip(
-                    key: const Key('crew-favor-dog-none'),
-                    label: '아이 없이',
-                    on: _dogId == null,
-                    onTap: () => setState(() => _dogId = null),
-                    tight: true,
-                  ),
-                ]),
-              ],
-              const SizedBox(height: 14),
-              _label('한 줄'),
-              const SizedBox(height: 6),
-              TextField(
-                key: const Key('crew-favor-note'),
-                controller: _note,
-                enabled: !_sending,
-                maxLength: CrewRepository.maxFavorNoteLength,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  hintText: '예: 두 시간만 부탁드려요',
-                  hintStyle: const TextStyle(fontSize: 13.5, color: T.textFaint),
-                  counterText: '',
-                  filled: true,
-                  fillColor: T.surface,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none),
-                ),
+            ),
+            if (slot != CrewFavorSlot.values.last) const SizedBox(width: 8),
+          ],
+        ]),
+        if (_sendable.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          const FormLabel('누구를'),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final pet in _sendable)
+              PillChip(
+                key: Key('crew-favor-dog-${pet.serverId}'),
+                label: pet.name,
+                selected: _dogId == pet.serverId,
+                onTap: _sending ? null : () => setState(() => _dogId = pet.serverId),
               ),
-              if (_error case final message?) ...[
-                const SizedBox(height: 10),
-                Text(message,
-                    key: const Key('crew-favor-error'),
-                    style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFD2604F))),
-              ],
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const Key('crew-favor-submit'),
-                  // 시간대를 안 골랐으면 잠긴다 — 그리고 버튼이 그 이유를 말한다.
-                  onPressed: _slot == null || _sending ? null : _submit,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: T.sigEnd,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Text(
-                    _sending
-                        ? '올리는 중…'
-                        : (_slot == null ? '시간대를 골라 주세요' : '부탁 올리기'),
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ),
-            ]),
-          ),
+            PillChip(
+              key: const Key('crew-favor-dog-none'),
+              label: '아이 없이',
+              selected: _dogId == null,
+              onTap: _sending ? null : () => setState(() => _dogId = null),
+            ),
+          ]),
+        ],
+        const SizedBox(height: 14),
+        const FormLabel('한 줄'),
+        GlassField(
+          key: const Key('crew-favor-note'),
+          controller: _note,
+          hint: '예: 두 시간만 부탁드려요',
+          maxLength: CrewRepository.maxFavorNoteLength,
+          maxLines: 2,
+          enabled: !_sending,
         ),
-      ),
-    );
-  }
-
-  Widget _label(String text) => Text(text,
-      style: const TextStyle(
-          fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary));
-
-  Widget _chip({
-    required Key key,
-    required String label,
-    required bool on,
-    required VoidCallback onTap,
-    bool tight = false,
-  }) {
-    return GestureDetector(
-      key: key,
-      onTap: _sending ? null : onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: tight
-            ? const EdgeInsets.symmetric(horizontal: 14, vertical: 8)
-            : const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: on ? T.sigEnd.withValues(alpha: 0.18) : T.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: on ? T.sigEnd : Colors.transparent),
+        if (_error case final message?) ...[
+          const SizedBox(height: 10),
+          Text(message,
+              key: const Key('crew-favor-error'),
+              style: const TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFD2604F))),
+        ],
+        const SizedBox(height: 16),
+        PrimaryButton(
+          buttonKey: const Key('crew-favor-submit'),
+          // 시간대를 안 골랐으면 잠긴다 — 그리고 버튼이 그 이유를 말한다.
+          onPressed: _slot == null || _sending ? null : _submit,
+          label: _sending ? '올리는 중…' : (_slot == null ? '시간대를 골라 주세요' : '부탁 올리기'),
         ),
-        child: Center(
-          widthFactor: tight ? 1 : null,
-          child: Text(label,
-              style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w800,
-                  color: on ? T.textPrimary : T.textMuted)),
-        ),
-      ),
+      ],
     );
   }
 }
