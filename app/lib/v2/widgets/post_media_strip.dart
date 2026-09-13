@@ -103,6 +103,22 @@ class _Tile extends StatelessWidget {
           const Center(
             child: Icon(Icons.play_circle_fill_rounded, size: 40, color: Colors.white),
           ),
+        // 길이는 재생 전에 알 수 있는 유일한 사실이다 — 60초짜리인지 5초짜리인지.
+        if (media.durationLabel case final label?)
+          Positioned(
+            right: 6,
+            bottom: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xB3000000),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(label,
+                  key: const Key('post-media-duration'),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+            ),
+          ),
         if (overflow > 0)
           ColoredBox(
             color: const Color(0x8C000000),

@@ -14,9 +14,17 @@
 //
 // iOS 에서 사진의 전체 메타데이터(위치 포함)를 요청하지 않는다. 진짜로 지우는 것은
 // `ImagePrep` 이 다시 인코딩할 때다 — 이건 그 앞의 안전벨트 하나다.
+//
+// ## 영상은 파일로 든다
+//
+// 사진은 바이트로 받아 바로 다시 인코딩하지만, 영상은 수십 MB 라 경로만 든다. `VideoPrep` 이
+// 그 경로로 720p 파일을 새로 만들고 그것을 흘려 보낸다. `maxDuration` 은 OS 고르기에 주는
+// **힌트**다(iOS 는 자르기를 권하고 Android 는 대개 무시한다) — 판정은 `VideoPrep` 이 한다.
 
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+
+import 'video_prep.dart' show VideoLimits;
 
 /// 고른 사진 하나 — 아직 서버에 없다.
 @immutable
@@ -30,11 +38,25 @@ class PickedImage {
   const PickedImage({required this.name, required this.bytes});
 }
 
+/// 고른 영상 하나 — 파일 경로로 든다. 아직 서버에 없다.
+@immutable
+class PickedVideo {
+  final String name;
+
+  /// 기기 안의 원본 경로. `VideoPrep` 이 여기서 읽어 새 파일을 만든다 — 원본은 안 건드린다.
+  final String path;
+
+  const PickedVideo({required this.name, required this.path});
+}
+
 abstract class MediaPicker {
   /// 갤러리에서 사진을 고른다. 사용자가 닫으면 빈 목록이다.
   ///
   /// [limit] 은 남은 자리다. 서버가 한 글에 열 장까지 받는다.
   Future<List<PickedImage>> pickImages({required int limit});
+
+  /// 갤러리에서 영상 하나를 고른다. 사용자가 닫으면 `null`.
+  Future<PickedVideo?> pickVideo();
 }
 
 class ImagePickerMediaPicker implements MediaPicker {
@@ -63,5 +85,15 @@ class ImagePickerMediaPicker implements MediaPicker {
       for (final file in files.take(limit))
         PickedImage(name: file.name, bytes: await file.readAsBytes()),
     ];
+  }
+
+  @override
+  Future<PickedVideo?> pickVideo() async {
+    final file = await _picker.pickVideo(
+      source: ImageSource.gallery,
+      maxDuration: VideoLimits.maxDuration,
+    );
+    if (file == null) return null;
+    return PickedVideo(name: file.name, path: file.path);
   }
 }
