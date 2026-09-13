@@ -11,13 +11,16 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/community_repository.dart';
+import 'package:heat_trip_flutter/v2/domain/date_label.dart';
 import 'package:heat_trip_flutter/v2/screens/feed_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/post_detail_screen.dart';
 
@@ -282,9 +285,8 @@ void main() {
   // 360dp·1.5배에서 **4px** 넘쳤다(2026-09-13 실측). 사진·동영상(#429)과 무관하다 —
   // 이 줄은 아이콘·글자·화살표뿐이라 첨부가 있든 없든 같은 값으로 넘친다.
   //
-  // 2.0배는 여기서 안 본다. 같은 화면의 다른 세 줄(머리말·필터 줄·카드 머리말)이 2.0배에서
-  // 먼저 터져서, 화면 전체로 예외를 보는 이 방식으로는 이 줄을 판정할 수 없다. 셋은 #433
-  // 에서 고치고, 그때 2.0배 케이스를 여기에 더한다.
+  // 2.0배는 같은 화면의 다른 세 줄(머리말·필터 줄·카드 머리말)이 먼저 터져서 #432 때는 못
+  // 봤다 — 화면 전체로 예외를 보는 방식이라서다. 셋을 #433 에서 고치고 2.0배 케이스를 더했다.
 
   group('카드 발치의 댓글 줄', () {
     Future<void> pumpFeed(
@@ -364,6 +366,199 @@ void main() {
       final ink = paragraph.getMaxIntrinsicWidth(double.infinity);
       expect(labelBox.left + ink, lessThan(chevron.left),
           reason: '글자와 화살표 사이가 비어 있다 — 글자가 화살표까지 자라면 안 된다');
+    });
+
+    testWidgets('320dp · 글자 2.0배에서도 안 넘치고 화살표는 오른쪽 끝이다 — #433 뒤에 더한 케이스',
+        (tester) async {
+      await pumpFeed(tester, width: 320, scale: 2.0, post: {
+        ..._post(),
+        'commentCount': 999,
+        'authorDistrict': '성동구',
+      });
+
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('댓글 999개'), findsOneWidget);
+      final chevron = tester.getRect(find.byIcon(Icons.chevron_right));
+      expect(chevron.right, moreOrLessEquals(footerRowRect(tester).right));
+    });
+  });
+
+  // 머리말 `커뮤니티 …` · 필터 줄 `전체 ▾ … N개의 글 글쓰기` · 카드 머리말 `닉네임 동네 … 날짜`.
+  // 셋 다 `Text` 가 flex 가 아니라 2.0배에서 넘쳤다(320dp 27px · 360dp 47px · 58px, #433).
+  //
+  // 접는 문턱은 홈·트래킹 패널과 같은 1.3배다(#396 · #402). 무엇을 접는지는 줄마다 다르다 —
+  // 빼도 뜻이 서는 보조 정보(동네 · "N개의 글")만 접고, 누가·언제·무엇을 누르는지는 남긴다.
+  group('머리말 · 필터 줄 · 카드 머리말', () {
+    const longNickname = '보리랑초코랑산책하는아빠';
+
+    Future<void> pumpFeed(
+      WidgetTester tester, {
+      required double width,
+      required double scale,
+      String nickname = '보리아빠',
+    }) async {
+      final f = fixture((_) async => _json({
+            'items': [
+              {
+                ..._post(),
+                'author': {'userId': 7, 'nickname': nickname},
+                'commentCount': 999,
+                'authorDistrict': '성동구',
+              },
+            ],
+            'nextCursor': null,
+            'hasMore': false,
+          }));
+      useWidth(tester, width);
+      await tester.pumpWidget(_scaled(FeedScreen(repository: f.repo), scale));
+      await tester.pumpAndSettle();
+    }
+
+    for (final width in const [320.0, 360.0, 375.0, 393.0, 412.0, 430.0]) {
+      testWidgets('${width.toInt()}dp · 글자 2.0배에서 세 줄이 안 넘친다', (tester) async {
+        await pumpFeed(tester, width: width, scale: 2.0);
+
+        expect(tester.takeException(), isNull,
+            reason: '넘치면 프레임워크가 예외를 남긴다 — 노란 줄무늬는 그 예외의 그림이다');
+      });
+    }
+
+    testWidgets('보통 배율에서는 동네와 글 수가 그대로 보인다', (tester) async {
+      await pumpFeed(tester, width: 360, scale: 1.0);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('성동구'), findsOneWidget);
+      expect(find.text('1개의 글'), findsOneWidget);
+    });
+
+    testWidgets('1.3배부터 보조 정보를 접는다 — 동네와 글 수. 닉네임·날짜·게시판·글쓰기는 남는다',
+        (tester) async {
+      await pumpFeed(tester, width: 360, scale: 1.3);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('성동구'), findsNothing,
+          reason: '동네는 보조 정보다 — 누가 썼는지·언제인지보다 먼저 접는다');
+      expect(find.text('1개의 글'), findsNothing,
+          reason: '글 수는 보조 정보다 — 게시판 이름과 글쓰기는 누르는 것이라 남긴다');
+      expect(find.text('보리아빠'), findsOneWidget);
+      expect(find.text(dateLabel(DateTime.parse('2026-09-01T07:30:00Z'))), findsOneWidget);
+      expect(find.text('전체'), findsOneWidget);
+      expect(find.text('글쓰기'), findsOneWidget);
+      expect(find.text('커뮤니티'), findsOneWidget);
+    });
+
+    testWidgets('좁아도 날짜는 오른쪽 끝에 그대로다 — 줄어드는 것은 닉네임이다', (tester) async {
+      await pumpFeed(tester, width: 320, scale: 2.0, nickname: longNickname);
+
+      expect(tester.takeException(), isNull);
+      final date = find.text(dateLabel(DateTime.parse('2026-09-01T07:30:00Z')));
+      final row = tester.getRect(
+          find.ancestor(of: date, matching: find.byType(Row)).first);
+      expect(tester.getRect(date).right, moreOrLessEquals(row.right),
+          reason: '닉네임이 날짜를 밀어내면 언제 쓴 글인지가 화면 밖으로 나간다');
+      final nickname = tester.renderObject<RenderParagraph>(find.text(longNickname));
+      expect(nickname.didExceedMaxLines, isTrue,
+          reason: '긴 닉네임은 말줄임으로 끝난다 — 두 줄로 접거나 넘치지 않는다');
+    });
+
+    // 동네를 고른 사람에게는 필터 줄에 칩이 하나 더 있다(#342). 그 칩까지 있으면 320dp 에서는
+    // **보통 배율에서도** 45px 넘치던 자리다 — 칩 둘을 옆으로 스크롤하는 줄에 뒀다.
+    void seedNeighborhood() {
+      SharedPreferences.setMockInitialValues({
+        'v2.neighborhood': jsonEncode({
+          'code': '1120052000',
+          'sido': '서울특별시',
+          'sigungu': '성동구',
+          'dong': '왕십리2동',
+          // 좌표가 없으면 tryParse 가 null 을 준다 — 지도가 그 동네로 열려야 해서다.
+          'lat': 37.56,
+          'lng': 127.03,
+        }),
+      });
+      addTearDown(() => SharedPreferences.setMockInitialValues({}));
+    }
+
+    testWidgets('필터 줄에 동네 칩이 있어도 320dp 에서 안 넘친다 — 보통 배율에서도 넘치던 자리다',
+        (tester) async {
+      seedNeighborhood();
+      await pumpFeed(tester, width: 320, scale: 1.0);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('성동구'), findsNWidgets(2),
+          reason: '칩과 카드 머리말 — 보통 배율에서는 둘 다 글자가 보인다');
+      expect(find.text('글쓰기'), findsOneWidget);
+    });
+
+    testWidgets('동네 칩의 글자는 1.3배부터 접힌다 — 아이콘과 색이 남는다', (tester) async {
+      seedNeighborhood();
+      await pumpFeed(tester, width: 360, scale: 1.3);
+
+      expect(tester.takeException(), isNull);
+      expect(find.byIcon(Icons.home_work_outlined), findsOneWidget,
+          reason: '칩은 남는다 — 켜졌는지는 색이 말한다');
+      expect(find.text('성동구'), findsNothing,
+          reason: '칩의 글자도, 카드 머리말의 동네도 1.3배부터 접힌다');
+    });
+
+    // 위의 검사는 테스트 폰트로 잰 것이다 — 글자 하나가 폰트 크기와 같은 폭이라 실제
+    // Pretendard 보다 넓고, 그래서 "최악의 폭에서 견디는가" 를 잰다. 아래는 **진짜 폰트**를
+    // 물려 같은 것을 다시 잰다 — 실기기에서 보이는 것과 같은 폭이다(#386 · #432 의 방식).
+    group('진짜 폰트(Pretendard)로', () {
+      setUpAll(() async {
+        TestWidgetsFlutterBinding.ensureInitialized();
+        final loader = FontLoader('Pretendard');
+        for (final weight in const ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold']) {
+          loader.addFont(rootBundle.load('assets/fonts/Pretendard-$weight.otf'));
+        }
+        await loader.load();
+      });
+
+      Future<void> pumpReal(
+        WidgetTester tester, {
+        required double width,
+        required double scale,
+        bool neighborhood = false,
+      }) async {
+        if (neighborhood) seedNeighborhood();
+        final f = fixture((_) async => _json({
+              'items': [
+                {..._post(), 'commentCount': 999, 'authorDistrict': '성동구'},
+              ],
+              'nextCursor': null,
+              'hasMore': false,
+            }));
+        useWidth(tester, width);
+        await tester.pumpWidget(MaterialApp(
+          // 앱의 테마와 같은 글꼴이다(`core/theme/theme.dart`). 이것 없이는 테스트 폰트다.
+          theme: ThemeData(fontFamily: 'Pretendard'),
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: FeedScreen(repository: f.repo),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+      }
+
+      for (final width in const [320.0, 360.0, 430.0]) {
+        testWidgets('${width.toInt()}dp · 글자 2.0배 · 동네 칩까지 있어도 안 넘친다', (tester) async {
+          await pumpReal(tester, width: width, scale: 2.0, neighborhood: true);
+
+          expect(tester.takeException(), isNull);
+          expect(find.text('글쓰기'), findsOneWidget);
+        });
+      }
+
+      testWidgets('360dp · 1.3배 직전(1.2배)에는 동네와 글 수가 보이고 넘치지 않는다', (tester) async {
+        await pumpReal(tester, width: 360, scale: 1.2, neighborhood: true);
+
+        expect(tester.takeException(), isNull,
+            reason: '접기 문턱 아래에서도 넘치면 문턱이 너무 높은 것이다');
+        expect(find.text('성동구'), findsNWidgets(2));
+        expect(find.text('1개의 글'), findsOneWidget);
+      });
     });
   });
 }
