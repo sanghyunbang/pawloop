@@ -748,12 +748,20 @@ class _FeedScreenState extends State<FeedScreen> {
           Row(children: [
             const Icon(Icons.chat_bubble_outline, size: 16, color: T.textMuted),
             const SizedBox(width: 6),
-            Text('댓글 ${post.commentCount}개 · 자세히 보기',
-                style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: T.textSecondary)),
-            const Spacer(),
+            // Expanded 가 Spacer 를 겸한다. flex 가 아니면 Row 가 글자에 폭을 무한대로
+            // 줘서 기기 글자 크기를 키우면 오른쪽으로 넘치고, Spacer 는 남은 공간이
+            // 음수여도 0 까지만 줄어든다 — 360dp·1.5배에서 4px 넘쳤다(#432).
+            // 두 줄로 접지 않는다 — 한글은 음절 사이에서 줄이 바뀌어 "보/기" 로 갈라진다.
+            // 줄어드는 것은 뒤쪽 안내("자세히 보기")이고 개수는 앞에 있어 남는다.
+            Expanded(
+              child: Text('댓글 ${post.commentCount}개 · 자세히 보기',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: T.textSecondary)),
+            ),
             const Icon(Icons.chevron_right, size: 18, color: T.textMuted),
           ]),
         ]),
