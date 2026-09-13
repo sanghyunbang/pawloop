@@ -17,6 +17,7 @@ import '../data/crew_repository.dart';
 import '../data/invite_share.dart';
 import '../domain/crew.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/form_kit.dart';
 import '../widgets/aurora.dart';
 import 'family_chat_screen.dart';
 
@@ -518,48 +519,28 @@ class _CrewEditSheetState extends State<_CrewEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: T.bgTop,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('크루 고치기',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: T.textPrimary)),
-              ),
-              const SizedBox(height: 4),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('이름을 바꾸면 대화방 이름도 함께 바뀌어요',
-                    style: TextStyle(fontSize: 12.5, color: T.textMuted)),
-              ),
-              const SizedBox(height: 14),
-              TextField(
+    // 틀·입력칸·버튼은 폼 부품이다(#445) — 만들기 시트와 같은 결.
+    return SheetFrame(
+      title: '크루 고치기',
+      subtitle: '이름을 바꾸면 대화방 이름도 함께 바뀌어요',
+      children: [
+              const FormLabel('이름'),
+              GlassField(
                 key: const Key('crew-edit-name'),
                 controller: _name,
+                hint: '이름',
                 maxLength: CrewRepository.maxNameLength,
-                decoration: _decoration('이름'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                key: const Key('crew-edit-intro'),
-                controller: _intro,
-                maxLength: CrewRepository.maxIntroLength,
-                maxLines: 2,
-                decoration: _decoration('소개 (비우면 지워져요)'),
               ),
               const SizedBox(height: 12),
+              const FormLabel('소개 (비우면 지워져요)'),
+              GlassField(
+                key: const Key('crew-edit-intro'),
+                controller: _intro,
+                hint: '소개',
+                maxLength: CrewRepository.maxIntroLength,
+                maxLines: 2,
+              ),
+              const SizedBox(height: 14),
               Row(children: [
                 for (final v in CrewVisibility.values) ...[
                   Expanded(
@@ -571,11 +552,11 @@ class _CrewEditSheetState extends State<_CrewEditSheet> {
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
                           color: _visibility == v
-                              ? T.sigEnd.withValues(alpha: 0.18)
+                              ? T.accentLine
                               : Colors.white.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: _visibility == v ? T.sigEnd : Colors.transparent),
+                              color: _visibility == v ? T.accent : Colors.transparent),
                         ),
                         child: Center(
                           child: Text(v.label,
@@ -644,36 +625,12 @@ class _CrewEditSheetState extends State<_CrewEditSheet> {
                         color: Color(0xFFD2604F))),
               ],
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const Key('crew-edit-submit'),
-                  onPressed: _sending ? null : _submit,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: T.sigEnd,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Text(_sending ? '저장 중…' : '저장',
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w800)),
-                ),
+              PrimaryButton(
+                buttonKey: const Key('crew-edit-submit'),
+                label: _sending ? '저장 중…' : '저장',
+                onPressed: _sending ? null : _submit,
               ),
-            ]),
-          ),
-        ),
-      ),
+      ],
     );
   }
-
-  InputDecoration _decoration(String label) => InputDecoration(
-        labelText: label,
-        counterText: '',
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.75),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      );
 }

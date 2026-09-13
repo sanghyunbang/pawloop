@@ -18,6 +18,8 @@ import 'package:heat_trip_flutter/v2/data/schedule_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/domain/schedule_reminder.dart';
 import 'package:heat_trip_flutter/v2/screens/schedule_screen.dart';
+import 'package:heat_trip_flutter/v2/widgets/aurora.dart';
+import 'package:heat_trip_flutter/v2/widgets/form_kit.dart';
 
 const _base = 'https://api.example.test';
 
@@ -268,6 +270,35 @@ void main() {
         reason: '"없다" 만 말하고 길을 안 주면 화면이 막다른 길이 된다');
   });
 
+  // ── 폼 부품 (#445 · #453) — 화면이 머티리얼 기본 위젯이 아니라 우리 부품을 쓰는지
+  group('폼 부품', () {
+    testWidgets('떠 있는 + 는 없고 머리말의 둥근 버튼 하나뿐이다 — 빈 상태 버튼과 안 겹친다', (tester) async {
+      final f = fixture();
+      await pumpScreen(tester, f);
+
+      expect(find.byType(FloatingActionButton), findsNothing,
+          reason: '떠 있는 + 가 "일정 적기" 카드에 겹쳤다(#453)');
+      expect(find.byTooltip('일정 추가'), findsOneWidget);
+      expect(find.byType(GlassCard), findsWidgets, reason: '달력과 빈 상태는 홈과 같은 반투명 카드다');
+    });
+
+    testWidgets('시트는 흰 입력칸 · 고르기 상자 · 그라데이션 버튼이다 — 아웃라인·OutlinedButton 이 없다', (tester) async {
+      final f = fixture();
+      await pumpScreen(tester, f);
+      await tester.tap(find.byTooltip('일정 추가'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(GlassField), findsNWidgets(2), reason: '제목 · 메모');
+      expect(find.byType(PickerButton), findsNWidgets(2), reason: '날짜 · 시각');
+      expect(find.byType(OutlinedButton), findsNothing);
+      expect(find.widgetWithText(PrimaryButton, '저장'), findsOneWidget);
+      for (final field in tester.widgetList<TextField>(find.byType(TextField))) {
+        expect(field.decoration!.border, InputBorder.none,
+            reason: '머티리얼 아웃라인이 하나라도 남으면 시트의 결이 갈린다');
+      }
+    });
+  });
+
   testWidgets('시트로 만들면 목록에 바로 보인다 — 다시 안 불러온다', (tester) async {
     final f = fixture(
       onPost: (request) => _json(
@@ -276,7 +307,7 @@ void main() {
     );
     await pumpScreen(tester, f);
 
-    await tester.tap(find.byType(FloatingActionButton));
+    await tester.tap(find.byTooltip('일정 추가'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '보리 광견병');
     await tester.tap(find.widgetWithText(FilledButton, '저장'));
@@ -297,7 +328,7 @@ void main() {
     );
     await pumpScreen(tester, f);
 
-    await tester.tap(find.byType(FloatingActionButton));
+    await tester.tap(find.byTooltip('일정 추가'));
     await tester.pumpAndSettle();
 
     expect(find.text('이 일정은 나만 봅니다'), findsOneWidget,
@@ -316,7 +347,7 @@ void main() {
     final f = fixture();
     await pumpScreen(tester, f);
 
-    await tester.tap(find.byType(FloatingActionButton));
+    await tester.tap(find.byTooltip('일정 추가'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '저장'));
     await tester.pumpAndSettle();
@@ -499,7 +530,7 @@ group('반복과 고치기 (#421)', () {
       );
       await pumpScreen(tester, f);
 
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find.byTooltip('일정 추가'));
       await tester.pumpAndSettle();
       expect(find.text('담당'), findsOneWidget);
 
@@ -517,7 +548,7 @@ group('반복과 고치기 (#421)', () {
       final f = fixture(hasGroup: false);
       await pumpScreen(tester, f);
 
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find.byTooltip('일정 추가'));
       await tester.pumpAndSettle();
 
       expect(find.text('담당'), findsNothing);
@@ -545,7 +576,7 @@ group('반복과 고치기 (#421)', () {
     await pumpScreen(tester, f);
     final before = f.sent.where((r) => r.method == 'GET').length;
 
-    await tester.tap(find.byType(FloatingActionButton));
+    await tester.tap(find.byTooltip('일정 추가'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '보리 목욕');
     await tester.tap(find.widgetWithText(GestureDetector, '매주').first);

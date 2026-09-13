@@ -24,6 +24,8 @@ import '../domain/pet.dart';
 import '../domain/schedule.dart';
 import '../domain/schedule_reminder.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/aurora.dart';
+import '../widgets/form_kit.dart';
 
 /// 목록을 무엇으로 거를까. `전체` 가 기본이다 — 달력의 기본이 합쳐 보기다.
 class ScheduleFilter {
@@ -189,7 +191,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: T.bgTop,
-      body: SafeArea(
+      // 홈·커뮤니티와 같은 결(#453) — 단색 바탕이 아니라 오라 위에 반투명 카드다.
+      body: AuroraBackground(
+        child: SafeArea(
         bottom: false,
         // 아이 목록은 셸의 `PetLoader` 가 채운다(#159) — 이 화면보다 **늦게** 올 수 있다.
         // 값을 한 번만 읽으면 그날 처음 연 사람에게는 필터 칩이 영영 "전체" 하나뿐이고,
@@ -203,7 +207,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               _filterChips(),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 40),
                   children: [
                     _calendar(),
                     const SizedBox(height: 14),
@@ -214,23 +218,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ],
           ),
         ),
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: FloatingActionButton(
-          onPressed: _openCreateSheet,
-          backgroundColor: T.sigEnd,
-          tooltip: '일정 추가',
-          child: const Icon(Icons.add_rounded, color: Colors.white),
         ),
       ),
+      // 떠 있는 + 는 없앴다(#453) — 빈 상태의 "일정 적기" 와 겹쳐 같은 일을 하는 버튼이 둘이었다.
+      // 새로 적기는 머리말 오른쪽의 둥근 버튼 하나다(iOS 캘린더의 자리).
     );
   }
 
   // ─────────────────────── 머리말 ───────────────────────
 
   Widget _header() => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 12, 8, 6),
+        padding: const EdgeInsets.fromLTRB(4, 12, 16, 10),
         child: Row(children: [
           // 탭이 아니라 밀린 화면이다(#446) — 뒤로 가는 길이 있어야 한다.
           if (Navigator.of(context).canPop())
@@ -259,6 +257,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             tooltip: '다음 달',
             color: T.textSecondary,
           ),
+          const SizedBox(width: 4),
+          SigFab(icon: Icons.add_rounded, tooltip: '일정 추가', size: 38, onPressed: _openCreateSheet),
         ]),
       );
 
@@ -272,9 +272,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: selected ? T.sigEnd : T.cardBg,
+                color: selected ? T.accent : T.cardBg,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: selected ? T.sigEnd : T.cardBorder),
+                border: Border.all(color: selected ? T.accent : T.cardBorder),
               ),
               child: Text(label,
                   style: TextStyle(
@@ -291,7 +291,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
 
     return SizedBox(
-      height: 46,
+      height: 44,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -325,14 +325,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       cells.add(_dayCell(day));
     }
 
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
-      decoration: BoxDecoration(
-        color: T.cardBg,
-        borderRadius: BorderRadius.circular(T.radius),
-        border: Border.all(color: T.cardBorder),
-        boxShadow: T.cardShadow,
-      ),
       child: Column(children: [
         Row(
           children: [
@@ -351,7 +345,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           crossAxisCount: 7,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 0.82,
+          // 1.0 — 예전 0.82 는 세로가 길어 달력이 화면 절반을 넘었다(#453).
+          childAspectRatio: 1.0,
           children: cells,
         ),
       ]),
@@ -382,9 +377,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isSelected ? T.sigEnd : Colors.transparent,
+              color: isSelected ? T.accent : Colors.transparent,
               border: isToday && !isSelected
-                  ? Border.all(color: T.sigEnd, width: 1.4)
+                  ? Border.all(color: T.accent, width: 1.4)
                   : null,
             ),
             child: Text('${day.day}',
@@ -472,13 +467,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     ]);
   }
 
-  Widget _emptyState() => Container(
+  Widget _emptyState() => GlassCard(
         padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
-        decoration: BoxDecoration(
-          color: T.cardBg,
-          borderRadius: BorderRadius.circular(T.radius),
-          border: Border.all(color: T.cardBorder),
-        ),
         child: Column(children: [
           const Icon(Icons.event_available_outlined, size: 34, color: T.textFaint),
           const SizedBox(height: 10),
@@ -491,10 +481,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: T.textSecondary)),
           const SizedBox(height: 14),
-          FilledButton(
-            onPressed: _openCreateSheet,
-            style: FilledButton.styleFrom(backgroundColor: T.sigEnd),
-            child: const Text('일정 적기'),
+          SizedBox(
+            width: 180,
+            child: PrimaryButton(label: '일정 적기', onPressed: _openCreateSheet),
           ),
         ]),
       );
@@ -584,7 +573,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           tooltip: done ? '아직 안 함으로' : '완료로',
           icon: Icon(
             done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-            color: done ? T.auroraMint : T.textFaint,
+            color: done ? T.accent : T.textFaint,
           ),
         ),
       ]),
@@ -836,40 +825,11 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: T.bgTop,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-        child: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: T.textFaint, borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 14),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(_editing ? '일정 고치기' : '일정 적기',
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800, color: T.textPrimary)),
-            ),
-            if (widget.onlyThisDay) ...[
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('${_date.month}월 ${_date.day}일 하루만 바꿉니다',
-                    style: const TextStyle(fontSize: 12, color: T.textSecondary)),
-              ),
-            ],
-            const SizedBox(height: 12),
-
+    // 틀(손잡이 · 제목 · 여백)은 폼 부품의 것이다(#445).
+    return SheetFrame(
+      title: _editing ? '일정 고치기' : '일정 적기',
+      subtitle: widget.onlyThisDay ? '${_date.month}월 ${_date.day}일 하루만 바꿉니다' : null,
+      children: [
             _label('종류'),
             Wrap(spacing: 8, runSpacing: 8, children: [
               for (final k in ScheduleKind.values)
@@ -878,40 +838,33 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
             const SizedBox(height: 14),
 
             _label('제목'),
-            TextField(
+            GlassField(
               controller: _title,
+              hint: '예) 보리 광견병 접종',
               maxLength: ScheduleRepository.maxTitleLength,
-              decoration: const InputDecoration(
-                hintText: '예) 보리 광견병 접종',
-                counterText: '',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
             ),
             const SizedBox(height: 14),
 
             _label('언제'),
             Row(children: [
               Expanded(
-                child: OutlinedButton(
+                child: PickerButton(
+                  icon: Icons.event_outlined,
+                  label: '${_date.month}월 ${_date.day}일',
                   onPressed: _pickDate,
-                  child: Text('${_date.month}월 ${_date.day}일'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton(
-                  onPressed: _pickTime,
+                child: PickerButton(
+                  icon: Icons.schedule_outlined,
                   // 시각은 **없어도 되는 값**이라 기본이 "하루 종일" 이다.
-                  child: Text(_time == null ? '하루 종일' : Schedule.formatTime(_time!)),
+                  label: _time == null ? '하루 종일' : Schedule.formatTime(_time!),
+                  onPressed: _pickTime,
+                  onClear: _time == null ? null : () => setState(() => _time = null),
+                  clearTooltip: '시각 지우기',
                 ),
               ),
-              if (_time != null)
-                IconButton(
-                  tooltip: '시각 지우기',
-                  onPressed: () => setState(() => _time = null),
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                ),
             ]),
             const SizedBox(height: 14),
 
@@ -926,23 +879,16 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
               ]),
               if (_repeat.repeats) ...[
                 const SizedBox(height: 8),
-                Row(children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _pickRepeatUntil,
-                      // 끝이 없어도 된다 — 조회가 기간으로 잘리므로 안전하다.
-                      child: Text(_repeatUntil == null
-                          ? '끝없이'
-                          : '${_repeatUntil!.month}월 ${_repeatUntil!.day}일까지'),
-                    ),
-                  ),
-                  if (_repeatUntil != null)
-                    IconButton(
-                      tooltip: '종료일 지우기',
-                      onPressed: () => setState(() => _repeatUntil = null),
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                    ),
-                ]),
+                PickerButton(
+                  icon: Icons.event_repeat_outlined,
+                  // 끝이 없어도 된다 — 조회가 기간으로 잘리므로 안전하다.
+                  label: _repeatUntil == null
+                      ? '끝없이'
+                      : '${_repeatUntil!.month}월 ${_repeatUntil!.day}일까지',
+                  onPressed: _pickRepeatUntil,
+                  onClear: _repeatUntil == null ? null : () => setState(() => _repeatUntil = null),
+                  clearTooltip: '종료일 지우기',
+                ),
               ],
               const SizedBox(height: 14),
             ],
@@ -972,16 +918,11 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
             ],
 
             _label('메모'),
-            TextField(
+            GlassField(
               controller: _memo,
+              hint: '안 적어도 돼요',
               maxLines: 2,
               maxLength: ScheduleRepository.maxMemoLength,
-              decoration: const InputDecoration(
-                hintText: '안 적어도 돼요',
-                counterText: '',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
             ),
             const SizedBox(height: 8),
 
@@ -1009,17 +950,11 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
               ),
             ],
             const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(backgroundColor: T.sigEnd),
-                child: Text(_saving ? '저장 중…' : '저장'),
-              ),
+            PrimaryButton(
+              label: _saving ? '저장 중…' : '저장',
+              onPressed: _saving ? null : _save,
             ),
-          ]),
-        ),
-      ),
+      ],
     );
   }
 
@@ -1033,23 +968,8 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
         ),
       );
 
-  Widget _chip(String label, bool selected, VoidCallback onTap) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected ? T.sigEnd : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: selected ? T.sigEnd : T.cardBorder),
-          ),
-          child: Text(label,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : T.textSecondary)),
-        ),
-      );
+  Widget _chip(String label, bool selected, VoidCallback onTap) =>
+      PillChip(label: label, selected: selected, onTap: onTap);
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(

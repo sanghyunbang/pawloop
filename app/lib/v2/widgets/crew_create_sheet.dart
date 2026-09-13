@@ -21,6 +21,7 @@ import '../data/crew_repository.dart';
 import '../domain/crew.dart';
 import '../domain/neighborhood.dart';
 import '../theme/app_tokens.dart';
+import 'form_kit.dart';
 
 /// 만들기 시트를 띄운다.
 ///
@@ -121,41 +122,11 @@ class _CrewCreateSheetState extends State<_CrewCreateSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: T.bgTop,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                    color: T.textFaint, borderRadius: BorderRadius.circular(2)),
-              ),
-              const SizedBox(height: 16),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('크루 만들기',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: T.textPrimary)),
-              ),
-              const SizedBox(height: 4),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('만들면 대화방이 함께 생기고 내가 방장이 됩니다',
-                    style: TextStyle(fontSize: 12.5, color: T.textMuted)),
-              ),
-              const SizedBox(height: 16),
+    // 틀·입력칸·버튼은 폼 부품이다(#445).
+    return SheetFrame(
+      title: '크루 만들기',
+      subtitle: '만들면 대화방이 함께 생기고 내가 방장이 됩니다',
+      children: [
               _field(
                 controller: _name,
                 hint: '성수동 아침 산책',
@@ -186,26 +157,12 @@ class _CrewCreateSheetState extends State<_CrewCreateSheet> {
                         color: Color(0xFFD2604F))),
               ],
               const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const Key('crew-create-submit'),
-                  onPressed: _canSubmit ? _submit : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: T.sigEnd,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Text(_sending ? '만드는 중…' : '만들기',
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w800)),
-                ),
+              PrimaryButton(
+                buttonKey: const Key('crew-create-submit'),
+                label: _sending ? '만드는 중…' : '만들기',
+                onPressed: _canSubmit ? _submit : null,
               ),
-            ]),
-          ),
-        ),
-      ),
+      ],
     );
   }
 
@@ -217,25 +174,12 @@ class _CrewCreateSheetState extends State<_CrewCreateSheet> {
     int maxLines = 1,
   }) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label,
-          style: const TextStyle(
-              fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
-      const SizedBox(height: 6),
-      TextField(
+      FormLabel(label),
+      GlassField(
         controller: controller,
+        hint: hint,
         maxLength: maxLength,
         maxLines: maxLines,
-        style: const TextStyle(fontSize: 14, color: T.textPrimary),
-        decoration: InputDecoration(
-          hintText: hint,
-          counterText: '',
-          filled: true,
-          fillColor: Colors.white.withValues(alpha: 0.75),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        ),
       ),
     ]);
   }
@@ -278,11 +222,11 @@ class _CrewCreateSheetState extends State<_CrewCreateSheet> {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   color: _visibility == v
-                      ? T.sigEnd.withValues(alpha: 0.18)
+                      ? T.accentLine
                       : Colors.white.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color: _visibility == v ? T.sigEnd : Colors.transparent),
+                      color: _visibility == v ? T.accent : Colors.transparent),
                 ),
                 child: Center(
                   child: Text(v.label,

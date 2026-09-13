@@ -26,6 +26,7 @@ import '../data/pet_sync.dart';
 import '../data/walk_repository.dart';
 import '../domain/pet.dart';
 import '../theme/app_tokens.dart';
+import 'form_kit.dart';
 
 /// 등록 시트를 띄운다.
 ///
@@ -110,52 +111,20 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          20,
-          18,
-          20,
-          18 + MediaQuery.of(context).padding.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              '우리 아이를 등록해 주세요',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: T.textPrimary,
-              ),
-            ),
-            if (widget.reason != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                widget.reason!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, color: T.textSecondary),
-              ),
-            ],
-            const SizedBox(height: 18),
-
+    // 틀·입력칸·버튼은 폼 부품이다(#445) — 예전엔 흰 시트에 머티리얼 아웃라인 칸과 색 없는
+    // FilledButton(머티리얼 기본 보라)이라 앱의 결과 어긋났다.
+    return SheetFrame(
+      title: '우리 아이를 등록해 주세요',
+      subtitle: widget.reason,
+      children: [
             _label('이름'),
-            TextField(
+            GlassField(
               controller: _name,
+              hint: '예) 보리',
               maxLength: 50,
               autofocus: true,
-              decoration: _decoration('예) 보리'),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
 
             _label('종'),
             _chips<PetSpecies>(
@@ -176,10 +145,10 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
             const SizedBox(height: 14),
 
             _label('품종 (선택)'),
-            TextField(
+            GlassField(
               controller: _breed,
+              hint: '모르면 비워 두세요',
               maxLength: 50,
-              decoration: _decoration('모르면 비워 두세요'),
             ),
 
             if (_error != null) ...[
@@ -191,24 +160,16 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
             ],
 
             const SizedBox(height: 14),
-            FilledButton(
+            PrimaryButton(
+              label: _saving ? '등록하는 중…' : '등록하기',
               onPressed: _saving ? null : _submit,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-              ),
-              child: Text(_saving ? '등록하는 중…' : '등록하기'),
             ),
             const SizedBox(height: 4),
             TextButton(
               onPressed: _saving ? null : () => Navigator.of(context).pop(),
               child: const Text('나중에', style: TextStyle(color: T.textMuted)),
             ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 
@@ -224,14 +185,6 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
         ),
       );
 
-  InputDecoration _decoration(String hint) => InputDecoration(
-        hintText: hint,
-        counterText: '',
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(13)),
-      );
-
   Widget _chips<T2>({
     required List<T2> values,
     required T2 selected,
@@ -242,35 +195,11 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
         children: [
           for (final v in values) ...[
             Expanded(
-              child: GestureDetector(
+              child: PillChip(
+                label: labelOf(v),
+                selected: v == selected,
                 onTap: () => onTap(v),
-                child: Container(
-                  height: 44,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: v == selected
-                        ? T.warmSoft
-                        : const Color(0x0A463C64),
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(
-                      color: v == selected
-                          ? T.warmMid
-                          : Colors.transparent,
-                      width: 1.4,
-                    ),
-                  ),
-                  child: Text(
-                    labelOf(v),
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight:
-                          v == selected ? FontWeight.w800 : FontWeight.w600,
-                      color: v == selected
-                          ? T.warmText
-                          : T.textSecondary,
-                    ),
-                  ),
-                ),
+                stretch: true,
               ),
             ),
             if (v != values.last) const SizedBox(width: 8),

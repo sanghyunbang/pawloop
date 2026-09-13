@@ -114,6 +114,7 @@ lib/
   - `AuroraBackground` — 파스텔 오라 그라데이션 배경. 전역 `AppThemeCtl.index`를 구독해 테마 변경이 앱 전체에 반영됨.
   - `GlassCard` — `BackdropFilter` blur 기반 반투명 글래스 카드.
 - `profile_avatar.dart` — 강아지 프로필 아바타(테두리색 선택 반영).
+- `form_kit.dart` — 폼 부품 한 벌(#445): `SheetFrame` · `PrimaryButton`/`SecondaryButton`(머티리얼 버튼을 감싼다 — 테스트의 `find.widgetWithText(FilledButton, …)` 이 그대로 산다) · `PickerButton` · `GlassField` · `PillChip` · `FormLabel` · `SigFab`. 일정 시트 · 아이 등록 시트 · 크루 만들기/고치기 시트가 쓴다.
 - `walk_finish_sheet.dart` — 산책 완료 바텀시트(`WalkFinishSheet`, #310). 요약 셋 + **경로 미리보기** + "경로 사진 저장" + 기록 저장/저장 안 함. 트래킹 화면이 geolocator·네이버 지도를 물고 있어 위젯 테스트로 못 띄우므로 시트를 밖으로 꺼냈다.
 - `post_media_field.dart` — 글쓰기의 사진 칸(#429): 고르는 순간 올리기 시작하고 밖으로는 `PostMediaSelection`(올라간 id 순서 · 올리는 중인가 · 실패가 있는가)을 낸다. 글쓰기 화면은 올리는 중이면 저장을 잠근다. `post_media_strip.dart` 는 카드·상세의 격자(한 장 크게 · 둘 나란히 · 2×2 에 `+N`), `post_media_viewer.dart` 는 전체 보기 대화상자 — 화면이 아니라 위젯이라 라우트 없이 `showDialog` 로 뜬다.
 - `today_care_card.dart` · `message_actions_sheet.dart` 등 — 각 화면 문서 참조.
