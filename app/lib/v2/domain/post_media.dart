@@ -74,6 +74,13 @@ class PostMedia {
   /// 카드에 그릴 그림. 영상이면 썸네일이고, 썸네일이 없으면 `null` — 그때는 어두운 칸이다.
   String? get thumbnailUrl => kind.isVideo ? posterUrl : url;
 
+  /// 영상 길이 표시 — `0:08` · `1:00`. 사진이거나 길이를 모르면 `null`.
+  String? get durationLabel {
+    final ms = durationMs;
+    if (!kind.isVideo || ms == null || ms < 0) return null;
+    return formatMediaDuration(ms);
+  }
+
   /// 모양이 아니면 `null`. 한 칸이 깨졌다고 글 전체를 버리지 않는다.
   static PostMedia? tryParse(Object? json) {
     if (json is! Map) return null;
@@ -120,4 +127,11 @@ class PostMedia {
 
   @override
   int get hashCode => Object.hash(id, kind, url, posterUrl, width, height, durationMs);
+}
+
+/// `m:ss`. 내림이다 — 7.9초는 `0:07` 이다. 올림이면 59.1초짜리가 `1:00` 이 되어 60초 상한을
+/// 넘는 것처럼 보인다.
+String formatMediaDuration(int ms) {
+  final seconds = ms ~/ 1000;
+  return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
 }
