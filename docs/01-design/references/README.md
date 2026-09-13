@@ -26,3 +26,22 @@ UI/UX 이슈에 붙이는 그림들입니다. **탭별 UI/UX 이슈**(하단 메
 | `ours-before-home.jpg` | 우리 앱 홈 — 2026-09-13 상태. 왼쪽 셋 · 오른쪽 둘 · 가운데만 솟은 메뉴바 | 에뮬레이터 |
 | `ours-before-community.jpg` | 우리 앱 커뮤니티 — 세로 영상 포스터가 화면을 통째로 먹는다(#440 의 4:5 고침이 아직 안 들어간 빌드) | 에뮬레이터 |
 | `ours-before-schedule.jpg` | 우리 앱 일정 — 칩이 제목에 붙고, + 가 "일정 적기" 카드에 겹치고, 전부 라일락 | 에뮬레이터 |
+
+## 수상작 — "아무거나 말고 상 받은 것" (사장님 2026-09-13)
+
+앱스토어 공식 스크린샷을 iTunes 검색 API 로 받았습니다(`award-*.jpg`). 출처는 각 앱의 스토어 페이지입니다.
+
+| 파일 | 앱 | 상 | 배운 것 |
+|:---|:---|:---|:---|
+| `award-focus-friend-1..2.jpg` | Focus Friend (Hank Green) | Google Play **올해의 앱 2025** | 크림·살구 바탕에 귀여운 캐릭터 하나. 색은 적고 캐릭터가 주인공 |
+| `award-gentler-streak-1..2.jpg` | Gentler Streak | Apple Design Award 2023 | 코랄→주황 그라데이션 히어로 + 흰 카드. **따뜻한데 핑크가 아니다** — 우리 브랜드 톤의 검증된 예 |
+| `award-vocabulary-1..2.jpg` | Vocabulary (Monkey Taps) | ADA 2025 Visuals & Graphics 최종 후보 | 테라코타·틸·크림의 절제된 팔레트, 일관된 일러스트. "조용히 다 맞는 앱" |
+| `award-capybara-1.jpg` | Capy — AI Meeting Translator | ADA 2025 Innovation 최종 후보 | 크림 바탕 + 귀여운 카피바라. 복잡한 일을 단순하고 사랑스럽게 |
+| `award-crouton-1.jpg` | Crouton | ADA 2024 Interaction 수상 | 화면마다 선명한 단색 바탕(파랑·초록·빨강) — 대담한 색 쓰기 |
+| `award-mela-1.jpg` | Mela | ADA 2025 Interaction 최종 후보 | 코랄 바탕에 흰 카드, 사진이 주인공 |
+| `award-lumy-2.jpg` | Lumy | ADA 2025 Delight & Fun 최종 후보 | "carefully curated color palette" — 어두운 바탕에 금색 한 점 |
+| `award-rooms-2.jpg` | Rooms | ADA 2024 Delight & Fun 수상 | 보라·파랑 위의 복셀 방. 색이 많아도 한 세계로 읽힌다 |
+| `award-capwords-1.jpg` | CapWords | ADA 2025 Delight & Fun 수상 | 노랑 한 색 + 스티커. 명랑함은 색의 개수가 아니라 확신에서 온다 |
+| `award-denim-1.jpg` | Denim | ADA 2025 Delight & Fun 최종 후보 | 메시 그라데이션 — 우리 오라 배경의 먼 친척 |
+| `web-ada-2025.jpg` · `web-ada-2024.jpg` | Apple Design Awards 수상·후보 목록 | — | https://developer.apple.com/design/awards/2025/ · /2024/ |
+| `web-play-best-2025.jpg` · `web-play-best-2025-kr.jpg` | Google Play Best of 2025 (세계 · 아시아) | — | https://blog.google/products/google-play/best-apps-games-2025/ |
