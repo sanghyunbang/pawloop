@@ -20,6 +20,7 @@ import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/feed_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/post_write_screen.dart';
+import 'package:heat_trip_flutter/v2/widgets/post_media_field.dart';
 
 const _base = 'https://api.example.test';
 
@@ -346,5 +347,17 @@ void main() {
 
     expect(find.text('아직 자유 게시판에 글이 없어요'), findsOneWidget,
         reason: "'자유' 를 골랐는데 그냥 '글이 없어요' 면 앱 전체가 빈 것처럼 읽힌다");
+  });
+  // ── 사진부터 (#451 3번)
+  testWidgets('글쓰기의 첫 칸은 사진·영상이다 — 제목·본문보다 위', (tester) async {
+    final f = fixture();
+
+    await tester.pumpWidget(_host(PostWriteScreen(repository: f.repo)));
+    await tester.pumpAndSettle();
+
+    final media = tester.getTopLeft(find.byType(PostMediaField));
+    final title = tester.getTopLeft(find.byType(TextField).first);
+    expect(media.dy, lessThan(title.dy), reason: '사진이 주인공인 앱은 글쓰기도 사진부터다');
+    expect(find.text('사진 · 영상'), findsOneWidget);
   });
 }
