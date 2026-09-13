@@ -45,3 +45,14 @@ UI/UX 이슈에 붙이는 그림들입니다. **탭별 UI/UX 이슈**(하단 메
 | `award-denim-1.jpg` | Denim | ADA 2025 Delight & Fun 최종 후보 | 메시 그라데이션 — 우리 오라 배경의 먼 친척 |
 | `web-ada-2025.jpg` · `web-ada-2024.jpg` | Apple Design Awards 수상·후보 목록 | — | https://developer.apple.com/design/awards/2025/ · /2024/ |
 | `web-play-best-2025.jpg` · `web-play-best-2025-kr.jpg` | Google Play Best of 2025 (세계 · 아시아) | — | https://blog.google/products/google-play/best-apps-games-2025/ |
+
+## 다른 참고 사이트 (사장님 2026-09-13: "핀터레스트 외에 UI/UX 참고 사이트를 검색해서 들어가 봐")
+
+검색해서 나온 곳: Mobbin · Refero · Screenlane · Dribbble · Behance · Muzli · UX Archive · Pttrns · Page Flows.
+들어가 본 결과 — **Mobbin · Refero · Behance 는 로그인 없이는 거의 안 보입니다**(캡처가 빈 화면). 로그인 없이 볼 수 있는 셋을 캡처했습니다.
+
+| 파일 | 어디 | 쓸모 |
+|:---|:---|:---|
+| `web-dribbble-pet-app.jpg` | Dribbble "pet app" 검색 | 시각 방향(색·일러스트). 실제 앱이 아니라 콘셉트가 많다 |
+| `web-muzli-mobile.jpg` | Muzli 모바일 앱 영감 60+ | 실제 앱 중심의 큐레이션 |
+| `web-refero.jpg` | Refero 첫 화면 | 실제 앱 화면·흐름. 로그인하면 검색 가능 — 사장님 계정으로 볼 만합니다 |
