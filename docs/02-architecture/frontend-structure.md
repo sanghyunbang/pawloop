@@ -15,7 +15,7 @@
 | `lib/v2/` | 화면·도메인·레포·위젯·테마 전부. 새 기능은 여기에 둔다 |
 | `lib/app/` | `go_router`(`appRouter`)와 인증 리다이렉트 규칙(`auth_redirect.dart`), 네비게이터 키 |
 | `lib/core/` | `config/env.dart`(--dart-define), `net/`(인증 클라이언트·토큰 저장소·로그 마스킹), `theme/` |
-| `lib/features/auth/` · `lib/shared/media/` | 소셜 로그인의 데이터 계층(`auth_repository_impl` · `social_login_service` · `secure_token_store`)과 **디버그 빌드에만 붙는 이메일 로그인·가입 화면**(ADR-0022). `shared/media` 는 프로필 사진 업로드 |
+| `lib/features/auth/` · `lib/shared/media/` | 소셜 로그인의 데이터 계층(`auth_repository_impl` · `social_login_service` · `secure_token_store`)과 **디버그 빌드에만 붙는 이메일 로그인·가입 화면**(ADR-0022). `shared/media` 는 Provider 주입형 업로드 모듈인데 **부르는 화면이 없다** — 커뮤니티 사진 첨부(#429)는 `v2/data/post_media_repository.dart` 가 따로 한다 |
 
 - 실행: `flutter run`(`lib/main.dart`). 라우트는 `/splash`·`/consent`·`/onboarding`·`/home`·`/auth/*` 뿐이고, `/home` 이 `MainShell` 이다. 나머지 화면은 `Navigator.push` 로 연다(4장).
 - 상태관리는 `ValueNotifier` + `ValueListenableBuilder`(3장). `provider` 는 `main.dart` 가 미디어 업로드 클라이언트를 주입하는 데만 쓴다.
@@ -106,6 +106,7 @@ lib/
   - **앱에 관광공사 서비스키가 없다.** 서버가 대신 부른다. 서버가 실패하면 빈 리스트다(앱이 죽지 않음).
   - ✅ 관광공사 키는 **이미 앱에서 사라졌다**. 예전 서술: 이 키는 앱 바이너리에 박히는 과금성 자격증명이다. [#40](https://github.com/sanghyunbang/heattrip/issues/40) 에서 호출을 백엔드 프록시로 옮기면 앱에서 완전히 사라진다 — 그때 이 레포는 KTO 대신 자체 백엔드를 호출한다.
   - 병원(vet)·펫샵(shop)·산책로(trail)는 **서버가 같은 카탈로그에 이어 붙인다**(#291) — 앱에 별도 레포가 없고 `PetPlace.categoryKey`(`contentTypeId` 가 없으면 `category`)로 칩을 가른다. 산책로의 선만 `trail_route_repository.dart` 가 따로 받는다.
+- `post_media_repository.dart` · `image_prep.dart` · `media_picker.dart` — 커뮤니티 글의 사진 첨부(#429). 고른 사진은 `ImagePrep` 이 **다시 인코딩**해(긴 변 1600px · EXIF 없음 → 촬영 좌표가 안 나간다, `image_prep_test` 가 값으로 잰다) `POST /media`(`category=POST_IMAGE`) 로 한 장씩 올리고, 글에는 돌려받은 `mediaIds` 만 싣는다. `MediaPicker` 는 `image_picker` 를 인터페이스 뒤에 둔 것 — 위젯 테스트가 가짜를 꽂는다. 도메인은 `domain/post_media.dart`(`PostMedia` · `PostMediaKind`).
 
 ### 2.4 `widgets/` — 공용 위젯
 
@@ -114,6 +115,7 @@ lib/
   - `GlassCard` — `BackdropFilter` blur 기반 반투명 글래스 카드.
 - `profile_avatar.dart` — 강아지 프로필 아바타(테두리색 선택 반영).
 - `walk_finish_sheet.dart` — 산책 완료 바텀시트(`WalkFinishSheet`, #310). 요약 셋 + **경로 미리보기** + "경로 사진 저장" + 기록 저장/저장 안 함. 트래킹 화면이 geolocator·네이버 지도를 물고 있어 위젯 테스트로 못 띄우므로 시트를 밖으로 꺼냈다.
+- `post_media_field.dart` — 글쓰기의 사진 칸(#429): 고르는 순간 올리기 시작하고 밖으로는 `PostMediaSelection`(올라간 id 순서 · 올리는 중인가 · 실패가 있는가)을 낸다. 글쓰기 화면은 올리는 중이면 저장을 잠근다. `post_media_strip.dart` 는 카드·상세의 격자(한 장 크게 · 둘 나란히 · 2×2 에 `+N`), `post_media_viewer.dart` 는 전체 보기 대화상자 — 화면이 아니라 위젯이라 라우트 없이 `showDialog` 로 뜬다.
 - `today_care_card.dart` · `message_actions_sheet.dart` 등 — 각 화면 문서 참조.
 
 ### 2.4-1 `walk/` — 경로 그림과 갤러리 저장 (#310)

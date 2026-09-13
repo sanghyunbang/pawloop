@@ -78,6 +78,16 @@ Map<String, Object?> _createdPost() => {
 Widget _host(Widget child) => MaterialApp(home: child);
 
 void main() {
+  // 사진 칸(#429)이 더해져 폼이 기본 테스트 표면(800×600)보다 길어졌다. 폰은 스크롤하지만
+  // ListView 는 보이는 것만 만들어 '올리기' 가 finder 에 안 잡힌다 — 표면을 길게 둔다.
+  // 폼의 규칙을 보는 테스트라 표면 크기는 전제일 뿐이다.
+  setUp(() {
+    final view = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.views.single;
+    view.physicalSize = const Size(800, 1400);
+    view.devicePixelRatio = 1;
+  });
+  tearDown(() => TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.views.single.reset());
+
   // 이 파일의 단언들은 **서버 전송이 켜진 빌드**를 잰다 — 좌표 순서·키 이름·charset 같은
   // 것들은 정책과 무관한 계약이고, 정책이 꺼져 있으면 요청 자체가 안 나가서 잴 수 없다.
   // 꺼진 쪽은 location_upload_policy_test.dart 가 잰다. (#235)

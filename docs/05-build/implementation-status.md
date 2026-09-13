@@ -86,6 +86,7 @@
 | 반응(도움돼요/귀여워요/공감) | ✅ 서버 | 멱등 `POST`/`DELETE .../reactions/{type}`. **셋을 동시에 누를 수 있다**(ADR-0016). 응답의 집계를 그대로 그린다 |
 | 댓글 | ✅ 서버 | 오래된 것부터. 게스트에게는 입력칸 대신 안내 |
 | 글쓰기 | ✅ | `post_write_screen.dart`(#172). 진입점 셋이 `writePost()` 하나를 지나고 거기서 미로그인을 안내한다. 지도 장소 시트에서 오면 `loc`·`contentId` 를 물고 온다 |
+| 사진 첨부 | ✅ 서버 | `POST /media`(`category=POST_IMAGE`)로 **먼저 올리고** 글에는 `mediaIds` 만 싣는다(#429 · 서버 [#430](https://github.com/sanghyunbang/heattrip/pull/430)). 앱이 올리기 전에 다시 인코딩한다(`v2/data/image_prep.dart`) — 긴 변 1600px, **EXIF 없음**이라 촬영 좌표가 단말을 떠나지 않는다(`image_prep_test` 가 나간 바이트를 값으로 잰다). 한 글 10장 · 한 장 10MB(서버 상한과 같은 상수). 고치기는 `PostPatch.mediaIds` 로 통째로 갈아 끼운다. 영상은 다음 조각 |
 | 삭제(글·댓글) | ✅ 서버 | `DELETE .../posts/{id}` · `.../posts/{id}/comments/{id}`(#211). **내가 쓴 것만** — `PostDetailScreen._isMine` 이 `PersonRef.userId` 와 내 id 를 견줘 버튼을 그리고, 진짜 판정은 서버가 한다. 글 삭제만 한 번 묻는다(남의 댓글까지 사라진다). 탈퇴한 사람의 글은 아무도 못 지운다 — 그건 관리이고 [#166](https://github.com/sanghyunbang/heattrip/issues/166) 의 결정이다 |
 | 글 수정 | ✅ | `PATCH .../posts/{id}`(#211) + 앱 편집 화면(#243). **글쓰기 화면을 편집 모드로 재사용**한다 — 두 벌이면 상한도 문구도 갈린다. **안 바뀐 키는 안 보낸다**(`PostPatch`, `minProperties: 1`) — 다 실으면 그 사이 다른 기기에서 고친 값을 조용히 되돌린다. 하나도 안 고쳤으면 요청을 안 보낸다. `loc`·`contentId` 는 못 바꾼다(계약이 뺐다) — 화면이 읽기 전용으로 보여만 준다 |
 

@@ -45,6 +45,12 @@
 	<!-- 경로 사진을 사진 앱에 저장한다 (이슈 #310). 추가만 하고 읽지 않으므로 Add 키 하나다. -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>산책 경로를 그린 사진을 사진 앱에 저장하기 위해 필요해요. 사진을 읽지는 않아요.</string>
+	<!-- 커뮤니티 글에 사진을 붙인다 (이슈 #429). iOS 14+ 의 image_picker 는 PHPicker 라 이 문구
+	     없이도 고르기 창이 뜨지만, 플러그인 README 가 이 키를 요구하고 iOS 13 이하에서는 없으면
+	     고르는 순간 앱이 죽는다. 카메라 문구는 없다 — 카메라를 안 연다.
+	     촬영 좌표는 앱이 다시 인코딩할 때 빠진다 (lib/v2/data/image_prep.dart). -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>커뮤니티 글에 우리 아이 사진을 붙이기 위해 사진을 골라요. 사진의 위치 정보는 지우고 올려요.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

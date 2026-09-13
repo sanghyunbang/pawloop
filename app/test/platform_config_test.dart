@@ -29,6 +29,14 @@ void main() {
       expect(plist, contains('CFBundleURLName'));
       expect(plist, contains('<string>com.cetacealab.heattrip</string>'));
     });
+
+    test('사진 고르기 문구가 있다 — 커뮤니티 글에 사진을 붙인다 (#429)', () {
+      // iOS 14+ 의 image_picker 는 PHPicker 라 이 문구 없이도 창이 뜨지만, 플러그인 README 가
+      // 요구하고 iOS 13 이하에서는 없으면 고르는 순간 앱이 죽는다. 문구에 "위치 정보는 지운다" 를
+      // 적은 것은 약속이다 — `image_prep_test` 가 그 약속을 바이트로 잰다.
+      expect(plist, contains('<key>NSPhotoLibraryUsageDescription</key>'));
+      expect(plist, contains('위치 정보는 지우고 올려요'));
+    });
   });
 
   group('android/app/src/main/AndroidManifest.xml', () {

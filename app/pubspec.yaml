@@ -24,6 +24,11 @@ dependencies:
   google_fonts: ^8.1.0
   flutter_svg: ^2.2.0
   image_picker: ^1.1.2
+  # 올리기 전에 사진을 다시 인코딩한다 (#429) — EXIF(촬영 좌표)가 빠지고 긴 변 1600px 로 줄어든다.
+  # 네이티브 압축 플러그인이 아니라 순수 Dart 인 이유: `flutter test` 에서 돌아야
+  # "나간 바이트에 GPS 가 없다" 를 값으로 잴 수 있다. flutter_launcher_icons 의 전이 의존이라
+  # lock 에는 이미 있었지만, 직접 쓰는 것은 직접 적는다.
+  image: ^4.8.0
   fl_chart: ^1.2.0
 
   # 소셜 로그인 관련
