@@ -141,7 +141,7 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xB3FFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(13),
               ),
               child: const Icon(Icons.arrow_back, size: 22, color: T.textPrimary),
@@ -165,7 +165,7 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
             hintText: '동네 이름으로 찾기 (예: 성수동)',
             prefixIcon: const Icon(Icons.search, size: 20, color: T.textMuted),
             filled: true,
-            fillColor: const Color(0xCCFFFFFF),
+            fillColor: T.surface,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide.none,
@@ -276,7 +276,7 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
                 decoration: BoxDecoration(
-                  color: const Color(0xC9FFFFFF),
+                  color: T.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: T.line),
                 ),
@@ -295,7 +295,7 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xCCFFFFFF),
+            color: T.surface,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(children: [

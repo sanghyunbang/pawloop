@@ -475,9 +475,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         height: 40,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: const Color(0xB3FFFFFF),
+                          color: T.surface,
                           borderRadius: BorderRadius.circular(13),
-                          border: Border.all(color: const Color(0x80FFFFFF)),
+                          border: Border.all(color: T.cardBorder),
                         ),
                         child: const Icon(
                           Icons.arrow_back,
@@ -608,9 +608,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xCCFFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0x66FFFFFF)),
+                border: Border.all(color: T.cardBorder),
               ),
               child: Text(_loadingMoreComments ? '불러오는 중…' : '댓글 더 보기',
                   style: const TextStyle(
@@ -835,7 +835,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           gradient: on ? _warm : null,
-          color: on ? null : const Color(0xC9FFFFFF),
+          color: on ? null : T.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: on ? Colors.transparent : T.line,
@@ -882,9 +882,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: const Color(0x80FFFFFF),
+        color: T.surface,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0x66FFFFFF)),
+        border: Border.all(color: T.cardBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -960,7 +960,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           14 + MediaQuery.of(context).padding.bottom,
         ),
         decoration: const BoxDecoration(
-          color: Color(0xF0FFFFFF),
+          color: T.cardBg,
           border: Border(top: BorderSide(color: Color(0x22785AA0))),
         ),
         child: const Text(
@@ -983,7 +983,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         10 + MediaQuery.of(context).padding.bottom,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xF0FFFFFF),
+        color: T.cardBg,
         border: Border(top: BorderSide(color: Color(0x22785AA0))),
       ),
       child: Column(

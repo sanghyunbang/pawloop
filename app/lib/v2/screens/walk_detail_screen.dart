@@ -154,7 +154,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xB3FFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(13),
               ),
               child: const Icon(Icons.arrow_back, size: 22, color: T.textPrimary),
@@ -199,7 +199,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: const Color(0xCCFFFFFF),
+            color: T.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: T.line),
           ),

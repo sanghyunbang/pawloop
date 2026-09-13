@@ -182,7 +182,7 @@ class _PinPickerScreenState extends State<PinPickerScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xF7FCFAFF),
                     borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: const Color(0xD9FFFFFF)),
+                    border: Border.all(color: T.cardBorder),
                     boxShadow: const [
                       BoxShadow(
                         color: Color(0x38281E46),
@@ -321,7 +321,7 @@ class _PinPickerScreenState extends State<PinPickerScreen> {
       decoration: BoxDecoration(
         color: const Color(0xE0FFFFFF),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: const Color(0xD9FFFFFF)),
+        border: Border.all(color: T.cardBorder),
         boxShadow: const [
           BoxShadow(
             color: Color(0x295A4682),

@@ -522,10 +522,10 @@ class _TodayCareCardState extends State<TodayCareCard> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
         decoration: BoxDecoration(
-          color: done != null ? color.withValues(alpha: 0.13) : const Color(0xB3FFFFFF),
+          color: done != null ? color.withValues(alpha: 0.13) : T.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-              color: done != null ? color.withValues(alpha: 0.35) : const Color(0x66FFFFFF)),
+              color: done != null ? color.withValues(alpha: 0.35) : T.surface),
         ),
         child: Column(children: [
           Icon(

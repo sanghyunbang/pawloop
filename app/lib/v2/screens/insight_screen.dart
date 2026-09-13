@@ -164,9 +164,9 @@ class _InsightScreenState extends State<InsightScreen> {
             height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xB3FFFFFF),
+              color: T.surface,
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: const Color(0x80FFFFFF)),
+              border: Border.all(color: T.cardBorder),
             ),
             child: const Icon(Icons.arrow_back, size: 22, color: T.textPrimary),
           ),

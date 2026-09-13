@@ -397,9 +397,9 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
             height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xB3FFFFFF),
+              color: T.surface,
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: const Color(0x80FFFFFF)),
+              border: Border.all(color: T.cardBorder),
             ),
             child: const Icon(Icons.arrow_back, size: 22, color: T.textPrimary),
           ),
@@ -530,9 +530,9 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xD6FFFFFF),
+                      color: T.cardBg,
                       borderRadius: br,
-                      border: Border.all(color: const Color(0xCCFFFFFF)),
+                      border: Border.all(color: T.cardBorder),
                     ),
                     child: _otherBody(m),
                   ),
@@ -821,9 +821,9 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: const Color(0xCCFFFFFF),
+              color: T.surface,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0x80FFFFFF)),
+              border: Border.all(color: T.cardBorder),
             ),
             child: TextField(
               controller: _ctrl,

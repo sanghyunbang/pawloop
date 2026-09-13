@@ -197,10 +197,10 @@ class _ConsentScreenState extends State<ConsentScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           decoration: BoxDecoration(
-            color: const Color(0x80FFFFFF),
+            color: T.surface,
             borderRadius: BorderRadius.circular(T.radius),
             border: Border.all(
-                color: _allChecked ? T.warmMid : const Color(0x33FFFFFF)),
+                color: _allChecked ? T.warmMid : T.surface),
           ),
           child: Row(children: [
             _check(_allChecked),

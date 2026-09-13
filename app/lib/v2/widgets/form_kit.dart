@@ -164,7 +164,7 @@ class SecondaryButton extends StatelessWidget {
       key: buttonKey,
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        backgroundColor: const Color(0xCCFFFFFF),
+        backgroundColor: T.cardBg,
         foregroundColor: danger ? dangerColor : T.textSecondary,
         disabledForegroundColor: T.textFaint,
         side: const BorderSide(color: T.cardBorder),
@@ -319,7 +319,8 @@ class PillChip extends StatelessWidget {
           : const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
       alignment: stretch ? Alignment.center : null,
       decoration: BoxDecoration(
-        color: selected ? T.accent : const Color(0xCCFFFFFF),
+        // 안 골린 칩은 옅은 회색 면 — 흰 바탕에서 흰 칩은 안 보인다(#447).
+        color: selected ? T.accent : T.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: selected ? T.accent : T.cardBorder),
       ),

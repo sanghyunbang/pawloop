@@ -173,7 +173,7 @@ class _IntroCard extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  Colors.white.withValues(alpha: 0.9),
+                  T.surface,
                   page.tint.withValues(alpha: 0.75),
                 ],
               ),

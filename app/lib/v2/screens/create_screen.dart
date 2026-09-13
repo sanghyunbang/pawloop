@@ -306,9 +306,9 @@ class _CreateScreenState extends State<CreateScreen> {
             child: Container(
               width: 40, height: 40, alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xB3FFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: const Color(0x80FFFFFF)),
+                border: Border.all(color: T.cardBorder),
               ),
               child: const Icon(Icons.arrow_back, size: 22, color: T.textPrimary),
             ),
@@ -330,7 +330,7 @@ class _CreateScreenState extends State<CreateScreen> {
   Widget _label(String t) => Text(t, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: T.textSecondary));
 
   BoxDecoration get _fieldDeco => BoxDecoration(
-        color: const Color(0xB3FFFFFF),
+        color: T.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0x2E8C7BFF)),
       );
@@ -368,7 +368,7 @@ class _CreateScreenState extends State<CreateScreen> {
           // 기기 안 카탈로그에서 찾은 것들. 고르면 식별자가 붙어 "자주 가는 곳" 에 쌓인다.
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xCCFFFFFF),
+              color: T.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: T.line),
             ),
@@ -514,7 +514,7 @@ class _CreateScreenState extends State<CreateScreen> {
           child: Container(
             width: 38, height: 38, alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xC9FFFFFF),
+              color: T.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0x2E8C7BFF)),
             ),

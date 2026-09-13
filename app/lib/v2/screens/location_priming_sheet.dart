@@ -172,7 +172,7 @@ class LocationPrimingSheet extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 13),
           decoration: BoxDecoration(
-            color: const Color(0xCCFFFFFF),
+            color: T.surface,
             borderRadius: BorderRadius.circular(15),
             border: Border.all(color: T.line),
           ),

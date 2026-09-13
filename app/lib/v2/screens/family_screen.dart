@@ -183,9 +183,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     height: 40,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: const Color(0xB3FFFFFF),
+                      color: T.surface,
                       borderRadius: BorderRadius.circular(13),
-                      border: Border.all(color: const Color(0x80FFFFFF)),
+                      border: Border.all(color: T.cardBorder),
                     ),
                     child: const Icon(Icons.arrow_back, size: 22, color: T.textPrimary),
                   ),
@@ -290,7 +290,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 11),
               decoration: BoxDecoration(
-                color: const Color(0xCCFFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(13),
                 border: Border.all(color: T.line),
               ),
@@ -375,7 +375,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0x66FFFFFF),
+                    color: T.surface,
                     border: Border.all(color: T.warmStart.withValues(alpha: 0.6), width: 1.5),
                   ),
                   child: const Icon(Icons.add, size: 24, color: T.warmText),
@@ -530,7 +530,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 13),
               decoration: BoxDecoration(
-                color: const Color(0xCCFFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(color: T.line),
               ),
@@ -771,7 +771,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           const SizedBox(height: 14),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0x9EFFFFFF),
+              color: T.surface,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: T.accentLine),
             ),
@@ -847,7 +847,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
             height: 42,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.22),
+              color: T.surface,
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.chat_bubble_rounded, size: 21, color: Colors.white),
@@ -864,7 +864,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 '가족과 나눈 대화 보기',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: Color(0xE6FFFFFF)),
+                style: TextStyle(fontSize: 12, color: T.cardBg),
               ),
             ]),
           ),
@@ -974,7 +974,7 @@ class _CreateGroupSheetState extends State<_CreateGroupSheet> {
               hintText: '예) 보리네 가족',
               hintStyle: const TextStyle(fontSize: 14, color: T.textMuted),
               filled: true,
-              fillColor: const Color(0xCCFFFFFF),
+              fillColor: T.surface,
               counterText: '',
               isDense: true,
               contentPadding:

@@ -405,7 +405,7 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.55),
+        color: T.surface,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(children: [
@@ -452,7 +452,7 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
           gradient: filled && enabled ? T.sig : null,
           color: filled
               ? (enabled ? null : T.textFaint.withValues(alpha: 0.4))
-              : Colors.white.withValues(alpha: 0.8),
+              : T.surface,
           borderRadius: BorderRadius.circular(11),
         ),
         child: Text(label,
@@ -510,7 +510,7 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
             gradient: filled && enabled ? T.sig : null,
             color: filled
                 ? (enabled ? null : T.textFaint.withValues(alpha: 0.4))
-                : Colors.white.withValues(alpha: 0.7),
+                : T.surface,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Center(
@@ -898,7 +898,7 @@ class _CrewEditSheetState extends State<_CrewEditSheet> {
                         decoration: BoxDecoration(
                           color: _visibility == v
                               ? T.accentLine
-                              : Colors.white.withValues(alpha: 0.6),
+                              : T.surface,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                               color: _visibility == v ? T.accent : Colors.transparent),

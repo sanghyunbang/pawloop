@@ -403,9 +403,9 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xB3FFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: const Color(0x80FFFFFF)),
+                border: Border.all(color: T.cardBorder),
               ),
               child: const Icon(Icons.arrow_back,
                   size: 22, color: T.textPrimary),
@@ -492,7 +492,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xCCFFFFFF),
+          color: T.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: T.line),
         ),
@@ -548,9 +548,9 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                     const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
                   gradient: _board == board ? _warm : null,
-                  color: _board == board ? null : const Color(0xCCFFFFFF),
+                  color: _board == board ? null : T.surface,
                   borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: const Color(0x66FFFFFF)),
+                  border: Border.all(color: T.cardBorder),
                 ),
                 child: Text(board.label,
                     style: TextStyle(
@@ -568,7 +568,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
         hintText: hint,
         hintStyle: const TextStyle(fontSize: 14, color: T.textMuted),
         filled: true,
-        fillColor: const Color(0xCCFFFFFF),
+        fillColor: T.surface,
         isDense: true,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 13),

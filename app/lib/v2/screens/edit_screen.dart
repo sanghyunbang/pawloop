@@ -206,9 +206,9 @@ class _EditScreenState extends State<EditScreen> {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xB3FFFFFF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: const Color(0x80FFFFFF)),
+                border: Border.all(color: T.cardBorder),
               ),
               child: const Icon(
                 Icons.arrow_back,
@@ -363,7 +363,7 @@ class _EditScreenState extends State<EditScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: const Color(0x9EFFFFFF),
+            color: T.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: T.accentLine),
           ),
@@ -395,10 +395,10 @@ class _EditScreenState extends State<EditScreen> {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             gradient: on ? _sig : null,
-            color: on ? null : const Color(0x99FFFFFF),
+            color: on ? null : T.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: on ? Colors.transparent : const Color(0x66FFFFFF),
+              color: on ? Colors.transparent : T.cardBorder,
             ),
             boxShadow: on
                 ? const [
@@ -468,10 +468,10 @@ class _EditScreenState extends State<EditScreen> {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           gradient: on ? _sig : null,
-          color: on ? null : const Color(0x99FFFFFF),
+          color: on ? null : T.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: on ? Colors.transparent : const Color(0x66FFFFFF),
+            color: on ? Colors.transparent : T.cardBorder,
           ),
           boxShadow: on
               ? const [
@@ -498,7 +498,7 @@ class _EditScreenState extends State<EditScreen> {
   Widget _ageField() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0x9EFFFFFF),
+        color: T.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: T.accentLine),
       ),
@@ -539,7 +539,7 @@ class _EditScreenState extends State<EditScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
         decoration: BoxDecoration(
-          color: const Color(0x9EFFFFFF),
+          color: T.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: T.accentLine),
         ),
