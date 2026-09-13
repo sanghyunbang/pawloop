@@ -59,14 +59,22 @@ void main() {
     expect(PostMedia.parseList([null, 3, _image()]).length, 1);
   });
 
-  test('가로세로비 — 크기를 모르면 1, 너무 길거나 납작하면 잘라 둔다', () {
+  test('가로세로비 — 크기를 모르면 1, 세로는 4:5 까지, 가로는 1.91:1 까지 (#440)', () {
     expect(PostMedia.tryParse(_image(width: null, height: null))!.aspectRatio, 1);
     expect(PostMedia.tryParse(_image(width: 0, height: 10))!.aspectRatio, 1);
     expect(PostMedia.tryParse(_image(width: 1600, height: 1200))!.aspectRatio,
         closeTo(4 / 3, 1e-9));
-    expect(PostMedia.tryParse(_image(width: 100, height: 1000))!.aspectRatio, 0.6,
+    expect(PostMedia.tryParse(_image(width: 1080, height: 1350))!.aspectRatio,
+        closeTo(4 / 5, 1e-9),
+        reason: '4:5 는 그대로다 — 인스타그램의 세로 상한과 같은 값');
+    expect(PostMedia.tryParse(_image(width: 720, height: 1280))!.aspectRatio,
+        closeTo(4 / 5, 1e-9),
+        reason: '세로 영상 포스터(9:16)를 원본 비율로 두면 360dp 폰에서 사진만 640dp 다 — 카드가 한 화면에 안 들어온다');
+    expect(PostMedia.tryParse(_image(width: 100, height: 1000))!.aspectRatio,
+        closeTo(4 / 5, 1e-9),
         reason: '세로로 아주 긴 사진이 카드를 끝없이 늘리지 않는다');
-    expect(PostMedia.tryParse(_image(width: 3000, height: 100))!.aspectRatio, 1.8);
+    expect(PostMedia.tryParse(_image(width: 3000, height: 100))!.aspectRatio, 1.91,
+        reason: '파노라마는 1.91:1 로 — 인스타그램의 가로 상한');
   });
 
   test('같은 값이면 같다 — 화면이 목록을 비교해 바뀐 것만 보낸다', () {
