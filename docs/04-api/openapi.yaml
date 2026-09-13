@@ -165,7 +165,9 @@ tags:
       올리며 그때 EXIF 가 통째로 사라집니다 — `UPLOAD_LOCATION` 과 무관하게 무조건입니다.
 
       **영상은 이 문으로 안 옵니다.** `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을
-      100MB 까지만 받아서, 영상은 서명 URL 로 S3 에 직접 올립니다(다음 PR).
+      100MB 까지만 받아서, 영상은 세 단계입니다 — `POST /media/videos` 로 자리를 잡고(서명 PUT),
+      앱이 S3 에 직접 올리고, `POST /media/{mediaId}/complete` 로 서버가 확인합니다. 한 글에
+      영상은 하나입니다.
     description: 게시판 · 댓글 · 반응
   - name: Bookmarks
     description: 저장한 장소
@@ -2456,7 +2458,7 @@ paths:
         **10MB 를 넘으면 400** 입니다. 2026-09-13 이전에는 Spring 기본값(1MB)이라 폰 사진 한 장도
         못 받았습니다 — 이 경로가 실제 사진으로 쓰인 적이 없어서 아무도 못 봤습니다.
 
-        `category` 가 `POST_VIDEO` 면 **400** 입니다 — 영상은 서명 URL 로 갑니다(태그 설명 참조).
+        `category` 가 `POST_VIDEO` 면 **400** 입니다 — 영상은 `POST /media/videos` 로 갑니다.
         나머지 카테고리(`JOURNEY_IMAGE`·`PROFILE_IMAGE`·`REVIEW_IMAGE`)는 감정 여행 시절 것이라
         서버는 받지만 앱은 안 씁니다.
 
@@ -2517,6 +2519,93 @@ paths:
         '204': { description: 지웠습니다 }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /media/videos:
+    post:
+      tags: [Media]
+      summary: 영상 자리 잡기 — 서명 PUT 받기 (①)
+      description: |
+        영상은 서버를 **안 지납니다** — `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을 100MB 에서
+        끊습니다. 그래서 세 단계입니다.
+
+        1. **여기** — 형식·크기·길이·픽셀을 알리면 `pending` 행이 생기고 `uploadUrl`(서명 PUT, **15분**)이
+           옵니다. 파일은 아직 없습니다.
+        2. 앱이 `uploadUrl` 로 S3 에 **직접 PUT** 합니다 — 알린 것과 **같은 `Content-Type`** 으로.
+           서명에 묶여 있어서 다르면 S3 가 `SignatureDoesNotMatch` 로 거절합니다.
+        3. `POST /media/{mediaId}/complete` — 서버가 S3 에 HEAD 로 실제로 올라왔는지와 크기를 묻고
+           `ready` 로 바꿉니다.
+
+        **상한 — 60초 · 150MB · `video/mp4`·`video/quicktime`.** 앱이 720p 로 다시 인코딩해 올리므로
+        60초짜리가 보통 수십 MB 입니다. 넘으면 **400** 입니다. `size` 는 **올릴 파일의 정확한
+        바이트 수**입니다 — ③ 에서 실제 크기와 같아야 합니다. 서명 PUT 은 크기 조건을 못 걸어서
+        올라온 뒤 서버가 잽니다.
+
+        `pending` 인 것은 글에 붙지 않습니다(`PostInput.mediaIds` 가 400). 하루 안에 ③ 을 안 하면
+        서버가 자리와 S3 객체를 함께 거둡니다.
+
+        **위치 메타데이터는 기기에서 지우고 올립니다** — 사진과 같습니다(태그 설명).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VideoUploadRequest' }
+      responses:
+        '201':
+          description: 자리를 잡았습니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VideoUploadTicket' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /media/{mediaId}/complete:
+    parameters:
+      - name: mediaId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      tags: [Media]
+      summary: 영상 올리기 끝 — 포스터와 함께 확정 (③)
+      description: |
+        앱이 S3 에 PUT 을 마친 뒤 부릅니다. 서버가 S3 에 **HEAD** 로 묻습니다 — 객체가 있는가,
+        크기가 ① 에서 알린 것과 같은가, 형식이 영상인가. 맞으면 포스터를 저장하고 `ready` 가 됩니다.
+        그때부터 `PostInput.mediaIds` 에 실을 수 있습니다.
+
+        **포스터(썸네일)는 앱이 만들어 여기에 싣습니다** — 서버에서 ffmpeg 를 돌리는 것보다 쌉니다
+        (Mac mini 한 대). jpeg·png·webp, 10MB 까지. 피드는 이 그림과 재생 표시만 그리고 자동재생은
+        없습니다.
+
+        - **409** — 아직 S3 에 없습니다. 잘못된 요청이 아니라 **아직 그 상태가 아닌 것**입니다.
+          PUT 을 다시 하고 다시 부르십시오. 행은 `pending` 으로 남습니다.
+        - **400** — 크기가 알린 것과 다르거나(다른 파일을 올린 것입니다), 영상이 아니거나, 포스터가
+          사진이 아니거나, `mediaId` 가 사진입니다(사진은 이 단계가 없습니다).
+        - **404** — 내 것이 아닙니다. 없는 것과 구별해 주지 않습니다(ADR-0017 규약 3).
+
+        **두 번 불러도 같습니다.** 이미 `ready` 면 그대로 돌려주고 두 번째 포스터는 안 받습니다 —
+        앱이 응답을 못 받고 다시 부르는 경우를 위해서입니다.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [poster]
+              properties:
+                poster:
+                  type: string
+                  format: binary
+                  description: 앱이 뽑은 썸네일 한 장. `image/jpeg` · `image/png` · `image/webp`
+      responses:
+        '200':
+          description: 확정했습니다 — `status` 가 `ready` 이고 `posterUrl` 이 찼습니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MediaItem' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /api/crews:
     get:
@@ -3694,7 +3783,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Conflict:
-      description: 중복
+      description: 중복, 또는 아직 그 상태가 아님 — 예를 들어 S3 에 안 올라온 영상의 `complete`
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -4958,11 +5047,54 @@ components:
         status:
           type: string
           enum: [pending, ready]
-          description: multipart 로 올린 사진은 언제나 `ready`. `pending` 은 S3 에 직접 올리는 영상의 중간 상태
+          description: multipart 로 올린 사진은 언제나 `ready`. `pending` 은 S3 에 직접 올리는 영상의 중간 상태 — `POST /media/{mediaId}/complete` 가 `ready` 로 바꿉니다
         posterUrl: { type: [string, "null"], format: uri }
         width: { type: [integer, "null"] }
         height: { type: [integer, "null"] }
         durationMs: { type: [integer, "null"] }
+
+    VideoUploadRequest:
+      type: object
+      description: 영상 자리 잡기 — `POST /media/videos` 의 본문 (#429). 파일은 없고 파일에 대한 사실만 있습니다
+      required: [contentType, size, durationMs]
+      properties:
+        contentType:
+          type: string
+          enum: [video/mp4, video/quicktime]
+          description: 앱이 PUT 할 때 **같은 값**을 `Content-Type` 으로 보냅니다 — 서명에 묶입니다
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 157286400
+          description: 올릴 파일의 정확한 바이트 수(150MB 까지). ③ 에서 실제 크기와 같아야 합니다
+        width:
+          type: integer
+          minimum: 1
+          description: 다시 인코딩한 뒤의 픽셀 폭. `height` 와 함께 주거나 둘 다 생략합니다
+        height: { type: integer, minimum: 1 }
+        durationMs:
+          type: integer
+          minimum: 1
+          maximum: 60000
+          description: 길이. 60초까지
+
+    VideoUploadTicket:
+      type: object
+      description: 자리 잡기의 답 (#429) — 어디에 올릴지와, 그것을 기다리는 행
+      required: [id, key, uploadUrl]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: '`complete` 에 쓰고, 그다음 `PostInput.mediaIds` 에 싣습니다'
+        key:
+          type: string
+          description: S3 object key. 앱은 쓸 일이 없습니다 — 사람이 볼 때를 위해
+        uploadUrl:
+          type: string
+          format: uri
+          description: 서명 PUT URL. **15분** 뒤에는 S3 가 403 을 줍니다. 알린 `contentType` 과 같은 `Content-Type` 헤더로 PUT
 
     PostPatch:
       type: object
@@ -4991,6 +5123,7 @@ components:
             붙은 사진·영상을 **통째로 갈아 끼웁니다** (#429). 키가 없으면 안 바꾸고, `[]` 면 전부
             뗍니다 — 위의 "키가 없으면 안 바꿉니다" 와 같은 규약입니다. 목록에서 빠진 것은
             지워집니다(S3 객체까지). 새로 든 것은 `PostInput.mediaIds` 와 같은 조건입니다.
+            **영상은 여전히 하나**입니다 — 남는 것과 새로 드는 것을 합쳐 셉니다.
 
     PostInput:
       type: object
@@ -5046,6 +5179,9 @@ components:
 
             순서는 이 목록이 아니라 **올린 순서**입니다. 없어도 됩니다 — 사진 없는 글이 여전히
             대부분입니다.
+
+            **영상은 한 글에 하나**입니다(#429). 둘을 실으면 **400** 이고 글은 안 생깁니다.
+            사진 아홉과 영상 하나까지는 됩니다.
 
     Comment:
       type: object

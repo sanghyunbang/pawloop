@@ -1,10 +1,13 @@
 package com.heattrip.heat_trip_backend.S3.media;
 
 import com.heattrip.heat_trip_backend.S3.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -53,6 +56,17 @@ import java.util.stream.Collectors;
  * <h2>글에 붙이기는 {@link MediaAttachment} 가 정본이다 (#429)</h2>
  * <p>{@code community} 는 그 표면만 본다. 여기 있는 다른 메서드는 그 모듈에서 안 보인다 —
  * 하위 패키지라 Modulith 가 막는다.
+ *
+ * <h2>영상은 세 단계다 (#429)</h2>
+ * <p>서버를 안 지난다 — {@code api.heattrip.link} 앞의 Cloudflare 가 본문을 100MB 에서 끊는다.
+ * ① {@link #reserveVideo} 가 형식·크기·길이를 받아 {@code pending} 행과 서명 PUT 을 만들고
+ * ② 앱이 그 URL 로 S3 에 직접 올리고 ③ {@link #completeVideo} 가 S3 에 HEAD 로 <b>실제로
+ * 올라왔는지와 크기</b>를 묻고 포스터를 받아 {@code ready} 로 바꾼다. 서명 PUT 은 크기 조건을
+ * 못 걸어서(SDK v1) "올렸다" 는 앱의 말이 아니라 HEAD 의 답으로 정한다.
+ *
+ * <p>{@code pending} 인 채 하루가 지나면 {@link #sweepOrphans} 가 사진과 같이 거둔다 — 상태를
+ * 안 보고 {@code ref_type IS NULL} 만 본다. S3 에 객체가 있든 없든 {@code deleteObjects} 는
+ * 성공을 준다.
  */
 @Service
 public class MediaService implements MediaAttachment {
@@ -60,6 +74,24 @@ public class MediaService implements MediaAttachment {
     /** 글에 붙는 카테고리. 고아 청소와 글 삭제가 이 둘만 본다. */
     private static final Set<UploadCategory> POST_CATEGORIES =
             EnumSet.of(UploadCategory.POST_IMAGE, UploadCategory.POST_VIDEO);
+
+    /**
+     * 서명 PUT 이 사는 시간 (#429). 앱이 URL 을 받고 720p 파일을 올리는 데 15분이면 넉넉하고,
+     * URL 이 새도 그 뒤로는 못 쓴다. 계약({@code /media/videos})이 같은 숫자를 적는다.
+     */
+    public static final Duration VIDEO_UPLOAD_TTL = Duration.ofMinutes(15);
+
+    /**
+     * 영상 길이 상한 (#429). 피드에서 스치며 보는 영상이지 강의가 아니다 — 60초.
+     * 크기 상한은 {@link UploadCategory#POST_VIDEO} 가 든다(150MB). 계약이 둘 다 적는다.
+     */
+    public static final Duration MAX_VIDEO_DURATION = Duration.ofSeconds(60);
+
+    /** 한 글에 붙는 영상 수 — 이슈 #429 의 한도, 하나. 사진과 합쳐 열 개까지는 {@code PostRequest} 가 잰다. */
+    public static final int MAX_VIDEOS_PER_POST = 1;
+
+    /** 포스터(썸네일)는 사진 규칙(형식 · 10MB)을 따르고, 사진 접두사 밑 이 하위 경로에 산다. */
+    static final String POSTER_SUB_PATH = "posters";
 
     private final FileStorage storage;
     private final MediaObjectRepository repo;
@@ -159,11 +191,101 @@ public class MediaService implements MediaAttachment {
         remove(own);
     }
 
+    // ─────────────────────────── 영상 — 세 단계 (#429) ───────────────────────────
+
+    /** {@link #reserveVideo} 의 답 — 만든 행과, 앱이 PUT 할 서명 URL. */
+    public record VideoTicket(MediaObject media, URL uploadUrl) {
+    }
+
+    /**
+     * ① 자리 잡기. 형식·크기·길이를 재고 {@code pending} 행을 만든 뒤 서명 PUT 을 돌려준다.
+     *
+     * <p>파일은 아직 없다. 크기는 앱이 <b>올리겠다고 알린</b> 값이고, {@link #completeVideo} 가
+     * 실제 크기와 같은지 잰다 — 다르면 앱이 알린 것과 다른 파일을 올린 것이다.
+     *
+     * @param width  픽셀 폭. {@code height} 와 함께거나 둘 다 없거나
+     */
+    @Transactional
+    public VideoTicket reserveVideo(String ownerId, String contentType, long size,
+                                    Integer width, Integer height, int durationMs) {
+        UploadCategory category = UploadCategory.POST_VIDEO;
+        if (contentType == null || !category.allowed.contains(contentType)) {
+            throw new IllegalArgumentException("영상은 mp4 · mov 만 올릴 수 있어요.");
+        }
+        if (size <= 0 || size > category.max) {
+            throw new IllegalArgumentException("영상은 " + (category.max / (1024 * 1024)) + "MB 까지예요.");
+        }
+        if (durationMs <= 0 || durationMs > MAX_VIDEO_DURATION.toMillis()) {
+            throw new IllegalArgumentException("영상은 " + MAX_VIDEO_DURATION.toSeconds() + "초까지예요.");
+        }
+        if ((width == null) != (height == null)) {
+            throw new IllegalArgumentException("width·height 는 함께 줘야 합니다.");
+        }
+
+        String fileName = "clip" + extensionOf(contentType);
+        PresignedUpload put = storage.presignedPut(
+                UploadRequest.of(category, ownerId), fileName, contentType, VIDEO_UPLOAD_TTL);
+
+        MediaObject m = MediaObject.of(category, ownerId, null, null, put.key(), fileName, contentType, size);
+        m.setStatus(MediaStatus.PENDING);
+        m.setDimensions(width, height);
+        m.setDurationMs(durationMs);
+        return new VideoTicket(repo.save(m), put.url());
+    }
+
+    /**
+     * ③ 끝내기. S3 에 HEAD 로 실제로 올라왔는지와 크기를 묻고, 포스터를 받아 {@code ready} 로 바꾼다.
+     *
+     * <ul>
+     *   <li>내 것이 아니면 <b>404</b> — 클래스 javadoc 의 규약 그대로.</li>
+     *   <li>사진이면 <b>400</b> — 사진은 받는 순간 끝나서 이 단계가 없다.</li>
+     *   <li>이미 {@code ready} 면 <b>그대로 돌려준다</b> — 앱이 타임아웃 뒤 다시 부를 수 있다. 두 번째
+     *       포스터는 안 받는다. 첫 번째가 이미 글에 그려지고 있을 수 있다.</li>
+     *   <li>S3 에 없으면 <b>409</b> — 아직 그 상태가 아닌 것이지 잘못된 요청이 아니다. 앱이 다시
+     *       올리고 다시 부른다. 행은 {@code pending} 으로 남고 하루 뒤 청소가 거둔다.</li>
+     *   <li>크기가 알린 것과 다르면 <b>400</b> — 알린 것과 다른 파일이다. S3 의 객체는 안 지운다.
+     *       행이 {@code pending} 이라 청소가 함께 거둔다.</li>
+     * </ul>
+     *
+     * <p>포스터는 HEAD 뒤에 올린다. 앞에 올리면 "아직 안 올라왔습니다" 마다 포스터가 버킷에 남는다.
+     * 그래도 포스터를 올린 뒤 DB 가 실패하면 그 한 장은 남는다 — 행이 가리키지 않는 키라 청소도
+     * 모른다. 사진의 {@link #uploadMany} 와 같은 틈이고, 같은 이유로 여기서 안 막는다.
+     */
+    @Transactional
+    public MediaObject completeVideo(Long mediaId, MultipartFile poster, String ownerId) {
+        MediaObject m = mine(mediaId, ownerId);
+        if (!m.isVideo()) {
+            throw new IllegalArgumentException("사진은 올리는 순간 끝납니다 — 이 경로는 영상만 씁니다.");
+        }
+        if (m.getStatus().isReady()) {
+            return m;
+        }
+        requirePoster(poster);
+
+        StoredObject actual = storage.stat(m.getObjectKey())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "영상이 아직 올라오지 않았습니다. 올린 뒤 다시 불러 주세요."));
+        if (actual.size() != m.getSize()) {
+            throw new IllegalArgumentException("올라온 영상의 크기가 알린 크기와 다릅니다.");
+        }
+        if (actual.contentType() == null || !m.getCategory().allowed.contains(actual.contentType())) {
+            throw new IllegalArgumentException("올라온 파일이 영상이 아닙니다.");
+        }
+
+        StoredObject posterObject = storage.upload(
+                poster, UploadRequest.of(UploadCategory.POST_IMAGE, ownerId).withSubPath(POSTER_SUB_PATH));
+        m.setPosterKey(posterObject.key());
+        m.setContentType(actual.contentType());
+        m.setStatus(MediaStatus.READY);
+        return repo.save(m);
+    }
+
     // ─────────────────────────── MediaAttachment (#429) ───────────────────────────
 
     @Override
     @Transactional
     public List<AttachedMedia> attach(String refType, String refId, List<Long> mediaIds, long ownerId) {
+        requireAtMostOneVideo(List.of(), mediaIds == null ? List.of() : mediaIds);
         attachOrThrow(refType, refId, mediaIds, ownerId);
         return attachedList(refType, refId);
     }
@@ -174,16 +296,25 @@ public class MediaService implements MediaAttachment {
         Set<Long> wanted = new LinkedHashSet<>(mediaIds);
         List<MediaObject> current = repo.findByRefTypeAndRefIdOrderByIdAsc(refType, refId);
 
-        // 빠진 것은 지운다 — 사용자가 고치기 화면에서 뗀 사진이다. 되돌릴 길을 남기지 않는다.
         List<MediaObject> gone = current.stream()
                 .filter(m -> !wanted.contains(m.getId()))
                 .toList();
-        remove(gone);
+        List<MediaObject> kept = current.stream()
+                .filter(m -> wanted.contains(m.getId()))
+                .toList();
 
         // 새로 든 것만 붙인다. 이미 붙어 있는 것은 조건(ref_type is null)에 안 걸리므로 빼고 센다.
         Set<Long> already = current.stream().map(MediaObject::getId).collect(Collectors.toSet());
         List<Long> fresh = wanted.stream().filter(id -> !already.contains(id)).toList();
+
+        // **붙이기가 먼저고 지우기는 나중이다.** 지우기는 S3 를 부르고 S3 는 트랜잭션 밖이다 —
+        // 먼저 지우고 붙이기가 실패하면 DB 는 되돌아가는데 파일은 이미 없어서, 뗀 적 없는
+        // 사진이 화면에서 깨진다. 붙이기는 조건부 UPDATE 라 실패해도 밖에 남는 것이 없다.
+        requireAtMostOneVideo(kept, fresh);
         attachOrThrow(refType, refId, fresh, ownerId);
+
+        // 빠진 것은 지운다 — 사용자가 고치기 화면에서 뗀 사진이다. 되돌릴 길을 남기지 않는다.
+        remove(gone);
 
         return attachedList(refType, refId);
     }
@@ -259,6 +390,48 @@ public class MediaService implements MediaAttachment {
                 m.getWidth(),
                 m.getHeight(),
                 m.getDurationMs());
+    }
+
+    /**
+     * 한 글에 영상은 {@value #MAX_VIDEOS_PER_POST}개다 (#429). 붙이기 전에 센다 — 요청 하나가 목록
+     * 전부를 들고 오므로 경합이 없다. 남의 id 나 없는 id 는 여기서 안 거른다 — 그건
+     * {@link #attachOrThrow} 의 영향 행 수가 잰다.
+     *
+     * @param kept  이미 붙어 있고 이번에도 남는 것
+     * @param fresh 이번에 새로 붙일 id
+     */
+    private void requireAtMostOneVideo(List<MediaObject> kept, List<Long> fresh) {
+        long videos = kept.stream().filter(MediaObject::isVideo).count();
+        if (!fresh.isEmpty()) {
+            videos += repo.findAllById(new LinkedHashSet<>(fresh)).stream()
+                    .filter(MediaObject::isVideo)
+                    .count();
+        }
+        if (videos > MAX_VIDEOS_PER_POST) {
+            throw new IllegalArgumentException("영상은 한 글에 하나까지 붙일 수 있어요.");
+        }
+    }
+
+    /**
+     * 포스터는 사진 규칙이다 — 비어 있지 않고, 사진 형식이고, 10MB 아래. 저장소의 검증기도 같은
+     * 것을 보지만 그쪽은 S3 를 부르기 직전이라, HEAD 를 부르기 <b>전에</b> 여기서 먼저 거른다.
+     */
+    private static void requirePoster(MultipartFile poster) {
+        if (poster == null || poster.isEmpty()) {
+            throw new IllegalArgumentException("포스터(썸네일) 한 장이 있어야 합니다.");
+        }
+        UploadCategory rule = UploadCategory.POST_IMAGE;
+        if (poster.getContentType() == null || !rule.allowed.contains(poster.getContentType())) {
+            throw new IllegalArgumentException("포스터는 jpeg · png · webp 여야 합니다.");
+        }
+        if (poster.getSize() > rule.max) {
+            throw new IllegalArgumentException("포스터가 너무 큽니다.");
+        }
+    }
+
+    /** 허용 형식이 둘뿐이라 표가 아니다 — {@code UploadCategory.POST_VIDEO.allowed} 가 늘면 여기도 는다. */
+    private static String extensionOf(String contentType) {
+        return "video/quicktime".equals(contentType) ? ".mov" : ".mp4";
     }
 
     /** 내 것이어야 한다. 아니면 <b>없는 것</b>이다 — 클래스 javadoc 참조. */

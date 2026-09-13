@@ -94,7 +94,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 | 403 | `FORBIDDEN` | 타인 리소스 수정 시도 |
 | 404 | `NOT_FOUND` | 리소스 없음, 알 수 없는 경로 |
 | 405 | `METHOD_NOT_ALLOWED` | 그 경로가 지원하지 않는 HTTP 메서드 |
-| 409 | `CONFLICT` | 중복(예: 이미 가입된 이메일) |
+| 409 | `CONFLICT` | 중복(예: 이미 가입된 이메일), 또는 아직 그 상태가 아님(예: S3 에 안 올라온 영상의 `complete`, §18) |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | `Content-Type` 이 `application/json` 이 아님 |
 | 429 | `RATE_LIMITED` | 외부 데이터(예: KTO 1000콜/일) 한도, 또는 서버의 요청 빈도 제한. 인증 경로(`POST /auth/login`·`POST /auth/token/refresh`·`POST /auth/oauth/{provider}/callback`·`GET /oauth2/authorization/*`)가 여기 걸린다(#14). `Retry-After` 헤더에 창 길이(초)가 실린다. 버킷 이름·한도 수치는 본문에 싣지 않는다 |
 | 500 | `INTERNAL` | 서버 오류. `message` 는 고정 문구다 — 예외 메시지에는 SQL 조각·경로·이메일·토큰이 섞인다(#6) |
@@ -685,12 +685,12 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
   "body": "이른 아침엔 사람이 적어서 대형견도 편해요. 잔디마당은 목줄 필수!",
   "contentId": "126508",              // nullable — Place.contentId 와 같은 키
   "loc": "서울숲",                     // nullable — 표시용 문자열
-  "mediaIds": [312, 313]              // 선택 — POST /media 가 돌려준 id (#429). 최대 10
+  "mediaIds": [312, 313]              // 선택 — POST /media 가 돌려준 id (#429). 최대 10 · 영상은 하나
 }
 // 201 Created → 6.2 상세 반환. media[] 에 붙은 사진이 올린 순서로 든다
 ```
 
-검증: `title` 1~100자, `body` 1~5000자, `board` ∈ enum. `mediaIds` 는 **내가 올렸고 · 아직 어디에도 안 붙었고 · `ready` 인 것**만 붙고, 하나라도 아니면 400 이고 글도 안 생긴다(§18).
+검증: `title` 1~100자, `body` 1~5000자, `board` ∈ enum. `mediaIds` 는 **내가 올렸고 · 아직 어디에도 안 붙었고 · `ready` 인 것**만 붙고, 하나라도 아니면 400 이고 글도 안 생긴다(§18). **영상은 한 글에 하나**다 — 둘이면 400 이다.
 
 ### 6.4 글 수정 — ✅ 구현(#211)
 
@@ -704,7 +704,7 @@ PATCH /api/community/posts/{postId}   # 200, 고쳐진 Post 전체
 
 **`board`·`title`·`body` 셋만 바꿉니다.** 보낸 키만 바뀌고, 하나도 안 보내면 `400` 입니다 — 아무 일도 안 하면서 `200` 을 주면 "고쳐졌다" 로 읽힙니다. 공백만 보내도 `400` 입니다.
 
-**`mediaIds` 는 통째로 갈아 끼웁니다**(#429). 키가 없으면 안 바꾸고, `[]` 면 전부 뗍니다. 목록에서 빠진 것은 지워집니다 — S3 객체까지. 새로 든 것은 §6.3 과 같은 조건(내 것 · 아직 안 붙음 · `ready`)이고, 하나라도 아니면 `400` 이고 아무것도 안 바뀝니다.
+**`mediaIds` 는 통째로 갈아 끼웁니다**(#429). 키가 없으면 안 바꾸고, `[]` 면 전부 뗍니다. 목록에서 빠진 것은 지워집니다 — S3 객체까지. 새로 든 것은 §6.3 과 같은 조건(내 것 · 아직 안 붙음 · `ready`)이고, 하나라도 아니면 `400` 이고 아무것도 안 바뀝니다 — 뗀 것의 파일도 그대로입니다(붙이기가 먼저고 지우기는 나중이라서). 영상은 여전히 하나입니다 — 남는 것과 새로 드는 것을 합쳐 셉니다.
 
 **`loc`·`contentId` 는 이 요청으로 못 바꿉니다.** 그 둘은 비울 수 있어야 하는데(장소 연결 해제), 그러려면 JSON 의 "키가 없음" 과 "명시적 `null`" 을 구별해야 합니다 — 저장소 최초의 `PATCH` 를 그 결정과 함께 들이지 않았습니다. 장소 연결은 지우고 다시 쓰면 됩니다.
 
@@ -992,6 +992,8 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 |:---|:---|:---|
 | `POST` | `/media` (multipart) | 사진 올리기. **한 요청에 한 장**이 기본이고 `width`·`height` 를 함께 줍니다(파일이 하나일 때만). 장당 **10MB** 를 넘으면 `400`. `category=POST_VIDEO` 는 `400` — 영상은 서명 URL 로 갑니다 |
 | `DELETE` | `/media/{mediaId}` | 내가 올린 것 지우기 — S3 객체까지. **내 것이 아니면 `404`**(남의 것과 없는 것을 구별해 주지 않습니다, ADR-0017 규약 3) |
+| `POST` | `/media/videos` (JSON) | **영상 ①** — 형식·크기·길이를 알리면 `201` 에 `{ id, key, uploadUrl }`. 행은 `POST_VIDEO`·`pending`, `uploadUrl` 은 **15분**짜리 서명 PUT. **60초 · 150MB · mp4/mov** 를 넘으면 `400` |
+| `POST` | `/media/{mediaId}/complete` (multipart, `poster`) | **영상 ③** — 서버가 S3 에 HEAD 로 실제 크기·형식을 묻고 `ready` 로. 아직 없으면 `409`, 크기가 알린 것과 다르면 `400`, 내 것이 아니면 `404`. 두 번 불러도 같다 |
 
 ```json
 // POST /media  (multipart/form-data: files=<jpeg>, category=POST_IMAGE, width=1600, height=1200)
@@ -1008,7 +1010,24 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 **2026-09-13 이전에는 이 경로가 폰 사진을 못 받았습니다.** `spring.servlet.multipart` 상한이 Spring 기본값(파일당 1MB)이었는데 폰 사진은 3~8MB 입니다 — 실제 사진으로 쓰인 적이 없어서 아무도 못 봤습니다.
 
-**영상은 이 문으로 안 옵니다.** `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을 100MB 까지만 받습니다. 영상은 세 단계로 갑니다 — ① 크기·형식을 알려 서명 URL 과 `id`(`status: pending`)를 받고 ② 앱이 S3 에 직접 올리고 ③ 다 올렸다고 알리면 서버가 S3 에 실제 크기·형식을 묻고 `ready` 로 바꿉니다. **다음 PR** 이고, 그 경로 둘은 그때 계약에 올립니다(여기 미리 적으면 `ApiSpecStatusMarkersTest` 가 "✅ 절에 계약 밖 경로" 로 막습니다 — 맞는 지적입니다). 표의 자리(`status`·`poster_key`·`duration_ms`)는 `39_post_media.sql` 이 함께 팠습니다.
+**영상은 이 문으로 안 옵니다 — 세 단계입니다.** `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을 100MB 까지만 받습니다.
+
+```json
+// ① POST /media/videos   { "contentType": "video/mp4", "size": 31457280, "width": 1280, "height": 720, "durationMs": 42000 }
+// 201
+{ "id": 315, "key": "posts-video/7/2026/09/….mp4",
+  "uploadUrl": "https://<bucket>.s3.ap-northeast-2.amazonaws.com/posts-video/7/2026/09/….mp4?X-Amz-Signature=…" }
+
+// ② 앱이 uploadUrl 로 PUT — 알린 것과 같은 Content-Type 으로. 서버를 안 지난다
+
+// ③ POST /media/315/complete   (multipart/form-data: poster=<jpeg>)
+// 200 → 위의 MediaItem. status 가 ready 고 posterUrl 이 찼다
+// 409 → 아직 S3 에 없다. PUT 을 다시 하고 다시 부른다
+```
+
+① 에서 알린 `size` 는 **올릴 파일의 정확한 바이트 수**입니다. 서명 PUT 은 크기 조건을 못 걸어서(SDK v1) ③ 에서 서버가 HEAD 로 실제 크기를 재고, 다르면 `400` 입니다 — 알린 것과 다른 파일입니다. `pending` 인 것은 글에 안 붙고(§6.3 이 `400`), 하루 안에 ③ 을 안 하면 청소가 S3 객체와 함께 거둡니다. **한 글에 영상은 하나**입니다 — 둘째를 붙이려 하면 `400` 이고, 고치기에서 하나 더 얹는 것도 같습니다.
+
+포스터(썸네일)는 앱이 만들어 ③ 에 싣습니다 — 서버에서 ffmpeg 를 돌리는 것보다 쌉니다(Mac mini 한 대). 피드는 그 그림과 재생 표시만 그리고 자동재생은 없습니다. 영상의 위치 메타데이터도 사진처럼 **기기에서** 지웁니다 — 720p 로 다시 인코딩하면서 사라지고, 실제로 지워지는지는 실기기 수동 확인입니다(`legal-lbs-compliance.md` §7). 표의 자리(`status`·`poster_key`·`duration_ms`)는 `39_post_media.sql` 이 사진 PR 때 함께 팠습니다.
 
 옛 경로 넷 — 공개 URL 조립 · presigned 발급 · 파일 교체 · 참조 단위 일괄 삭제 — 은 감정 여행 시절 것이라 계약에 안 올렸습니다. 앱이 안 씁니다. 핸들러는 `MediaController` 에 남아 있습니다.
 
