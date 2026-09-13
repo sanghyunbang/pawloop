@@ -6,6 +6,7 @@ import '../data/neighborhood_store.dart';
 import '../domain/neighborhood.dart';
 import '../widgets/post_course_card.dart';
 import '../widgets/post_media_strip.dart';
+import '../widgets/post_photo_wall.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
@@ -68,7 +69,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// 내가 고른 동네. `null` 이면 칩 자체가 없다.
   Neighborhood? _mine;
-  String _view = 'card'; // 'card' | 'list'
+  String _view = 'card'; // 'card' | 'list' | 'grid'(사진 벽, #451)
 
   /// 이 배율부터 **보조 정보를 접는다** — 카드 머리말의 동네, 필터 줄의 "N개의 글", 동네
   /// 칩의 글자.
@@ -302,11 +303,27 @@ class _FeedScreenState extends State<FeedScreen> {
     if (_posts.isEmpty) {
       return _emptyView();
     }
+    final padding = EdgeInsets.fromLTRB(12, 4, 12, MediaQuery.of(context).padding.bottom + 100);
+    // 사진 벽 — 사진·영상이 있는 글만 두 열로(#451). 한 화면에 여섯~여덟 장이 보인다.
+    if (_view == 'grid') {
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: padding,
+          children: [
+            if (PostPhotoWall.withMedia(_posts).isEmpty)
+              _photoEmptyView()
+            else
+              PostPhotoWall(posts: _posts, onTap: _open),
+            if (_hasMore) _moreButton(),
+          ],
+        ),
+      );
+    }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(
-            12, 4, 12, MediaQuery.of(context).padding.bottom + 100),
+        padding: padding,
         children: [
           for (final post in _posts) ...[
             _view == 'card' ? _card(post) : _row(post),
@@ -317,6 +334,28 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
     );
   }
+
+  /// 글은 있는데 사진 있는 글이 없을 때. "글이 없다" 와 다른 말이다 — 사진을 붙이면 된다.
+  Widget _photoEmptyView() => Container(
+        key: const Key('feed-photo-empty'),
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+        decoration: BoxDecoration(
+          color: T.cardBg,
+          borderRadius: BorderRadius.circular(T.radius),
+          border: Border.all(color: T.cardBorder),
+        ),
+        child: const Column(children: [
+          Icon(Icons.photo_library_outlined, size: 32, color: T.textFaint),
+          SizedBox(height: 10),
+          Text('사진이 있는 글이 아직 없어요',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          SizedBox(height: 4),
+          Text('글쓰기에서 사진을 붙이면 여기 벽에 걸려요',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: T.textSecondary)),
+        ]),
+      );
 
   /// 글이 하나도 없을 때.
   ///
@@ -456,6 +495,7 @@ class _FeedScreenState extends State<FeedScreen> {
     Widget seg(String value, IconData icon) {
       final on = _view == value;
       return GestureDetector(
+        key: Key('feed-view-$value'),
         onTap: () => setState(() => _view = value),
         child: Container(
           width: 42,
@@ -479,6 +519,8 @@ class _FeedScreenState extends State<FeedScreen> {
       child: Row(children: [
         seg('card', Icons.view_agenda_outlined),
         seg('list', Icons.format_list_bulleted),
+        // 사진 벽 — 핀터레스트·반려견 판의 격자(#451)
+        seg('grid', Icons.grid_view_rounded),
       ]),
     );
   }

@@ -194,4 +194,56 @@ void main() {
       expect(tester.takeException(), isNull, reason: '${media.length}장');
     }
   });
+  // ── 사진 벽 (#451 1번) — 격자 보기는 사진·영상이 있는 글만 두 열로 깐다
+  group('사진 벽', () {
+    testWidgets('격자로 바꾸면 사진 있는 글만 타일이고 글만 있는 글은 없다 — 카드는 안 그린다', (tester) async {
+      _phone(tester);
+      final repo = _repo([
+        _post(id: 12, media: [_media(1, width: 1080, height: 1350)]),
+        _post(id: 13),
+        _post(id: 14, media: [_media(2, kind: 'video', width: 1280, height: 720), _media(3)]),
+      ]);
+      await tester.pumpWidget(_host(FeedScreen(repository: repo)));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('post-photo-wall')), findsNothing, reason: '기본은 카드 보기다');
+
+      await tester.tap(find.byKey(const Key('feed-view-grid')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('post-photo-wall')), findsOneWidget);
+      expect(find.byKey(const Key('photo-tile-12')), findsOneWidget);
+      expect(find.byKey(const Key('photo-tile-14')), findsOneWidget);
+      expect(find.byKey(const Key('photo-tile-13')), findsNothing, reason: '사진 없는 글은 벽에 없다');
+      expect(_strip, findsNothing, reason: '격자에서는 카드를 안 그린다');
+      expect(find.byIcon(Icons.play_circle_fill_rounded), findsOneWidget, reason: '영상은 재생 표시');
+      expect(find.text('+1'), findsOneWidget, reason: '사진이 둘이면 +1');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('사진 있는 글이 하나도 없으면 벽 대신 그 말을 한다', (tester) async {
+      _phone(tester);
+      final repo = _repo([_post(id: 12), _post(id: 13)]);
+      await tester.pumpWidget(_host(FeedScreen(repository: repo)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('feed-view-grid')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('feed-photo-empty')), findsOneWidget);
+      expect(find.byKey(const Key('post-photo-wall')), findsNothing);
+    });
+
+    testWidgets('타일을 누르면 글 상세로 간다', (tester) async {
+      _phone(tester);
+      final repo = _repo([_post(id: 12, media: [_media(1)])]);
+      await tester.pumpWidget(_host(FeedScreen(repository: repo)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('feed-view-grid')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('photo-tile-12')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PostDetailScreen), findsOneWidget);
+    });
+  });
 }
