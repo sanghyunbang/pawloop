@@ -53,6 +53,7 @@ class _Community implements CommunityRepository {
     String? loc,
     String? contentId,
     int? courseId,
+    List<int>? mediaIds,
   }) async {
     createdWith.add(courseId);
     return CommunityPost(

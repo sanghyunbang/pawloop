@@ -156,9 +156,17 @@ Widget _host(Widget child) => MaterialApp(home: child);
 void main() {
   setUp(() {
     AuthState.signInForTest(const AuthUser(id: _meId, nickname: '나'));
+    // 편집 화면에 사진 칸(#429)이 더해져 폼이 기본 표면(800×600)보다 길다. ListView 는 보이는
+    // 것만 만들어 '고치기' 가 finder 에 안 잡힌다 — `post_write_test.dart` 와 같은 전제.
+    final view = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.views.single;
+    view.physicalSize = const Size(800, 1400);
+    view.devicePixelRatio = 1;
   });
 
-  tearDown(AuthState.resetForTest);
+  tearDown(() {
+    AuthState.resetForTest();
+    TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.views.single.reset();
+  });
 
   // ─────────────────── 공개 범위 고지 (이슈 #253) ───────────────────
 

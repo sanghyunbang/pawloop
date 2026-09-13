@@ -42,6 +42,7 @@ import 'chat_repository.dart' show ChatReportReason;
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'location_upload_policy.dart';
+import '../domain/post_media.dart';
 
 /// 게시판 — 계약의 `Board`.
 ///
@@ -254,6 +255,9 @@ class CommunityPost {
   /// 실제로 달라졌다**는 뜻이고, 그래서 화면이 그것을 표시할 근거가 된다.
   final DateTime? updatedAt;
 
+  /// 붙은 사진·영상 (#429). **항상 있다** — 없으면 빈 목록. 순서는 올린 순서다.
+  final List<PostMedia> media;
+
   const CommunityPost({
     required this.id,
     required this.author,
@@ -269,6 +273,7 @@ class CommunityPost {
     this.contentId,
     this.course,
     this.authorDistrict,
+    this.media = const [],
   });
 
   /// 한 자리만 바꾼 사본.
@@ -293,6 +298,7 @@ class CommunityPost {
         updatedAt: updatedAt,
         hiddenByBlock: hiddenByBlock,
         authorDistrict: authorDistrict,
+        media: media,
       );
 
   /// 모양이 아니면 `null`. 한 건이 깨졌다고 목록 전체를 버리지 않는다.
@@ -322,6 +328,7 @@ class CommunityPost {
       updatedAt: _dateTime(json['updatedAt']),
       hiddenByBlock: json['hiddenByBlock'] == true,
       authorDistrict: json['authorDistrict'] as String?,
+      media: PostMedia.parseList(json['media']),
     );
   }
 }
@@ -545,6 +552,9 @@ class CommunityRepository {
 
     /// 붙일 코스 (#339). **내 것이면서 공개된 코스**만 붙는다 — 아니면 서버가 400 이다.
     int? courseId,
+
+    /// 미리 올려 둔 사진의 id — `POST /media` 가 돌려준 값 (#429). 순서는 올린 순서다.
+    List<int>? mediaIds,
   }) async {
     final uploadLoc = LocationUploadPolicy.placeNameForUpload(loc);
     final uploadContentId = LocationUploadPolicy.placeIdForUpload(contentId);
@@ -563,6 +573,7 @@ class CommunityRepository {
             'contentId': uploadContentId,
           // 코스는 좌표가 아니다 — 서버가 이미 양 끝을 자른 선의 식별자다(#339).
           if (courseId != null) 'courseId': courseId,
+          if (mediaIds != null && mediaIds.isNotEmpty) 'mediaIds': mediaIds,
         },
       ),
     );
@@ -647,11 +658,16 @@ class CommunityRepository {
     CommunityBoard? board,
     String? title,
     String? body,
+
+    /// 붙은 사진을 **통째로 갈아 끼운다** (#429). `null` 이면 안 바꾸고, 빈 목록이면 전부 뗀다 —
+    /// `PostPatch` 의 "키가 없으면 안 바꿈" 과 같은 규약이다.
+    List<int>? mediaIds,
   }) async {
     final patch = <String, Object?>{
       if (board != null) 'board': board.wire,
       if (title != null) 'title': title,
       if (body != null) 'body': body,
+      if (mediaIds != null) 'mediaIds': mediaIds,
     };
     if (patch.isEmpty) return null;
 

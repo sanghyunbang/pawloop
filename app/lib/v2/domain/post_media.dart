@@ -1,0 +1,123 @@
+// 글에 붙은 사진·영상 하나 — 계약의 `PostMedia`. 이슈 #429, 서버는 PR #430.
+//
+// ## 키는 서버 레코드에서 옮겨 적었다
+//
+// `PostResponse.PostMedia(id, kind, url, posterUrl, width, height, durationMs)` 그대로다.
+// 앱이 읽는 키를 보고 목을 만들면 테스트가 버그에 동의한다 — 채팅에서 `messages` 와
+// `items` 가 갈렸던 그 일이다. 파서 테스트는 이 키들만 넣은 응답으로 잰다.
+//
+// ## 모르는 종류는 버린다
+//
+// 서버가 언젠가 `kind` 를 늘리면(예: 문서) 그 항목은 목록에서 빠진다. 사진으로 그리면
+// 영상 URL 을 그림으로 열려다 깨진 칸이 뜨고, 영상으로 그리면 재생을 시도한다. 한 칸이
+// 이상해도 나머지는 산다 — `Crew.parseList` 와 같은 규칙이다.
+import 'package:flutter/foundation.dart';
+
+/// 화면이 그리는 종류. 서버의 카테고리(`POST_IMAGE`·`POST_VIDEO`)에서 온다.
+enum PostMediaKind {
+  image('image'),
+  video('video');
+
+  const PostMediaKind(this.wire);
+
+  /// 계약의 값.
+  final String wire;
+
+  bool get isVideo => this == PostMediaKind.video;
+
+  /// 모르는 값이면 `null` — 부르는 쪽이 그 항목을 버린다.
+  static PostMediaKind? tryParse(Object? value) {
+    for (final kind in values) {
+      if (kind.wire == value) return kind;
+    }
+    return null;
+  }
+}
+
+@immutable
+class PostMedia {
+  final int id;
+  final PostMediaKind kind;
+
+  /// CDN 공개 URL. 사진이면 그림, 영상이면 재생할 파일.
+  final String url;
+
+  /// 영상의 썸네일. 사진은 `null`.
+  final String? posterUrl;
+
+  /// 픽셀 폭·높이. 앱이 올릴 때 준 값이라 없을 수 있다 — 그러면 정사각형 자리를 잡는다.
+  final int? width;
+  final int? height;
+
+  /// 영상 길이. 사진은 `null`.
+  final int? durationMs;
+
+  const PostMedia({
+    required this.id,
+    required this.kind,
+    required this.url,
+    this.posterUrl,
+    this.width,
+    this.height,
+    this.durationMs,
+  });
+
+  /// 자리를 잡을 가로세로비. 크기를 모르면 1 이다 — 사진이 도착할 때마다 화면이 뛰지 않게
+  /// **미리** 잡는 것이 이 값의 목적이다. 너무 길거나 납작한 것은 카드 안에서 잘라 그린다.
+  double get aspectRatio {
+    final w = width;
+    final h = height;
+    if (w == null || h == null || w <= 0 || h <= 0) return 1;
+    return (w / h).clamp(0.6, 1.8).toDouble();
+  }
+
+  /// 카드에 그릴 그림. 영상이면 썸네일이고, 썸네일이 없으면 `null` — 그때는 어두운 칸이다.
+  String? get thumbnailUrl => kind.isVideo ? posterUrl : url;
+
+  /// 모양이 아니면 `null`. 한 칸이 깨졌다고 글 전체를 버리지 않는다.
+  static PostMedia? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final id = json['id'];
+    final kind = PostMediaKind.tryParse(json['kind']);
+    final url = json['url'];
+    if (id is! num || kind == null || url is! String || url.isEmpty) return null;
+    return PostMedia(
+      id: id.toInt(),
+      kind: kind,
+      url: url,
+      posterUrl: _text(json['posterUrl']),
+      width: _int(json['width']),
+      height: _int(json['height']),
+      durationMs: _int(json['durationMs']),
+    );
+  }
+
+  static List<PostMedia> parseList(Object? json) {
+    if (json is! List) return const [];
+    return [
+      for (final raw in json)
+        if (PostMedia.tryParse(raw) case final media?) media,
+    ];
+  }
+
+  static int? _int(Object? value) => value is num ? value.toInt() : null;
+
+  static String? _text(Object? value) {
+    if (value is! String) return null;
+    return value.isEmpty ? null : value;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is PostMedia &&
+      other.id == id &&
+      other.kind == kind &&
+      other.url == url &&
+      other.posterUrl == posterUrl &&
+      other.width == width &&
+      other.height == height &&
+      other.durationMs == durationMs;
+
+  @override
+  int get hashCode => Object.hash(id, kind, url, posterUrl, width, height, durationMs);
+}

@@ -23,15 +23,20 @@
 // 사람이 올리기를 누른 뒤에야 400 을 받는다(#161).
 library;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/community_repository.dart';
 import '../data/course_repository.dart';
 import '../data/location_upload_policy.dart';
+import '../data/image_prep.dart';
+import '../data/media_picker.dart';
+import '../data/post_media_repository.dart';
 import '../widgets/course_picker_sheet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../widgets/post_media_field.dart';
 import 'login_screen.dart';
 
 /// 글쓰기를 여는 **유일한 문**. 미로그인이면 로그인부터 안내한다.
@@ -126,6 +131,16 @@ class PostWriteScreen extends StatefulWidget {
   /// 보여만 준다</b>(장소 카드).
   final CommunityPost? editing;
 
+  /// 사진 업로드 저장소 (#429). 테스트가 `MockClient` 를 꽂은 것을 넘긴다.
+  final PostMediaRepository? media;
+
+  /// 사진 고르기 (#429). 테스트가 가짜를 꽂는 자리 — 위젯 테스트에는 갤러리가 없다.
+  final MediaPicker? picker;
+
+  /// 사진 다시 인코딩 (#429). 기본은 격리 스레드의 `ImagePrep.prepare` — 위젯 테스트는 격리
+  /// 스레드의 결과를 못 받으므로(`FakeAsync`) 같은 일을 하는 동기 버전을 꽂는다.
+  final ImagePreparer? prepare;
+
   const PostWriteScreen({
     super.key,
     this.repository,
@@ -134,6 +149,9 @@ class PostWriteScreen extends StatefulWidget {
     this.loc,
     this.contentId,
     this.editing,
+    this.media,
+    this.picker,
+    this.prepare,
   });
 
   bool get isEditing => editing != null;
@@ -162,6 +180,16 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
   /// 뜻이 흐리다. 고쳐 쓰는 글에서는 이미 붙어 있는 것을 그대로 둔다(붙이기·떼기는
   /// 별도 오퍼레이션이라 이 화면의 저장과 섞지 않는다).
   Course? _course;
+
+  late final PostMediaRepository _media = widget.media ?? PostMediaRepository();
+  late final MediaPicker _picker = widget.picker ?? ImagePickerMediaPicker();
+
+  /// 붙일 사진 (#429). 고쳐 쓰는 글은 이미 붙어 있던 것으로 시작한다.
+  late PostMediaSelection _mediaSel = PostMediaSelection(
+    ids: [for (final m in widget.editing?.media ?? const []) m.id],
+    busy: false,
+    hasFailure: false,
+  );
 
   bool _sending = false;
   String? _error;
@@ -219,6 +247,15 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
       setState(() => _error = '본문이 너무 길어요 · 이모지는 여러 글자로 세어져요');
       return;
     }
+    // 사진이 아직 올라가는 중이면 id 가 없다. 그대로 보내면 사진 없는 글이 조용히 올라간다.
+    if (_mediaSel.busy) {
+      setState(() => _error = '사진을 올리는 중이에요 · 잠시만요');
+      return;
+    }
+    if (_mediaSel.hasFailure) {
+      setState(() => _error = '못 올린 사진이 있어요 · 다시 올리거나 떼 주세요');
+      return;
+    }
 
     setState(() {
       _sending = true;
@@ -235,6 +272,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
               body: body,
               loc: widget.loc,
               contentId: widget.contentId,
+              mediaIds: _mediaSel.ids,
             );
       if (!mounted) return;
       Navigator.of(context).pop(post);
@@ -258,8 +296,12 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
   /// 부르는 쪽은 `null` 을 "바뀐 것 없음" 으로 읽어 다시 그리지 않는다.
   Future<CommunityPost?> _saveEdit(String title, String body) {
     final original = widget.editing!;
+    // 사진은 목록이 달라졌을 때만 싣는다 — 안 실으면 안 바뀌고, 실으면 통째로 갈아 끼운다.
+    final originalIds = [for (final m in original.media) m.id];
+    final mediaChanged = !listEquals(originalIds, _mediaSel.ids);
     return _repo.updatePost(
       original.id,
+      mediaIds: mediaChanged ? _mediaSel.ids : null,
       board: _board == original.board ? null : _board,
       title: title == original.title ? null : title,
       body: body == original.body ? null : body,
@@ -316,6 +358,15 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                         fontSize: 14.5, height: 1.55, color: T.textPrimary),
                     decoration: _decoration(
                         '우리 아이와 있었던 일, 다녀온 곳, 궁금한 것을 적어보세요'),
+                  ),
+                  const SizedBox(height: 14),
+                  // 고르는 순간 올라가기 시작한다. 글을 저장할 때는 올라간 id 만 싣는다 (#429).
+                  PostMediaField(
+                    repository: _media,
+                    picker: _picker,
+                    initial: widget.editing?.media ?? const [],
+                    prepare: widget.prepare ?? ImagePrep.prepare,
+                    onChanged: (sel) => setState(() => _mediaSel = sel),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 2),

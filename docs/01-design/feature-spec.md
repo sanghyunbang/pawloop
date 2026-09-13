@@ -372,4 +372,4 @@ MVP 범위 밖. 개요만 정의하며 현재 미구현.
 | 상태관리 | `ValueNotifier` + `ValueListenableBuilder`. 전역: `RootTab.index/exploreView`, `kMyDog`, `AppThemeCtl.avatarBorder` |
 | 영속성 | **현재 없음** — 대부분 로컬 상수/세션 상태. 저장 액션은 스낵바 피드백만 |
 | 외부 연동 | 관광공사 KorPetTourService2 · 행정안전부 인허가 · 두루누비(전부 서버 경유, 실연동) · 네이버 지도 SDK(Client ID) |
-| 미구현 진입점 | 커뮤니티 글쓰기, 지도 검색, 날짜 선택, 사진 첨부, 북마크 저장, 로그인 |
+| 미구현 진입점 | 커뮤니티 글쓰기, 지도 검색, 날짜 선택, 북마크 저장, 로그인 |

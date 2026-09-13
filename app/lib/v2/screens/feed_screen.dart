@@ -5,6 +5,7 @@ import '../data/community_repository.dart';
 import '../data/neighborhood_store.dart';
 import '../domain/neighborhood.dart';
 import '../widgets/post_course_card.dart';
+import '../widgets/post_media_strip.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
@@ -726,6 +727,11 @@ class _FeedScreenState extends State<FeedScreen> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: 13.5, height: 1.5, color: Color(0xCC463C64))),
+          // 붙은 사진·영상 (#429). 한 장이면 크게, 넷 넘으면 +N.
+          if (post.media.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            PostMediaStrip(media: post.media),
+          ],
           // 붙은 코스가 있으면 그림 한 장 (#339). 비공개로 되돌렸거나 지웠으면 안 온다.
           if (post.course != null) ...[
             const SizedBox(height: 12),

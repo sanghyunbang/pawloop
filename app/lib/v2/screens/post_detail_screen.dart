@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/auth_state.dart';
 import '../data/community_repository.dart';
 import '../widgets/post_course_card.dart';
+import '../widgets/post_media_strip.dart';
 import '../domain/date_label.dart';
 import '../widgets/message_actions_sheet.dart';
 import 'login_screen.dart';
@@ -763,6 +764,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ),
           ),
+          // 붙은 사진·영상 (#429). 누르면 전체 보기.
+          if (post.media.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            PostMediaStrip(media: post.media),
+          ],
           // 붙은 코스 (#339). 누르면 지도가 아니라 그림만 크게 — 상세에서 온전한 선을
           // 다시 부르는 것은 "다시 걷기"(다음 조각)의 일이다.
           if (post.course != null) ...[
