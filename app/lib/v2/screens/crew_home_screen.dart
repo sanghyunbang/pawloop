@@ -121,7 +121,7 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
         Navigator.of(context).pop(_changed);
       },
       child: Scaffold(
-        backgroundColor: T.lilacTop,
+        backgroundColor: T.bgTop,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -681,7 +681,7 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
     final target = await showDialog<CrewMember>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        backgroundColor: T.lilacTop,
+        backgroundColor: T.bgTop,
         title: const Text('누구에게 넘길까요',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         children: [
@@ -777,7 +777,7 @@ class _CrewHomeScreenState extends State<CrewHomeScreen> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: T.lilacTop,
+        backgroundColor: T.bgTop,
         title: Text(title,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         content: Text(body, style: const TextStyle(fontSize: 13.5)),
@@ -867,7 +867,7 @@ class _CrewEditSheetState extends State<_CrewEditSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: const BoxDecoration(
-          color: T.lilacTop,
+          color: T.bgTop,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),

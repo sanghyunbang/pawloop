@@ -201,7 +201,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
@@ -233,7 +233,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         withCaption: false,
                       ),
                     )
-                  : const Icon(Icons.route_rounded, size: 22, color: Color(0xFFBBB3CC)),
+                  : const Icon(Icons.route_rounded, size: 22, color: T.textFaint),
             ),
             const SizedBox(width: 13),
             Expanded(
@@ -250,11 +250,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   Text(course.note!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: Color(0xCC463C64))),
+                      style: const TextStyle(fontSize: 12, color: T.textSecondary)),
                 ],
               ]),
             ),
-            const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+            const Icon(Icons.chevron_right, size: 18, color: T.textFaint),
           ]),
         ),
       );
@@ -285,7 +285,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
             GestureDetector(
               onTap: () => Navigator.pop(sheetCtx),
-              child: const Icon(Icons.close, size: 22, color: Color(0xFFBBB3CC)),
+              child: const Icon(Icons.close, size: 22, color: T.textFaint),
             ),
           ]),
           const SizedBox(height: 6),
@@ -293,7 +293,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               style: const TextStyle(fontSize: 12.5, color: T.textMuted)),
           if (course.note != null && course.note!.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Text(course.note!, style: const TextStyle(fontSize: 13.5, color: Color(0xCC463C64))),
+            Text(course.note!, style: const TextStyle(fontSize: 13.5, color: T.textSecondary)),
           ],
           if (course.tags.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -327,7 +327,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+                  colors: [T.warmStart, T.warmEnd],
                 ),
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -386,7 +386,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ProfileAvatar(),
         ]),
         const SizedBox(height: 4),
-        const Text('우리 아이랑 갈 수 있는 곳', style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
+        const Text('우리 아이랑 갈 수 있는 곳', style: TextStyle(fontSize: 13, color: T.textSecondary)),
         const SizedBox(height: 12),
         _searchRow(),
         const SizedBox(height: 10),
@@ -421,15 +421,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ],
           ],
         ] else if (_loading)
-          const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator(color: Color(0xFFFF8F63))))
+          const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator(color: T.warmMid)))
         else if (_filtered.isEmpty)
           _emptyBox()
         else ...[
           Row(children: [
-            const Icon(Icons.pets, size: 15, color: Color(0xFFFF8F63)),
+            const Icon(Icons.pets, size: 15, color: T.warmMid),
             const SizedBox(width: 5),
             Text('${_headerLabel()} · ${_filtered.length}곳',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
             const Spacer(),
             Text(_sourceCaption(), style: const TextStyle(fontSize: 10.5, color: T.textMuted)),
           ]),
@@ -449,7 +449,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           if (_farNotice != null) ...[
             const SizedBox(height: 6),
             Text(_farNotice!,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: T.warmText)),
           ],
           const SizedBox(height: 10),
           for (int i = 0; i < _filtered.length; i++) ...[
@@ -490,7 +490,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           const SizedBox(height: 10),
           const Text('장소 목록을 아직 못 받았어요', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textPrimary)),
           const SizedBox(height: 4),
-          const Text('네트워크를 확인하고 다시 시도해 주세요', style: TextStyle(fontSize: 12.5, color: Color(0xA8463C64))),
+          const Text('네트워크를 확인하고 다시 시도해 주세요', style: TextStyle(fontSize: 12.5, color: T.textMuted)),
           const SizedBox(height: 12),
           TextButton(onPressed: _retryCatalog, child: const Text('다시 시도')),
         ]),
@@ -515,7 +515,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             'trail' => '가까운 코스를 못 찾았어요 · 잠시 뒤 다시 열어 보세요',
             _ => '현위치 8km 안을 봤어요 · 필터를 바꿔보세요',
           },
-          style: const TextStyle(fontSize: 12.5, color: Color(0xA8463C64)),
+          style: const TextStyle(fontSize: 12.5, color: T.textMuted),
         ),
       ]),
     );
@@ -571,7 +571,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     marker.setCaption(NOverlayCaption(
       text: '${info.size}',
       color: Colors.white,
-      haloColor: const Color(0xFF8E7BFF),
+      haloColor: T.accent,
       textSize: 13,
     ));
   }
@@ -587,7 +587,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         height: 44,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xFF8E7BFF),
+          color: T.accent,
           border: Border.all(color: Colors.white, width: 3),
           boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
         ),
@@ -610,10 +610,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     ? const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+                        colors: [T.warmStart, T.warmEnd],
                       )
                     : null,
-                color: primary ? null : const Color(0xFFF1ECF7),
+                color: primary ? null : T.surface,
                 borderRadius: BorderRadius.circular(14),
               ),
               // 넷이 설 때가 있다 — 동네 길은 관리기관 전화번호가 있어서 "여기서 산책 시작 ·
@@ -736,7 +736,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               ],
             ]),
           ),
-          const Icon(Icons.chevron_right, size: 20, color: Color(0xFFCABFDC)),
+          const Icon(Icons.chevron_right, size: 20, color: T.textFaint),
         ]),
       ),
     );
@@ -777,7 +777,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           decoration: BoxDecoration(
             color: on ? color : const Color(0xC9FFFFFF),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: on ? Colors.transparent : const Color(0x1F8C7BFF)),
+            border: Border.all(color: on ? Colors.transparent : T.line),
           ),
           child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? Colors.white : T.textSecondary)),
         ),
@@ -787,7 +787,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return SizedBox(
       height: 40,
       child: ListView(scrollDirection: Axis.horizontal, children: [
-        chip('전체', null, const Color(0xFFFF8F63)),
+        chip('전체', null, T.warmMid),
         for (final c in kPetCategories) chip(c.label, c.key, c.color),
         // 병원을 고른 뒤에만 나온다. 이름에 24시가 있는 곳만 남긴다(#337).
         if (_catFilter == 'vet') _only24hChip(),
@@ -887,7 +887,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         child: Container(
           width: 42, height: 38, alignment: Alignment.center,
           decoration: BoxDecoration(
-            gradient: on ? const LinearGradient(colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)]) : null,
+            gradient: on ? const LinearGradient(colors: [T.warmStart, T.warmEnd]) : null,
             borderRadius: BorderRadius.circular(11),
           ),
           child: Icon(icon, size: 21, color: on ? Colors.white : T.textMuted),
@@ -981,7 +981,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 3))],
               ),
               child: Text(_farNotice!,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.warmText)),
             ),
           ),
         ),
@@ -993,7 +993,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8F63))),
+                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: T.warmMid)),
                   SizedBox(width: 10),
                   Text('주변 장소 불러오는 중...', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
                 ]),
@@ -1071,7 +1071,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         alignment: Alignment.center,
         // 두 번째 동작이다 — 주 동작(전화·길찾기·지도에서 보기)은 `_sheetActions` 에 있다(#328).
         decoration: BoxDecoration(
-          color: const Color(0xFFF1ECF7),
+          color: T.surface,
           borderRadius: BorderRadius.circular(14),
         ),
         child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1150,7 +1150,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 ]),
               ]),
             ),
-            GestureDetector(onTap: () => Navigator.pop(sheetCtx), child: const Icon(Icons.close, size: 22, color: Color(0xFFBBB3CC))),
+            GestureDetector(onTap: () => Navigator.pop(sheetCtx), child: const Icon(Icons.close, size: 22, color: T.textFaint)),
           ]),
           if (p.summary.isNotEmpty) ...[
             const SizedBox(height: 14),
@@ -1165,7 +1165,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             Row(children: [
               const Icon(Icons.place_outlined, size: 16, color: T.textMuted),
               const SizedBox(width: 7),
-              Expanded(child: Text(p.addr, style: const TextStyle(fontSize: 13, color: Color(0xCC463C64)))),
+              Expanded(child: Text(p.addr, style: const TextStyle(fontSize: 13, color: T.textSecondary))),
             ]),
           ],
           if (p.tel.isNotEmpty) ...[
@@ -1173,16 +1173,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
             Row(children: [
               const Icon(Icons.call_outlined, size: 16, color: T.textMuted),
               const SizedBox(width: 7),
-              Text(p.tel, style: const TextStyle(fontSize: 13, color: Color(0xCC463C64))),
+              Text(p.tel, style: const TextStyle(fontSize: 13, color: T.textSecondary)),
             ]),
           ],
           const SizedBox(height: 8),
           // 출처 배지 — 어디서 온 데이터인지 말한다 (#291). 가짜 레이어는 #282 로 사라졌다.
           Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.pets, size: 13, color: Color(0xFFFF8F63)),
+            const Icon(Icons.pets, size: 13, color: T.warmMid),
             const SizedBox(width: 5),
             Text(p.sourceLabel,
-                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: T.warmText)),
           ]),
           const SizedBox(height: 14),
           _sheetActions(sheetCtx, p),

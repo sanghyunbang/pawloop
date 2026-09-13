@@ -26,7 +26,7 @@ class OnboardingScreen extends StatelessWidget {
     final name = AuthState.user?.nickname;
 
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Padding(
@@ -41,7 +41,7 @@ class OnboardingScreen extends StatelessWidget {
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
-                      colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)],
+                      colors: [T.glowStart, T.glowEnd],
                     ),
                   ),
                   child: Image.asset(
@@ -66,7 +66,7 @@ class OnboardingScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     height: 1.5,
-                    color: Color(0xB3463C64),
+                    color: T.textSecondary,
                   ),
                 ),
                 const Spacer(flex: 4),

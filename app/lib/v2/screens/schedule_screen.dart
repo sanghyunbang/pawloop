@@ -188,7 +188,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: SafeArea(
         bottom: false,
         // 아이 목록은 셸의 `PetLoader` 가 채운다(#159) — 이 화면보다 **늦게** 올 수 있다.
@@ -203,7 +203,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               _filterChips(),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 140),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
                   children: [
                     _calendar(),
                     const SizedBox(height: 14),
@@ -215,10 +215,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           ),
         ),
       ),
-      // 떠 있는 알약 네비(높이 66 + 아래 여백 8)가 화면 바닥을 덮고 있다. 기본 자리에
-      // 두면 버튼이 그 위에 겹쳐 "채팅" 탭을 가린다 — 그만큼 올려 둔다.
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 92),
+        padding: const EdgeInsets.only(bottom: 8),
         child: FloatingActionButton(
           onPressed: _openCreateSheet,
           backgroundColor: T.sigEnd,
@@ -232,8 +230,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   // ─────────────────────── 머리말 ───────────────────────
 
   Widget _header() => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 6),
+        padding: const EdgeInsets.fromLTRB(4, 12, 8, 6),
         child: Row(children: [
+          // 탭이 아니라 밀린 화면이다(#446) — 뒤로 가는 길이 있어야 한다.
+          if (Navigator.of(context).canPop())
+            IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+              tooltip: '뒤로',
+              color: T.textSecondary,
+            )
+          else
+            const SizedBox(width: 12),
           Expanded(
             child: Text('${_month.year}년 ${_month.month}월',
                 style: const TextStyle(
@@ -841,7 +849,7 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
       padding: EdgeInsets.only(bottom: bottom),
       child: Container(
         decoration: const BoxDecoration(
-          color: T.lilacTop,
+          color: T.bgTop,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),

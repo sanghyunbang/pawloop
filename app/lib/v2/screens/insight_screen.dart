@@ -25,7 +25,7 @@ class _InsightScreenState extends State<InsightScreen> {
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   /// 화면이 그리는 자료. [WalkFeedBuilder] 가 채운다.
@@ -125,7 +125,7 @@ class _InsightScreenState extends State<InsightScreen> {
 
   Widget _build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
@@ -187,7 +187,7 @@ class _InsightScreenState extends State<InsightScreen> {
           SizedBox(height: 4),
           Text(
             '우리 아이 활동 기록',
-            style: TextStyle(fontSize: 13, color: Color(0xB3463C64)),
+            style: TextStyle(fontSize: 13, color: T.textSecondary),
           ),
         ],
       ),
@@ -205,7 +205,7 @@ class _InsightScreenState extends State<InsightScreen> {
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, color: Color(0x9E463C64)),
+            style: const TextStyle(fontSize: 12, color: T.textMuted),
           ),
         ],
       ),
@@ -231,7 +231,7 @@ class _InsightScreenState extends State<InsightScreen> {
             const SizedBox(height: 10),
             const Text(
               '기록을 불러오지 못했어요',
-              style: TextStyle(fontSize: 11.5, color: Color(0x9E463C64)),
+              style: TextStyle(fontSize: 11.5, color: T.textMuted),
             ),
           ],
         ],
@@ -245,7 +245,7 @@ class _InsightScreenState extends State<InsightScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0x1FFFA96B), Color(0x1AFF7E8A)],
+          colors: [Color(0x1FFFA96B), T.warmSoft],
         ),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0x3DFF8F63)),
@@ -258,7 +258,7 @@ class _InsightScreenState extends State<InsightScreen> {
               const Icon(
                 Icons.insights_rounded,
                 size: 19,
-                color: Color(0xFFE07A4E),
+                color: T.warmText,
               ),
               const SizedBox(width: 8),
               const Text(
@@ -266,7 +266,7 @@ class _InsightScreenState extends State<InsightScreen> {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFFE07A4E),
+                  color: T.warmText,
                 ),
               ),
             ],
@@ -317,14 +317,14 @@ class _InsightScreenState extends State<InsightScreen> {
           const SizedBox(height: 6),
           Row(
             children: [
-              const Icon(Icons.circle, size: 9, color: Color(0xFFFF7E8A)),
+              const Icon(Icons.circle, size: 9, color: T.warmEnd),
               const SizedBox(width: 5),
               const Text(
                 '오늘',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFFE07A4E),
+                  color: T.warmText,
                 ),
               ),
               const SizedBox(width: 12),
@@ -352,7 +352,7 @@ class _InsightScreenState extends State<InsightScreen> {
 
   Widget _barChart() {
     final maxY = (_maxKm <= 0 ? 1.0 : _maxKm) * 1.25;
-    const todayColor = Color(0xFFFF7E8A);
+    const todayColor = T.warmEnd;
     const otherColor = Color(0x8C9E8FE8);
 
     return BarChart(
@@ -380,7 +380,7 @@ class _InsightScreenState extends State<InsightScreen> {
                 TextSpan(
                   text: '${rod.toY.toStringAsFixed(1)} km',
                   style: const TextStyle(
-                    color: Color(0xFFFFD9C2),
+                    color: T.glowStart,
                     fontWeight: FontWeight.w800,
                     fontSize: 13,
                   ),
@@ -394,7 +394,7 @@ class _InsightScreenState extends State<InsightScreen> {
           drawVerticalLine: false,
           horizontalInterval: maxY / 4,
           getDrawingHorizontalLine: (_) => const FlLine(
-            color: Color(0x1F8C7BFF),
+            color: T.line,
             strokeWidth: 1,
             dashArray: [4, 5],
           ),
@@ -470,7 +470,7 @@ class _InsightScreenState extends State<InsightScreen> {
                       ? const LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
-                          colors: [Color(0xFFFFA96B), todayColor],
+                          colors: [T.warmStart, todayColor],
                         )
                       : null,
                   backDrawRodData: BackgroundBarChartRodData(
@@ -507,7 +507,7 @@ class _InsightScreenState extends State<InsightScreen> {
               Spacer(),
               Text(
                 '산책 기록 기준',
-                style: TextStyle(fontSize: 12, color: Color(0x99463C64)),
+                style: TextStyle(fontSize: 12, color: T.textMuted),
               ),
             ],
           ),
@@ -572,7 +572,7 @@ class _InsightScreenState extends State<InsightScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0x1AFF7E8A),
+              color: T.warmSoft,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -581,7 +581,7 @@ class _InsightScreenState extends State<InsightScreen> {
                 const Icon(
                   Icons.directions_walk_rounded,
                   size: 13,
-                  color: Color(0xFFE07A4E),
+                  color: T.warmText,
                 ),
                 const SizedBox(width: 3),
                 Text(
@@ -589,7 +589,7 @@ class _InsightScreenState extends State<InsightScreen> {
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFFE07A4E),
+                    color: T.warmText,
                   ),
                 ),
               ],

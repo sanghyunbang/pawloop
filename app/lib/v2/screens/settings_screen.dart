@@ -50,7 +50,7 @@ class SettingsScreen extends StatelessWidget {
     // 내 동네·알림은 기기에만 사는 값이다.
     final guest = AuthState.isGuest;
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Column(
@@ -173,7 +173,7 @@ class SettingsScreen extends StatelessWidget {
       );
 
   Widget _divider() =>
-      Container(height: 1, color: const Color(0x148C7BFF));
+      Container(height: 1, color: T.accentSoft);
 
   Widget _row(BuildContext context, IconData icon, String label, VoidCallback onTap,
           {bool danger = false}) =>
@@ -184,7 +184,7 @@ class SettingsScreen extends StatelessWidget {
           child: Row(children: [
             Icon(icon,
                 size: 19,
-                color: danger ? const Color(0xFFD9534F) : const Color(0xA8463C64)),
+                color: danger ? const Color(0xFFD9534F) : T.textMuted),
             const SizedBox(width: 12),
             Expanded(
               child: Text(label,

@@ -16,7 +16,7 @@ class WalkLocatingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Scaffold(
-        backgroundColor: T.lilacTop,
+        backgroundColor: T.bgTop,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,

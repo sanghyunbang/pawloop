@@ -81,7 +81,7 @@ class _BodyState extends State<_Body> {
     return Container(
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
       decoration: const BoxDecoration(
-        color: Color(0xFAFCFAFF),
+        color: T.surfaceBright,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(24, 12, 24, 20 + MediaQuery.of(context).padding.bottom),
@@ -147,7 +147,7 @@ class _BodyState extends State<_Body> {
                       withCaption: false,
                     ),
                   )
-                : const Icon(Icons.route_rounded, size: 20, color: Color(0xFFBBB3CC)),
+                : const Icon(Icons.route_rounded, size: 20, color: T.textFaint),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -167,7 +167,7 @@ class _BodyState extends State<_Body> {
           else
             Text(course.isPublic ? '붙이기' : '공개하고 붙이기',
                 style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
+                    fontSize: 12.5, fontWeight: FontWeight.w800, color: T.warmText)),
         ]),
       ),
     );

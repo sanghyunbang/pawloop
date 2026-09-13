@@ -115,7 +115,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Column(children: [
@@ -173,7 +173,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: _dirty && !_sending ? const Color(0xFFE07A4E) : T.textMuted,
+                color: _dirty && !_sending ? T.warmText : T.textMuted,
               ),
             ),
           ),
@@ -201,10 +201,10 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
           decoration: BoxDecoration(
             color: const Color(0xCCFFFFFF),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0x1F8C7BFF)),
+            border: Border.all(color: T.line),
           ),
           child: Row(children: [
-            const Icon(Icons.route_rounded, size: 18, color: Color(0xFFE07A4E)),
+            const Icon(Icons.route_rounded, size: 18, color: T.warmText),
             const SizedBox(width: 10),
             const Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -215,7 +215,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
                     style: TextStyle(fontSize: 12, color: T.textMuted)),
               ]),
             ),
-            const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+            const Icon(Icons.chevron_right, size: 18, color: T.textFaint),
           ]),
         ),
       );
@@ -233,7 +233,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
                 style: const TextStyle(
                     fontSize: 19, fontWeight: FontWeight.w800, color: T.textPrimary)),
             const SizedBox(height: 3),
-            Text(l, style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+            Text(l, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
           ]),
         );
 
@@ -241,11 +241,11 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label,
             style: const TextStyle(
-                fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xBD463C69))),
+                fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
         const SizedBox(height: 14),
         Row(children: [
           cell('${widget.km.toStringAsFixed(1)}km', '거리'),
-          Container(width: 1, height: 30, color: const Color(0x1F8C7BFF)),
+          Container(width: 1, height: 30, color: T.line),
           cell('${widget.minutes}분', '시간'),
         ]),
       ]),

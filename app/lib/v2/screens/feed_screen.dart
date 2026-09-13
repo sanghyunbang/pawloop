@@ -104,7 +104,7 @@ class _FeedScreenState extends State<FeedScreen> {
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   @override
@@ -188,7 +188,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
@@ -226,7 +226,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                     _section == _Section.posts ? '우리 아이들 이야기' : '동네 반려인 모임',
-                    style: const TextStyle(fontSize: 13, color: Color(0xB3463C64))),
+                    style: const TextStyle(fontSize: 13, color: T.textSecondary)),
               ),
             ),
             const SizedBox(height: 10),
@@ -584,7 +584,7 @@ class _FeedScreenState extends State<FeedScreen> {
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => Container(
         decoration: const BoxDecoration(
-            color: Color(0xFAFCFAFF),
+            color: T.surfaceBright,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
         padding: EdgeInsets.fromLTRB(
             20, 12, 20, 18 + MediaQuery.of(sheetCtx).padding.bottom),
@@ -627,7 +627,7 @@ class _FeedScreenState extends State<FeedScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
         decoration: BoxDecoration(
           gradient: on ? _warm : null,
-          color: on ? null : const Color(0xFFF1ECF7),
+          color: on ? null : T.surface,
           borderRadius: BorderRadius.circular(13),
         ),
         child: Text(label,
@@ -679,9 +679,9 @@ class _FeedScreenState extends State<FeedScreen> {
         CommunityBoard.walkReview => const Color(0xFF33BFA6),
         CommunityBoard.petPlace => const Color(0xFFFF7E6B),
         CommunityBoard.health => const Color(0xFF5B8DEF),
-        CommunityBoard.free => const Color(0xFF9B7BFF),
+        CommunityBoard.free => T.accent,
         CommunityBoard.brag => const Color(0xFFEFA13C),
-        null => const Color(0xFFFF8F63),
+        null => T.warmMid,
       };
 
   Widget _boardChip(CommunityBoard? board) => Container(
@@ -777,7 +777,7 @@ class _FeedScreenState extends State<FeedScreen> {
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  fontSize: 13.5, height: 1.5, color: Color(0xCC463C64))),
+                  fontSize: 13.5, height: 1.5, color: T.textSecondary)),
           // 붙은 사진·영상 (#429). 한 장이면 크게, 넷 넘으면 +N.
           if (post.media.isNotEmpty) ...[
             const SizedBox(height: 12),

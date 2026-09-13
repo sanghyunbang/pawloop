@@ -69,10 +69,10 @@ class WalkStatsPanel extends StatelessWidget {
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
-  Color get _dot => paused ? const Color(0xFFBBB3CC) : const Color(0xFFFF7E8A);
+  Color get _dot => paused ? T.textFaint : T.warmEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +91,7 @@ class WalkStatsPanel extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(22),
           boxShadow: const [
-            BoxShadow(color: Color(0x2E5A4690), blurRadius: 18, offset: Offset(0, 8)),
+            BoxShadow(color: T.barShadow, blurRadius: 18, offset: Offset(0, 8)),
           ],
         ),
         child: Row(
@@ -135,7 +135,7 @@ class WalkStatsPanel extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: const [
-          BoxShadow(color: Color(0x2E5A4690), blurRadius: 26, offset: Offset(0, 10)),
+          BoxShadow(color: T.barShadow, blurRadius: 26, offset: Offset(0, 10)),
         ],
       ),
       child: Column(
@@ -165,7 +165,7 @@ class WalkStatsPanel extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
-                      color: paused ? T.textMuted : const Color(0xFFE07A4E),
+                      color: paused ? T.textMuted : T.warmText,
                     ),
                   ),
                 ),
@@ -207,7 +207,7 @@ class WalkStatsPanel extends StatelessWidget {
                     height: 48,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1ECF7),
+                      color: T.surface,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Row(

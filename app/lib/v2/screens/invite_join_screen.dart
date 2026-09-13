@@ -64,7 +64,7 @@ class _InviteJoinScreenState extends State<InviteJoinScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -108,7 +108,7 @@ class _InviteJoinScreenState extends State<InviteJoinScreen> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                        colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)]),
+                        colors: [T.sigStart, T.sigEnd]),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: _sending

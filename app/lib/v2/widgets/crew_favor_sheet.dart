@@ -153,7 +153,7 @@ class _CrewFavorSheetState extends State<CrewFavorSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: const BoxDecoration(
-          color: T.lilacTop,
+          color: T.bgTop,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),

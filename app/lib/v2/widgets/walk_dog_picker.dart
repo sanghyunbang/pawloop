@@ -65,7 +65,7 @@ class _WalkDogPickerState extends State<WalkDogPicker> {
       top: false,
       child: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFFFCFAFF),
+          color: T.surfaceBright,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
@@ -102,7 +102,7 @@ class _WalkDogPickerState extends State<WalkDogPicker> {
                   ? null
                   : () => Navigator.pop(context, _picked.toList()),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFE07A4E),
+                backgroundColor: T.warmText,
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15)),
@@ -143,7 +143,7 @@ class _WalkDogPickerState extends State<WalkDogPicker> {
           Icon(
             on ? Icons.check_circle_rounded : Icons.circle_outlined,
             size: 24,
-            color: on ? const Color(0xFFE07A4E) : const Color(0x33463C64),
+            color: on ? T.warmText : const Color(0x33463C64),
           ),
         ]),
       ),

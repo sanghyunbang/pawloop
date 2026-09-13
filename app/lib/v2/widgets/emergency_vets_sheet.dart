@@ -62,7 +62,7 @@ class EmergencyVetsSheet extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFAFCFAFF),
+        color: T.surfaceBright,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(24, 12, 24, 20 + MediaQuery.of(context).padding.bottom),

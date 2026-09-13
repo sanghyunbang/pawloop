@@ -484,7 +484,7 @@ class _JoinByCodeDialogState extends State<_JoinByCodeDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       title: const Text('초대 코드로 참여',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
       content: TextField(

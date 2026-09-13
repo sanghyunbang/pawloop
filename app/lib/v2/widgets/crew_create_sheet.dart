@@ -126,7 +126,7 @@ class _CrewCreateSheetState extends State<_CrewCreateSheet> {
       padding: EdgeInsets.only(bottom: bottom),
       child: Container(
         decoration: const BoxDecoration(
-          color: T.lilacTop,
+          color: T.bgTop,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),

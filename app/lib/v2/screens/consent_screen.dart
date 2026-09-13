@@ -101,7 +101,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
       // 보내겠지만, 그 한 프레임 사이에 화면이 깜빡인다.
       canPop: false,
       child: Scaffold(
-        backgroundColor: T.lilacTop,
+        backgroundColor: T.bgTop,
         body: AuroraBackground(
           child: SafeArea(
             child: Column(children: [
@@ -119,7 +119,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
                     const Text(
                       '포루프는 산책 경로를 기록하기 위해 위치를 사용해요.\n'
                       '위치 수집은 프로필에서 언제든 멈출 수 있어요.',
-                      style: TextStyle(fontSize: 13.5, height: 1.6, color: Color(0xBD463C64)),
+                      style: TextStyle(fontSize: 13.5, height: 1.6, color: T.textSecondary),
                     ),
                     const SizedBox(height: 22),
                     _allRow(),
@@ -170,7 +170,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
                           ? const LinearGradient(
                               begin: Alignment(-0.8, -1),
                               end: Alignment(0.8, 1),
-                              colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+                              colors: [T.warmStart, T.warmEnd],
                             )
                           : null,
                       color: _allRequired && !_sending ? null : const Color(0x33463C64),
@@ -200,7 +200,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
             color: const Color(0x80FFFFFF),
             borderRadius: BorderRadius.circular(T.radius),
             border: Border.all(
-                color: _allChecked ? const Color(0xFFFF8F63) : const Color(0x33FFFFFF)),
+                color: _allChecked ? T.warmMid : const Color(0x33FFFFFF)),
           ),
           child: Row(children: [
             _check(_allChecked),
@@ -217,7 +217,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
         child: GlassCard(padding: EdgeInsets.zero, child: Column(children: children)),
       );
 
-  Widget _divider() => Container(height: 1, color: const Color(0x148C7BFF));
+  Widget _divider() => Container(height: 1, color: T.accentSoft);
 
   Widget _row(
     String label, {
@@ -242,7 +242,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: required_ ? const Color(0xFFE07A4E) : T.textMuted)),
+                          color: required_ ? T.warmText : T.textMuted)),
                   Flexible(
                     child: Text(label,
                         style: const TextStyle(fontSize: 14, color: T.textPrimary)),
@@ -273,7 +273,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: on ? const Color(0xFFFF8F63) : Colors.transparent,
+          color: on ? T.warmMid : Colors.transparent,
           // 미체크는 빈 원이다 — 회색 바탕에 흰 체크는 "이미 체크된 비활성" 처럼 읽혔다(#325).
           border: on ? null : Border.all(color: const Color(0x66463C64), width: 1.6),
         ),

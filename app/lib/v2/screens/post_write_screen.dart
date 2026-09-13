@@ -202,7 +202,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
   static const _warm = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   @override
@@ -316,7 +316,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Column(children: [
@@ -425,7 +425,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
   Widget _placeCard() => GlassCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(children: [
-          const Icon(Icons.place_outlined, size: 17, color: Color(0xFFE07A4E)),
+          const Icon(Icons.place_outlined, size: 17, color: T.warmText),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -494,10 +494,10 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
         decoration: BoxDecoration(
           color: const Color(0xCCFFFFFF),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0x1F8C7BFF)),
+          border: Border.all(color: T.line),
         ),
         child: Row(children: [
-          const Icon(Icons.route_rounded, size: 17, color: Color(0xFFE07A4E)),
+          const Icon(Icons.route_rounded, size: 17, color: T.warmText),
           const SizedBox(width: 10),
           Expanded(
             child: course == null
@@ -524,7 +524,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
               ),
             )
           else
-            const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+            const Icon(Icons.chevron_right, size: 18, color: T.textFaint),
         ]),
       ),
     );
@@ -574,11 +574,11 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0x1F8C7BFF)),
+          borderSide: const BorderSide(color: T.line),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0x1F8C7BFF)),
+          borderSide: const BorderSide(color: T.line),
         ),
       );
 
@@ -592,7 +592,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
             borderRadius: BorderRadius.circular(18),
             boxShadow: const [
               BoxShadow(
-                  color: Color(0x66FF7E8A),
+                  color: T.warmGlow,
                   blurRadius: 26,
                   offset: Offset(0, 12)),
             ],

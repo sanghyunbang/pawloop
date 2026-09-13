@@ -118,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final showApple = widget.showAppleSignIn ?? (defaultTargetPlatform == TargetPlatform.iOS);
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Padding(
@@ -131,8 +131,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: 120, height: 120, alignment: Alignment.center,
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: RadialGradient(colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)]),
-                    boxShadow: [BoxShadow(color: Color(0x55FF9E7D), blurRadius: 30, offset: Offset(0, 14))],
+                    gradient: RadialGradient(colors: [T.glowStart, T.glowEnd]),
+                    boxShadow: [BoxShadow(color: T.sigGlow, blurRadius: 30, offset: Offset(0, 14))],
                   ),
                   child: Image.asset('assets/emoji/dog.png', width: 76, height: 76),
                 ),
@@ -142,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 const Text('반려동물과 함께 걷고,\n동네 반려인들과 연결되는 공간',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, height: 1.5, color: Color(0xB3463C64))),
+                    style: TextStyle(fontSize: 14, height: 1.5, color: T.textSecondary)),
                 const Spacer(flex: 4),
                 // 카카오
                 _socialBtn(

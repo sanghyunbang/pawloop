@@ -36,7 +36,7 @@ class MapUnavailable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: T.lilacTop,
+      color: T.bgTop,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(28),
@@ -52,7 +52,7 @@ class MapUnavailable extends StatelessWidget {
                   color: Color(0x22FF8F63),
                 ),
                 child: const Icon(Icons.map_outlined,
-                    size: 34, color: Color(0xFFE07A4E)),
+                    size: 34, color: T.warmText),
               ),
               const SizedBox(height: 18),
               const Text('지도를 불러올 수 없어요',
@@ -64,7 +64,7 @@ class MapUnavailable extends StatelessWidget {
               Text(what,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                      fontSize: 13.5, height: 1.55, color: Color(0xBD463C64))),
+                      fontSize: 13.5, height: 1.55, color: T.textSecondary)),
               const SizedBox(height: 14),
               // 개발자에게 하는 말이다. 사용자가 볼 일은 거의 없지만, 보게 된다면
               // 이 줄이 유일한 단서다.

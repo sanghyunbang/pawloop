@@ -35,7 +35,7 @@ class _EditScreenState extends State<EditScreen> {
   static const _sig = LinearGradient(
     begin: Alignment(-0.7, -1),
     end: Alignment(0.7, 1),
-    colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)],
+    colors: [T.sigStart, T.sigEnd],
   );
   static const _coral = Color(0xFFFF7A59);
 
@@ -104,7 +104,7 @@ class _EditScreenState extends State<EditScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: const Color(0xFFFCFAFF),
+        backgroundColor: T.surfaceBright,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           '${pet.name} 프로필을 지울까요?',
@@ -149,7 +149,7 @@ class _EditScreenState extends State<EditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Column(
@@ -236,7 +236,7 @@ class _EditScreenState extends State<EditScreen> {
                 borderRadius: BorderRadius.circular(13),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x4DD89BFF),
+                    color: T.sigGlow,
                     blurRadius: 14,
                     offset: Offset(0, 6),
                   ),
@@ -272,7 +272,7 @@ class _EditScreenState extends State<EditScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: const RadialGradient(
-                colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)],
+                colors: [T.glowStart, T.glowEnd],
               ),
               border: Border.all(color: border, width: 3.5),
               boxShadow: [
@@ -302,7 +302,7 @@ class _EditScreenState extends State<EditScreen> {
             height: 32,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF8E7BFF),
+              color: T.accent,
               border: Border.all(color: const Color(0xFFF7F0FB), width: 3),
             ),
             child: const Icon(Icons.pets, size: 15, color: Colors.white),
@@ -341,7 +341,7 @@ class _EditScreenState extends State<EditScreen> {
                       color: c,
                       border: Border.all(
                         color: sel.toARGB32() == c.toARGB32()
-                            ? const Color(0xFF2C2740)
+                            ? T.textPrimary
                             : const Color(0x33000000),
                         width: sel.toARGB32() == c.toARGB32() ? 3 : 1,
                       ),
@@ -365,7 +365,7 @@ class _EditScreenState extends State<EditScreen> {
           decoration: BoxDecoration(
             color: const Color(0x9EFFFFFF),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0x338C7BFF)),
+            border: Border.all(color: T.accentLine),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: TextField(
@@ -403,7 +403,7 @@ class _EditScreenState extends State<EditScreen> {
             boxShadow: on
                 ? const [
                     BoxShadow(
-                      color: Color(0x4DD89BFF),
+                      color: T.sigGlow,
                       blurRadius: 12,
                       offset: Offset(0, 6),
                     ),
@@ -476,7 +476,7 @@ class _EditScreenState extends State<EditScreen> {
           boxShadow: on
               ? const [
                   BoxShadow(
-                    color: Color(0x4DD89BFF),
+                    color: T.sigGlow,
                     blurRadius: 12,
                     offset: Offset(0, 6),
                   ),
@@ -500,7 +500,7 @@ class _EditScreenState extends State<EditScreen> {
       decoration: BoxDecoration(
         color: const Color(0x9EFFFFFF),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0x338C7BFF)),
+        border: Border.all(color: T.accentLine),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -541,7 +541,7 @@ class _EditScreenState extends State<EditScreen> {
         decoration: BoxDecoration(
           color: const Color(0x9EFFFFFF),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0x338C7BFF)),
+          border: Border.all(color: T.accentLine),
         ),
         child: Row(
           children: [
@@ -577,7 +577,7 @@ class _EditScreenState extends State<EditScreen> {
       alignment: on ? Alignment.centerRight : Alignment.centerLeft,
       decoration: BoxDecoration(
         gradient: on ? _sig : null,
-        color: on ? null : const Color(0x1F8C7BFF),
+        color: on ? null : T.line,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Container(

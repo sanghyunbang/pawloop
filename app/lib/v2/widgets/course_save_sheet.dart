@@ -163,7 +163,7 @@ class _BodyState extends State<_Body> {
       padding: EdgeInsets.only(bottom: bottom),
       child: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFAFCFAFF),
+          color: T.surfaceBright,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         padding: EdgeInsets.fromLTRB(24, 12, 24, 20 + MediaQuery.of(context).padding.bottom),
@@ -261,7 +261,7 @@ class _BodyState extends State<_Body> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: const Color(0x1F8C7BFF)),
+              border: Border.all(color: T.line),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: TextField(
@@ -288,9 +288,9 @@ class _BodyState extends State<_Body> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
         decoration: BoxDecoration(
-          color: on ? const Color(0xFFFF8F63) : Colors.white,
+          color: on ? T.warmMid : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: on ? Colors.transparent : const Color(0x1F8C7BFF)),
+          border: Border.all(color: on ? Colors.transparent : T.line),
         ),
         child: Text(label,
             style: TextStyle(
@@ -317,7 +317,7 @@ class _BodyState extends State<_Body> {
         ),
         Switch(
           value: _isPublic,
-          activeThumbColor: const Color(0xFFFF8F63),
+          activeThumbColor: T.warmMid,
           onChanged: (next) => setState(() => _isPublic = next),
         ),
       ]);
@@ -331,7 +331,7 @@ class _BodyState extends State<_Body> {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+              colors: [T.warmStart, T.warmEnd],
             ),
             borderRadius: BorderRadius.circular(16),
           ),

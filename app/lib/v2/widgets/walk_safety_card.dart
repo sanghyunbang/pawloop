@@ -109,7 +109,7 @@ class _WalkSafetyCardState extends State<WalkSafetyCard> with WidgetsBindingObse
                           style: const TextStyle(fontSize: 12, color: T.textMuted)),
                     ]),
                   ),
-                  const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+                  const Icon(Icons.chevron_right, size: 18, color: T.textFaint),
                 ]),
               ),
             ),
@@ -131,7 +131,7 @@ class _WalkSafetyCardState extends State<WalkSafetyCard> with WidgetsBindingObse
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => Container(
         decoration: const BoxDecoration(
-          color: Color(0xFAFCFAFF),
+          color: T.surfaceBright,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         padding: EdgeInsets.fromLTRB(24, 12, 24, 20 + MediaQuery.of(sheetCtx).padding.bottom),
@@ -177,7 +177,7 @@ class _Line extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, size: 18, color: const Color(0xFFE07A4E)),
+          Icon(icon, size: 18, color: T.warmText),
           const SizedBox(width: 10),
           Expanded(child: Text(text, style: const TextStyle(fontSize: 13.5, height: 1.45, color: T.textSecondary))),
         ]),

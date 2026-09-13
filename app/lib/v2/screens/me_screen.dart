@@ -25,13 +25,13 @@ class MeScreen extends StatelessWidget {
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Column(children: [
@@ -156,8 +156,8 @@ class MeScreen extends StatelessWidget {
         alignment: Alignment.center,
         decoration: const BoxDecoration(
           shape: BoxShape.circle,
-          gradient: RadialGradient(colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)]),
-          boxShadow: [BoxShadow(color: Color(0x55FF9E7D), blurRadius: 30, offset: Offset(0, 14))],
+          gradient: RadialGradient(colors: [T.glowStart, T.glowEnd]),
+          boxShadow: [BoxShadow(color: T.sigGlow, blurRadius: 30, offset: Offset(0, 14))],
         ),
         child: Image.asset(dog.avatarAsset, width: 62, height: 62, gaplessPlayback: true),
       ),
@@ -165,7 +165,7 @@ class MeScreen extends StatelessWidget {
       Text(dog.name, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: T.textPrimary)),
       const SizedBox(height: 5),
       Text(dog.subtitle,
-          style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+          style: const TextStyle(fontSize: 13.5, color: T.textSecondary)),
       if (dog.neutered) ...[
         const SizedBox(height: 9),
         Container(
@@ -256,9 +256,9 @@ class MeScreen extends StatelessWidget {
                         width: 54, height: 54, alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: const RadialGradient(colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)]),
+                          gradient: const RadialGradient(colors: [T.glowStart, T.glowEnd]),
                           border: Border.all(
-                            color: i == kSelectedPetIdx.value ? const Color(0xFFFF8F63) : Colors.transparent,
+                            color: i == kSelectedPetIdx.value ? T.warmMid : Colors.transparent,
                             width: 2.5,
                           ),
                         ),
@@ -269,7 +269,7 @@ class MeScreen extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: i == kSelectedPetIdx.value ? FontWeight.w800 : FontWeight.w600,
-                            color: i == kSelectedPetIdx.value ? const Color(0xFFE07A4E) : T.textSecondary,
+                            color: i == kSelectedPetIdx.value ? T.warmText : T.textSecondary,
                           )),
                     ]),
                   ),
@@ -286,12 +286,12 @@ class MeScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: const Color(0x66FFFFFF),
-                      border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.6), width: 1.5),
+                      border: Border.all(color: T.warmStart.withValues(alpha: 0.6), width: 1.5),
                     ),
-                    child: const Icon(Icons.add, size: 24, color: Color(0xFFE07A4E)),
+                    child: const Icon(Icons.add, size: 24, color: T.warmText),
                   ),
                   const SizedBox(height: 6),
-                  const Text('추가', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                  const Text('추가', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
                 ]),
               ),
             ]),
@@ -318,10 +318,10 @@ class MeScreen extends StatelessWidget {
           child: Column(children: [
             Text(value, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: T.textPrimary)),
             const SizedBox(height: 3),
-            Text(label, style: const TextStyle(fontSize: 12, color: Color(0x9E463C64))),
+            Text(label, style: const TextStyle(fontSize: 12, color: T.textMuted)),
           ]),
         );
-    Widget div() => Container(width: 1, height: 34, color: const Color(0x1F8C7BFF));
+    Widget div() => Container(width: 1, height: 34, color: T.line);
 
     return GestureDetector(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen())),
@@ -340,15 +340,15 @@ class MeScreen extends StatelessWidget {
           if (data.offline && !data.hasAnything) ...[
             const SizedBox(height: 10),
             const Text('기록을 불러오지 못했어요',
-                style: TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+                style: TextStyle(fontSize: 11.5, color: T.textMuted)),
           ],
           const SizedBox(height: 12),
           Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: const [
-            Icon(Icons.article_outlined, size: 14, color: Color(0xFFFF8F63)),
+            Icon(Icons.article_outlined, size: 14, color: T.warmMid),
             SizedBox(width: 5),
-            Text('산책 기록 보기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+            Text('산책 기록 보기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
             SizedBox(width: 2),
-            Icon(Icons.chevron_right, size: 16, color: Color(0xFFE07A4E)),
+            Icon(Icons.chevron_right, size: 16, color: T.warmText),
           ]),
         ]),
       ),
@@ -378,7 +378,7 @@ class MeScreen extends StatelessWidget {
                   style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
               const SizedBox(height: 3),
               Text(paused ? '중단됨 — 지도·산책 기록이 현위치를 쓰지 않아요' : '켜면 언제든 위치 이용을 멈출 수 있어요',
-                  style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+                  style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
             ]),
           ),
           GestureDetector(
@@ -402,7 +402,7 @@ class MeScreen extends StatelessWidget {
               padding: const EdgeInsets.all(3),
               alignment: paused ? Alignment.centerRight : Alignment.centerLeft,
               decoration: BoxDecoration(
-                color: paused ? const Color(0xFFFF6B7E) : const Color(0x1F8C7BFF),
+                color: paused ? const Color(0xFFFF6B7E) : T.line,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Container(
@@ -433,7 +433,7 @@ class MeScreen extends StatelessWidget {
           Icon(icon, size: 21, color: color ?? T.textSecondary),
           const SizedBox(width: 13),
           Expanded(child: Text(label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: c))),
-          Icon(Icons.chevron_right, size: 20, color: color ?? const Color(0xFFBBB3CC)),
+          Icon(Icons.chevron_right, size: 20, color: color ?? T.textFaint),
         ]),
       ),
     );
@@ -530,7 +530,7 @@ class MeScreen extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: _warm,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: const Color(0xFFFF7E8A).withValues(alpha: 0.28), blurRadius: 16, offset: const Offset(0, 8))],
+          boxShadow: [BoxShadow(color: T.warmEnd.withValues(alpha: 0.28), blurRadius: 16, offset: const Offset(0, 8))],
         ),
         child: Row(children: const [
           Icon(Icons.pets, size: 22, color: Colors.white),

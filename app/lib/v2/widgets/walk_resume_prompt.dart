@@ -25,7 +25,7 @@ class WalkResumePrompt {
     final choice = await showDialog<WalkResumeChoice>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: const Color(0xFFFCFAFF),
+        backgroundColor: T.surfaceBright,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           '이어서 기록할까요?',
@@ -44,7 +44,7 @@ class WalkResumePrompt {
             onPressed: () => Navigator.pop(dialogCtx, WalkResumeChoice.resume),
             child: const Text(
               '이어서 기록',
-              style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFE07A4E)),
+              style: TextStyle(fontWeight: FontWeight.w800, color: T.warmText),
             ),
           ),
         ],

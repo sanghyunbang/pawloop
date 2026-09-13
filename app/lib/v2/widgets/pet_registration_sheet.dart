@@ -249,12 +249,12 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: v == selected
-                        ? const Color(0x1AFF7E8A)
+                        ? T.warmSoft
                         : const Color(0x0A463C64),
                     borderRadius: BorderRadius.circular(13),
                     border: Border.all(
                       color: v == selected
-                          ? const Color(0xFFFF8F63)
+                          ? T.warmMid
                           : Colors.transparent,
                       width: 1.4,
                     ),
@@ -266,7 +266,7 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
                       fontWeight:
                           v == selected ? FontWeight.w800 : FontWeight.w600,
                       color: v == selected
-                          ? const Color(0xFFE07A4E)
+                          ? T.warmText
                           : T.textSecondary,
                     ),
                   ),

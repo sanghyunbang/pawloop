@@ -19,6 +19,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import '../theme/app_tokens.dart';
 
 import '../domain/walk_moment.dart';
 
@@ -105,14 +106,14 @@ class RouteCanvasPainter extends CustomPainter {
 
   const RouteCanvasPainter(this.art, {this.withCaption = true});
 
-  static const _bgTop = Color(0xFFF6F1FF);
+  static const _bgTop = T.surface;
   static const _bgBottom = Color(0xFFFFF1EA);
   static const _grid = Color(0x14463C64);
   static const _route = Color(0xFFFF7A59);
   static const _routeGlow = Color(0x33FF7A59);
   static const _start = Color(0xFF4CAF88);
-  static const _end = Color(0xFF463C64);
-  static const _ink = Color(0xFF463C64);
+  static const _end = T.textSecondary;
+  static const _ink = T.textSecondary;
 
   /// 순간 표식의 색. 버튼 줄(`walk_moment_bar.dart`)과 **같은 색**이어야 한다 —
   /// 누를 때 본 색과 그림에 남는 색이 다르면 같은 일로 안 읽힌다.
