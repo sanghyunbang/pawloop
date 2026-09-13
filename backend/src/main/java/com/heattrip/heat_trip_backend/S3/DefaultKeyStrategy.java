@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 기본 키 규칙:
@@ -17,11 +16,11 @@ public class DefaultKeyStrategy implements KeyStrategy {
     private static final DateTimeFormatter MM   = DateTimeFormatter.ofPattern("MM");
 
     @Override
-    public String buildKey(MultipartFile file, UploadRequest req) {
+    public String buildKey(String originalFilename, UploadRequest req) {
         var now = LocalDate.now();
         String yyyy = now.format(YYYY);
         String mm   = now.format(MM);
-        String safe = sanitize(file.getOriginalFilename());
+        String safe = sanitize(originalFilename);
         String uuid = UUID.randomUUID().toString();
         String sub  = (req.subPath()==null || req.subPath().isBlank())
             ? ""

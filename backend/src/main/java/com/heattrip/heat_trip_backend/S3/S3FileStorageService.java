@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -136,6 +137,54 @@ public class S3FileStorageService implements FileStorage {
                         .withMethod(HttpMethod.GET)
                         .withExpiration(exp)
         );
+    }
+
+    /**
+     * HEAD 한 번. 없는 키는 S3 가 404 를 주고, 그것만 "없음" 으로 읽는다 (#429).
+     *
+     * <p><b>403 은 없음이 아니다.</b> HEAD 를 부르는 자격 증명에 {@code s3:ListBucket} 이 없으면
+     * S3 는 없는 키에도 404 대신 403 을 준다. 그것을 여기서 "없음" 으로 삼키면 권한 사고가
+     * "아직 안 올라왔습니다" 로 보인다 — 그대로 예외로 올려 500 이 나게 두고, 운영이 권한을
+     * 본다.
+     */
+    @Override
+    public Optional<StoredObject> stat(String key) {
+        try {
+            ObjectMetadata meta = s3.getObjectMetadata(bucket, key);
+            return Optional.of(new StoredObject(
+                    key,
+                    UrlMapper.cfUrl(cloudFrontDomain, key),
+                    meta.getContentType(),
+                    meta.getContentLength()));
+        } catch (AmazonS3Exception e) {
+            if (e.getStatusCode() == 404) {
+                return Optional.empty();
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * 서명 PUT — 앱이 S3 에 직접 올린다 (#429). 네트워크를 안 탄다.
+     *
+     * <p>{@code Content-Type} 을 서명에 묶는다. 앱이 다른 형식으로 PUT 하면 S3 가
+     * {@code SignatureDoesNotMatch} 로 거절한다 — 그래서 {@code complete} 에서 읽는 형식은
+     * 자리 잡을 때 알린 것과 같다.
+     *
+     * <p>캐시 헤더는 못 싣는다 — 사진처럼 {@code immutable} 을 주려면 앱이 PUT 헤더로 보내야
+     * 하고, 그러면 그것도 서명에 넣어야 한다. 키가 UUID 라 캐시가 겹칠 일은 없다.
+     */
+    @Override
+    public PresignedUpload presignedPut(UploadRequest req, String fileName, String contentType, Duration ttl) {
+        String key = keyStrategy.buildKey(fileName, req);
+        var exp = new java.util.Date(System.currentTimeMillis() + ttl.toMillis());
+        URL url = s3.generatePresignedUrl(
+                new GeneratePresignedUrlRequest(bucket, key)
+                        .withMethod(HttpMethod.PUT)
+                        .withContentType(contentType)
+                        .withExpiration(exp)
+        );
+        return new PresignedUpload(key, url);
     }
 
     /**

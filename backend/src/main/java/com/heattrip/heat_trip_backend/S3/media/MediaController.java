@@ -3,6 +3,8 @@ package com.heattrip.heat_trip_backend.S3.media;
 import com.heattrip.heat_trip_backend.S3.UploadCategory;
 import com.heattrip.heat_trip_backend.S3.media.dto.MediaItemResponse;
 import com.heattrip.heat_trip_backend.S3.media.dto.UrlResponse;
+import com.heattrip.heat_trip_backend.S3.media.dto.VideoTicketResponse;
+import com.heattrip.heat_trip_backend.S3.media.dto.VideoUploadRequest;
 import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.error.GlobalExceptionHandler.ErrorResponse; // [①] 에러 스키마 참조
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -14,9 +16,11 @@ import io.swagger.v3.oas.annotations.responses.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -102,6 +106,70 @@ public class MediaController {
                 m,
                 mediaService.publicUrl(m.getObjectKey()),
                 m.getPosterKey() == null ? null : mediaService.publicUrl(m.getPosterKey()));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // C: 영상 — 자리 잡기 · 끝내기 (#429). 파일은 앱이 S3 에 직접 올린다
+    // ─────────────────────────────────────────────────────────────────────
+    @Operation(
+        summary = "Reserve a video slot — get a presigned PUT",
+        description = "Videos never pass through this server (Cloudflare caps request bodies at 100MB). "
+                + "Declare type/size/length, PUT the file to uploadUrl with the same Content-Type, then call complete.",
+        security = { @SecurityRequirement(name = "bearerAuth") }
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "Reserved — pending row and a 15-minute presigned PUT",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = VideoTicketResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Not mp4/mov, over 150MB, over 60 s, or width without height",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content)
+    })
+    @PostMapping(path = "/videos", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<VideoTicketResponse> reserveVideo(
+        @Valid @RequestBody VideoUploadRequest body,
+        @CurrentUser User me
+    ) {
+        MediaService.VideoTicket ticket = mediaService.reserveVideo(
+                me.getId().toString(), body.contentType(), body.size(),
+                body.width(), body.height(), body.durationMs());
+        return ResponseEntity.status(HttpStatus.CREATED).body(new VideoTicketResponse(
+                ticket.media().getId(), ticket.media().getObjectKey(), ticket.uploadUrl().toString()));
+    }
+
+    @Operation(
+        summary = "Finish a video upload — poster in, HEAD on S3, ready",
+        description = "The server confirms the object is on S3 with the declared size, stores the poster and flips "
+                + "the row to ready. Calling it again returns the same item without touching the poster.",
+        security = { @SecurityRequirement(name = "bearerAuth") }
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Ready",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = MediaItemResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Not a video, size differs from what was declared, or the poster is not an image",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @ApiResponse(responseCode = "404", description = "Not mine — same as not there",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "409", description = "The file has not arrived on S3 yet — PUT it, then call again",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping(path = "/{mediaId}/complete",
+                 consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<MediaItemResponse> completeVideo(
+        @Parameter(description = "Media id from the ticket", required = true)
+        @PathVariable(name = "mediaId") @Min(1) Long mediaId,
+        @Parameter(description = "Poster (thumbnail) the app rendered — jpeg/png/webp")
+        @RequestPart("poster") MultipartFile poster,
+        @CurrentUser User me
+    ) {
+        return ResponseEntity.ok(toItem(mediaService.completeVideo(mediaId, poster, me.getId().toString())));
     }
 
     // ─────────────────────────────────────────────────────────────────────
