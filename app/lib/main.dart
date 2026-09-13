@@ -19,6 +19,7 @@ import 'package:provider/provider.dart';
 // go_router 설정
 import 'package:heat_trip_flutter/app/app_router.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
+import 'package:heat_trip_flutter/core/localization.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 // 기본 테마
 import 'package:heat_trip_flutter/core/theme/theme.dart';
@@ -152,6 +153,12 @@ class HeatTrip extends StatelessWidget {
         title: 'Pawloop',
         debugShowCheckedModeBanner: false,
         theme: theme(),
+        // 머티리얼이 만드는 문구(날짜·시각 고르기, 툴팁, 붙여넣기 메뉴)를 한국어로 — #443.
+        // 앱의 글자는 전부 한국어라 기기 언어와 상관없이 ko 로 고정한다. 영어 기기에서 앱 글은
+        // 한국어인데 달력만 영어인 것이 오히려 이상하다.
+        locale: appLocale,
+        supportedLocales: appSupportedLocales,
+        localizationsDelegates: appLocalizationsDelegates,
         routerConfig: appRouter,
         builder: (context, child) => child ?? const SizedBox.shrink(),
       ),
