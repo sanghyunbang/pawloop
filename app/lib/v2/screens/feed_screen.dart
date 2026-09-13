@@ -70,6 +70,19 @@ class _FeedScreenState extends State<FeedScreen> {
   Neighborhood? _mine;
   String _view = 'card'; // 'card' | 'list'
 
+  /// 이 배율부터 **보조 정보를 접는다** — 카드 머리말의 동네, 필터 줄의 "N개의 글", 동네
+  /// 칩의 글자.
+  ///
+  /// 1.3 은 홈·트래킹 패널과 같은 문턱이다(#396 · #402) — 화면마다 다르면 같은 배율에서
+  /// 어떤 곳은 접히고 어떤 곳은 안 접혀 사용자가 규칙을 못 읽는다. 무엇을 접는지는 줄마다
+  /// 다르다: 닉네임(누가)·날짜(언제)·게시판 이름·글쓰기(누르는 것)는 남기고, 빼도 뜻이 서는
+  /// 보조 정보만 접는다. 남긴 글자를 [Expanded]·[Flexible] 로 감싼 것은 **바닥**이다 — 더
+  /// 좁아도 노란 줄무늬 대신 말줄임으로 끝난다(#433).
+  static const double _foldFrom = 1.3;
+
+  bool _folded(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(11) >= 11 * _foldFrom;
+
   List<CommunityPost> _posts = const [];
   String? _nextCursor;
   bool _hasMore = false;
@@ -183,12 +196,19 @@ class _FeedScreenState extends State<FeedScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               child: Row(children: [
-                const Text('커뮤니티',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: T.textPrimary)),
-                const Spacer(),
+                // Expanded 가 Spacer 를 겸한다 — 제목이 flex 가 아니면 320dp·2.0배에서
+                // 제목(22px×4자)과 전환·프로필이 한 줄에 안 들어가 27px 넘쳤다(#433). 이
+                // 줄에는 접을 보조 정보가 없다(전환도 프로필도 누르는 것) — 그 폭·배율에서만
+                // 제목이 말줄임으로 끝난다.
+                const Expanded(
+                  child: Text('커뮤니티',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: T.textPrimary)),
+                ),
                 // 카드/리스트 토글은 **글 목록의 것**이다. 크루 갈래에서 남겨 두면
                 // 아무것도 안 바꾸는 버튼이 되고, 그런 버튼은 한 번 눌러 본 사람에게
                 // 화면이 고장 난 것으로 보인다.
@@ -465,7 +485,9 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // 보드 필터: 가로로 무한정 늘지 않도록 '전체 ▾' 버튼 + 바텀시트.
   /// "우리 동네" 토글. 켜면 같은 구의 글만 온다 — 구 코드는 안 보낸다(#342).
-  Widget _neighborhoodChip() {
+  ///
+  /// [folded] 면 글자를 접고 아이콘만 남긴다 — 켜졌는지는 색이 말한다(#433).
+  Widget _neighborhoodChip({required bool folded}) {
     final mine = _mine!;
     const teal = Color(0xFF0B7A75);
     return GestureDetector(
@@ -484,49 +506,66 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.home_work_outlined,
               size: 14, color: _myNeighborhood ? Colors.white : teal),
-          const SizedBox(width: 5),
-          Text(mine.districtLabel,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: _myNeighborhood ? Colors.white : teal)),
+          if (!folded) ...[
+            const SizedBox(width: 5),
+            Text(mine.districtLabel,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _myNeighborhood ? Colors.white : teal)),
+          ],
         ]),
       ),
     );
   }
 
   Widget _boardFilter() {
+    final folded = _folded(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(children: [
-        GestureDetector(
-          onTap: _openBoardSheet,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xCCFFFFFF),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0x66FFFFFF)),
-            ),
+        // 칩 둘은 **옆으로 스크롤하는 줄** 안에 있다 — 글쓰기가 오른쪽 끝에 남고, 칩은 좁으면
+        // 잘리는 대신 밀려 들어간다. 칩을 Flexible 로 두면 Row 가 필요와 상관없이 몫을
+        // 나눠 줘서 320dp 에서는 보통 배율에서도 "전체" 가 말줄임이 됐다(#433).
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.tune, size: 16, color: T.textSecondary),
-              const SizedBox(width: 7),
-              Text(_board?.label ?? '전체',
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: T.textSecondary)),
-              const SizedBox(width: 5),
-              const Icon(Icons.expand_more, size: 16, color: T.textMuted),
+              GestureDetector(
+                onTap: _openBoardSheet,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xCCFFFFFF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0x66FFFFFF)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.tune, size: 16, color: T.textSecondary),
+                    const SizedBox(width: 7),
+                    Text(_board?.label ?? '전체',
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: T.textSecondary)),
+                    const SizedBox(width: 5),
+                    const Icon(Icons.expand_more, size: 16, color: T.textMuted),
+                  ]),
+                ),
+              ),
+              // 동네를 고른 사람에게만 보인다 (#342).
+              if (_mine != null) ...[
+                const SizedBox(width: 8),
+                _neighborhoodChip(folded: folded),
+              ],
             ]),
           ),
         ),
         const SizedBox(width: 8),
-        // 동네를 고른 사람에게만 보인다 (#342).
-        if (_mine != null) _neighborhoodChip(),
-        const Spacer(),
-        if (_failure == null) ...[
+        // "N개의 글" 은 보조 정보다 — 1.3배부터 접는다. 게시판 이름과 글쓰기는 누르는 것이라
+        // 남긴다.
+        if (_failure == null && !folded) ...[
           Text('${_posts.length}개의 글',
               style: const TextStyle(
                   fontSize: 11.5,
@@ -674,21 +713,33 @@ class _FeedScreenState extends State<FeedScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      Text(post.author.nickname,
-                          style: const TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w800,
-                              color: T.textPrimary)),
-                      // 글쓴이의 동네 — **구까지만** (#342). 안 골랐으면 자리가 없다.
-                      if (post.authorDistrict != null) ...[
-                        const SizedBox(width: 6),
-                        Text(post.authorDistrict!,
-                            style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0B7A75))),
-                      ],
-                      const Spacer(),
+                      // 닉네임(누가)과 날짜(언제)는 남고, 동네는 1.3배부터 접는다 — 셋 다
+                      // flex 가 아닌 채로는 360dp·2.0배에서 58px 넘쳤다(#433). 닉네임을
+                      // Flexible 로 감싼 것은 바닥이다 — 긴 닉네임은 말줄임으로 끝나고
+                      // 날짜는 오른쪽 끝에 그대로다.
+                      Expanded(
+                        child: Row(children: [
+                          Flexible(
+                            child: Text(post.author.nickname,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: T.textPrimary)),
+                          ),
+                          // 글쓴이의 동네 — **구까지만** (#342). 안 골랐으면 자리가 없다.
+                          if (post.authorDistrict != null && !_folded(context)) ...[
+                            const SizedBox(width: 6),
+                            Text(post.authorDistrict!,
+                                style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0B7A75))),
+                          ],
+                        ]),
+                      ),
+                      const SizedBox(width: 8),
                       Text(dateLabel(post.createdAt),
                           style: const TextStyle(
                               fontSize: 11.5, color: T.textMuted)),
