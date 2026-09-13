@@ -12,6 +12,10 @@ dependencies:
 
   flutter:
     sdk: flutter
+  # 머티리얼 위젯(날짜·시각 고르기, 툴팁, 붙여넣기 메뉴)의 한국어 — #443. 앱의 글자는 전부
+  # 한국어인데 이것이 없으면 그 문구만 영어다.
+  flutter_localizations:
+    sdk: flutter
 
   http: ^1.4.0
 
@@ -67,6 +71,8 @@ dependencies:
   # 시각을 다루므로 timezone 을 직접 적는다(전이 의존에 기대지 않는다 — http_parser 와 같은 이유).
   flutter_local_notifications: ^19.4.2
   timezone: ^0.10.1
+  video_compress: ^3.1.4
+  video_player: ^2.14.0
 
 dev_dependencies:
   flutter_test:

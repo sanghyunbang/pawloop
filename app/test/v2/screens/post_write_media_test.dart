@@ -225,7 +225,7 @@ void main() {
 
     await _tapVisible(tester, find.text('올리기'));
     await tester.pump();
-    expect(find.text('사진을 올리는 중이에요 · 잠시만요'), findsOneWidget);
+    expect(find.text('사진·영상을 올리는 중이에요 · 잠시만요'), findsOneWidget);
     expect(f.server.posts, isEmpty);
 
     f.server.gate!.complete();
@@ -248,7 +248,7 @@ void main() {
 
     await _tapVisible(tester, find.text('올리기'));
     await tester.pump();
-    expect(find.text('못 올린 사진이 있어요 · 다시 올리거나 떼 주세요'), findsOneWidget);
+    expect(find.text('못 올린 사진·영상이 있어요 · 다시 올리거나 떼 주세요'), findsOneWidget);
     expect(f.server.posts, isEmpty);
 
     await _tapVisible(tester, find.byKey(const Key('post-media-remove-0')));

@@ -10,6 +10,13 @@
 //
 // 둘 다 409 지만 사용자가 할 일이 다르다 — 하나는 **자리가 나기를 기다리는 것**이고
 // 하나는 **새 코드를 받는 것**이다. `InviteJoinScreen` 이 채팅에서 같은 구분을 한다.
+//
+// ## 409 의 뜻은 경로가 정한다
+//
+// 정원이 찬 것(참여) · 이미 맡은 것(품앗이 맡기) · 혼자가 아닌 것(크루 지우기)이 전부 같은
+// `CONFLICT` 코드로 온다 — 서버가 상태 코드를 스스로 정해 던지면 코드가 상태에서 나온다.
+// 문구로 가르면 문구를 다듬는 날 조용히 뒤집히므로, **어느 요청이었는지**로 가른다. 초대코드
+// 소진만 코드가 따로 와서(`INVITE_USES_EXHAUSTED`) 그것은 코드로 가른다.
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -17,6 +24,8 @@ import 'package:http/http.dart' as http;
 import '../../core/config/env.dart';
 import '../../core/net/authed_client.dart';
 import '../domain/crew.dart';
+import '../domain/crew_favor.dart';
+import '../domain/schedule.dart' show Schedule;
 
 /// 목록이 묻는 질문 둘. 돌아오는 것은 같은 카드다.
 enum CrewScope {
@@ -71,7 +80,14 @@ enum CrewFailureKind {
   /// 초대코드가 만료·회수됐거나 사용 횟수를 다 썼다. 새 코드를 받으면 된다.
   inviteDead,
 
-  /// 동네를 안 골랐거나, 이름이 비었거나, 공개인데 동네가 없다.
+  /// 이미 다른 사람이 맡은 부탁이다. 화면이 낡은 것이라 목록을 다시 받으면 된다.
+  taken,
+
+  /// 크루에 다른 사람이 남아 있어 못 지운다. 방장을 넘기고 나가면 된다.
+  notAlone,
+
+  /// 동네를 안 골랐거나, 이름이 비었거나, 공개인데 동네가 없다. 품앗이라면 지난 날짜거나
+  /// 내 부탁을 내가 맡으려 한 것이다.
   invalid,
 
   /// 연결이 없다. 다시 보내면 된다.
@@ -223,6 +239,92 @@ class CrewRepository {
         _authed.deleteJson(Uri.parse('$baseUrl/api/crews/$crewId/members/$userId')));
   }
 
+  /// 방장을 넘긴다. **방장만.** 그 방에 없는 사람이면 [CrewFailureKind.notFound], 자기
+  /// 자신이면 [CrewFailureKind.invalid] 다.
+  ///
+  /// 돌아오는 크루의 [Crew.owner] 는 `false` 다 — 넘긴 뒤의 나는 평범한 멤버라 [leave] 로
+  /// 나갈 수 있다. 이것이 없으면 크루를 만든 사람은 갇힌다(서버 PR #428).
+  Future<Crew> transferOwner(int crewId, int userId) async {
+    return _one(await _send(() =>
+        _authed.putJson(Uri.parse('$baseUrl/api/crews/$crewId/owner/$userId'))));
+  }
+
+  /// 크루를 지운다. **방장이 혼자 남았을 때만** — 아니면 [CrewFailureKind.notAlone] 이다.
+  ///
+  /// 대화방과 품앗이, 품앗이가 달력에 남긴 줄까지 함께 사라진다. 남이 있을 때 못 지우는 것은
+  /// 남의 대화를 지우는 버튼을 안 만들려는 것이다 — 그때는 넘기고 나간다.
+  Future<void> delete(int crewId) async {
+    await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/crews/$crewId')),
+        conflict: CrewFailureKind.notAlone);
+  }
+
+  // ─────────────────────────── 품앗이 (#417, 서버는 PR #428) ───────────────────────────
+
+  /// 서버의 `CrewFavor.MAX_NOTE_LENGTH` 와 같은 값이다.
+  static const int maxFavorNoteLength = 200;
+
+  /// 그 크루의 부탁 — 가까운 날짜부터 50건. **멤버만** — 공개 크루라도 안 든 사람에게는
+  /// [CrewFailureKind.notFound] 다(부탁에는 아이 이름과 "그날 집을 비운다" 가 적힌다).
+  /// 지난 것은 서버가 뺀다.
+  Future<List<CrewFavor>> favors(int crewId) async {
+    return CrewFavor.parseList(await _send(
+        () => _authed.getJson(Uri.parse('$baseUrl/api/crews/$crewId/favors'))));
+  }
+
+  /// 부탁을 올린다. 지난 날짜는 [CrewFailureKind.invalid], 남의 아이는
+  /// [CrewFailureKind.notFound] 다.
+  ///
+  /// [dogId] 를 안 주면 본문에 안 싣는다 — 아이를 아직 등록 안 한 사람도 부탁할 수 있다.
+  /// [note] 는 다듬어서 싣고, 비면 안 싣는다. **금액 칸이 없다** — 파일 머리말 참조.
+  Future<CrewFavor> postFavor(
+    int crewId, {
+    required DateTime onDate,
+    required CrewFavorSlot slot,
+    int? dogId,
+    String? note,
+  }) async {
+    final trimmed = note?.trim() ?? '';
+    final json = await _send(() => _authed.postJson(
+          Uri.parse('$baseUrl/api/crews/$crewId/favors'),
+          body: {
+            'onDate': Schedule.formatDate(onDate),
+            'slot': slot.wire,
+            if (dogId != null) 'dogId': dogId,
+            if (trimmed.isNotEmpty) 'note': trimmed,
+          },
+        ));
+    return _favor(json);
+  }
+
+  /// "제가 할게요". 이미 맡은 것이면 [CrewFailureKind.taken], 내 부탁이면
+  /// [CrewFailureKind.invalid] 다.
+  ///
+  /// 맡는 순간 **크루 일정 한 줄**이 생긴다 — 답의 [CrewFavor.scheduleId] 가 그것이고, 그
+  /// 줄은 그 크루 사람 모두의 달력에 뜬다. 앱이 일정을 따로 만들지 않는다.
+  Future<CrewFavor> takeFavor(int crewId, int favorId) async {
+    return _favor(await _send(
+      () => _authed
+          .postJson(Uri.parse('$baseUrl/api/crews/$crewId/favors/$favorId/take')),
+      conflict: CrewFailureKind.taken,
+    ));
+  }
+
+  /// 무른다. **맡은 사람만** — 아니면 [CrewFailureKind.forbidden] 이다. 부탁이 다시 열리고
+  /// 달력의 줄은 사라진다.
+  ///
+  /// 올린 사람이 거둬들이는 것([cancelFavor])과 경로가 다르다 — 권한도 결과도 다르다.
+  Future<CrewFavor> releaseFavor(int crewId, int favorId) async {
+    return _favor(await _send(() => _authed
+        .deleteJson(Uri.parse('$baseUrl/api/crews/$crewId/favors/$favorId/take'))));
+  }
+
+  /// 거둬들인다. **올린 사람만** — 부탁이 사라진다. 이미 맡은 것도 지울 수 있고, 그때 맡은
+  /// 사람의 달력 줄도 함께 사라진다.
+  Future<void> cancelFavor(int crewId, int favorId) async {
+    await _send(() =>
+        _authed.deleteJson(Uri.parse('$baseUrl/api/crews/$crewId/favors/$favorId')));
+  }
+
   static Crew _one(Object? json) {
     final crew = Crew.tryParse(json);
     // 본문이 계약과 다르면 이유를 모르는 것이다 — 화면에 빈 크루를 그리지 않는다.
@@ -230,8 +332,19 @@ class CrewRepository {
     return crew;
   }
 
+  static CrewFavor _favor(Object? json) {
+    final favor = CrewFavor.tryParse(json);
+    if (favor == null) throw const CrewFailure(CrewFailureKind.network);
+    return favor;
+  }
+
   /// 한 번의 왕복. **상태 코드를 실패의 종류로 옮기는 곳이 여기 하나다.**
-  Future<Object?> _send(Future<http.Response> Function() request) async {
+  ///
+  /// [conflict] 는 409 의 뜻이다 — 파일 머리말 참조. 안 주면 정원이 찬 것이다.
+  Future<Object?> _send(
+    Future<http.Response> Function() request, {
+    CrewFailureKind conflict = CrewFailureKind.full,
+  }) async {
     final http.Response res;
     try {
       res = await request().timeout(timeout);
@@ -249,11 +362,11 @@ class CrewRepository {
       throw CrewFailure(CrewFailureKind.forbidden, message: message);
     }
     if (res.statusCode == 409) {
-      // 정원과 코드 소진이 같은 409 다. 코드가 남긴 이유는 서버의 어휘(`code`)로 가른다 —
-      // 문구로 가르면 문구를 다듬는 날 조용히 뒤집힌다.
+      // 코드 소진만 서버의 어휘(`code`)로 가른다. 나머지 409 는 전부 `CONFLICT` 라 어느
+      // 요청이었는지([conflict])로 가른다 — 문구로 가르면 문구를 다듬는 날 조용히 뒤집힌다.
       final code = _codeOf(body);
       throw CrewFailure(
-        code == 'INVITE_USES_EXHAUSTED' ? CrewFailureKind.inviteDead : CrewFailureKind.full,
+        code == 'INVITE_USES_EXHAUSTED' ? CrewFailureKind.inviteDead : conflict,
         message: message,
       );
     }

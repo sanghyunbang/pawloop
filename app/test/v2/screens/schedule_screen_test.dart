@@ -57,15 +57,18 @@ Map<String, Object?> schedule({
   int version = 0,
   Object? assignee,
   Object? updatedBy,
+  String ownerKind = 'group',
+  int ownerRef = 3,
+  Object? memo,
 }) =>
     {
       'id': id,
-      'ownerKind': 'group',
-      'ownerRef': 3,
+      'ownerKind': ownerKind,
+      'ownerRef': ownerRef,
       'dogId': dogId,
       'kind': kind,
       'title': title,
-      'memo': null,
+      'memo': memo,
       'onDate': onDate,
       'atTime': atTime,
       'assignee': assignee,
@@ -216,6 +219,31 @@ void main() {
 
     expect(find.textContaining('00:00'), findsNothing,
         reason: '사용자가 안 정한 시각을 정한 것처럼 그리면 안 된다');
+  });
+
+  testWidgets('크루 일정은 "크루" 와 시간대 메모가 함께 적힌다 — 그날 아침에 언제인지가 보여야 한다',
+      (tester) async {
+    final f = fixture(items: [
+      // 품앗이를 맡으면 서버가 남기는 줄이다(#417) — 시각 대신 시간대가 메모에 산다.
+      schedule(
+          id: 1,
+          title: '보리 봐 주기',
+          onDate: '2026-10-20',
+          atTime: null,
+          ownerKind: 'room',
+          ownerRef: 9,
+          memo: '오후 · 두 시간만 부탁드려요',
+          assignee: {'userId': 2, 'nickname': '이웃'}),
+      schedule(id: 2, title: '보리 병원', onDate: '2026-10-20', memo: '간식 챙기기'),
+    ]);
+    await pumpScreen(tester, f);
+    await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 2건'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('크루 · 이웃 담당 · 오후 · 두 시간만 부탁드려요'), findsOneWidget,
+        reason: '내 아이 일정 사이에 "보리 봐 주기" 만 있으면 누구 것인지, 언제인지 모른다');
+    expect(find.textContaining('간식 챙기기'), findsNothing,
+        reason: '메모를 줄에 적는 것은 크루 일정뿐이다 — 시간대가 거기 살아서다');
   });
 
   testWidgets('필터 칩이 아이별로 가른다 — 서버에 dogId 를 보낸다', (tester) async {

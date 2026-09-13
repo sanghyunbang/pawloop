@@ -4293,7 +4293,7 @@ components:
         `source`+`contentId` 로 `GET /api/places/{contentId}` 에 닿습니다.
       required: [source, contentId, title]
       properties:
-        source: { type: string, enum: [kto, vet, shop, trail], example: kto }
+        source: { type: string, enum: [kto, vet, shop, trail, playground], example: kto }
         contentId: { type: string, example: "2733967" }
         title: { type: string, example: "서울숲" }
 
@@ -4311,13 +4311,15 @@ components:
           description: |
             `kto` 면 KTO 의 `contentid` 그대로(숫자 문자열)이고 상세(`GET /api/places/{contentId}`)의
             열쇠입니다. **다른 출처는 `출처:원본키`** 입니다 — `vet:322000001020260003`(인허가
-            관리번호) · `shop:…` · `trail:T_ROUTE_1`(두루누비 `crsIdx`). 접두사가 붙은 값에는
+            관리번호) · `shop:…` · `trail:T_ROUTE_1`(두루누비 `crsIdx`) · `playground:<해시>`(#346).
+            KTO 만 접두사가 없어 출처끼리 겹칠 수 없습니다 — ADR-0017 이 미뤄 둔 복합키는 이
+            접두사로 갚혔습니다(#210). 접두사가 붙은 값에는
             상세 경로가 **없습니다**(404) — 카탈로그 항목이 곧 전부입니다. 산책로는 선을
             `GET /api/places/trails/{courseId}/route` 로 따로 받습니다(#291).
         title: { type: string, example: "서울숲" }
         source:
           type: string
-          enum: [kto, vet, shop, trail]
+          enum: [kto, vet, shop, trail, playground]
           example: kto
           description: |
             `kto` 관광공사 반려동반 · `vet` 동물병원 · `shop` 동물판매업(둘 다 행정안전부 인허가,
@@ -4544,7 +4546,7 @@ components:
             - type: object
               required: [title]
               properties:
-                source: { type: [string, "null"], enum: [kto, vet, shop, trail, null], example: kto }
+                source: { type: [string, "null"], enum: [kto, vet, shop, trail, playground, null], example: kto }
                 contentId: { type: [string, "null"], example: "2733967" }
                 title: { type: string, maxLength: 120, example: "서울숲" }
         weather:
@@ -4679,7 +4681,7 @@ components:
         memo: { type: string, maxLength: 500 }
         placeSource:
           type: string
-          enum: [kto, vet, shop, trail]
+          enum: [kto, vet, shop, trail, playground]
           description: |
             어디를 걸었나 — 카탈로그 장소의 출처 (#338). `placeContentId` 와 **짝입니다**:
             하나만 보내면 400 입니다. 반쪽짜리 참조는 이름만 있는 것과 같으면서 있는 척합니다.

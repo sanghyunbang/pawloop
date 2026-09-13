@@ -33,6 +33,7 @@ import '../data/location_upload_policy.dart';
 import '../data/image_prep.dart';
 import '../data/media_picker.dart';
 import '../data/post_media_repository.dart';
+import '../data/video_prep.dart';
 import '../widgets/course_picker_sheet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -141,6 +142,9 @@ class PostWriteScreen extends StatefulWidget {
   /// 스레드의 결과를 못 받으므로(`FakeAsync`) 같은 일을 하는 동기 버전을 꽂는다.
   final ImagePreparer? prepare;
 
+  /// 영상 준비 (#429). 기본은 `VideoPrep.prepare` — 네이티브 재인코더라 위젯 테스트는 가짜를 꽂는다.
+  final VideoPreparer? prepareVideo;
+
   const PostWriteScreen({
     super.key,
     this.repository,
@@ -152,6 +156,7 @@ class PostWriteScreen extends StatefulWidget {
     this.media,
     this.picker,
     this.prepare,
+    this.prepareVideo,
   });
 
   bool get isEditing => editing != null;
@@ -249,11 +254,11 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
     }
     // 사진이 아직 올라가는 중이면 id 가 없다. 그대로 보내면 사진 없는 글이 조용히 올라간다.
     if (_mediaSel.busy) {
-      setState(() => _error = '사진을 올리는 중이에요 · 잠시만요');
+      setState(() => _error = '사진·영상을 올리는 중이에요 · 잠시만요');
       return;
     }
     if (_mediaSel.hasFailure) {
-      setState(() => _error = '못 올린 사진이 있어요 · 다시 올리거나 떼 주세요');
+      setState(() => _error = '못 올린 사진·영상이 있어요 · 다시 올리거나 떼 주세요');
       return;
     }
 
@@ -366,6 +371,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                     picker: _picker,
                     initial: widget.editing?.media ?? const [],
                     prepare: widget.prepare ?? ImagePrep.prepare,
+                    prepareVideo: widget.prepareVideo ?? VideoPrep.prepare,
                     onChanged: (sel) => setState(() => _mediaSel = sel),
                   ),
                   if (_error != null) ...[
