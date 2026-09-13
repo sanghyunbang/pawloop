@@ -2,6 +2,8 @@ package com.heattrip.heat_trip_backend.community.dto;
 
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
+
 /**
  * 글 수정 요청 — 계약의 {@code PostPatch}. 이슈 #211.
  *
@@ -35,11 +37,21 @@ public record PostPatchRequest(
 
         @Size(max = PostRequest.MAX_BODY_LENGTH,
                 message = "본문은 " + PostRequest.MAX_BODY_LENGTH + "자를 넘을 수 없습니다.")
-        String body) {
+        String body,
 
-    /** 계약의 {@code minProperties: 1}. 셋 다 없으면 고칠 것이 없다. */
+        /**
+         * 붙은 사진·영상을 <b>통째로 갈아 끼운다</b> (#429). 키가 없으면 안 바꾸고, 빈 배열이면
+         * 전부 뗀다 — 위의 "null 은 안 바꿈" 규약과 같다. 목록에서 빠진 것은 지워진다.
+         * 사용자가 고치기 화면에서 뗀 것이다. 새로 든 것은 {@code PostRequest.mediaIds} 와
+         * 같은 조건으로 붙는다(내 것 · 아직 안 붙음 · ready).
+         */
+        @Size(max = PostRequest.MAX_MEDIA,
+                message = "사진·영상은 한 글에 " + PostRequest.MAX_MEDIA + "개까지 붙일 수 있습니다.")
+        List<Long> mediaIds) {
+
+    /** 계약의 {@code minProperties: 1}. 넷 다 없으면 고칠 것이 없다. */
     public boolean isEmpty() {
-        return board == null && title == null && body == null;
+        return board == null && title == null && body == null && mediaIds == null;
     }
 
     /**

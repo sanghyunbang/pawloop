@@ -12,6 +12,7 @@ import com.heattrip.heat_trip_backend.community.dto.ReactionSummaryResponse;
 import com.heattrip.heat_trip_backend.community.entity.Comment;
 import com.heattrip.heat_trip_backend.community.entity.Post;
 import com.heattrip.heat_trip_backend.walk.CourseAttachment;
+import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.community.entity.Reaction;
 import com.heattrip.heat_trip_backend.community.repository.CommentRepository;
 import com.heattrip.heat_trip_backend.community.repository.PostRepository;
@@ -113,10 +114,20 @@ public class CommunityService {
     /** 보는 사람이 고른 동네를 묻는 자리 (#342). 사용자 모듈의 공개 면이다. */
     private final ViewerNeighborhood viewerNeighborhood;
 
+    /**
+     * 글에 붙는 사진·영상 — {@code S3} 모듈의 공개 표면이다(#429).
+     *
+     * <p>화살표가 {@code community → S3} 한 방향이다. {@code S3.media.MediaService} 를 직접
+     * 부르면 하위 패키지라 기준선 96 이 는다 — {@code walk.CourseAttachment} 와 같은 모양으로
+     * 루트의 인터페이스만 본다.
+     */
+    private final MediaAttachment media;
+
     public CommunityService(PostRepository posts, CommentRepository comments,
                             ReactionRepository reactions, Reports reports, Blocks blocks,
                             CourseAttachment courses, NeighborhoodCatalog neighborhoods,
-                            ViewerNeighborhood viewerNeighborhood) {
+                            ViewerNeighborhood viewerNeighborhood, MediaAttachment media) {
+        this.media = media;
         this.posts = posts;
         this.comments = comments;
         this.reactions = reactions;
@@ -205,6 +216,9 @@ public class CommunityService {
         // 붙은 코스도 한 장에 한 번 묻는다 — 글마다 물으면 20건 조회에 쿼리가 21개다(#339).
         Map<Long, CourseAttachment.AttachedCourse> courseCards = cardsFor(rows);
 
+        // 붙은 사진·영상도 한 장에 한 번 묻는다 (#429). 코스와 같은 이유다.
+        Map<Long, List<PostResponse.PostMedia>> mediaByPost = mediaFor(rows);
+
         List<PostResponse> items = new ArrayList<>(rows.size());
         for (Post p : rows) {
             items.add(PostResponse.of(p,
@@ -212,7 +226,8 @@ public class CommunityService {
                     reactionsById.getOrDefault(p.getId(), emptySummary(viewerId)),
                     isBlocked(blocked, p.getUser()),
                     toPostCourse(cardOf(p, courseCards)),
-                    districtOf(p)));
+                    districtOf(p),
+                    mediaByPost.getOrDefault(p.getId(), List.of())));
         }
 
         Post last = rows.get(rows.size() - 1);
@@ -228,7 +243,8 @@ public class CommunityService {
                 summarizeOne(postId, viewerId),
                 isBlocked(blockedBy(viewerId), post.getUser()),
                 toPostCourse(cardOf(post, cardsFor(List.of(post)))),
-                districtOf(post));
+                districtOf(post),
+                mediaOf(post));
     }
 
     @Transactional
@@ -246,9 +262,15 @@ public class CommunityService {
                 .handle(displayNameOf(me))
                 .courseId(request.courseId() == null ? null : requireAttachable(request.courseId(), me).id())
                 .build());
+        // 업로드가 먼저고 글이 나중이다 (#429). 붙일 수 없는 것이 하나라도 있으면 여기서 던지고,
+        // 같은 트랜잭션이라 방금 저장한 글도 함께 되돌아간다 — 사진 없는 글이 조용히 남지 않는다.
+        List<PostResponse.PostMedia> attached = toPostMedia(media.attach(
+                MediaAttachment.REF_POST, String.valueOf(saved.getId()),
+                request.mediaIds() == null ? List.of() : request.mediaIds(), me.getId()));
         return PostResponse.of(saved, 0, emptySummary(me.getId()), false,
                 toPostCourse(cardOf(saved, cardsFor(List.of(saved)))),
-                districtOf(saved));
+                districtOf(saved),
+                attached);
     }
 
     /**
@@ -469,9 +491,16 @@ public class CommunityService {
         requireMine(post.getUser(), me.getId(), "글");
         post.edit(request.board(), request.title(), request.body());
 
+        // 사진·영상은 키가 왔을 때만 통째로 갈아 끼운다 (#429). 안 왔으면 지금 것 그대로다.
+        List<PostResponse.PostMedia> attached = request.mediaIds() == null
+                ? mediaOf(post)
+                : toPostMedia(media.replace(MediaAttachment.REF_POST, String.valueOf(postId),
+                        request.mediaIds(), me.getId()));
+
         return PostResponse.of(post,
                 countComments(List.of(postId)).getOrDefault(postId, 0),
-                summarizeOne(postId, me.getId()));
+                summarizeOne(postId, me.getId()),
+                attached);
     }
 
     /**
@@ -490,7 +519,8 @@ public class CommunityService {
                 countComments(List.of(postId)).getOrDefault(postId, 0),
                 summarizeOne(postId, me.getId()),
                 false,
-                toPostCourse(card));
+                toPostCourse(card),
+                mediaOf(post));
     }
 
     /** 붙은 코스를 뗀다. 코스 자체는 그대로다 — 글에서 그림만 빠진다. */
@@ -503,7 +533,40 @@ public class CommunityService {
                 countComments(List.of(postId)).getOrDefault(postId, 0),
                 summarizeOne(postId, me.getId()),
                 false,
-                null);
+                null,
+                mediaOf(post));
+    }
+
+    /**
+     * 이 글들에 붙은 사진·영상 (#429). 글마다 물으면 20건 조회에 쿼리가 21개다 — 코스와 같은
+     * 이유로 한 번에 묻는다. 없는 글은 키가 없으므로 부르는 쪽이 빈 목록으로 읽는다.
+     */
+    private Map<Long, List<PostResponse.PostMedia>> mediaFor(List<Post> rows) {
+        if (rows.isEmpty()) {
+            return Map.of();
+        }
+        List<String> refs = rows.stream().map(p -> String.valueOf(p.getId())).toList();
+        Map<String, List<MediaAttachment.AttachedMedia>> attached =
+                media.attachedTo(MediaAttachment.REF_POST, refs);
+        Map<Long, List<PostResponse.PostMedia>> out = new java.util.HashMap<>();
+        for (Post p : rows) {
+            List<MediaAttachment.AttachedMedia> list = attached.get(String.valueOf(p.getId()));
+            if (list != null && !list.isEmpty()) {
+                out.put(p.getId(), toPostMedia(list));
+            }
+        }
+        return out;
+    }
+
+    private List<PostResponse.PostMedia> mediaOf(Post post) {
+        return mediaFor(List.of(post)).getOrDefault(post.getId(), List.of());
+    }
+
+    private static List<PostResponse.PostMedia> toPostMedia(List<MediaAttachment.AttachedMedia> list) {
+        return list.stream()
+                .map(m -> new PostResponse.PostMedia(m.id(), m.kind().wire(), m.url(), m.posterUrl(),
+                        m.width(), m.height(), m.durationMs()))
+                .toList();
     }
 
     private CourseAttachment.AttachedCourse requireAttachable(long courseId, User me) {
@@ -545,6 +608,10 @@ public class CommunityService {
     public void deletePost(User me, long postId) {
         Post post = requirePost(postId);
         requireMine(post.getUser(), me.getId(), "글");
+        // 붙은 사진·영상은 글과 함께 사라진다 — 행도 S3 객체도 (#429). DB 의 CASCADE 로는 안
+        // 된다: media_objects 는 post 로 나가는 FK 가 없고(ref_type/ref_id 는 불투명한 쌍),
+        // 있어도 S3 의 파일은 DB 가 모른다.
+        media.detachAll(MediaAttachment.REF_POST, String.valueOf(postId));
         posts.delete(post);
     }
 

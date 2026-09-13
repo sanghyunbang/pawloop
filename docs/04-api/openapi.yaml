@@ -154,6 +154,18 @@ tags:
   - name: Walks
     description: 산책 기록(GPS 경로) · 통계
   - name: Community
+  - name: Media
+    description: |
+      사진·영상 올리기 (#429). **업로드가 먼저고 글이 나중입니다** — 여기서 받은 `id` 를
+      `PostInput.mediaIds` 에 실어 글을 만듭니다. 올려 놓고 글을 안 쓴 것은 하루 뒤 서버가
+      거둡니다.
+
+      **위치 메타데이터는 기기에서 지우고 올립니다.** 폰 카메라는 EXIF 에 촬영 좌표를 넣고,
+      그대로 올리면 좌표가 단말을 떠납니다(#235 A안). 앱은 긴 변 1600px 로 다시 인코딩해
+      올리며 그때 EXIF 가 통째로 사라집니다 — `UPLOAD_LOCATION` 과 무관하게 무조건입니다.
+
+      **영상은 이 문으로 안 옵니다.** `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을
+      100MB 까지만 받아서, 영상은 서명 URL 로 S3 에 직접 올립니다(다음 PR).
     description: 게시판 · 댓글 · 반응
   - name: Bookmarks
     description: 저장한 장소
@@ -2427,6 +2439,82 @@ paths:
           schema: { type: string, format: date, example: "2026-12-15" }
       responses:
         '204': { description: 지워짐 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /media:
+    post:
+      tags: [Media]
+      summary: 사진 올리기 (multipart)
+      description: |
+        글에 붙일 사진을 올립니다. 돌아온 `id` 를 `PostInput.mediaIds` 에 싣습니다.
+
+        **한 요청에 한 장**이 기본입니다 — 앱이 순서대로 올리고, 글의 사진 순서는 `id` 순
+        (= 올린 순)입니다. `width`·`height` 는 파일이 하나일 때만 줄 수 있고 둘을 함께 줍니다.
+        서버는 이미지를 열어 재지 않습니다 — Mac mini 한 대의 CPU 입니다.
+
+        **10MB 를 넘으면 400** 입니다. 2026-09-13 이전에는 Spring 기본값(1MB)이라 폰 사진 한 장도
+        못 받았습니다 — 이 경로가 실제 사진으로 쓰인 적이 없어서 아무도 못 봤습니다.
+
+        `category` 가 `POST_VIDEO` 면 **400** 입니다 — 영상은 서명 URL 로 갑니다(태그 설명 참조).
+        나머지 카테고리(`JOURNEY_IMAGE`·`PROFILE_IMAGE`·`REVIEW_IMAGE`)는 감정 여행 시절 것이라
+        서버는 받지만 앱은 안 씁니다.
+
+        올린 것은 아직 **어디에도 안 붙은** 상태(`refType: null`)이고, 하루 안에 글에 안 붙으면
+        서버가 거둡니다.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files, category]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  items: { type: string, format: binary }
+                  description: '`image/jpeg` · `image/png` · `image/webp`. 장당 10MB'
+                category:
+                  type: string
+                  enum: [POST_IMAGE, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
+                  description: 글 사진은 `POST_IMAGE`. 나머지는 옛 값이라 앱이 안 씁니다
+                width:
+                  type: integer
+                  minimum: 1
+                  description: 픽셀 폭. 파일이 하나일 때만, `height` 와 함께
+                height:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: 올렸습니다. 요청의 파일 순서대로
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MediaItem' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /media/{mediaId}:
+    parameters:
+      - name: mediaId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    delete:
+      tags: [Media]
+      summary: 올린 것 지우기 (내 것만)
+      description: |
+        S3 객체와 행을 함께 지웁니다. **내 것이 아니면 404** — 남의 것과 없는 것을 구별해 주지
+        않습니다(ADR-0017 규약 3). 2026-09-13 이전에는 400 "권한 없음" 이었는데 그러면 id 를
+        훑어 어느 번호에 남의 파일이 있는지 셀 수 있었습니다.
+
+        글에 이미 붙은 것을 여기서 지우면 그 글의 사진이 빠집니다. 글을 고치는 길은
+        `PATCH /api/community/posts/{postId}` 의 `mediaIds` 입니다 — 그쪽이 순서와 함께 다룹니다.
+      responses:
+        '204': { description: 지웠습니다 }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -4720,7 +4808,7 @@ components:
 
     Post:
       type: object
-      required: [id, author, board, title, body, commentCount, reactions, createdAt]
+      required: [id, author, board, title, body, commentCount, reactions, createdAt, media]
       properties:
         id: { type: integer, format: int64 }
         author:
@@ -4777,6 +4865,14 @@ components:
                     maxItems: 2
         commentCount: { type: integer, example: 4 }
         reactions: { $ref: '#/components/schemas/ReactionSummary' }
+        media:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/PostMedia' }
+          description: |
+            붙은 사진·영상 (#429). **항상 있습니다** — 없으면 `[]` 입니다. 순서는 올린 순서입니다.
+            영상이면 `posterUrl` 이 썸네일이고 `url` 이 재생할 파일입니다. 피드는 썸네일만 그리고
+            자동재생하지 않습니다.
         createdAt: { type: string, format: date-time }
         authorDistrict:
           type: [string, "null"]
@@ -4812,6 +4908,62 @@ components:
 
             `Comment` 에는 없습니다 — 댓글 수정 경로가 계약에 없습니다.
 
+    PostMediaKind:
+      type: string
+      enum: [image, video]
+      description: 화면이 그리는 종류. 서버의 카테고리(`POST_IMAGE`·`POST_VIDEO`)에서 옵니다
+
+    PostMedia:
+      type: object
+      description: 글에 붙은 사진·영상 하나 — 카드에 그릴 만큼만 (#429).
+      required: [id, kind, url]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { $ref: '#/components/schemas/PostMediaKind' }
+        url:
+          type: string
+          format: uri
+          description: CDN 공개 URL. 사진이면 그림, 영상이면 재생할 파일
+        posterUrl:
+          type: [string, "null"]
+          format: uri
+          description: 영상의 썸네일. 사진은 `null`
+        width:
+          type: [integer, "null"]
+          description: 픽셀 폭. 앱이 올릴 때 준 값이라 없을 수 있습니다 — 없으면 화면이 정사각형 자리를 잡습니다
+        height: { type: [integer, "null"] }
+        durationMs:
+          type: [integer, "null"]
+          description: 영상 길이. 사진은 `null`
+
+    MediaItem:
+      type: object
+      description: 업로드 한 건 — `POST /media` 의 응답 (#429).
+      required: [id, key, url, category, status]
+      properties:
+        id: { type: integer, format: int64 }
+        key:
+          type: string
+          description: S3 object key. 앱은 이 값을 쓸 일이 없습니다 — `id` 로 글에 붙입니다
+        url: { type: string, format: uri }
+        contentType: { type: [string, "null"] }
+        size: { type: [integer, "null"], format: int64 }
+        category:
+          type: string
+          enum: [POST_IMAGE, POST_VIDEO, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
+        refType:
+          type: [string, "null"]
+          description: 어디에 붙었나. 방금 올린 것은 `null` — 글을 만들 때 채워집니다
+        refId: { type: [string, "null"] }
+        status:
+          type: string
+          enum: [pending, ready]
+          description: multipart 로 올린 사진은 언제나 `ready`. `pending` 은 S3 에 직접 올리는 영상의 중간 상태
+        posterUrl: { type: [string, "null"], format: uri }
+        width: { type: [integer, "null"] }
+        height: { type: [integer, "null"] }
+        durationMs: { type: [integer, "null"] }
+
     PostPatch:
       type: object
       minProperties: 1
@@ -4831,6 +4983,14 @@ components:
         board: { $ref: '#/components/schemas/Board' }
         title: { type: string, maxLength: 200, minLength: 1 }
         body: { type: string, maxLength: 5000, minLength: 1 }
+        mediaIds:
+          type: array
+          maxItems: 10
+          items: { type: integer, format: int64 }
+          description: |
+            붙은 사진·영상을 **통째로 갈아 끼웁니다** (#429). 키가 없으면 안 바꾸고, `[]` 면 전부
+            뗍니다 — 위의 "키가 없으면 안 바꿉니다" 와 같은 규약입니다. 목록에서 빠진 것은
+            지워집니다(S3 객체까지). 새로 든 것은 `PostInput.mediaIds` 와 같은 조건입니다.
 
     PostInput:
       type: object
@@ -4874,6 +5034,18 @@ components:
 
             비공개를 붙이면 남들에게는 빈 자리로 보입니다. 서버가 몰래 공개로 바꾸지 않고
             막습니다 — 공개는 사용자가 하는 일입니다. 앱이 "공개하고 붙이기" 를 권합니다.
+        mediaIds:
+          type: array
+          maxItems: 10
+          items: { type: integer, format: int64 }
+          description: |
+            붙일 사진·영상 (#429). **업로드가 먼저입니다** — `POST /media` 가 돌려준 `id` 를 싣습니다.
+            서버는 **내가 올렸고 · 아직 어디에도 안 붙었고 · `ready` 인 것**만 붙이고, 하나라도
+            아니면 **400** 이고 글도 안 생깁니다. 판정은 조건부 UPDATE 의 영향 행 수라 같은
+            사진을 두 글에 동시에 붙여도 하나만 이깁니다.
+
+            순서는 이 목록이 아니라 **올린 순서**입니다. 없어도 됩니다 — 사진 없는 글이 여전히
+            대부분입니다.
 
     Comment:
       type: object

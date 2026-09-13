@@ -3,6 +3,8 @@ package com.heattrip.heat_trip_backend.community.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
+
 /**
  * 글 작성 요청 — 계약의 {@code PostInput}. {@code required} 는 {@code [board, title, body]}.
  *
@@ -61,7 +63,23 @@ public record PostRequest(
          * <p>글을 고칠 때 이 키가 <b>오지 않으면 "안 바꿈"</b>, {@code null} 로 오면
          * "떼어 낸다" 이다.
          */
-        Long courseId) {
+        Long courseId,
+
+        /**
+         * 붙일 사진·영상 (#429). <b>업로드가 먼저다</b> — {@code POST /media} 가 돌려준 id 를
+         * 여기에 싣는다. 서버는 <b>내 것이고 아직 어디에도 안 붙은 것</b>만 붙이고, 하나라도
+         * 아니면 400 이고 글은 안 생긴다. 순서는 이 목록의 순서가 아니라 올린 순서다.
+         *
+         * <p>없어도 된다. 사진 없는 글이 여전히 대부분이다.
+         */
+        @Size(max = MAX_MEDIA, message = "사진·영상은 한 글에 " + MAX_MEDIA + "개까지 붙일 수 있습니다.")
+        List<Long> mediaIds) {
+
+    /**
+     * 한 글에 붙는 미디어의 상한. 열 장이면 카드 한 장의 그림으로 충분하고, 그보다 많으면
+     * 목록 응답 하나가 URL 백 개를 실어 나른다. 앱의 고르기 화면도 이 수를 본다.
+     */
+    public static final int MAX_MEDIA = 10;
 
     /**
      * 본문의 최대 글자 수.

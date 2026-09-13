@@ -239,22 +239,29 @@ CREATE TABLE `kto_call_budget` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `media_objects` (
+  `duration_ms` int DEFAULT NULL,
+  `height` int DEFAULT NULL,
+  `width` int DEFAULT NULL,
   `created_at` datetime(6) NOT NULL,
   `deleted_at` datetime(6) DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `size` bigint NOT NULL,
   `updated_at` datetime(6) DEFAULT NULL,
+  `status` varchar(10) NOT NULL,
   `media_key` varchar(512) NOT NULL,
+  `poster_key` varchar(512) DEFAULT NULL,
   `content_type` varchar(255) DEFAULT NULL,
   `original_name` varchar(255) DEFAULT NULL,
   `owner_id` varchar(255) NOT NULL,
   `ref_id` varchar(255) DEFAULT NULL,
   `ref_type` varchar(255) DEFAULT NULL,
-  `category` enum('JOURNEY_IMAGE','PROFILE_IMAGE','REVIEW_IMAGE') NOT NULL,
+  `category` enum('JOURNEY_IMAGE','POST_IMAGE','POST_VIDEO','PROFILE_IMAGE','REVIEW_IMAGE') NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `UK3pkjswl54cvrded30nci3u45t` (`media_key`),
   KEY `idx_media_owner` (`owner_id`),
-  KEY `idx_media_ref` (`ref_type`,`ref_id`)
+  KEY `idx_media_ref` (`ref_type`,`ref_id`),
+  KEY `idx_media_orphan` (`ref_type`,`created_at`),
+  CONSTRAINT `ck_media_status` CHECK ((`status` in (_utf8mb4'pending',_utf8mb4'ready')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `pet_place_detail` (
