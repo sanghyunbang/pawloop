@@ -188,10 +188,12 @@ GlassCard(
 
 아이콘 20px + 8px gap + 라벨(15/w700) 가로 배치.
 
+**코드는 `widgets/form_kit.dart` 다(#445).** `PrimaryButton`(그라데이션 상자 안의 투명한 `FilledButton` — 잉크·포커스·스크린리더가 머티리얼 그대로) · `SecondaryButton`(`OutlinedButton`) · `PickerButton`(날짜·시각처럼 눌러서 고르는 값) · `GlassField`(흰 채움 + `T.line` 테두리, `InputBorder.none`) · `PillChip` · `FormLabel` · `SheetFrame`(바텀시트 틀: 손잡이 · 제목 · 한 줄 설명) · `SigFab`(머리말의 둥근 "새로 적기"). 시트(일정 · 아이 등록 · 크루 만들기·고치기)는 전부 이 부품으로 짠다 — 머티리얼 기본 `OutlineInputBorder` · `OutlinedButton` · 색 없는 `FilledButton` 을 화면에 직접 쓰지 않는다.
+
 ### 5.6 칩 / 카테고리 태그
 
 - 지도 필터·범례 칩은 `kPetCategories`의 `(label, color, icon)`을 사용 — 아이콘 + 라벨, 카테고리색을 배경 저채도/테두리·아이콘 강조색으로.
-- 알약형(둥근) 형태를 기본으로 하고, 선택 시 해당 카테고리색으로 채운다. (구체 스타일은 화면별 인라인 — 공용 위젯화는 post-MVP 정리 대상.)
+- 알약형(둥근) 형태를 기본으로 하고, 선택 시 해당 카테고리색으로 채운다. 폼 안의 고르기 칩(종류 · 반복 · 아이 · 담당 · 종 · 몸집)은 `form_kit.dart` 의 `PillChip` — 선택되면 `T.accent` 로 채우고 흰 글자다(#445).
 
 ### 5.7 통계 차트
 
@@ -281,5 +283,7 @@ T.barShadow  // 0x2E5A4690 — 탭 바
 3. 색·radius·그림자는 `T` 토큰 → `kThemes`/`kPetCategories` 순으로 참조하고, 인라인 하드코딩은 최소화한다.
 4. 강조 액션은 SIG 그라데이션(또는 warm 변형), 상태 텍스트는 `T.text*` 위계를 지킨다.
 5. 브랜드 아이콘은 Fluent Emoji 3D, 기능 아이콘은 Material(rounded)로 통일한다.
+6. 시트·폼은 `widgets/form_kit.dart` 의 부품으로 짠다(#445). 새 시트에 머티리얼 기본 입력칸·버튼을 직접 쓰지 않는다.
+7. 유리(`BackdropFilter`)는 이동 층(탭 바)에만, 콘텐츠는 `GlassCard`(약한 블러)로 — HIG "재질"(#446).
 
-> 미구현/정리 대상: 칩·섹션헤더 등 인라인 스타일의 공용 위젯화, 다크 모드(현재 라이트 파스텔 전용), 접근성 대비(반투명 텍스트 대비 검증)는 post-MVP 항목.
+> 미구현/정리 대상: 다크 모드(현재 라이트 파스텔 전용), 접근성 대비(반투명 텍스트 대비 검증), 팔레트 다시 고르기(#447).
