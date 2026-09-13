@@ -747,6 +747,12 @@ class _FeedScreenState extends State<FeedScreen> {
         padding: const EdgeInsets.all(16),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // 사진·영상이 있으면 **사진이 먼저**다(#451 2번, 반려견 판·인스타의 순서). 예전엔
+          // 작성자 → 게시판 → 제목 → 본문 다음 세 번째 줄에 있었다. 한 장이면 크게, 넷 넘으면 +N(#429).
+          if (post.media.isNotEmpty) ...[
+            PostMediaStrip(media: post.media),
+            const SizedBox(height: 12),
+          ],
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _avatar(post, 40),
             const SizedBox(width: 11),
@@ -820,11 +826,6 @@ class _FeedScreenState extends State<FeedScreen> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: 13.5, height: 1.5, color: T.textSecondary)),
-          // 붙은 사진·영상 (#429). 한 장이면 크게, 넷 넘으면 +N.
-          if (post.media.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            PostMediaStrip(media: post.media),
-          ],
           // 붙은 코스가 있으면 그림 한 장 (#339). 비공개로 되돌렸거나 지웠으면 안 온다.
           if (post.course != null) ...[
             const SizedBox(height: 12),
