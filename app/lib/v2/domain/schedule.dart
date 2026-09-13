@@ -17,7 +17,8 @@ enum ScheduleOwnerKind {
   dog('dog'),
   group('group'),
 
-  /// 크루(#417). **서버가 아직 400 으로 거절한다** — 값만 열려 있다.
+  /// 크루(#417). **앱이 직접 만들지 않는다** — 품앗이를 맡으면 서버가 한 줄을 남기고, 그
+  /// 줄이 그 크루 사람 모두의 달력에 뜬다. 달력은 이 값을 보고 "크루" 라고 적는다.
   room('room');
 
   const ScheduleOwnerKind(this.wire);

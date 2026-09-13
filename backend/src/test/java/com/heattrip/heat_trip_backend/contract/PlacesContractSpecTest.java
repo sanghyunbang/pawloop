@@ -173,6 +173,30 @@ class PlacesContractSpecTest {
     }
 
     @Test
+    @DisplayName("계약의 모든 source enum 은 kto + PlaceDto.LAYER_SOURCES 와 같은 집합이다")
+    void sourceEnumsMatchLayerSources() {
+        // 서버가 실제로 내보내는 출처는 이 다섯이다. 계약에 source 를 적은 자리가 넷(Place·PlaceRef·…)
+        // 이라 하나만 낡기 쉽다 — 놀이터(#346)가 들어올 때 PlaceCategory 에는 붙고 source 에는
+        // 안 붙어 서버가 계약에 없는 값(playground)을 내보내고 있었다(2026-09-13 발견).
+        Set<String> expected = new LinkedHashSet<>();
+        expected.add(PlaceDto.SOURCE_KTO);
+        expected.addAll(PlaceDto.LAYER_SOURCES);
+
+        Map<String, List<String>> found = sourceEnums();
+        assertThat(found)
+                .as("source enum 을 적은 스키마가 하나도 없으면 이 검사의 전제가 무너진다")
+                .isNotEmpty();
+        found.forEach((schema, values) -> {
+            Set<String> actual = new LinkedHashSet<>(values);
+            actual.remove(null); // 없을 수 있는 자리는 null 을 함께 적는다 — 출처 값이 아니다
+            assertThat(actual)
+                    .as("%s.source 의 enum 이 서버가 만드는 출처와 다르다 — 갈리면 계약만 보고 짠"
+                            + " 앱이 모르는 출처를 받는다", schema)
+                    .isEqualTo(expected);
+        });
+    }
+
+    @Test
     @DisplayName("contentTypeId 는 null 이 될 수 있다 — kto 가 아닌 출처에는 채울 값이 없다")
     void contentTypeIdIsNullable() {
         assertThat(typeOf("Place", "contentTypeId")).contains("null");
@@ -303,6 +327,33 @@ class PlacesContractSpecTest {
         Map<String, Object> schemas =
                 (Map<String, Object>) ((Map<String, Object>) spec.get("components")).get("schemas");
         return (List<String>) ((Map<String, Object>) schemas.get(schema)).get("enum");
+    }
+
+    /**
+     * {@code components.schemas.*.properties.source.enum} 전부 — 스키마 이름 → 값 목록.
+     *
+     * <p>이름을 손으로 적지 않는다(ADR-0017 의 방식). 새 스키마가 {@code source} 를 적으면
+     * 그대로 검사에 들어온다.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, List<String>> sourceEnums() {
+        Map<String, Object> schemas =
+                (Map<String, Object>) ((Map<String, Object>) spec.get("components")).get("schemas");
+        Map<String, List<String>> found = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : schemas.entrySet()) {
+            Object properties = ((Map<String, Object>) entry.getValue()).get("properties");
+            if (!(properties instanceof Map<?, ?> props)) {
+                continue;
+            }
+            // 장소 자체는 `source`, 산책이 장소를 가리킬 때는 `placeSource` 다(#338).
+            for (String name : List.of("source", "placeSource")) {
+                Object prop = props.get(name);
+                if (prop instanceof Map<?, ?> p && p.get("enum") instanceof List<?> values) {
+                    found.put(entry.getKey() + "." + name, (List<String>) values);
+                }
+            }
+        }
+        return found;
     }
 
     private static Set<String> componentNames(Class<?> record) {

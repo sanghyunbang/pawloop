@@ -362,6 +362,60 @@ dart run flutter_launcher_icons
 
 ---
 
+## 8. 다른 기기로 옮기기 — 클론만으로는 안 뜬다
+
+2026-09-13 에 맥북으로 실제로 옮기면서 걸린 것을 적어 둔다. **저장소에 없는 것이 넷**이고, 그것을
+안 옮기면 백엔드는 부팅 중에 죽고 앱은 지도 자리에 안내문만 뜬다.
+
+| 무엇 | 왜 저장소에 없나 | 없으면 |
+|:---|:---|:---|
+| `backend/.env` | 비밀(gitignore) | 기본값 없는 환경변수가 비어 **부팅 중 죽는다** |
+| `backend/src/main/resources/data/` 의 `sigungu.json` · `local_trails.json` · `playgrounds.json` · `place_traits.csv` | 자산(gitignore) | `sigungu.json` 이 없으면 `NeighborhoodCatalog` 생성이 실패해 **스프링 컨텍스트가 통째로** 죽는다. 나머지는 지도의 산책로·놀이터·장소 특성이 빈다 |
+| `app/dart-define.json` | 키(gitignore) | 앱은 뜨지만 지도 탭이 "지도를 불러올 수 없어요" 다 |
+| `app/android/key.properties` + 업로드 키스토어 `heattrip-upload.jks` | 저장소 **밖** | **release 빌드만** 안 된다 — debug·`flutter run` 은 이 둘을 안 본다 |
+
+Firebase 서비스 계정 JSON 과 Apple `.p8` 은 어느 기기에도 아직 없다(#83 · #316) — 옮길 것이 아니다.
+
+### 8.1 묶어 보내기 (원래 기기)
+
+- **zip 안의 경로는 저장소 구조 그대로** 둔다 — 저장소 루트에서 풀면 제자리에 들어간다. 키스토어만 저장소 밖이라 `keystores/` 로 따로 담는다.
+- 값은 화면에 찍지 않는다 — 파일을 통째로 복사만 하고, 로그에는 이름과 크기만 남긴다.
+- 메일·메신저·클라우드 공유 링크로 보내지 않는다. 옮기고 나면 zip 은 지운다.
+- `backend/config/application-private.properties` 는 넣지 않는다 — `private` 프로파일이 안 켜져 있어 읽히지 않는 잔재다.
+
+### 8.2 받는 기기에서 푸는 법 — 파인더로 끌어다 놓지 말 것
+
+```bash
+git clone https://github.com/sanghyunbang/heattrip.git
+cd heattrip
+# -o: 같은 이름이 있으면 덮어쓴다(클론 직후엔 덮을 것이 없다) · -x README.md: zip 의 안내문이 저장소 README 를 덮지 않게 뺀다
+unzip -o ~/Downloads/heattrip-backend-handover.zip -x README.md
+unzip -o ~/Downloads/heattrip-app-handover.zip -x README.md
+ls -la backend/.env backend/src/main/resources/data app/dart-define.json
+```
+
+- **맥의 파인더는 점으로 시작하는 파일을 숨긴다**(`backend/.env` 가 "없는 것처럼" 보인다 — `Cmd+Shift+.` 로 보이게 한다). 그래서 "풀었는데 `backend/.env` 가 없다" 는 대개 안 푼 것이 아니라 안 보이는 것이다 — 터미널의 `ls -la` 로 본다.
+- **파인더에서 폴더를 끌어다 놓으면 합치는 것이 아니라 통째로 바꾼다.** zip 의 `backend/` 를 클론한 `heattrip/` 에 끌어 놓으면 클론한 `backend/` 전체가 zip 의 다섯 파일로 대체된다. 터미널의 `unzip`(또는 `rsync -a`)만 쓴다.
+- 키스토어는 저장소 밖으로 옮기고 `app/android/key.properties` 의 `storeFile` 을 새 자리로 고친다(지금 값은 원래 기기의 절대경로다).
+  ```bash
+  mkdir -p ~/keystores && mv keystores/heattrip-upload.jks ~/keystores/
+  ```
+- `app/dart-define.json` 의 `API_BASE_URL` 은 로컬 백엔드에 붙일 거면 `http://10.0.2.2:8080` 으로, 백엔드의 `APP_SECURITY_ALLOWED_ORIGINS` 와 함께 본다(3.2 절).
+
+### 8.3 백엔드는 마이그레이션부터 — 서버를 먼저 띄우지 말 것
+
+새 DB 면 `backend/mysql/init/01_schema.sql` 로 스키마를 세우고 `bash scripts/check-migrations.sh` 가 알려 주는 순서대로 `backend/mysql/post-start/` 의 마이그레이션을 돌린 **뒤에** 서버를 띄운다. dev 프로파일은 `ddl-auto=update` 라 먼저 띄우면 Hibernate 가 표를 자기 방식으로 만들어 두고, 그 뒤의 마이그레이션은 `IF NOT EXISTS` 로 조용히 지나가 **CHECK 제약 없는 표**가 남는다(실제로 겪었다). 그다음은 5.3 절 그대로다.
+
+### 8.4 키스토어가 무엇인가 — 정확히
+
+`heattrip-upload.jks` 는 Play 에 올리는 AAB 에 서명하는 **업로드 키**다. 앱은 아직 Play 에 올라간 적이 없으므로(2026-09-13 기준) 지금 이 파일을 잃어도 새로 만들면 된다. 올린 뒤에도 Play App Signing 을 쓰면 앱 서명 키는 구글이 보관하고, 업로드 키를 잃었을 때는 Play Console 에서 새 업로드 키 등록을 요청할 수 있다 — 예전 안내문의 "잃으면 영영 업데이트할 수 없다" 는 App Signing 을 안 쓰던 시절의 말이라 과장이다. 다만 **비밀번호 셋**(`storePassword`·`keyPassword`·`keyAlias`, `key.properties` 안)과 파일은 함께 있어야 뜻이 있고, 유출되면 남이 우리 이름으로 올릴 수 있으니 공유 링크로 보내지 않는다.
+
+### 8.5 (선택) 작업 메모
+
+Claude Code 의 프로젝트 메모는 기기를 따라가지 않는다 — `~/.claude/projects/<저장소 절대경로의 구분자를 -로 바꾼 슬러그>/memory/` 를 같은 자리로 복사한다. 슬러그가 기기마다 다르므로(`C--Users-...` vs `-Users-...`) 폴더 이름은 새 기기에서 `ls ~/.claude/projects/` 로 확인한다.
+
+---
+
 ## 관련 문서
 
 - [ERD](../03-database/erd.md) — 데이터 모델(MySQL 공간형)

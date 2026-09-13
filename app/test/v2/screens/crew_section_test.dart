@@ -277,8 +277,14 @@ void main() {
     expect(find.text('초대 코드 보내기'), findsOneWidget);
     expect(find.text('크루 나가기'), findsNothing,
         reason: '방장이 나가면 초대코드도 못 내는 방이 남는다 — 서버도 400 이다');
-    expect(find.byKey(const Key('crew-owner-cannot-leave')), findsOneWidget,
-        reason: '버튼만 빼면 왜 없는지 아무도 모른다');
+    // 방장 자리는 품앗이 카드 아래라 800×600 에서는 아직 안 만들어진다 — 내려서 본다.
+    await tester.drag(find.byType(ListView).last, const Offset(0, -600));
+    await tester.pumpAndSettle();
+    expect(find.text('방장 넘기기'), findsOneWidget,
+        reason: '사람이 있으면 지우기가 아니라 넘기기다 — 남의 대화를 지우는 버튼은 없다');
+    expect(find.text('크루 지우기'), findsNothing);
+    expect(find.byKey(const Key('crew-owner-note')), findsOneWidget,
+        reason: '버튼만 두면 왜 나가기가 없는지 아무도 모른다');
     expect(find.byKey(const Key('crew-kick-2')), findsOneWidget);
     expect(find.byKey(const Key('crew-kick-1')), findsNothing,
         reason: '방장은 자기를 못 내보낸다');
