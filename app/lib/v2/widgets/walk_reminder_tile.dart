@@ -133,7 +133,7 @@ class _WalkReminderTileState extends State<WalkReminderTile> {
         ]),
       ),
       if (_settings.enabled) ...[
-        Container(height: 1, color: const Color(0x148C7BFF)),
+        Container(height: 1, color: T.accentSoft),
         GestureDetector(
           onTap: _pickTime,
           behavior: HitTestBehavior.opaque,
@@ -147,9 +147,9 @@ class _WalkReminderTileState extends State<WalkReminderTile> {
               const Spacer(),
               Text(_settings.timeLabel,
                   style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
+                      fontSize: 14, fontWeight: FontWeight.w800, color: T.warmText)),
               const SizedBox(width: 6),
-              const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+              const Icon(Icons.chevron_right, size: 18, color: T.textFaint),
             ]),
           ),
         ),

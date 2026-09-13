@@ -135,7 +135,7 @@ Future<bool> _confirmIfUnsafe(BuildContext context, {required DateTime now}) asy
   final go = await showDialog<bool>(
     context: context,
     builder: (dialogCtx) => AlertDialog(
-      backgroundColor: const Color(0xFFFCFAFF),
+      backgroundColor: T.surfaceBright,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Text('지금은 피하는 게 좋아요',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
@@ -148,7 +148,7 @@ Future<bool> _confirmIfUnsafe(BuildContext context, {required DateTime now}) asy
         ),
         TextButton(
           onPressed: () => Navigator.pop(dialogCtx, true),
-          child: const Text('그래도 시작', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
+          child: const Text('그래도 시작', style: TextStyle(fontWeight: FontWeight.w800, color: T.warmText)),
         ),
       ],
     ),

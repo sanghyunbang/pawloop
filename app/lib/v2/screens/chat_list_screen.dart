@@ -85,7 +85,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
@@ -104,7 +104,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ]),
                 const SizedBox(height: 4),
                 const Text('가족·이웃 반려인들과의 대화',
-                    style: TextStyle(fontSize: 13, color: Color(0xB3463C64))),
+                    style: TextStyle(fontSize: 13, color: T.textSecondary)),
                 const SizedBox(height: 16),
                 ..._body(),
                 // 로그인 전에는 가족 관리·초대 참여를 보여 주지 않는다 — 눌러도 안 되는 항목이다(#324).
@@ -164,11 +164,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 .push(MaterialPageRoute(builder: (_) => const LoginScreen())),
             behavior: HitTestBehavior.opaque,
             child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.login_rounded, size: 17, color: Color(0xFFE07A4E)),
+              Icon(Icons.login_rounded, size: 17, color: T.warmText),
               SizedBox(width: 6),
               Text('로그인',
                   style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                      fontSize: 13, fontWeight: FontWeight.w700, color: T.warmText)),
             ]),
           )
         else
@@ -248,7 +248,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 _preview(room),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12.5, color: Color(0xA8463C64)),
+                style: const TextStyle(fontSize: 12.5, color: T.textMuted),
               ),
             ]),
           ),
@@ -257,7 +257,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)]),
+                gradient: const LinearGradient(colors: [T.warmStart, T.warmEnd]),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text('${room.unread}',
@@ -292,9 +292,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
   /// '크루' 는 #417 이 실제로 쓰는 값이고, '산책 크루' 는 그 전에 문서·더미가 쓰던 값이라
   /// 둘 다 받는다 — 옛 값을 지우면 예전에 만들어진 방이 회색으로 떨어진다.
   static Color _accentFor(String tag) => switch (tag) {
-        '가족' => const Color(0xFFFF8F63),
+        '가족' => T.warmMid,
         '크루' || '산책 크루' => const Color(0xFF57C98A),
-        _ => const Color(0xFF8E7BFF),
+        _ => T.accent,
       };
 
   static IconData _iconFor(String tag) => switch (tag) {
@@ -312,14 +312,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
         child: GlassCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           child: Row(children: const [
-            Icon(Icons.diversity_1_rounded, size: 19, color: Color(0xFFFF8F63)),
+            Icon(Icons.diversity_1_rounded, size: 19, color: T.warmMid),
             SizedBox(width: 10),
             Expanded(
               child: Text('우리 가족 관리 — 멤버·초대·오늘의 케어',
                   style: TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
             ),
-            Icon(Icons.chevron_right, size: 18, color: Color(0xFFCABFDC)),
+            Icon(Icons.chevron_right, size: 18, color: T.textFaint),
           ]),
         ),
       ),

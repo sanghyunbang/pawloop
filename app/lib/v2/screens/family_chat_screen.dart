@@ -68,7 +68,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   late final ChatRepository _repo = widget._injected ?? ChatRepository();
@@ -326,9 +326,9 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     const palette = [
       Color(0xFF33BFA6),
       Color(0xFF5B8DEF),
-      Color(0xFF9B7BFF),
+      T.accent,
       Color(0xFFEFA13C),
-      Color(0xFFFF7E8A),
+      T.warmEnd,
       Color(0xFF57C98A),
     ];
     return palette[name.hashCode.abs() % palette.length];
@@ -337,7 +337,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
@@ -484,7 +484,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFFF7E8A).withValues(alpha: 0.24),
+                    color: T.warmEnd.withValues(alpha: 0.24),
                     blurRadius: 12,
                     offset: const Offset(0, 6),
                   ),

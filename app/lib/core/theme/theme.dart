@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:heat_trip_flutter/v2/theme/app_tokens.dart';
+
 AppBarTheme appBarTheme() {
   return AppBarTheme(
     centerTitle: false,
@@ -29,6 +31,14 @@ ThemeData theme() {
   return ThemeData(
     useMaterial3: true,
     fontFamily: 'Pretendard',
+    // 머티리얼 위젯(날짜·시각 고르기, 대화상자, 기본 FilledButton)의 색 — #445.
+    // colorScheme 이 없으면 머티리얼 3 기본 보라(#6750A4)로 그려져 앱의 피치·라일락과 어긋난다.
+    // 시드는 플로팅 네비의 활성색이자 아바타 테두리 기본값인 accent(#8E7BFF)다. sigEnd(#D89BFF)를
+    // primary 로 쓰면 흰 글자가 안 읽혀서 한 단계 진한 accent 를 primary 로 둔다.
+    colorScheme: ColorScheme.fromSeed(seedColor: T.accent).copyWith(
+      primary: T.accent,
+      onPrimary: Colors.white,
+    ),
     scaffoldBackgroundColor: Colors.white,
     shadowColor: Colors.transparent,
 

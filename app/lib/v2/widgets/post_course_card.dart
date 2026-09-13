@@ -43,13 +43,13 @@ class PostCourseCard extends StatelessWidget {
                         withCaption: false,
                       ),
                     )
-                  : const Icon(Icons.route_rounded, size: 20, color: Color(0xFFBBB3CC)),
+                  : const Icon(Icons.route_rounded, size: 20, color: T.textFaint),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  const Icon(Icons.route_rounded, size: 14, color: Color(0xFFE07A4E)),
+                  const Icon(Icons.route_rounded, size: 14, color: T.warmText),
                   const SizedBox(width: 5),
                   Flexible(
                     child: Text(course.name,

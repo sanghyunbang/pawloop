@@ -138,7 +138,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: const Color(0xFFFCFAFF),
+        backgroundColor: T.surfaceBright,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('삭제할까요?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
         content: Text("'$what' 항목이 가족 모두에게서 삭제돼요.",
@@ -161,13 +161,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
@@ -234,7 +234,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE07A4E))),
+              child: CircularProgressIndicator(strokeWidth: 2, color: T.warmText)),
           SizedBox(width: 10),
           Text('가족 정보를 불러오는 중', style: TextStyle(fontSize: 13.5, color: T.textSecondary)),
         ]),
@@ -247,7 +247,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Icon(noGroup ? Icons.group_add_rounded : Icons.cloud_off_rounded,
-              size: 18, color: const Color(0xFFE07A4E)),
+              size: 18, color: T.warmText),
           const SizedBox(width: 8),
           Expanded(
             child: Text(FamilyFailure.messageFor(failure),
@@ -292,7 +292,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xCCFFFFFF),
                 borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: const Color(0x1F8C7BFF)),
+                border: Border.all(color: T.line),
               ),
               child: const Text('초대 코드로 참여하기',
                   textAlign: TextAlign.center,
@@ -321,12 +321,12 @@ class _FamilyScreenState extends State<FamilyScreen> {
   /// 아바타 색. 서버는 색을 주지 않으므로 **참여 순서로** 고정한다 — 매번 랜덤이면
   /// 같은 사람이 화면을 열 때마다 다른 색이 되어 얼굴 대신 쓰는 표식이 되지 못한다.
   static const List<Color> _memberColors = [
-    Color(0xFFFF8F63),
+    T.warmMid,
     Color(0xFF57C98A),
     Color(0xFF5B8DEF),
-    Color(0xFF9B7BFF),
+    T.accent,
     Color(0xFFEFA13C),
-    Color(0xFFFF7E8A),
+    T.warmEnd,
   ];
 
   Color _colorOf(int index) => _memberColors[index % _memberColors.length];
@@ -376,13 +376,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: const Color(0x66FFFFFF),
-                    border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.6), width: 1.5),
+                    border: Border.all(color: T.warmStart.withValues(alpha: 0.6), width: 1.5),
                   ),
-                  child: const Icon(Icons.add, size: 24, color: Color(0xFFE07A4E)),
+                  child: const Icon(Icons.add, size: 24, color: T.warmText),
                 ),
                 const SizedBox(height: 7),
                 const Text('초대',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.warmText)),
               ]),
             ),
           ]),
@@ -462,7 +462,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => Container(
         decoration: const BoxDecoration(
-          color: Color(0xFAFCFAFF),
+          color: T.surfaceBright,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(sheetCtx).padding.bottom),
@@ -480,9 +480,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 22),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFA96B).withValues(alpha: 0.12),
+              color: T.warmStart.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.35)),
+              border: Border.all(color: T.warmStart.withValues(alpha: 0.35)),
             ),
             child: Text(
               code,
@@ -491,7 +491,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 fontSize: 26,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 3,
-                color: Color(0xFFE07A4E),
+                color: T.warmText,
               ),
             ),
           ),
@@ -508,7 +508,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 borderRadius: BorderRadius.circular(15),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFFF7E8A).withValues(alpha: 0.28),
+                    color: T.warmEnd.withValues(alpha: 0.28),
                     blurRadius: 16,
                     offset: const Offset(0, 8),
                   ),
@@ -532,7 +532,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xCCFFFFFF),
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: const Color(0x1F8C7BFF)),
+                border: Border.all(color: T.line),
               ),
               child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.copy_rounded, size: 16, color: T.textSecondary),
@@ -593,7 +593,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: const [
-          Icon(Icons.report_gmailerrorred_rounded, size: 18, color: Color(0xFFE07A4E)),
+          Icon(Icons.report_gmailerrorred_rounded, size: 18, color: T.warmText),
           SizedBox(width: 7),
           Text('산책 주의사항',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
@@ -617,7 +617,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     width: 6,
                     height: 6,
                     margin: const EdgeInsets.only(top: 7),
-                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFFA96B)),
+                    decoration: const BoxDecoration(shape: BoxShape.circle, color: T.warmStart),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -644,15 +644,15 @@ class _FamilyScreenState extends State<FamilyScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 11),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFA96B).withValues(alpha: 0.10),
+              color: T.warmStart.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFFA96B).withValues(alpha: 0.35)),
+              border: Border.all(color: T.warmStart.withValues(alpha: 0.35)),
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-              Icon(Icons.add_rounded, size: 18, color: Color(0xFFE07A4E)),
+              Icon(Icons.add_rounded, size: 18, color: T.warmText),
               SizedBox(width: 5),
               Text('주의사항 추가',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: T.warmText)),
             ]),
           ),
         ),
@@ -678,7 +678,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => Container(
         decoration: const BoxDecoration(
-          color: Color(0xFAFCFAFF),
+          color: T.surfaceBright,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(sheetCtx).padding.bottom),
@@ -754,7 +754,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       isScrollControlled: true,
       builder: (sheetCtx) => Container(
         decoration: const BoxDecoration(
-          color: Color(0xFAFCFAFF),
+          color: T.surfaceBright,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         padding: EdgeInsets.fromLTRB(
@@ -773,7 +773,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
             decoration: BoxDecoration(
               color: const Color(0x9EFFFFFF),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0x338C7BFF)),
+              border: Border.all(color: T.accentLine),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
@@ -835,7 +835,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFF7E8A).withValues(alpha: 0.28),
+              color: T.warmEnd.withValues(alpha: 0.28),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -942,7 +942,7 @@ class _CreateGroupSheetState extends State<_CreateGroupSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFAFCFAFF),
+          color: T.surfaceBright,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         padding: EdgeInsets.fromLTRB(
@@ -981,11 +981,11 @@ class _CreateGroupSheetState extends State<_CreateGroupSheet> {
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0x1F8C7BFF)),
+                borderSide: const BorderSide(color: T.line),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0x1F8C7BFF)),
+                borderSide: const BorderSide(color: T.line),
               ),
             ),
           ),
@@ -1011,9 +1011,9 @@ class _CreateGroupSheetState extends State<_CreateGroupSheet> {
                     : const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+                        colors: [T.warmStart, T.warmEnd],
                       ),
-                color: _saving ? const Color(0xFFC9C2D8) : null,
+                color: _saving ? T.textFaint : null,
                 borderRadius: BorderRadius.circular(16),
               ),
               // 스피너가 아니라 문구를 바꾼다 — pet_registration_sheet 와 같은 모양이다.

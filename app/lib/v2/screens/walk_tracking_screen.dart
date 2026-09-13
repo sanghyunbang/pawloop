@@ -64,7 +64,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   NaverMapController? _ctrl;
@@ -338,7 +338,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       NPolylineOverlay(
         id: 'walk-path',
         coords: _path,
-        color: const Color(0xFFFF7E8A),
+        color: T.warmEnd,
         width: 7,
       ),
     );
@@ -346,7 +346,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       NMarker(
         id: 'walk-head',
         position: _path.last,
-        iconTintColor: const Color(0xFFFF7E8A),
+        iconTintColor: T.warmEnd,
       ),
     );
   }
@@ -494,7 +494,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
               child: const Icon(
                 Icons.close,
                 size: 21,
-                color: Color(0xFFBBB3CC),
+                color: T.textFaint,
               ),
             ),
           ],
@@ -525,7 +525,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
           return Container(
             height: MediaQuery.of(sheetCtx).size.height * 0.66,
             decoration: const BoxDecoration(
-              color: Color(0xFAFCFAFF),
+              color: T.surfaceBright,
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             ),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
@@ -559,7 +559,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: const Color(0x338C7BFF)),
+                    border: Border.all(color: T.accentLine),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 13),
                   child: TextField(
@@ -607,7 +607,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
                                   SizedBox(
                                       width: 22,
                                       height: 22,
-                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFFFF8F63))),
+                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: T.warmMid)),
                                   SizedBox(height: 10),
                                   Text('주변 장소를 불러오는 중이에요',
                                       style: TextStyle(fontSize: 13, color: T.textMuted)),
@@ -684,7 +684,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
                                     const Icon(
                                       Icons.near_me_outlined,
                                       size: 17,
-                                      color: Color(0xFFCABFDC),
+                                      color: T.textFaint,
                                     ),
                                   ],
                                 ),
@@ -708,14 +708,14 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
     VoidCallback onTap, {
     Color? color,
   }) {
-    final c = color ?? const Color(0xFFFF8F63);
+    final c = color ?? T.warmMid;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(right: 7),
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
         decoration: BoxDecoration(
-          color: on ? c : const Color(0xFFF1ECF7),
+          color: on ? c : T.surface,
           borderRadius: BorderRadius.circular(11),
         ),
         child: Text(
@@ -749,7 +749,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
     final leave = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: const Color(0xFFFCFAFF),
+        backgroundColor: T.surfaceBright,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           '산책을 그만둘까요?',
@@ -770,7 +770,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
               '계속 걷기',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Color(0xFFE07A4E),
+                color: T.warmText,
               ),
             ),
           ),
@@ -1050,7 +1050,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
                         );
                       }
                     },
-                    color: _follow ? const Color(0xFFE07A4E) : T.textSecondary,
+                    color: _follow ? T.warmText : T.textSecondary,
                   ),
                 ],
               ),
@@ -1217,7 +1217,7 @@ class WalkLocationDeniedScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final (primaryLabel, primaryAction) = _primary;
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -1240,7 +1240,7 @@ class WalkLocationDeniedScreen extends StatelessWidget {
                 child: const Icon(
                   Icons.location_off_rounded,
                   size: 38,
-                  color: Color(0xFFE07A4E),
+                  color: T.warmText,
                 ),
               ),
               const SizedBox(height: 20),
@@ -1260,7 +1260,7 @@ class WalkLocationDeniedScreen extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 13.5,
                   height: 1.55,
-                  color: Color(0xBD463C64),
+                  color: T.textSecondary,
                 ),
               ),
               const Spacer(),
@@ -1300,7 +1300,7 @@ class WalkLocationDeniedScreen extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment(-0.8, -1),
           end: Alignment(0.8, 1),
-          colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+          colors: [T.warmStart, T.warmEnd],
         ),
         borderRadius: BorderRadius.circular(15),
       ),

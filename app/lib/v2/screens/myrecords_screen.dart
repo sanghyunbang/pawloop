@@ -25,7 +25,7 @@ class MyRecordsScreen extends StatelessWidget {
   static const _warm = LinearGradient(
     begin: Alignment(-0.7, -1),
     end: Alignment(0.7, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   @override
@@ -46,7 +46,7 @@ class MyRecordsScreen extends StatelessWidget {
     final totalMinutes = data.stats.allTimeMinutes;
 
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Column(children: [
@@ -151,10 +151,10 @@ class MyRecordsScreen extends StatelessWidget {
           child: Column(children: [
             Text(v, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: T.textPrimary)),
             const SizedBox(height: 3),
-            Text(label, style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+            Text(label, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
           ]),
         );
-    Widget div() => Container(width: 1, height: 34, color: const Color(0x1F8C7BFF));
+    Widget div() => Container(width: 1, height: 34, color: T.line);
 
     return GlassCard(
       radius: 24,
@@ -198,7 +198,7 @@ class MyRecordsScreen extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: _warm,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: const [BoxShadow(color: Color(0x66FF7E8A), blurRadius: 24, offset: Offset(0, 12))],
+          boxShadow: const [BoxShadow(color: T.warmGlow, blurRadius: 24, offset: Offset(0, 12))],
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: const [
           Icon(Icons.add_location_alt_outlined, size: 21, color: Colors.white),
@@ -315,7 +315,7 @@ class MyRecordsScreen extends StatelessWidget {
       builder: (sheetCtx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
-            leading: const Icon(Icons.ios_share_rounded, color: Color(0xFFE07A4E)),
+            leading: const Icon(Icons.ios_share_rounded, color: T.warmText),
             title: const Text('공유하기'),
             subtitle: const Text('숫자만 담긴 카드 한 장',
                 style: TextStyle(fontSize: 11.5, color: T.textMuted)),
@@ -364,7 +364,7 @@ class MyRecordsScreen extends StatelessWidget {
     try {
       await (share ?? WalkShare.share)(WalkShareCard(
         dogName: dog,
-        accent: const Color(0xFFFF8F63),
+        accent: T.warmMid,
         dateLabel: '${w.date} ${_timeOf(w.startedAt)} 출발',
         distanceLabel: '${w.km.toStringAsFixed(1)}km',
         timeLabel: '${w.minutes}분',
@@ -428,7 +428,7 @@ class MyRecordsScreen extends StatelessWidget {
                     ),
                     child: const Text('전송 대기',
                         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                            color: Color(0xFFE07A4E))),
+                            color: T.warmText)),
                   ),
                 if (w.deletable) ...[
                   const SizedBox(width: 4),
@@ -444,23 +444,23 @@ class MyRecordsScreen extends StatelessWidget {
               ]),
               const SizedBox(height: 3),
               Row(children: [
-                const Icon(Icons.calendar_today, size: 12.5, color: Color(0xA8463C64)),
+                const Icon(Icons.calendar_today, size: 12.5, color: T.textMuted),
                 const SizedBox(width: 4),
-                Text(w.date, style: const TextStyle(fontSize: 12, color: Color(0xA8463C64))),
+                Text(w.date, style: const TextStyle(fontSize: 12, color: T.textMuted)),
               ]),
               // 함께 나간 아이들 (#343). **한 마리면 안 적는다** — 한 마리인 사람에게
               // 매 카드마다 자기 아이 이름을 한 번 더 보여 줄 이유가 없다.
               if (_companions(w) != null) ...[
                 const SizedBox(height: 3),
                 Row(children: [
-                  const Icon(Icons.pets_rounded, size: 12.5, color: Color(0xFFE07A4E)),
+                  const Icon(Icons.pets_rounded, size: 12.5, color: T.warmText),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(_companions(w)!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                            fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
                   ),
                 ]),
               ],
@@ -550,10 +550,10 @@ class MyRecordsScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(11),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 13.5, color: const Color(0xFFE07A4E)),
+          Icon(icon, size: 13.5, color: T.warmText),
           const SizedBox(width: 5),
           Text(label,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
         ]),
       );
 }

@@ -115,7 +115,7 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
   Widget build(BuildContext context) {
     final catalog = _catalog;
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Column(children: [
@@ -178,11 +178,11 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
           behavior: HitTestBehavior.opaque,
           child: Row(children: [
             Icon(_locating ? Icons.hourglass_empty : Icons.my_location_rounded,
-                size: 17, color: const Color(0xFFE07A4E)),
+                size: 17, color: T.warmText),
             const SizedBox(width: 7),
             Text(_locating ? '위치를 찾는 중…' : '현재 위치로 찾기',
                 style: const TextStyle(
-                    fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                    fontSize: 13.5, fontWeight: FontWeight.w700, color: T.warmText)),
             const SizedBox(width: 8),
             const Expanded(
               child: Text('좌표는 기기 밖으로 안 나가요',
@@ -210,7 +210,7 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
   List<Widget> _section(String title, List<Neighborhood> items) => [
         Text(title,
             style: const TextStyle(
-                fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0x9E463C64))),
+                fontSize: 12.5, fontWeight: FontWeight.w800, color: T.textMuted)),
         const SizedBox(height: 8),
         if (items.isEmpty)
           const Padding(
@@ -258,10 +258,10 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
           onTap: onBack,
           behavior: HitTestBehavior.opaque,
           child: Row(children: [
-            const Icon(Icons.chevron_left, size: 16, color: Color(0xFFE07A4E)),
+            const Icon(Icons.chevron_left, size: 16, color: T.warmText),
             Text(text,
                 style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                    fontSize: 12.5, fontWeight: FontWeight.w700, color: T.warmText)),
           ]),
         ),
       );
@@ -278,7 +278,7 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xC9FFFFFF),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0x1F8C7BFF)),
+                  border: Border.all(color: T.line),
                 ),
                 child: Text(name,
                     style: const TextStyle(
@@ -308,7 +308,7 @@ class _NeighborhoodPickerScreenState extends State<NeighborhoodPickerScreen> {
                 Text(n.sido, style: const TextStyle(fontSize: 12, color: T.textMuted)),
               ]),
             ),
-            const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+            const Icon(Icons.chevron_right, size: 18, color: T.textFaint),
           ]),
         ),
       );

@@ -116,7 +116,7 @@ class _NeighborhoodTileState extends State<NeighborhoodTile> {
           behavior: HitTestBehavior.opaque,
           child: const Padding(
             padding: EdgeInsets.only(left: 4),
-            child: Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+            child: Icon(Icons.chevron_right, size: 18, color: T.textFaint),
           ),
         ),
       ]),

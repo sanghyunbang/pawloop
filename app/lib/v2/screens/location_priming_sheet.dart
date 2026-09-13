@@ -88,7 +88,7 @@ class LocationPrimingSheet extends StatelessWidget {
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1),
     end: Alignment(0.8, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   @override
@@ -98,7 +98,7 @@ class LocationPrimingSheet extends StatelessWidget {
 
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFAFCFAFF),
+        color: T.surfaceBright,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(24, 12, 24, 20 + MediaQuery.of(context).padding.bottom),
@@ -174,7 +174,7 @@ class LocationPrimingSheet extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xCCFFFFFF),
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: const Color(0x1F8C7BFF)),
+            border: Border.all(color: T.line),
           ),
           child: Text(label,
               textAlign: TextAlign.center,
@@ -193,7 +193,7 @@ class _Line extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, size: 18, color: const Color(0xFFE07A4E)),
+          Icon(icon, size: 18, color: T.warmText),
           const SizedBox(width: 10),
           Expanded(
             child: Text(text, style: const TextStyle(fontSize: 13.5, height: 1.45, color: T.textSecondary)),

@@ -84,7 +84,7 @@ class _CreateScreenState extends State<CreateScreen> {
 
   static const _warm = LinearGradient(
     begin: Alignment(-0.7, -1), end: Alignment(0.7, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   @override
@@ -273,7 +273,7 @@ class _CreateScreenState extends State<CreateScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Column(children: [
@@ -320,7 +320,7 @@ class _CreateScreenState extends State<CreateScreen> {
             onTap: _save,
             child: const Padding(
               padding: EdgeInsets.all(6),
-              child: Text('저장', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFFFF7E8A))),
+              child: Text('저장', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.warmEnd)),
             ),
           ),
         ]),
@@ -345,7 +345,7 @@ class _CreateScreenState extends State<CreateScreen> {
           decoration: _fieldDeco,
           padding: const EdgeInsets.symmetric(horizontal: 15),
           child: Row(children: [
-            const Icon(Icons.place, size: 18, color: Color(0xFFFF9E7D)),
+            const Icon(Icons.place, size: 18, color: T.sigStart),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
@@ -370,7 +370,7 @@ class _CreateScreenState extends State<CreateScreen> {
             decoration: BoxDecoration(
               color: const Color(0xCCFFFFFF),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0x1F8C7BFF)),
+              border: Border.all(color: T.line),
             ),
             child: Column(
               children: [
@@ -410,7 +410,7 @@ class _CreateScreenState extends State<CreateScreen> {
           decoration: _fieldDeco,
           padding: const EdgeInsets.fromLTRB(15, 13, 12, 13),
           child: Row(children: [
-            Text(_dateLabel, style: const TextStyle(fontSize: 14, color: Color(0xFF3A3550))),
+            Text(_dateLabel, style: const TextStyle(fontSize: 14, color: T.textPrimary)),
             const Spacer(),
             const Icon(Icons.calendar_month, size: 18, color: T.textMuted),
           ]),
@@ -533,7 +533,7 @@ class _CreateScreenState extends State<CreateScreen> {
         Container(
           width: 34, height: 34, alignment: Alignment.center,
           decoration: BoxDecoration(color: const Color(0x22FF9E7D), borderRadius: BorderRadius.circular(11)),
-          child: Icon(icon, size: 18, color: const Color(0xFFFF8F63)),
+          child: Icon(icon, size: 18, color: T.warmMid),
         ),
         const SizedBox(width: 10),
         _label(label),
@@ -543,7 +543,7 @@ class _CreateScreenState extends State<CreateScreen> {
         SizedBox(
           width: 78,
           child: Text(value, textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF3A3550))),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: T.textPrimary)),
         ),
         if (!readOnly) btn(Icons.add, onPlus),
       ]),
@@ -590,7 +590,7 @@ class _CreateScreenState extends State<CreateScreen> {
         decoration: BoxDecoration(
           gradient: _warm,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: const [BoxShadow(color: Color(0x66FF7E8A), blurRadius: 30, offset: Offset(0, 14))],
+          boxShadow: const [BoxShadow(color: T.warmGlow, blurRadius: 30, offset: Offset(0, 14))],
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: const [
           Icon(Icons.pets, size: 21, color: Colors.white),

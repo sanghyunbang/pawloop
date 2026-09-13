@@ -15,7 +15,7 @@
 | 시그니처 그라데이션 | 따뜻한 계열 `#FFA96B → #FF7E8A`(warm), 프로필 계열 `#FF9E7D → #D89BFF`(sig) |
 | 아이콘 | Fluent Emoji 3D PNG(강아지 아바타 등) + Material `Icons.*` |
 | 폰트 | Pretendard |
-| 디자인 토큰 | `T`(app_tokens.dart) — textPrimary `#2C2740` / textSecondary `#574F6E` / textMuted `#9B93B3`, lilacTop, radius, cardShadow |
+| 디자인 토큰 | `T`(app_tokens.dart) — textPrimary `#2C2740` / textSecondary `#574F6E` / textMuted `#9B93B3`, bgTop, radius, cardShadow |
 | 상태관리 | `ValueNotifier` + `ValueListenableBuilder`(경량). 전역: `kMyDog`(반려견), `RootTab.index`(탭) |
 
 ### 네비게이션 셸 (`main_shell.dart` · `MainShell`)

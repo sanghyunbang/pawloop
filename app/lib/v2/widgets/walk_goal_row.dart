@@ -115,7 +115,7 @@ class _WalkGoalRowState extends State<WalkGoalRow> {
       behavior: HitTestBehavior.opaque,
       child: Column(children: [
         const SizedBox(height: 12),
-        Container(height: 1, color: const Color(0x148C7BFF)),
+        Container(height: 1, color: T.accentSoft),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(
@@ -123,7 +123,7 @@ class _WalkGoalRowState extends State<WalkGoalRow> {
               Row(children: [
                 const Text('이번 주 목표',
                     style: TextStyle(
-                        fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0x9E463C64))),
+                        fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textMuted)),
                 const SizedBox(width: 6),
                 Text(progress.label,
                     style: TextStyle(
@@ -138,9 +138,9 @@ class _WalkGoalRowState extends State<WalkGoalRow> {
                 child: LinearProgressIndicator(
                   value: progress.ratio,
                   minHeight: 7,
-                  backgroundColor: const Color(0x148C7BFF),
+                  backgroundColor: T.accentSoft,
                   valueColor: AlwaysStoppedAnimation(
-                    progress.met ? const Color(0xFF4CAF88) : const Color(0xFFFF8F63),
+                    progress.met ? const Color(0xFF4CAF88) : T.warmMid,
                   ),
                 ),
               ),
@@ -157,10 +157,10 @@ class _WalkGoalRowState extends State<WalkGoalRow> {
               ),
               child: Text('$streak일째',
                   style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFE07A4E))),
+                      fontSize: 12, fontWeight: FontWeight.w800, color: T.warmText)),
             )
           else
-            const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBB3CC)),
+            const Icon(Icons.chevron_right, size: 18, color: T.textFaint),
         ]),
       ]),
     );
@@ -270,7 +270,7 @@ class _GoalSheetBodyState extends State<_GoalSheetBody> {
             child: Text(
               '제안값으로 — 주 ${widget.recommended.daysPerWeek}일 · ${widget.recommended.minutesPerWeek}분',
               style: const TextStyle(
-                  fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E)),
+                  fontSize: 12.5, fontWeight: FontWeight.w700, color: T.warmText),
             ),
           ),
           const SizedBox(height: 18),
@@ -282,7 +282,7 @@ class _GoalSheetBodyState extends State<_GoalSheetBody> {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+                  colors: [T.warmStart, T.warmEnd],
                 ),
                 borderRadius: BorderRadius.circular(15),
               ),

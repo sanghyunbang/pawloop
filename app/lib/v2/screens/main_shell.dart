@@ -5,8 +5,6 @@ import 'today_screen.dart';
 import 'explore_screen.dart';
 import 'feed_screen.dart';
 import 'chat_list_screen.dart';
-import 'schedule_screen.dart';
-import '../data/local_notification_sink.dart';
 import 'start_walk.dart';
 import 'walk_tracking_screen.dart';
 import '../data/walk_in_progress.dart';
@@ -26,7 +24,7 @@ class RootTab {
   }
 }
 
-/// 메인 네비게이션 셸 — 홈/지도/일정/커뮤니티/채팅 탭 + 가운데 기록(+) 버튼.
+/// 메인 네비게이션 셸 — 홈 · 지도 · [산책] · 커뮤니티 · 채팅. 일정은 홈에서 연다(#446).
 class MainShell extends StatelessWidget {
   /// 끊긴 산책 스냅숏 저장소. 테스트가 갈아 끼운다(#335).
   final WalkInProgressStore resumeStore;
@@ -39,7 +37,7 @@ class MainShell extends StatelessWidget {
     // 부르면 한 곳을 빠뜨리는 날이 오고, 그 화면만 영원히 빈 목록을 본다.
     return PetLoader(
       child: Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: ValueListenableBuilder<int>(
         valueListenable: RootTab.index,
         builder: (_, i, __) {
@@ -52,14 +50,9 @@ class MainShell extends StatelessWidget {
               );
               break;
             case 2:
-              // 알림 싱크는 여기서 물려 준다 — 화면이 스스로 만들면 위젯 테스트가 그것을
-              // 갈아끼울 수 없고, 진짜는 테스트 바인딩에 채널이 없어 던진다(#420).
-              screen = ScheduleScreen(reminderSink: LocalNotificationSink());
-              break;
-            case 3:
               screen = const FeedScreen();
               break;
-            case 4:
+            case 3:
               screen = const ChatListScreen();
               break;
             default:
@@ -87,116 +80,125 @@ class MainShell extends StatelessWidget {
 class _ShellNav extends StatelessWidget {
   const _ShellNav();
 
+  /// 채도를 1.5배 올리는 색 행렬. iOS 의 재질이 뒤 색을 살짝 진하게 비추는 것을 흉내 낸다 —
+  /// 블러만 하면 뒤가 뿌옇게 회색이 되고, 채도를 올려야 "유리 너머" 로 읽힌다(#446).
+  static const List<double> _saturate = <double>[
+    1.3935, -0.3575, -0.0360, 0, 0,
+    -0.1065, 1.1425, -0.0360, 0, 0,
+    -0.1065, -0.3575, 1.4640, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
+
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFF8E7BFF);
     return ValueListenableBuilder<int>(
       valueListenable: RootTab.index,
       builder: (_, idx, __) {
-        Widget item(IconData icon, String label, int i) => Expanded(
+        // 탭 라벨의 배율만 1.3 에서 멈춘다 — 이슈 #396.
+        //
+        // 다섯 칸이 한 알약을 나눠 쓰므로 360dp 에서 한 칸이 60dp 안팎이다. 2.0배의
+        // "커뮤니티" 는 거기 안 들어가 두 줄로 접히고 알약을 넘긴다. 자르면 "커뮤…" 가
+        // 되어 무엇을 누르는지 알 수 없다. 본문은 배율을 그대로 따른다 — 여기만 멈춘다.
+        // 화면을 읽는 글자와 길을 찾는 표지판은 다르고, Material 의 NavigationBar 도
+        // 같은 이유로 라벨 배율을 제한한다.
+        Widget label(String text, bool on) => MediaQuery.withClampedTextScaling(
+              maxScaleFactor: 1.3,
+              child: Text(text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: on ? FontWeight.w800 : FontWeight.w500,
+                      color: on ? T.accent : T.textMuted)),
+            );
+
+        Widget item(IconData icon, String text, int i) => Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => RootTab.index.value = i,
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(icon, size: 23, color: idx == i ? accent : T.textMuted),
+                  Icon(icon, size: 23, color: idx == i ? T.accent : T.textMuted),
                   const SizedBox(height: 3),
-                  // 탭 라벨의 배율만 1.3 에서 멈춘다 — 이슈 #396.
-                  //
-                  // 네 칸이 한 알약을 나눠 쓰므로 360dp 에서 한 칸이 59dp 였다. 2.0배의
-                  // "커뮤니티" 는 거기 안 들어가 두 줄로 접히고, 알약 높이 66 을 24px
-                  // 넘겼다. 자르면 "커뮤…" 가 되어 무엇을 누르는지 알 수 없다.
-                  //
-                  // #419 가 다섯째("일정")를 더하면서 한 칸이 더 좁아졌다 — 그래서 이
-                  // 멈춤이 더 중요해졌지 덜해지지 않았다. 새 라벨을 두 글자로 고른 것도
-                  // 같은 이유다.
-                  //
-                  // 본문은 배율을 그대로 따른다 — 여기만 멈춘다. 화면을 읽는 글자와
-                  // 길을 찾는 표지판은 다르고, Material 의 NavigationBar 도 같은 이유로
-                  // 라벨 배율을 제한한다.
-                  MediaQuery.withClampedTextScaling(
-                    maxScaleFactor: 1.3,
-                    child: Text(label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: idx == i ? FontWeight.w800 : FontWeight.w500,
-                            color: idx == i ? accent : T.textMuted)),
-                  ),
+                  label(text, idx == i),
                 ]),
               ),
             );
+
+        // 산책은 **탭이 아니다** — 누르면 화면을 미는 동작이다(HIG: "탭 바는 이동용").
+        // 그래서 탭 번호가 없고, 다른 칸과 **같은 폭**의 가운데 칸을 쓴다. 예전처럼 바 위로
+        // 솟게 두면 하나만 튀어나와 좌우가 안 맞아 보였다(#446, 사장님이 짚었다).
+        Widget walkCell() => Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                // today_screen 의 "산책 시작" 과 같은 문을 지난다.
+                onTap: () => startWalk(context),
+                child: Semantics(
+                  button: true,
+                  label: '산책 시작',
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: T.sig,
+                        boxShadow: [
+                          BoxShadow(color: T.sigGlow, blurRadius: 14, offset: Offset(0, 5)),
+                        ],
+                      ),
+                      child: const Icon(Icons.directions_walk_rounded,
+                          color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(height: 3),
+                    MediaQuery.withClampedTextScaling(
+                      maxScaleFactor: 1.3,
+                      child: const Text('산책',
+                          maxLines: 1,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: T.textSecondary)),
+                    ),
+                  ]),
+                ),
+              ),
+            );
+
         final bottom = MediaQuery.of(context).padding.bottom;
-        return SizedBox(
-          height: bottom + 100,
-          child: Stack(clipBehavior: Clip.none, children: [
-            // 떠 있는 글래스 알약
-            Positioned(
-              left: 16, right: 16, bottom: bottom + 8,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(26),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                  child: Container(
-                    // 못 박지 않는다 — 1.3배까지 라벨이 자라면 알약도 함께 자란다(#396).
-                    constraints: const BoxConstraints(minHeight: 66),
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    decoration: BoxDecoration(
-                      color: const Color(0xAAFFFFFF),
-                      borderRadius: BorderRadius.circular(26),
-                      border: Border.all(color: const Color(0xC7FFFFFF)),
-                      boxShadow: const [BoxShadow(color: Color(0x2E5A4690), blurRadius: 30, offset: Offset(0, 12))],
-                    ),
-                    // 왼쪽 셋 · 오른쪽 둘 — 기록 버튼 오른쪽에 셋을 두면 왼쪽이 둘이라
-                    // 알약의 무게가 한쪽으로 쏠린다(#419).
-                    //
-                    // **양쪽을 같은 폭의 Expanded 로 감싸는 것이 핵심이다.** 다섯 칸을 한
-                    // Row 에 늘어놓고 가운데에 56 을 끼우면, 왼쪽이 셋이라 그 빈칸이 화면
-                    // 중앙보다 오른쪽으로 밀린다. 그런데 기록 버튼은 화면 **중앙**에 절대
-                    // 배치라, 밀린 만큼 버튼이 세 번째 칸("일정") 위를 덮는다 — 에뮬레이터
-                    // 화면에서 실제로 그러고 있었다(#420에서 눈으로 잡았다). 넘침이 아니라
-                    // 겹침이라 RenderFlex 예외도 안 난다.
-                    child: Row(children: [
-                      Expanded(
-                        child: Row(children: [
-                          item(Icons.home_rounded, '홈', 0),
-                          item(Icons.map_outlined, '지도', 1),
-                          item(Icons.event_note_outlined, '일정', 2),
-                        ]),
-                      ),
-                      const SizedBox(width: 56),
-                      Expanded(
-                        child: Row(children: [
-                          item(Icons.forum_outlined, '커뮤니티', 3),
-                          item(Icons.chat_bubble_outline, '채팅', 4),
-                        ]),
-                      ),
-                    ]),
-                  ),
+        // 떠 있는 유리 알약 — 유리는 이 이동 층에만 쓴다. 카드에는 안 쓴다(HIG "재질").
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, bottom + 8),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: BackdropFilter(
+              filter: ImageFilter.compose(
+                outer: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                inner: const ColorFilter.matrix(_saturate),
+              ),
+              child: Container(
+                // 못 박지 않는다 — 1.3배까지 라벨이 자라면 알약도 함께 자란다(#396).
+                constraints: const BoxConstraints(minHeight: 66),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+                decoration: BoxDecoration(
+                  // 흰색 55% — 예전 67% 는 거의 불투명했다. 뒤가 비쳐야 유리다.
+                  color: const Color(0x8CFFFFFF),
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: const Color(0xB3FFFFFF)),
+                  boxShadow: const [
+                    BoxShadow(color: T.barShadow, blurRadius: 30, offset: Offset(0, 12)),
+                  ],
                 ),
+                // 다섯 칸 전부 Expanded — 같은 폭이라 좌우 2+2 가 대칭이다.
+                child: Row(children: [
+                  item(Icons.home_rounded, '홈', 0),
+                  item(Icons.map_outlined, '지도', 1),
+                  walkCell(),
+                  item(Icons.forum_outlined, '커뮤니티', 2),
+                  item(Icons.chat_bubble_outline, '채팅', 3),
+                ]),
               ),
             ),
-            // 솟은 가운데 기록(+) 버튼
-            Positioned(
-              left: 0, right: 0, bottom: bottom + 38,
-              child: Center(
-                child: GestureDetector(
-                  // today_screen 의 "산책 시작" 과 같은 문을 지난다.
-                  onTap: () => startWalk(context),
-                  child: Container(
-                    width: 58, height: 58,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFF9E7D), Color(0xFFD89BFF)]),
-                      border: Border.all(color: const Color(0xA6FFFFFF), width: 3),
-                      boxShadow: const [BoxShadow(color: Color(0x80D89BFF), blurRadius: 22, offset: Offset(0, 10))],
-                    ),
-                    child: const Icon(Icons.directions_walk_rounded, color: Colors.white, size: 26),
-                  ),
-                ),
-              ),
-            ),
-          ]),
+          ),
         );
       },
     );

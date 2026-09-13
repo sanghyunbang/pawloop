@@ -71,7 +71,7 @@ class WalkFinishSheet extends StatefulWidget {
     required this.warm,
     this.renderer = RouteImage.renderPng,
     this.dogName,
-    this.dogColor = const Color(0xFFFF8F63),
+    this.dogColor = T.warmMid,
     this.placeName,
     this.shareCard = WalkShare.share,
   });
@@ -159,7 +159,7 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFF6F1FF),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -247,13 +247,13 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
     return TextButton.icon(
       onPressed: _sharing ? null : () => _share(dog),
       icon: Icon(Icons.ios_share_rounded,
-          size: 18, color: _sharing ? T.textMuted : const Color(0xFFE07A4E)),
+          size: 18, color: _sharing ? T.textMuted : T.warmText),
       label: Text(
         _sharing ? '만드는 중…' : '공유하기',
         style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w800,
-          color: _sharing ? T.textMuted : const Color(0xFFE07A4E),
+          color: _sharing ? T.textMuted : T.warmText,
         ),
       ),
     );
@@ -284,7 +284,7 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
         icon: Icon(
           _saved ? Icons.check_circle_rounded : Icons.photo_library_outlined,
           size: 18,
-          color: _saved ? const Color(0xFF4CAF88) : const Color(0xFFE07A4E),
+          color: _saved ? const Color(0xFF4CAF88) : T.warmText,
         ),
         label: Text(
           _saved
@@ -295,7 +295,7 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w800,
-            color: _saved ? const Color(0xFF4CAF88) : const Color(0xFFE07A4E),
+            color: _saved ? const Color(0xFF4CAF88) : T.warmText,
           ),
         ),
       );

@@ -43,7 +43,9 @@
 | `T.sigEnd` | `#D89BFF` (라일락) |
 | `T.sig` | `LinearGradient(begin: (-0.7,-1) → end: (0.7,1))` |
 
-산책 FAB, 아바타 하이라이트 등에 사용. 홈 화면 CTA(`산책 시작`)는 더 따뜻한 변형 `#FFA96B → #FF7E8A`(140deg 근사)를 쓴다 — 즉 SIG 계열 안에서 화면별 강조 톤이 존재한다.
+산책 FAB, 아바타 하이라이트 등에 사용. 홈 화면 CTA(`산책 시작`)는 더 따뜻한 변형 `T.warm`(`#FFA96B → #FF7E8A`, 140deg 근사)을 쓴다 — 즉 SIG 계열 안에서 화면별 강조 톤이 존재한다. 주황 글자·테두리는 `T.warmText`(`#E07A4E`) · `T.warmMid`(`#FF8F63`)다.
+
+> 팔레트 자체는 #447 에서 다시 고르는 중이다(핑크·라일락 위주라 부담스럽다는 사장님 말씀). 후보와 레퍼런스는 그 이슈에.
 
 ### 2.3 글래스 카드 표면
 
@@ -67,7 +69,7 @@
 | 코랄 | `#FBE9E4` | `#F4DBDD` | `#FFB892` | `#FF9FBE` | `#FFD79A` |
 | 모노 | `#EEEFF4` | `#E2E2EC` | `#C7CCDC` | `#D5CBE4` | `#CDE0D9` |
 
-기본 라일락 팔레트 토큰: `T.lilacTop #F3E8F9` / `T.lilacBottom #E4D6F0`, 오라 블롭 `T.auroraPeach #FFC79E` / `T.auroraLilac #D4B0FF` / `T.auroraMint #9EE2C4`.
+기본 라일락 팔레트 토큰: `T.bgTop #F3E8F9` / `T.bgBottom #E4D6F0`, 오라 블롭 `T.auroraPeach #FFC79E` / `T.auroraLilac #D4B0FF` / `T.auroraMint #9EE2C4`.
 
 ### 2.5 프로필 아바타 테두리 (`kAvatarBorders`)
 
@@ -165,14 +167,16 @@ GlassCard(
 - 테두리 두께: size≥60 → 3.5, 그 외 2.5. 그림자 = 테두리색 α0.4, blur 12, y+4.
 - `size`(기본 38), `tappable`(기본 true → 탭 시 `MeScreen` 푸시).
 
-### 5.4 플로팅 바텀 네비 + 산책 FAB (`screens/main_shell.dart`)
+### 5.4 플로팅 바텀 네비 (`screens/main_shell.dart`) — #446
 
 `MainShell`이 본문 위에 `_ShellNav`를 오버레이(배경 끊김 없이 항상 표시).
 
-- **글래스 알약**: `left/right 16`, 높이 66, radius 26, 배경 `0xAAFFFFFF`, 블러 22. 4개 탭 + 가운데 56px 공백.
-  - 탭: 홈(`home_rounded`) / 지도(`map_outlined`) / [FAB 자리] / 커뮤니티(`forum_outlined`) / 채팅(`chat_bubble_outline`).
-  - 활성 색 `accent #8E7BFF`, 비활성 `T.textMuted`. 활성 라벨 w800, 비활성 w500.
-- **솟은 산책 FAB**: 58×58 원형, SIG 그라데이션 `#FF9E7D → #D89BFF`, 흰 테두리 3px, 라일락 글로우 그림자. `edit` 아이콘. 탭 시 `WalkTrackingScreen` 푸시.
+- **유리 알약**: `left/right 16`, 최소 높이 66, radius 26. 배경 흰색 55%(`0x8CFFFFFF`) + 블러 24 + **채도 1.5배**(`ColorFilter.matrix`) — 뒤가 비치되 글자는 읽힌다. HIG 대로 유리는 이 이동 층에만 쓰고 카드에는 안 쓴다.
+- **다섯 칸 전부 같은 폭**(`Expanded`): 홈(`home_rounded`) / 지도(`map_outlined`) / **산책** / 커뮤니티(`forum_outlined`) / 채팅(`chat_bubble_outline`). 좌우 2+2 라 대칭이다.
+  - 탭 번호: 홈 0 · 지도 1 · 커뮤니티 2 · 채팅 3. **산책은 탭이 아니다** — 번호가 없고 누르면 `startWalk` 로 화면을 민다(HIG "탭 바는 이동용").
+  - 활성 색 `T.accent`, 비활성 `T.textMuted`. 활성 라벨 w800, 비활성 w500. 라벨 배율은 1.3 에서 멈춘다(#396).
+- **산책 칸**: 34×34 원형, `T.sig` 그라데이션, `T.sigGlow` 그림자, 흰 `directions_walk` 아이콘 + "산책" 라벨. **바 안에 든다** — 예전처럼 솟지 않는다(사장님: "가운데만 튀어나와 이상하다").
+- **일정은 홈에서 연다** — 홈 머리말의 날짜 줄과 "오늘 할 일" 줄이 `openSchedule` 로 `ScheduleScreen` 을 민다. 탭 다섯에 가운데 버튼까지 두면 좌우가 3:2 로 안 맞아서 #419 의 다섯째 탭을 되돌렸다.
 - 탭 상태는 전역 `RootTab.index`(+ `exploreView`)로 관리하며, 푸시된 화면에서도 `RootTab.go(...)`로 탭 전환 가능.
 
 ### 5.5 버튼
@@ -220,28 +224,51 @@ T.textSecondary // #574F6E
 T.textMuted     // #9B93B3
 T.textFaint     // #BBB3CC
 
-// 글래스 카드
-T.cardBg     // 0xC6FFFFFF (white ~0.78)
-T.cardBorder // 0x80FFFFFF
-T.radius     // 22
+// 글래스 카드 · 면 · 선
+T.cardBg        // 0xC6FFFFFF (white ~0.78)
+T.cardBorder    // 0x80FFFFFF
+T.radius        // 22
+T.surface       // #F1ECF7 — 목록 줄 · 입력칸 바탕
+T.surfaceBright // #FCFAFF
+T.line          // 0x1F8C7BFF — 입력칸 · 구분선
 
-// 라일락 베이스
-T.lilacTop    // #F3E8F9
-T.lilacBottom // #E4D6F0
+// 바탕 (기본 테마 kThemes[0] 과 같은 값)
+T.bgTop    // #F3E8F9
+T.bgBottom // #E4D6F0
 
-// 오라 블롭
+// 오라 블롭 · 히어로 글로우
 T.auroraPeach // #FFC79E
 T.auroraLilac // #D4B0FF
 T.auroraMint  // #9EE2C4
+T.glowStart   // #FFE7D2 — 아이 히어로 · 로고 뒤 둥근 빛
+T.glowEnd     // #FFD0C0
 
-// 시그니처 그라데이션
+// 강조색 — 활성 탭 · 선택 · 링크 · 머티리얼 primary
+T.accent     // #8E7BFF
+T.accentSoft // 0x148C7BFF
+T.accentLine // 0x338C7BFF
+
+// 시그니처 그라데이션 — 탭 바 산책 버튼 · 아바타 테두리
 T.sigStart // #FF9E7D
 T.sigEnd   // #D89BFF
 T.sig      // LinearGradient (-0.7,-1) → (0.7,1)
+T.sigGlow  // 0x4DD89BFF
+
+// 따뜻한 그라데이션 — 홈 CTA · 채움 버튼
+T.warmStart // #FFA96B
+T.warmEnd   // #FF7E8A
+T.warm      // LinearGradient (-0.8,-1) → (0.8,1)
+T.warmGlow  // 0x66FF7E8A
+T.warmText  // #E07A4E — "더보기" · 링크 · 선택된 칩 글자
+T.warmMid   // #FF8F63 — 선택된 칩 테두리 · 케어 색
+T.warmSoft  // 0x1AFF7E8A — 따뜻한 칩 바탕
 
 // 그림자
 T.cardShadow // #5A4682 α0.10, blur 26, y+10
+T.barShadow  // 0x2E5A4690 — 탭 바
 ```
+
+**인라인 색은 없다(#447).** 2026-09-13 까지 위 색이 화면마다 `Color(0x…)` 로 166곳 적혀 있었다(주황 글자만 75곳). 지금은 전부 토큰이고, 팔레트를 바꾸는 날은 `app_tokens.dart` 의 값만 바꾼다. 카테고리색·상태색(빨강 오류 · 초록 성공 · 앰버 주의)은 토큰이 아니라 그대로다.
 
 배경 테마(`AppThemeDef` / `kThemes`)·아바타 테두리(`kAvatarBorders`)·카테고리 색(`kPetCategories`)은 각각 `themes.dart` / `pet.dart`에 있으며, `T`와 함께 앱 전체 시각 SSOT를 이룬다.
 

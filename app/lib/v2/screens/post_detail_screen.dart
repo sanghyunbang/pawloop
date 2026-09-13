@@ -66,7 +66,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   static const _warm = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   /// 서버가 방금 이 요청을 게스트로 봤는가.
@@ -458,7 +458,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Widget build(BuildContext context) {
     final post = _post;
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           child: Column(
@@ -513,7 +513,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         const Icon(
                           Icons.forum_outlined,
                           size: 17,
-                          color: Color(0xFFFF8F63),
+                          color: T.warmMid,
                         ),
                         const SizedBox(width: 7),
                         Text(
@@ -757,7 +757,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 height: 1.6,
                 color: _folded(post.hiddenByBlock, _postKey)
                     ? T.textMuted
-                    : const Color(0xCC463C64),
+                    : T.textSecondary,
                 fontStyle: _folded(post.hiddenByBlock, _postKey)
                     ? FontStyle.italic
                     : FontStyle.normal,
@@ -790,14 +790,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.pets, size: 11, color: Color(0xFFE07A4E)),
+          const Icon(Icons.pets, size: 11, color: T.warmText),
           const SizedBox(width: 4),
           Text(
             board?.label ?? '기타',
             style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
-              color: Color(0xFFE07A4E),
+              color: T.warmText,
             ),
           ),
         ],
@@ -838,7 +838,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           color: on ? null : const Color(0xC9FFFFFF),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: on ? Colors.transparent : const Color(0x1F8C7BFF),
+            color: on ? Colors.transparent : T.line,
           ),
           boxShadow: on
               ? [
@@ -933,7 +933,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       height: 1.45,
                       color: _folded(comment.hiddenByBlock, comment.id)
                           ? T.textMuted
-                          : const Color(0xCC463C64),
+                          : T.textSecondary,
                       fontStyle: _folded(comment.hiddenByBlock, comment.id)
                           ? FontStyle.italic
                           : FontStyle.normal,
@@ -1001,7 +1001,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1ECF7),
+                color: T.surface,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: TextField(
@@ -1030,7 +1030,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: _sending ? null : _warm,
-                color: _sending ? const Color(0xFFC9C2D8) : null,
+                color: _sending ? T.textFaint : null,
               ),
               child: const Icon(Icons.send, color: Colors.white, size: 20),
             ),

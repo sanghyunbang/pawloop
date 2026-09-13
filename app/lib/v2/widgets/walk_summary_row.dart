@@ -59,7 +59,7 @@ class WalkSummaryRow extends StatelessWidget {
     this.gap = 3,
   });
 
-  static const Color labelColor = Color(0x9E463C64);
+  static const Color labelColor = T.textMuted;
 
   TextStyle _valueStyle(double size) =>
       TextStyle(fontSize: size, fontWeight: FontWeight.w800, color: T.textPrimary);

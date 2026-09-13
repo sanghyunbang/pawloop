@@ -32,6 +32,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import '../theme/app_tokens.dart';
 
 import '../domain/course_path.dart';
 import 'route_image.dart';
@@ -107,11 +108,11 @@ class WalkShareCardPainter extends CustomPainter {
 
   const WalkShareCardPainter(this.card);
 
-  static const _bgTop = Color(0xFFF6F1FF);
+  static const _bgTop = T.surface;
   static const _bgBottom = Color(0xFFFFF1EA);
   static const _grid = Color(0x14463C64);
-  static const _ink = Color(0xFF463C64);
-  static const _inkSoft = Color(0x99463C64);
+  static const _ink = T.textSecondary;
+  static const _inkSoft = T.textMuted;
   static const _routeGlow = Color(0x33FF7A59);
   static const _start = Color(0xFF4CAF88);
 

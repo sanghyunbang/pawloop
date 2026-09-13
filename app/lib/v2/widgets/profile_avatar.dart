@@ -1,5 +1,6 @@
 import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
+import '../theme/app_tokens.dart';
 import '../theme/themes.dart';
 import '../screens/me_screen.dart';
 
@@ -34,7 +35,7 @@ class ProfileAvatar extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFFFD9C2), Color(0xFFE9C9FF)],
+            colors: [T.glowStart, Color(0xFFE9C9FF)],
           ),
           border: Border.all(color: border, width: size >= 60 ? 3.5 : 2.5),
           boxShadow: [

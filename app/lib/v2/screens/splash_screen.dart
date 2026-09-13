@@ -14,7 +14,7 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: Center(
           child: Column(
@@ -27,7 +27,7 @@ class SplashScreen extends StatelessWidget {
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
-                    colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)],
+                    colors: [T.glowStart, T.glowEnd],
                   ),
                 ),
                 child: Image.asset('assets/emoji/dog.png', width: 60, height: 60),

@@ -13,6 +13,8 @@ import '../widgets/walk_safety_card.dart';
 import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
 import 'main_shell.dart';
+import 'schedule_screen.dart';
+import '../data/local_notification_sink.dart';
 import 'start_walk.dart';
 import 'family_screen.dart';
 import 'insight_screen.dart';
@@ -23,7 +25,7 @@ class TodayScreen extends StatelessWidget {
 
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1), end: Alignment(0.8, 1),
-    colors: [Color(0xFFFFA96B), Color(0xFFFF7E8A)],
+    colors: [T.warmStart, T.warmEnd],
   );
 
   String get _dateLabel {
@@ -35,7 +37,7 @@ class TodayScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: T.lilacTop,
+      backgroundColor: T.bgTop,
       body: AuroraBackground(
         child: SafeArea(
           bottom: false,
@@ -49,8 +51,25 @@ class TodayScreen extends StatelessWidget {
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(_dateLabel,
-                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: 0.3, color: Color(0xBD463C69))),
+                        // 날짜 줄이 달력의 문이다(#446). 일정 탭이 메뉴바에서 빠지면서 — 탭 다섯에
+                        // 가운데 산책까지 두면 좌우가 3:2 로 안 맞았다 — 홈이 그 자리를 맡는다.
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => openSchedule(context),
+                          child: Semantics(
+                            button: true,
+                            label: '일정표 열기',
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              // Flexible 이 없으면 2.0배 글자에서 날짜가 Row 를 넘친다(셸 테스트가 잡았다).
+                              Flexible(
+                                child: Text(_dateLabel,
+                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: 0.3, color: T.textSecondary)),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.event_note_outlined, size: 15, color: T.textSecondary),
+                            ]),
+                          ),
+                        ),
                         const SizedBox(height: 6),
                         // 아이가 없으면 이름을 지어내지 않는다. 예전에는 '보리' 가
                         // 하드코딩돼 있어서 등록도 안 한 사람에게 "보리랑 산책 갈까요?"
@@ -77,7 +96,7 @@ class TodayScreen extends StatelessWidget {
                                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: T.textPrimary)),
                               const SizedBox(height: 6),
                               const Text('등록하면 산책이 기록되기 시작해요',
-                                  style: TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+                                  style: TextStyle(fontSize: 13.5, color: T.textSecondary)),
                               const SizedBox(height: 10),
                               TextButton(
                                 onPressed: () => showPetRegistrationSheet(context),
@@ -87,7 +106,7 @@ class TodayScreen extends StatelessWidget {
                               Text(dog.name, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: T.textPrimary)),
                               const SizedBox(height: 4),
                               Text(dog.subtitle,
-                                  style: const TextStyle(fontSize: 13.5, color: Color(0xBD463C64))),
+                                  style: const TextStyle(fontSize: 13.5, color: T.textSecondary)),
                               if (kMyPets.value.length > 1) ...[
                                 const SizedBox(height: 12),
                                 _petSwitcher(),
@@ -117,7 +136,7 @@ class TodayScreen extends StatelessWidget {
                   // 오늘 할 일 한 줄 — 케어 카드 **아래**다(#420). 케어는 "이미 한 것",
                   // 이 줄은 "앞으로 할 것" 이라 시간 순서가 그렇다. 없으면 줄 자체가 없다.
                   TodayScheduleLine(
-                    onOpen: () => RootTab.index.value = 2,
+                    onOpen: () => openSchedule(context),
                   ),
                   const SizedBox(height: 12),
                   _ctas(context),
@@ -178,10 +197,10 @@ class TodayScreen extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: i == sel ? const Color(0xFFFF8F63).withValues(alpha: 0.16) : const Color(0x80FFFFFF),
+              color: i == sel ? T.warmMid.withValues(alpha: 0.16) : const Color(0x80FFFFFF),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: i == sel ? const Color(0xFFFF8F63) : const Color(0x66FFFFFF),
+                color: i == sel ? T.warmMid : const Color(0x66FFFFFF),
                 width: i == sel ? 1.6 : 1,
               ),
             ),
@@ -192,7 +211,7 @@ class TodayScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: i == sel ? FontWeight.w800 : FontWeight.w600,
-                    color: i == sel ? const Color(0xFFE07A4E) : T.textSecondary,
+                    color: i == sel ? T.warmText : T.textSecondary,
                   )),
             ]),
           ),
@@ -209,8 +228,8 @@ class TodayScreen extends StatelessWidget {
       alignment: Alignment.center,
       decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [Color(0xFFFFE7D2), Color(0xFFFFD0C0)]),
-        boxShadow: [BoxShadow(color: Color(0x55FF9E7D), blurRadius: 34, offset: Offset(0, 16))],
+        gradient: RadialGradient(colors: [T.glowStart, T.glowEnd]),
+        boxShadow: [BoxShadow(color: T.sigGlow, blurRadius: 34, offset: Offset(0, 16))],
       ),
       child: Image.asset(dog?.avatarAsset ?? 'assets/emoji/paw.png', width: 96, height: 96, gaplessPlayback: true),
     );
@@ -223,10 +242,10 @@ class TodayScreen extends StatelessWidget {
           child: Column(children: [
             Text(v, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: T.textPrimary)),
             const SizedBox(height: 3),
-            Text(label, style: const TextStyle(fontSize: 11.5, color: Color(0x9E463C64))),
+            Text(label, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
           ]),
         );
-    Widget div() => Container(width: 1, height: 30, color: const Color(0x1F8C7BFF));
+    Widget div() => Container(width: 1, height: 30, color: T.line);
     return GlassCard(
       padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
       child: Column(children: [
@@ -242,7 +261,7 @@ class TodayScreen extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             '로그인하면 오늘 산책이 여기 쌓여요',
-            style: TextStyle(fontSize: 11.5, color: Color(0x9E463C64)),
+            style: TextStyle(fontSize: 11.5, color: T.textMuted),
           ),
         ]
         // 대기 중인 것이 있으면 말한다. 감추면 "저장됐는데 안 보인다" 가 된다.
@@ -250,13 +269,13 @@ class TodayScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '전송 대기 $pendingToday건 · 연결되면 올릴게요',
-            style: const TextStyle(fontSize: 11.5, color: Color(0xFFE07A4E)),
+            style: const TextStyle(fontSize: 11.5, color: T.warmText),
           ),
         ] else if (data.offline && !data.hasAnything) ...[
           const SizedBox(height: 8),
           const Text(
             '기록을 불러오지 못했어요',
-            style: TextStyle(fontSize: 11.5, color: Color(0x9E463C64)),
+            style: TextStyle(fontSize: 11.5, color: T.textMuted),
           ),
         ],
         // 이번 주 목표와 연속 일수 (#341). 아이가 없거나 개가 아니면 줄 자체가 없다 —
@@ -368,3 +387,11 @@ class TodayScreen extends StatelessWidget {
   }
 
 }
+
+/// 일정표를 **민다** — 탭이 아니라서(#446). 홈의 날짜 줄과 "오늘 할 일" 줄이 이 문을 쓴다.
+///
+/// 알림 싱크는 여기서 물려 준다 — 화면이 스스로 만들면 위젯 테스트가 그것을 갈아끼울 수
+/// 없고, 진짜는 테스트 바인딩에 채널이 없어 던진다(#420).
+Future<void> openSchedule(BuildContext context) => Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ScheduleScreen(reminderSink: LocalNotificationSink())),
+    );

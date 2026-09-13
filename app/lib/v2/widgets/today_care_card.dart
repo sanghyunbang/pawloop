@@ -195,7 +195,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
     final answer = await showDialog<_Retap>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: const Color(0xFFFCFAFF),
+        backgroundColor: T.surfaceBright,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           '이미 기록한 칸이에요',
@@ -219,7 +219,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
             onPressed: () => Navigator.pop(dialogCtx, _Retap.undo),
             child: const Text(
               '지우기',
-              style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFE07A4E)),
+              style: TextStyle(fontWeight: FontWeight.w800, color: T.warmText),
             ),
           ),
         ],
@@ -233,7 +233,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
     final answer = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: const Color(0xFFFCFAFF),
+        backgroundColor: T.surfaceBright,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           '오늘 이미 기록이 있어요',
@@ -252,7 +252,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
             onPressed: () => Navigator.pop(dialogCtx, true),
             child: const Text(
               '그래도 기록',
-              style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFE07A4E)),
+              style: TextStyle(fontWeight: FontWeight.w800, color: T.warmText),
             ),
           ),
         ],
@@ -306,7 +306,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
     final answer = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: const Color(0xFFFCFAFF),
+        backgroundColor: T.surfaceBright,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           '기록을 지울까요?',
@@ -325,7 +325,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
             onPressed: () => Navigator.pop(dialogCtx, true),
             child: const Text(
               '지우기',
-              style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFE07A4E)),
+              style: TextStyle(fontWeight: FontWeight.w800, color: T.warmText),
             ),
           ),
         ],
@@ -347,7 +347,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(children: [
         Row(children: [
-          const Icon(Icons.diversity_1_rounded, size: 17, color: Color(0xFFFF8F63)),
+          const Icon(Icons.diversity_1_rounded, size: 17, color: T.warmMid),
           const SizedBox(width: 6),
           // Spacer 대신 Expanded 다 — 글자를 키우면 제목이 자라는데 Spacer 는 0 아래로
           // 못 줄어들어 줄이 통째로 넘쳤다(360dp · 2.0배에서 38px, #396).
@@ -367,9 +367,9 @@ class _TodayCareCardState extends State<TodayCareCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                          fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
                 ),
-                Icon(Icons.chevron_right, size: 16, color: Color(0xFFE07A4E)),
+                Icon(Icons.chevron_right, size: 16, color: T.warmText),
               ]),
             ),
         ]),
@@ -387,7 +387,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
           SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE07A4E))),
+              child: CircularProgressIndicator(strokeWidth: 2, color: T.warmText)),
           SizedBox(width: 8),
           Text('오늘의 케어를 불러오는 중',
               style: TextStyle(fontSize: 12.5, color: T.textMuted)),
@@ -411,7 +411,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
             behavior: HitTestBehavior.opaque,
             child: const Text('로그인',
                 style: TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                    fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
           ),
         ]),
       );
@@ -444,7 +444,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
               behavior: HitTestBehavior.opaque,
               child: const Text('만들기',
                   style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                      fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
             )
           else if (failure != FamilyFailureKind.noGroup)
             GestureDetector(
@@ -452,7 +452,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
               behavior: HitTestBehavior.opaque,
               child: const Text('다시 시도',
                   style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                      fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
             ),
         ]),
       );
@@ -464,13 +464,13 @@ class _TodayCareCardState extends State<TodayCareCard> {
       // 걷는 집도 있다. 몰라서 두 번 나가는 것과 알고 두 번 나가는 것은 다르다.
       if (alreadyWalked != null) ...[
         Row(children: [
-          const Icon(Icons.directions_walk_rounded, size: 15, color: Color(0xFFE07A4E)),
+          const Icon(Icons.directions_walk_rounded, size: 15, color: T.warmText),
           const SizedBox(width: 6),
           Expanded(
             child: Text(alreadyWalked,
                 maxLines: 2,
                 style: const TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFE07A4E))),
+                    fontSize: 12.5, fontWeight: FontWeight.w700, color: T.warmText)),
           ),
         ]),
         const SizedBox(height: 9),

@@ -220,7 +220,7 @@ class _PinPickerScreenState extends State<PinPickerScreen> {
                                     '위도 ${lat!.toStringAsFixed(5)} · 경도 ${lng!.toStringAsFixed(5)}',
                                     style: const TextStyle(
                                       fontSize: 11.5,
-                                      color: Color(0x99463C64),
+                                      color: T.textMuted,
                                     ),
                                   ),
                                 ],
@@ -243,8 +243,8 @@ class _PinPickerScreenState extends State<PinPickerScreen> {
                                     begin: Alignment(-0.7, -1),
                                     end: Alignment(0.7, 1),
                                     colors: [
-                                      Color(0xFFFF9E7D),
-                                      Color(0xFFD89BFF),
+                                      T.sigStart,
+                                      T.sigEnd,
                                     ],
                                   )
                                 : null,

@@ -10,6 +10,7 @@
 // 반대로 `updatedAt` 은 **서버가 찍는 순간**이라 오프셋이 붙어 오고, 여기서 `toLocal()`
 // 한다. 두 종류를 한 파일에서 다르게 다루는 것이 헷갈릴 수 있어 여기 적어 둔다.
 import 'package:flutter/material.dart';
+import '../theme/app_tokens.dart';
 
 /// 일정의 주인. `chat_room` 과 같은 방식의 불투명한 쌍이다(ADR-0011).
 enum ScheduleOwnerKind {
@@ -65,7 +66,7 @@ enum ScheduleKind {
   groom('groom', '미용', Icons.content_cut_rounded, Color(0xFFB79BFF)),
   bath('bath', '목욕', Icons.shower_outlined, Color(0xFF7FB3FF)),
   food('food', '사료', Icons.restaurant_rounded, Color(0xFFE0B27A)),
-  etc('etc', '그 밖', Icons.event_note_outlined, Color(0xFF9B93B3));
+  etc('etc', '그 밖', Icons.event_note_outlined, T.textMuted);
 
   const ScheduleKind(this.wire, this.label, this.icon, this.color);
 
