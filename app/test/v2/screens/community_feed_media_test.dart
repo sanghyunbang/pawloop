@@ -246,4 +246,17 @@ void main() {
       expect(find.byType(PostDetailScreen), findsOneWidget);
     });
   });
+  // ── 사진이 먼저 (#451 2번)
+  testWidgets('사진 있는 글은 카드에서 사진이 작성자·제목보다 위다', (tester) async {
+    _phone(tester);
+    final repo = _repo([_post(media: [_media(1, width: 1600, height: 1200)])]);
+    await tester.pumpWidget(_host(FeedScreen(repository: repo)));
+    await tester.pumpAndSettle();
+
+    final strip = tester.getTopLeft(_strip);
+    final author = tester.getTopLeft(find.text('보리아빠'));
+    final title = tester.getTopLeft(find.text('서울숲 아침 산책 코스 추천'));
+    expect(strip.dy, lessThan(author.dy), reason: '벽에서처럼 카드에서도 사진이 주인공이다');
+    expect(strip.dy, lessThan(title.dy));
+  });
 }
