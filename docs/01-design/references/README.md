@@ -72,3 +72,14 @@ UI/UX 이슈에 붙이는 그림들입니다. **탭별 UI/UX 이슈**(하단 메
 | `ours-after-schedule-2.jpg` | 일정 — 오라 배경 + 반투명 카드, 머리말 오른쪽의 둥근 +, 칩 여백, 칸 비율 1.0, 선택은 강조색 |
 | `ours-after-schedule-sheet.jpg` | 일정 적기 시트 — 흰 입력칸 · 날짜/시각 고르기 상자 · 알약 칩 · 그라데이션 저장 |
 | `ours-after-crew-sheet.jpg` | 크루 만들기 시트 — 같은 부품. 이름이 비어 있어 만들기가 회색 |
+
+## 팔레트 후보 — 실제 앱 화면 (#447, 2026-09-13)
+
+단색 후보 A·B·C(HTML 그림)는 사장님이 기각하셨습니다. 이번엔 토큰 값만 바꿔 **실제로 빌드**해 찍었습니다(`scratchpad/palette_apply.py coral|sky`).
+
+| 파일 | 무엇 |
+|:---|:---|
+| `palette-candidates-on-device.jpg` | 한 장에 나란히 — 열: 지금(라일락) · 후보 1 크림+코랄 · 후보 2 크림+하늘, 행: 홈 · 일정 · 일정 적기 시트 · 커뮤니티 |
+| `palette-now-*.jpg` | 지금 |
+| `palette-coral-*.jpg` | 후보 1 — 크림 바탕 · 피치/하늘/민트 오라 · 강조색 코랄 `#F0603F` · CTA 살구→코랄 |
+| `palette-sky-*.jpg` | 후보 2 — 같은 바탕 · 강조색 하늘 `#3D8BFD` · CTA 살구→코랄 |
