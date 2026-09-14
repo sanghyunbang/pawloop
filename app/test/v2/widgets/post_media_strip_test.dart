@@ -1,4 +1,4 @@
-// 카드 격자의 영상 칸 — 재생 표시 옆에 길이가 붙는다 (#429).
+// 사진·영상 자리 — 비율 상한 · 캐러셀 · 영상 길이 (#429 · #465).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -60,6 +60,44 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('post-media-duration')), findsNothing);
+  });
+
+  testWidgets('minAspect 1 이면 세로 사진이 정사각까지 — 카드가 넘기는 값이다 (#465)', (tester) async {
+    await tester.pumpWidget(_host(PostMediaStrip(media: [_media(width: 720, height: 1280)], minAspect: 1)));
+    await tester.pumpAndSettle();
+
+    final box = tester.getSize(find.byType(AspectRatio));
+    expect(box.height / box.width, closeTo(1, 1e-6));
+  });
+
+  testWidgets('가로 사진은 minAspect 와 상관없다 — 4:3 이면 4:3', (tester) async {
+    await tester.pumpWidget(_host(PostMediaStrip(media: [_media(width: 1600, height: 1200)], minAspect: 1)));
+    await tester.pumpAndSettle();
+
+    final box = tester.getSize(find.byType(AspectRatio));
+    expect(box.width / box.height, closeTo(4 / 3, 1e-6));
+  });
+
+  testWidgets('둘 이상이면 캐러셀 — "1/3" 과 점 셋, 넘기면 "2/3"', (tester) async {
+    await tester.pumpWidget(_host(PostMediaStrip(media: [_media(), _media(id: 2), _media(id: 3)])));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('post-media-carousel')), findsOneWidget);
+    expect(find.text('1/3'), findsOneWidget);
+    expect(find.byType(PageView), findsOneWidget);
+
+    await tester.drag(find.byKey(const Key('post-media-carousel')), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('2/3'), findsOneWidget);
+    expect(find.text('1/3'), findsNothing);
+  });
+
+  testWidgets('한 장이면 캐러셀도 숫자도 없다', (tester) async {
+    await tester.pumpWidget(_host(PostMediaStrip(media: [_media()])));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('post-media-carousel')), findsNothing);
+    expect(find.byKey(const Key('post-media-counter')), findsNothing);
   });
 
   test('formatMediaDuration — m:ss 로, 내림이다', () {

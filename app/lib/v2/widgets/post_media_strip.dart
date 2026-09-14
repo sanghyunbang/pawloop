@@ -1,18 +1,17 @@
-// 글에 붙은 사진·영상을 카드와 상세에 그린다 — 이슈 #429.
+// 글에 붙은 사진·영상 — 이슈 #429 · #465.
 //
-// ## 한 장이면 크게 — 그래도 4:5 까지만, 여럿이면 격자
+// ## 한 장은 크게, 여러 장은 캐러셀
 //
 // 한 장은 카드 폭을 다 쓰고 서버가 준 크기로 자리를 **미리** 잡는다(`aspectRatio`) — 사진이
-// 도착할 때 카드가 뛰지 않는다. 다만 세로는 **4:5** 까지다(`PostMedia.minFeedAspectRatio`,
-// #440): 인스타그램·페이스북·레딧이 피드에서 그렇게 자르고, 세로 영상 포스터를 원본 비율로
-// 두면 카드가 한 화면에 안 들어온다. 잘린 부분은 전체 보기에서 본다. 두 장은 나란히, 셋
-// 이상은 2×2 격자에 넷까지 그리고 다섯째부터는 넷째 칸 위에 `+N` 을 쓴다. 목록 응답 하나에
-// URL 열 개가 실려도 그림은 넷만 받는다.
+// 오기 전에 카드가 뛰지 않는다. 둘 이상이면 **옆으로 넘기는 캐러셀**이다(Instagram · Material 3):
+// 첫 장의 비율을 전부가 따르고, 오른쪽 위에 "1/N", 아래에 점. 예전의 2×2 격자는 사진이 카드
+// 폭의 절반이라 무엇이 찍혔는지 안 보였다(#465).
 //
-// ## 영상은 썸네일과 재생 표시만
+// ## 목록에서는 정사각까지
 //
-// 피드에서 자동재생하지 않는다 — 데이터와 배터리다. 누르면 전체 보기로 간다. 재생 자체는
-// 영상 PR 의 일이고, 그전까지 전체 보기는 썸네일과 안내 한 줄이다.
+// [minAspect] 가 세로 사진을 어디까지 두는지 정한다. 카드는 1(정사각)까지 — 세로 사진 하나가
+// 화면 절반을 먹으면 한 화면에 글이 하나뿐이다(#465, Reddit 의 카드). 상세는 4:5 까지(기본값,
+// #440). 원본은 전체 보기에서 본다.
 import 'package:flutter/material.dart';
 
 import '../domain/post_media.dart';
@@ -21,55 +20,33 @@ import 'post_media_viewer.dart';
 class PostMediaStrip extends StatelessWidget {
   final List<PostMedia> media;
 
-  const PostMediaStrip({super.key, required this.media});
+  /// 세로 사진의 하한 비율. 카드는 `1`, 상세·벽은 [PostMedia.minFeedAspectRatio](4:5).
+  final double minAspect;
 
-  /// 격자에 실제로 그리는 수. 나머지는 `+N` 이다.
-  static const int maxTiles = 4;
+  const PostMediaStrip({
+    super.key,
+    required this.media,
+    this.minAspect = PostMedia.minFeedAspectRatio,
+  });
+
+  /// 첫 장의 비율. [minAspect] 보다 세로로 길면 거기서 자른다.
+  double get aspect {
+    final a = media.first.aspectRatio;
+    return a < minAspect ? minAspect : a;
+  }
 
   @override
   Widget build(BuildContext context) {
     if (media.isEmpty) return const SizedBox.shrink();
-
-    final Widget body;
-    if (media.length == 1) {
-      body = AspectRatio(
-        aspectRatio: media.single.aspectRatio,
-        child: _Tile(media: media.single, onTap: () => _open(context, 0)),
-      );
-    } else if (media.length == 2) {
-      body = AspectRatio(
-        aspectRatio: 2,
-        child: Row(children: [
-          Expanded(child: _Tile(media: media[0], onTap: () => _open(context, 0))),
-          const SizedBox(width: 4),
-          Expanded(child: _Tile(media: media[1], onTap: () => _open(context, 1))),
-        ]),
-      );
-    } else {
-      final shown = media.take(maxTiles).toList();
-      final hidden = media.length - shown.length;
-      body = GridView.count(
-        crossAxisCount: 2,
-        mainAxisSpacing: 4,
-        crossAxisSpacing: 4,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          for (var i = 0; i < shown.length; i++)
-            _Tile(
-              media: shown[i],
-              onTap: () => _open(context, i),
-              // 다섯째부터는 넷째 칸이 "+N" 을 든다 — 누르면 전체 보기의 그 자리로 간다.
-              overflow: i == shown.length - 1 && hidden > 0 ? hidden : 0,
-            ),
-        ],
-      );
-    }
-
     return ClipRRect(
       key: const Key('post-media-strip'),
       borderRadius: BorderRadius.circular(14),
-      child: body,
+      child: AspectRatio(
+        aspectRatio: aspect,
+        child: media.length == 1
+            ? _Tile(media: media.single, onTap: () => _open(context, 0))
+            : _Carousel(media: media, onOpen: (i) => _open(context, i)),
+      ),
     );
   }
 
@@ -77,14 +54,76 @@ class PostMediaStrip extends StatelessWidget {
       PostMediaViewer.open(context, media, initialIndex: index);
 }
 
+/// 옆으로 넘기는 여러 장. 자동으로 넘기지 않는다.
+class _Carousel extends StatefulWidget {
+  final List<PostMedia> media;
+  final ValueChanged<int> onOpen;
+
+  const _Carousel({required this.media, required this.onOpen});
+
+  @override
+  State<_Carousel> createState() => _CarouselState();
+}
+
+class _CarouselState extends State<_Carousel> {
+  int _index = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = widget.media.length;
+    return Stack(fit: StackFit.expand, children: [
+      PageView.builder(
+        key: const Key('post-media-carousel'),
+        itemCount: n,
+        onPageChanged: (i) => setState(() => _index = i),
+        itemBuilder: (_, i) => _Tile(media: widget.media[i], onTap: () => widget.onOpen(i)),
+      ),
+      // "1/N" — 사진이 여럿이라는 것을 첫눈에 알 수 있게(Instagram).
+      Positioned(
+        top: 8,
+        right: 8,
+        child: IgnorePointer(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xB3000000),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text('${_index + 1}/$n',
+                key: const Key('post-media-counter'),
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+          ),
+        ),
+      ),
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 8,
+        child: IgnorePointer(
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            for (var i = 0; i < n; i++)
+              Container(
+                width: 6,
+                height: 6,
+                margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i == _index ? Colors.white : const Color(0x80FFFFFF),
+                ),
+              ),
+          ]),
+        ),
+      ),
+    ]);
+  }
+}
+
 class _Tile extends StatelessWidget {
   final PostMedia media;
   final VoidCallback onTap;
 
-  /// 0 보다 크면 이 칸 위에 `+N` 을 쓴다.
-  final int overflow;
-
-  const _Tile({required this.media, required this.onTap, this.overflow = 0});
+  const _Tile({required this.media, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -120,16 +159,6 @@ class _Tile extends StatelessWidget {
               child: Text(label,
                   key: const Key('post-media-duration'),
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
-            ),
-          ),
-        if (overflow > 0)
-          ColoredBox(
-            color: const Color(0x8C000000),
-            child: Center(
-              child: Text('+$overflow',
-                  key: const Key('post-media-overflow'),
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
             ),
           ),
       ]),

@@ -331,7 +331,8 @@ class _FeedScreenState extends State<FeedScreen> {
         children: [
           for (final post in _posts) ...[
             _view == 'card' ? _card(post) : _row(post),
-            SizedBox(height: _view == 'card' ? 14 : 10),
+            // 카드 사이 10 — 예전 14. 한 화면에 글이 더 들어온다(#465).
+            const SizedBox(height: 10),
           ],
           if (_hasMore) _moreButton(),
         ],
@@ -744,122 +745,116 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// 목록의 날짜. 시각까지는 안 그린다 — 카드 한 줄에 들어가야 한다.
   Widget _card(CommunityPost post) {
+    final folded = _folded(context);
     return GestureDetector(
       onTap: () => _open(post),
       behavior: HitTestBehavior.opaque,
       child: GlassCard(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // 사진·영상이 있으면 **사진이 먼저**다(#451 2번, 반려견 판·인스타의 순서). 예전엔
-          // 작성자 → 게시판 → 제목 → 본문 다음 세 번째 줄에 있었다. 한 장이면 크게, 넷 넘으면 +N(#429).
+          // 사진·영상이 있으면 **사진이 먼저**다(#451). 목록에서는 **정사각까지만** — 세로 사진
+          // 하나가 화면 절반을 먹으면 한 화면에 글이 하나뿐이었다(#465, Reddit 의 카드). 여러 장은
+          // 캐러셀(Instagram). 원본은 전체 보기에서.
           if (post.media.isNotEmpty) ...[
-            PostMediaStrip(media: post.media),
-            const SizedBox(height: 12),
+            PostMediaStrip(media: post.media, minAspect: 1),
+            const SizedBox(height: 10),
           ],
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _avatar(post, 40),
-            const SizedBox(width: 11),
+          // 작성자 줄 — 아바타 28(예전 40) · 닉네임 · 동네 · 날짜. 닉네임은 Flexible 이라 좁으면
+          // 말줄임으로 끝나고 날짜는 오른쪽 끝에 그대로다(#433). 동네는 1.3배부터 접는다.
+          // 게시판 칩은 다음 줄에 장소와 함께 — 2.0배·320dp 에서는 칩과 날짜가 한 줄에 못 들어간다.
+          Row(children: [
+            _avatar(post, 28),
+            const SizedBox(width: 8),
             Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      // 닉네임(누가)과 날짜(언제)는 남고, 동네는 1.3배부터 접는다 — 셋 다
-                      // flex 가 아닌 채로는 360dp·2.0배에서 58px 넘쳤다(#433). 닉네임을
-                      // Flexible 로 감싼 것은 바닥이다 — 긴 닉네임은 말줄임으로 끝나고
-                      // 날짜는 오른쪽 끝에 그대로다.
-                      Expanded(
-                        child: Row(children: [
-                          Flexible(
-                            child: Text(post.author.nickname,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: T.textPrimary)),
-                          ),
-                          // 글쓴이의 동네 — **구까지만** (#342). 안 골랐으면 자리가 없다.
-                          if (post.authorDistrict != null && !_folded(context)) ...[
-                            const SizedBox(width: 6),
-                            Text(post.authorDistrict!,
-                                style: const TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF0B7A75))),
-                          ],
-                        ]),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(dateLabel(post.createdAt),
-                          style: const TextStyle(
-                              fontSize: 11.5, color: T.textMuted)),
-                    ]),
-                    const SizedBox(height: 5),
-                    Row(children: [
-                      _boardChip(post.board),
-                      if (post.loc != null) ...[
-                        const SizedBox(width: 7),
-                        const Icon(Icons.place_outlined,
-                            size: 13, color: T.textMuted),
-                        const SizedBox(width: 2),
-                        // Flexible 이 없으면 긴 장소 이름이 Row 를 넘쳐 노란 줄무늬가
-                        // 뜬다. 아래 리스트 뷰는 진작부터 이 모양이었다.
-                        Flexible(
-                          child: Text(post.loc!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 11.5, color: T.textMuted)),
-                        ),
-                      ],
-                    ]),
-                  ]),
+              child: Row(children: [
+                Flexible(
+                  child: Text(post.author.nickname,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          color: T.textPrimary)),
+                ),
+                // 글쓴이의 동네 — **구까지만** (#342). 안 골랐으면 자리가 없다.
+                if (post.authorDistrict != null && !folded) ...[
+                  const SizedBox(width: 6),
+                  Text(post.authorDistrict!,
+                      style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0B7A75))),
+                ],
+              ]),
             ),
+            const SizedBox(width: 8),
+            Text(dateLabel(post.createdAt),
+                style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
           ]),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
+          Row(children: [
+            _boardChip(post.board),
+            if (post.loc != null) ...[
+              const SizedBox(width: 7),
+              const Icon(Icons.place_outlined, size: 12, color: T.textMuted),
+              const SizedBox(width: 2),
+              // Flexible 이 없으면 긴 장소 이름이 Row 를 넘쳐 노란 줄무늬가 뜬다.
+              Flexible(
+                child: Text(post.loc!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+              ),
+            ],
+          ]),
+          const SizedBox(height: 8),
           Text(post.title,
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: T.textPrimary)),
-          const SizedBox(height: 5),
-          Text(post.body,
-              maxLines: 3,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  fontSize: 13.5, height: 1.5, color: T.textSecondary)),
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w800,
+                  color: T.textPrimary)),
+          const SizedBox(height: 3),
+          // 본문은 두 줄까지(#465) — 나머지는 상세에서.
+          Text(post.body,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 13.5, height: 1.45, color: T.textSecondary)),
           // 붙은 코스가 있으면 그림 한 장 (#339). 비공개로 되돌렸거나 지웠으면 안 온다.
           if (post.course != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             PostCourseCard(course: post.course!),
           ],
-          const SizedBox(height: 12),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final reaction in CommunityReaction.values)
-              _reactionChip(reaction, post.reactions),
-          ]),
-          const SizedBox(height: 12),
-          Container(height: 1, color: const Color(0x14785AA0)),
           const SizedBox(height: 10),
+          // 액션 **한 줄** — 왼쪽은 반응(아이콘 · 이름 · 수), 오른쪽 끝은 댓글 수와 화살표(Reddit 의
+          // 액션 바, #465). 예전의 반응 칩 세 개 + 구분선 + "댓글 N개 · 자세히 보기" 는 세 줄이었다.
+          // 반응은 가로 스크롤 줄이라 어떤 배율에서도 안 넘치고(#433 의 방식), 1.3배부터 이름을
+          // 접어 아이콘·수만 남긴다. 화살표는 오른쪽 끝에 그대로다 — "더 볼 수 있다" 는 신호(#432).
           Row(children: [
-            const Icon(Icons.chat_bubble_outline, size: 16, color: T.textMuted),
-            const SizedBox(width: 6),
-            // Expanded 가 Spacer 를 겸한다. flex 가 아니면 Row 가 글자에 폭을 무한대로
-            // 줘서 기기 글자 크기를 키우면 오른쪽으로 넘치고, Spacer 는 남은 공간이
-            // 음수여도 0 까지만 줄어든다 — 360dp·1.5배에서 4px 넘쳤다(#432).
-            // 두 줄로 접지 않는다 — 한글은 음절 사이에서 줄이 바뀌어 "보/기" 로 갈라진다.
-            // 줄어드는 것은 뒤쪽 안내("자세히 보기")이고 개수는 앞에 있어 남는다.
             Expanded(
-              child: Text('댓글 ${post.commentCount}개 · 자세히 보기',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: T.textSecondary)),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  for (final reaction in CommunityReaction.values) ...[
+                    _reactionInline(reaction, post.reactions, folded: folded),
+                    const SizedBox(width: 14),
+                  ],
+                ]),
+              ),
             ),
+            const SizedBox(width: 6),
+            const Icon(Icons.chat_bubble_outline, size: 16, color: T.textMuted),
+            const SizedBox(width: 4),
+            Text('${post.commentCount}',
+                key: Key('post-comment-count-${post.id}'),
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: T.textSecondary)),
+            const SizedBox(width: 2),
             const Icon(Icons.chevron_right, size: 18, color: T.textMuted),
           ]),
         ]),
@@ -867,32 +862,39 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  Widget _reactionChip(CommunityReaction reaction, ReactionSummary summary) {
+  /// 반응 하나 — 아이콘 · 이름 · 수. 내가 누른 것은 채운 아이콘에 강조색이다.
+  Widget _reactionInline(CommunityReaction reaction, ReactionSummary summary,
+      {required bool folded}) {
     final count = summary.countOf(reaction);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: T.surface,
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: T.cardBorder),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
+    final mine = summary.mine?.contains(reaction) ?? false;
+    final color = mine ? T.accent : T.textMuted;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(_reactionIcon(reaction, mine), size: 16, color: color),
+      if (!folded) ...[
+        const SizedBox(width: 4),
         Text(reaction.label,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: T.textSecondary)),
-        if (count > 0) ...[
-          const SizedBox(width: 5),
-          Text('$count',
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: T.textMuted)),
-        ],
-      ]),
-    );
+                color: mine ? T.accent : T.textSecondary)),
+      ],
+      if (count > 0) ...[
+        const SizedBox(width: 4),
+        Text('$count',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color)),
+      ],
+    ]);
   }
+
+  static IconData _reactionIcon(CommunityReaction reaction, bool mine) =>
+      switch (reaction) {
+        CommunityReaction.help =>
+          mine ? Icons.thumb_up_alt_rounded : Icons.thumb_up_alt_outlined,
+        CommunityReaction.cute =>
+          mine ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+        CommunityReaction.empathy =>
+          mine ? Icons.handshake_rounded : Icons.handshake_outlined,
+      };
 
   Widget _row(CommunityPost post) {
     return GestureDetector(
@@ -940,7 +942,37 @@ class _FeedScreenState extends State<FeedScreen> {
                   ]),
                 ]),
           ),
+          // 사진이 있으면 오른쪽에 섬네일 — Reddit 의 compact(#465). 예전 목록은 사진이 있어도 안 보였다.
+          if (post.media.isNotEmpty) ...[
+            const SizedBox(width: 10),
+            _thumb(post),
+          ],
           const Icon(Icons.chevron_right, size: 18, color: T.textMuted),
+        ]),
+      ),
+    );
+  }
+  /// 목록 보기의 56×56 섬네일. 첫 장, 영상이면 재생 표시.
+  Widget _thumb(CommunityPost post) {
+    final media = post.media.first;
+    final url = media.thumbnailUrl;
+    return ClipRRect(
+      key: Key('post-thumb-${post.id}'),
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: 56,
+        height: 56,
+        child: Stack(fit: StackFit.expand, children: [
+          if (url == null)
+            ColoredBox(color: T.surface)
+          else
+            Image.network(url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => ColoredBox(color: T.surface)),
+          if (media.kind.isVideo)
+            const Center(
+              child: Icon(Icons.play_circle_fill_rounded, size: 20, color: Colors.white),
+            ),
         ]),
       ),
     );
