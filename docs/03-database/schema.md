@@ -1496,10 +1496,13 @@ CREATE TABLE weekly_insight (
   text          TEXT         NULL     COMMENT '문장. NULL = 만들었다가 버렸다(숫자 검사 실패)',
   calls         INT          NOT NULL COMMENT '이 주에 모델을 부른 횟수 — 주당 상한(3)의 근거',
   generated_at  DATETIME(6)  NOT NULL,
+  feedback      VARCHAR(8)   NULL     COMMENT '사용자의 👍/👎 — up · down · NULL(안 누름). 문장이 다시 만들어지면 비운다',
+  feedback_at   DATETIME(6)  NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_weekly_insight (user_id, dog_id, week_start),
   KEY idx_weekly_insight_generated (generated_at),
-  CONSTRAINT fk_weekly_insight_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  CONSTRAINT fk_weekly_insight_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT ck_weekly_insight_feedback CHECK (feedback in ('up','down'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
@@ -1514,6 +1517,8 @@ CREATE TABLE weekly_insight (
 | `text` | `TEXT` | NULL | 문장. NULL 은 버린 것 |
 | `calls` | `INT` | NOT NULL | 이 주의 호출 횟수 |
 | `generated_at` | `DATETIME(6)` | NOT NULL | 만든 순간(UTC) |
+| `feedback` | `VARCHAR(8)` | NULL, CHECK(`up`·`down`) | 사용자의 👍/👎(#486 후속). 안 눌렀으면 NULL, 문장이 다시 만들어지면 비운다 |
+| `feedback_at` | `DATETIME(6)` | NULL | 누른 시각(UTC) |
 
 마이그레이션 `44_weekly_insight.sql`. 실제 컬럼 순서는 `01_schema.sql`(엔티티에서 뽑은 것) 그대로다.
 

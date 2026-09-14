@@ -31,6 +31,12 @@ class _InsightScreenState extends State<InsightScreen> {
   /// 화면이 그리는 자료. [WalkFeedBuilder] 가 채운다.
   WalkFeedData _data = WalkFeedData.empty;
 
+  /// 피드 하나를 화면이 들고 빌더에 준다 — 👍/👎 도 같은 저장소로 보내려고(#486 후속).
+  late final WalkFeed _feed = widget.feed ?? WalkFeed();
+
+  /// 내가 방금 누른 평가, 요약 id 별 — 서버 값보다 앞선다(낙관적). 실패하면 이전 값으로 되돌린다.
+  final Map<int, String?> _rated = {};
+
   /// 이번 주 요일별 거리. **전송 대기 중인 것도 얹는다** — 방금 걸었는데 막대가 안 오르면
   /// 사용자는 기록이 안 됐다고 읽는다.
   List<double> get _weekKm => _data.weekKmWithPending;
@@ -116,7 +122,7 @@ class _InsightScreenState extends State<InsightScreen> {
 
   @override
   Widget build(BuildContext context) => WalkFeedBuilder(
-        feed: widget.feed,
+        feed: _feed,
         builder: (context, data, _) {
           _data = data;
           return _build(context);
@@ -359,6 +365,10 @@ class _InsightScreenState extends State<InsightScreen> {
               ],
             ),
           ],
+          if (ai.id != null) ...[
+            const SizedBox(height: 6),
+            _feedbackRow(ai),
+          ],
           const SizedBox(height: 8),
           const Text(
             '이번 주 산책 기록과 우리 아이의 크기·나이대로 만든 문장이에요 · 숫자는 위 카드의 것만 써요',
@@ -367,6 +377,53 @@ class _InsightScreenState extends State<InsightScreen> {
         ],
       ),
     );
+  }
+
+  // ── 👍/👎 (#486 후속) — 한 번 누르면 남고, 같은 것을 다시 누르면 지운다. 서버가 실패하면 되돌린다.
+  // ChatGPT · 카카오 AI 요약의 답변 평가와 같은 자리(문장 아래 오른쪽), 색은 강조색 하나.
+  Widget _feedbackRow(AiSummary ai) {
+    final id = ai.id!;
+    final current = _rated.containsKey(id) ? _rated[id] : ai.feedback;
+    return Row(
+      children: [
+        const Text('도움이 됐나요?', style: TextStyle(fontSize: 11.5, color: T.textSecondary)),
+        const Spacer(),
+        _thumb(id, current, 'up', Icons.thumb_up_outlined, Icons.thumb_up_rounded,
+            key: const Key('ai-feedback-up'), label: '도움이 됐어요'),
+        const SizedBox(width: 2),
+        _thumb(id, current, 'down', Icons.thumb_down_outlined, Icons.thumb_down_rounded,
+            key: const Key('ai-feedback-down'), label: '아니에요'),
+      ],
+    );
+  }
+
+  Widget _thumb(int id, String? current, String value, IconData off, IconData on,
+      {required Key key, required String label}) {
+    final selected = current == value;
+    return IconButton(
+      key: key,
+      tooltip: label,
+      onPressed: () => _rate(id, selected ? null : value, current),
+      icon: Icon(selected ? on : off, size: 18, color: selected ? T.accent : T.textMuted),
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+    );
+  }
+
+  Future<void> _rate(int id, String? next, String? before) async {
+    setState(() => _rated[id] = next);
+    try {
+      final saved = await _feed.repository.rateInsight(id, next);
+      if (!mounted) return;
+      setState(() => _rated[id] = saved.feedback);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _rated[id] = before);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('지금은 보낼 수 없어요. 잠시 뒤 다시 눌러 주세요')),
+      );
+    }
   }
 
   Widget _weekChartCard() {

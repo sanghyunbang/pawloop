@@ -235,6 +235,9 @@ class WalkFeed {
 
   WalkFeed({WalkRepository? repository}) : _repo = repository ?? WalkRepository();
 
+  /// 화면이 목록 밖의 한 번짜리 요청(AI 요약 👍/👎, #486 후속)을 같은 저장소로 보내게 한다.
+  WalkRepository get repository => _repo;
+
   /// 화면이 열릴 때 한 번.
   ///
   /// **밀린 초안을 먼저 내보낸다.** 그래야 방금 연결이 돌아온 사람의 기록이 이 화면에서

@@ -1,7 +1,7 @@
 # Walks 백엔드 구현 청사진 (산책 기록/통계)
 
 > 이 문서는 **구현 코드(메서드 바디)를 담지 않는다.** 개발자가 직접 구현할 때 읽을 구조/시그니처/DTO 필드/엔티티 매핑/쿼리 개요만 정의한다.
-> 계약: [openapi.yaml](../../04-api/openapi.yaml) `Walks` 태그 (`/api/walks`, `/api/walks/{walkId}`, `/api/walks/stats/weekly`)
+> 계약: [openapi.yaml](../../04-api/openapi.yaml) `Walks` 태그 (`/api/walks`, `/api/walks/{walkId}`, `/api/walks/stats/weekly`, `/api/walks/insights/{insightId}/feedback`)
 > 데이터 모델: [erd.md](../../03-database/erd.md) `walk`, [schema.md](../../03-database/schema.md) §3 `walk`
 > 컨벤션 참조: `backend/.../social`(controller/service/repository/entity/dto, record DTO, ResponseEntity), `.../user/controller/AuthController.java`(JWT userId 추출), `.../config/WebClientConfig.java`
 
@@ -32,6 +32,7 @@
 | `GET /api/walks/stats/weekly` | `stats(@CurrentUser User user, Long dogId)` | `WalkStatsResponse` — 통계 뒤에 `WeeklyInsightService.attach` 가 `aiSummary`(#486, 트랜잭션 밖 · `weekly_insight` 캐시)를 얹는다 | O |
 | `GET /api/walks/{walkId}` | `detail(@CurrentUser User user, long walkId)` | `WalkResponse` — **경로가 실리는 유일한 응답이다** | O |
 | `PUT /api/walks/{walkId}/memo` | `rewriteMemo(@CurrentUser User user, long walkId, @Valid @RequestBody WalkMemoRequest request)` | `WalkResponse` (#187) | O |
+| `PUT /api/walks/insights/{insightId}/feedback` | `rateInsight(@CurrentUser User user, long insightId, @RequestBody InsightFeedbackRequest request)` | `WalkStatsResponse.AiSummary` — AI 요약 👍/👎(#486 후속). `WeeklyInsightService.rate` 가 내 요약 행에 `feedback`·`feedback_at` 을 남기거나 지운다(`value: null`). 남의/없는 요약은 404, `up`·`down` 밖은 400. 문장이 다시 만들어지면 평가는 비워진다 | O |
 | `DELETE /api/walks/{walkId}` | `delete(@CurrentUser User user, long walkId)` | `void` (204) | O |
 
 > 메모: `GET /{walkId}` 의 `401` 은 계약에 추가됐다(#24 · #145). **타인 산책과 없는 산책은 똑같이 404 다** — 403 을 주면 "그 id 는 존재한다" 를 알려 주는 셈이라 id 를 훑어 남의 기록 수를 셀 수 있다.

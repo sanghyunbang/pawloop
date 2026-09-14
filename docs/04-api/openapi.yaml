@@ -1554,6 +1554,41 @@ paths:
               schema: { $ref: '#/components/schemas/WalkStats' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /api/walks/insights/{insightId}/feedback:
+    put:
+      tags: [Walks]
+      summary: AI 요약 👍/👎
+      description: |
+        통계 응답의 `aiSummary.id` 로 평가 하나를 남깁니다(#486 후속). 요약(사용자 · 아이 · 주)마다 하나이고
+        다시 누르면 바뀌며, `value: null` 이면 지웁니다. **내 요약이 아니면 404** — 남의 것과 없는 것을
+        구별해 주지 않습니다. `up` · `down` 밖의 값은 400. 문장이 다시 만들어지면 평가는 비워집니다.
+        `walk-write` 요청 한도 버킷입니다.
+      parameters:
+        - name: insightId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: [string, "null"]
+                  enum: [up, down, null]
+                  description: "`up` 👍 · `down` 👎 · `null` 지우기"
+      responses:
+        '200':
+          description: 평가가 반영된 요약
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AiSummary' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   # ─────────────────────────── Community ───────────────────────────
   /api/community/posts:
     get:
@@ -4979,8 +5014,18 @@ components:
 
     AiSummary:
       type: object
-      required: [text, generatedAt]
+      required: [id, text, generatedAt]
       properties:
+        id:
+          type: integer
+          format: int64
+          description: 요약 행의 id — 👍/👎 를 `PUT /api/walks/insights/{insightId}/feedback` 로 보낼 때 씁니다
+        feedback:
+          type: [string, "null"]
+          enum: [up, down, null]
+          description: |
+            내가 남긴 평가(#486 후속). `up` 👍 · `down` 👎 · `null` 은 안 누름. 문장이 다시 만들어지면(입력이 바뀌어
+            새로 부르면) 옛 문장에 대한 평가라 `null` 로 돌아갑니다.
         text:
           type: string
           description: 첫 두 줄은 요약, 셋째 줄은 제안. 줄바꿈(`\n`)으로 구분. 이모지 · 머리말 없음.

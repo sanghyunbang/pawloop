@@ -572,6 +572,8 @@ CREATE TABLE `weekly_insight` (
   `calls` int NOT NULL,
   `week_start` date NOT NULL,
   `dog_id` bigint NOT NULL,
+  `feedback` varchar(8) DEFAULT NULL,
+  `feedback_at` datetime(6) DEFAULT NULL,
   `generated_at` datetime(6) NOT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `user_id` bigint NOT NULL,
@@ -581,7 +583,8 @@ CREATE TABLE `weekly_insight` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_weekly_insight` (`user_id`,`dog_id`,`week_start`),
   KEY `idx_weekly_insight_generated` (`generated_at`),
-  CONSTRAINT `fk_weekly_insight_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+  CONSTRAINT `fk_weekly_insight_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `ck_weekly_insight_feedback` CHECK ((`feedback` in (_utf8mb4'up',_utf8mb4'down')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

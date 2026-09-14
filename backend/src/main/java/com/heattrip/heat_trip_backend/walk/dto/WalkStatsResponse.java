@@ -60,8 +60,11 @@ public record WalkStatsResponse(
     /**
      * AI 주간 요약(#486) — 모델이 만든 두 문장 + 제안 한 줄. 키가 없거나 · 실패 · 상한 · 숫자 검사에서
      * 버렸으면 {@code null} 이고, 그때 앱은 카드도 라벨도 그리지 않는다.
+     *
+     * @param id       요약 행의 id — 앱이 👍/👎 를 {@code PUT /api/walks/insights/{id}/feedback} 로 보낼 때 쓴다
+     * @param feedback 내가 남긴 평가 {@code up}·{@code down}, 안 눌렀으면 {@code null}. 문장이 다시 만들어지면 비워진다
      */
-    public record AiSummary(String text, java.time.Instant generatedAt) {
+    public record AiSummary(long id, String text, java.time.Instant generatedAt, String feedback) {
     }
 
     public WalkStatsResponse withAiSummary(AiSummary ai) {

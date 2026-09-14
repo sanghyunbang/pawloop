@@ -667,6 +667,18 @@ class WalkRepository {
     return ServerWalkStats.parse(json as Map<String, dynamic>);
   }
 
+  /// AI 요약 👍/👎(#486 후속) — [value] 는 `up` · `down` · null(지우기). 평가가 반영된 요약이 돌아온다.
+  /// 내 요약이 아니면 서버가 404 를 준다(남의 것과 없는 것을 구별해 주지 않는다).
+  Future<AiSummary> rateInsight(int insightId, String? value) async {
+    final json = await _send(() => _authed.putJson(
+          Uri.parse('$baseUrl/api/walks/insights/$insightId/feedback'),
+          body: {'value': value},
+        ));
+    final parsed = AiSummary.parse(json);
+    if (parsed == null) throw const WalkFailure(WalkFailureKind.network);
+    return parsed;
+  }
+
   // ─────────────────────────── 지그 ───────────────────────────
 
   /// 한 번의 왕복. **상태 코드를 실패의 종류로 옮기는 곳이 여기 하나다.**
