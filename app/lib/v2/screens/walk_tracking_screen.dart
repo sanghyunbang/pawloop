@@ -78,6 +78,12 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   );
 
   NaverMapController? _ctrl;
+
+  /// 지도 위젯의 논리 픽셀 크기 — 스냅숏(#483)의 점 자리를 그림 픽셀로 옮길 때 배율의 분모.
+  Size? _mapSize;
+
+  /// 끝내기를 두 번 누르는 것을 막는다 — 스냅숏을 찍는 1초 사이.
+  bool _finishing = false;
   Timer? _timer;
   StreamSubscription<Position>? _posSub;
   bool _paused = false;
@@ -935,11 +941,59 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   /// 산책 완료 시트 — 몸통은 `WalkFinishSheet`(#310) 다. 이 화면은 geolocator·네이버 지도를
   /// 물고 있어 위젯 테스트로 못 띄우므로, 시트의 동작(경로 미리보기 · 사진 저장 · 두 버튼)은
   /// 그 위젯의 테스트가 잰다. 여기서는 메모리에 든 좌표를 그대로 건넨다 — 새로 GPS 를 켜지 않는다.
-  void _finish() {
+  /// 끝내기 순간 지도 한 장(#483). 경로 전체가 화면 가운데 정사각형 안에 들게 카메라를 맞추고,
+  /// 오버레이(내 선 · 머리 표식 · 코스 선 · 장소 핀)는 치운 뒤 찍는다 — 선은 그림 파일이 제
+  /// 스타일로 다시 그리고, 공유 카드는 양 끝을 잘라야 하므로 SDK 의 선이 스냅숏에 있으면 안 된다.
+  /// 점 자리는 SDK 에 묻는다(기기 안 투영은 지도와 어긋난다). 실패하면 null — 캔버스로 간다.
+  ///
+  /// 지도 키 없는 빌드는 `_ctrl` 이 null 이라 여기 오지 않는다.
+  Future<MapGround?> _captureMap() async {
+    final c = _ctrl;
+    final view = _mapSize;
+    if (c == null || view == null || _path.length < 2) return null;
+    try {
+      final side = math.max(120.0, view.width - 96);
+      final vPad = math.max(48.0, (view.height - side) / 2);
+      final fit = NCameraUpdate.fitBounds(
+        NLatLngBounds.from(_path),
+        padding: EdgeInsets.symmetric(horizontal: 48, vertical: vPad),
+      )..setAnimation(animation: NCameraAnimation.none);
+      await c.updateCamera(fit);
+      await c.clearOverlays();
+      // 타일이 오는 시간 — 걷던 동네라 대개 캐시에 있다.
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      final indices = MapGround.sampleIndices(_path.length, keep: _log.moments.map((m) => m.pathIndex));
+      final points = List<Offset?>.filled(_path.length, null);
+      for (final i in indices) {
+        final p = await c.latLngToScreenLocation(_path[i]);
+        points[i] = Offset(p.x, p.y);
+      }
+      final file = await c.takeSnapshot(compressQuality: 85);
+      final bytes = await file.readAsBytes();
+      unawaited(file.delete().then((_) {}, onError: (Object _) {}));
+      if (kDebugMode) {
+        debugPrint('map snapshot: ${bytes.length} bytes · view $view · ${indices.length} pts · first ${points[indices.first]}');
+      }
+      return MapGround(bytes: bytes, viewSize: view, screenPoints: points);
+    } catch (e) {
+      if (kDebugMode) debugPrint('map snapshot failed: $e');
+      return null;
+    } finally {
+      // 시트를 닫고 돌아오면 지도에 선이 있어야 한다.
+      unawaited(_drawCourseLine());
+      unawaited(_drawPath());
+    }
+  }
+
+  Future<void> _finish() async {
+    if (_finishing) return;
+    _finishing = true;
     _timer?.cancel();
     _posSub?.cancel();
     // 산책은 끝났다 — 저장 화면이 실패해도 초안 큐(WalkOutbox)가 맡는다. 스냅숏은 지운다.
     unawaited(_snapshots.clear());
+    final ground = await _captureMap();
+    if (!mounted) return;
     final walkedAt = _startedAt ?? DateTime.now();
     final distanceLabel = '${_km.toStringAsFixed(2)}km';
     final art = RouteArt(
@@ -949,8 +1003,9 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       timeLabel: _timeLabel,
       dateLabel: WalkFinishSheet.dateLabel(walkedAt),
       moments: _log.moments,
+      map: ground,
     );
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => WalkFinishSheet(
@@ -986,6 +1041,8 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
         },
       ),
     );
+    // 시트를 그냥 닫았으면(밖을 탭) 다시 끝낼 수 있어야 한다.
+    _finishing = false;
   }
 
   // ───────────── UI ─────────────
@@ -1011,7 +1068,9 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
             Positioned.fill(
               // 키가 없으면 지도를 그리지 않는다. 트래킹 자체는 계속 돈다 —
               // GPS·거리·시간은 지도와 무관하고, 아래 스탯 패널이 그대로 보인다.
-              child: !Env.hasNaverMap
+              child: LayoutBuilder(builder: (_, box) {
+                _mapSize = box.biggest;
+                return !Env.hasNaverMap
                   ? const MapUnavailable(
                       what: '산책은 계속 기록되고 있어요.\n경로를 지도에 그리지 못할 뿐이에요.')
                   : NaverMap(
@@ -1045,7 +1104,8 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
                     setState(() => _follow = false);
                   }
                 },
-              ),
+              );
+              }),
             ),
             // 상단: 뒤로(확인) + 주변 찾기 검색바
             SafeArea(

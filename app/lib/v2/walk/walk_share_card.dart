@@ -8,11 +8,13 @@
 // 남길 뿐이라 거리도 시간도 우리 아이 이름도 없다. 반려인은 산책 사진을 인스타·카톡 가족방에
 // 올린다 — 거기 붙는 카드 한 장이 **비용 0 의 유입 경로**다.
 //
-// ## 지도 타일이 없다 · 양 끝을 자른다
+// ## 지도 바닥 · 양 끝을 자른다
 //
-// 배경은 `route_image.dart` 와 같은 단색+격자다(#310 — 네이버 지도 위에 그리면 카메라 궤적이
-// 곧 경로라 좌표가 나간다). 그리고 **양 끝 100m 를 버린다**(#339 의 `trimCourseEnds` 와 같은
-// 규칙) — 카드는 남에게 보내는 것이고, 시작점은 대개 집 앞이다.
+// 배경은 `route_image.dart` 와 같다 — 단색+격자이거나, 끝내기 순간의 지도 스냅숏(#483,
+// `MapGround`)이 **경로 상자에만** 깔린다. 사진(#450)이 있으면 사진이 바닥이고 지도는 안 깐다.
+// 그리고 **양 끝 100m 를 버린다**(#339 의 `trimCourseEnds` 와 같은 규칙) — 카드는 남에게
+// 보내는 것이고, 시작점은 대개 집 앞이다. 지도 위에서도 잘라낸 구간만 그리고, 오림 자리도 그
+// 구간의 경계 상자에서 잡는다 — 집 앞이 지도의 가운데에 오지 않는다.
 //
 // 자르고 남는 것이 없으면(아주 짧은 산책) **선을 안 그린다.** 짧으니까 그냥 그리자는 유혹이
 // 정확히 집 앞을 그리는 길이다.
@@ -61,6 +63,9 @@ class WalkShareCard {
   /// 배경 사진(#450) — 산책 중 찍은 첫 장의 바이트. 있으면 사진이 바닥이 되고 글자는 흰색이다.
   final Uint8List? photo;
 
+  /// 끝내기 순간의 지도 스냅숏(#483). 사진이 없을 때만 경로 상자의 바닥이 된다.
+  final MapGround? map;
+
   const WalkShareCard({
     required this.dogName,
     required this.accent,
@@ -71,9 +76,12 @@ class WalkShareCard {
     this.placeName,
     this.lngLat,
     this.photo,
+    this.map,
   });
 
   bool get hasPhoto => photo != null && photo!.isNotEmpty;
+
+  bool get hasMap => map != null;
 
   /// 남에게 보낼 수 있는 선. 양 끝 100m 를 버리고, 남는 것이 없으면 `null`.
   List<List<double>>? get trimmedPath => trimCourseEnds(lngLat);
@@ -116,7 +124,10 @@ class WalkShareCardPainter extends CustomPainter {
   /// painter 는 동기라 여기서 디코딩할 수 없다.
   final ui.Image? photo;
 
-  const WalkShareCardPainter(this.card, {this.photo});
+  /// 디코딩된 [WalkShareCard.map] — 사진이 없을 때 경로 상자의 바닥(#483).
+  final ui.Image? map;
+
+  const WalkShareCardPainter(this.card, {this.photo, this.map});
 
   static const _bgTop = T.surface;
   static const _bgBottom = Color(0xFFFFF1EA);
@@ -244,9 +255,25 @@ class WalkShareCardPainter extends CustomPainter {
   }
 
   void _drawRoute(Canvas canvas, Rect box, double unit) {
-    final points = RouteProjection.fit(card.trimmedPath!, box.size, 24 * unit)
-        .map((o) => o.translate(box.left, box.top))
-        .toList();
+    // 지도 바닥(#483) — 사진이 있으면 사진이 바닥이라 지도는 안 깐다. 잘라낸 구간만 센다.
+    final ground = photo == null ? map : null;
+    final g = card.map;
+    final range = trimCourseRange(card.lngLat);
+    final placement = ground == null || g == null || range == null
+        ? null
+        : MapPlacement.of(g, ground, box, from: range.$1, to: range.$2 + 1);
+    final List<Offset> points;
+    if (placement != null) {
+      canvas.save();
+      canvas.clipRRect(RRect.fromRectAndRadius(box, Radius.circular(28 * unit)));
+      drawMapGround(canvas, ground!, placement, box);
+      canvas.restore();
+      points = placement.points.whereType<Offset>().toList();
+    } else {
+      points = RouteProjection.fit(card.trimmedPath!, box.size, 24 * unit)
+          .map((o) => o.translate(box.left, box.top))
+          .toList();
+    }
     if (points.length < 2) return;
 
     final path = Path()..moveTo(points.first.dx, points.first.dy);
@@ -300,7 +327,8 @@ class WalkShareCardPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(WalkShareCardPainter old) => old.card != card || old.photo != photo;
+  bool shouldRepaint(WalkShareCardPainter old) =>
+      old.card != card || old.photo != photo || old.map != map;
 }
 
 /// 카드 PNG 한 장.
@@ -312,15 +340,27 @@ class WalkShareImage {
     ui.Image? photo;
     if (card.hasPhoto) {
       try {
-        photo = await decodeImageFromList(card.photo!);
+        photo = await decodeMapBytes(card.photo!);
       } catch (_) {
         photo = null;
       }
     }
+    // 지도 바닥(#483)도 여기서. "사진이 있으면 지도를 안 깐다" 는 painter 의 규칙이라 여기서
+    // 거르지 않는다 — 규칙이 두 곳이면 한 곳이 죽어도 초록이다. 못 읽으면 단색 카드.
+    ui.Image? map;
+    final ground = card.map;
+    if (ground != null) {
+      try {
+        map = await decodeMapBytes(ground.bytes);
+      } catch (_) {
+        map = null;
+      }
+    }
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, Offset.zero & size);
-    WalkShareCardPainter(card, photo: photo).paint(canvas, size);
+    WalkShareCardPainter(card, photo: photo, map: map).paint(canvas, size);
     photo?.dispose();
+    map?.dispose();
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.width.round(), size.height.round());
     try {

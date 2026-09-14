@@ -20,14 +20,23 @@ const double _earthRadiusM = 6371000;
 /// 점의 개수가 아니라 **거리**로 자른다 — 5m 마다 찍힌 산책과 드문드문 찍힌 산책이 같은
 /// 규칙으로 잘려야 한다.
 List<List<double>>? trimCourseEnds(List<List<double>>? points) {
+  final range = trimCourseRange(points);
+  return range == null ? null : points!.sublist(range.$1, range.$2 + 1);
+}
+
+/// [trimCourseEnds] 와 같은 규칙으로 **남는 구간의 인덱스** `(from, to)` — 둘 다 포함. 남는 것이
+/// 없으면 null. 지도 스냅숏 위의 점 자리(#483)는 원래 경로의 인덱스로 찾으므로, 잘라낸 목록이
+/// 아니라 범위가 필요하다.
+(int, int)? trimCourseRange(List<List<double>>? points) {
   if (points == null || points.length < 2) return null;
 
   final from = _advance(points, 0, 1);
   final to = _advance(points, points.length - 1, -1);
   if (to - from < 1) return null;
 
-  final trimmed = points.sublist(from, to + 1);
-  return coursePathLengthMeters(trimmed) < kCourseMinRemainingMeters ? null : trimmed;
+  return coursePathLengthMeters(points.sublist(from, to + 1)) < kCourseMinRemainingMeters
+      ? null
+      : (from, to);
 }
 
 /// 선의 길이(m). 점이 하나 이하면 0.

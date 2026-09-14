@@ -12,6 +12,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:ui' as ui;
+import 'package:heat_trip_flutter/v2/domain/course_path.dart';
+import 'package:heat_trip_flutter/v2/walk/route_image.dart';
 
 import 'package:heat_trip_flutter/v2/walk/walk_share.dart';
 import 'package:heat_trip_flutter/v2/walk/walk_share_card.dart';
@@ -176,6 +179,69 @@ void main() {
       ));
 
       expect(text, '구름과 1.2km 걸었어요');
+    });
+  });
+
+  // ── 지도 바닥 (#483) ─────────────────────────────────────────
+  group('지도 바닥 (#483)', () {
+    final oneKm = _line(1000);
+    Future<Uint8List> green() async {
+      final rec = ui.PictureRecorder();
+      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 80, 160), Paint()..color = const Color(0xFF00C853));
+      final img = rec.endRecording().toImageSync(80, 160);
+      final data = await img.toByteData(format: ui.ImageByteFormat.png);
+      img.dispose();
+      return data!.buffer.asUint8List();
+    }
+
+    WalkShareCard card({MapGround? map, Uint8List? photo}) => WalkShareCard(
+          dogName: '보리',
+          accent: const Color(0xFFFF7A59),
+          dateLabel: '2026.09.06',
+          distanceLabel: '1.24km',
+          timeLabel: '18:40',
+          paceLabel: "15'03\"",
+          lngLat: oneKm,
+          map: map,
+          photo: photo,
+        );
+
+    test('스냅숏이 있으면 다른 카드다 — 경로 상자의 바닥이 지도', () async {
+      final png = await green();
+      final ground = MapGround(
+        bytes: png,
+        viewSize: const Size(80, 160),
+        screenPoints: [for (var i = 0; i < oneKm.length; i++) Offset(10 + i * 2.0, 20 + i * 4.0)],
+      );
+
+      final withMap = await WalkShareImage.renderPng(card(map: ground), size: const Size(216, 270));
+      final plain = await WalkShareImage.renderPng(card(), size: const Size(216, 270));
+
+      expect(withMap, isNot(equals(plain)));
+    });
+
+    test('사진이 있으면 사진이 이긴다 — 지도는 그리지 않는다(#450 의 규칙 그대로)', () async {
+      final png = await green();
+      final ground = MapGround(
+        bytes: png,
+        viewSize: const Size(80, 160),
+        screenPoints: [for (var i = 0; i < oneKm.length; i++) Offset(10 + i * 2.0, 20 + i * 4.0)],
+      );
+
+      final photoOnly = await WalkShareImage.renderPng(card(photo: png), size: const Size(216, 270));
+      final photoAndMap = await WalkShareImage.renderPng(card(photo: png, map: ground), size: const Size(216, 270));
+
+      expect(photoAndMap, equals(photoOnly));
+    });
+
+    test('trimCourseRange 는 trimCourseEnds 와 같은 구간이다 — 지도 위의 점은 원래 인덱스로 찾는다', () {
+      final range = trimCourseRange(oneKm)!;
+      final trimmed = trimCourseEnds(oneKm)!;
+
+      expect(oneKm.sublist(range.$1, range.$2 + 1), trimmed);
+      expect(range.$1, greaterThan(0), reason: '앞 100m 를 버린다');
+      expect(range.$2, lessThan(oneKm.length - 1), reason: '뒤 100m 를 버린다');
+      expect(trimCourseRange(oneKm.sublist(0, 3)), isNull, reason: '남는 것이 100m 미만이면 없다');
     });
   });
 }
