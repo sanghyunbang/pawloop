@@ -4,6 +4,7 @@ import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/today_care_card.dart';
+import '../widgets/today_course_card.dart';
 import '../widgets/today_schedule_line.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../widgets/emergency_vets_sheet.dart';
@@ -116,29 +117,42 @@ class TodayScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen())),
-                    behavior: HitTestBehavior.opaque,
-                    // 예전에는 `const WalkToday()` 였다 — 무엇을 걷든 영원히 0회 0.0km 0분.
-                    child: WalkFeedBuilder(
-                      builder: (_, data, __) => _walkSummary(data, dog),
+                  // 산책 자료는 한 번만 받는다 — 요약과 "오늘의 코스"(#485)가 같은 자료를 쓴다.
+                  // 그 사이의 케어 · 일정 · CTA 는 자료가 필요 없지만 순서 때문에 같은 열에 둔다.
+                  WalkFeedBuilder(
+                    builder: (_, data, __) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen())),
+                          behavior: HitTestBehavior.opaque,
+                          // 예전에는 `const WalkToday()` 였다 — 무엇을 걷든 영원히 0회 0.0km 0분.
+                          child: _walkSummary(data, dog),
+                        ),
+                        const SizedBox(height: 12),
+                        TodayCareCard(
+                          onOpenFamily: () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const FamilyScreen())),
+                          // "만들기" 는 이름 시트까지 한 번에(#329).
+                          onCreateFamily: () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const FamilyScreen(openCreate: true))),
+                        ),
+                        // 오늘 할 일 한 줄 — 케어 카드 **아래**다(#420). 케어는 "이미 한 것",
+                        // 이 줄은 "앞으로 할 것" 이라 시간 순서가 그렇다. 없으면 줄 자체가 없다.
+                        TodayScheduleLine(
+                          onOpen: () => openSchedule(context),
+                        ),
+                        const SizedBox(height: 12),
+                        _ctas(context),
+                        // 오늘의 코스(#485) — 산책 시작 버튼 바로 아래. 규칙으로 고른 하나와 "다른 코스".
+                        TodayCourseCard(
+                          dog: dog,
+                          data: data,
+                          onStart: (context, place) => startWalk(context, place: place),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TodayCareCard(
-                    onOpenFamily: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const FamilyScreen())),
-                    // "만들기" 는 이름 시트까지 한 번에(#329).
-                    onCreateFamily: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const FamilyScreen(openCreate: true))),
-                  ),
-                  // 오늘 할 일 한 줄 — 케어 카드 **아래**다(#420). 케어는 "이미 한 것",
-                  // 이 줄은 "앞으로 할 것" 이라 시간 순서가 그렇다. 없으면 줄 자체가 없다.
-                  TodayScheduleLine(
-                    onOpen: () => openSchedule(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _ctas(context),
                   // 이웃의 사진 한 줄 — 홈에서 커뮤니티 사진 벽으로 가는 문(#451 6번). 사진 있는
                   // 글이 없거나 못 불러오면 줄 자체가 없다.
                   NeighborPhotoStrip(onMore: () {

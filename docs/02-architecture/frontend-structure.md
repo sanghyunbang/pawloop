@@ -50,7 +50,7 @@ lib/
 | 파일 | 역할 | 진입 경로 |
 | --- | --- | --- |
 | `main_shell.dart` | 네비게이션 셸. 탭 스와핑 + 플로팅 글래스 바텀네비 + 산책 FAB | 루트 (`home`) |
-| `today_screen.dart` | 홈(오늘) — 강아지 히어로 · 오늘 산책 요약 · 근처 동반장소 | 탭 0 |
+| `today_screen.dart` | 홈(오늘) — 강아지 히어로 · 오늘 산책 요약 · 오늘의 코스(#485) · 근처 동반장소 | 탭 0 |
 | `explore_screen.dart` | 지도 — KTO 반려동반 장소 + 병원/펫샵/산책로(실데이터, #291) + 필터 (리스트/지도 토글). 산책로 시트를 열면 선을 그린다 | 탭 1 |
 | `schedule_screen.dart` | 일정 — 월 달력(종류별 점) · 그날 목록 · 필터 칩 · 만들기/고치기 시트 (#419·#421). 화면을 열 때 알림 예약을 다시 건다(#420). 되풀이하는 하루를 고칠 때는 "이 날만 / 앞으로 전부" 를 먼저 묻는다 | 탭 2 |
 | `feed_screen.dart` | 커뮤니티 — 게시글 카드/리스트 (더미) | 탭 3 |
@@ -102,6 +102,8 @@ lib/
 
 ### 2.3 `data/` — 레포지토리 (데이터 소스)
 
+- `course_candidates.dart` — 오늘의 코스 후보(#485). 기기 안 카탈로그(`PlaceCatalogRepository.nearby`, 2km)에서 걷는 곳(`trail` · `playground` · 여행지 `12`)만 고르고 내 코스(`GET /api/courses/me`, 시작점이 2km 안)를 더한다. 거리는 기기 안에서 잰다 — 이 파일과 `domain/course_recommender.dart` 에 네트워크 import 가 없는 것을 `course_recommender_no_network_test` 가 소스로 잠근다.
+
 - `pet_places_repository.dart`: **우리 백엔드**의 `GET /api/places/nearby` 를 `http` 로 호출(#40). `PetPlace` 모델은 계약의 `Place` 를 그대로 읽는다(`lat`/`lng`/`contentTypeId`/`addr`/`tel`/`image`/`distM`).
   - **앱에 관광공사 서비스키가 없다.** 서버가 대신 부른다. 서버가 실패하면 빈 리스트다(앱이 죽지 않음).
   - ✅ 관광공사 키는 **이미 앱에서 사라졌다**. 예전 서술: 이 키는 앱 바이너리에 박히는 과금성 자격증명이다. [#40](https://github.com/sanghyunbang/heattrip/issues/40) 에서 호출을 백엔드 프록시로 옮기면 앱에서 완전히 사라진다 — 그때 이 레포는 KTO 대신 자체 백엔드를 호출한다.
@@ -112,6 +114,8 @@ lib/
 - `walk_photos.dart` — 산책 사진(#450). `WalkPhotoStore` 는 산책 중 찍은 바이트를 앱 문서 폴더 `walk_photos/<산책>/` 에 파일로 두고 경로만 돌려준다(`discard` 로 지움 — 카메라의 캐시 파일은 OS 가 지우므로 그대로 들고 있으면 안 된다). `WalkPhotoUploader` 는 경로를 읽어 `ImagePrep` 으로 다시 인코딩한 뒤 `POST /media`(`category=WALK_IMAGE`) 로 올려 id 를 돌려준다. `WalkSync` 가 저장 직전에 부른다 — 올린 id 는 그때그때 초안(`WalkDraft.mediaIds`)에 적어 재전송 때 앞의 것을 또 올리지 않고, 서버가 거절한 한 장은 빼고 가며, 저장되면 기기 파일을 지운다. `walk_sync_photo_test` 가 이 순서를 잰다.
 
 ### 2.4 `widgets/` — 공용 위젯
+
+- `today_course_card.dart` — 홈의 "오늘의 코스"(#485). 위치(기기) → `CourseCandidateSource`(기본 `CourseCandidates`) 로 후보를 모으고 안전 지수(`WalkSafetyStore.latest`) · 주간 목표(`WalkGoalStore` 또는 `WalkGoal.recommendedFor`) · 이번 주 걸은 분 · 최근 7일에 간 장소(`WalkFeedData.walks[].place`)를 `CourseRecommender.rank` 에 넘겨 1등을 그린다. `다른 코스` 는 다음 점수, `여기서 산책 시작` 은 `startWalk(place:)`. 홈은 산책 자료 빌더를 한 단 올려 요약과 이 카드가 같은 자료를 쓴다(요청 한 번).
 
 - `aurora.dart`:
   - `AuroraBackground` — 파스텔 오라 그라데이션 배경. 전역 `AppThemeCtl.index`를 구독해 테마 변경이 앱 전체에 반영됨.
