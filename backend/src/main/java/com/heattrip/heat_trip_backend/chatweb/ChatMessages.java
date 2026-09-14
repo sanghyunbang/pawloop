@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 메시지 목록을 <b>계약의 모양</b>으로 만든다 — 조회와 이름 해석을 한 자리에서 묶는다.
@@ -44,6 +45,12 @@ import java.util.Map;
  * 이름·가리기와 같은 자리, 즉 여기서 조립한다. 붙이는 것은 {@link ChatMessageSender} 가 INSERT 와
  * <b>같은 트랜잭션</b>에서 불러 주는 일이라 남의 사진이면 메시지도 없던 일이 된다. 읽을 때는 한 장에
  * 한 번 — 사진 메시지가 없는 장은 묻지도 않는다. 지울 때는 메시지와 사진을 한 트랜잭션에서 함께.
+ *
+ * <h2>답장의 원문 미리보기도 여기서 만든다 (#452)</h2>
+ * <p>{@code chat} 은 답장을 원문의 id 하나로만 안다({@code ChatMessageView#replyToId}). 원문의 내용을
+ * 답장 행에 복사해 두지 않는 이유는 원문이 나중에 지워지거나(톰스톤) 보낸 사람의 이름이 바뀌기 때문이다 —
+ * 미리보기는 <b>응답 때마다</b> 원문을 읽어 만든다. 한 장의 답장들이 가리키는 원문은 <b>한 번의 조회</b>로
+ * 모은다(이름·사진과 같은 규칙) — 답장이 없는 장은 묻지 않는다.
  *
  * <p>이 패키지가 하는 일은 여전히 셋뿐이다(package-info) — 사용자를 id 로 바꾸고,
  * {@code ChatRoomService} 를 부르고, 돌아온 값 레코드를 계약의 모양으로 옮긴다.
@@ -96,7 +103,7 @@ public class ChatMessages {
         Long mediaId = request.mediaId();
         List<AttachedMedia> attached = new ArrayList<>(1);
         ChatMessageSendResult result = sender.send(roomId, user.getId(), user.displayName(),
-                request.body(), type, request.clientMsgId(),
+                request.body(), type, request.clientMsgId(), request.replyToId(),
                 posted -> {
                     if (mediaId != null) {
                         attached.addAll(media.attach(MediaAttachment.REF_CHAT,
@@ -106,7 +113,8 @@ public class ChatMessages {
         ChatMessageResponse.Media photo = result.created()
                 ? firstOf(attached)
                 : photosOf(List.of(result.message())).get(result.message().id());
-        return new Sent(ChatMessageResponse.of(result.message(), user.displayName(), false, photo),
+        ChatMessageResponse.ReplyTo replyTo = replyOf(repliesOf(roomId, List.of(result.message())), result.message());
+        return new Sent(ChatMessageResponse.of(result.message(), user.displayName(), false, photo, replyTo),
                 result.created());
     }
 
@@ -133,9 +141,10 @@ public class ChatMessages {
         Map<Long, String> names = senderNames.of(
                 messages.stream().map(ChatMessageView::senderUserId).toList());
         Map<Long, ChatMessageResponse.Media> photos = photosOf(messages);
+        Map<Long, ChatMessageResponse.ReplyTo> replies = repliesOf(roomId, messages);
         return messages.stream()
                 .map(message -> ChatMessageResponse.of(message, names.get(message.senderUserId()),
-                        false, photos.get(message.id())))
+                        false, photos.get(message.id()), replyOf(replies, message)))
                 .toList();
     }
 
@@ -155,7 +164,31 @@ public class ChatMessages {
                 page.items().stream().map(ChatMessageView::senderUserId).toList());
         // 한 장에 한 번 묻는다. 메시지마다 "가렸나" 를 물으면 100건 조회에 쿼리가 101개다 —
         // 바로 위 이름 해석이 이미 피해 둔 함정이다. 사진도 같은 규칙이다.
-        return ChatMessagePageResponse.of(page, names, blocks.blockedBy(userId), photosOf(page.items()));
+        return ChatMessagePageResponse.of(page, names, blocks.blockedBy(userId), photosOf(page.items()),
+                repliesOf(roomId, page.items()));
+    }
+
+    /**
+     * 답장들의 원문 미리보기(#452) — <b>원문</b> 메시지 id → 미리보기, <b>한 번의 조회</b>. 답장이 하나도
+     * 없으면 묻지 않는다. 원문을 보낸 사람의 이름은 지금 이름이다(메시지와 같은 규칙, #78).
+     */
+    private Map<Long, ChatMessageResponse.ReplyTo> repliesOf(long roomId, List<ChatMessageView> messages) {
+        List<Long> ids = messages.stream().map(ChatMessageView::replyToId).filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        List<ChatMessageView> originals = chatRooms.messagesByIds(roomId, ids);
+        Map<Long, String> names = senderNames.of(originals.stream().map(ChatMessageView::senderUserId).toList());
+        Map<Long, ChatMessageResponse.ReplyTo> replies = new HashMap<>();
+        for (ChatMessageView original : originals) {
+            replies.put(original.id(), ChatMessageResponse.ReplyTo.of(original, names.get(original.senderUserId())));
+        }
+        return replies;
+    }
+
+    /** 이 메시지의 답장 미리보기 — 답장이 아니거나 원문이 하드 삭제돼 없으면 {@code null}. */
+    static ChatMessageResponse.ReplyTo replyOf(Map<Long, ChatMessageResponse.ReplyTo> replies, ChatMessageView message) {
+        return message.replyToId() == null ? null : replies.get(message.replyToId());
     }
 
     /**

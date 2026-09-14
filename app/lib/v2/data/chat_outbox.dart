@@ -29,6 +29,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import '../domain/chat_reply.dart';
 import '../domain/post_media.dart';
 
 /// 보낸 메시지 하나의 상태.
@@ -74,6 +75,10 @@ class PendingMessage {
   /// 버킷에 두 번 남지 않는다.
   final int? mediaId;
 
+  /// 답장(#452)이면 원문의 미리보기 — 확정되기 전 말풍선이 이것으로 인용 블록을 그린다. 서버에는
+  /// `replyToId` 만 보내고, 확정된 메시지의 `replyTo` 는 서버가 만든 것으로 바뀐다(같은 규칙이라 글자는 같다).
+  final ChatReplyTo? replyTo;
+
   const PendingMessage({
     required this.clientMsgId,
     required this.body,
@@ -81,28 +86,31 @@ class PendingMessage {
     required this.createdAt,
     this.photo,
     this.mediaId,
+    this.replyTo,
   });
 
   bool get isPhoto => photo != null;
 
   /// 새로 보내는 메시지. **여기서만 키를 만든다.**
-  factory PendingMessage.create(String body, {DateTime? now}) {
+  factory PendingMessage.create(String body, {DateTime? now, ChatReplyTo? replyTo}) {
     return PendingMessage(
       clientMsgId: newClientMsgId(),
       body: body,
       state: PendingState.sending,
       createdAt: now ?? DateTime.now(),
+      replyTo: replyTo,
     );
   }
 
   /// 사진 메시지 — 본문은 비어 있다(캡션은 아직 없다). 키는 여기서 만든다.
-  factory PendingMessage.photo(PendingPhoto photo, {DateTime? now}) {
+  factory PendingMessage.photo(PendingPhoto photo, {DateTime? now, ChatReplyTo? replyTo}) {
     return PendingMessage(
       clientMsgId: newClientMsgId(),
       body: '',
       state: PendingState.sending,
       createdAt: now ?? DateTime.now(),
       photo: photo,
+      replyTo: replyTo,
     );
   }
 
@@ -114,6 +122,7 @@ class PendingMessage {
         createdAt: createdAt,
         photo: photo,
         mediaId: mediaId,
+        replyTo: replyTo,
       );
 
   /// 전송이 실패했다. 키와 본문은 그대로다 — 사진과 올린 id 도.
@@ -124,6 +133,7 @@ class PendingMessage {
         createdAt: createdAt,
         photo: photo,
         mediaId: mediaId,
+        replyTo: replyTo,
       );
 
   /// 다시 보낸다. **키를 새로 만들지 않는다** — 만들면 서버에 같은 말이 두 번 남는다.
@@ -134,6 +144,7 @@ class PendingMessage {
         createdAt: createdAt,
         photo: photo,
         mediaId: mediaId,
+        replyTo: replyTo,
       );
 
   @override

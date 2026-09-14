@@ -80,7 +80,8 @@ import java.time.LocalDateTime;
                         columnNames = {"room_id", "sender_user_id", "client_msg_id"})
         },
         indexes = {
-                @Index(name = "idx_chat_sender", columnList = "sender_user_id")
+                @Index(name = "idx_chat_sender", columnList = "sender_user_id"),
+                @Index(name = "idx_chat_reply_to", columnList = "reply_to_id")
         }
 )
 @Getter
@@ -206,6 +207,20 @@ public class ChatMessage {
     /** 소프트 삭제 시각. 조회에서 <b>거르지 않는다</b> — 위 javadoc 참조. */
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    /**
+     * 답장 대상(#452) — <b>같은 방</b>의 메시지. 카카오톡의 답장처럼 "어느 말에 대한 답" 하나이고
+     * 스레드가 아니다.
+     *
+     * <p>원문의 내용은 여기 저장하지 않는다. 응답을 만들 때 원문을 읽어 미리보기(보낸 사람 · 첫 줄)를
+     * 만든다 — 원문이 소프트 삭제되면 미리보기가 "삭제된 메시지" 가 되고, 하드 삭제(운영 정리)되면
+     * {@code SET NULL} 로 답장만 남는다. 다른 방의 메시지는 {@code ChatRoomService#postMessage} 가
+     * 400 으로 막는다. 이 표 안의 자기 참조라 chat 경계를 넘지 않는다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reply_to_id", foreignKey = @ForeignKey(name = "fk_chat_reply_to"))
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private ChatMessage replyTo;
 
     /**
      * 애플리케이션이 값을 안 넣어도 행이 만들어지게 한다.

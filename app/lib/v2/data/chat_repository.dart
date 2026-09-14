@@ -26,6 +26,7 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:http/http.dart' as http;
 
+import '../domain/chat_reply.dart';
 import '../domain/post_media.dart';
 
 /// 채팅 요청이 실패한 이유.
@@ -226,6 +227,10 @@ class ChatMessageItem {
   /// 사진 메시지의 사진(#452) — 글의 [PostMedia] 와 같은 모양. 글자 메시지 · 지워진 사진 메시지는 null.
   final PostMedia? media;
 
+  /// 답장(#452)이면 원문의 미리보기(보낸 사람의 지금 이름 · 첫 줄). 답장이 아니면 null.
+  /// 서버가 응답 때마다 원문을 읽어 만든다 — 원문이 지워지면 다음 조회부터 `deleted` 다.
+  final ChatReplyTo? replyTo;
+
   bool get isImage => contentType == 'image';
 
   const ChatMessageItem({
@@ -239,6 +244,7 @@ class ChatMessageItem {
     this.hiddenByBlock = false,
     this.contentType = 'text',
     this.media,
+    this.replyTo,
   });
 
   static ChatMessageItem? tryParse(Map<String, dynamic> json) {
@@ -258,6 +264,7 @@ class ChatMessageItem {
       hiddenByBlock: json['hiddenByBlock'] == true,
       contentType: '${json['contentType'] ?? 'text'}',
       media: PostMedia.tryParse(json['media']),
+      replyTo: ChatReplyTo.tryParse(json['replyTo']),
     );
   }
 }
@@ -373,7 +380,11 @@ class ChatRepository {
   ///
   /// [mediaId] 가 있으면 사진 메시지(#452)다 — `POST /media` 에 `CHAT_IMAGE` 로 올린 id. 종류는
   /// `image` 이고 [body] 는 캡션이라 비어도 된다. 사진 하나에 메시지 하나.
-  Future<ChatMessageItem> send(int roomId, String body, String clientMsgId, {int? mediaId}) async {
+  ///
+  /// [replyToId] 가 있으면 답장(#452)이다 — 같은 방의 원문 메시지 id. 서버가 응답에 원문 미리보기
+  /// (`replyTo`)를 실어 준다. 다른 방의 id 는 400 이다.
+  Future<ChatMessageItem> send(int roomId, String body, String clientMsgId,
+      {int? mediaId, int? replyToId}) async {
     final json = await _send(
       () => _authed.postJson(
         Uri.parse('$baseUrl/api/chat/rooms/$roomId/messages'),
@@ -382,6 +393,7 @@ class ChatRepository {
           'clientMsgId': clientMsgId,
           'contentType': mediaId == null ? 'text' : 'image',
           if (mediaId != null) 'mediaId': mediaId,
+          if (replyToId != null) 'replyToId': replyToId,
         },
       ),
     );

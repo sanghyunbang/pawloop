@@ -16,6 +16,7 @@ import java.util.Set;
  * @param senderNames 발신자들의 <b>지금</b> 이름. {@link ChatSenderNames} 가 한 번의 조회로 모아 온 것
  * @param blockedIds  읽는 사람이 가린 발신자들 — {@code hiddenByBlock} 의 근거(#82)
  * @param photos      사진 메시지의 사진, 메시지 id 별(#452). 없는 메시지는 {@code null} 로 실린다
+ * @param replies     답장들의 원문 미리보기, <b>원문</b> 메시지 id 별(#452). 답장이 아닌 메시지는 {@code null}
  */
 public record ChatMessagePageResponse(
         List<ChatMessageResponse> items,
@@ -23,14 +24,16 @@ public record ChatMessagePageResponse(
         boolean hasMore) {
 
     static ChatMessagePageResponse of(ChatMessagePageView page, Map<Long, String> senderNames,
-                                      Set<Long> blockedIds, Map<Long, ChatMessageResponse.Media> photos) {
+                                      Set<Long> blockedIds, Map<Long, ChatMessageResponse.Media> photos,
+                                      Map<Long, ChatMessageResponse.ReplyTo> replies) {
         return new ChatMessagePageResponse(
                 page.items().stream()
                         .map(message -> ChatMessageResponse.of(
                                 message,
                                 senderNames.get(message.senderUserId()),
                                 blockedIds.contains(message.senderUserId()),
-                                photos.get(message.id())))
+                                photos.get(message.id()),
+                                ChatMessages.replyOf(replies, message)))
                         .toList(),
                 page.lastSeq(),
                 page.hasMore());

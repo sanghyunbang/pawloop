@@ -18,6 +18,11 @@ import '../theme/app_tokens.dart';
 /// (https://cs.kakao.com/helps_html/1073199401) — 가족방에서 그건 되돌릴 수 없는 사고가 된다.
 ///
 /// 서버도 묶지 않는다. 켰으면 앱이 `POST /api/blocks` 를 **따로** 부른다.
+///
+/// ## 답장이 맨 위다 (#452)
+///
+/// 길게 눌러서 가장 자주 하는 일은 신고가 아니라 **답장**이다 — 카카오톡 · 인스타그램 DM 이 같은
+/// 메뉴의 첫 줄에 둔다. 내 말에도 남의 말에도 있고, 지워진 말에는 없다([canReply]).
 class MessageActionsSheet extends StatelessWidget {
   const MessageActionsSheet({
     super.key,
@@ -25,6 +30,7 @@ class MessageActionsSheet extends StatelessWidget {
     required this.hiddenByBlock,
     required this.canRemoveMember,
     this.isMine = false,
+    this.canReply = true,
   });
 
   final String senderName;
@@ -38,12 +44,16 @@ class MessageActionsSheet extends StatelessWidget {
   /// 내가 보낸 메시지인가. 그러면 신고·가리기·내보내기는 뜻이 없고 **삭제** 하나뿐이다(#197).
   final bool isMine;
 
+  /// 답장(#452)을 보여 줄 것인가 — 지워진 메시지에는 없다.
+  final bool canReply;
+
   static Future<MessageAction?> show(
     BuildContext context, {
     required String senderName,
     required bool hiddenByBlock,
     required bool canRemoveMember,
     bool isMine = false,
+    bool canReply = true,
   }) {
     return showModalBottomSheet<MessageAction>(
       context: context,
@@ -53,6 +63,7 @@ class MessageActionsSheet extends StatelessWidget {
         hiddenByBlock: hiddenByBlock,
         canRemoveMember: canRemoveMember,
         isMine: isMine,
+        canReply: canReply,
       ),
     );
   }
@@ -84,6 +95,13 @@ class MessageActionsSheet extends StatelessWidget {
               ),
             ]),
           ),
+          if (canReply)
+            _tile(
+              context,
+              icon: Icons.reply_rounded,
+              label: '답장',
+              value: MessageAction.reply,
+            ),
           if (isMine)
             _tile(
               context,
@@ -138,7 +156,7 @@ class MessageActionsSheet extends StatelessWidget {
 }
 
 /// 시트에서 고른 것.
-enum MessageAction { report, block, unblock, removeMember, delete }
+enum MessageAction { reply, report, block, unblock, removeMember, delete }
 
 /// 신고 사유를 고르는 화면 — 이슈 #82.
 ///

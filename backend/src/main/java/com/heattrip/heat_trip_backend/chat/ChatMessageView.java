@@ -21,6 +21,9 @@ import java.time.LocalDateTime;
  * @param deletedAt 소프트 삭제 시각. <b>{@code null} 이 아니어도 조회에서 빠지지 않는다</b> —
  *                  톰스톤이다. 거르면 그 {@code roomSeq} 가 클라이언트에 도달하지 않아
  *                  읽음 커서가 넘지 못하고 미읽음 뱃지가 영원히 남는다(ADR-0011)
+ * @param replyToId 답장(#452)이면 원문 메시지의 id — 같은 방의 메시지다. 아니면 {@code null}.
+ *                  원문의 내용은 여기 없다: 미리보기는 chat 밖({@code chatweb.ChatMessages})이
+ *                  {@code ChatRoomService#messagesByIds} 로 읽어 만든다
  */
 public record ChatMessageView(
         long id,
@@ -32,5 +35,6 @@ public record ChatMessageView(
         String contentType,
         String clientMsgId,
         LocalDateTime createdAt,
-        LocalDateTime deletedAt) {
+        LocalDateTime deletedAt,
+        Long replyToId) {
 }

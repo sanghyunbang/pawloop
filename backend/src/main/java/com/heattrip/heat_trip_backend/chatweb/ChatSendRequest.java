@@ -21,5 +21,5 @@ package com.heattrip.heat_trip_backend.chatweb;
  *                    있으면 {@code contentType} 은 {@code image} 이고 {@code body} 는 캡션이라 비어도 된다.
  *                    사진 하나에 메시지 하나
  */
-public record ChatSendRequest(String body, String clientMsgId, String contentType, Long mediaId) {
+public record ChatSendRequest(String body, String clientMsgId, String contentType, Long mediaId, Long replyToId) {
 }
