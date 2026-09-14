@@ -8,6 +8,7 @@ import 'package:heat_trip_flutter/v2/data/walk_feed.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/screens/me_screen.dart';
+import 'package:heat_trip_flutter/v2/screens/saved_posts_screen.dart';
 
 /// 로그인 상태에서 화면이 서버를 부르지 않게 — 진짜 저장소는 12초 타이머를 남긴다.
 class _Repo implements WalkRepository {
@@ -55,7 +56,20 @@ void main() {
     expect(find.text('우리 아이 정보 관리'), findsOneWidget);
     expect(find.text('프로필 편집'), findsNothing);
     expect(find.text('북마크'), findsNothing);
+    expect(find.text('저장한 글'), findsOneWidget, reason: '죽은 북마크 행의 자리에 진짜 기능이 들어왔다(#451 4번)');
     expect(find.text('내 산책 기록'), findsOneWidget, reason: '나머지 메뉴는 그대로');
+  });
+
+  testWidgets('"저장한 글" 을 누르면 내 사진첩 화면이 열린다 (#451 4번)', (t) async {
+    // 게스트로 둔다 — 그 화면은 게스트면 서버를 안 부른다(진짜 저장소라 타이머가 남으면 안 된다).
+    AuthState.status.value = AuthStatus.unauthenticated;
+    await pump(t);
+
+    await t.tap(find.text('저장한 글'));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(SavedPostsScreen), findsOneWidget);
   });
 
   testWidgets('제공자는 사람 말로 — "walker · 카카오로 로그인", local 은 안 보인다', (t) async {

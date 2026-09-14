@@ -4,6 +4,7 @@ import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 import '../widgets/pet_registration_sheet.dart';
 import 'settings_screen.dart';
+import 'saved_posts_screen.dart';
 import '../data/walk_feed.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../data/auth_state.dart';
@@ -498,13 +499,16 @@ class MeScreen extends StatelessWidget {
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FamilyScreen()))),
           row(Icons.bar_chart_rounded, '산책 통계',
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen()))),
+          // 저장한 글 — "내 사진첩" (#451 4번). #332 가 뺀 죽은 북마크 행의 자리에 진짜 기능이 들어왔다.
+          row(Icons.bookmark_border_rounded, '저장한 글',
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const SavedPostsScreen()))),
           // 스토어 요건 셋이 이 줄 뒤에 있다 — 인앱 계정 삭제(Apple 5.1.1(v)),
           // 공개 연락처(1.2 · 채팅이 이미 UGC 다), 인앱 처리방침 링크(Play).
           // 화면은 예전부터 있었는데 여는 곳이 없었다 (#165).
           row(Icons.settings_outlined, '설정',
               onTap: () => Navigator.of(context)
                   .push(MaterialPageRoute(builder: (_) => const SettingsScreen()))),
-          // 북마크 행은 뺐다 — 기능이 없어 스낵바만 띄우던 죽은 메뉴였다(#332). 생기면 넣는다.
           ValueListenableBuilder<AuthStatus>(
             valueListenable: AuthState.status,
             builder: (_, status, __) => status == AuthStatus.authenticated ||

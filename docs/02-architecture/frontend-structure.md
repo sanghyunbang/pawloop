@@ -114,6 +114,7 @@ lib/
   - `AuroraBackground` — 파스텔 오라 그라데이션 배경. 전역 `AppThemeCtl.index`를 구독해 테마 변경이 앱 전체에 반영됨.
   - `GlassCard` — `BackdropFilter` blur 기반 반투명 글래스 카드.
 - `profile_avatar.dart` — 강아지 프로필 아바타(테두리색 선택 반영).
+- `saved_posts_screen.dart` — 내 정보 > 저장한 글(#451 4번): `CommunityRepository.bookmarks()` 를 저장한 순으로 읽어 사진 글은 `PostPhotoWall`(하트 알약 없음), 글만 있는 글은 한 줄로. 게스트는 서버를 안 부르고 로그인 안내. 상세에서 저장을 빼고 돌아오면 다시 읽는다.
 - `like_burst.dart` — 두 번 탭 하트(#451 4번): `trigger` 가 바뀔 때마다 사진 위에서 한 번 튄다. 응답을 안 기다린다 — 손가락에 대한 대답이지 집계가 아니다.
 - `post_photo_wall.dart` — 커뮤니티의 **사진 벽**(#451): 사진·영상이 있는 글만 두 열 벽돌(masonry)로. 열 나누기는 순수 함수 `split`(순서대로 더 짧은 열에, 높이는 폭 1 기준 `1/비율 + 글 두 줄`), 타일은 첫 장 하나에 4:5…1.91:1 로 잘린 비율. 피드의 카드/목록/격자 전환 중 격자가 이것이다.
 - `neighbor_photo_strip.dart` — 홈의 **이웃의 사진** 한 줄(#451): 커뮤니티 목록 한 장에서 사진·영상 있는 글의 첫 장을 열두 개까지. 게스트에게는 없고, 없거나 못 불러오면 줄 자체가 없다. 타일은 글 상세로, "더 보기" 는 `RootTab.communityView = 'grid'` 로 커뮤니티 탭을 사진 벽으로 연다(피드가 읽고 되돌리는 한 번짜리 부탁).

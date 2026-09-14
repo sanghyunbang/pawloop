@@ -17,7 +17,7 @@
 | 5 | 가족 그룹 만들기 · 초대 · 참여 | 홈 케어 카드 "만들기" · 채팅 탭 · 프로필 | `family_screen.dart` · `invite_join_screen.dart` |
 | 6 | 오늘의 케어 기록 | 홈 · 가족 화면의 케어 칸 | `today_screen.dart` · `family_screen.dart` |
 | 7 | 채팅 — 방 목록 → 첫 진입 규칙 → 대화 | 채팅 탭 · 가족 화면 | `chat_list_screen.dart` → `family_chat_screen.dart` |
-| 8 | 산책 기록 보기 → 회고 → 지우기 · 통계 | 프로필 | `me_screen.dart` → `myrecords_screen.dart` → `walk_detail_screen.dart` · `insight_screen.dart` |
+| 8 | 산책 기록 보기 → 회고 → 지우기 · 통계 · 저장한 글 | 프로필 | `me_screen.dart` → `myrecords_screen.dart` → `walk_detail_screen.dart` · `insight_screen.dart` · `saved_posts_screen.dart` |
 | 9 | 프로필 편집 · 설정 · 약관 · 탈퇴 | 프로필 | `edit_screen.dart` · `settings_screen.dart` · `settings/legal_document_screen.dart` · `settings/account_delete_screen.dart` |
 | 10 | 위치 권한 거부 · 위치 이용중지 | 첫 산책 · 프로필 토글 | `walk_tracking_screen.dart` · `me_screen.dart` · `explore_screen.dart` |
 | 11 | 세션 만료 · 로그아웃 | 어느 화면에서든 | 라우터(`auth_redirect.dart`) → `login_screen.dart` |
@@ -286,6 +286,8 @@ flowchart TD
 flowchart TD
     A([프로필 me_screen.dart]) -->|내 산책 기록| R[myrecords_screen.dart<br/>GET /api/walks 커서 · 전송 대기 · 거절 큐]
     A -->|산책 통계| I[insight_screen.dart<br/>GET /api/walks/stats/weekly — 주간 막대 · 요약 · 자주 가는 곳 #338]
+    A -->|저장한 글| B[saved_posts_screen.dart<br/>GET /api/community/bookmarks — 저장한 순 · 사진 벽 + 한 줄 #451]
+    B -->|타일·줄 탭| P[post_detail_screen.dart — 책갈피로 빼면 돌아올 때 다시 읽음]
     R -->|카드 탭| D[walk_detail_screen.dart<br/>회고 쓰기 PUT /api/walks/{id}/memo]
     R -->|길게 누르기| X[삭제 확인 → DELETE /api/walks/{id}]
     R -->|산책 기록하기| C[create_screen.dart — 수동 기록]

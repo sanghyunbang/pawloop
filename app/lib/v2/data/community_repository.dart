@@ -258,6 +258,11 @@ class CommunityPost {
   /// 붙은 사진·영상 (#429). **항상 있다** — 없으면 빈 목록. 순서는 올린 순서다.
   final List<PostMedia> media;
 
+  /// 보는 사람이 이 글을 **저장해 뒀는가** (#451 4번). 게스트는 `false` 다 — 게스트인지는
+  /// `reactions.mine == null` 이 말한다. 켜고 끄는 것은 [CommunityRepository.bookmark] ·
+  /// [CommunityRepository.unbookmark] 이고 둘 다 멱등이다.
+  final bool bookmarked;
+
   const CommunityPost({
     required this.id,
     required this.author,
@@ -274,6 +279,7 @@ class CommunityPost {
     this.course,
     this.authorDistrict,
     this.media = const [],
+    this.bookmarked = false,
   });
 
   /// 한 자리만 바꾼 사본.
@@ -282,7 +288,7 @@ class CommunityPost {
   /// 베끼는 헬퍼 둘을 들고 있었는데, `updatedAt` 을 더하자 그중 하나가 그것을 조용히
   /// 흘렸다 — 반응만 눌러도 '수정됨' 이 사라졌다. 필드가 늘 때 고칠 자리를 **선언 옆
   /// 한 곳**으로 모은다.
-  CommunityPost copyWith({int? commentCount, ReactionSummary? reactions}) =>
+  CommunityPost copyWith({int? commentCount, ReactionSummary? reactions, bool? bookmarked}) =>
       CommunityPost(
         id: id,
         author: author,
@@ -299,6 +305,7 @@ class CommunityPost {
         hiddenByBlock: hiddenByBlock,
         authorDistrict: authorDistrict,
         media: media,
+        bookmarked: bookmarked ?? this.bookmarked,
       );
 
   /// 모양이 아니면 `null`. 한 건이 깨졌다고 목록 전체를 버리지 않는다.
@@ -329,6 +336,7 @@ class CommunityPost {
       hiddenByBlock: json['hiddenByBlock'] == true,
       authorDistrict: json['authorDistrict'] as String?,
       media: PostMedia.parseList(json['media']),
+      bookmarked: json['bookmarked'] == true,
     );
   }
 }
@@ -724,6 +732,42 @@ class CommunityRepository {
         body: {'reason': reason.wire, if (memo != null && memo.isNotEmpty) 'memo': memo},
       ),
     );
+  }
+
+  /// 글을 저장한다 — "내 사진첩" (#451 4번). **멱등이다** — 이미 저장해 뒀어도 200 이다.
+  /// 응답은 집계가 아니라 지금 상태 하나다 — 저장은 세지 않는다.
+  Future<bool> bookmark(int postId) async {
+    final json = await _send(
+      () => _authed.postJson(Uri.parse('$baseUrl/api/community/posts/$postId/bookmark')),
+    );
+    return _bookmarked(json);
+  }
+
+  /// 저장을 뺀다. **멱등이다** — 안 저장했던 것을 빼도 200 이다.
+  Future<bool> unbookmark(int postId) async {
+    final json = await _send(
+      () => _authed.deleteJson(Uri.parse('$baseUrl/api/community/posts/$postId/bookmark')),
+    );
+    return _bookmarked(json);
+  }
+
+  /// 내가 저장한 글 — **저장한 순**(글이 쓰인 순이 아니다). 인증 필수 — 게스트는 401 이다.
+  Future<CommunityPage<CommunityPost>> bookmarks({String? cursor, int? limit}) async {
+    final uri = Uri.parse('$baseUrl/api/community/bookmarks').replace(
+      queryParameters: <String, String>{
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+        if (limit != null) 'limit': '$limit',
+      },
+    );
+    final json = await _send(() => _authed.getJson(uri));
+    return _page(json, CommunityPost.tryParse);
+  }
+
+  /// 계약의 `BookmarkState.bookmarked`. 키가 없으면 네트워크 실패로 본다 — 서버가 다른 모양을
+  /// 주는데 `false` 로 그리면 저장이 안 된 것처럼 보인다.
+  static bool _bookmarked(Object? json) {
+    if (json is Map && json['bookmarked'] is bool) return json['bookmarked'] as bool;
+    throw const CommunityFailure(CommunityFailureKind.network);
   }
 
   /// 반응을 누른다. **멱등이다** — 이미 눌러 뒀어도 200 이고 집계가 안 늘어난다.

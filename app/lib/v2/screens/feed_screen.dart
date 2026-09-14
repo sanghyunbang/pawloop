@@ -93,6 +93,9 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// 반응을 보내는 중인 글 — 같은 글에 겹쳐 보내지 않는다.
   final Set<int> _sendingReaction = {};
+
+  /// 저장을 보내는 중인 글.
+  final Set<int> _sendingBookmark = {};
   String? _nextCursor;
   bool _hasMore = false;
 
@@ -796,6 +799,32 @@ class _FeedScreenState extends State<FeedScreen> {
     _toggleReaction(post, CommunityReaction.cute, addOnly: true);
   }
 
+  /// 저장을 켜고 끈다 — 응답의 상태를 그린다(반응과 같은 규칙). 저장은 세지 않아서
+  /// 되돌릴 수는 없지만, 실패했을 때 켜진 채 남는 거짓은 여기서도 안 만든다.
+  Future<void> _toggleBookmark(CommunityPost post) async {
+    if (post.reactions.mine == null) {
+      _toast('로그인하면 글을 저장할 수 있어요');
+      return;
+    }
+    if (_sendingBookmark.contains(post.id)) return;
+    setState(() => _sendingBookmark.add(post.id));
+    try {
+      final on = post.bookmarked
+          ? await _repo.unbookmark(post.id)
+          : await _repo.bookmark(post.id);
+      if (!mounted) return;
+      setState(() {
+        _posts = [for (final p in _posts) p.id == post.id ? p.copyWith(bookmarked: on) : p];
+      });
+      _toast(on ? '저장했어요 — 내 정보 > 저장한 글' : '저장을 뺐어요');
+    } on CommunityFailure catch (failure) {
+      if (!mounted) return;
+      _toast(failure.message);
+    } finally {
+      if (mounted) setState(() => _sendingBookmark.remove(post.id));
+    }
+  }
+
   void _toast(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -906,6 +935,20 @@ class _FeedScreenState extends State<FeedScreen> {
                     const SizedBox(width: 14),
                   ],
                 ]),
+              ),
+            ),
+            const SizedBox(width: 6),
+            // 저장 — "내 사진첩" (#451 4번). 누르면 켜고 끈다, 카드는 안 열린다. 세지 않는다.
+            GestureDetector(
+              key: Key('bookmark-${post.id}'),
+              onTap: () => _toggleBookmark(post),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                child: Icon(
+                    post.bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                    size: 18,
+                    color: post.bookmarked ? T.accent : T.textMuted),
               ),
             ),
             const SizedBox(width: 6),
