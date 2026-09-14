@@ -36,7 +36,10 @@ public enum UploadCategory {
     POST_VIDEO   ("posts-video", Set.of("video/mp4","video/quicktime"),                   150 * 1024 * 1024L),
 
     /** 산책 중 찍은 사진(#450) — 산책 기록({@code walk})에 붙는다. 글 사진과 같은 크기 규칙. */
-    WALK_IMAGE   ("walks",    Set.of("image/jpeg","image/png","image/webp"),              10 * 1024 * 1024L);
+    WALK_IMAGE   ("walks",    Set.of("image/jpeg","image/png","image/webp"),              10 * 1024 * 1024L),
+
+    /** 채팅 말풍선 사진(#452) — 메시지({@code chat_message})에 하나씩 붙는다. 글 사진과 같은 크기 규칙. */
+    CHAT_IMAGE   ("chats",    Set.of("image/jpeg","image/png","image/webp"),              10 * 1024 * 1024L);
 
     public final String prefix;
     public final Set<String> allowed;

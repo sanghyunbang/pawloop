@@ -136,13 +136,27 @@ class ChatContractSpecTest {
     }
 
     @Test
-    @DisplayName("clientMsgId 는 선택이다 — 없으면 멱등을 요구하지 않는 전송이다")
-    void clientMsgIdIsOptional() {
+    @DisplayName("전송 본문에 필수가 없다 — clientMsgId 는 멱등이 선택이라, body 는 사진 메시지(#452)의 캡션이라")
+    void nothingInTheSendBodyIsRequired() {
         assertThat(requiredFieldsOfRequestBody(MESSAGES, "post"))
                 .as("""
                         UNIQUE 는 NULL 을 겹침으로 보지 않는다. 필수로 두면 '한 번만 보낼 것' 에도 \
-                        앱이 키를 지어내야 하고, 그렇게 지어낸 키는 재시도에서 같은 값이 아니다.""")
-                .containsExactly("body");
+                        앱이 키를 지어내야 하고, 그렇게 지어낸 키는 재시도에서 같은 값이 아니다. \
+                        body 는 사진 메시지가 생기면서 빠졌다 — 글자 메시지의 빈 본문은 서버가 400 으로 막는다.""")
+                .isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    @DisplayName("사진 메시지(#452): 요청의 mediaId 는 선택이고, ChatMessage.media 는 PostMedia 아니면 null 이다")
+    void photoMessageIsInTheContract() {
+        assertThat(requestBodyProperties(MESSAGES, "post")).containsKeys("mediaId", "contentType", "body");
+        Map<String, Object> properties = (Map<String, Object>) schema("ChatMessage").get("properties");
+        Map<String, Object> media = (Map<String, Object>) properties.get("media");
+        assertThat(media).as("글의 PostMedia 와 같은 모양이라 앱이 같은 파서를 쓴다").isNotNull();
+        List<Map<String, Object>> oneOf = (List<Map<String, Object>>) media.get("oneOf");
+        assertThat(oneOf).extracting(option -> option.containsKey("$ref") ? option.get("$ref") : option.get("type"))
+                .containsExactlyInAnyOrder("#/components/schemas/PostMedia", "null");
     }
 
     @Test
@@ -290,6 +304,16 @@ class ChatContractSpecTest {
                                                           String status) {
         Map<String, Object> content =
                 (Map<String, Object>) response(path, method, status).get("content");
+        Map<String, Object> json = (Map<String, Object>) content.get("application/json");
+        Map<String, Object> schema = (Map<String, Object>) json.get("schema");
+        return (Map<String, Object>) schema.get("properties");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> requestBodyProperties(String path, String method) {
+        Map<String, Object> requestBody =
+                (Map<String, Object>) operation(path, method).get("requestBody");
+        Map<String, Object> content = (Map<String, Object>) requestBody.get("content");
         Map<String, Object> json = (Map<String, Object>) content.get("application/json");
         Map<String, Object> schema = (Map<String, Object>) json.get("schema");
         return (Map<String, Object>) schema.get("properties");

@@ -884,8 +884,8 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 |---|---|---|---|
 | `GET` | `/api/chat/rooms` | 내 방 목록. 방마다 `unread`(뺄셈)·`lastReadSeq`·`myRole`·`lastMessage`·`memberCount`·`tag`. **`roomId` 를 안 받으므로 403 이 없다** — 답의 범위 자체가 내 멤버십이다 | M2.6 ✅ |
 | `GET` | `/api/chat/rooms/{roomId}` | 방 상세(멤버 목록·내 `lastReadSeq`·역할) | M2.6 |
-| `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq\|beforeSeq&limit` | 폴링/스크롤 겸용. 응답은 `{ items, lastSeq, hasMore }` 이고 `items` 는 **어느 방향이든 `roomSeq` 오름차순**이다. `ETag: "{roomId}:{lastSeq}"` 를 직접 계산해 붙이고, `If-None-Match` 가 같으면 `304`(인가가 **먼저**다) | M2.6 ✅ |
-| `POST` | `/api/chat/rooms/{roomId}/messages` | 전송 `{ "body": "...", "clientMsgId": "..." }`. 처음이면 `201`, 같은 키의 재전송이면 **`200`**(409 가 아니다) 이고 두 응답의 `roomSeq` 가 같다. 보낸 사람의 읽음 위치(`lastReadSeq`)가 그 메시지까지 올라간다 — 내 메시지는 내 미읽음에 들지 않는다(#330) | M2.6 ✅ |
+| `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq\|beforeSeq&limit` | 폴링/스크롤 겸용. 응답은 `{ items, lastSeq, hasMore }` 이고 `items` 는 **어느 방향이든 `roomSeq` 오름차순**이다. `ETag: "{roomId}:{lastSeq}"` 를 직접 계산해 붙이고, `If-None-Match` 가 같으면 `304`(인가가 **먼저**다). 사진 메시지(#452)는 `items[].media`(글의 `PostMedia` 와 같은 모양) 가 있고 글자 메시지는 `null` | M2.6 ✅ |
+| `POST` | `/api/chat/rooms/{roomId}/messages` | 전송 `{ "body": "...", "clientMsgId": "..." }`. 처음이면 `201`, 같은 키의 재전송이면 **`200`**(409 가 아니다) 이고 두 응답의 `roomSeq` 가 같다. 보낸 사람의 읽음 위치(`lastReadSeq`)가 그 메시지까지 올라간다 — 내 메시지는 내 미읽음에 들지 않는다(#330). **사진 메시지(#452)**: `POST /media`(`CHAT_IMAGE`) 로 올린 id 를 `mediaId` 로 — `contentType` 은 `image`, `body` 는 캡션이라 비어도 된다. 사진 하나에 메시지 하나. 남의 사진 · 안 붙는 사진이면 400 이고 **메시지도 안 생긴다**(INSERT 와 붙이기가 한 트랜잭션) | M2.6 ✅ |
 | `POST` | `/api/chat/rooms/{roomId}/read` | `lastReadSeq` 올리기. `GREATEST` 로 **뒤로 안 가고** `LEAST(:seq, room.last_seq)` 로 방의 끝을 넘지 않는다. 응답은 서버가 실제로 쓴 값 | M2.6 ✅ |
 | `PUT` | `/api/chat/rooms/{roomId}/mute` | 방별 음소거 `{ "muted": true }`. 살아 있는 멤버만(아니면 403). 방 목록의 `muted` 에 실린다. `{}` 는 400. 버킷 `group-write` | M2.8 ✅ |
 | `POST` | `/api/chat/rooms/{roomId}/invites` | 초대코드 발급(방장만. 7일·무제한 고정 — **본문을 받지 않는다**) | M2.5 ✅ |
@@ -893,7 +893,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `POST` | `/api/chat/invites/{code}/join` | 코드로 입장. 없음 `404` → 만료 `410` → 회수 `410` → **이미 멤버면 `200`** → 소진 `409` → 정원 `409`. 재입장 금지 대상이면 `403` | M2.5 ✅ |
 | `DELETE` | `/api/chat/rooms/{roomId}/members/me` | 나가기 | M2.6 |
 | `DELETE` | `/api/chat/rooms/{roomId}/members/{userId}` | 강퇴(방장). `removed_at` + `rejoin_blocked` | M2.7 |
-| `DELETE` | `/api/chat/messages/{messageId}` | 삭제 — **소프트**(`deleted_at`). 빈틈이 나면 델타가 깨진다 | M2.6 |
+| `DELETE` | `/api/chat/messages/{messageId}` | 삭제 — **소프트**(`deleted_at`). 빈틈이 나면 델타가 깨진다. 사진 메시지면 사진 파일도 같은 트랜잭션에서 지운다(#452) | M2.6 |
 | `POST` | `/api/chat/rooms/{roomId}/reports` | 신고(사유 코드 + 메모 + `room_seq` 구간). 서버가 본문 스냅샷을 남긴다 | M2.7 |
 | `DELETE` | `/api/chat/rooms/{roomId}/bans/{userId}` | 재입장 금지 해제 | M2.7 |
 | `POST`·`DELETE` | `/api/blocks` · `/api/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다. **2026-09-03 에 `/api/chat/blocks` 에서 옮겼습니다** — 처음부터 사람 단위였는데(경로에 방 id 가 없습니다) 커뮤니티가 같은 것을 쓰게 되면서 이름이 거짓이 됐습니다(#166) | M2.7 |
@@ -1040,7 +1040,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 ```json
 // POST /media  (multipart/form-data: files=<jpeg>, category=POST_IMAGE, width=1600, height=1200)
-//   category 는 POST_IMAGE(글) · WALK_IMAGE(산책, #450) · PROFILE_IMAGE(아이 사진, #448) — 붙는 곳이 다를 뿐 올리기는 같다
+//   category 는 POST_IMAGE(글) · WALK_IMAGE(산책, #450) · CHAT_IMAGE(채팅 말풍선, #452) · PROFILE_IMAGE(아이 사진, #448) — 붙는 곳이 다를 뿐 올리기는 같다
 // 200
 [{ "id": 312, "key": "posts/7/2026/09/….jpg", "url": "https://cdn…/posts/7/2026/09/….jpg",
    "contentType": "image/jpeg", "size": 412331, "category": "POST_IMAGE",

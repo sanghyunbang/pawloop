@@ -96,7 +96,7 @@ controller  →  service  →  repository(JPA)  →  entity
 ### 4.1 `S3` — 미디어 업로드
 
 - `S3/media/*` — multipart 업로드, presigned URL 발급, 업로드 객체 원장(`media_objects`). **2026-09-13 까지 앱이 부르는 화면이 없었다** — 예전 서술의 "앱의 `shared/media` 가 프로필 사진에 쓴다" 는 틀렸다. 그 모듈은 완성품이지만 라우터에서 도달하는 화면이 없다(#429).
-- `S3/MediaAttachment` — **밖으로 내놓는 유일한 표면**(#429). `community` 가 이것으로 글에 사진·영상을 붙이고(`attach`·`replace`), 목록에 그릴 것을 한 번에 묻고(`attachedTo`), 글이 사라질 때 함께 지운다(`detachAll`). `walk.CourseAttachment` 와 같은 모양이다 — 하위 패키지의 `MediaService` 를 직접 부르면 Modulith 기준선이 는다.
+- `S3/MediaAttachment` — **밖으로 내놓는 유일한 표면**(#429). `community` 가 이것으로 글에 사진·영상을 붙이고(`attach`·`replace`), 목록에 그릴 것을 한 번에 묻고(`attachedTo`), 글이 사라질 때 함께 지운다(`detachAll`). `walk.CourseAttachment` 와 같은 모양이다 — 하위 패키지의 `MediaService` 를 직접 부르면 Modulith 기준선이 는다. `walk`(#450 산책 사진, `REF_WALK`)와 `chatweb`(#452 말풍선 사진, `REF_CHAT` — `chat` 은 경계 밖을 못 보므로 붙이는 것도 chatweb 이고, INSERT 와 같은 트랜잭션에서 붙인다)도 같은 표면을 쓴다.
 - `S3/media/MediaOrphanSweeper` — 올려 놓고 글을 안 쓴 사진을 하루 뒤 거둔다(새벽 4:10). 벌크 삭제라 두 인스턴스가 함께 돌아도 같다(📌 #86 원칙 2). `POST_*` 카테고리만 본다.
 - 레이트리밋 버킷 `upload`(`/media/**`). multipart 상한은 파일당 10MB(`spring.servlet.multipart.max-file-size`) — 2026-09-13 이전에는 Spring 기본값 1MB 라 폰 사진 한 장도 못 받았다.
 - **영상은 이 모듈을 통과하지 않는다.** `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을 100MB 에서 끊어서, 영상은 세 단계다 — `POST /media/videos` 가 `pending` 행과 15분짜리 서명 PUT 을 주고, 앱이 S3 에 직접 올리고, `POST /media/{mediaId}/complete` 에서 서버가 `FileStorage.stat`(HEAD)으로 실제 크기·형식을 확인해 `ready` 로 바꾼다. 서명 PUT 은 크기 조건을 못 걸어서(SDK v1) HEAD 의 답이 판정이다. `MediaController` 가 multipart 로 온 `POST_VIDEO` 를 400 으로 막는다. 한 글에 영상은 하나다.

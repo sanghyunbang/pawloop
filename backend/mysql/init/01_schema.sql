@@ -255,7 +255,7 @@ CREATE TABLE `media_objects` (
   `owner_id` varchar(255) NOT NULL,
   `ref_id` varchar(255) DEFAULT NULL,
   `ref_type` varchar(255) DEFAULT NULL,
-  `category` enum('JOURNEY_IMAGE','POST_IMAGE','POST_VIDEO','PROFILE_IMAGE','REVIEW_IMAGE','WALK_IMAGE') NOT NULL,
+  `category` enum('CHAT_IMAGE','JOURNEY_IMAGE','POST_IMAGE','POST_VIDEO','PROFILE_IMAGE','REVIEW_IMAGE','WALK_IMAGE') NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `UK3pkjswl54cvrded30nci3u45t` (`media_key`),
   KEY `idx_media_owner` (`owner_id`),

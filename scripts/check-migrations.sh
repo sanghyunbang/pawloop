@@ -95,7 +95,8 @@ fi
 has_table()  { q "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='$1';"; }
 has_column() { q "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='$1' AND column_name='$2';"; }
 has_cons()   { q "SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name='$1' AND constraint_name='$2';"; }
-has_index()  { q "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='$1' AND index_name='$2';"; }
+# statistics 는 인덱스의 **컬럼마다** 한 행이다 — COUNT(*) 로 재면 두 컬럼짜리 인덱스가 2 로 나와 '없음' 이 된다(39·40·41 이 그렇게 빨갛게 보였다).
+has_index()  { q "SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='$1' AND index_name='$2';"; }
 check_has()  { q "SELECT COUNT(*) FROM information_schema.check_constraints WHERE constraint_schema=DATABASE() AND constraint_name='$1' AND check_clause LIKE '%$2%';"; }
 
 MISSING=()
@@ -271,6 +272,9 @@ want 1 "$(has_index post idx_post_dog)" "idx_post_dog (없으면 아이 사진�
 
 step "42_media_walk_image.sql"
 want 1 "$(q "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='media_objects' AND column_name='category' AND column_type LIKE '%WALK_IMAGE%';")" "media_objects.category 에 WALK_IMAGE (없으면 산책 사진 올리기가 500 · 부팅이 validate 에서 죽는다)"
+
+step "43_media_chat_image.sql"
+want 1 "$(q "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='media_objects' AND column_name='category' AND column_type LIKE '%CHAT_IMAGE%';")" "media_objects.category 에 CHAT_IMAGE (없으면 채팅 사진 올리기가 500)"
 
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo

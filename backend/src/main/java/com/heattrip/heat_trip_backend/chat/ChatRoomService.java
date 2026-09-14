@@ -85,6 +85,13 @@ public class ChatRoomService {
     private static final String DEFAULT_CONTENT_TYPE = "text";
 
     /**
+     * 사진 메시지(#452). 본문은 캡션이라 비어도 된다. 사진 자체는 chat 이 모른다 — 붙이고 읽는 것은
+     * {@code chatweb.ChatMessages} 다(chat 은 경계 밖을 못 본다). 종류 문자열은 화이트리스트가 아니라
+     * <b>이 값일 때만 빈 본문을 허용</b>하는 규칙 하나를 위해 있다.
+     */
+    public static final String IMAGE_CONTENT_TYPE = "image";
+
+    /**
      * {@code chat_message.sender_name} 의 컬럼 폭. <b>한도가 아니라 스키마다</b> —
      * {@code users.nickname varchar(255)} 와 같은 값이고, 넘으면 500 대신 400 을 내려고 둔다.
      *
@@ -914,7 +921,9 @@ public class ChatRoomService {
      * 하고, 해석은 {@code chatweb.ChatSenderNames} 다 · #78 완료 조건 3·4).
      * 이 값은 "그때 방 안의 사람들이 본 이름" 으로 남는다({@link ChatMessageView} javadoc).
      *
-     * @param contentType {@code null}·공백이면 {@code text}. 16자를 넘으면 400
+     * @param contentType {@code null}·공백이면 {@code text}. 16자를 넘으면 400. {@link #IMAGE_CONTENT_TYPE} 면
+     *                    사진 메시지(#452) — 본문은 캡션이라 비어도 된다. 사진은 chat 밖에서 같은
+     *                    트랜잭션에 붙는다({@link ChatMessageSender#send})
      * @param clientMsgId 재전송 멱등키. {@code null} 이면 멱등을 요구하지 않는 전송이다.
      *                    <b>같은 사람이</b> 같은 키로 두 번 보내면 두 번째는
      *                    {@code UNIQUE (room_id, sender_user_id, client_msg_id)} 가 거부한다 —
@@ -923,7 +932,7 @@ public class ChatRoomService {
      *                    서로의 말을 지우지 않는다</b>(#79). 64자를 넘으면 400
      * @throws ResponseStatusException  403 — 이 방의 살아 있는 멤버가 아니면(없는 방도 여기다)
      * @throws NoSuchElementException   404 — 값싼 인가를 통과한 뒤 발급 전에 방이 사라졌으면
-     * @throws IllegalArgumentException 400 — 본문이 비었거나, 이름이 없거나, 넷 중 어느 하나가
+     * @throws IllegalArgumentException 400 — 본문이 비었거나(사진 메시지는 예외), 이름이 없거나, 넷 중 어느 하나가
      *                                  자기 컬럼 폭을 넘으면
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -931,8 +940,8 @@ public class ChatRoomService {
                                        String body, String contentType, String clientMsgId) {
         // ① 입력 검증 — 잠금을 잡기 전에 끝낸다.
         String name = validSenderName(senderName);
-        String text = validBody(body);
         String type = validContentType(contentType);
+        String text = validBody(body, type);
         String idempotencyKey = validClientMsgId(clientMsgId);
 
         // ② 값싼 인가 — 잠금을 잡기 전에 명백한 비멤버를 돌려보낸다. 최종 판정은 ④다.
@@ -980,7 +989,7 @@ public class ChatRoomService {
         metrics.messageSent(roomKind);
         // 저장 트랜잭션 안에서 알린다 — 듣는 쪽(알림, #83)은 AFTER_COMMIT 으로 받아 커밋 뒤에만 움직인다.
         events.publishEvent(new ChatMessagePosted(roomId, roomName, seq, saved.getId(), senderUserId, name,
-                "text".equals(type) ? text : "", saved.getCreatedAt()));
+                previewOf(type, text), saved.getCreatedAt()));
         return viewOf(saved);
     }
 
@@ -1358,15 +1367,30 @@ public class ChatRoomService {
      * <p>세는 단위가 문자가 아니라 <b>UTF-8 바이트</b>인 이유는 {@code TEXT} 가 바이트로
      * 세기 때문이다. 한글은 3바이트라 22,000자면 이미 넘는다.
      */
-    private static String validBody(String requested) {
+    private static String validBody(String requested, String contentType) {
         String text = requested == null ? "" : requested.strip();
-        if (text.isEmpty()) {
+        // 사진 메시지(#452)의 본문은 캡션이라 비어도 된다 — 빈 문자열로 저장한다(컬럼이 NOT NULL).
+        if (text.isEmpty() && !IMAGE_CONTENT_TYPE.equals(contentType)) {
             throw new IllegalArgumentException("메시지 본문이 비어 있습니다.");
         }
         if (text.getBytes(StandardCharsets.UTF_8).length > BODY_COLUMN_BYTES) {
             throw new IllegalArgumentException("메시지 본문이 너무 깁니다.");
         }
         return text;
+    }
+
+    /**
+     * 알림 미리보기(#83). 글자면 본문, 사진(#452)이면 캡션 — 캡션이 없으면 "사진" 이라고 말한다.
+     * 그 밖의 종류는 비운다 — 알림이 "메시지를 보냈어요" 로 뭉뚱그린다({@code push.PushMessage}).
+     */
+    private static String previewOf(String type, String text) {
+        if (DEFAULT_CONTENT_TYPE.equals(type)) {
+            return text;
+        }
+        if (IMAGE_CONTENT_TYPE.equals(type)) {
+            return text.isEmpty() ? "사진" : text;
+        }
+        return "";
     }
 
     /**

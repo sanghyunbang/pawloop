@@ -2596,8 +2596,8 @@ paths:
                   description: '`image/jpeg` · `image/png` · `image/webp`. 장당 10MB'
                 category:
                   type: string
-                  enum: [POST_IMAGE, WALK_IMAGE, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
-                  description: 글 사진은 `POST_IMAGE`. 나머지는 옛 값이라 앱이 안 씁니다
+                  enum: [POST_IMAGE, WALK_IMAGE, CHAT_IMAGE, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
+                  description: 글 사진 `POST_IMAGE` · 산책 사진 `WALK_IMAGE`(#450) · 채팅 사진 `CHAT_IMAGE`(#452) · 아이 사진 `PROFILE_IMAGE`(#448). `JOURNEY_IMAGE`·`REVIEW_IMAGE` 는 옛 값이라 앱이 안 씁니다
                 width:
                   type: integer
                   minimum: 1
@@ -3310,13 +3310,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [body]
+              required: []
               properties:
                 body:
                   type: string
-                  minLength: 1
                   description: |
-                    비어 있으면 400 입니다. 길이 상한은 **문자가 아니라 UTF-8 바이트 65,535**
+                    글자 메시지에서 비어 있으면 400 입니다. 사진 메시지(`mediaId` 있음, #452)에서는 **캡션**이라
+                    비워도 됩니다 — 응답의 `body` 는 `""` 입니다. 길이 상한은 **문자가 아니라 UTF-8 바이트 65,535**
                     입니다 — 컬럼이 `TEXT` 라서 그렇고, 한글은 3바이트라 22,000자면 이미 넘습니다.
                     넘으면 400 입니다(예전에는 500 이 나갔습니다).
                   example: "보리 저녁밥 방금 줬어요! 또 주지 마세요 🐶"
@@ -3332,7 +3332,18 @@ paths:
                   type: string
                   default: text
                   maxLength: 16
-                  description: 생략하면 `text`. `chat_message.content_type varchar(16)` 폭을 넘으면 400 입니다
+                  description: |
+                    생략하면 `text`. `chat_message.content_type varchar(16)` 폭을 넘으면 400 입니다.
+                    사진 메시지는 `image` 입니다(#452) — `mediaId` 가 있으면 생략해도 서버가 `image` 로 두고,
+                    `image` 인데 `mediaId` 가 없거나 다른 종류에 `mediaId` 를 붙이면 400 입니다.
+                mediaId:
+                  type: [integer, "null"]
+                  format: int64
+                  description: |
+                    사진 메시지(#452) — `POST /media` 에 `category=CHAT_IMAGE` 로 올린 것의 `id`. **사진 하나에
+                    메시지 하나**입니다(여러 장은 메시지 여러 개). 내가 올렸고 `ready` 이고 아직 어디에도 안 붙은
+                    것만 붙습니다 — 아니면 400 이고 **메시지도 생기지 않습니다**(번호도 안 태웁니다: INSERT 와
+                    붙이기가 한 트랜잭션). 재전송(같은 `clientMsgId`)은 처음 붙인 사진을 그대로 돌려줍니다.
       responses:
         '201':
           description: 전송됨(배정된 roomSeq 포함)
@@ -5218,7 +5229,7 @@ components:
         size: { type: [integer, "null"], format: int64 }
         category:
           type: string
-          enum: [POST_IMAGE, POST_VIDEO, WALK_IMAGE, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
+          enum: [POST_IMAGE, POST_VIDEO, WALK_IMAGE, CHAT_IMAGE, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
         refType:
           type: [string, "null"]
           description: 어디에 붙었나. 방금 올린 것은 `null` — 글을 만들 때 채워집니다
@@ -5696,7 +5707,10 @@ components:
             `users` 에 있으면 현재 닉네임, 없으면(탈퇴) `알 수 없음` 입니다.
             `"익명"` 은 쓰지 않습니다 — 커뮤니티 화면에서 이미 다른 뜻으로 쓰이고 있습니다.
           example: "보리아빠"
-        contentType: { type: string, default: text }
+        contentType:
+          type: string
+          default: text
+          description: '`text` 또는 `image`(사진 메시지, #452 — 그때 `media` 가 있습니다)'
         body: { type: string, example: "보리 저녁밥 방금 줬어요! 또 주지 마세요 🐶" }
         createdAt: { type: string, format: date-time }
         deletedAt:
@@ -5716,6 +5730,15 @@ components:
 
             앱은 이 자리에 **"가린 사람의 메시지입니다. 보기"** 를 그리고, "보기" 는 이미 받아
             둔 `body` 를 펼칩니다.
+        media:
+          description: |
+            사진 메시지(`contentType: image`, #452)의 사진 하나. 글의 `PostMedia` 와 같은 모양이라 앱이
+            같은 파서와 같은 그림을 씁니다 — 말풍선은 커뮤니티 카드와 같은 4:5 규칙입니다. 글자 메시지는
+            `null` 이고, 사진 메시지를 지우면(`deletedAt`) 사진도 지워져 `null` 입니다. 방 목록의
+            `lastMessage` 에는 싣지 않습니다 — 앱이 `contentType` 만 보고 "사진" 이라고 그립니다.
+          oneOf:
+            - $ref: '#/components/schemas/PostMedia'
+            - type: "null"
 
     ChatMessagePage:
       type: object

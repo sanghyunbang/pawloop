@@ -1386,7 +1386,7 @@ S3 에 올린 파일 하나에 행 하나. 감정 여행 시절(여정·리뷰·
 ```sql
 CREATE TABLE media_objects (
   id            BIGINT        NOT NULL AUTO_INCREMENT,
-  category      ENUM('JOURNEY_IMAGE','POST_IMAGE','POST_VIDEO','PROFILE_IMAGE','REVIEW_IMAGE','WALK_IMAGE') NOT NULL, -- WALK_IMAGE 는 42_media_walk_image.sql (#450 산책 사진)
+  category      ENUM('CHAT_IMAGE','JOURNEY_IMAGE','POST_IMAGE','POST_VIDEO','PROFILE_IMAGE','REVIEW_IMAGE','WALK_IMAGE') NOT NULL, -- WALK_IMAGE 는 42_media_walk_image.sql (#450 산책 사진) · CHAT_IMAGE 는 43_media_chat_image.sql (#452 말풍선 사진 — Hibernate 가 알파벳순으로 뽑아 맨 앞)
   owner_id      VARCHAR(255)  NOT NULL COMMENT 'users.id 를 문자열로 — 아래 각주',
   ref_type      VARCHAR(255)  NULL COMMENT '어디에 붙었나. POST 면 커뮤니티 글 · DOG 면 아이 사진(#448) · WALK 면 산책 사진(#450). NULL 이면 아직 안 붙었다',
   ref_id        VARCHAR(255)  NULL COMMENT '무엇에 붙었나. ref_type=POST 면 post.id. FK 는 없다 — 아래 각주',
