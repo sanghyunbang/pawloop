@@ -13,6 +13,7 @@ import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/feed_screen.dart';
+import 'package:heat_trip_flutter/v2/screens/main_shell.dart';
 import 'package:heat_trip_flutter/v2/domain/post_media.dart';
 import 'package:heat_trip_flutter/v2/screens/post_detail_screen.dart';
 import 'package:heat_trip_flutter/v2/widgets/post_media_strip.dart';
@@ -258,5 +259,16 @@ void main() {
     final title = tester.getTopLeft(find.text('서울숲 아침 산책 코스 추천'));
     expect(strip.dy, lessThan(author.dy), reason: '벽에서처럼 카드에서도 사진이 주인공이다');
     expect(strip.dy, lessThan(title.dy));
+  });
+  testWidgets('홈이 사진 벽을 부탁하면 격자로 열리고, 부탁은 한 번짜리다 (#451 6번)', (tester) async {
+    _phone(tester);
+    addTearDown(() => RootTab.communityView.value = 'card');
+    RootTab.communityView.value = 'grid';
+    final repo = _repo([_post(id: 12, media: [_media(1)])]);
+    await tester.pumpWidget(_host(FeedScreen(repository: repo)));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('post-photo-wall')), findsOneWidget, reason: '홈의 더 보기가 부탁한 대로 격자');
+    expect(RootTab.communityView.value, 'card', reason: '읽은 뒤 되돌린다 — 다음에 열 때는 카드');
   });
 }

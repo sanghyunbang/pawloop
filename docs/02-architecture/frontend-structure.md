@@ -115,6 +115,7 @@ lib/
   - `GlassCard` — `BackdropFilter` blur 기반 반투명 글래스 카드.
 - `profile_avatar.dart` — 강아지 프로필 아바타(테두리색 선택 반영).
 - `post_photo_wall.dart` — 커뮤니티의 **사진 벽**(#451): 사진·영상이 있는 글만 두 열 벽돌(masonry)로. 열 나누기는 순수 함수 `split`(순서대로 더 짧은 열에, 높이는 폭 1 기준 `1/비율 + 글 두 줄`), 타일은 첫 장 하나에 4:5…1.91:1 로 잘린 비율. 피드의 카드/목록/격자 전환 중 격자가 이것이다.
+- `neighbor_photo_strip.dart` — 홈의 **이웃의 사진** 한 줄(#451): 커뮤니티 목록 한 장에서 사진·영상 있는 글의 첫 장을 열두 개까지. 게스트에게는 없고, 없거나 못 불러오면 줄 자체가 없다. 타일은 글 상세로, "더 보기" 는 `RootTab.communityView = 'grid'` 로 커뮤니티 탭을 사진 벽으로 연다(피드가 읽고 되돌리는 한 번짜리 부탁).
 - `form_kit.dart` — 폼 부품 한 벌(#445): `SheetFrame` · `PrimaryButton`/`SecondaryButton`(머티리얼 버튼을 감싼다 — 테스트의 `find.widgetWithText(FilledButton, …)` 이 그대로 산다) · `PickerButton` · `GlassField` · `PillChip` · `FormLabel` · `SigFab`. 일정 시트 · 아이 등록 시트 · 크루 만들기/고치기 시트가 쓴다.
 - `walk_finish_sheet.dart` — 산책 완료 바텀시트(`WalkFinishSheet`, #310). 요약 셋 + **경로 미리보기** + "경로 사진 저장" + 기록 저장/저장 안 함. 트래킹 화면이 geolocator·네이버 지도를 물고 있어 위젯 테스트로 못 띄우므로 시트를 밖으로 꺼냈다.
 - `post_media_field.dart` — 글쓰기의 사진 칸(#429): 고르는 순간 올리기 시작하고 밖으로는 `PostMediaSelection`(올라간 id 순서 · 올리는 중인가 · 실패가 있는가)을 낸다. 글쓰기 화면은 올리는 중이면 저장을 잠근다. `post_media_strip.dart` 는 카드·상세의 격자(한 장 크게 · 둘 나란히 · 2×2 에 `+N`), `post_media_viewer.dart` 는 전체 보기 대화상자 — 화면이 아니라 위젯이라 라우트 없이 `showDialog` 로 뜬다. 영상 칸은 하나이고(서버 상한) 압축 중 → 올리는 중(%) → 올라감을 그린다. 전체 보기의 영상 페이지는 포스터·재생 버튼으로 시작해 **눌러야** `video_player` 컨트롤러를 만든다 — 넘겨 보다 스친 영상이 데이터를 먹지 않는다.

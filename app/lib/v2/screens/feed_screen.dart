@@ -12,6 +12,7 @@ import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import '../data/crew_repository.dart';
 import 'crew_section.dart';
+import 'main_shell.dart';
 import 'post_detail_screen.dart';
 import 'post_write_screen.dart';
 
@@ -111,6 +112,9 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    // 홈의 "이웃의 사진 → 더 보기" 가 사진 벽을 부탁했으면 격자로 연다(#451). 읽고 되돌린다.
+    _view = RootTab.communityView.value;
+    RootTab.communityView.value = 'card';
     _loadNeighborhood();
     kNeighborhoodRev.addListener(_loadNeighborhood);
     _load();

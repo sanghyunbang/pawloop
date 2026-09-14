@@ -16,6 +16,7 @@ import 'main_shell.dart';
 import 'start_walk.dart';
 import 'family_screen.dart';
 import 'insight_screen.dart';
+import '../widgets/neighbor_photo_strip.dart';
 
 /// 홈 — 우리 아이 · 오늘 산책 · 근처 동반 장소. (감정 도메인 제거, 강아지 산책 중심)
 class TodayScreen extends StatelessWidget {
@@ -137,6 +138,12 @@ class TodayScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   _ctas(context),
+                  // 이웃의 사진 한 줄 — 홈에서 커뮤니티 사진 벽으로 가는 문(#451 6번). 사진 있는
+                  // 글이 없거나 못 불러오면 줄 자체가 없다.
+                  NeighborPhotoStrip(onMore: () {
+                    RootTab.communityView.value = 'grid';
+                    RootTab.index.value = 3;
+                  }),
                   // 하드코딩 "맑음 · 24°C" 가 있던 자리(#326). 지금은 기상청·에어코리아 값으로 판정한
                   // 산책 안전 지수 한 줄이고, 키·위치·응답이 없으면 카드 자체가 없다(#336).
                   const WalkSafetyCard(),

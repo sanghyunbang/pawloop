@@ -17,6 +17,10 @@ class RootTab {
   static final ValueNotifier<int> index = ValueNotifier(0);
   static final ValueNotifier<String> exploreView = ValueNotifier('list');
 
+  /// 커뮤니티 탭이 다음에 열릴 때의 보기('card' | 'list' | 'grid'). 홈의 "이웃의 사진 → 더 보기" 가
+  /// 'grid' 로 두고 탭을 바꾼다. 피드가 읽은 뒤 'card' 로 되돌린다 — 한 번짜리 부탁이다(#451).
+  static final ValueNotifier<String> communityView = ValueNotifier('card');
+
   /// 모든 푸시 라우트를 닫고 해당 탭으로 이동. (result의 "더 둘러보기" 등)
   static void go(BuildContext context, int i, {String? exView}) {
     Navigator.of(context).popUntil((r) => r.isFirst);
