@@ -280,8 +280,10 @@ void main() {
 
   // ── 카드 발치의 댓글 줄이 큰 글자에서 안 넘친다 (#432) ──────────────────
   //
-  // `💬 댓글 N개 · 자세히 보기 …… >` 줄이다. `Text` 가 flex 가 아니라 Row 가 폭을 무한대로
+  // 처음엔 `💬 댓글 N개 · 자세히 보기 …… >` 줄이었다. `Text` 가 flex 가 아니라 Row 가 폭을 무한대로
   // 주고, `Spacer` 는 남은 공간이 음수여도 0 까지만 줄어든다 — #402 와 같은 모양이다.
+  // #465 에서 반응과 한 줄(`👍 도움돼요 7 … 💬 N >`)로 합쳤다 — 왼쪽 반응은 가로 스크롤 줄이라
+  // 어떤 배율에서도 안 넘치고, 오른쪽 댓글 수·화살표는 고정 폭이다. 아래 케이스는 그대로 지킨다.
   // 360dp·1.5배에서 **4px** 넘쳤다(2026-09-13 실측). 사진·동영상(#429)과 무관하다 —
   // 이 줄은 아이콘·글자·화살표뿐이라 첨부가 있든 없든 같은 값으로 넘친다.
   //
@@ -327,11 +329,11 @@ void main() {
       });
 
       expect(tester.takeException(), isNull);
-      expect(find.textContaining('댓글 999개'), findsOneWidget,
-          reason: '줄이더라도 개수는 남는다 — 줄어드는 것은 뒤쪽 안내("자세히 보기")다');
-      final label = tester.getSize(find.textContaining('댓글 999개'));
+      expect(find.text('999'), findsOneWidget,
+          reason: '좁아도 개수는 남는다 — 줄어드는 것은 왼쪽의 반응 줄(가로 스크롤)이다');
+      final label = tester.getSize(find.text('999'));
       expect(label.height, lessThan(12.5 * 1.5 * 2),
-          reason: '두 줄로 접지 않는다 — 한글은 음절 사이에서 줄이 바뀌어 "보/기" 로 갈라진다');
+          reason: '두 줄로 접지 않는다');
     });
 
     testWidgets('좁아도 화살표는 오른쪽 끝에 그대로 보인다', (tester) async {
@@ -345,27 +347,27 @@ void main() {
           reason: '글자가 화살표를 밀어내면 "더 볼 수 있다" 는 신호가 화면 밖으로 나간다');
     });
 
-    testWidgets('보통 배율에서는 지금 모양 그대로다 — 글자는 왼쪽, 화살표는 오른쪽 끝',
+    testWidgets('보통 배율에서는 액션 한 줄 — 반응은 왼쪽, 댓글 수와 화살표는 오른쪽 끝 (#465)',
         (tester) async {
       await pumpFeed(tester, width: 360, scale: 1.0);
 
       expect(tester.takeException(), isNull);
       final row = footerRowRect(tester);
-      final label = find.text('댓글 1개 · 자세히 보기');
-      final labelBox = tester.getRect(label);
+      final help = tester.getRect(find.text('도움돼요'));
+      final count = tester.getRect(find.text('1'));
       final chevron = tester.getRect(find.byIcon(Icons.chevron_right));
-      expect(labelBox.left, lessThan(row.left + 40),
-          reason: '아이콘(16) 과 간격(6) 바로 뒤에 글자가 온다');
+      expect(help.left, lessThan(row.left + 40),
+          reason: '아이콘(16) 과 간격(4) 바로 뒤에 반응 이름이 온다');
       expect(chevron.right, moreOrLessEquals(row.right));
+      expect(count.right, lessThan(chevron.left), reason: '댓글 수는 화살표 바로 앞');
+      expect(count.top, moreOrLessEquals(help.top, epsilon: 3), reason: '한 줄이다 — 예전엔 세 줄');
 
-      // 글자 **상자**가 아니라 **그려진 글자**로 잰다 — Expanded 라 상자는 화살표까지 닿고,
-      // 꽉 찬 제약에서는 textSize 도 상자 폭을 돌려준다. 글자 폭은 intrinsic 으로 잰다.
-      final paragraph = tester.renderObject<RenderParagraph>(label);
-      expect(paragraph.didExceedMaxLines, isFalse,
-          reason: '보통 배율에서는 안내가 통째로 보인다 — 말줄임은 좁을 때만');
-      final ink = paragraph.getMaxIntrinsicWidth(double.infinity);
-      expect(labelBox.left + ink, lessThan(chevron.left),
-          reason: '글자와 화살표 사이가 비어 있다 — 글자가 화살표까지 자라면 안 된다');
+      // 반응이 댓글 수까지 자라면 안 된다 — 사이가 비어 있다.
+      final empathy = tester.getRect(find.text('공감'));
+      final paragraph = tester.renderObject<RenderParagraph>(find.text('공감'));
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(empathy.right, lessThan(tester.getRect(find.byIcon(Icons.chat_bubble_outline)).left),
+          reason: '보통 배율에서는 반응 셋이 통째로 보인다 — 스크롤은 좁을 때만');
     });
 
     testWidgets('320dp · 글자 2.0배에서도 안 넘치고 화살표는 오른쪽 끝이다 — #433 뒤에 더한 케이스',
@@ -377,7 +379,7 @@ void main() {
       });
 
       expect(tester.takeException(), isNull);
-      expect(find.textContaining('댓글 999개'), findsOneWidget);
+      expect(find.text('999'), findsOneWidget);
       final chevron = tester.getRect(find.byIcon(Icons.chevron_right));
       expect(chevron.right, moreOrLessEquals(footerRowRect(tester).right));
     });
