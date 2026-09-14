@@ -8,6 +8,7 @@ import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.dog.entity.DogSize;
 import com.heattrip.heat_trip_backend.dog.entity.PetSpecies;
 import com.heattrip.heat_trip_backend.dog.repository.DogRepository;
+import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
 import lombok.RequiredArgsConstructor;
@@ -59,15 +60,18 @@ public class DogService implements DogOwnership {
 
     private final DogRepository dogs;
 
+    /** 프로필 사진 (#448). 모듈 경계의 공개 타입만 든다 — {@code S3.media.MediaService} 는 안 든다. */
+    private final MediaAttachment media;
+
     /** 삭제 시각. 빈은 {@code Asia/Seoul} 이지만 저장값은 UTC 로 눕힌다(계약: 표에 담기는 값은 UTC). */
     private final Clock clock;
 
     public List<DogResponse> mine(Long userId) {
-        return dogs.findMine(userId).stream().map(DogResponse::of).toList();
+        return dogs.findMine(userId).stream().map(this::toResponse).toList();
     }
 
     public DogResponse one(Long userId, long dogId) {
-        return DogResponse.of(require(userId, dogId));
+        return toResponse(require(userId, dogId));
     }
 
     @Transactional
@@ -95,7 +99,44 @@ public class DogService implements DogOwnership {
                 .neutered(request.neuteredOrDefault())
                 .build();
 
-        return DogResponse.of(dogs.save(dog));
+        return toResponse(dogs.save(dog));
+    }
+
+    // ─────────────────────────── 프로필 사진 (#448) ───────────────────────────
+
+    /**
+     * 프로필 사진을 붙인다 — 앱이 {@code POST /media}(PROFILE_IMAGE) 로 올린 미디어의 id 를 받는다.
+     * 한 아이에 한 장이라 <b>갈아 끼우기</b>다: 새 것을 먼저 붙이고 옛 것을 지운다
+     * ({@link MediaAttachment#replace} — 지우기는 S3 를 부르므로 붙이기가 먼저다).
+     * 남의 미디어 · 아직 안 올라온 것 · 이미 다른 데 붙은 것은 붙이기가 400 으로 거절한다.
+     */
+    @Transactional
+    public DogResponse updateAvatar(Long userId, long dogId, long mediaId) {
+        require(userId, dogId);
+        List<MediaAttachment.AttachedMedia> attached = media.replace(
+                MediaAttachment.REF_DOG, String.valueOf(dogId), List.of(mediaId), userId);
+        // 붙이기의 조건부 UPDATE 가 영속성 컨텍스트를 비운다(clearAutomatically) — 그 전에 읽은 엔티티는
+        // 떨어져 나가 고쳐도 안 남는다. 그래서 붙인 **뒤에** 다시 읽는다.
+        Dog dog = require(userId, dogId);
+        if (attached.size() != 1 || attached.get(0).kind() != MediaAttachment.Kind.IMAGE) {
+            throw new IllegalArgumentException("프로필 사진은 사진 한 장이어야 합니다.");
+        }
+        dog.changeAvatar(attached.get(0).key());
+        return toResponse(dog);
+    }
+
+    /** 프로필 사진을 뗀다 — 파일도 지운다. 없는데 떼도 200 이다(멱등). */
+    @Transactional
+    public DogResponse removeAvatar(Long userId, long dogId) {
+        require(userId, dogId);
+        media.detachAll(MediaAttachment.REF_DOG, String.valueOf(dogId));
+        Dog dog = require(userId, dogId); // 떼기가 컨텍스트를 비울 수 있다 — updateAvatar 와 같은 이유
+        dog.changeAvatar(null);
+        return toResponse(dog);
+    }
+
+    private DogResponse toResponse(Dog dog) {
+        return DogResponse.of(dog, dog.getAvatar() == null ? null : media.publicUrl(dog.getAvatar()));
     }
 
     /**
@@ -106,8 +147,13 @@ public class DogService implements DogOwnership {
      */
     @Transactional
     public void delete(Long userId, long dogId) {
+        require(userId, dogId);
+        // 되살리기가 없는 소프트 삭제다 — 사진 파일을 남겨 둘 이유가 없다(#448). 떼기가 영속성
+        // 컨텍스트를 비울 수 있어 **먼저** 떼고 그 뒤에 읽어 표시한다.
+        media.detachAll(MediaAttachment.REF_DOG, String.valueOf(dogId));
         Dog dog = require(userId, dogId);
         dog.markDeleted(DogTime.nowUtc(clock));
+        dog.changeAvatar(null);
     }
 
     /**

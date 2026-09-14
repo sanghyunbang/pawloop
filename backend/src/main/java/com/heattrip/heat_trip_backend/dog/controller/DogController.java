@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.dog.controller;
 
+import com.heattrip.heat_trip_backend.dog.dto.DogAvatarRequest;
 import com.heattrip.heat_trip_backend.dog.dto.DogRequest;
 import com.heattrip.heat_trip_backend.dog.dto.DogResponse;
 import com.heattrip.heat_trip_backend.dog.service.DogService;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -96,5 +98,20 @@ public class DogController {
     public ResponseEntity<Void> delete(@CurrentUser User user, @PathVariable long dogId) {
         dogService.delete(user.getId(), dogId);
         return ResponseEntity.noContent().build();
+    }
+
+    // ─────────────────────────── 프로필 사진 (#448) ───────────────────────────
+
+    /** 갈아 끼우기라 {@code PUT} 이다 — 같은 id 를 두 번 보내도 결과가 같다. 남의 것·없는 것은 404. */
+    @PutMapping("/{dogId}/avatar")
+    public DogResponse updateAvatar(@CurrentUser User user, @PathVariable long dogId,
+                                    @Valid @RequestBody DogAvatarRequest request) {
+        return dogService.updateAvatar(user.getId(), dogId, request.mediaId());
+    }
+
+    /** 사진 떼기 — 없는데 떼도 200 이다. 바뀐 아이를 돌려줘 앱이 그대로 그린다. */
+    @DeleteMapping("/{dogId}/avatar")
+    public DogResponse removeAvatar(@CurrentUser User user, @PathVariable long dogId) {
+        return dogService.removeAvatar(user.getId(), dogId);
     }
 }

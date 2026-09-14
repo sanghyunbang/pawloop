@@ -28,6 +28,9 @@ public interface MediaAttachment {
     /** 커뮤니티 글에 붙은 것의 {@code ref_type}. 이 어휘는 붙이는 쪽이 아니라 여기가 든다. */
     String REF_POST = "POST";
 
+    /** 아이 프로필 사진 (#448). {@code refId} 는 {@code dog.id}. 한 아이에 한 장이다 — {@link #replace} 로 간다. */
+    String REF_DOG = "DOG";
+
     /**
      * 붙인다. <b>내 것이고, 아직 어디에도 안 붙었고, {@code ready} 인 것</b>만 붙는다.
      *
@@ -58,6 +61,12 @@ public interface MediaAttachment {
     /** 글이 사라질 때 함께 지운다 — 행과 S3 객체 둘 다. 없으면 아무 일도 안 한다. */
     void detachAll(String refType, String refId);
 
+    /**
+     * S3 objectKey 를 공개 URL 로. {@code dog.avatar} 처럼 <b>키만 저장한</b> 자리가 응답을 조립할 때
+     * 쓴다 — 완성된 URL 을 저장하면 버킷·CDN 을 옮길 때 행마다 고쳐야 한다(#209 Dogs-medium-2).
+     */
+    String publicUrl(String objectKey);
+
     /** 화면이 그리는 종류. 카테고리에서 온다. */
     enum Kind {
         IMAGE("image"),
@@ -83,6 +92,8 @@ public interface MediaAttachment {
      * @param durationMs 영상 길이. 사진은 {@code null}
      */
     record AttachedMedia(long id, Kind kind, String url, String posterUrl,
-                         Integer width, Integer height, Integer durationMs) {
+                         Integer width, Integer height, Integer durationMs,
+                         /** S3 objectKey — 키만 저장하는 자리(dog.avatar)가 쓴다. */
+                         String key) {
     }
 }

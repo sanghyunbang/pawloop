@@ -890,6 +890,53 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
 
   # ─────────────────────────── Places ───────────────────────────
+  /api/dogs/{dogId}/avatar:
+    parameters:
+      - name: dogId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      tags: [Dogs]
+      summary: 프로필 사진 붙이기(갈아 끼우기)
+      description: |
+        먼저 `POST /media` 에 `category=PROFILE_IMAGE` 로 올리고, 그 **미디어 id** 를 보냅니다(#448).
+        커뮤니티 글의 사진(#429)과 같은 두 단계라 업로드 검증(형식·크기)이 한 곳에 삽니다.
+
+        **한 아이에 한 장입니다** — 새 것이 붙으면 옛 것은 파일까지 지워집니다. 갈아 끼우기라
+        `PUT` 이고, 같은 id 를 두 번 보내도 결과가 같습니다.
+
+        남의 미디어 · 아직 안 올라온 것(`pending`) · 이미 다른 데 붙은 것 · 영상은 `400` 입니다.
+        남의 반려동물과 없는 반려동물은 바이트까지 같은 `404` 입니다(ADR-0017 규약 3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DogAvatarInput' }
+      responses:
+        '200':
+          description: 사진이 붙은 반려동물 — `avatarUrl` 이 채워져 있습니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dog' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Dogs]
+      summary: 프로필 사진 떼기
+      description: |
+        파일도 지웁니다. **없는데 떼도 `200`** 입니다(멱등). 바뀐 반려동물을 돌려줘 앱이 그대로 그립니다 —
+        `avatarUrl` 은 `null` 입니다.
+      responses:
+        '200':
+          description: 사진이 없는 반려동물
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /api/places/nearby:
     get:
       tags: [Places]
@@ -4286,10 +4333,20 @@ components:
         avatarUrl:
           type: [string, "null"]
           description: |
-            **아직 항상 `null` 입니다** — 업로드 경로가 없습니다(#145 는 컬럼만 뒀습니다).
-            입력(`DogInput`)에 대응 필드가 없는 비대칭은 **의도**입니다: 채우는 날 입력은 S3
-            objectKey(`avatarFileId`)를 받고, `avatarUrl` 은 응답 전용 파생값으로 남깁니다 —
-            완성된 URL 을 저장하면 버킷·CDN 을 옮길 때 행마다 고쳐야 합니다(#209 `Dogs-medium-2`).
+            프로필 사진의 공개 URL (#448). 사진이 없으면 `null` 입니다.
+
+            입력(`DogInput`)에 대응 필드가 없는 비대칭은 **의도**입니다: 사진은
+            `PUT /api/dogs/{dogId}/avatar` 에 **미디어 id** 로 붙이고(먼저 `POST /media` 의
+            `PROFILE_IMAGE` 로 올립니다 — 커뮤니티 글의 사진과 같은 두 단계), `avatarUrl` 은 응답 전용
+            파생값입니다 — 저장되는 것은 S3 objectKey 이고 완성된 URL 을 저장하면 버킷·CDN 을 옮길 때
+            행마다 고쳐야 합니다(#209 `Dogs-medium-2`).
+
+    DogAvatarInput:
+      type: object
+      required: [mediaId]
+      description: 프로필 사진 붙이기의 본문 — `POST /media`(PROFILE_IMAGE) 가 돌려준 미디어 id (#448).
+      properties:
+        mediaId: { type: integer, format: int64 }
 
     DogInput:
       type: object
