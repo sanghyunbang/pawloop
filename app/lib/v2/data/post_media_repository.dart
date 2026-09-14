@@ -137,6 +137,9 @@ class PostMediaRepository {
   /// 서버가 받는 카테고리. 다른 셋은 감정 여행 시절 것이다.
   static const String category = 'POST_IMAGE';
 
+  /// 아이 프로필 사진의 카테고리 (#448) — 서버의 `profiles/` 접두, 5MB 까지.
+  static const String profileCategory = 'PROFILE_IMAGE';
+
   /// S3 로 직접 올리는 시간. 720p 60초는 수십 MB 다 — 카페 wifi 로 몇 분이다.
   static const Duration videoPutTimeout = Duration(minutes: 5);
 
@@ -159,6 +162,7 @@ class PostMediaRepository {
     required int width,
     required int height,
     String filename = 'photo.jpg',
+    String category = PostMediaRepository.category,
   }) async {
     if (jpegBytes.length > maxBytes) {
       throw const PostMediaFailure(PostMediaFailureKind.rejected,

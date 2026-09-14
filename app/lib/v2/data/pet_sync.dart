@@ -98,6 +98,27 @@ class PetSync {
   // 에셋·나이 라벨 같은 표시용 파생을 들고, 서버 쪽은 계약의 키를 그대로 읽는다.
   // 둘을 하나로 합치면 계약이 바뀔 때마다 화면이 흔들린다.
 
+  /// 프로필 사진을 붙이거나(#448) 뗀다. 서버가 돌려준 아이로 목록의 그 자리를 갈아 끼운다 —
+  /// 응답의 `avatarUrl` 을 그대로 그리지, 로컬에서 URL 을 짓지 않는다.
+  Future<DogProfile> setPhoto(DogProfile pet, int mediaId) async {
+    final id = pet.serverId;
+    if (id == null) throw const WalkFailure(WalkFailureKind.notFound);
+    return _swap(_toProfile(await _repo.setPetAvatar(id, mediaId)));
+  }
+
+  Future<DogProfile> clearPhoto(DogProfile pet) async {
+    final id = pet.serverId;
+    if (id == null) throw const WalkFailure(WalkFailureKind.notFound);
+    return _swap(_toProfile(await _repo.clearPetAvatar(id)));
+  }
+
+  DogProfile _swap(DogProfile fresh) {
+    replacePets([
+      for (final p in kMyPets.value) p.serverId == fresh.serverId ? fresh : p,
+    ]);
+    return fresh;
+  }
+
   static DogProfile _toProfile(ServerPet pet) => DogProfile(
         serverId: pet.id,
         name: pet.name,
@@ -117,6 +138,7 @@ class PetSync {
         // 그게 "모른다" 와 같은 자리다. 생일 입력을 받는 날 이 줄을 다시 본다.
         ageMonths: pet.ageMonths ?? 0,
         neutered: pet.neutered,
+        photoUrl: pet.avatarUrl,
       );
 
   static ServerPetSpecies _toServerSpecies(PetSpecies s) => switch (s) {

@@ -86,6 +86,9 @@ class ServerPet {
 
   final bool neutered;
 
+  /// 프로필 사진의 공개 URL — 계약의 `avatarUrl` (#448). 없으면 `null`.
+  final String? avatarUrl;
+
   const ServerPet({
     required this.id,
     required this.name,
@@ -94,6 +97,7 @@ class ServerPet {
     required this.neutered,
     this.breed,
     this.ageMonths,
+    this.avatarUrl,
   });
 
   /// 모양이 계약과 다르면 `null`. 목록 하나가 깨졌다고 화면 전체를 죽이지 않는다.
@@ -109,6 +113,7 @@ class ServerPet {
       breed: json['breed'] as String?,
       ageMonths: json['ageMonths'] as int?,
       neutered: json['neutered'] == true,
+      avatarUrl: json['avatarUrl'] as String?,
     );
   }
 }
@@ -562,6 +567,26 @@ class WalkRepository {
     final walk = ServerWalk.tryParse(json as Map<String, dynamic>);
     if (walk == null) throw const WalkFailure(WalkFailureKind.network);
     return walk;
+  }
+
+  /// 프로필 사진을 붙인다 (#448). [mediaId] 는 `POST /media`(PROFILE_IMAGE) 가 준 id 다. 갈아 끼우기라
+  /// 같은 id 를 두 번 보내도 결과가 같다. 남의 미디어·안 올라온 것은 400 → [WalkFailureKind.rejected].
+  Future<ServerPet> setPetAvatar(int dogId, int mediaId) async {
+    final json = await _send(() => _authed.putJson(
+          Uri.parse('$baseUrl/api/dogs/$dogId/avatar'),
+          body: {'mediaId': mediaId},
+        ));
+    final pet = ServerPet.tryParse(json as Map<String, dynamic>);
+    if (pet == null) throw const WalkFailure(WalkFailureKind.network);
+    return pet;
+  }
+
+  /// 프로필 사진을 뗀다 — 파일도 지워진다. 없는데 떼도 200 이고 사진 없는 아이가 돌아온다.
+  Future<ServerPet> clearPetAvatar(int dogId) async {
+    final json = await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/dogs/$dogId/avatar')));
+    final pet = ServerPet.tryParse(json as Map<String, dynamic>);
+    if (pet == null) throw const WalkFailure(WalkFailureKind.network);
+    return pet;
   }
 
   /// 반려동물 프로필을 지운다 — 서버는 **소프트 삭제**라 산책 기록은 남는다(#156).

@@ -95,6 +95,9 @@ class DogProfile {
   final int ageMonths;
   final bool neutered;
 
+  /// 프로필 사진의 공개 URL (#448). 없으면 `null` — 화면은 [avatarAsset] 의 종 이모지로 돌아간다.
+  final String? photoUrl;
+
   const DogProfile({
     this.serverId,
     required this.name,
@@ -103,6 +106,7 @@ class DogProfile {
     required this.size,
     required this.ageMonths,
     this.neutered = false,
+    this.photoUrl,
   });
 
   String get ageLabel =>
@@ -137,6 +141,8 @@ class DogProfile {
     DogSize? size,
     int? ageMonths,
     bool? neutered,
+    String? photoUrl,
+    bool clearPhoto = false,
   }) => DogProfile(
     serverId: serverId ?? this.serverId,
     name: name ?? this.name,
@@ -145,6 +151,7 @@ class DogProfile {
     size: size ?? this.size,
     ageMonths: ageMonths ?? this.ageMonths,
     neutered: neutered ?? this.neutered,
+    photoUrl: clearPhoto ? null : (photoUrl ?? this.photoUrl),
   );
 }
 
