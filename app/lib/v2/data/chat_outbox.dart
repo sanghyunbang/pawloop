@@ -27,6 +27,9 @@ library;
 
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
+
+import '../domain/post_media.dart';
 
 /// 보낸 메시지 하나의 상태.
 enum PendingState {
@@ -35,6 +38,20 @@ enum PendingState {
 
   /// 실패했다. **지우지 않는다** — 재전송 버튼이 붙는다.
   failed,
+}
+
+/// 보낼 사진(#452) — 다시 인코딩한 JPEG 바이트와 크기. 말풍선이 자리를 잡는 데 크기를 쓴다.
+class PendingPhoto {
+  final Uint8List bytes;
+  final int width;
+  final int height;
+
+  const PendingPhoto({required this.bytes, required this.width, required this.height});
+
+  /// 말풍선의 가로세로비 — 서버 사진([PostMedia.aspectRatio])과 같은 4:5 ~ 1.91:1 규칙.
+  double get aspectRatio => width <= 0 || height <= 0
+      ? 1
+      : (width / height).clamp(PostMedia.minFeedAspectRatio, PostMedia.maxFeedAspectRatio).toDouble();
 }
 
 /// 서버가 아직 확정하지 않은 메시지 하나.
@@ -50,12 +67,23 @@ class PendingMessage {
   /// 서버가 준 메시지가 그 자리에 들어간다.
   final DateTime createdAt;
 
+  /// 사진 메시지(#452)의 보낼 사진. 글자 메시지는 null.
+  final PendingPhoto? photo;
+
+  /// 올리기가 끝나 서버가 준 사진 id. 있으면 다시 보낼 때 올리기를 건너뛴다 — 같은 사진이
+  /// 버킷에 두 번 남지 않는다.
+  final int? mediaId;
+
   const PendingMessage({
     required this.clientMsgId,
     required this.body,
     required this.state,
     required this.createdAt,
+    this.photo,
+    this.mediaId,
   });
+
+  bool get isPhoto => photo != null;
 
   /// 새로 보내는 메시지. **여기서만 키를 만든다.**
   factory PendingMessage.create(String body, {DateTime? now}) {
@@ -67,12 +95,35 @@ class PendingMessage {
     );
   }
 
-  /// 전송이 실패했다. 키와 본문은 그대로다.
+  /// 사진 메시지 — 본문은 비어 있다(캡션은 아직 없다). 키는 여기서 만든다.
+  factory PendingMessage.photo(PendingPhoto photo, {DateTime? now}) {
+    return PendingMessage(
+      clientMsgId: newClientMsgId(),
+      body: '',
+      state: PendingState.sending,
+      createdAt: now ?? DateTime.now(),
+      photo: photo,
+    );
+  }
+
+  /// 사진을 올렸다 — 서버가 준 id 를 적어 둔다. 상태는 그대로(보내는 중).
+  PendingMessage uploaded(int mediaId) => PendingMessage(
+        clientMsgId: clientMsgId,
+        body: body,
+        state: state,
+        createdAt: createdAt,
+        photo: photo,
+        mediaId: mediaId,
+      );
+
+  /// 전송이 실패했다. 키와 본문은 그대로다 — 사진과 올린 id 도.
   PendingMessage failed() => PendingMessage(
         clientMsgId: clientMsgId,
         body: body,
         state: PendingState.failed,
         createdAt: createdAt,
+        photo: photo,
+        mediaId: mediaId,
       );
 
   /// 다시 보낸다. **키를 새로 만들지 않는다** — 만들면 서버에 같은 말이 두 번 남는다.
@@ -81,6 +132,8 @@ class PendingMessage {
         body: body,
         state: PendingState.sending,
         createdAt: createdAt,
+        photo: photo,
+        mediaId: mediaId,
       );
 
   @override

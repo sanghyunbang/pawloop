@@ -26,6 +26,8 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:http/http.dart' as http;
 
+import '../domain/post_media.dart';
+
 /// 채팅 요청이 실패한 이유.
 enum ChatFailureKind {
   /// 세션이 끝났다(401). `AuthedClient` 가 갱신까지 시도한 뒤의 결과다.
@@ -137,6 +139,9 @@ class ChatRoomSummary {
   final String? lastMessageBody;
   final String? lastMessageSender;
 
+  /// 마지막 말이 사진 메시지(#452)다 — 본문(캡션)이 비어 있으면 목록은 "사진" 이라고 말한다.
+  final bool lastMessageIsImage;
+
   /// 이 방에서의 내 역할. `OWNER` 면 방장이라 강퇴할 수 있다.
   ///
   /// 서버가 늘 주지만 모르는 값이 올 수 있어 문자열 그대로 든다 — [isOwner] 로만 읽는다.
@@ -159,6 +164,7 @@ class ChatRoomSummary {
     this.lastMessageBody,
     this.lastMessageSender,
     this.lastMessageHidden = false,
+    this.lastMessageIsImage = false,
     this.myRole = '',
     this.muted = false,
   });
@@ -183,6 +189,7 @@ class ChatRoomSummary {
       lastMessageBody: last is Map ? last['body']?.toString() : null,
       lastMessageSender: last is Map ? last['senderName']?.toString() : null,
       lastMessageHidden: last is Map && last['hiddenByBlock'] == true,
+      lastMessageIsImage: last is Map && last['contentType'] == 'image',
       myRole: '${json['myRole'] ?? ''}',
       muted: json['muted'] == true,
     );
@@ -208,6 +215,14 @@ class ChatMessageItem {
   /// 미읽음 뱃지가 영원히 남고, 본문을 지워 내리면 "보기" 를 누를 때 요청이 한 번 더 필요하다.
   final bool hiddenByBlock;
 
+  /// 메시지 종류 — `text` 아니면 `image`(#452). 서버는 자유 문자열이라 모르는 값은 글자로 그린다.
+  final String contentType;
+
+  /// 사진 메시지의 사진(#452) — 글의 [PostMedia] 와 같은 모양. 글자 메시지 · 지워진 사진 메시지는 null.
+  final PostMedia? media;
+
+  bool get isImage => contentType == 'image';
+
   const ChatMessageItem({
     required this.id,
     required this.roomSeq,
@@ -217,6 +232,8 @@ class ChatMessageItem {
     required this.createdAt,
     required this.deleted,
     this.hiddenByBlock = false,
+    this.contentType = 'text',
+    this.media,
   });
 
   static ChatMessageItem? tryParse(Map<String, dynamic> json) {
@@ -234,6 +251,8 @@ class ChatMessageItem {
       createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}'),
       deleted: json['deletedAt'] != null,
       hiddenByBlock: json['hiddenByBlock'] == true,
+      contentType: '${json['contentType'] ?? 'text'}',
+      media: PostMedia.tryParse(json['media']),
     );
   }
 }
@@ -346,11 +365,19 @@ class ChatRepository {
   /// [clientMsgId] 는 멱등키다. **재전송에는 같은 키를 다시 쓴다** — 새로 만들면 서버의
   /// `(room_id, sender_user_id, client_msg_id)` UNIQUE 그물을 통과해 같은 말이 두 번 남는다
   /// ([PendingMessage] 참조).
-  Future<ChatMessageItem> send(int roomId, String body, String clientMsgId) async {
+  ///
+  /// [mediaId] 가 있으면 사진 메시지(#452)다 — `POST /media` 에 `CHAT_IMAGE` 로 올린 id. 종류는
+  /// `image` 이고 [body] 는 캡션이라 비어도 된다. 사진 하나에 메시지 하나.
+  Future<ChatMessageItem> send(int roomId, String body, String clientMsgId, {int? mediaId}) async {
     final json = await _send(
       () => _authed.postJson(
         Uri.parse('$baseUrl/api/chat/rooms/$roomId/messages'),
-        body: {'body': body, 'clientMsgId': clientMsgId, 'contentType': 'text'},
+        body: {
+          'body': body,
+          'clientMsgId': clientMsgId,
+          'contentType': mediaId == null ? 'text' : 'image',
+          if (mediaId != null) 'mediaId': mediaId,
+        },
       ),
     );
     final parsed = ChatMessageItem.tryParse(json as Map<String, dynamic>);
