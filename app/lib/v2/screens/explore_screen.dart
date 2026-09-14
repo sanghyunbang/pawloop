@@ -430,8 +430,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
             const SizedBox(width: 5),
             Text('${_headerLabel()} · ${_filtered.length}곳',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.warmText)),
-            const Spacer(),
-            Text(_sourceCaption(), style: const TextStyle(fontSize: 10.5, color: T.textMuted)),
+            const SizedBox(width: 8),
+            // 출처 한 마디가 먼저 접힌다 — 큰 글자(1.6배)에서 이 줄이 190px 넘쳤다(#449 테스트).
+            // 개수는 짧고 자주 읽는 값이라 그대로 둔다.
+            Expanded(
+              child: Text(_sourceCaption(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(fontSize: 10.5, color: T.textMuted)),
+            ),
           ]),
           if (_fallbackCenter) ...[
             const SizedBox(height: 6),
@@ -695,52 +703,94 @@ class _ExploreScreenState extends State<ExploreScreen> {
         child: Icon(cat.icon, size: 26, color: cat.color),
       );
 
+  /// 사진을 못 받았을 때 카드 폭의 자리 — 카테고리색 바탕 + 아이콘. 크기를 그대로 두어
+  /// 사진이 늦게 실패해도 목록이 흔들리지 않는다.
+  Widget _wideFallback(PetCategory cat, String id) => Container(
+        key: Key('place-photo-fallback-$id'),
+        color: cat.color.withValues(alpha: 0.14),
+        alignment: Alignment.center,
+        child: Icon(cat.icon, size: 34, color: cat.color),
+      );
+
+  /// 장소 카드 (#449). 관광공사 사진이 있는 곳은 **사진이 먼저, 카드 폭**이다 — 지도 탭도
+  /// 사진 앱이다. AllTrails 의 코스 카드(사진 → 이름 → 거리)와 같은 순서. 사진이 없는
+  /// 공공데이터 층(병원·펫샵·산책로·놀이터)은 카테고리 아이콘의 한 줄 카드 그대로다 —
+  /// 사진 없이 카드만 키우면 밀도만 잃는다.
   Widget _placeCard(PetPlace p) {
     final cat = p.petCategory;
+    if (p.image.isNotEmpty) return _photoCard(p, cat);
     return GestureDetector(
+      key: Key('place-card-${p.contentId}'),
       onTap: () => _showPlaceSheet(p),
       child: GlassCard(
         padding: const EdgeInsets.all(12),
         child: Row(children: [
           ClipRRect(
+            key: Key('place-thumb-${p.contentId}'),
             borderRadius: BorderRadius.circular(14),
-            child: p.image.isNotEmpty
-                ? Image.network(p.image, width: 64, height: 64, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _imgFallback(cat))
-                : _imgFallback(cat),
+            child: _imgFallback(cat),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(p.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
-              const SizedBox(height: 6),
-              Row(children: [
-                // 배지가 먼저 줄어든다 — 거리는 짧고, 카드에서 가장 자주 읽는 값이다.
-                // 좁은 폭에서 배지가 안 줄어들어 줄이 통째로 넘쳤다(393dp 에서 8.5px).
-                Flexible(child: _catTag(cat)),
-                if (p.distLabel.isNotEmpty) ...[
-                  const SizedBox(width: 7),
-                  const Icon(Icons.near_me, size: 12, color: T.textMuted),
-                  const SizedBox(width: 2),
-                  Text(p.distLabel, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
-                ],
-              ]),
-              if (p.summary.isNotEmpty) ...[
-                const SizedBox(height: 5),
-                Text(p.summary, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: T.textSecondary)),
-              ],
-              if (p.addr.isNotEmpty) ...[
-                const SizedBox(height: 5),
-                Text(p.addr, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: T.textMuted)),
-              ],
-            ]),
-          ),
+          Expanded(child: _placeText(p, cat)),
           const Icon(Icons.chevron_right, size: 20, color: T.textFaint),
         ]),
       ),
     );
   }
+
+  /// 사진 카드 — 사진(16:9, 카드 폭) 아래 이름·태그·거리·주소. 세로 사진도 16:9 로 자른다 —
+  /// 관광공사 사진은 거의 가로이고, 목록에서는 한 화면에 두어 곳은 보여야 한다(#465 의 밀도).
+  Widget _photoCard(PetPlace p, PetCategory cat) => GestureDetector(
+        key: Key('place-card-${p.contentId}'),
+        onTap: () => _showPlaceSheet(p),
+        child: GlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            AspectRatio(
+              key: Key('place-photo-${p.contentId}'),
+              aspectRatio: 16 / 9,
+              child: Image.network(p.image,
+                  fit: BoxFit.cover, errorBuilder: (_, __, ___) => _wideFallback(cat, p.contentId)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 11, 12, 13),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: _placeText(p, cat)),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right, size: 20, color: T.textFaint),
+              ]),
+            ),
+          ]),
+        ),
+      );
+
+  /// 이름 · 태그와 거리 · 요약 · 주소 — 사진 카드와 한 줄 카드가 같은 글 묶음을 쓴다.
+  Widget _placeText(PetPlace p, PetCategory cat) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(p.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+        const SizedBox(height: 6),
+        Row(children: [
+          // 배지가 먼저 줄어든다 — 거리는 짧고, 카드에서 가장 자주 읽는 값이다.
+          // 좁은 폭에서 배지가 안 줄어들어 줄이 통째로 넘쳤다(393dp 에서 8.5px).
+          Flexible(child: _catTag(cat)),
+          if (p.distLabel.isNotEmpty) ...[
+            const SizedBox(width: 7),
+            const Icon(Icons.near_me, size: 12, color: T.textMuted),
+            const SizedBox(width: 2),
+            Text(p.distLabel, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+          ],
+        ]),
+        if (p.summary.isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Text(p.summary, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: T.textSecondary)),
+        ],
+        if (p.addr.isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Text(p.addr, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: T.textMuted)),
+        ],
+      ]);
 
   Widget _catTag(PetCategory cat) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1123,7 +1173,22 @@ class _ExploreScreenState extends State<ExploreScreen> {
       builder: (sheetCtx) => Container(
         decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
         padding: EdgeInsets.fromLTRB(20, 16, 20, 18 + MediaQuery.of(sheetCtx).padding.bottom),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // 사진이 얹히면 작은 화면·큰 글자에서 시트가 화면보다 길 수 있다 — 넘치지 않고 스크롤한다.
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // 사진이 맨 위, 시트 폭 (#449) — Apple 지도의 장소 시트처럼 사진이 먼저다.
+          if (p.image.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: AspectRatio(
+                key: const Key('place-sheet-photo'),
+                aspectRatio: 16 / 9,
+                child: Image.network(p.image,
+                    fit: BoxFit.cover, errorBuilder: (_, __, ___) => _wideFallback(cat, 'sheet-${p.contentId}')),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(
               width: 56, height: 56, alignment: Alignment.center,
@@ -1188,7 +1253,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
           _sheetActions(sheetCtx, p),
           const SizedBox(height: 10),
           _writeAboutPlace(sheetCtx, p),
-        ]),
+          ]),
+        ),
       ),
     );
   }
