@@ -80,9 +80,10 @@ _Fixture _fixture(List<Map<String, Object?>> items,
       requests.add(request);
       if (request.url.path.contains('/reactions/')) {
         if (onReaction != null) return onReaction(request);
-        // 서버의 집계 — 로컬에서 +1 한 것과 다르게 **4** 를 준다(3 에서 두 번 올라간 것처럼).
+        // 서버의 집계 — 로컬에서 ±1 한 것과 **다른 수**를 준다(켜면 5, 끄면 1). 남이 같은 시간에
+        // 누른 것이 섞인 값이다 — 로컬에서 세면 4·2 가 그려지고 그건 거짓이다.
         final mine = request.method == 'DELETE' ? const <String>[] : const ['cute'];
-        return _json({'help': 7, 'cute': request.method == 'DELETE' ? 2 : 4, 'empathy': 2, 'mine': mine});
+        return _json({'help': 7, 'cute': request.method == 'DELETE' ? 1 : 5, 'empathy': 2, 'mine': mine});
       }
       if (request.url.path.endsWith('/comments')) {
         return _json({'items': const [], 'nextCursor': null, 'hasMore': false});
@@ -145,7 +146,8 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(_burst, findsNothing, reason: '튀고 나면 사라진다');
-    expect(_cuteCount('4'), findsOneWidget, reason: '서버가 준 4 — 로컬에서 세면 남이 누른 것이 안 보인다');
+    expect(_cuteCount('5'), findsOneWidget, reason: '서버가 준 5 — 로컬에서 +1 하면 4 가 그려지고 남이 누른 것이 안 보인다');
+    expect(_cuteCount('4'), findsNothing);
     expect(find.byIcon(Icons.favorite_rounded), findsOneWidget, reason: '채운 하트');
     expect(find.byIcon(Icons.favorite_border_rounded), findsNothing);
     expect(find.byKey(const Key('post-media-viewer')), findsNothing, reason: '두 번 탭은 전체 보기를 열지 않는다');
@@ -173,7 +175,7 @@ void main() {
     final call = f.reactionCalls.single;
     expect(call.method, 'DELETE', reason: '눌러 둔 것을 누르면 뗀다');
     expect(call.url.path, '/api/community/posts/12/reactions/cute');
-    expect(_cuteCount('2'), findsOneWidget);
+    expect(_cuteCount('1'), findsOneWidget, reason: '서버가 준 1 — 로컬에서 -1 하면 2 다');
     expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
     expect(find.byType(PostDetailScreen), findsNothing, reason: '안쪽 탭이 이긴다 — 카드 열기가 가로채지 않는다');
     expect(_burst, findsNothing, reason: '하트는 두 번 탭에만 튄다');
@@ -204,6 +206,7 @@ void main() {
 
     expect(f.reactionCalls.single.method, 'POST');
     expect(_cuteCount('3'), findsOneWidget, reason: '낙관적으로 4 를 그렸다면 실패 뒤에 거짓이 남는다');
+    expect(_cuteCount('4'), findsNothing);
     expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
     expect(find.byType(SnackBar), findsOneWidget);
   });
@@ -240,7 +243,7 @@ void main() {
 
       expect(f.reactionCalls.single.method, 'POST');
       expect(f.reactionCalls.single.url.path, '/api/community/posts/12/reactions/cute');
-      expect(find.descendant(of: pill, matching: find.text('4')), findsOneWidget);
+      expect(find.descendant(of: pill, matching: find.text('5')), findsOneWidget, reason: '서버가 준 값');
       expect(find.descendant(of: pill, matching: find.byIcon(Icons.favorite_rounded)), findsOneWidget);
       expect(find.byType(PostDetailScreen), findsNothing);
     });
