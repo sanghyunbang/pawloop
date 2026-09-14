@@ -59,6 +59,7 @@ CREATE TABLE `chat_message` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `deleted_at` datetime(6) DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
+  `reply_to_id` bigint DEFAULT NULL,
   `room_id` bigint NOT NULL,
   `room_seq` bigint NOT NULL,
   `sender_user_id` bigint NOT NULL,
@@ -70,6 +71,8 @@ CREATE TABLE `chat_message` (
   UNIQUE KEY `uq_chat_room_seq` (`room_id`,`room_seq`),
   UNIQUE KEY `uq_chat_msg_client` (`room_id`,`sender_user_id`,`client_msg_id`),
   KEY `idx_chat_sender` (`sender_user_id`),
+  KEY `idx_chat_reply_to` (`reply_to_id`),
+  CONSTRAINT `fk_chat_reply_to` FOREIGN KEY (`reply_to_id`) REFERENCES `chat_message` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_chat_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

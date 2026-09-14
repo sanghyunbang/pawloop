@@ -106,6 +106,12 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
      */
     List<ChatMessage> findByRoomIdAndRoomSeqIn(Long roomId, Collection<Long> roomSeqs);
 
+    /**
+     * 답장의 원문들을 한 번에 — 이슈 #452. <b>같은 방 안에서만</b> 찾는다: 남의 방 메시지 id 를
+     * 들이밀어도 안 나온다. 지워진 것도 준다(미리보기가 "삭제된 메시지" 를 그린다).
+     */
+    List<ChatMessage> findByRoomIdAndIdIn(Long roomId, Collection<Long> ids);
+
     Optional<ChatMessage> findByRoomIdAndSenderUserIdAndClientMsgId(
             Long roomId, Long senderUserId, String clientMsgId);
 }

@@ -938,11 +938,24 @@ public class ChatRoomService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ChatMessageView postMessage(long roomId, long senderUserId, String senderName,
                                        String body, String contentType, String clientMsgId) {
+        return postMessage(roomId, senderUserId, senderName, body, contentType, clientMsgId, null);
+    }
+
+    /**
+     * 답장(#452)이면 {@code replyToId} 를 받는 판 — 원문은 <b>같은 방</b>의 메시지여야 하고
+     * (다른 방 · 없는 id 는 400), 원문이 지워졌어도 답장은 된다(카카오톡도 그렇다 — 미리보기가
+     * "삭제된 메시지" 로 나간다). 원문 확인은 잠금을 잡기 <b>전</b>에 한다 — 입력 검증과 같은 자리다.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ChatMessageView postMessage(long roomId, long senderUserId, String senderName,
+                                       String body, String contentType, String clientMsgId,
+                                       Long replyToId) {
         // ① 입력 검증 — 잠금을 잡기 전에 끝낸다.
         String name = validSenderName(senderName);
         String type = validContentType(contentType);
         String text = validBody(body, type);
         String idempotencyKey = validClientMsgId(clientMsgId);
+        ChatMessage replyTarget = validReplyTo(roomId, replyToId);
 
         // ② 값싼 인가 — 잠금을 잡기 전에 명백한 비멤버를 돌려보낸다. 최종 판정은 ④다.
         if (!isLiveMember(roomId, senderUserId)) {
@@ -971,6 +984,7 @@ public class ChatRoomService {
         // ⑤ INSERT. 방은 프록시로 든다 — 엔티티를 읽어 오면 그 스냅샷의 낡은 last_seq 가
         //    플러시 순서에 따라 ③을 덮어쓸 여지가 생긴다.
         ChatMessage saved = messages.saveAndFlush(ChatMessage.builder()
+                .replyTo(replyTarget)
                 .room(rooms.getReferenceById(roomId))
                 .roomSeq(seq)
                 .senderUserId(senderUserId)
@@ -1367,6 +1381,34 @@ public class ChatRoomService {
      * <p>세는 단위가 문자가 아니라 <b>UTF-8 바이트</b>인 이유는 {@code TEXT} 가 바이트로
      * 세기 때문이다. 한글은 3바이트라 22,000자면 이미 넘는다.
      */
+    /**
+     * 답장 대상(#452) — 없으면 {@code null}, 있으면 <b>같은 방</b>의 메시지여야 한다. 다른 방의 id 와
+     * 없는 id 를 구별해 주지 않는다(둘 다 400) — 남의 방 메시지가 있는지를 이 오류로 알아낼 수 없게.
+     */
+    private ChatMessage validReplyTo(long roomId, Long replyToId) {
+        if (replyToId == null) {
+            return null;
+        }
+        return messages.findById(replyToId)
+                .filter(target -> target.getRoom().getId().equals(roomId))
+                .orElseThrow(() -> new IllegalArgumentException("답장할 메시지가 이 방에 없습니다."));
+    }
+
+    /**
+     * 답장 미리보기용(#452) — 이 방의 메시지 몇 개를 id 로, <b>한 번의 조회</b>. 지워진 것도 준다
+     * (미리보기가 "삭제된 메시지" 를 그려야 한다). 방 밖의 id 는 그냥 빠져서 온다.
+     *
+     * <p>인가는 하지 않는다 — {@link #messagesAfter} 와 같은 이유로, 부르는 쪽이 이미 그 방의
+     * 목록을 인가받아 읽은 뒤 그 안의 {@code replyToId} 들로 묻는다.
+     */
+    @Transactional(readOnly = true)
+    public List<ChatMessageView> messagesByIds(long roomId, Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return messages.findByRoomIdAndIdIn(roomId, ids).stream().map(ChatRoomService::viewOf).toList();
+    }
+
     private static String validBody(String requested, String contentType) {
         String text = requested == null ? "" : requested.strip();
         // 사진 메시지(#452)의 본문은 캡션이라 비어도 된다 — 빈 문자열로 저장한다(컬럼이 NOT NULL).
@@ -1494,7 +1536,8 @@ public class ChatRoomService {
         return new ChatMessageView(message.getId(), message.getRoom().getId(),
                 message.getRoomSeq(), message.getSenderUserId(), message.getSenderName(),
                 message.getBody(), message.getContentType(), message.getClientMsgId(),
-                message.getCreatedAt(), message.getDeletedAt());
+                message.getCreatedAt(), message.getDeletedAt(),
+                message.getReplyTo() == null ? null : message.getReplyTo().getId());
     }
 
     private static ChatInviteView viewOf(ChatRoomInvite invite, long roomId) {

@@ -280,6 +280,10 @@ want 1 "$(has_index weekly_insight uq_weekly_insight)" "uq_weekly_insight (없�
 step "43_media_chat_image.sql"
 want 1 "$(q "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='media_objects' AND column_name='category' AND column_type LIKE '%CHAT_IMAGE%';")" "media_objects.category 에 CHAT_IMAGE (없으면 채팅 사진 올리기가 500)"
 
+step "45_chat_reply.sql"
+want 1 "$(has_column chat_message reply_to_id)" "chat_message.reply_to_id 컬럼 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(has_index chat_message idx_chat_reply_to)" "idx_chat_reply_to (없으면 원문을 지울 때 SET NULL 이 표 전체를 훑는다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

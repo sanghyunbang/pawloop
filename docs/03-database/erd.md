@@ -33,6 +33,7 @@ erDiagram
     chat_room ||--o{ chat_room_member : "멤버십"
     chat_room ||--o{ chat_room_invite : "초대코드"
     chat_room ||--o{ chat_message     : "메시지(room_seq 순)"
+    chat_message |o--o{ chat_message  : "답장의 원문 (reply_to_id, SET NULL, #452)"
 
     dog      ||--o{ walk      : "산책 기록 (대표 아이)"
     walk     ||--|{ walk_dog  : "함께 나간 아이들 (#343)"
@@ -243,6 +244,7 @@ erDiagram
         VARCHAR  client_msg_id  "재전송 멱등키. room+client UNIQUE, NULL 은 여러 번 허용"
         DATETIME created_at
         DATETIME deleted_at    "소프트 삭제 - seq 에 빈틈을 내지 않는다"
+        BIGINT   reply_to_id FK "답장 대상 - 같은 방의 메시지, SET NULL (#452)"
     }
 
     walk_note {

@@ -73,7 +73,14 @@ public class ChatMessageSender {
      */
     public ChatMessageSendResult send(long roomId, long senderUserId, String senderName,
                                       String body, String contentType, String clientMsgId) {
-        return send(roomId, senderUserId, senderName, body, contentType, clientMsgId, posted -> { });
+        return send(roomId, senderUserId, senderName, body, contentType, clientMsgId, null, posted -> { });
+    }
+
+    /** 답장이 아닌 전송 — {@code replyToId} 없이. */
+    public ChatMessageSendResult send(long roomId, long senderUserId, String senderName,
+                                      String body, String contentType, String clientMsgId,
+                                      Consumer<ChatMessageView> alongside) {
+        return send(roomId, senderUserId, senderName, body, contentType, clientMsgId, null, alongside);
     }
 
     /**
@@ -99,16 +106,18 @@ public class ChatMessageSender {
      * <p>그래서 돌아오는 메시지는 <b>언제나 부르는 사람 자신의 것</b>이다 —
      * {@code ChatRoomController.send} 가 응답의 이름을 자기 이름으로 채우는 근거가 그것이다.
      *
+     * @param replyToId 답장(#452)이면 원문 메시지의 id — 같은 방이어야 한다. 검증은
+     *                  {@link ChatRoomService#postMessage(long, long, String, String, String, String, Long)}
      * @param alongside INSERT 된 메시지를 받아 <b>같은 트랜잭션</b>에서 할 일(사진 붙이기, #452).
      *                  던지면 메시지도 없던 일이 된다. 재전송(이미 있는 메시지)에는 부르지 않는다
      */
     public ChatMessageSendResult send(long roomId, long senderUserId, String senderName,
                                       String body, String contentType, String clientMsgId,
-                                      Consumer<ChatMessageView> alongside) {
+                                      Long replyToId, Consumer<ChatMessageView> alongside) {
         try {
             ChatMessageView posted = sameTransaction.execute(status -> {
                 ChatMessageView view = chatRooms.postMessage(
-                        roomId, senderUserId, senderName, body, contentType, clientMsgId);
+                        roomId, senderUserId, senderName, body, contentType, clientMsgId, replyToId);
                 alongside.accept(view);
                 return view;
             });

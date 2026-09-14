@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/chat_outbox.dart';
+import '../domain/chat_reply.dart';
 import '../domain/chat_thread.dart';
 import '../data/chat_polling_policy.dart';
 import '../data/chat_repository.dart';
@@ -107,6 +108,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
 
   final List<ChatMessageItem> _messages = [];
   final List<PendingMessage> _pending = [];
+
+  /// 답장(#452)으로 고른 원문 — 입력창 위 인용 띠가 이것을 그리고, 보내면 비운다.
+  ChatMessageItem? _replyingTo;
+  final FocusNode _focus = FocusNode();
   late final PostMediaRepository _media = widget.media ?? PostMediaRepository();
   late final MediaPicker _picker = widget.picker ?? ImagePickerMediaPicker();
   bool _picking = false;
@@ -194,6 +199,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     _timer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _ctrl.dispose();
+    _focus.dispose();
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
     super.dispose();
@@ -318,8 +324,11 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       return;
     }
     _ctrl.clear();
-    final message = PendingMessage.create(text);
-    setState(() => _pending.add(message));
+    final message = PendingMessage.create(text, replyTo: _quoteOf(_replyingTo));
+    setState(() {
+      _pending.add(message);
+      _replyingTo = null;
+    });
     _scrollToBottom();
     await _deliver(message);
   }
@@ -343,8 +352,12 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
           continue;
         }
         if (!mounted) return;
-        final message = PendingMessage.photo(photo);
-        setState(() => _pending.add(message));
+        // 답장 중에 고른 사진은 첫 장에만 붙는다 — 카카오톡도 그렇다.
+        final message = PendingMessage.photo(photo, replyTo: _quoteOf(_replyingTo));
+        setState(() {
+          _pending.add(message);
+          _replyingTo = null;
+        });
         _scrollToBottom();
         await _deliver(message);
         if (!mounted) return;
@@ -374,7 +387,8 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         if (!mounted) return;
         setState(() => _replacePending(current));
       }
-      final sent = await _repo.send(widget.roomId, current.body, current.clientMsgId, mediaId: current.mediaId);
+      final sent = await _repo.send(widget.roomId, current.body, current.clientMsgId,
+          mediaId: current.mediaId, replyToId: current.replyTo?.id);
       if (!mounted) return;
       setState(() {
         _pending.removeWhere((p) => p.clientMsgId == current.clientMsgId);
@@ -617,6 +631,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     return Padding(
       padding: EdgeInsets.only(top: _gapAbove(slot)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        if (message.photo != null && message.replyTo != null) ...[
+          _quoteCard(message.replyTo!, key: Key('chat-reply-quote-pending-${message.clientMsgId}')),
+          const SizedBox(height: 4),
+        ],
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxW),
           child: message.photo != null ? _pendingPhoto(message, maxW) : Container(
@@ -630,8 +648,12 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
                 bottomRight: Radius.circular(4),
               ),
             ),
-            child: Text(message.body,
-                style: const TextStyle(fontSize: 13.5, height: 1.45, color: Colors.white)),
+            child: _withQuote(
+                message.replyTo,
+                Text(message.body,
+                    style: const TextStyle(fontSize: 13.5, height: 1.45, color: Colors.white)),
+                onDark: true,
+                quoteKey: Key('chat-reply-quote-pending-${message.clientMsgId}')),
           ),
         ),
         const SizedBox(height: 4),
@@ -681,12 +703,14 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   Widget _photoRow(BuildContext context, ChatMessageItem m, ThreadSlot slot,
       {required double maxW, required bool mine, required String time}) {
     final tile = _photoTile(m, maxW, mine: mine);
+    final quote = m.replyTo == null ? null : _quoteCard(m.replyTo!, key: Key('chat-reply-quote-${m.id}'));
     final caption = m.body.isEmpty ? null : _captionBubble(m, maxW, mine: mine);
     final timeText = Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted));
     if (mine) {
       return Padding(
         padding: EdgeInsets.only(top: _gapAbove(slot)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          if (quote != null) ...[quote, const SizedBox(height: 4)],
           tile,
           if (caption != null) ...[const SizedBox(height: 4), caption],
           if (slot.showTime) ...[const SizedBox(height: 4), timeText],
@@ -701,6 +725,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         Flexible(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (slot.showHeader) ...[_senderName(m.senderName), const SizedBox(height: 4)],
+            if (quote != null) ...[quote, const SizedBox(height: 4)],
             tile,
             if (caption != null) ...[const SizedBox(height: 4), caption],
             if (slot.showTime) ...[const SizedBox(height: 4), timeText],
@@ -787,7 +812,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxW),
-            child: Container(
+            child: GestureDetector(
+              // 길게 눌러 답장(#452) · 삭제(#197) — 남의 말풍선과 같은 제스처.
+              onLongPress: () => _openMessageActions(m),
+              child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 gradient: _warm,
@@ -805,8 +833,13 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
                   ),
                 ],
               ),
-              child: Text(_bodyOf(m),
-                  style: const TextStyle(fontSize: 13.5, height: 1.45, color: Colors.white)),
+              child: _withQuote(
+                  m.deleted ? null : m.replyTo,
+                  Text(_bodyOf(m),
+                      style: const TextStyle(fontSize: 13.5, height: 1.45, color: Colors.white)),
+                  onDark: true,
+                  quoteKey: Key('chat-reply-quote-${m.id}')),
+            ),
             ),
           ),
           if (slot.showTime) ...[
@@ -848,7 +881,11 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
                       borderRadius: br,
                       border: Border.all(color: T.cardBorder),
                     ),
-                    child: _otherBody(m),
+                    child: _withQuote(
+                        _isFolded(m) || m.deleted ? null : m.replyTo,
+                        _otherBody(m),
+                        onDark: false,
+                        quoteKey: Key('chat-reply-quote-${m.id}')),
                   ),
                 ),
               ),
@@ -905,12 +942,16 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       hiddenByBlock: m.hiddenByBlock,
       canRemoveMember: widget.isOwner,
       isMine: mine,
+      canReply: !m.deleted,
     );
     if (!mounted || action == null) {
       return;
     }
 
     switch (action) {
+      case MessageAction.reply:
+        setState(() => _replyingTo = m);
+        _focus.requestFocus();
       case MessageAction.report:
         await _report(m);
       case MessageAction.block:
@@ -1132,7 +1173,9 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 6, 16, bottom + 14),
-      child: Row(children: [
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (_replyingTo != null) _replyBar(_replyingTo!),
+        Row(children: [
         // 사진 보내기(#452) — 글자 칸 왼쪽. 앨범에서 고른 사진이 말풍선이 된다.
         GestureDetector(
           key: const Key('chat-photo'),
@@ -1160,6 +1203,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
             ),
             child: TextField(
               controller: _ctrl,
+              focusNode: _focus,
               onSubmitted: (_) => _send(),
               textInputAction: TextInputAction.send,
               decoration: const InputDecoration(
@@ -1173,6 +1217,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         ),
         const SizedBox(width: 10),
         GestureDetector(
+          key: const Key('chat-send'),
           onTap: _send,
           child: Container(
             width: 46,
@@ -1182,7 +1227,112 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
             child: const Icon(Icons.send_rounded, size: 20, color: Colors.white),
           ),
         ),
+        ]),
       ]),
     );
   }
+
+  /// 입력창 위의 인용 띠(#452) — "누구에게 답장" 과 첫 줄, 오른쪽에 닫기. 카카오톡 · 인스타그램 DM 의 자리.
+  Widget _replyBar(ChatMessageItem m) {
+    final quote = _quoteOf(m)!;
+    final mine = _myUserId != null && m.senderUserId == _myUserId;
+    return Container(
+      key: const Key('chat-reply-bar'),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: T.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: T.cardBorder),
+      ),
+      child: Row(children: [
+        Container(
+          width: 3,
+          height: 32,
+          decoration: BoxDecoration(color: T.accent, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(mine ? '나에게 답장' : '${m.senderName}에게 답장',
+                key: const Key('chat-reply-bar-name'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.textPrimary)),
+            const SizedBox(height: 2),
+            Text(quote.preview,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: T.textSecondary)),
+          ]),
+        ),
+        IconButton(
+          key: const Key('chat-reply-cancel'),
+          onPressed: () => setState(() => _replyingTo = null),
+          icon: const Icon(Icons.close_rounded, size: 18, color: T.textMuted),
+          visualDensity: VisualDensity.compact,
+        ),
+      ]),
+    );
+  }
+
+  /// 고른 원문 → 보내기 전 말풍선이 그릴 인용. 서버와 같은 규칙([replyPreviewOf])이라 확정돼도 글자가 안 바뀐다.
+  ChatReplyTo? _quoteOf(ChatMessageItem? m) => m == null
+      ? null
+      : ChatReplyTo(
+          id: m.id,
+          senderName: m.senderName,
+          preview: replyPreviewOf(m.body, isImage: m.isImage, deleted: m.deleted),
+          deleted: m.deleted,
+        );
+
+  /// 말풍선 본문 위에 인용 블록을 얹는다 — 인용이 없으면 본문 그대로.
+  Widget _withQuote(ChatReplyTo? quote, Widget body, {required bool onDark, required Key quoteKey}) {
+    if (quote == null) return body;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      _quoteBlock(quote, key: quoteKey, onDark: onDark),
+      const SizedBox(height: 6),
+      body,
+    ]);
+  }
+
+  /// 인용 블록 — 왼쪽 세로선, 이름 한 줄, 첫 줄. 내 말풍선(어두운 바탕)에서는 흰색 계열.
+  /// 지워진 원문은 기울임 — 본문의 "삭제된 메시지예요" 와 같은 어조.
+  Widget _quoteBlock(ChatReplyTo quote, {required Key key, required bool onDark}) {
+    final name = onDark ? Colors.white : T.textPrimary;
+    final text = onDark ? Colors.white.withValues(alpha: 0.86) : T.textSecondary;
+    final bar = onDark ? Colors.white.withValues(alpha: 0.7) : T.accent;
+    return Container(
+      key: key,
+      padding: const EdgeInsets.only(left: 8),
+      decoration: BoxDecoration(border: Border(left: BorderSide(color: bar, width: 2))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text(quote.senderName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: name)),
+        const SizedBox(height: 1),
+        Text(quote.preview,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11.5,
+              height: 1.3,
+              color: text,
+              fontStyle: quote.deleted ? FontStyle.italic : FontStyle.normal,
+            )),
+      ]),
+    );
+  }
+
+  /// 사진 말풍선 위에 두는 인용 — 사진에는 바탕이 없어 작은 카드에 담는다.
+  Widget _quoteCard(ChatReplyTo quote, {required Key key}) => Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+        decoration: BoxDecoration(
+          color: T.cardBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: T.cardBorder),
+        ),
+        child: _quoteBlock(quote, key: key, onDark: false),
+      );
 }

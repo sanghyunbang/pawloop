@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.chatweb;
 
 import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
+import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.chat.ChatTime;
 
 import java.time.Instant;
@@ -50,6 +51,7 @@ import java.time.Instant;
  *                  {@code deletedAt} 과 같다 — 빼면 그 {@code roomSeq} 가 도달하지 않아
  *                  미읽음 뱃지가 영원히 남는다
  * @param media 사진 메시지의 사진. 글자 메시지는 {@code null}
+ * @param replyTo 답장(#452)이면 원문의 미리보기. 아니면 {@code null}
  */
 public record ChatMessageResponse(
         long id,
@@ -62,7 +64,34 @@ public record ChatMessageResponse(
         Instant createdAt,
         Instant deletedAt,
         boolean hiddenByBlock,
-        Media media) {
+        Media media,
+        ReplyTo replyTo) {
+
+    /**
+     * 답장의 원문 미리보기(#452) — 원문을 보낸 사람의 <b>지금</b> 이름(메시지와 같은 규칙, #78)과
+     * 첫 {@value #PREVIEW_CHARS}자(공백·줄바꿈은 한 칸으로). 원문이 지워졌으면 {@code deleted} 이고
+     * {@code preview} 는 "삭제된 메시지", 캡션 없는 사진이면 "사진" 이다. 원문의 내용은 저장하지 않고
+     * 응답 때마다 읽는다 — 그래서 원문이 지워지면 다음 조회부터 이렇게 보인다.
+     */
+    public record ReplyTo(long id, String senderName, String preview, boolean deleted) {
+        static final int PREVIEW_CHARS = 80;
+        static final String DELETED = "삭제된 메시지";
+        static final String PHOTO = "사진";
+
+        static ReplyTo of(ChatMessageView target, String senderName) {
+            if (target.deletedAt() != null) {
+                return new ReplyTo(target.id(), senderName, DELETED, true);
+            }
+            String text = target.body() == null ? "" : target.body().strip().replaceAll("\\s+", " ");
+            if (text.isEmpty() && ChatRoomService.IMAGE_CONTENT_TYPE.equals(target.contentType())) {
+                text = PHOTO;
+            }
+            if (text.codePointCount(0, text.length()) > PREVIEW_CHARS) {
+                text = text.substring(0, text.offsetByCodePoints(0, PREVIEW_CHARS)) + "…";
+            }
+            return new ReplyTo(target.id(), senderName, text, false);
+        }
+    }
 
     /** 계약의 {@code PostMedia} 모양 — 사진 하나. 글 사진과 같은 필드라 앱이 같은 파서를 쓴다. */
     public record Media(long id, String kind, String url, String posterUrl,
@@ -85,9 +114,14 @@ public record ChatMessageResponse(
 
     static ChatMessageResponse of(ChatMessageView message, String senderName,
                                   boolean hiddenByBlock, Media media) {
+        return of(message, senderName, hiddenByBlock, media, null);
+    }
+
+    static ChatMessageResponse of(ChatMessageView message, String senderName,
+                                  boolean hiddenByBlock, Media media, ReplyTo replyTo) {
         return new ChatMessageResponse(message.id(), message.roomId(), message.roomSeq(),
                 message.senderUserId(), senderName, message.contentType(), message.body(),
                 ChatTime.toInstant(message.createdAt()),
-                ChatTime.toInstant(message.deletedAt()), hiddenByBlock, media);
+                ChatTime.toInstant(message.deletedAt()), hiddenByBlock, media, replyTo);
     }
 }

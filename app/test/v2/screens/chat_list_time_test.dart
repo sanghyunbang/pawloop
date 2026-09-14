@@ -1,5 +1,4 @@
 // 방 목록의 마지막 말 시각 (#452) — 오늘은 HH:mm, 어제는 "어제", 말이 없으면 없다.
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

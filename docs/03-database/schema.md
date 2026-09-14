@@ -669,12 +669,16 @@ CREATE TABLE chat_message (
   client_msg_id  VARCHAR(64)  NULL COMMENT '재전송 멱등키. NULL 은 여러 번 허용된다',
   created_at     DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   deleted_at     DATETIME(6)  NULL COMMENT '삭제는 소프트 — 뺀 자리가 seq 빈틈이 되면 안 된다',
+  reply_to_id    BIGINT       NULL COMMENT '답장 대상(#452) — 같은 방의 메시지. 원문 내용은 저장하지 않는다',
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_room_seq (room_id, room_seq),
   UNIQUE KEY uq_chat_msg_client (room_id, sender_user_id, client_msg_id),
   KEY idx_chat_sender (sender_user_id),
+  KEY idx_chat_reply_to (reply_to_id),
   CONSTRAINT fk_chat_room FOREIGN KEY (room_id)
-    REFERENCES chat_room (id) ON DELETE CASCADE
+    REFERENCES chat_room (id) ON DELETE CASCADE,
+  CONSTRAINT fk_chat_reply_to FOREIGN KEY (reply_to_id)
+    REFERENCES chat_message (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
@@ -690,10 +694,13 @@ CREATE TABLE chat_message (
 | `client_msg_id` | `VARCHAR(64)` | NULL, UNIQUE(room,sender,client) | 재전송 멱등키 |
 | `created_at` | `DATETIME(6)` | NOT NULL, 기본 now | 전송 시각 |
 | `deleted_at` | `DATETIME(6)` | NULL | 소프트 삭제 |
+| `reply_to_id` | `BIGINT` | NULL, FK→`chat_message.id` **SET NULL**, INDEX | 답장 대상(#452). 같은 방의 메시지만 — 서버가 400 으로 막는다 |
 
 **`room_seq` 발급은 한 문장이다.** `UPDATE chat_room SET last_seq = LAST_INSERT_ID(last_seq + 1) WHERE id = ?` 로 올리고 같은 트랜잭션에서 `SELECT LAST_INSERT_ID()` 로 내 번호를 읽는다. 방을 읽어 `+1` 해서 쓰는 판은 두 트랜잭션이 같은 값을 읽어 같은 번호를 쓴다 — 스레드 20개로 재현했고 `Duplicate entry '1-1' for key 'uq_chat_room_seq'` 가 났다(#78). **발급과 INSERT 가 한 트랜잭션이라 롤백이 번호를 되돌린다** — `AUTO_INCREMENT` 와 달리 실패한 요청이 번호를 태우지 않는 이유가 그것이다.
 
 **`deleted_at` 은 톰스톤이다 — 조회에서 거르지 않는다.** 빼면 그 `room_seq` 가 클라이언트에 도달하지 않는다. 미읽음이 `room.last_seq − member.last_read_seq` 뺄셈이라 읽음 커서가 그 번호를 넘지 못하고 **뱃지가 영원히 안 지워진다**. 본문을 가리는 것은 응답을 만드는 쪽의 일이지 조회에서 빼는 것이 아니다.
+
+**`reply_to_id` 는 같은 표를 가리키는 FK 다(#452, `45_chat_reply.sql`).** 카카오톡의 답장처럼 "어느 말에 대한 답" 하나이고 스레드가 아니다. **원문의 내용을 복사해 두지 않는다** — 원문이 나중에 지워지거나(톰스톤) 보낸 사람의 이름이 바뀌므로, 미리보기(보낸 사람 · 첫 줄)는 응답 때마다 `chatweb.ChatMessages` 가 원문을 한 번의 조회로 읽어 만든다. 원문이 소프트 삭제되면 "삭제된 메시지" 로 보이고, 운영 정리로 하드 삭제되면 `ON DELETE SET NULL` 로 답장만 남는다. 다른 방의 메시지는 `ChatRoomService#postMessage` 가 400 으로 막는다 — 표 안의 자기 참조라 chat 경계 밖으로 나가는 FK 가 아니다.
 
 ---
 
@@ -1366,6 +1373,7 @@ CREATE TABLE crew (
 | `chat_message` | `uq_chat_room_seq(room_id, room_seq)` | UNIQUE | 방별 순서·델타·미읽음의 유일한 근거. `afterSeq` 범위 스캔도 이 인덱스다 |
 | `chat_message` | `uq_chat_msg_client(room_id, sender_user_id, client_msg_id)` | UNIQUE | 재전송 멱등. `NULL` 은 여러 번 허용된다. **범위에 보낸 사람이 들어 있다** — 방 전체로 두면 같은 방의 다른 멤버가 같은 키를 썼을 때 그 사람의 메시지가 사라진다(#79) |
 | `chat_message` | `idx_chat_sender(sender_user_id)` | 보조 | 발신자별 조회(신고 처리) |
+| `chat_message` | `idx_chat_reply_to(reply_to_id)` | 보조 | 답장 대상 FK(#452). 원문을 지울 때 SET NULL 이 이 인덱스로 답장들을 찾는다 |
 | `walk_note` | `uq_walknote_group(group_id)` | UNIQUE | 그룹당 주의사항 한 장 |
 | `care_log` | `idx_carelog_group(group_id, occurred_at)` | 보조 | 그룹별 "오늘의 케어" 조회 |
 | `care_log` | `idx_carelog_doneby(done_by)` | 보조 | 사용자 삭제 시 `SET NULL` 이 훑는 자리 |
