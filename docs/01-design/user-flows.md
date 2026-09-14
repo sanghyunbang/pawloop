@@ -27,6 +27,7 @@
 | 15 | 일정 적기 → 달력에서 보기 → 완료 표시 | 일정 탭 | `schedule_screen.dart`(월 달력 · 그날 목록 · 만들기 시트) |
 | 16 | 우리 동네 크루 찾기 → 참여 → 대화방 | 커뮤니티 탭 > 크루 | `crew_section.dart`(내 크루 · 우리 동네) → `crew_home_screen.dart` → `family_chat_screen.dart` |
 | 17 | 크루 만들기 → 초대 코드 보내기 | 커뮤니티 탭 > 크루 | `widgets/crew_create_sheet.dart` → `crew_home_screen.dart`(초대 코드 보내기) |
+| 18 | 오늘의 코스 → 여기서 산책 시작 | 홈 · 산책 시작 버튼 아래 | `widgets/today_course_card.dart`(규칙 `domain/course_recommender.dart`) → `walk_tracking_screen.dart` |
 
 네비게이션 골격은 `main_shell.dart` 의 여섯 자리다: **홈 · 지도 · 일정 · [가운데 산책 FAB] · 커뮤니티 · 채팅**. 일정은 #419 가 더했다 — 왼쪽 셋 · 오른쪽 둘로 나눈 것은 FAB 오른쪽에 셋을 두면 알약의 무게가 쏠리기 때문이다. 통계·기록·가족·설정은 탭이 아니라 프로필(`me_screen.dart`)에서 들어간다. `pin_picker_screen.dart` 는 파일은 있으나 지금 어디에서도 열리지 않는다(#322 에서 확인 — 지울지는 따로 정한다).
 
@@ -446,6 +447,22 @@ flowchart TD
 - 개인정보처리방침 v1.6 의 수집 항목에 "동네(읍·면·동, 선택)" 가 있고, **"단말이 측정한 좌표가 아닙니다"** 가 그 옆에 적혀 있다.
 
 ---
+
+## 15. 오늘의 코스 → 여기서 산책 시작 (#485)
+
+```mermaid
+flowchart TD
+    H[홈 · 산책 시작 버튼 아래] --> L{위치 · 후보}
+    L -->|위치 없음 · 후보 없음 · 게스트| N[카드 없음]
+    L --> S{안전 지수 #336}
+    S -->|피하세요| R[오늘의 코스는 쉬어요 · 판정 한 줄]
+    S -->|좋아요 · 짧게 · 추위| C[카드: 코스 하나<br/>이름 · 거리 · 코스 길이 · 이유]
+    C -->|다른 코스| C
+    C -->|여기서 산책 시작| W[startWalk place: → walk_tracking_screen.dart<br/>장소가 미리 채워짐 #338]
+    W -->|저장| X[내 기록의 장소로 남아 7일 동안 뒤로 밀린다]
+```
+
+- 고르는 것은 `domain/course_recommender.dart`(규칙, LLM 없음) — 재료 넷은 기기 안: 카탈로그 · 내 코스 · 안전 지수 · 주간 목표.
 
 ## 관련 문서
 
