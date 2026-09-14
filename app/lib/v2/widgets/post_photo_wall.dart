@@ -25,7 +25,10 @@ class PostPhotoWall extends StatelessWidget {
   /// 테스트가 고정한다. 안 주면 기기 시계다.
   final DateTime? now;
 
-  const PostPhotoWall({super.key, required this.posts, required this.onTap, this.now});
+  /// 타일 왼쪽 아래 하트 알약을 누르면 — 귀여워요를 켜고 끈다(#451 4번). 안 주면 알약이 없다(홈의 줄).
+  final ValueChanged<CommunityPost>? onLike;
+
+  const PostPhotoWall({super.key, required this.posts, required this.onTap, this.now, this.onLike});
 
   /// 사진·영상이 있는 글만. 글만 있는 글은 벽에 없다 — 벽은 사진을 보는 곳이다.
   static List<CommunityPost> withMedia(List<CommunityPost> posts) =>
@@ -61,7 +64,11 @@ class PostPhotoWall extends StatelessWidget {
           Expanded(
             child: Column(children: [
               for (final post in columns[i]) ...[
-                _PhotoTile(post: post, now: now, onTap: () => onTap(post)),
+                _PhotoTile(
+                    post: post,
+                    now: now,
+                    onTap: () => onTap(post),
+                    onLike: onLike == null ? null : () => onLike!(post)),
                 const SizedBox(height: 12),
               ],
             ]),
@@ -76,13 +83,16 @@ class _PhotoTile extends StatelessWidget {
   final CommunityPost post;
   final DateTime? now;
   final VoidCallback onTap;
+  final VoidCallback? onLike;
 
-  const _PhotoTile({required this.post, required this.now, required this.onTap});
+  const _PhotoTile({required this.post, required this.now, required this.onTap, this.onLike});
 
   @override
   Widget build(BuildContext context) {
     final media = post.media.first;
     final url = media.thumbnailUrl;
+    final liked = post.reactions.isMine(CommunityReaction.cute);
+    final likes = post.reactions.cute;
     return GestureDetector(
       key: Key('photo-tile-${post.id}'),
       onTap: onTap,
@@ -105,6 +115,35 @@ class _PhotoTile extends StatelessWidget {
               if (media.kind.isVideo)
                 const Center(
                   child: Icon(Icons.play_circle_fill_rounded, size: 34, color: Colors.white),
+                ),
+              // 하트 알약 — 벽에서 바로 귀여워요를 누른다(#451 4번). 두 번 탭은 안 쓴다: 벽은 구경하는
+              // 곳이라 한 번 탭(열기)이 두 번 탭 판정만큼 늦어지면 안 된다. Instagram 도 격자에는 없다.
+              if (onLike != null)
+                Positioned(
+                  left: 6,
+                  bottom: 6,
+                  child: GestureDetector(
+                    key: Key('photo-like-${post.id}'),
+                    onTap: onLike,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xB3000000),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            size: 14, color: liked ? T.accent : Colors.white),
+                        if (likes > 0) ...[
+                          const SizedBox(width: 3),
+                          Text('$likes',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+                        ],
+                      ]),
+                    ),
+                  ),
                 ),
               if (post.media.length > 1)
                 Positioned(

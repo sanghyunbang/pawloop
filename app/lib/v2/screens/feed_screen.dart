@@ -5,6 +5,7 @@ import '../data/community_repository.dart';
 import '../data/neighborhood_store.dart';
 import '../domain/neighborhood.dart';
 import '../widgets/post_course_card.dart';
+import '../widgets/like_burst.dart';
 import '../widgets/post_media_strip.dart';
 import '../widgets/post_photo_wall.dart';
 import '../theme/app_tokens.dart';
@@ -86,6 +87,12 @@ class _FeedScreenState extends State<FeedScreen> {
       MediaQuery.textScalerOf(context).scale(11) >= 11 * _foldFrom;
 
   List<CommunityPost> _posts = const [];
+
+  /// 두 번 탭 하트 — 글마다 튄 횟수. [LikeBurst] 는 값이 바뀔 때마다 한 번 튄다(#451 4번).
+  final Map<int, int> _bursts = {};
+
+  /// 반응을 보내는 중인 글 — 같은 글에 겹쳐 보내지 않는다.
+  final Set<int> _sendingReaction = {};
   String? _nextCursor;
   bool _hasMore = false;
 
@@ -318,7 +325,10 @@ class _FeedScreenState extends State<FeedScreen> {
             if (PostPhotoWall.withMedia(_posts).isEmpty)
               _photoEmptyView()
             else
-              PostPhotoWall(posts: _posts, onTap: _open),
+              PostPhotoWall(
+                  posts: _posts,
+                  onTap: _open,
+                  onLike: (post) => _toggleReaction(post, CommunityReaction.cute)),
             if (_hasMore) _moreButton(),
           ],
         ),
@@ -744,6 +754,54 @@ class _FeedScreenState extends State<FeedScreen> {
       );
 
   /// 목록의 날짜. 시각까지는 안 그린다 — 카드 한 줄에 들어가야 한다.
+  /// 반응을 누르거나 뗀다 — 상세와 같은 규칙: **낙관적 갱신을 안 한다.** 서버가 멱등한 응답으로
+  /// 집계를 돌려주므로 그것을 그대로 그린다. [addOnly] 면 이미 누른 것을 떼지 않는다(두 번 탭).
+  Future<void> _toggleReaction(CommunityPost post, CommunityReaction reaction,
+      {bool addOnly = false}) async {
+    // `mine` 이 null 이면 게스트다 — 누를 수 없는 상태를 "안 누른 상태" 로 다루지 않는다.
+    if (post.reactions.mine == null) {
+      _toast('로그인하면 반응을 남길 수 있어요');
+      return;
+    }
+    if (_sendingReaction.contains(post.id)) return;
+    final mine = post.reactions.isMine(reaction);
+    if (mine && addOnly) return;
+    setState(() => _sendingReaction.add(post.id));
+    try {
+      final summary = mine
+          ? await _repo.removeReaction(post.id, reaction)
+          : await _repo.addReaction(post.id, reaction);
+      if (!mounted) return;
+      setState(() {
+        _posts = [
+          for (final p in _posts) p.id == post.id ? p.copyWith(reactions: summary) : p,
+        ];
+      });
+    } on CommunityFailure catch (failure) {
+      if (!mounted) return;
+      _toast(failure.message);
+    } finally {
+      if (mounted) setState(() => _sendingReaction.remove(post.id));
+    }
+  }
+
+  /// 사진 두 번 탭 = 귀여워요 (Instagram, #451 4번). 하트는 **바로** 튀고(손가락에 대한 대답),
+  /// 집계는 응답이 와야 바뀐다. 이미 눌렀으면 떼지 않는다 — 두 번 탭은 켜기만 한다.
+  void _doubleTapLike(CommunityPost post) {
+    if (post.reactions.mine == null) {
+      _toast('로그인하면 반응을 남길 수 있어요');
+      return;
+    }
+    setState(() => _bursts[post.id] = (_bursts[post.id] ?? 0) + 1);
+    _toggleReaction(post, CommunityReaction.cute, addOnly: true);
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Widget _card(CommunityPost post) {
     final folded = _folded(context);
     return GestureDetector(
@@ -757,7 +815,12 @@ class _FeedScreenState extends State<FeedScreen> {
           // 하나가 화면 절반을 먹으면 한 화면에 글이 하나뿐이었다(#465, Reddit 의 카드). 여러 장은
           // 캐러셀(Instagram). 원본은 전체 보기에서.
           if (post.media.isNotEmpty) ...[
-            PostMediaStrip(media: post.media, minAspect: 1),
+            Stack(children: [
+              PostMediaStrip(
+                  media: post.media, minAspect: 1, onDoubleTap: () => _doubleTapLike(post)),
+              // 두 번 탭 하트 — 사진 위에서 튄다.
+              Positioned.fill(child: LikeBurst(trigger: _bursts[post.id] ?? 0)),
+            ]),
             const SizedBox(height: 10),
           ],
           // 작성자 줄 — 아바타 28(예전 40) · 닉네임 · 동네 · 날짜. 닉네임은 Flexible 이라 좁으면
@@ -839,7 +902,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 scrollDirection: Axis.horizontal,
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   for (final reaction in CommunityReaction.values) ...[
-                    _reactionInline(reaction, post.reactions, folded: folded),
+                    _reactionInline(post, reaction, folded: folded),
                     const SizedBox(width: 14),
                   ],
                 ]),
@@ -862,13 +925,21 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  /// 반응 하나 — 아이콘 · 이름 · 수. 내가 누른 것은 채운 아이콘에 강조색이다.
-  Widget _reactionInline(CommunityReaction reaction, ReactionSummary summary,
+  /// 반응 하나 — 아이콘 · 이름 · 수. **누르면 켜고 끈다** — 카드를 열지 않는다(안쪽 탭이 이긴다).
+  /// 내가 누른 것은 채운 아이콘에 강조색이다.
+  Widget _reactionInline(CommunityPost post, CommunityReaction reaction,
       {required bool folded}) {
+    final summary = post.reactions;
     final count = summary.countOf(reaction);
-    final mine = summary.mine?.contains(reaction) ?? false;
+    final mine = summary.isMine(reaction);
     final color = mine ? T.accent : T.textMuted;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
+    return GestureDetector(
+      key: Key('reaction-${reaction.wire}-${post.id}'),
+      onTap: () => _toggleReaction(post, reaction),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(_reactionIcon(reaction, mine), size: 16, color: color),
       if (!folded) ...[
         const SizedBox(width: 4),
@@ -883,7 +954,9 @@ class _FeedScreenState extends State<FeedScreen> {
         Text('$count',
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color)),
       ],
-    ]);
+        ]),
+      ),
+    );
   }
 
   static IconData _reactionIcon(CommunityReaction reaction, bool mine) =>

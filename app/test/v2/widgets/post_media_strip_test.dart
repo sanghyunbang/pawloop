@@ -100,6 +100,36 @@ void main() {
     expect(find.byKey(const Key('post-media-counter')), findsNothing);
   });
 
+  testWidgets('onDoubleTap 을 주면 두 번 탭에 불리고, 한 번 탭은 판정 시간 뒤에 전체 보기다 (#451 4번)', (tester) async {
+    var doubled = 0;
+    await tester.pumpWidget(_host(PostMediaStrip(media: [_media()], onDoubleTap: () => doubled++)));
+    await tester.pumpAndSettle();
+
+    final strip = find.byKey(const Key('post-media-strip'));
+    await tester.tap(strip);
+    await tester.pump(const Duration(milliseconds: 60));
+    await tester.tap(strip);
+    await tester.pump();
+    expect(doubled, 1);
+    expect(find.byKey(const Key('post-media-viewer')), findsNothing, reason: '두 번 탭은 전체 보기가 아니다');
+
+    await tester.tap(strip);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('post-media-viewer')), findsOneWidget);
+    expect(doubled, 1);
+  });
+
+  testWidgets('onDoubleTap 이 없으면 한 번 탭이 바로 전체 보기다 — 상세·벽은 늦어지지 않는다', (tester) async {
+    await tester.pumpWidget(_host(PostMediaStrip(media: [_media()])));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('post-media-strip')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(find.byKey(const Key('post-media-viewer')), findsOneWidget, reason: '두 번 탭 인식기가 없으니 기다릴 것이 없다');
+  });
+
   test('formatMediaDuration — m:ss 로, 내림이다', () {
     expect(formatMediaDuration(7900), '0:07', reason: '올림이면 59.1초가 1:00 으로 보여 상한을 넘은 것 같다');
     expect(formatMediaDuration(0), '0:00');

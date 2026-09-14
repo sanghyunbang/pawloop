@@ -178,6 +178,8 @@ void main() {
     expect(find.text('4/6'), findsOneWidget, reason: '세 번 넘겼으니 넷째');
 
     await tester.tap(carousel);
+    // 카드의 사진에는 두 번 탭(귀여워요, #451 4번)이 있어 한 번 탭은 판정 시간(300ms) 뒤에 온다.
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('post-media-viewer')), findsOneWidget);
