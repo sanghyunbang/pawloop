@@ -9,6 +9,7 @@ import com.heattrip.heat_trip_backend.walk.entity.WeeklyInsight;
 import com.heattrip.heat_trip_backend.walk.repository.WeeklyInsightRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.NoSuchElementException;
 
 /**
@@ -58,6 +63,15 @@ public class WeeklyInsightService {
     private final Clock clock;
     private final DailyCounter counter = new DailyCounter();
 
+    /** {@code AsyncConfig.INSIGHT_EXECUTOR} — 모듈 경계 밖의 상수를 참조하지 않으려고 문자열로 든다. */
+    static final String INSIGHT_EXECUTOR = "insightExecutor";
+
+    /** 요청 밖에서 만드는 일. 동기 모드({@code async=false})면 요청 안에서 그대로 돈다. */
+    private final Executor executor;
+
+    /** 지금 만드는 중인 (사용자 · 아이 · 주). 같은 것을 여러 요청이 동시에 부르면 모델은 한 번만. */
+    private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
+
     /**
      * {@code user} 는 {@link EntityManager#getReference} 로 잇는다 — 사용자 모듈의 저장소(내부 패키지)를
      * 부르지 않는다. 아이는 {@link DogOwnership}(dog 모듈의 공개 표면)에서 크기 · 나이대만 받는다.
@@ -68,13 +82,15 @@ public class WeeklyInsightService {
                                 EntityManager entityManager,
                                 DogOwnership dogs,
                                 WeeklyInsightProperties props,
-                                Clock clock) {
+                                Clock clock,
+                                @Qualifier(INSIGHT_EXECUTOR) Executor executor) {
         this.model = model;
         this.insights = insights;
         this.entityManager = entityManager;
         this.dogs = dogs;
         this.props = props;
         this.clock = clock;
+        this.executor = executor;
     }
 
     /** 통계에 {@code aiSummary} 를 얹어 돌려준다. 실패 · 꺼짐 · 상한이면 {@code null} 인 채로. */
@@ -92,24 +108,74 @@ public class WeeklyInsightService {
                 || row.get().getCalls() >= props.maxRegenerations())) {
             return stats.withAiSummary(summaryOf(row.get()));
         }
+        String key = jobKey(userId, dogKey, stats.weekStart());
+        if (inFlight.contains(key)) {
+            // 이미 만드는 중 — 모델을 또 부르지도, 하루 상한을 또 쓰지도 않는다.
+            return pending(stats, row);
+        }
         if (!counter.tryAcquire(today, props.dailyCap())) {
             log.info("[AI 주간 요약] 하루 상한 {}회에 닿았다 — 오늘은 1단계 문장만 (user {})", props.dailyCap(), userId);
             return stats.withAiSummary(row.map(WeeklyInsightService::summaryOf).orElse(null));
         }
 
-        Optional<String> answer = model.complete(SYSTEM, input.render());
-        if (answer.isEmpty()) {
-            // 망 · 시간 초과 — 행을 남기지 않아 다음 요청이 다시 시도한다(하루 상한이 재시도를 묶는다).
-            return stats.withAiSummary(row.map(WeeklyInsightService::summaryOf).orElse(null));
+        Job job = new Job(userId, dogKey, stats.weekStart(), input, hash, row.orElse(null));
+        if (!props.async()) {
+            // 동기 — 테스트와 비상 스위치. 요청이 모델을 기다린다.
+            generate(job);
+            return stats.withAiSummary(insights.findByUser_IdAndDogKeyAndWeekStart(userId, dogKey, stats.weekStart())
+                    .map(WeeklyInsightService::summaryOf).orElse(null));
         }
-        String text = answer.get();
-        if (!InsightNumberGuard.allowed(text, input.render())) {
-            log.info("[AI 주간 요약] 입력에 없는 숫자가 있어 버린다 (user {}, week {})", userId, stats.weekStart());
-            text = null;
+        // 비동기 — 요청은 지금 있는 것(옛 문장이거나 null)에 "만드는 중" 을 붙여 바로 돌아간다.
+        // 문장은 실행기가 적고, 앱이 잠시 뒤 한 번 더 읽는다.
+        if (inFlight.add(key)) {
+            try {
+                executor.execute(() -> {
+                    try {
+                        generate(job);
+                    } finally {
+                        inFlight.remove(key);
+                    }
+                });
+            } catch (RejectedExecutionException full) {
+                inFlight.remove(key);
+                log.warn("[AI 주간 요약] 실행기 큐가 찼다 — 이번 요청은 문장 없이 (user {})", userId);
+            }
         }
-        WeeklyInsight saved = store(row.orElse(null), userId, dogKey, stats.weekStart(), hash, text);
-        return stats.withAiSummary(summaryOf(saved));
+        return pending(stats, row);
     }
+
+    private static WalkStatsResponse pending(WalkStatsResponse stats, Optional<WeeklyInsight> row) {
+        return stats.withAiSummary(row.map(WeeklyInsightService::summaryOf).orElse(null)).withAiSummaryPending(true);
+    }
+
+    private static String jobKey(long userId, long dogKey, LocalDate weekStart) {
+        return userId + ":" + dogKey + ":" + weekStart;
+    }
+
+    /**
+     * 모델을 부르고 결과를 적는다 — 비동기 모드면 실행기 스레드에서, 동기 모드면 요청 안에서. <b>던지지 않는다</b>:
+     * 실패는 행을 남기지 않아 다음 요청이 다시 시도한다(하루 상한이 재시도를 묶는다).
+     */
+    void generate(Job job) {
+        try {
+            Optional<String> answer = model.complete(SYSTEM, job.input().render());
+            if (answer.isEmpty()) {
+                return;
+            }
+            String text = answer.get();
+            if (!InsightNumberGuard.allowed(text, job.input().render())) {
+                log.info("[AI 주간 요약] 입력에 없는 숫자가 있어 버린다 (user {}, week {})", job.userId(), job.weekStart());
+                text = null;
+            }
+            store(job.existing(), job.userId(), job.dogKey(), job.weekStart(), job.hash(), text);
+        } catch (RuntimeException e) {
+            log.warn("[AI 주간 요약] 만들기 실패 (user {}, week {}): {}", job.userId(), job.weekStart(), e.toString());
+        }
+    }
+
+    /** 만들 것 하나 — 요청 스레드가 읽어 둔 값들. {@code existing} 은 그 주의 행(없으면 null). */
+    record Job(long userId, long dogKey, LocalDate weekStart, WeeklyInsightInput input, String hash,
+               WeeklyInsight existing) { }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     protected WeeklyInsight store(WeeklyInsight existing, long userId, long dogKey, LocalDate weekStart,

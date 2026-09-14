@@ -334,7 +334,8 @@ public class WalkService {
                 (int) (all.seconds() / 60),
                 topPlaces(userId, dogId),
                 summaryOf(userId, dogId, weekStart, week),
-                null);
+                null,
+                false);
     }
 
     /**

@@ -55,7 +55,8 @@ public record WalkStatsResponse(
          * 다른 문장을 줘야 하는 날이 온다.
          */
         WeekSummary summary,
-        AiSummary aiSummary) {
+        AiSummary aiSummary,
+        boolean aiSummaryPending) {
 
     /**
      * AI 주간 요약(#486) — 모델이 만든 두 문장 + 제안 한 줄. 키가 없거나 · 실패 · 상한 · 숫자 검사에서
@@ -69,7 +70,16 @@ public record WalkStatsResponse(
 
     public WalkStatsResponse withAiSummary(AiSummary ai) {
         return new WalkStatsResponse(weekStart, weekEnd, weekKm, weekMinutes, totalKm, walkCount, avgKm,
-                allTimeKm, allTimeCount, allTimeMinutes, topPlaces, summary, ai);
+                allTimeKm, allTimeCount, allTimeMinutes, topPlaces, summary, ai, aiSummaryPending);
+    }
+
+    /**
+     * {@code aiSummaryPending} — 요약을 지금 <b>만드는 중</b>이다(모델 호출은 요청 밖에서 돈다). 앱은 잠시 뒤
+     * 한 번 더 읽는다. {@code aiSummary} 가 있으면서 참이면 옛 문장을 새로 만드는 중이다.
+     */
+    public WalkStatsResponse withAiSummaryPending(boolean pending) {
+        return new WalkStatsResponse(weekStart, weekEnd, weekKm, weekMinutes, totalKm, walkCount, avgKm,
+                allTimeKm, allTimeCount, allTimeMinutes, topPlaces, summary, aiSummary, pending);
     }
 
     /**

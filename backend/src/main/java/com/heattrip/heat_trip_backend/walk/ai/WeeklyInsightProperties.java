@@ -17,5 +17,6 @@ public record WeeklyInsightProperties(
         @DefaultValue("true") boolean enabled,
         @DefaultValue("200") int dailyCap,
         @DefaultValue("3") int maxRegenerations,
-        @DefaultValue("12") int timeoutSeconds) {
+        @DefaultValue("12") int timeoutSeconds,
+        @DefaultValue("true") boolean async) {
 }

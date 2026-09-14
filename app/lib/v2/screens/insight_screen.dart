@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../theme/app_tokens.dart';
@@ -37,6 +39,12 @@ class _InsightScreenState extends State<InsightScreen> {
   /// 내가 방금 누른 평가, 요약 id 별 — 서버 값보다 앞선다(낙관적). 실패하면 이전 값으로 되돌린다.
   final Map<int, String?> _rated = {};
 
+  /// "만드는 중" 이면 잠시 뒤 한 번 더 읽는다 — 서버가 모델을 요청 밖에서 부르기 때문이다. 세 번까지.
+  Timer? _aiRefresh;
+  int _aiRefreshes = 0;
+  static const int _aiRefreshCap = 3;
+  static const Duration _aiRefreshAfter = Duration(seconds: 4);
+
   /// 이번 주 요일별 거리. **전송 대기 중인 것도 얹는다** — 방금 걸었는데 막대가 안 오르면
   /// 사용자는 기록이 안 됐다고 읽는다.
   List<double> get _weekKm => _data.weekKmWithPending;
@@ -61,6 +69,27 @@ class _InsightScreenState extends State<InsightScreen> {
   void initState() {
     super.initState();
     _loadGoal();
+  }
+
+  @override
+  void dispose() {
+    _aiRefresh?.cancel();
+    super.dispose();
+  }
+
+  /// 만드는 중이면 한 번 더 읽기를 건다 — 이미 걸려 있거나 세 번을 다 썼으면 안 건다. 문장이 오면 횟수를 되돌린다.
+  void _armAiRefresh(ServerWalkStats stats) {
+    if (!stats.aiSummaryPending) {
+      // 만드는 중이 아니다 — 다음 번 "만드는 중" 을 위해 횟수를 되돌린다.
+      _aiRefreshes = 0;
+      return;
+    }
+    if (_aiRefresh != null || _aiRefreshes >= _aiRefreshCap) return;
+    _aiRefreshes++;
+    _aiRefresh = Timer(_aiRefreshAfter, () {
+      _aiRefresh = null;
+      if (mounted) notifyWalksChanged();
+    });
   }
 
   Future<void> _loadGoal() async {
@@ -125,6 +154,7 @@ class _InsightScreenState extends State<InsightScreen> {
         feed: _feed,
         builder: (context, data, _) {
           _data = data;
+          _armAiRefresh(data.stats);
           return _build(context);
         },
       );
@@ -151,6 +181,9 @@ class _InsightScreenState extends State<InsightScreen> {
               if (_data.stats.aiSummary != null) ...[
                 const SizedBox(height: 10),
                 _aiInsightCard(_data.stats.aiSummary!),
+              ] else if (_data.stats.aiSummaryPending) ...[
+                const SizedBox(height: 10),
+                _aiPendingCard(),
               ],
               const SizedBox(height: 14),
               _weekChartCard(),
@@ -378,6 +411,26 @@ class _InsightScreenState extends State<InsightScreen> {
       ),
     );
   }
+
+  // 서버가 모델을 요청 밖에서 부르는 동안 — 한 줄 카드. 문장이 오면 [_aiInsightCard] 가 그 자리를 잇는다.
+  Widget _aiPendingCard() => Container(
+        key: const Key('ai-summary-pending'),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: BoxDecoration(
+          color: T.cardBg,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: T.cardBorder),
+        ),
+        // 움직이는 표시(스피너)를 안 둔다 — 몇 초짜리 기다림에 시선을 끌 이유가 없고, 화면이 쉬지 않고 다시 그린다.
+        child: const Row(children: [
+          Icon(Icons.auto_awesome_outlined, size: 16, color: T.textMuted),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text('AI 요약을 만들고 있어요 · 잠시 뒤 보여 드릴게요',
+                style: TextStyle(fontSize: 12.5, color: T.textSecondary)),
+          ),
+        ]),
+      );
 
   // ── 👍/👎 (#486 후속) — 한 번 누르면 남고, 같은 것을 다시 누르면 지운다. 서버가 실패하면 되돌린다.
   // ChatGPT · 카카오 AI 요약의 답변 평가와 같은 자리(문장 아래 오른쪽), 색은 강조색 하나.

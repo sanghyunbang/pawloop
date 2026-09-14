@@ -27,6 +27,12 @@ public class AsyncConfig {
 
     public static final String PUSH_EXECUTOR = "pushExecutor";
 
+    /**
+     * AI 주간 요약(#486)의 모델 호출 — 통계 요청이 모델을 기다리지 않게 요청 밖에서 돈다.
+     * 이름은 {@code walk.ai.WeeklyInsightService} 가 문자열로 든다(모듈 경계 밖의 상수를 참조하지 않으려고).
+     */
+    public static final String INSIGHT_EXECUTOR = "insightExecutor";
+
     @Bean(PUSH_EXECUTOR)
     public ThreadPoolTaskExecutor pushExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -40,6 +46,24 @@ public class AsyncConfig {
                 log.warn("푸시 발송 큐가 찼다 — 알림 하나를 버린다 (대기 {} · 실행 중 {})",
                         pool.getQueue().size(), pool.getActiveCount());
         executor.setRejectedExecutionHandler(dropAndWarn);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * 모델 호출은 하나에 몇 초씩 걸리고 돈이다 — 스레드 둘, 대기 50 이면 충분하고, 그 이상은 <b>거절</b>한다
+     * (기본 {@code AbortPolicy}). 거절은 부르는 쪽이 받아 "이번 요청은 문장 없이" 로 처리한다 — 조용히 버리면
+     * 부르는 쪽의 "만드는 중" 표식이 안 풀린다.
+     */
+    @Bean(INSIGHT_EXECUTOR)
+    public ThreadPoolTaskExecutor insightExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("ai-insight-");
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(50);
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(15);
         executor.initialize();
         return executor;
     }

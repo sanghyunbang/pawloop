@@ -26,7 +26,8 @@ class WeeklyInsightInputTest {
                         new WalkStatsResponse.PartOfDayCount("morning", 2, 3.2, 48),
                         new WalkStatsResponse.PartOfDayCount("afternoon", 0, 0, 0),
                         new WalkStatsResponse.PartOfDayCount("evening", 1, 0, 0))),
-                null);
+                null,
+                false);
     }
 
     private static DogProfileView dog(String sizeKey, Integer ageMonths) {
