@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import 'today_screen.dart';
@@ -6,6 +7,7 @@ import 'explore_screen.dart';
 import 'feed_screen.dart';
 import 'chat_list_screen.dart';
 import 'schedule_screen.dart';
+import '../data/chat_unread.dart';
 import '../data/local_notification_sink.dart';
 import 'walk_tracking_screen.dart';
 import '../data/walk_in_progress.dart';
@@ -72,6 +74,8 @@ class MainShell extends StatelessWidget {
           return Stack(children: [
             Positioned.fill(child: screen),
             const Align(alignment: Alignment.bottomCenter, child: _ShellNav()),
+            // 채팅 탭의 점 — 로그인한 동안 방 목록을 가끔 본다(#452). 그리는 것은 없다.
+            const ChatUnreadWatcher(),
             // 앱이 죽었다 살아났을 때 끊긴 산책을 이어 갈지 묻는다(#335). 그리는 것은 없다.
             WalkResumeGate(
               store: resumeStore,
@@ -122,12 +126,36 @@ class _ShellNav extends StatelessWidget {
                       color: on ? T.accent : T.textMuted)),
             );
 
-        Widget item(IconData icon, String text, int i) => Expanded(
+        Widget item(IconData icon, String text, int i, {ValueListenable<bool>? dot}) => Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => RootTab.index.value = i,
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(icon, size: 23, color: idx == i ? T.accent : T.textMuted),
+                  Stack(clipBehavior: Clip.none, children: [
+                    Icon(icon, size: 23, color: idx == i ? T.accent : T.textMuted),
+                    // 안 읽은 것이 있다는 점 하나 — 개수가 아니다(HIG, #452). 흰 테두리로
+                    // 아이콘과 떨어져 보인다.
+                    if (dot != null)
+                      Positioned(
+                        top: -2,
+                        right: -3,
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: dot,
+                          builder: (_, on, __) => on
+                              ? Container(
+                                  key: const Key('chat-unread-dot'),
+                                  width: 9,
+                                  height: 9,
+                                  decoration: BoxDecoration(
+                                    color: T.accent,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 1.5),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ),
+                  ]),
                   const SizedBox(height: 3),
                   label(text, idx == i),
                 ]),
@@ -168,7 +196,7 @@ class _ShellNav extends StatelessWidget {
                   item(Icons.map_outlined, '지도', 1),
                   item(Icons.event_note_outlined, '일정', 2),
                   item(Icons.forum_outlined, '커뮤니티', 3),
-                  item(Icons.chat_bubble_outline, '채팅', 4),
+                  item(Icons.chat_bubble_outline, '채팅', 4, dot: ChatUnread.any),
                 ]),
               ),
             ),

@@ -176,6 +176,7 @@ GlassCard(
 - **다섯 칸 전부 같은 폭**(`Expanded`): 홈(`home_rounded`) / 지도(`map_outlined`) / 일정(`event_note_outlined`) / 커뮤니티(`forum_outlined`) / 채팅(`chat_bubble_outline`). 가운데가 일정이라 좌우가 대칭이다.
   - 탭 번호: 홈 0 · 지도 1 · 일정 2 · 커뮤니티 3 · 채팅 4. **산책은 바에 없다** — 사장님 결정(2026-09-14): 일정 탭은 필수이고 가운데 산책까지 두면 여섯이라, 산책은 홈의 "산책 시작" 이 맡는다.
   - 활성 색 `T.accent`, 비활성 `T.textMuted`. 활성 라벨 w800, 비활성 w500. 라벨 배율은 1.3 에서 멈춘다(#396).
+  - **채팅 칸의 안 읽음 점**(#452): 안 읽은 방이 하나라도 있으면 아이콘 오른쪽 위에 9dp 점(`T.accent`, 흰 테두리 1.5, `chat-unread-dot`). **개수가 아니라 점** — HIG(탭 바 뱃지는 정말 중요한 것에만). 음소거한 방은 안 센다. `ChatUnread.any` 를 듣고, `ChatUnreadWatcher`(`data/chat_unread.dart`) 가 로그인한 동안 60초마다 · 앱이 앞으로 올 때 `GET /api/chat/rooms` 를 본다. 방 목록 화면도 받을 때마다 같은 답으로 갱신한다.
 - 홈 머리말의 날짜 줄과 "오늘 할 일" 줄도 `openSchedule` 로 일정 탭에 간다.
 - 탭 상태는 전역 `RootTab.index`(+ `exploreView`)로 관리하며, 푸시된 화면에서도 `RootTab.go(...)`로 탭 전환 가능.
 

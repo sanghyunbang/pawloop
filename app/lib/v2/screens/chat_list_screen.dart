@@ -3,6 +3,7 @@ import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
 
 import '../data/chat_repository.dart';
+import '../data/chat_unread.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
@@ -68,6 +69,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
     try {
       final rooms = await _repo.rooms();
+      // 탭 바의 점도 같은 답으로 갱신한다(#452) — 방을 보고 나와 다시 받으면 점이 꺼진다.
+      ChatUnread.update(rooms);
       if (!mounted) return;
       setState(() {
         _rooms = rooms;
