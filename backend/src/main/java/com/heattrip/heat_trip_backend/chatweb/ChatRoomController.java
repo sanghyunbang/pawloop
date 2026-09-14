@@ -81,7 +81,6 @@ public class ChatRoomController {
     private final ChatRoomService chatRooms;
     private final ChatRooms roomList;
     private final ChatMessages chatMessages;
-    private final ChatMessageSender sender;
 
     /**
      * 내 방 목록. 방마다 미읽음은 {@code lastSeq − lastReadSeq} <b>뺄셈</b>이다.
@@ -200,17 +199,18 @@ public class ChatRoomController {
      * 이름</b>을 찍어 {@code senderUserId} 와 {@code senderName} 이 다른 사람을 가리키는
      * 응답이 나갔다(실측). 지금은 제약과 조회의 범위에 {@code sender_user_id} 가 들어 있어
      * 그 경우가 없다({@link ChatMessageSender#send}).
+     *
+     * <p>사진 메시지(#452)는 {@code mediaId} 로 온다 — 종류 판정과 붙이기는 {@link ChatMessages#send} 다.
      */
     @PostMapping("/rooms/{roomId}/messages")
     public ResponseEntity<ChatMessageResponse> send(@CurrentUser User user,
                                                     @PathVariable long roomId,
                                                     @RequestBody ChatSendRequest request) {
-        ChatMessageSendResult result = sender.send(roomId, user.getId(), user.displayName(),
-                request.body(), request.contentType(), request.clientMsgId());
+        ChatMessages.Sent sent = chatMessages.send(roomId, user, request);
 
         return ResponseEntity
-                .status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
-                .body(ChatMessageResponse.of(result.message(), user.displayName()));
+                .status(sent.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .body(sent.message());
     }
 
     /**
@@ -222,7 +222,7 @@ public class ChatRoomController {
      */
     @DeleteMapping("/messages/{messageId}")
     public ResponseEntity<Void> deleteMessage(@CurrentUser User user, @PathVariable long messageId) {
-        chatRooms.deleteMessage(messageId, user.getId());
+        chatMessages.delete(messageId, user.getId());
         return ResponseEntity.noContent().build();
     }
 

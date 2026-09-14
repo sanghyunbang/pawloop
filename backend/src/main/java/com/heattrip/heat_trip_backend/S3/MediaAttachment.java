@@ -34,6 +34,9 @@ public interface MediaAttachment {
     /** 산책 기록에 붙은 사진(#450). {@code refId} 는 {@code walk.id}. */
     String REF_WALK = "WALK";
 
+    /** 채팅 말풍선 사진(#452). {@code refId} 는 {@code chat_message.id} — 메시지 하나에 사진 하나. 붙이는 쪽은 {@code chatweb} 이다(chat 은 경계 밖을 못 본다). */
+    String REF_CHAT = "CHAT";
+
     /**
      * 붙인다. <b>내 것이고, 아직 어디에도 안 붙었고, {@code ready} 인 것</b>만 붙는다.
      *

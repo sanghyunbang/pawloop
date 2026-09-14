@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.chatweb;
 
+import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
 import com.heattrip.heat_trip_backend.chat.ChatTime;
 
@@ -38,11 +39,17 @@ import java.time.Instant;
  *
  * <p>컬럼에 담긴 값은 UTC 다 — 이유는 {@link ChatTime}. 세우는 것도 그 클래스다.
  *
+ * <h2>{@code media} 는 사진 메시지에만 있다 (#452)</h2>
+ * <p>{@code contentType} 이 {@code image} 인 메시지의 사진 하나 — 글의 {@code PostMedia} 와 같은
+ * 모양이라 앱이 같은 그림을 그린다. 글자 메시지는 {@code null} 이고, 사진 메시지를 지우면 사진도
+ * 함께 지워져 {@code null} 이다. chat 은 이 값을 모른다 — 붙이고 읽는 것은 {@link ChatMessages} 다.
+ *
  * @param deletedAt 소프트 삭제 시각. <b>{@code null} 이 아니어도 목록에서 빠지지 않는다</b> —
  *                  톰스톤이다. 본문을 가리는 것은 화면의 일이다(ADR-0011)
  * @param hiddenByBlock 읽는 사람이 이 발신자를 가렸는가. <b>목록에서 빼지 않는 이유</b>는
  *                  {@code deletedAt} 과 같다 — 빼면 그 {@code roomSeq} 가 도달하지 않아
  *                  미읽음 뱃지가 영원히 남는다
+ * @param media 사진 메시지의 사진. 글자 메시지는 {@code null}
  */
 public record ChatMessageResponse(
         long id,
@@ -54,17 +61,33 @@ public record ChatMessageResponse(
         String body,
         Instant createdAt,
         Instant deletedAt,
-        boolean hiddenByBlock) {
+        boolean hiddenByBlock,
+        Media media) {
+
+    /** 계약의 {@code PostMedia} 모양 — 사진 하나. 글 사진과 같은 필드라 앱이 같은 파서를 쓴다. */
+    public record Media(long id, String kind, String url, String posterUrl,
+                        Integer width, Integer height, Integer durationMs) {
+        static Media of(MediaAttachment.AttachedMedia attached) {
+            return new Media(attached.id(), attached.kind().wire(), attached.url(), attached.posterUrl(),
+                    attached.width(), attached.height(), attached.durationMs());
+        }
+    }
 
     static ChatMessageResponse of(ChatMessageView message, String senderName) {
-        return of(message, senderName, false);
+        return of(message, senderName, false, null);
+    }
+
+    /** 방 목록의 미리보기 등 사진을 안 싣는 자리 — 사진 메시지면 {@code contentType} 만으로 "사진" 이라고 그린다. */
+    static ChatMessageResponse of(ChatMessageView message, String senderName,
+                                  boolean hiddenByBlock) {
+        return of(message, senderName, hiddenByBlock, null);
     }
 
     static ChatMessageResponse of(ChatMessageView message, String senderName,
-                                  boolean hiddenByBlock) {
+                                  boolean hiddenByBlock, Media media) {
         return new ChatMessageResponse(message.id(), message.roomId(), message.roomSeq(),
                 message.senderUserId(), senderName, message.contentType(), message.body(),
                 ChatTime.toInstant(message.createdAt()),
-                ChatTime.toInstant(message.deletedAt()), hiddenByBlock);
+                ChatTime.toInstant(message.deletedAt()), hiddenByBlock, media);
     }
 }

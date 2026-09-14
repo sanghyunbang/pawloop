@@ -43,10 +43,15 @@
  * {@code ChatSenderNames} 가 그걸 직접 부른다. 리포지토리를 남이 직접 부르는 것은 공용 어휘가
  * 아니라 그냥 새는 것이라 허용으로 덮지 않았다. 이 패키지가 필요한 것은 "userId 로 닉네임을
  * 얻는 것" 이므로, {@code user} 쪽이 그 일을 하는 표면을 내주는 것이 맞다.
+ *
+ * <p><b>{@code "S3"} 는 말풍선 사진(#452) 때문에 열었다.</b> {@code chat} 은 경계 밖을 못 보므로 사진을
+ * 메시지에 붙이고 읽는 것은 이 패키지({@code ChatMessages})다 — 이름·가리기와 같은 자리. 부르는 것은
+ * {@code S3} 루트의 {@code MediaAttachment}(그 안의 {@code AttachedMedia}·{@code Kind})뿐이고
+ * {@code S3.media} 는 안 본다 — {@code walk}·{@code community} 가 쓰는 것과 같은 표면이다.
  */
 @ApplicationModule(
         displayName = "Chat Web Adapter",
-        allowedDependencies = { "chat", "moderation", "user", "user :: entity" })
+        allowedDependencies = { "chat", "moderation", "user", "user :: entity", "S3" })
 package com.heattrip.heat_trip_backend.chatweb;
 
 import org.springframework.modulith.ApplicationModule;

@@ -1,9 +1,12 @@
 package com.heattrip.heat_trip_backend.chat;
 
-import lombok.RequiredArgsConstructor;
-
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.util.function.Consumer;
 
 /**
  * 재전송을 <b>200 으로 번역</b>하는 자리 — 이슈 #79 완료 조건 3·8.
@@ -39,12 +42,39 @@ import org.springframework.stereotype.Component;
  * <p>진 쪽이 롤백되면 {@code assignNextSeq} 가 올린 {@code last_seq} 도 함께 되돌아간다 —
  * 그래서 재전송은 번호를 태우지 않는다({@code ChatRoomService#postMessage} javadoc ·
  * {@code ChatMessageIntegrationTest.aRejectedSendBurnsNoNumber}).
+ *
+ * <h2>"같은 트랜잭션에서 할 일" 을 받는다 (#452)</h2>
+ * <p>사진 메시지는 INSERT 된 메시지의 id 에 사진을 붙여야 하는데, 붙이는 쪽(미디어)은 chat 이
+ * 모르는 모듈이다({@code ChatBoundaryArchitectureTest}). 그래서 chat 은 <b>무엇을 붙이는지 모른 채</b>
+ * 부르는 쪽이 준 일을 INSERT 와 <b>같은 트랜잭션</b>에서 해 준다 — 그 일이 던지면(남의 사진 등)
+ * 메시지도 없던 일이 되고 번호도 안 태운다. 두 트랜잭션으로 갈라 두면 "사진 없는 사진 메시지" 가
+ * 남는다. 트랜잭션은 {@link TransactionTemplate} 으로 연다 — {@code postMessage} 가 요구하는
+ * {@code READ_COMMITTED} 를 같이 준다(잠금 뒤 인가를 <b>다시 읽는</b> 단계가 스냅숏이 아니라
+ * 지금 값을 봐야 한다). 재전송(이미 있는 메시지)에는 그 일을 부르지 않는다.
  */
 @Component
-@RequiredArgsConstructor
 public class ChatMessageSender {
 
     private final ChatRoomService chatRooms;
+
+    /** INSERT 와 "같은 트랜잭션에서 할 일" 을 한 경계에 묶는다. 격리는 {@code postMessage} 와 같다. */
+    private final TransactionTemplate sameTransaction;
+
+    public ChatMessageSender(ChatRoomService chatRooms, PlatformTransactionManager transactions) {
+        this.chatRooms = chatRooms;
+        this.sameTransaction = new TransactionTemplate(transactions);
+        this.sameTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+    }
+
+    /**
+     * 글자 메시지 한 줄 — 같은 트랜잭션에서 더 할 일이 없는 전송.
+     *
+     * @see #send(long, long, String, String, String, String, Consumer)
+     */
+    public ChatMessageSendResult send(long roomId, long senderUserId, String senderName,
+                                      String body, String contentType, String clientMsgId) {
+        return send(roomId, senderUserId, senderName, body, contentType, clientMsgId, posted -> { });
+    }
 
     /**
      * 메시지 한 줄. <b>이 사람이</b> 같은 {@code clientMsgId} 로 다시 보내면 이미 있는
@@ -68,12 +98,21 @@ public class ChatMessageSender {
      *
      * <p>그래서 돌아오는 메시지는 <b>언제나 부르는 사람 자신의 것</b>이다 —
      * {@code ChatRoomController.send} 가 응답의 이름을 자기 이름으로 채우는 근거가 그것이다.
+     *
+     * @param alongside INSERT 된 메시지를 받아 <b>같은 트랜잭션</b>에서 할 일(사진 붙이기, #452).
+     *                  던지면 메시지도 없던 일이 된다. 재전송(이미 있는 메시지)에는 부르지 않는다
      */
     public ChatMessageSendResult send(long roomId, long senderUserId, String senderName,
-                                      String body, String contentType, String clientMsgId) {
+                                      String body, String contentType, String clientMsgId,
+                                      Consumer<ChatMessageView> alongside) {
         try {
-            return new ChatMessageSendResult(chatRooms.postMessage(
-                    roomId, senderUserId, senderName, body, contentType, clientMsgId), true);
+            ChatMessageView posted = sameTransaction.execute(status -> {
+                ChatMessageView view = chatRooms.postMessage(
+                        roomId, senderUserId, senderName, body, contentType, clientMsgId);
+                alongside.accept(view);
+                return view;
+            });
+            return new ChatMessageSendResult(posted, true);
         } catch (DataIntegrityViolationException collision) {
             if (clientMsgId == null || clientMsgId.isBlank()) {
                 throw collision;

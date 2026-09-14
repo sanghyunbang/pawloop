@@ -67,6 +67,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\40_post_bookmark.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\41_post_dog.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\42_media_walk_image.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\43_media_chat_image.sql
 ```
 
 | 파일 | 무엇을 |
@@ -113,6 +114,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `40_post_bookmark.sql` | **글 저장** — #451 4번. `post_bookmark` 표 하나를 만듭니다(`post_id`·`user_id`·`created_at`). `reaction` 과 닮았지만 둘이 다릅니다: **탈퇴하면 행이 사라집니다**(`user_id` CASCADE — 반응은 집계가 남아야 해서 SET NULL 이지만 저장은 그 사람만 보는 목록입니다) 그리고 **정렬 축이 이 표의 시각**입니다(저장한 순, Instagram 의 저장됨) — `idx_post_bookmark_user(user_id, created_at, id)` 가 커서의 두 축을 듭니다. 유니크는 `(post_id, user_id)` 이고 멱등 삽입이 그것을 딛습니다. **세지 않습니다** — "몇 명이 저장했나" 는 화면에 없고, 있으면 남의 사진첩을 들여다보는 숫자가 됩니다. 표 이름이 `post_bookmark` 인 것은 `bookmark` 가 장소 저장(계획, schema.md §10)이 예약한 이름이라서입니다. 14 뒤에, 새 코드 배포 **전**. **dev 에서도 앱을 띄우기 전에** 돌리십시오. DOWN 은 `DROP TABLE post_bookmark` — 글도 사람도 그대로입니다. |
 | `41_post_dog.sql` | **글에 찍힌 아이** — #451 5번(아이 사진첩). `post` 에 `dog_id`(NULL 허용) · `idx_post_dog(dog_id, created_at, id)` · `fk_post_dog` **SET NULL** 을 더합니다. 글 하나에 아이 하나 — 여럿이 찍혔으면 대표 하나입니다(다대다로 가면 사진첩마다 같은 글이 겹칩니다). 아이가 사라져도 글은 남습니다(꼬리표만 빕니다). 인덱스 앞자리가 `dog_id` 라 `?dogId=` 목록이 인덱스 범위이고 커서 순서 그대로입니다. 14·11 뒤에, 새 코드 배포 **전**. **dev 에서도 앱을 띄우기 전에** — 안 돌리면 Hibernate 가 다른 이름의 FK 를 만듭니다. `dog_id` 가 이미 있는데 모양이 다르면(NOT NULL 등) 멈춥니다. DOWN 은 FK·인덱스·컬럼을 떼는 것이고 글은 그대로입니다. |
 | `42_media_walk_image.sql` | **산책 사진** — #450. `media_objects.category` ENUM 끝에 `WALK_IMAGE` 를 더합니다(값을 끝에 더하면 InnoDB 가 표를 다시 쓰지 않습니다). 코드(`UploadCategory.WALK_IMAGE`)를 배포하기 **전**에 돌립니다 — 안 돌리면 산책 사진을 올리는 순간 `Data truncated for column 'category'` 로 500 입니다. `category` 가 ENUM 이 아니면 멈춥니다. 멱등 |
+| `43_media_chat_image.sql` | **채팅 말풍선 사진** — #452. `media_objects.category` ENUM 에 `CHAT_IMAGE` 를 더합니다 — 이번엔 끝이 아니라 **알파벳 자리(맨 앞)** 입니다: Hibernate 가 ENUM 값을 알파벳순으로 뽑아 `01_schema.sql`(새 DB)이 그 순서이고, 끝에 넣으면 옮긴 DB 와 새 DB 의 `SHOW CREATE TABLE` 이 달라진 채 아무 검사도 못 잡습니다. 앞에 넣으면 InnoDB 가 표를 한 번 다시 쓰지만 업로드 한 건에 행 하나라 밀리초입니다(그동안 쓰기가 잠기니 조용한 시간에). **42 가 먼저**입니다 — 값 목록을 통째로 쓰므로 WALK_IMAGE 가 없는 표에는 멈춥니다. 코드(`UploadCategory.CHAT_IMAGE`)를 배포하기 **전**에 돌립니다 — 안 돌리면 채팅 사진을 올리는 순간 `Data truncated for column 'category'` 로 500 입니다. 멱등 |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 

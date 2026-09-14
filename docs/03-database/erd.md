@@ -312,7 +312,7 @@ erDiagram
 
     media_objects {
         BIGINT   id PK
-        VARCHAR  category    "JOURNEY_IMAGE|PROFILE_IMAGE|REVIEW_IMAGE|POST_IMAGE|POST_VIDEO"
+        VARCHAR  category    "JOURNEY_IMAGE|PROFILE_IMAGE|REVIEW_IMAGE|POST_IMAGE|POST_VIDEO|WALK_IMAGE|CHAT_IMAGE"
         VARCHAR  owner_id    "users.id 를 문자열로 - 감정 여행 시절의 흔적"
         VARCHAR  ref_type    "POST 면 글. NULL 이면 아직 안 붙었다"
         VARCHAR  ref_id      "post.id - FK 는 없다"
