@@ -2596,7 +2596,7 @@ paths:
                   description: '`image/jpeg` · `image/png` · `image/webp`. 장당 10MB'
                 category:
                   type: string
-                  enum: [POST_IMAGE, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
+                  enum: [POST_IMAGE, WALK_IMAGE, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
                   description: 글 사진은 `POST_IMAGE`. 나머지는 옛 값이라 앱이 안 씁니다
                 width:
                   type: integer
@@ -4687,6 +4687,13 @@ components:
             해석하지 않으므로 집계·검색의 근거가 아니고, 온도 단위·형식도 정해진 것이 없습니다.
             **지금 앱은 채우지 않습니다**(항상 `null`). 구조화(`{condition, tempC}`)는 쓰는 화면이
             생길 때 합니다(#209 `Walks-low-3`).
+        media:
+          type: array
+          description: |
+            산책 중 찍은 사진(#450) — 올린 순서(`id` 순). 없으면 `[]`. 글의 `Post.media` 와 같은
+            모양이라 앱이 같은 그림을 그립니다. 지금은 사진뿐이라 `kind` 는 늘 `image` 입니다.
+            목록(`GET /api/walks`)에도 실립니다 — 카드의 배경이 됩니다.
+          items: { $ref: '#/components/schemas/PostMedia' }
 
     WalkMemoInput:
       type: object
@@ -4808,6 +4815,16 @@ components:
           maxItems: 20000
           items: { type: integer, minimum: 0 }
           example: [0, 3, 7]
+        mediaIds:
+          type: array
+          maxItems: 10
+          items: { type: integer, format: int64 }
+          description: |
+            산책 중 찍은 사진(#450) — `POST /media` 에 `category=WALK_IMAGE` 로 올린 것의 `id`.
+            **내가 올렸고 아직 어디에도 안 붙은 것만** 붙습니다. 남의 것 · 이미 붙은 것 · 아직
+            `pending` 인 것이 섞이면 400 이고 그때 산책도 안 생깁니다(글의 `mediaIds` 와 같은 규칙).
+            같은 `clientWalkId` 로 다시 보내면(200) 처음에 붙인 사진이 그대로 옵니다 — 다시 붙이지
+            않습니다. 산책을 지우면 사진도 같이 사라집니다.
         memo: { type: string, maxLength: 500 }
         placeSource:
           type: string
@@ -5201,7 +5218,7 @@ components:
         size: { type: [integer, "null"], format: int64 }
         category:
           type: string
-          enum: [POST_IMAGE, POST_VIDEO, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
+          enum: [POST_IMAGE, POST_VIDEO, WALK_IMAGE, JOURNEY_IMAGE, PROFILE_IMAGE, REVIEW_IMAGE]
         refType:
           type: [string, "null"]
           description: 어디에 붙었나. 방금 올린 것은 `null` — 글을 만들 때 채워집니다

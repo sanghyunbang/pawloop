@@ -97,7 +97,23 @@ public record WalkRequest(
 
         /** 화면에 나갈 이름. 카탈로그에 없는 곳은 이것만 보낸다. */
         @Size(max = 120, message = "장소 이름은 120자를 넘을 수 없습니다.")
-        String placeName) {
+        String placeName,
+
+        /**
+         * 산책 중 찍은 사진(#450) — {@code POST /media} 에 {@code WALK_IMAGE} 로 올린 것의 id.
+         * 안 보내면 없는 것이다. 내가 올렸고 아직 어디에도 안 붙은 것만 붙는다 — 남의 것 · 이미 붙은
+         * 것이 섞이면 400 이고 그때 산책도 안 생긴다(글과 같은 규칙, {@code MediaAttachment}).
+         */
+        @Size(max = MAX_MEDIA, message = "사진은 한 산책에 " + MAX_MEDIA + "장까지 붙일 수 있습니다.")
+        List<Long> mediaIds) {
+
+    /** 한 산책에 붙는 사진 상한 — 글({@code PostRequest.MAX_MEDIA})과 같다. */
+    public static final int MAX_MEDIA = 10;
+
+    /** {@code null} 이면 빈 목록 — 붙이기가 {@code null} 을 안 받게. */
+    public List<Long> mediaIdsOrEmpty() {
+        return mediaIds == null ? List.of() : mediaIds;
+    }
 
     /**
      * 실제로 저장할 아이들 — 대표 아이가 맨 앞이고 중복이 없다 (#343).

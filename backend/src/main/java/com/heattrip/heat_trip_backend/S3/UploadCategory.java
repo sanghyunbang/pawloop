@@ -33,7 +33,10 @@ public enum UploadCategory {
     POST_IMAGE   ("posts",    Set.of("image/jpeg","image/png","image/webp"),              10 * 1024 * 1024L),
 
     /** 커뮤니티 글의 영상(#429). 앱이 720p 로 다시 인코딩해 S3 에 직접 올린다. */
-    POST_VIDEO   ("posts-video", Set.of("video/mp4","video/quicktime"),                   150 * 1024 * 1024L);
+    POST_VIDEO   ("posts-video", Set.of("video/mp4","video/quicktime"),                   150 * 1024 * 1024L),
+
+    /** 산책 중 찍은 사진(#450) — 산책 기록({@code walk})에 붙는다. 글 사진과 같은 크기 규칙. */
+    WALK_IMAGE   ("walks",    Set.of("image/jpeg","image/png","image/webp"),              10 * 1024 * 1024L);
 
     public final String prefix;
     public final Set<String> allowed;

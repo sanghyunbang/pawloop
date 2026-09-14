@@ -523,9 +523,12 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   "pathT": [0, 7],                     // 점별 델타 초. path 와 길이가 같아야 한다(#155)
   "clientWalkId": "8f14e45f-...",      // 재전송 멱등키
   "memo": "아침 공기가 좋아 한 바퀴 더.",
-  "weather": "맑음"
+  "weather": "맑음",
+  "mediaIds": [31, 32]                 // 산책 중 찍은 사진 (#450) — POST /media 에 WALK_IMAGE 로 올린 id. 없으면 생략
 }
 ```
+
+> **사진은 글과 같은 두 단계다(#450).** `POST /media`(`category=WALK_IMAGE`) 로 올리고 `mediaIds` 로 붙인다. 내가 올렸고 아직 어디에도 안 붙은 것만 — 남의 것 · 이미 붙은 것이 섞이면 400 이고 그때 산책도 안 생긴다. 한 산책에 열 장까지. 같은 `clientWalkId` 재전송(200)에는 처음 붙인 사진이 그대로 온다. 산책을 지우면 사진 행과 S3 파일도 같이 사라진다.
 
 > **`placeId`·`placeName` 은 없다.** `Walk` 에 장소 축 자체가 없어서, 통계의 "자주 가는 곳" 도 항상 빈 배열이다 — 그럴듯한 값을 만들지 않는다.
 
@@ -545,6 +548,9 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
   "paceSecPerKm": 950,                 // 서버 계산 (durationS / km)
   "placeName": "서울숲",
   "memo": "아침 공기가 좋아 한 바퀴 더.",
+  "media": [                           // 올린 순서. 없으면 [] (#450). Post.media 와 같은 모양
+    { "id": 31, "kind": "image", "url": "https://cdn.../walks/7/....jpg", "posterUrl": null, "width": 1200, "height": 1600, "durationMs": null }
+  ],
   "weather": "맑음"
 }
 ```
@@ -1034,6 +1040,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 ```json
 // POST /media  (multipart/form-data: files=<jpeg>, category=POST_IMAGE, width=1600, height=1200)
+//   category 는 POST_IMAGE(글) · WALK_IMAGE(산책, #450) · PROFILE_IMAGE(아이 사진, #448) — 붙는 곳이 다를 뿐 올리기는 같다
 // 200
 [{ "id": 312, "key": "posts/7/2026/09/….jpg", "url": "https://cdn…/posts/7/2026/09/….jpg",
    "contentType": "image/jpeg", "size": 412331, "category": "POST_IMAGE",

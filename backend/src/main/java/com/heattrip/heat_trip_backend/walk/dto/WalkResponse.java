@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.walk.dto;
 
+import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.walk.entity.Walk;
 import com.heattrip.heat_trip_backend.walk.service.WalkPath;
 
@@ -49,7 +50,28 @@ public record WalkResponse(
          * {@code source}·{@code contentId} 가 {@code null} 이다. 아무것도 안 붙였으면 이 필드가
          * {@code null} 이다 — 빈 객체를 주지 않는다.
          */
-        WalkPlace place) {
+        WalkPlace place,
+
+        /** 산책 중 찍은 사진(#450) — 올린 순서. 없으면 빈 목록이지 {@code null} 이 아니다. */
+        List<WalkMedia> media) {
+
+    /**
+     * 산책에 붙은 사진 하나(#450) — 계약의 {@code PostMedia} 와 같은 모양이다. 지금은 사진뿐이라
+     * {@code kind} 는 늘 {@code image} 이고 {@code posterUrl} · {@code durationMs} 는 {@code null} 이지만,
+     * 영상이 오는 날 앱이 같은 그림을 그리게 자리를 같게 둔다.
+     */
+    public record WalkMedia(long id, String kind, String url, String posterUrl,
+                            Integer width, Integer height, Integer durationMs) {
+
+        public static WalkMedia of(MediaAttachment.AttachedMedia m) {
+            return new WalkMedia(m.id(), m.kind().wire(), m.url(), m.posterUrl(),
+                    m.width(), m.height(), m.durationMs());
+        }
+
+        public static List<WalkMedia> listOf(List<MediaAttachment.AttachedMedia> attached) {
+            return attached == null ? List.of() : attached.stream().map(WalkMedia::of).toList();
+        }
+    }
 
     /**
      * 함께 나간 아이들. 대표 아이를 <b>맨 앞</b>에 놓는다 (#343).
@@ -82,8 +104,13 @@ public record WalkResponse(
         }
     }
 
-    /** 목록용 — 경로를 빼고 만든다. */
+    /** 목록용 — 경로를 빼고 만든다. 사진 없이. */
     public static WalkResponse summary(Walk walk) {
+        return summary(walk, List.of());
+    }
+
+    /** 목록용 — 경로를 빼고, 붙은 사진을 실어 만든다(#450). */
+    public static WalkResponse summary(Walk walk, List<WalkMedia> media) {
         return new WalkResponse(
                 walk.getId(),
                 walk.getDog().getId(),
@@ -96,11 +123,17 @@ public record WalkResponse(
                 null,
                 walk.getMemo(),
                 walk.getWeather(),
-                WalkPlace.of(walk));
+                WalkPlace.of(walk),
+                media);
     }
 
-    /** 상세용 — 경로를 실어 만든다. */
+    /** 상세용 — 경로를 실어 만든다. 사진 없이. */
     public static WalkResponse withPath(Walk walk) {
+        return withPath(walk, List.of());
+    }
+
+    /** 상세용 — 경로와 붙은 사진을 실어 만든다(#450). */
+    public static WalkResponse withPath(Walk walk, List<WalkMedia> media) {
         return new WalkResponse(
                 walk.getId(),
                 walk.getDog().getId(),
@@ -113,6 +146,7 @@ public record WalkResponse(
                 WalkPath.toPoints(walk.getPath()),
                 walk.getMemo(),
                 walk.getWeather(),
-                WalkPlace.of(walk));
+                WalkPlace.of(walk),
+                media);
     }
 }
