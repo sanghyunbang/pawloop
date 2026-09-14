@@ -74,7 +74,7 @@ public class LayerPlaceIndex {
     }
 
     /**
-     * KTO 를 뺀 레이어를 전부 합친 점.
+     * KTO 를 뺀 레이어를 전부 합친 점 — <b>겹침을 정리한 뒤</b>의 것이다(#411).
      *
      * <p><b>출처를 손으로 세지 않는다.</b> 전에는 둘을 이름으로 적어 뒀는데, #346 이
      * 넷째({@link CatalogSource#LOCALTRAIL})를 더했을 때 여기를 안 고쳐서 자산 1,302개가
@@ -82,14 +82,53 @@ public class LayerPlaceIndex {
      * 늘면 여기도 함께 는다.
      */
     public List<PlaceDto> allLayers() {
-        List<PlaceDto> all = new java.util.ArrayList<>();
+        return merged().layers();
+    }
+
+    private record MergedCache(String key, PlaceDedupe.Merged merged) { }
+
+    private volatile MergedCache mergedCache;
+
+    /**
+     * 겹침을 정리한 한 벌 (#411) — 우리 자산(놀이터 · 동네 길)이 관광공사 · 두루누비 · 인허가
+     * 항목과 같은 자리면 빠지고, 놀이터에 밀린 관광공사 항목은 놀이터를 옮겨 단 사본이 된다.
+     * 규칙은 {@link PlaceDedupe} 에 있다.
+     *
+     * <p>출처 다섯의 ETag 가 하나라도 바뀔 때만 다시 만든다 — 요청당 비용은 ETag 다섯 줄을
+     * 읽는 것뿐이다. 관광공사 한 벌(2MB 남짓)도 여기서 객체로 읽어 두는데, {@link #places}
+     * 가 ETag 로 캐시하므로 하루 한 번(새벽 예열)이다.
+     *
+     * <p>어느 출처가 "우리 자산" 인지는 {@link CatalogSource#isAsset()} 이 말한다 — 이름을
+     * 손으로 세지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public PlaceDedupe.Merged merged() {
+        StringBuilder key = new StringBuilder();
+        for (CatalogSource source : CatalogSource.values()) {
+            key.append(catalogs.etagOf(source.id()).orElse("-")).append('|');
+        }
+        MergedCache cached = mergedCache;
+        if (cached != null && cached.key().contentEquals(key)) {
+            return cached.merged();
+        }
+        List<PlaceDto> kto = List.of();
+        List<PlaceDto> others = new java.util.ArrayList<>();
+        List<PlaceDto> ours = new java.util.ArrayList<>();
         for (CatalogSource source : CatalogSource.values()) {
             if (source == CatalogSource.KTO) {
-                // KTO 는 레이어가 아니다 — 카탈로그 응답에서 따로 이어 붙는다.
-                continue;
+                kto = places(source);
+            } else if (source.isAsset()) {
+                ours.addAll(places(source));
+            } else {
+                others.addAll(places(source));
             }
-            all.addAll(places(source));
         }
-        return all;
+        PlaceDedupe.Merged merged = PlaceDedupe.merge(kto, others, ours);
+        if (merged.dropped() > 0) {
+            log.info("겹치는 자리를 정리했다 — 우리 자산 {}곳을 뺐고, 관광공사 {}곳에 놀이터를 옮겨 달았다 (#411)",
+                    merged.dropped(), merged.overrides().size());
+        }
+        mergedCache = new MergedCache(key.toString(), merged);
+        return merged;
     }
 }

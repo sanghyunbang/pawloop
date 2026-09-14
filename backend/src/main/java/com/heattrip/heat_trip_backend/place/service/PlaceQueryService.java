@@ -1,9 +1,11 @@
 package com.heattrip.heat_trip_backend.place.service;
 
+import com.heattrip.heat_trip_backend.place.GeoDistance;
 import com.heattrip.heat_trip_backend.place.KtoBudgetProperties;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
 import com.heattrip.heat_trip_backend.place.entity.PlaceCell;
 import com.heattrip.heat_trip_backend.place.layer.LayerPlaceIndex;
+import com.heattrip.heat_trip_backend.place.layer.PlaceDedupe;
 
 import org.springframework.stereotype.Service;
 
@@ -11,8 +13,10 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 내 주변 반려동반 장소 — 이슈 #40. 계약의 {@code GET /api/places/nearby} 다.
@@ -44,7 +48,6 @@ import java.util.Optional;
 public class PlaceQueryService {
 
     /** 지구 반지름(m). 하버사인에 쓴다. */
-    private static final double EARTH_RADIUS_M = 6_371_000.0;
 
     private final CellSnapshotStore snapshots;
     private final KtoApiClient kto;
@@ -80,18 +83,34 @@ public class PlaceQueryService {
      */
     public List<PlaceDto> nearby(double lat, double lng, int radiusM, String category, int limit) {
         boolean layerOnly = category != null && PlaceDto.LAYER_SOURCES.contains(category);
+        // 겹침을 정리한 한 벌 (#411) — 우리 자산이 관광공사 항목과 같은 자리면 빠져 있고,
+        // 놀이터에 밀린 관광공사 항목은 놀이터를 옮겨 단 사본이 있다.
+        PlaceDedupe.Merged merged = layers.merged();
         List<PlaceDto> pool = new ArrayList<>();
+        Set<String> inCell = new HashSet<>();
 
-        // 레이어 칩(vet·shop·trail)이면 KTO 셀을 부르지 않는다 — 부르면 예산만 태운다.
+        // 레이어 칩(vet·shop·trail·playground)이면 KTO 셀을 부르지 않는다 — 부르면 예산만 태운다.
         if (!layerOnly) {
             List<PlaceDto> ktoPlaces = ktoCell(lat, lng);
             if (ktoPlaces != null) {
-                pool.addAll(ktoPlaces);
+                for (PlaceDto place : ktoPlaces) {
+                    pool.add(merged.override(place));
+                    inCell.add(place.contentId());
+                }
             }
         }
         // 전체이거나 레이어 칩이면 레이어 한 벌도 본다. 전국이 메모리에 있고 거리는 여기서 잰다.
         if (category == null || layerOnly) {
-            pool.addAll(layers.allLayers());
+            pool.addAll(merged.layers());
+            // 옮겨 단 관광공사 항목은 KTO 셀에 없을 수 있다 — 셀은 KTO 주변 조회가 준 것이라 전국
+            // 한 벌보다 좁다(일산 셀 19곳에 "일산호수공원 반려견놀이터" 가 없었다, 2026-09-14 실측).
+            // 놀이터 칩은 셀을 부르지도 않는다. 셀에 이미 있으면(사본으로 바뀐 채) 다시 더하지 않는다.
+            // 다른 레이어 칩(병원 · 산책로)에서는 아래 카테고리 비교가 걸러 낸다.
+            for (PlaceDto copy : merged.overrides().values()) {
+                if (!inCell.contains(copy.contentId())) {
+                    pool.add(copy);
+                }
+            }
         }
 
         if (pool.isEmpty()) {
@@ -140,7 +159,7 @@ public class PlaceQueryService {
             if (category != null && !category.equals(place.categoryKey())) {
                 continue;
             }
-            double distance = haversineMeters(lat, lng, place.lat(), place.lng());
+            double distance = GeoDistance.metersBetween(lat, lng, place.lat(), place.lng());
             if (!trailsOnly && distance > radiusM) {
                 continue;
             }
@@ -213,19 +232,5 @@ public class PlaceQueryService {
                 || KtoApiClient.RESULT_KEY_NOT_REGISTERED.equals(resultCode)) {
             budget.closeForToday(KtoPool.NEARBY, "resultCode=" + resultCode);
         }
-    }
-
-    /**
-     * 두 좌표 사이의 거리(m).
-     *
-     * <p>KTO 가 준 {@code dist} 를 안 쓰는 이유는 위 javadoc 참조 — 그 값은 셀 중심 기준이다.
-     */
-    static double haversineMeters(double lat1, double lng1, double lat2, double lng2) {
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLng = Math.toRadians(lng2 - lng1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 }

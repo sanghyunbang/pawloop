@@ -97,6 +97,8 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
         final AtomicInteger catalogCalls = new AtomicInteger();
         final AtomicInteger nearbyCalls = new AtomicInteger();
         final AtomicInteger totalPlaces = new AtomicInteger(2);
+        /** 주변 조회(셀)에서만 빼는 id — KTO 의 주변 조회는 전국 한 벌보다 좁다(#411 실측). */
+        final AtomicReference<String> omitFromNearby = new AtomicReference<>(null);
 
         FakeKto() {
             super(null, null, null, "unused", 1000);
@@ -111,6 +113,15 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
             if (totalPlaces.get() >= 2) {
                 out.add(new PlaceDto("101", "논현동 카페", PlaceDto.SOURCE_KTO, "39", "39",
                         37.5100, 127.0300, "서울 강남구", null, null, null));
+            }
+            // 셋째 · 넷째는 겹침 정리(#411)를 보는 테스트만 켠다 — 우리 놀이터 · 동네 길 자산과 같은 자리다.
+            if (totalPlaces.get() >= 3) {
+                out.add(new PlaceDto("200", "일산호수공원 반려견놀이터", PlaceDto.SOURCE_KTO, "12", "12",
+                        37.6640, 126.7660, "경기 고양시", null, "https://tong.visitkorea.or.kr/200.jpg", null));
+            }
+            if (totalPlaces.get() >= 4) {
+                out.add(new PlaceDto("201", "세종호수공원", PlaceDto.SOURCE_KTO, "12", "12",
+                        36.5040, 127.2840, "세종특별자치시", null, null, null));
             }
             return out;
         }
@@ -127,7 +138,10 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
         @Override
         public Result<List<PlaceDto>> fetchNearby(double centerLat, double centerLng) {
             nearbyCalls.incrementAndGet();
-            return new Result.Ok<>(places(), places().size());
+            List<PlaceDto> out = places().stream()
+                    .filter(p -> !p.contentId().equals(omitFromNearby.get()))
+                    .toList();
+            return new Result.Ok<>(out, out.size());
         }
 
         @Override
@@ -280,6 +294,8 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
         kto.catalogCalls.set(0);
         kto.nearbyCalls.set(0);
         kto.totalPlaces.set(2);
+        kto.omitFromNearby.set(null);
+        jdbc.update("delete from place_cell");
         localData.pageCalls.set(0);
         localData.failFromPage.set(0);
         localData.failCode.set("999");
@@ -395,9 +411,11 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
     @DisplayName("동네 길 자산이 카탈로그 응답까지 간다 — 출처를 손으로 세면 여기가 빈다")
     void localTrailsReachTheCatalog() throws Exception {
         // 자산이 주는 모양 그대로 — 두루누비와 안 겹치는 trail:lt… 다.
+        // 좌표는 KTO "서울숲"(37.5445, 127.0374)에서 330m 뗀다 — 같은 자리면 이름이 그쪽을 포함해
+        // 겹침 정리(#411)가 이 길을 빼는 것이 맞고, 이 테스트가 보려는 것은 그것이 아니다.
         when(localTrails.load()).thenReturn(List.of(
                 new PlaceDto("trail:ltaaaa1", "서울숲길", PlaceDto.SOURCE_TRAIL, PlaceDto.SOURCE_TRAIL,
-                        null, 37.5445, 127.0374, "서울특별시 성동구", null, null, null, "4.2km · 약 1시간"),
+                        null, 37.5475, 127.0374, "서울특별시 성동구", null, null, null, "4.2km · 약 1시간"),
                 new PlaceDto("trail:ltaaaa2", "한강수변길", PlaceDto.SOURCE_TRAIL, PlaceDto.SOURCE_TRAIL,
                         null, 37.5450, 127.0400, "서울특별시 성동구", null, null, null, "6.6km · 약 2시간")));
 
@@ -623,5 +641,97 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
             }
         }
         assertThat(served).isEqualTo(asset.size());
+    }
+
+    // ─────────────────────────── 겹치는 자리 (#411) ───────────────────────────
+
+    @Test
+    @DisplayName("우리 자산이 관광공사 항목과 같은 자리면 빠지고, 놀이터는 관광공사 항목에 옮겨 달린다 — 카탈로그 · 놀이터 칩 · 전체 · 여행지 칩 (#411)")
+    void overlappingAssetsYieldToKto() throws Exception {
+        kto.totalPlaces.set(4);
+        when(playgrounds.load()).thenReturn(List.of(
+                // 관광공사 "일산호수공원 반려견놀이터"(200) 에서 33m — 이름은 한 칸 다르다.
+                new PlaceDto("playground:ovl", "일산호수공원 반려견 놀이터", PlaceDto.SOURCE_PLAYGROUND,
+                        PlaceDto.SOURCE_PLAYGROUND, null, 37.6643, 126.7660, "경기 고양시", "031-000-0000", null, null, null),
+                // 1.3km 떨어진 다른 놀이터 — 그대로 남아야 한다.
+                new PlaceDto("playground:keep", "정발산 반려견 놀이터", PlaceDto.SOURCE_PLAYGROUND,
+                        PlaceDto.SOURCE_PLAYGROUND, null, 37.6700, 126.7800, "경기 고양시", null, null, null, null)));
+        when(localTrails.load()).thenReturn(List.of(
+                // 관광공사 "세종호수공원"(201) 에서 22m — 이름이 그쪽을 포함한다. 빠지되 옮기지 않는다.
+                new PlaceDto("trail:ltovl", "세종호수공원 산책로", PlaceDto.SOURCE_TRAIL, PlaceDto.SOURCE_TRAIL,
+                        null, 36.5042, 127.2840, "세종특별자치시", null, null, null, "3.0km · 약 40분")));
+
+        layers.refreshAll();
+
+        mockMvc.perform(get(CATALOG))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.contentId == 'playground:ovl')]").isEmpty())
+                .andExpect(jsonPath("$[?(@.contentId == 'trail:ltovl')]").isEmpty())
+                .andExpect(jsonPath("$[?(@.contentId == 'playground:keep')].title").value("정발산 반려견 놀이터"))
+                .andExpect(jsonPath("$[?(@.contentId == '200')].source").value("kto"))
+                .andExpect(jsonPath("$[?(@.contentId == '200')].category").value("playground"))
+                .andExpect(jsonPath("$[?(@.contentId == '200')].contentTypeId").isEmpty())
+                .andExpect(jsonPath("$[?(@.contentId == '200')].tel").value("031-000-0000"))
+                .andExpect(jsonPath("$[?(@.contentId == '200')].image").value("https://tong.visitkorea.or.kr/200.jpg"))
+                .andExpect(jsonPath("$[?(@.contentId == '201')].category").value("12"))
+                .andExpect(jsonPath("$[?(@.contentId == '201')].contentTypeId").value("12"))
+                // KTO 넷 + 병원 · 펫샵 · 두루누비 + 남은 놀이터 하나 = 8. 겹친 둘이 빠졌다.
+                .andExpect(jsonPath("$.length()").value(8));
+
+        // 놀이터 칩 — KTO 셀을 안 부르는 길인데도 옮겨 단 관광공사 항목이 온다.
+        mockMvc.perform(get("/api/places/nearby")
+                        .param("lat", "37.6640").param("lng", "126.7660").param("category", "playground"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].contentId").value("200"))
+                .andExpect(jsonPath("$[0].source").value("kto"))
+                .andExpect(jsonPath("$[0].category").value("playground"))
+                .andExpect(jsonPath("$[1].contentId").value("playground:keep"));
+        assertThat(kto.nearbyCalls.get()).as("놀이터 칩은 KTO 예산을 태우지 않는다").isZero();
+
+        // 전체 — 셀에 있으면 사본으로 바뀐 채 한 번만, 놀이터로.
+        mockMvc.perform(get("/api/places/nearby")
+                        .param("lat", "37.6640").param("lng", "126.7660"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.contentId == '200')]", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[?(@.contentId == '200')].category").value("playground"))
+                .andExpect(jsonPath("$[?(@.contentId == 'playground:ovl')]").isEmpty());
+
+        // 전체 — 셀에 없어도 한 번은 온다. KTO 의 주변 조회는 전국 한 벌보다 좁아서 일산 셀 19곳에
+        // "일산호수공원 반려견놀이터" 가 없었다(2026-09-14 실측) — 그러면 우리 놀이터를 뺀 자리가 비어
+        // 사용자는 그 놀이터를 전체 목록에서 잃는다.
+        jdbc.update("delete from place_cell");
+        kto.omitFromNearby.set("200");
+        mockMvc.perform(get("/api/places/nearby")
+                        .param("lat", "37.6640").param("lng", "126.7660"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.contentId == '200')]", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[?(@.contentId == '200')].category").value("playground"))
+                .andExpect(jsonPath("$[?(@.contentId == '200')].source").value("kto"));
+
+        // 여행지 칩 — 놀이터로 옮겨 갔으니 여기엔 없다.
+        mockMvc.perform(get("/api/places/nearby")
+                        .param("lat", "37.6640").param("lng", "126.7660").param("category", "12"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.contentId == '200')]").isEmpty());
+    }
+
+    @Test
+    @DisplayName("겹침 정리가 들어가면 같은 행이라도 ETag 가 바뀐다 — 옛 본문을 캐시한 앱이 304 만 받으면 안 된다")
+    void catalogEtagChangesWithTheServedFormat() throws Exception {
+        layers.refreshAll();
+
+        String etag = mockMvc.perform(get(CATALOG)).andReturn().getResponse().getHeader(HttpHeaders.ETAG);
+        List<String> rowEtags = new ArrayList<>();
+        for (CatalogSource source : CatalogSource.values()) {
+            catalogRows.etagOf(source.id()).ifPresent(rowEtags::add);
+        }
+        // 행의 ETag 만 섞은 옛 값(#291 의 공식: sha256 을 32자로 자른 것)과 다르다.
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(String.join("|", rowEtags).getBytes(StandardCharsets.UTF_8));
+        String legacy = java.util.HexFormat.of().formatHex(digest).substring(0, 32);
+        assertThat(etag).isNotEqualTo("W/\"" + legacy + "\"");
+        mockMvc.perform(get(CATALOG).header(HttpHeaders.IF_NONE_MATCH, etag))
+                .andExpect(status().isNotModified());
     }
 }

@@ -4451,7 +4451,9 @@ components:
           description: |
             `kto` 관광공사 반려동반 · `vet` 동물병원 · `shop` 동물판매업(둘 다 행정안전부 인허가,
             전국) · `trail` 두루누비 걷기여행길. #291 부터 넷 다 실데이터입니다. `kto` 가 아니면
-            `category` 가 `source` 와 같은 값이고 `contentTypeId` 는 `null` 입니다.
+            `category` 가 `source` 와 같은 값이고 `contentTypeId` 는 `null` 입니다. 예외 하나(#411):
+            우리 놀이터 자산과 같은 자리라 놀이터를 옮겨 단 `kto` 항목은 `category: playground` 이고
+            `contentTypeId` 가 `null` 입니다 — 사진·상세는 관광공사 것, 배지는 놀이터.
         category:
           $ref: '#/components/schemas/PlaceCategory'
           description: |
@@ -4472,7 +4474,8 @@ components:
             KTO 콘텐츠타입(12관광지/14문화/28레포츠/32숙박/38쇼핑/39음식점).
 
             **앱이 실제로 보는 필드가 이것입니다.** `category` 가 아닙니다 —
-            `category` 설명을 참고하세요.
+            `category` 설명을 참고하세요. 놀이터를 옮겨 단 `kto` 항목(#411)에는 없습니다 —
+            그때 앱은 `category`(`playground`)를 봅니다.
 
             **`kto` 가 아닌 출처에서는 `null` 입니다.** `vet`/`shop`/`trail` 은 KTO 체계의 값이
             없어 채울 것이 없고, 그때 앱은 `category` 를 봅니다(#291).
