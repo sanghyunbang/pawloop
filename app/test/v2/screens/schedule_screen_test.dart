@@ -16,6 +16,7 @@ import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
 import 'package:heat_trip_flutter/v2/data/schedule_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
+import 'package:heat_trip_flutter/v2/widgets/dog_avatar.dart';
 import 'package:heat_trip_flutter/v2/domain/schedule_reminder.dart';
 import 'package:heat_trip_flutter/v2/screens/schedule_screen.dart';
 import 'package:heat_trip_flutter/v2/widgets/aurora.dart';
@@ -286,6 +287,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('보리'), findsWidgets, reason: '필터 칩과 목록의 아이 이름이 함께 살아난다');
+  });
+
+  testWidgets('아이 필터 칩에 그 아이의 사진이 붙는다 — 없으면 종 이모지, 있으면 사진 (#448)', (tester) async {
+    kMyPets.value = const [
+      DogProfile(
+          name: '보리', serverId: 7, breed: '푸들', size: DogSize.small, ageMonths: 30,
+          photoUrl: 'https://cdn.example.test/profiles/1/bori.jpg'),
+      DogProfile(
+          name: '초코', serverId: 8, breed: '시바', size: DogSize.medium, ageMonths: 48),
+    ];
+    final f = fixture();
+    await pumpScreen(tester, f);
+
+    final bori = find.ancestor(of: find.text('보리'), matching: find.byType(DogAvatar));
+    expect(find.descendant(of: find.ancestor(of: find.text('보리'), matching: find.byType(Row)).first,
+            matching: find.byType(DogAvatar)),
+        findsOneWidget, reason: '홈·내 정보와 같은 사진이 칩에도');
+    expect(find.descendant(of: find.ancestor(of: find.text('보리'), matching: find.byType(Row)).first,
+            matching: find.byKey(const Key('dog-photo'))),
+        findsOneWidget, reason: '사진이 있는 아이는 사진');
+    expect(find.descendant(of: find.ancestor(of: find.text('초코'), matching: find.byType(Row)).first,
+            matching: find.byKey(const Key('dog-photo'))),
+        findsNothing, reason: '사진이 없는 아이는 이모지');
+    expect(find.descendant(of: find.ancestor(of: find.text('전체'), matching: find.byType(Row)).first,
+            matching: find.byType(DogAvatar)),
+        findsNothing, reason: '"전체" 칩에는 아이가 없다');
+    expect(bori, findsNothing);
   });
 
   testWidgets('빈 상태가 무엇을 하면 되는지 말한다', (tester) async {
