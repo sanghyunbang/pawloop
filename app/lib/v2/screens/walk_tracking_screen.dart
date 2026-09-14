@@ -14,6 +14,8 @@ import '../domain/pet.dart';
 import '../walk/walk_share_card.dart' show joinDogNames;
 import '../domain/walk_moment.dart';
 import '../data/location_service.dart';
+import '../data/media_picker.dart';
+import '../data/walk_photos.dart';
 import '../data/location_upload_policy.dart';
 import '../data/pet_places_repository.dart';
 import '../data/place_catalog_repository.dart';
@@ -49,12 +51,20 @@ class WalkTrackingScreen extends StatefulWidget {
   /// 보낸다(계약이 `dogIds` 를 선택으로 받는다).
   final List<int> dogIds;
 
+  /// 산책 중 사진(#450) — 카메라. 테스트가 가짜를 꽂는 자리. 없으면 실물이다.
+  final MediaPicker? picker;
+
+  /// 찍은 사진을 두는 곳. 테스트가 임시 폴더를 꽂는다.
+  final WalkPhotoStore photoStore;
+
   const WalkTrackingScreen({
     super.key,
     this.resume,
     this.place,
     this.courseLine,
     this.dogIds = const [],
+    this.picker,
+    this.photoStore = const WalkPhotoStore(),
   });
   @override
   State<WalkTrackingScreen> createState() => _WalkTrackingScreenState();
@@ -140,6 +150,11 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
 
   /// 5초마다 기기에 적는 스냅숏(#335). 앱이 죽었다 살아나면 [WalkResumePrompt] 가 읽는다.
   static const _snapshots = WalkInProgressStore();
+
+  /// 산책 중 찍은 사진의 기기 안 경로(#450). 끝내기 시트에 붙고 저장 때 올라간다.
+  final List<String> _photos = [];
+  bool _shooting = false;
+  late final MediaPicker _picker = widget.picker ?? ImagePickerMediaPicker();
   int _sinceSave = 0;
 
   @override
@@ -180,6 +195,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       path: [for (final p in _path) [p.longitude, p.latitude]],
       pathT: List<int>.of(_pathT),
       moments: _log.moments,
+      photoPaths: List<String>.of(_photos),
       savedAt: DateTime.now(),
     )));
   }
@@ -243,6 +259,8 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       _pathT.addAll(resume.pathT);
       // 눌러 둔 것도 함께 살아난다 — 배변 두 번이 앱이 죽었다고 사라지면 안 된다(#340).
       _log.addAll(resume.moments);
+      // 찍어 둔 사진도 — 파일은 문서 폴더에 있으니 경로만 되살리면 된다(#450).
+      _photos.addAll(resume.photoPaths);
     } else {
       _startedAt = DateTime.now();
     }
@@ -831,8 +849,88 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       pathT: List<int>.of(_pathT),
       place: widget.place,
       moments: _log.moments,
+      photoPaths: List<String>.of(_photos),
     );
   }
+
+  /// 산책 중 사진 한 장(#450). 카메라가 돌려준 바이트를 문서 폴더에 두고 경로만 든다 — 끝내기
+  /// 시트에 붙고, 저장할 때 `WalkSync` 가 올린다. 위치 정보는 올릴 때 다시 인코딩하며 빠진다.
+  Future<void> _takePhoto() async {
+    if (_shooting) return;
+    if (_photos.length >= 10) {
+      _toast('사진은 한 산책에 열 장까지예요');
+      return;
+    }
+    setState(() => _shooting = true);
+    try {
+      final shot = await _picker.takePhoto();
+      if (shot == null || !mounted) return;
+      final key = (_startedAt ?? DateTime.now()).millisecondsSinceEpoch.toString();
+      final path = await widget.photoStore.save(key, shot.bytes);
+      if (!mounted) return;
+      setState(() => _photos.add(path));
+      HapticFeedback.selectionClick();
+      _snapshot();
+      _toast('사진 ${_photos.length}장 · 끝내면 기록에 같이 남아요');
+    } catch (_) {
+      if (mounted) _toast('사진을 찍지 못했어요');
+    } finally {
+      if (mounted) setState(() => _shooting = false);
+    }
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(milliseconds: 1400)));
+  }
+
+  /// 순간 막대의 넷째 칸 — 카메라. 순간 버튼과 같은 꼴(원 · 이름 · 개수 배지).
+  Widget _cameraButton() => Semantics(
+        button: true,
+        label: '사진 찍기',
+        child: GestureDetector(
+          key: const Key('walk-camera'),
+          onTap: _shooting ? null : _takePhoto,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: WalkMomentBar.minTapSize),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Stack(clipBehavior: Clip.none, children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: T.accent.withValues(alpha: 0.12)),
+                  child: const Icon(Icons.photo_camera_rounded, size: 21, color: T.accent),
+                ),
+                if (_photos.isNotEmpty)
+                  Positioned(
+                    right: -4,
+                    top: -3,
+                    child: Container(
+                      key: const Key('walk-camera-count'),
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: T.accent,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      child: Text('${_photos.length}',
+                          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.white)),
+                    ),
+                  ),
+              ]),
+              const SizedBox(height: 5),
+              const Text('사진',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: T.textSecondary)),
+            ]),
+          ),
+        ),
+      );
 
   /// 산책 완료 시트 — 몸통은 `WalkFinishSheet`(#310) 다. 이 화면은 geolocator·네이버 지도를
   /// 물고 있어 위젯 테스트로 못 띄우므로, 시트의 동작(경로 미리보기 · 사진 저장 · 두 버튼)은
@@ -867,6 +965,8 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
         // "아바타 테두리색" 은 아직 저장되는 값이 아니다).
         dogName: _companionNames(),
         placeName: widget.place?.title,
+        photoPaths: List<String>.of(_photos),
+        readPhoto: widget.photoStore.read,
         warm: _warm,
         onSave: () {
           Navigator.pop(sheetCtx);
@@ -1067,6 +1167,8 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
                     tally: _log.tally,
                     undoable: _undoable,
                     onTap: _tapMoment,
+                    // 산책 중 카메라 (#450) — 귀여운 사진은 산책 중에 제일 많이 나온다.
+                    trailing: _cameraButton(),
                   ),
                   const SizedBox(height: 8),
                   _statsPanel(context),

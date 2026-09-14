@@ -3,6 +3,7 @@ import '../data/walk_care_link.dart';
 import '../domain/walk_moment.dart';
 import 'package:heat_trip_flutter/app/navigator_keys.dart';
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -282,6 +283,10 @@ class _CreateScreenState extends State<CreateScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
                 children: [
+                  if ((widget.draft?.photoPaths ?? const []).isNotEmpty) ...[
+                    _photosCard(),
+                    const SizedBox(height: 14),
+                  ],
                   _placeCard(),
                   const SizedBox(height: 14),
                   _metricsCard(),
@@ -551,6 +556,38 @@ class _CreateScreenState extends State<CreateScreen> {
   }
 
   // ── 메모 ────────────────────────────────────
+  /// 산책 중 찍은 사진(#450) — 저장하면 같이 올라간다. 여기서 빼거나 더하지 않는다: 찍는 자리는 산책이다.
+  Widget _photosCard() {
+    final paths = widget.draft!.photoPaths;
+    return GlassCard(
+      key: const Key('create-photos'),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _label('사진 ${paths.length}장 · 저장하면 같이 올라가요'),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 92,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: paths.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            itemBuilder: (_, i) => ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 74,
+                height: 92,
+                child: Image.file(File(paths[i]),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                        color: T.surface,
+                        child: const Icon(Icons.broken_image_outlined, color: T.textMuted))),
+              ),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
   Widget _memoCard() {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

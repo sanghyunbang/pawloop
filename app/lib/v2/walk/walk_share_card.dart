@@ -58,6 +58,9 @@ class WalkShareCard {
   /// 걸은 좌표 `[경도, 위도]`. 서버에서 받은 기록에는 없다(A안 #235).
   final List<List<double>>? lngLat;
 
+  /// 배경 사진(#450) — 산책 중 찍은 첫 장의 바이트. 있으면 사진이 바닥이 되고 글자는 흰색이다.
+  final Uint8List? photo;
+
   const WalkShareCard({
     required this.dogName,
     required this.accent,
@@ -67,7 +70,10 @@ class WalkShareCard {
     required this.paceLabel,
     this.placeName,
     this.lngLat,
+    this.photo,
   });
+
+  bool get hasPhoto => photo != null && photo!.isNotEmpty;
 
   /// 남에게 보낼 수 있는 선. 양 끝 100m 를 버리고, 남는 것이 없으면 `null`.
   List<List<double>>? get trimmedPath => trimCourseEnds(lngLat);
@@ -106,38 +112,61 @@ String withParticle(String name) {
 class WalkShareCardPainter extends CustomPainter {
   final WalkShareCard card;
 
-  const WalkShareCardPainter(this.card);
+  /// 디코딩된 배경 사진 — [WalkShareImage.renderPng] 가 [WalkShareCard.photo] 에서 만든다.
+  /// painter 는 동기라 여기서 디코딩할 수 없다.
+  final ui.Image? photo;
+
+  const WalkShareCardPainter(this.card, {this.photo});
 
   static const _bgTop = T.surface;
   static const _bgBottom = Color(0xFFFFF1EA);
   static const _grid = Color(0x14463C64);
-  static const _ink = T.textSecondary;
-  static const _inkSoft = T.textMuted;
+  static const _inkPlain = T.textSecondary;
+  static const _inkSoftPlain = T.textMuted;
   static const _routeGlow = Color(0x33FF7A59);
   static const _start = Color(0xFF4CAF88);
+
+  /// 사진 위에서는 글자가 흰색이다 — 어두운 스크림을 깔아 어느 사진이든 읽힌다.
+  Color get _ink => photo == null ? _inkPlain : Colors.white;
+  Color get _inkSoft => photo == null ? _inkSoftPlain : const Color(0xE6FFFFFF);
 
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_bgTop, _bgBottom],
-        ).createShader(rect),
-    );
-
-    final gridPaint = Paint()
-      ..color = _grid
-      ..strokeWidth = size.shortestSide / 540;
-    final step = size.shortestSide / 10;
-    for (double x = step; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-    for (double y = step; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    final bg = photo;
+    if (bg != null) {
+      _drawPhoto(canvas, rect, bg);
+      // 위아래 스크림 — 이름·날짜(위)와 수치(아래)가 사진 위에서 읽히게.
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0x99000000), Color(0x1A000000), Color(0x1A000000), Color(0xB3000000)],
+            stops: [0.0, 0.3, 0.6, 1.0],
+          ).createShader(rect),
+      );
+    } else {
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [_bgTop, _bgBottom],
+          ).createShader(rect),
+      );
+      final gridPaint = Paint()
+        ..color = _grid
+        ..strokeWidth = size.shortestSide / 540;
+      final step = size.shortestSide / 10;
+      for (double x = step; x < size.width; x += step) {
+        canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      }
+      for (double y = step; y < size.height; y += step) {
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      }
     }
 
     final pad = size.width * 0.09;
@@ -200,6 +229,20 @@ class WalkShareCardPainter extends CustomPainter {
         30 * unit, FontWeight.w800, 200 * unit, card.accent, alignRight: true);
   }
 
+  /// 사진을 카드에 꽉 채운다(cover) — 비율이 달라도 빈 곳이 없게 가운데를 자른다.
+  void _drawPhoto(Canvas canvas, Rect rect, ui.Image image) {
+    final scale = math.max(rect.width / image.width, rect.height / image.height);
+    final w = image.width * scale;
+    final h = image.height * scale;
+    final dst = Rect.fromLTWH(rect.left + (rect.width - w) / 2, rect.top + (rect.height - h) / 2, w, h);
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      dst,
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+  }
+
   void _drawRoute(Canvas canvas, Rect box, double unit) {
     final points = RouteProjection.fit(card.trimmedPath!, box.size, 24 * unit)
         .map((o) => o.translate(box.left, box.top))
@@ -257,7 +300,7 @@ class WalkShareCardPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(WalkShareCardPainter old) => old.card != card;
+  bool shouldRepaint(WalkShareCardPainter old) => old.card != card || old.photo != photo;
 }
 
 /// 카드 PNG 한 장.
@@ -265,9 +308,19 @@ class WalkShareImage {
   static const Size defaultSize = Size(1080, 1350);
 
   static Future<Uint8List> renderPng(WalkShareCard card, {Size size = defaultSize}) async {
+    // 배경 사진은 여기서 디코딩한다 — painter 는 동기다(#450). 못 읽는 바이트면 사진 없이 그린다.
+    ui.Image? photo;
+    if (card.hasPhoto) {
+      try {
+        photo = await decodeImageFromList(card.photo!);
+      } catch (_) {
+        photo = null;
+      }
+    }
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, Offset.zero & size);
-    WalkShareCardPainter(card).paint(canvas, size);
+    WalkShareCardPainter(card, photo: photo).paint(canvas, size);
+    photo?.dispose();
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.width.round(), size.height.round());
     try {

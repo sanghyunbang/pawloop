@@ -29,7 +29,11 @@ class WalkMomentBar extends StatelessWidget {
     required this.tally,
     required this.onTap,
     this.undoable,
+    this.trailing,
   });
+
+  /// 순간 버튼들 뒤에 하나 더 — 산책 중 카메라(#450). 같은 칸 폭을 나눠 쓴다. 없으면 셋뿐이다.
+  final Widget? trailing;
 
   /// 지금까지의 횟수. 0 이면 배지를 안 그린다.
   final WalkMomentTally tally;
@@ -64,6 +68,7 @@ class WalkMomentBar extends StatelessWidget {
       child: Row(
         children: [
           for (final kind in WalkMomentKind.values) Expanded(child: _button(kind)),
+          if (trailing != null) Expanded(child: trailing!),
         ],
       ),
     );

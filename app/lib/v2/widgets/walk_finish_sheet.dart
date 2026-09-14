@@ -28,6 +28,14 @@ typedef RouteRenderer = Future<Uint8List> Function(RouteArt art);
 class WalkFinishSheet extends StatefulWidget {
   final String timeLabel;
   final String distanceLabel;
+
+  /// 산책 중 찍은 사진의 기기 안 경로(#450). 시트에 띠로 보이고, 공유 카드의 배경(첫 장)이 된다.
+  /// 저장은 이 시트가 아니라 저장 화면 → `WalkSync` 가 한다.
+  final List<String> photoPaths;
+
+  /// 경로에서 바이트를 읽는 함수 — 사진이 있으면 반드시 준다(`WalkPhotoStore.read`). 파일은 이 시트가
+  /// 읽지 않는다: 이 파일엔 `dart:io` 가 못 들어온다(`route_photo_no_network_test` 가 #310 을 잠근다).
+  final Future<Uint8List?> Function(String path)? readPhoto;
   final String paceLabel;
 
   /// 그릴 경로와 사진에 적을 글자. 점이 둘 미만이면 미리보기·저장 버튼이 안 뜬다.
@@ -74,6 +82,8 @@ class WalkFinishSheet extends StatefulWidget {
     this.dogColor = T.warmMid,
     this.placeName,
     this.shareCard = WalkShare.share,
+    this.photoPaths = const [],
+    this.readPhoto,
   });
 
   /// 사진 아래에 적는 날짜 — "2026.09.06 14:20 출발".
@@ -87,6 +97,18 @@ class WalkFinishSheet extends StatefulWidget {
 }
 
 class _WalkFinishSheetState extends State<WalkFinishSheet> {
+  /// 띠의 그림 — 경로마다 한 번만 읽는다(다시 그릴 때마다 파일을 또 읽지 않게).
+  final Map<String, Future<Uint8List?>> _thumbs = {};
+
+  Future<Uint8List?> _thumb(String path) =>
+      _thumbs.putIfAbsent(path, () => widget.readPhoto?.call(path) ?? Future<Uint8List?>.value(null));
+
+  @override
+  void initState() {
+    super.initState();
+    assert(widget.photoPaths.isEmpty || widget.readPhoto != null, '사진이 있으면 읽는 함수도 있어야 한다');
+  }
+
   /// 카드를 그리는 동안 두 번 누르는 것을 막는다.
   bool _sharing = false;
 
@@ -152,6 +174,11 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
             ],
             valueSize: 20,
           ),
+          // 산책 중 찍은 사진 (#450) — 없으면 줄이 아예 없다.
+          if (widget.photoPaths.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _photoStrip(),
+          ],
           // 산책 중에 누른 것들 (#340). 안 눌렀으면 줄이 아예 없다 — 0회를 세어 보여 주면
           // 안 한 일이 못 한 일처럼 읽힌다.
           if (!WalkMomentTally.of(widget.art.moments).isEmpty) ...[
@@ -209,6 +236,50 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
   }
 
   /// 타일 없이 그린 경로. 저장되는 사진과 **같은 painter** 다 — 보이는 것과 저장되는 것이 같다.
+  /// 찍은 사진 띠 — 한 줄, 왼쪽부터 찍은 순서. 4:5 로 자른다(커뮤니티 카드와 같은 규칙).
+  Widget _photoStrip() => SizedBox(
+        key: const Key('finish-photos'),
+        height: 92,
+        child: Row(children: [
+          Expanded(
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: widget.photoPaths.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (_, i) => ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 74,
+                  height: 92,
+                  child: FutureBuilder<Uint8List?>(
+                    future: _thumb(widget.photoPaths[i]),
+                    builder: (_, snap) {
+                      final bytes = snap.data;
+                      if (bytes == null || bytes.isEmpty) return _thumbFallback();
+                      return Image.memory(bytes,
+                          fit: BoxFit.cover,
+                          cacheWidth: 222,
+                          gaplessPlayback: true,
+                          errorBuilder: (_, __, ___) => _thumbFallback());
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 92,
+            child: Text('사진 ${widget.photoPaths.length}장\n기록에 같이 남아요',
+                style: const TextStyle(fontSize: 11.5, color: T.textMuted, height: 1.35)),
+          ),
+        ]),
+      );
+
+  /// 아직 안 읽었거나 못 읽는 사진의 자리 — 띠가 흔들리지 않게 같은 크기.
+  Widget _thumbFallback() =>
+      Container(color: T.surface, child: const Icon(Icons.photo_outlined, color: T.textMuted));
+
   Widget _preview() => ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: SizedBox(
@@ -262,6 +333,10 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
   Future<void> _share(String dogName) async {
     setState(() => _sharing = true);
     try {
+      // 첫 사진이 카드의 배경이 된다(#450) — Nike Run Club 처럼 사진 위에 수치를 얹는다.
+      // 띠가 이미 읽은 바이트를 다시 쓴다 — 파일을 두 번 열지 않는다.
+      final photo = widget.photoPaths.isEmpty ? null : await _thumb(widget.photoPaths.first);
+      if (!mounted) return;
       await widget.shareCard(WalkShareCard(
         dogName: dogName,
         accent: widget.dogColor,
@@ -271,6 +346,7 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
         paceLabel: widget.paceLabel,
         placeName: widget.placeName,
         lngLat: widget.art.lngLat,
+        photo: photo,
       ));
     } on WalkShareException catch (e) {
       if (mounted) _toast(e.message);

@@ -40,6 +40,7 @@ class _Walks implements WalkRepository {
     String? memo,
     String? weather,
     WalkPlaceRef? place,
+    List<int> mediaIds = const [],
   }) async {
     saved++;
     return ServerWalk(

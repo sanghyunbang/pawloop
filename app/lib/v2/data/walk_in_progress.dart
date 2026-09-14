@@ -30,6 +30,9 @@ class WalkInProgress {
   /// 옛 스냅숏에는 이 키가 없다 — 그때는 빈 목록이다.
   final List<WalkMoment> moments;
 
+  /// 산책 중 찍은 사진의 기기 안 경로(#450) — 앱이 죽어도 사진은 남아야 한다. 옛 스냅숏에는 없다.
+  final List<String> photoPaths;
+
   /// 마지막으로 적은 시각. "지난 산책이 몇 분 전에 끊겼나" 를 말할 때 쓴다.
   final DateTime savedAt;
 
@@ -41,6 +44,7 @@ class WalkInProgress {
     required this.pathT,
     required this.savedAt,
     this.moments = const [],
+    this.photoPaths = const [],
   });
 
   double get km => distanceM / 1000;
@@ -52,6 +56,7 @@ class WalkInProgress {
         'path': path,
         'pathT': pathT,
         if (moments.isNotEmpty) 'moments': [for (final m in moments) m.toJson()],
+        if (photoPaths.isNotEmpty) 'photoPaths': photoPaths,
         'savedAt': savedAt.toIso8601String(),
       };
 
@@ -90,6 +95,9 @@ class WalkInProgress {
       path: points,
       pathT: times,
       moments: moments,
+      photoPaths: raw['photoPaths'] is List
+          ? (raw['photoPaths'] as List).whereType<String>().toList()
+          : const [],
       savedAt: savedAt,
     );
   }

@@ -90,6 +90,13 @@ class WalkDraft {
   /// 마지막 실패의 사유. 화면이 "왜 아직 안 올라갔는지" 를 말해 준다.
   final String? lastError;
 
+  /// 산책 중 찍은 사진의 **기기 안 경로**(#450). 올릴 때 읽는다. 없으면 빈 목록.
+  final List<String> photoPaths;
+
+  /// 이미 올린 사진의 서버 id — 재시도에서 다시 올리지 않으려고 적어 둔다. [photoPaths] 의 앞에서부터
+  /// 짝이 맞는다(i 번째 경로 = i 번째 id).
+  final List<int> mediaIds;
+
   const WalkDraft({
     required this.clientWalkId,
     required this.startedAt,
@@ -105,6 +112,8 @@ class WalkDraft {
     this.place,
     this.moments = const [],
     this.lastError,
+    this.photoPaths = const [],
+    this.mediaIds = const [],
   });
 
   double get km => distanceM / 1000.0;
@@ -123,6 +132,7 @@ class WalkDraft {
     List<int> dogIds = const [],
     WalkPlaceRef? place,
     List<WalkMoment> moments = const [],
+    List<String> photoPaths = const [],
   }) =>
       WalkDraft(
         clientWalkId: _newKey(),
@@ -136,6 +146,7 @@ class WalkDraft {
         dogIds: dogIds,
         place: place,
         moments: moments,
+        photoPaths: photoPaths,
       );
 
   WalkDraft copyWith({
@@ -151,6 +162,8 @@ class WalkDraft {
     /// `place: null` 만으로는 "안 바꿈" 과 구분되지 않는다.
     bool dropPlace = false,
     String? lastError,
+    List<String>? photoPaths,
+    List<int>? mediaIds,
   }) =>
       WalkDraft(
         clientWalkId: clientWalkId,
@@ -170,6 +183,8 @@ class WalkDraft {
         // 저장 화면이 copyWith 로 이름·거리를 고칠 때 눌러 둔 것이 떨어지면 안 된다.
         moments: moments,
         lastError: lastError ?? this.lastError,
+        photoPaths: photoPaths ?? this.photoPaths,
+        mediaIds: mediaIds ?? this.mediaIds,
       );
 
   Map<String, dynamic> toJson() => {
@@ -187,6 +202,8 @@ class WalkDraft {
         if (place != null) 'place': place!.toJson(),
         if (moments.isNotEmpty) 'moments': [for (final m in moments) m.toJson()],
         if (lastError != null) 'lastError': lastError,
+        if (photoPaths.isNotEmpty) 'photoPaths': photoPaths,
+        if (mediaIds.isNotEmpty) 'mediaIds': mediaIds,
       };
 
   /// 모양이 다르면 `null`. **저장 형식이 바뀌어도 앱이 죽지 않아야 한다** — 옛 초안
@@ -243,6 +260,12 @@ class WalkDraft {
               .toList()
           : const [],
       lastError: json['lastError'] as String?,
+      photoPaths: json['photoPaths'] is List
+          ? (json['photoPaths'] as List).whereType<String>().toList()
+          : const [],
+      mediaIds: json['mediaIds'] is List
+          ? (json['mediaIds'] as List).whereType<num>().map((n) => n.toInt()).toList()
+          : const [],
     );
   }
 
