@@ -120,3 +120,11 @@ UI/UX 이슈에 붙이는 그림들입니다. **탭별 UI/UX 이슈**(하단 메
 | `ours-452-unread-dot.jpg` | 우리 앱 (#452 뒤) | 채팅 탭의 **안 읽음 점** — 안 읽은 방이 있으면 탭 아이콘 오른쪽 위에 점 하나(개수 아님, HIG). 방 목록의 개수 뱃지는 그대로. 방을 보고 나오면 꺼진다 |
 | `ours-450-walk-photos.jpg` | 우리 앱 (#450 뒤) | 산책 사진 — 산책 중 한 손 기록 줄의 넷째 칸 **사진**(찍은 장수 배지) · 끝내기 시트의 사진 띠 · 저장 화면의 사진 카드 · 기록 상세의 사진 띠. 공유 카드는 첫 장이 배경(위아래 스크림 + 흰 글자) |
 | `ours-452-chat-photo.jpg` | 우리 앱 (#452 뒤) | 채팅 말풍선 사진 — 글자 칸 왼쪽 사진 버튼 · 보내는 중(흐린 사진) · 내 사진 말풍선(4:5) · 상대의 사진 말풍선(아바타 · 이름 · 사진) · 방 목록의 "사진" |
+| `app-alltrails-1.jpg` | AllTrails(Apple 2023 iPhone App of the Year) 스토어 페이지 — 근처 탐색 목록: 이름 · 거리 · 길이 · 난이도 · 평점 한 줄, 고르는 기준이 칩. 코스 추천 카드의 기준 | https://apps.apple.com/kr/app/id405075943 |
+| `app-komoot-1.jpg` | Komoot 스토어 페이지 — 추천 투어 카드에 "왜 이 코스인지" 한 줄과 지도 미리보기 | https://apps.apple.com/kr/app/id447374873 |
+| `app-mungkok-1.jpg` | 멍콕(국내 반려 앱) 스토어 페이지 — "추천 코스 따라가기" 는 정적 목록. 우리는 오늘 · 우리 아이 기준이라는 것이 차이 | https://apps.apple.com/kr/app/id6753100529 |
+| `strava-routes.jpg` | Strava Stories — Find New Routes Near You: 거리 칩으로 길이를 먼저 정하고 인기(히트맵) 순으로 추천, 이유가 데이터 | https://stories.strava.com/articles/find-new-routes-near-you |
+| `strava-athlete-intelligence.jpg` | Strava Stories — Athlete Intelligence(2024-10 공개 베타): 활동 아래 짧은 AI 카드 두세 문장, 베타 라벨, 👍/👎 | https://stories.strava.com/articles/meet-athlete-intelligence-personalized-ai-insights-that-help-you-reach-your |
+| `strava-athlete-intelligence-help.jpg` | Strava 도움말 — Athlete Intelligence 가 무엇을 읽고 무엇을 쓰는지(입력은 활동 데이터, 출력은 요약과 제안) | https://support.strava.com/hc/en-us/articles/26786795557005-Athlete-Intelligence-on-Strava |
+| `oura-advisor.jpg` | Oura Advisor — 주간 흐름을 대화체로 풀어 주는 AI. 우리는 대화까지 안 가고 두 문장 + 제안 한 줄 | https://ouraring.com/blog/oura-advisor |
+| `hig-charts.jpg` | Apple HIG — Charts: 숫자 카드(막대 · 목표 대비)가 근거이고 글은 그 아래의 해석 | https://developer.apple.com/design/human-interface-guidelines/charts |
