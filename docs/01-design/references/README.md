@@ -96,3 +96,4 @@ UI/UX 이슈에 붙이는 그림들입니다. **탭별 UI/UX 이슈**(하단 메
 | `ours-white-photo-wall.jpg` | 커뮤니티 **사진 벽**(#451 1번) — 격자 보기. 사진·영상 있는 글만 두 열 벽돌, 세로 4:5 는 왼쪽에 하나, 가로 둘은 오른쪽에 | 에뮬레이터 |
 | `ours-white-feed-photo-first.jpg` | 커뮤니티 카드 — 사진·영상이 있으면 **사진이 먼저**(#451 2번). 작성자·제목·본문은 그 아래 | 에뮬레이터 |
 | `ours-white-compose-photo-first.jpg` | 글쓰기 — 첫 칸이 **사진 · 영상**(#451 3번), 게시판·제목·본문은 그 아래 | 에뮬레이터 |
+| `ours-white-home-photo-strip.jpg` · `ours-white-home-strip-more.jpg` | 홈의 **이웃의 사진** 한 줄(#451 6번)과 "더 보기" 로 열린 커뮤니티 사진 벽 | 에뮬레이터 |
