@@ -25,6 +25,7 @@ import '../domain/schedule.dart';
 import '../domain/schedule_reminder.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../widgets/dog_avatar.dart';
 import '../widgets/form_kit.dart';
 
 /// 목록을 무엇으로 거를까. `전체` 가 기본이다 — 달력의 기본이 합쳐 보기다.
@@ -265,7 +266,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   Widget _filterChips() {
     final pets = kMyPets.value.where((p) => p.serverId != null).toList();
-    Widget chip(String label, bool selected, VoidCallback onTap) => Padding(
+    // 아이 칩에는 그 아이의 사진(없으면 종 이모지)이 앞에 붙는다 — 홈·내 정보와 같은 사진(#448).
+    Widget chip(String label, bool selected, VoidCallback onTap, {DogProfile? dog}) => Padding(
           padding: const EdgeInsets.only(right: 8),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -277,11 +279,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: selected ? T.accent : T.cardBorder),
               ),
-              child: Text(label,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: selected ? Colors.white : T.textSecondary)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (dog != null) ...[
+                  DogAvatar(dog: dog, size: 18, emojiSize: 18),
+                  const SizedBox(width: 6),
+                ],
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? Colors.white : T.textSecondary)),
+              ]),
             ),
           ),
         );
@@ -300,7 +308,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           chip('전체', _filter.isAll, () => pick(ScheduleFilter.all)),
           for (final pet in pets)
             chip(pet.name, _filter.dogId == pet.serverId,
-                () => pick(ScheduleFilter(dogId: pet.serverId))),
+                () => pick(ScheduleFilter(dogId: pet.serverId)), dog: pet),
           if (_groupId != null)
             chip('가족', _filter.groupOnly,
                 () => pick(const ScheduleFilter(groupOnly: true))),
