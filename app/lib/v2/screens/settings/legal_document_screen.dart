@@ -38,7 +38,7 @@ import '../../theme/app_tokens.dart';
 /// 다시 동의 화면을 본다 — 그것이 의도다.
 enum LegalDocument {
   terms('이용약관', 'assets/terms/terms_ko.md', ConsentKind.terms, 'v1.2'),
-  privacy('개인정보처리방침', 'assets/terms/privacy_ko.md', ConsentKind.privacy, 'v1.7'),
+  privacy('개인정보처리방침', 'assets/terms/privacy_ko.md', ConsentKind.privacy, 'v1.8'),
 
   /// 위치정보법 제18조가 요구하는 문서. **이용약관과 따로 있어야 한다** — 법이
   /// "위치기반서비스 이용약관에 명시하고 동의를 받으라" 고 정하고 있어서, 일반

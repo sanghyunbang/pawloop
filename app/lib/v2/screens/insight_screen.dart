@@ -142,6 +142,10 @@ class _InsightScreenState extends State<InsightScreen> {
               _summaryCard(),
               const SizedBox(height: 14),
               _aiReportCard(),
+              if (_data.stats.aiSummary != null) ...[
+                const SizedBox(height: 10),
+                _aiInsightCard(_data.stats.aiSummary!),
+              ],
               const SizedBox(height: 14),
               _weekChartCard(),
               const SizedBox(height: 14),
@@ -291,6 +295,80 @@ class _InsightScreenState extends State<InsightScreen> {
   }
 
   // ── 주간 거리 막대그래프 ─────────────────────────
+  // ── AI 요약 (#486) — 서버가 모델로 만든 두 문장 + 제안. 숫자는 위 카드에서 온 것뿐이다
+  // (서버가 입력에 없는 숫자를 쓴 문장은 버린다). null 이면 이 카드도 "AI" 라벨도 없다.
+  // Strava Athlete Intelligence 처럼 수치 카드 아래 짧은 카드 하나, 반짝 아이콘 + 베타 라벨.
+  Widget _aiInsightCard(AiSummary ai) {
+    final lines = ai.lines;
+    final suggestion = lines.length >= 2 ? lines.last : null;
+    final body = suggestion == null ? lines : lines.sublist(0, lines.length - 1);
+    return Container(
+      key: const Key('ai-summary'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: T.cardBg,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: T.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, size: 17, color: T.accent),
+              const SizedBox(width: 7),
+              const Text(
+                'AI 요약',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: T.textPrimary),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: T.surface,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  '베타',
+                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: T.textSecondary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Text(
+            body.join(' '),
+            style: const TextStyle(fontSize: 13, height: 1.55, color: T.textPrimary),
+          ),
+          if (suggestion != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Icon(Icons.arrow_forward_rounded, size: 14, color: T.accent),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    suggestion,
+                    style: const TextStyle(fontSize: 13, height: 1.5, fontWeight: FontWeight.w700, color: T.textPrimary),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          const Text(
+            '이번 주 산책 기록과 우리 아이의 크기·나이대로 만든 문장이에요 · 숫자는 위 카드의 것만 써요',
+            style: TextStyle(fontSize: 11, color: T.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _weekChartCard() {
     return GlassCard(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),

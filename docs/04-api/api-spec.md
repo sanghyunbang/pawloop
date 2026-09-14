@@ -615,7 +615,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 ### 5.5 산책 통계 — ✅ 구현(#145)
 
-`GET /api/walks/stats/weekly?dogId={id}` — 통계 차트(`fl_chart`)용 집계. **`period` 파라미터는 없다.** 이번 주(KST 월~일)와 전체 기간을 한 응답에 함께 담아 화면 둘을 채운다. 2026-08 이전에는 이 절이 `/api/walks/stats` 에 `period ∈ {week, month}` 라고 적혀 있었고, 그대로 짜면 404 였다(#201).
+`GET /api/walks/stats/weekly?dogId={id}` — 통계 차트(`fl_chart`)용 집계. **`period` 파라미터는 없다.** 응답 끝의 `aiSummary`(#486)는 모델이 만든 두 문장 + 제안이고 키 · 상한 · 숫자 검사에 따라 `null` 일 수 있다 — 앱은 `null` 이면 카드를 그리지 않는다. 이번 주(KST 월~일)와 전체 기간을 한 응답에 함께 담아 화면 둘을 채운다. 2026-08 이전에는 이 절이 `/api/walks/stats` 에 `period ∈ {week, month}` 라고 적혀 있었고, 그대로 짜면 404 였다(#201).
 
 ```json
 // 200 OK — 계약의 WalkStats 그대로 (2026-09-05 까지 이 예시는 계약에 없는 period·range·daily·summary 모양이었다)

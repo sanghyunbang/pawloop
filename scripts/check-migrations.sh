@@ -273,6 +273,10 @@ want 1 "$(has_index post idx_post_dog)" "idx_post_dog (없으면 아이 사진�
 step "42_media_walk_image.sql"
 want 1 "$(q "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='media_objects' AND column_name='category' AND column_type LIKE '%WALK_IMAGE%';")" "media_objects.category 에 WALK_IMAGE (없으면 산책 사진 올리기가 500 · 부팅이 validate 에서 죽는다)"
 
+step "44_weekly_insight.sql"
+want 1 "$(has_table weekly_insight)" "weekly_insight 표 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(has_index weekly_insight uq_weekly_insight)" "uq_weekly_insight (없으면 한 주에 행이 쌓이고 캐시가 안 맞는다)"
+
 step "43_media_chat_image.sql"
 want 1 "$(q "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='media_objects' AND column_name='category' AND column_type LIKE '%CHAT_IMAGE%';")" "media_objects.category 에 CHAT_IMAGE (없으면 채팅 사진 올리기가 500)"
 

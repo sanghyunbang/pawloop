@@ -149,6 +149,8 @@
 ### 구성요소
 1. **헤더**: `산책 통계` + `우리 아이 활동 기록` + `ProfileAvatar`.
 2. **이번 주 요약 카드**(GlassCard): 3분할 — `{총거리}km 총 거리` / `{횟수}회 산책 횟수` / `{평균}km 평균 거리`. 숫자는 warm 그라데이션 텍스트(`ShaderMask`).
+   - 그 아래 **규칙 문장 카드**("이번 주 요약", #359 1단계) — 목표 대비 · 빠진 요일 · 지난주 대비 · 제안. "AI" 라고 부르지 않는다.
+   - 그 아래 **AI 요약 카드**(#486, `Key('ai-summary')`) — 서버 `aiSummary` 가 있을 때만. 머리 반짝 아이콘 + "AI 요약" + "베타" 칩, 두 문장, 화살표 붙은 제안 한 줄, 꼬리 "이번 주 산책 기록과 우리 아이의 크기·나이대로 만든 문장이에요 · 숫자는 위 카드의 것만 써요". `null` 이면 카드도 "AI" 글자도 없다(`insight_screen_test`).
 3. **주간 거리 막대그래프 카드**(`fl_chart` BarChart):
    - 범례: `오늘`(핑크 점) / `평일`(연보라 사각).
    - 월~일 7개 막대. 오늘(`WalkFeedData.todayIndex` = **실제 요일**)은 warm 그라데이션 + 라벨 강조, 나머지는 연보라(`#8C9E8FE8`). 예전에는 `kWalkTodayIdx = 6` 상수라 **영원히 일요일**이었다(#145).
@@ -159,7 +161,7 @@
 - 막대 터치 → 툴팁 표시(요일·거리). 그 외 정적 리스트.
 
 ### 데이터 (모두 파생/상수)
-- `GET /api/walks/stats/weekly` 의 `weekKm`(월~일, 주 경계는 **KST**) + 전송 대기 초안, `kWeekDayLabels`.
+- `GET /api/walks/stats/weekly` 의 `weekKm`(월~일, 주 경계는 **KST**) + 전송 대기 초안, `kWeekDayLabels`. `aiSummary`(#486)는 `AiSummary.parse` — 줄 단위로 나눠 마지막 줄을 제안으로.
 - 파생: `_totalKm`(합), `_walkCount`(>0 개수), `_avgKm`, `_maxKm`(축 스케일).
 - `_topPlaces` — 항상 빈 목록(위 4번 참조).
 

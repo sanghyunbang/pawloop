@@ -565,4 +565,20 @@ CREATE TABLE `walk_note` (
   CONSTRAINT `fk_walknote_updatedby` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `weekly_insight` (
+  `calls` int NOT NULL,
+  `week_start` date NOT NULL,
+  `dog_id` bigint NOT NULL,
+  `generated_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `input_hash` varchar(64) NOT NULL,
+  `model` varchar(64) NOT NULL,
+  `text` text,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_weekly_insight` (`user_id`,`dog_id`,`week_start`),
+  KEY `idx_weekly_insight_generated` (`generated_at`),
+  CONSTRAINT `fk_weekly_insight_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

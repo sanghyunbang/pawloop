@@ -307,6 +307,9 @@ class ServerWalkStats {
   /// `null` 을 위로 흘리면 화면이 두 갈래를 만들고 그중 하나가 언젠가 안 그린다.
   final WeekSummaryData summary;
 
+  /// AI 요약(#486) — 서버가 만들었을 때만. null 이면 카드 없음.
+  final AiSummary? aiSummary;
+
   const ServerWalkStats({
     required this.weekKm,
     this.weekMinutes = const [0, 0, 0, 0, 0, 0, 0],
@@ -318,6 +321,7 @@ class ServerWalkStats {
     required this.allTimeMinutes,
     this.topPlaces = const [],
     this.summary = WeekSummaryData.empty,
+    this.aiSummary,
   });
 
   /// 아무것도 없는 상태. 서버를 못 부른 화면이 그릴 값이다.
@@ -362,6 +366,7 @@ class ServerWalkStats {
       allTimeMinutes: (json['allTimeMinutes'] as num?)?.toInt() ?? 0,
       topPlaces: WalkTopPlace.parseList(json['topPlaces']),
       summary: WeekSummaryData.parse(json['summary']),
+      aiSummary: AiSummary.parse(json['aiSummary']),
     );
   }
 }

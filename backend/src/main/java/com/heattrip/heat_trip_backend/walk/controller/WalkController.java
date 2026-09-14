@@ -8,6 +8,7 @@ import com.heattrip.heat_trip_backend.walk.dto.WalkRequest;
 import com.heattrip.heat_trip_backend.walk.dto.WalkResponse;
 import com.heattrip.heat_trip_backend.walk.dto.WalkStatsResponse;
 import com.heattrip.heat_trip_backend.walk.service.WalkService;
+import com.heattrip.heat_trip_backend.walk.ai.WeeklyInsightService;
 
 import jakarta.validation.Valid;
 
@@ -56,6 +57,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class WalkController {
 
     private final WalkService walks;
+    private final WeeklyInsightService insights;
 
     /**
      * 내 산책 목록. <b>경로는 실리지 않는다</b> — 상세에서만 준다.
@@ -90,7 +92,8 @@ public class WalkController {
     @GetMapping("/stats/weekly")
     public WalkStatsResponse stats(@CurrentUser User user,
                                    @RequestParam(required = false) Long dogId) {
-        return walks.stats(user.getId(), dogId);
+        // AI 주간 요약(#486)은 통계 트랜잭션 밖에서 얹는다 — 모델 호출은 망이다.
+        return insights.attach(user.getId(), dogId, walks.stats(user.getId(), dogId));
     }
 
     /** 상세. 경로가 여기에만 실린다. */

@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.dog.service;
 
 import com.heattrip.heat_trip_backend.dog.DogTime;
 import com.heattrip.heat_trip_backend.dog.DogOwnership;
+import com.heattrip.heat_trip_backend.dog.DogProfileView;
 import com.heattrip.heat_trip_backend.dog.dto.DogRequest;
 import com.heattrip.heat_trip_backend.dog.dto.DogResponse;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
@@ -68,6 +69,15 @@ public class DogService implements DogOwnership {
 
     public List<DogResponse> mine(Long userId) {
         return dogs.findMine(userId).stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    public DogProfileView profileOf(long userId, Long dogId) {
+        Dog dog = dogId != null ? require(userId, dogId) : dogs.findMine(userId).stream().findFirst().orElse(null);
+        if (dog == null) {
+            return null;
+        }
+        return new DogProfileView(dog.getSize().wire(), toResponse(dog).ageMonths());
     }
 
     public DogResponse one(Long userId, long dogId) {
