@@ -31,6 +31,9 @@ public interface MediaAttachment {
     /** 아이 프로필 사진 (#448). {@code refId} 는 {@code dog.id}. 한 아이에 한 장이다 — {@link #replace} 로 간다. */
     String REF_DOG = "DOG";
 
+    /** 산책 기록에 붙은 사진(#450). {@code refId} 는 {@code walk.id}. */
+    String REF_WALK = "WALK";
+
     /**
      * 붙인다. <b>내 것이고, 아직 어디에도 안 붙었고, {@code ready} 인 것</b>만 붙는다.
      *

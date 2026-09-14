@@ -79,9 +79,12 @@ class StructureDocDriftTest {
     private static final Pattern TAB_TABLE_ROW =
             Pattern.compile("\\|\\s*탭\\s+(\\d+)\\s*\\|([^|]+)\\|");
 
-    /** {@code item(Icons.chat_bubble_outline, '채팅', 3)}. */
+    /**
+     * {@code item(Icons.chat_bubble_outline, '채팅', 4)} — 뒤에 이름 붙은 인자가 더 올 수 있다
+     * ({@code dot: ChatUnread.any}, #452 의 안 읽음 점). 라벨과 번호만 읽는다.
+     */
     private static final Pattern SHELL_TAB_ITEM = Pattern.compile(
-            "item\\(\\s*Icons\\.\\w+\\s*,\\s*'([^']+)'\\s*,\\s*(\\d+)\\s*\\)");
+            "item\\(\\s*Icons\\.\\w+\\s*,\\s*'([^']+)'\\s*,\\s*(\\d+)\\s*(?:,[^)]*)?\\)");
 
     /** 탭을 <b>나열</b>하는 문서들. 라벨이 나오는지만 본다. */
     private static final List<String> TAB_LISTING_DOCS = List.of(

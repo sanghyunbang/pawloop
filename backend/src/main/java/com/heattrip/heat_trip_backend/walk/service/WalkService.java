@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.walk.service;
 
+import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.dog.DogOwnership;
 import com.heattrip.heat_trip_backend.walk.dto.WalkPageResponse;
@@ -29,6 +30,7 @@ import java.time.ZonedDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -84,6 +86,8 @@ public class WalkService {
 
     private final WalkRepository walks;
     private final DogOwnership dogs;
+    /** 산책 사진(#450) — 글과 같은 붙이기. 모듈 경계는 {@code S3} 의 공개 인터페이스 하나다. */
+    private final MediaAttachment media;
     private final Clock clock;
 
     // ─────────────────────────── 저장 ───────────────────────────
@@ -114,8 +118,9 @@ public class WalkService {
                 walks.findByClientKey(dog.getId(), request.clientWalkId(), userId);
         if (existing.isPresent()) {
             // 재전송이다. 아이 목록도 **다시 안 쓴다** — 처음 저장한 것이 정본이고,
-            // 여기서 덮으면 재전송 요청의 목록이 원본을 조용히 바꾼다.
-            return new Saved(WalkResponse.withPath(existing.get()), false);
+            // 여기서 덮으면 재전송 요청의 목록이 원본을 조용히 바꾼다. 사진도 처음 붙인 것을
+            // 그대로 준다 — 다시 붙이면 이미 붙은 id 라 400 이 된다(#450).
+            return new Saved(WalkResponse.withPath(existing.get(), mediaOf(existing.get())), false);
         }
 
         Walk walk = Walk.builder()
@@ -138,14 +143,21 @@ public class WalkService {
                 .build();
         companions.forEach(walk::walkWith);
 
+        Walk saved;
         try {
-            return new Saved(WalkResponse.withPath(walks.saveAndFlush(walk)), true);
+            saved = walks.saveAndFlush(walk);
         } catch (DataIntegrityViolationException concurrentDuplicate) {
             // uq_walk_client 가 막았다. 같은 산책이므로 이미 들어간 것을 준다.
             return walks.findByClientKey(dog.getId(), request.clientWalkId(), userId)
-                    .map(saved -> new Saved(WalkResponse.withPath(saved), false))
+                    .map(row -> new Saved(WalkResponse.withPath(row, mediaOf(row)), false))
                     .orElseThrow(() -> concurrentDuplicate);
         }
+        // 사진은 산책 행이 생긴 뒤에 붙는다(#450). 남의 것 · 이미 붙은 것이 섞이면 여기서 400 이고
+        // 트랜잭션이 통째로 돌아가 산책도 안 생긴다 — 글과 같다.
+        List<WalkResponse.WalkMedia> attached = WalkResponse.WalkMedia.listOf(media.attach(
+                MediaAttachment.REF_WALK, String.valueOf(saved.getId()),
+                request.mediaIdsOrEmpty(), userId));
+        return new Saved(WalkResponse.withPath(saved, attached), true);
     }
 
     /** 저장 결과. {@code created} 가 참이면 201, 거짓이면 재전송이라 200 이다. */
@@ -209,13 +221,27 @@ public class WalkService {
                 ? WalkCursor.of(rows.get(rows.size() - 1))
                 : null;
 
-        return new WalkPageResponse(rows.stream().map(WalkResponse::summary).toList(), next, hasMore);
+        // 사진은 한 번에 받는다(#450) — 행마다 물으면 목록 한 장에 스무 번이다.
+        Map<String, List<MediaAttachment.AttachedMedia>> photos = media.attachedTo(
+                MediaAttachment.REF_WALK, rows.stream().map(w -> String.valueOf(w.getId())).toList());
+        List<WalkResponse> items = rows.stream()
+                .map(w -> WalkResponse.summary(w, WalkResponse.WalkMedia.listOf(
+                        photos.getOrDefault(String.valueOf(w.getId()), List.of()))))
+                .toList();
+        return new WalkPageResponse(items, next, hasMore);
+    }
+
+    /** 이 산책에 붙은 사진 — 상세 · 재전송 · 메모 고치기가 같이 쓴다(#450). */
+    private List<WalkResponse.WalkMedia> mediaOf(Walk walk) {
+        String ref = String.valueOf(walk.getId());
+        return WalkResponse.WalkMedia.listOf(
+                media.attachedTo(MediaAttachment.REF_WALK, List.of(ref)).getOrDefault(ref, List.of()));
     }
 
     /** 상세. 경로가 여기에만 실린다. 남의 것과 없는 것이 같은 404 다. */
     public WalkResponse detail(long userId, long walkId) {
         return walks.findMineById(walkId, userId)
-                .map(WalkResponse::withPath)
+                .map(w -> WalkResponse.withPath(w, mediaOf(w)))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
@@ -235,7 +261,7 @@ public class WalkService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         walk.rewriteMemo(memo);
         // 경로를 실어 돌려준다 — 이 응답을 받는 곳이 상세 화면이고, 거기는 경로를 그린다.
-        return WalkResponse.withPath(walk);
+        return WalkResponse.withPath(walk, mediaOf(walk));
     }
 
     /** 삭제. 남의 산책은 0행이 지워지고 그것이 404 다. */
@@ -244,6 +270,8 @@ public class WalkService {
         if (walks.deleteMine(walkId, userId) == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
+        // 산책이 사라지면 사진도 같이(#450) — 행과 S3 파일 둘 다. 붙은 채 남으면 아무도 못 보는 파일이 쌓인다.
+        media.detachAll(MediaAttachment.REF_WALK, String.valueOf(walkId));
     }
 
     // ─────────────────────────── 통계 ───────────────────────────

@@ -58,6 +58,7 @@
 | `path` | `List<List<Double>>` | 선택. `[[lng, lat], ...]` (GeoJSON coordinates 순서 = 경도, 위도) |
 | `memo` | `String` | 선택. ≤ 500자 |
 | `weather` | `String` | 선택. ≤ 30자 |
+| `mediaIds` | `List<Long>` | 선택. ≤ 10. `POST /media` 에 `WALK_IMAGE` 로 올린 사진 id(#450). 내가 올렸고 아직 안 붙은 것만 — 아니면 400 이고 산책도 안 생긴다 |
 
 ### 3.2 응답
 
@@ -74,6 +75,7 @@
 | `path` | `List<List<Double>>` | `[[lng, lat], ...]`. LINESTRING → 배열 역변환 |
 | `memo` | `String` | nullable |
 | `weather` | `String` | nullable |
+| `media` | `List<WalkMedia>` | 붙은 사진(#450) — `id · kind · url · posterUrl · width · height · durationMs`, 계약의 `PostMedia` 와 같은 모양. 없으면 `[]`. 목록에도 실린다(한 번에 `attachedTo` 로 받는다) |
 
 > 목록(`GET /api/walks`) 응답의 `path`는 페이로드 절감을 위해 생략/빈 배열 정책 고려 가능(상세에서만 완전 경로 반환). 정책 선택은 구현 노트 참조.
 

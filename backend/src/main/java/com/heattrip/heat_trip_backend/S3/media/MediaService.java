@@ -73,7 +73,8 @@ public class MediaService implements MediaAttachment {
 
     /** 글에 붙는 카테고리. 고아 청소와 글 삭제가 이 둘만 본다. */
     private static final Set<UploadCategory> POST_CATEGORIES =
-            EnumSet.of(UploadCategory.POST_IMAGE, UploadCategory.POST_VIDEO);
+            // 산책 사진(#450)도 같은 두 단계(올리고 → 붙이고)를 지난다 — 산책을 저장 안 하면 고아다.
+            EnumSet.of(UploadCategory.POST_IMAGE, UploadCategory.POST_VIDEO, UploadCategory.WALK_IMAGE);
 
     /**
      * 서명 PUT 이 사는 시간 (#429). 앱이 URL 을 받고 720p 파일을 올리는 데 15분이면 넉넉하고,

@@ -66,6 +66,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\39_post_media.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\40_post_bookmark.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\41_post_dog.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\42_media_walk_image.sql
 ```
 
 | 파일 | 무엇을 |
@@ -111,6 +112,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `39_post_media.sql` | **커뮤니티 글에 사진·동영상을 붙인다** — #429. 표를 새로 안 만들고 `media_objects` 를 넓힙니다: `category` enum 에 `POST_IMAGE`·`POST_VIDEO`, `status`(`pending`·`ready`, CHECK `ck_media_status`), `poster_key`(영상 썸네일), `width`·`height`·`duration_ms`, 그리고 고아 청소용 `idx_media_orphan(ref_type, created_at)`. **`status` 가 왜 있나** — 영상은 앱이 S3 에 직접 올립니다(`api.heattrip.link` 앞 Cloudflare 가 100MB 에서 끊습니다). "자리는 잡았는데 아직 안 올라온" 상태가 그것이고 `pending` 은 글에 안 붙습니다. **enum 의 순서는 알파벳순이어야 합니다** — Hibernate 가 상수를 알파벳순으로 뽑고(선언 순서가 아닙니다) `SchemaDdlDriftTest` 가 문자열을 그대로 비교합니다. 앞선 post-start 에 안 기대고 `media_objects` 만 있으면 됩니다. 새 코드 배포 **전**. **dev 에서 앱을 먼저 띄웠으면** Hibernate 가 CHECK 없이 컬럼을 더해 두고 기존 행의 `status` 가 `''` 인데, 이 스크립트는 38 과 달리 멈추지 않고 **고칩니다**(빈 값을 `ready` 로 채우고 CHECK 를 겁니다) — 표를 만드는 것이 아니라 있는 표를 넓히는 것이라서입니다. 멱등: 조각마다 있으면 지나갑니다. DOWN 은 컬럼 다섯과 CHECK·인덱스를 떼는 것이고 **S3 객체는 안 지워집니다**. |
 | `40_post_bookmark.sql` | **글 저장** — #451 4번. `post_bookmark` 표 하나를 만듭니다(`post_id`·`user_id`·`created_at`). `reaction` 과 닮았지만 둘이 다릅니다: **탈퇴하면 행이 사라집니다**(`user_id` CASCADE — 반응은 집계가 남아야 해서 SET NULL 이지만 저장은 그 사람만 보는 목록입니다) 그리고 **정렬 축이 이 표의 시각**입니다(저장한 순, Instagram 의 저장됨) — `idx_post_bookmark_user(user_id, created_at, id)` 가 커서의 두 축을 듭니다. 유니크는 `(post_id, user_id)` 이고 멱등 삽입이 그것을 딛습니다. **세지 않습니다** — "몇 명이 저장했나" 는 화면에 없고, 있으면 남의 사진첩을 들여다보는 숫자가 됩니다. 표 이름이 `post_bookmark` 인 것은 `bookmark` 가 장소 저장(계획, schema.md §10)이 예약한 이름이라서입니다. 14 뒤에, 새 코드 배포 **전**. **dev 에서도 앱을 띄우기 전에** 돌리십시오. DOWN 은 `DROP TABLE post_bookmark` — 글도 사람도 그대로입니다. |
 | `41_post_dog.sql` | **글에 찍힌 아이** — #451 5번(아이 사진첩). `post` 에 `dog_id`(NULL 허용) · `idx_post_dog(dog_id, created_at, id)` · `fk_post_dog` **SET NULL** 을 더합니다. 글 하나에 아이 하나 — 여럿이 찍혔으면 대표 하나입니다(다대다로 가면 사진첩마다 같은 글이 겹칩니다). 아이가 사라져도 글은 남습니다(꼬리표만 빕니다). 인덱스 앞자리가 `dog_id` 라 `?dogId=` 목록이 인덱스 범위이고 커서 순서 그대로입니다. 14·11 뒤에, 새 코드 배포 **전**. **dev 에서도 앱을 띄우기 전에** — 안 돌리면 Hibernate 가 다른 이름의 FK 를 만듭니다. `dog_id` 가 이미 있는데 모양이 다르면(NOT NULL 등) 멈춥니다. DOWN 은 FK·인덱스·컬럼을 떼는 것이고 글은 그대로입니다. |
+| `42_media_walk_image.sql` | **산책 사진** — #450. `media_objects.category` ENUM 끝에 `WALK_IMAGE` 를 더합니다(값을 끝에 더하면 InnoDB 가 표를 다시 쓰지 않습니다). 코드(`UploadCategory.WALK_IMAGE`)를 배포하기 **전**에 돌립니다 — 안 돌리면 산책 사진을 올리는 순간 `Data truncated for column 'category'` 로 500 입니다. `category` 가 ENUM 이 아니면 멈춥니다. 멱등 |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
