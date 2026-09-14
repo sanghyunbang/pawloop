@@ -88,14 +88,14 @@ class CommunityContractSpecTest {
     // ─────────────────── A. 코드 ↔ 계약 ───────────────────
 
     @Test
-    @DisplayName("컨트롤러의 열네 매핑이 전부 계약에 등재돼 있다 — 경로 목록은 코드에서 읽는다")
+    @DisplayName("컨트롤러의 열일곱 매핑이 전부 계약에 등재돼 있다 — 경로 목록은 코드에서 읽는다")
     void everyImplementedEndpoint_isDeclaredInTheContract() {
         List<String> implemented = operationsOf(CommunityController.class);
 
         assertThat(implemented)
                 .as("컨트롤러에서 매핑을 하나도 못 읽었다면 이 검사는 아무것도 지키지 않는다")
-                // 코스 붙이기·떼기가 늘어 열넷이다 (#339).
-                .hasSize(14);
+                // 코스 붙이기·떼기가 늘어 열넷(#339), 저장 셋(켜기·끄기·내 목록)이 늘어 열일곱이다(#451).
+                .hasSize(17);
         assertThat(declaredOperations())
                 .as("""
                         계약에 없는 경로는 앱이 존재를 모른다 — design-first 라 앱은 이 파일을 보고 \

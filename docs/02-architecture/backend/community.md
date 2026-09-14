@@ -59,6 +59,9 @@
 | 5 | `POST /api/community/posts/{postId}/comments` | `addComment(@CurrentUser User me, @PathVariable long postId, @Valid @RequestBody CommentRequest body)` | `CommentResponse` (201) | ✔ | `.../comments` POST |
 | 6 | `POST /api/community/posts/{postId}/reactions/{type}` | `addReaction(@CurrentUser User me, @PathVariable Long postId, @PathVariable String type)` | `ReactionSummary` | ✔ | `.../reactions/{type}` POST |
 | 7 | `DELETE /api/community/posts/{postId}/reactions/{type}` | `removeReaction(@CurrentUser User me, @PathVariable Long postId, @PathVariable String type)` | `ReactionSummary` | ✔ | `.../reactions/{type}` DELETE |
+| 8 | `POST /api/community/posts/{postId}/bookmark` | `bookmark(@CurrentUser User me, @PathVariable long postId)` | `BookmarkState` — 멱등, 세지 않는다 (#451 4번) | ✔ | `.../bookmark` POST |
+| 9 | `DELETE /api/community/posts/{postId}/bookmark` | `unbookmark(@CurrentUser User me, @PathVariable long postId)` | `BookmarkState` — 멱등 | ✔ | `.../bookmark` DELETE |
+| 10 | `GET /api/community/bookmarks` | `bookmarks(@CurrentUser User me, String cursor, Integer limit)` | `PostPageResponse` — **저장한 순**(`post_bookmark.(created_at, id)` 커서), 내 것만 | ✔ | `/api/community/bookmarks` GET |
 
 > **반환 규약.** `ResponseEntity<?>` 를 쓰지 않는다 — DTO 를 그대로 반환하고 상태 코드는
 > `@ResponseStatus` 로 붙인다(`walk`·`dog` 이 그 모양이다). `ResponseEntity<?>` 는 springdoc 이

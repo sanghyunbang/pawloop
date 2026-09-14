@@ -67,7 +67,13 @@ public record PostResponse(
         String authorDistrict,
 
         /** 붙은 사진·영상 (#429). 올린 순서. 없으면 빈 목록이다. */
-        List<PostMedia> media) {
+        List<PostMedia> media,
+
+        /**
+         * 보는 사람이 이 글을 <b>저장해 뒀는가</b> (#451 4번). 게스트는 {@code false} 다 —
+         * 게스트인지는 {@code reactions.mine == null} 이 이미 말하므로 여기서 셋째 값을 두지 않는다.
+         */
+        boolean bookmarked) {
 
     /**
      * 카드에 그릴 만큼의 코스. 선은 <b>이미 잘라 낸 것을 더 줄인 것</b>(최대 40점)이라
@@ -88,30 +94,27 @@ public record PostResponse(
                             Integer width, Integer height, Integer durationMs) {
     }
 
-    /** 가리기와 무관한 자리 — 방금 내가 쓰거나 고친 글이다. */
+    /** 가리기와 무관한 자리 — 방금 내가 쓰거나 고친 글이다. 저장 여부는 그대로 물어 넣는다. */
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
-                                  List<PostMedia> media) {
-        return of(post, commentCount, reactions, false, null, null, media);
+                                  List<PostMedia> media, boolean bookmarked) {
+        return of(post, commentCount, reactions, false, null, null, media, bookmarked);
     }
 
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
-                                  boolean hiddenByBlock, List<PostMedia> media) {
-        return of(post, commentCount, reactions, hiddenByBlock, null, null, media);
-    }
-
-    public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
-                                  boolean hiddenByBlock, PostCourse course, List<PostMedia> media) {
-        return of(post, commentCount, reactions, hiddenByBlock, course, null, media);
+                                  boolean hiddenByBlock, PostCourse course, List<PostMedia> media,
+                                  boolean bookmarked) {
+        return of(post, commentCount, reactions, hiddenByBlock, course, null, media, bookmarked);
     }
 
     /**
      * @param authorDistrict 글쓴이의 시군구 이름. 서비스가 {@code NeighborhoodCatalog} 로
      *                       찾아 넣는다 — 사용자가 보낸 문자열이 아니다(#342).
      * @param media          붙은 사진·영상. {@code null} 이면 빈 목록으로 나간다
+     * @param bookmarked     보는 사람이 저장해 뒀는가. 게스트는 {@code false}
      */
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
                                   boolean hiddenByBlock, PostCourse course, String authorDistrict,
-                                  List<PostMedia> media) {
+                                  List<PostMedia> media, boolean bookmarked) {
         return new PostResponse(
                 post.getId(),
                 PersonRefResponse.of(post.getUser()),
@@ -127,6 +130,7 @@ public record PostResponse(
                 hiddenByBlock,
                 course,
                 authorDistrict,
-                media == null ? List.of() : List.copyOf(media));
+                media == null ? List.of() : List.copyOf(media),
+                bookmarked);
     }
 }

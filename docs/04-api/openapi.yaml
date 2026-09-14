@@ -1958,6 +1958,70 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/community/posts/{postId}/bookmark:
+    parameters:
+      - $ref: '#/components/parameters/PostId'
+    post:
+      tags: [Community]
+      summary: 글 저장(내 사진첩에 넣기)
+      description: |
+        **멱등입니다** — 이미 저장해 뒀어도 `200` 이고 행이 늘지 않습니다. 반응과 같은 모양 —
+        켜기(`POST`)와 끄기(`DELETE`)가 따로라 네트워크 재시도가 저장을 되돌리지 않습니다(#451 4번).
+
+        **세지 않습니다.** "몇 명이 저장했나" 는 어느 응답에도 없습니다 — 있으면 글쓴이에게
+        남의 사진첩을 들여다보는 숫자가 됩니다. 그래서 응답은 집계가 아니라 **지금 상태** 하나입니다.
+      responses:
+        '200':
+          description: 반영 후 상태 — 늘 `true`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookmarkState' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Community]
+      summary: 저장 빼기
+      description: |
+        **멱등입니다** — 안 저장했던 것을 빼도 `200` 입니다. 없던 것과 있던 것을 상태 코드로
+        나누면 앱이 두 갈래를 다뤄야 하는데 **사용자에게는 결과가 같습니다.**
+      responses:
+        '200':
+          description: 반영 후 상태 — 늘 `false`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookmarkState' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/community/bookmarks:
+    get:
+      tags: [Community]
+      summary: 내가 저장한 글
+      description: |
+        **저장한 순입니다** — `post_bookmark.(createdAt, id)` 내림차순. 글이 쓰인 순이 아닙니다
+        (Instagram 의 저장됨). 두 축인 이유는 글 목록과 같습니다.
+
+        **인증 필수입니다.** 누구의 것도 아닌 목록은 없고, 경로에 사람이 없으므로 남의 목록은
+        물을 길이 없습니다. 항목은 `GET /api/community/posts` 와 같은 `Post` 이고 저장한 글이라
+        `bookmarked` 가 전부 `true` 입니다.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 저장한 글(커서 페이지네이션)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Post' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   # ─────────────────────────── Bookmarks ───────────────────────────
   /api/bookmarks:
     get:
@@ -4897,9 +4961,17 @@ components:
             갱신하므로 **그 화면에서는 세션 복구가 일어나지 않습니다** — 다만 앱을 다시 켜면
             `GET /auth/me` 가 반드시 `401` 을 주므로 창은 한 세션입니다(ADR-0016 결정 3).
 
+    BookmarkState:
+      type: object
+      required: [bookmarked]
+      description: |
+        저장·저장 빼기의 응답 — 지금 상태 하나(#451 4번). 집계가 없는 이유는 오퍼레이션 설명에.
+      properties:
+        bookmarked: { type: boolean }
+
     Post:
       type: object
-      required: [id, author, board, title, body, commentCount, reactions, createdAt, media]
+      required: [id, author, board, title, body, commentCount, reactions, createdAt, media, bookmarked]
       properties:
         id: { type: integer, format: int64 }
         author:
@@ -4956,6 +5028,12 @@ components:
                     maxItems: 2
         commentCount: { type: integer, example: 4 }
         reactions: { $ref: '#/components/schemas/ReactionSummary' }
+        bookmarked:
+          type: boolean
+          description: |
+            보는 사람이 이 글을 **저장해 뒀는가**(#451 4번). 읽는 사람마다 다른 값입니다.
+            게스트는 `false` 입니다 — 게스트인지는 `reactions.mine == null` 이 이미 말하므로
+            여기서 셋째 값을 두지 않습니다.
         media:
           type: array
           maxItems: 10

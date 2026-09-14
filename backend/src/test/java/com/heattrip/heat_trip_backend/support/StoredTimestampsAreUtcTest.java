@@ -89,6 +89,8 @@ class StoredTimestampsAreUtcTest {
             // #306 — 훑는 범위를 chat·group·user 에서 전체로 넓히면서 들어온 반려 축 엔티티.
             Dog.class, CareLog.class, Walk.class,
             Post.class, Comment.class, Reaction.class, Block.class,
+            // #451 — 글 저장. created_at 이 목록의 정렬 축이라 UTC 로 눕힌다.
+            com.heattrip.heat_trip_backend.community.entity.PostBookmark.class,
             // #83 — 기기 토큰과 알림 설정.
             DeviceToken.class, PushPreference.class,
             // #418 — 일정표. on_date·at_time 은 사람이 고른 벽시계라 UTC 로 안 눕힌다

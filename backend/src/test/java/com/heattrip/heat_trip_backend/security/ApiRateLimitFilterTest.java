@@ -201,6 +201,15 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("GET /api/community/bookmarks 도 community-read 버킷이다 — 표에 없으면 한도가 무한이다 (#451)")
+    void communityBookmarks_isRateLimited() throws Exception {
+        MockHttpServletResponse blocked = exhaust(
+                filterWithCommunityLimits(2, 100), "GET", "/api/community/bookmarks", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
     @DisplayName("글 id 가 숫자가 아니어도 읽기 버킷이 덮는다 — permitAll 과 같은 집합이어야 한다")
     void communityDetail_withNonNumericId_isStillMetered() throws Exception {
         // SecurityConfig 의 permitAll 은 "/api/community/posts/*" 라 임의의 한 세그먼트를

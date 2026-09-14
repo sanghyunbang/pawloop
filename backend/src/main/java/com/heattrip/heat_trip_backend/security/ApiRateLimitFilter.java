@@ -277,8 +277,11 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         // "/api/community/posts/*" 라 임의의 한 세그먼트를 열므로, 여기서 [0-9]+ 만
         // 덮으면 GET /api/community/posts/abc 가 **인증 없음 + 한도 무한**이 된다.
         // /api/places/** 를 거부한 근거와 같은 모양이라 [^/]+ 로 맞춘다.
+        // 저장한 글 목록(#451 4번)도 읽기다 — 인증 필수라 게스트는 못 부르지만, 표에 없으면
+        // 한도가 무한이라는 규칙은 같다.
         if ("GET".equals(method)
                 && ("/api/community/posts".equals(path)
+                    || "/api/community/bookmarks".equals(path)
                     || path.matches("^/api/community/posts/[^/]+$")
                     || path.matches("^/api/community/posts/[^/]+/comments$"))) {
             return new Rule("community-read", rateLimitProperties.getCommunityReadMaxRequests());

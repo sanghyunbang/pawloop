@@ -800,6 +800,31 @@ DELETE /api/community/posts/{postId}/reactions/{type}   # 안 눌렀어도 200 (
 
 ---
 
+### 6.11 저장 — ✅ 구현(#451 4번) · 멱등 둘 · 내 목록
+
+"내 사진첩" 에 글을 넣어 둔다. 반응과 같은 모양 — 켜기·끄기가 따로이고 둘 다 멱등이다.
+**세지 않는다** — "몇 명이 저장했나" 는 응답에 없다(글쓴이에게 남의 사진첩을 들여다보는 숫자가 된다).
+
+```
+POST   /api/community/posts/{postId}/bookmark   # 이미 저장해 뒀어도 200 (멱등)
+DELETE /api/community/posts/{postId}/bookmark   # 안 저장했어도 200 (멱등)
+GET    /api/community/bookmarks?limit=20&cursor=...   # 내가 저장한 글 — 저장한 순(커서 봉투)
+```
+
+```json
+// 200 OK — 켜기·끄기 둘 다 지금 상태를 돌려준다
+{ "bookmarked": true }
+```
+
+`GET /api/community/bookmarks` 는 6.1 과 같은 봉투이고 항목도 같은 `Post` 다 — 저장한 글이라
+`bookmarked` 가 전부 `true` 다. **정렬은 저장한 순**(글이 쓰인 순이 아니다, Instagram 의 저장됨).
+인증 필수 — 누구의 것도 아닌 목록은 없다. 게스트가 부르면 `401`.
+
+`Post` 에 `bookmarked`(boolean) 가 생겼다 — 6.1·6.2 의 항목마다 보는 사람이 저장해 뒀는가.
+게스트는 `false` 다(게스트인지는 `reactions.mine == null` 이 이미 말한다).
+
+---
+
 ### 6.10 신고 — ✅ 구현(#166)
 
 ```
