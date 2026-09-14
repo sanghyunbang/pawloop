@@ -319,6 +319,52 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _toast('글을 고쳤어요');
   }
 
+  /// 저장 버튼 — 반응 버튼과 같은 높이의 네모. 켜져 있으면 채운 책갈피에 강조색 테두리다.
+  Widget _bookmarkButton() => GestureDetector(
+        key: const Key('detail-bookmark'),
+        onTap: _sending ? null : _toggleBookmark,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 46,
+          height: 46,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _post.bookmarked ? T.accentSoft : T.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _post.bookmarked ? T.accent : T.line),
+          ),
+          child: Icon(
+              _post.bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+              size: 20,
+              color: _post.bookmarked ? T.accent : T.textSecondary),
+        ),
+      );
+
+  /// 저장을 켜고 끈다 — 반응과 같은 규칙: 응답의 상태를 그린다. 둘 다 멱등이라 재시도가 안전하다.
+  Future<void> _toggleBookmark() async {
+    if (_sending) return;
+    if (_isGuest) {
+      if (!await _askLogin('글을 저장할 수 있어요')) return;
+    }
+    setState(() => _sending = true);
+    try {
+      final on = _post.bookmarked
+          ? await _repo.unbookmark(_post.id)
+          : await _repo.bookmark(_post.id);
+      if (!mounted) return;
+      setState(() {
+        _post = _post.copyWith(bookmarked: on);
+        _sending = false;
+        _changed = true;
+      });
+      _toast(on ? '저장했어요 — 내 정보 > 저장한 글' : '저장을 뺐어요');
+    } on CommunityFailure catch (failure) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _toast(failure.message);
+    }
+  }
+
   /// 신고 버튼 — 이슈 #166.
   ///
   /// **삭제와 반대 조건에 있다.** 삭제는 `_isMine` 안이고 신고는 밖이다 — 같은 칸에 두되
@@ -820,6 +866,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             const SizedBox(width: 9),
           Expanded(child: _reactionBtn(reaction, icons[reaction]!)),
         ],
+        // 저장 — "내 사진첩" (#451 4번). 반응 줄 끝의 네모 하나. 내 글도 남의 글도, 게스트에게도
+        // 보인다(눌러야 로그인 안내가 뜬다 — 숨기면 저장이 있다는 것 자체를 모른다). 머리말에
+        // 두면 390dp 에서 날짜 줄이 넘쳤다 — 여기서는 반응 셋이 Expanded 라 줄어든다.
+        const SizedBox(width: 9),
+        _bookmarkButton(),
       ],
     );
   }
@@ -855,12 +906,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           children: [
             Icon(icon, size: 17, color: on ? Colors.white : T.textSecondary),
             const SizedBox(width: 6),
-            Text(
-              reaction.label,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: on ? Colors.white : T.textSecondary,
+            // 유일한 Flexible — 저장 네모(#451 4번)가 들어와 칸이 좁아지면 이름이 말줄임으로
+            // 끝난다. 실제 글꼴에서는 390dp 에서도 통째로 들어간다(테스트 글꼴이 더 넓다).
+            Flexible(
+              child: Text(
+                reaction.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: on ? Colors.white : T.textSecondary,
+                ),
               ),
             ),
             const SizedBox(width: 5),
