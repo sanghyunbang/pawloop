@@ -100,6 +100,8 @@ lib/
 
 `petCatByType(contentTypeId)`로 KTO 응답의 `contenttypeid` → 카테고리를 매핑한다.
 
+같은 폴더의 순수 함수들 — 화면은 결과를 그리기만 한다: `course_recommender.dart`(오늘의 코스 점수, #485) · `chat_thread.dart`(채팅방 말풍선 묶기 · 날짜 구분선 `layoutThread`, #452).
+
 ### 2.3 `data/` — 레포지토리 (데이터 소스)
 
 - `course_candidates.dart` — 오늘의 코스 후보(#485). 기기 안 카탈로그(`PlaceCatalogRepository.nearby`, 2km)에서 걷는 곳(`trail` · `playground` · 여행지 `12`)만 고르고 내 코스(`GET /api/courses/me`, 시작점이 2km 안)를 더한다. 거리는 기기 안에서 잰다 — 이 파일과 `domain/course_recommender.dart` 에 네트워크 import 가 없는 것을 `course_recommender_no_network_test` 가 소스로 잠근다.
