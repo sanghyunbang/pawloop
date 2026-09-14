@@ -47,11 +47,14 @@ public record PostPatchRequest(
          */
         @Size(max = PostRequest.MAX_MEDIA,
                 message = "사진·영상은 한 글에 " + PostRequest.MAX_MEDIA + "개까지 붙일 수 있습니다.")
-        List<Long> mediaIds) {
+        List<Long> mediaIds,
+
+        /** 찍힌 아이를 바꾼다 (#451 5번). 키가 없으면 안 바꾼다 — 비우는 길은 없다(loc·contentId 와 같은 이유). */
+        Long dogId) {
 
     /** 계약의 {@code minProperties: 1}. 넷 다 없으면 고칠 것이 없다. */
     public boolean isEmpty() {
-        return board == null && title == null && body == null && mediaIds == null;
+        return board == null && title == null && body == null && mediaIds == null && dogId == null;
     }
 
     /**

@@ -34,14 +34,17 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Query("""
             select p from Post p
               left join fetch p.user u
+              left join fetch p.dog d
              where (:board is null or p.board = :board)
                and (:sgg is null
                     or (u.neighborhoodCode is not null
                         and u.neighborhoodCode like concat(:sgg, '%')))
+               and (:dogId is null or d.id = :dogId)
              order by p.createdAt desc, p.id desc
             """)
     List<Post> findPage(@Param("board") String board,
                         @Param("sgg") String sgg,
+                        @Param("dogId") Long dogId,
                         Limit limit);
 
     /**
@@ -53,16 +56,19 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Query("""
             select p from Post p
               left join fetch p.user u
+              left join fetch p.dog d
              where (:board is null or p.board = :board)
                and (:sgg is null
                     or (u.neighborhoodCode is not null
                         and u.neighborhoodCode like concat(:sgg, '%')))
+               and (:dogId is null or d.id = :dogId)
                and (p.createdAt < :cursorAt
                     or (p.createdAt = :cursorAt and p.id < :cursorId))
              order by p.createdAt desc, p.id desc
             """)
     List<Post> findPageAfter(@Param("board") String board,
                              @Param("sgg") String sgg,
+                             @Param("dogId") Long dogId,
                              @Param("cursorAt") LocalDateTime cursorAt,
                              @Param("cursorId") long cursorId,
                              Limit limit);
@@ -71,6 +77,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Query("""
             select p from Post p
               left join fetch p.user u
+              left join fetch p.dog d
              where p.id = :id
             """)
     java.util.Optional<Post> findDetail(@Param("id") long id);

@@ -1589,6 +1589,12 @@ paths:
 
             동네를 안 고른 사람의 글은 이 목록에 **안 나옵니다.**
           schema: { type: string, enum: [mine] }
+        - name: dogId
+          in: query
+          description: |
+            **찍힌 아이로 좁힙니다** (#451 5번, 아이 사진첩). 글은 공개라 남의 아이 id 를 넣어도 `400` 이
+            아닙니다 — 그 아이의 글이 있으면 보입니다. `board`·`neighborhood` 와 함께 쓸 수 있습니다.
+          schema: { type: integer, format: int64 }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -5100,6 +5106,13 @@ components:
             영상이면 `posterUrl` 이 썸네일이고 `url` 이 재생할 파일입니다. 피드는 썸네일만 그리고
             자동재생하지 않습니다.
         createdAt: { type: string, format: date-time }
+        dog:
+          description: |
+            이 글에 찍힌 아이 (#451 5번). 안 골랐거나 아이를 보냈으면 `null` 입니다. 카드의 꼬리표와
+            사진첩이 그리는 만큼만 — id · 이름 · 사진.
+          oneOf:
+            - type: "null"
+            - $ref: '#/components/schemas/PostDog'
         authorDistrict:
           type: [string, "null"]
           example: "성동구"
@@ -5138,6 +5151,15 @@ components:
       type: string
       enum: [image, video]
       description: 화면이 그리는 종류. 서버의 카테고리(`POST_IMAGE`·`POST_VIDEO`)에서 옵니다
+
+    PostDog:
+      type: object
+      required: [id, name]
+      description: 글에 찍힌 아이의 꼬리표 (#451 5번). `Dog` 전체가 아니라 카드가 그리는 셋만.
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        avatarUrl: { type: [string, "null"] }
 
     PostMedia:
       type: object
@@ -5252,6 +5274,10 @@ components:
         board: { $ref: '#/components/schemas/Board' }
         title: { type: string, maxLength: 200, minLength: 1 }
         body: { type: string, maxLength: 5000, minLength: 1 }
+        dogId:
+          type: integer
+          format: int64
+          description: 찍힌 아이를 바꿉니다 (#451 5번). 키가 없으면 안 바꾸고, 비우는 길은 없습니다(`loc` 과 같은 이유). 내 아이만.
         mediaIds:
           type: array
           maxItems: 10
@@ -5296,6 +5322,12 @@ components:
           type: string
           maxLength: 64
           description: 연결된 장소(선택). `Place.contentId` 와 같은 키입니다.
+        dogId:
+          type: integer
+          format: int64
+          description: |
+            이 글에 찍힌 아이 (#451 5번). **내 아이만** — 남의 아이 id 는 `400` 입니다. 글 하나에 아이 하나,
+            여럿이 찍혔으면 대표 하나를 고릅니다.
         courseId:
           type: integer
           format: int64

@@ -37,6 +37,7 @@ erDiagram
     walk     ||--|{ walk_dog  : "함께 나간 아이들 (#343)"
     dog      ||--o{ walk_dog  : "이 아이가 낀 산책"
     dog      ||--o{ schedule  : "이 아이의 앞으로 할 일 (#418)"
+    dog      |o--o{ post      : "이 아이가 찍힌 글 (#451, SET NULL)"
     users    ||--o{ schedule  : "적은 사람 / 맡은 사람"
     schedule ||--o{ schedule_exception : "하루짜리 예외 (#421)"
     dog      |o--o{ care_log  : "케어 기록 (nullable, ON DELETE SET NULL - #154)"
@@ -283,6 +284,7 @@ erDiagram
         TEXT     body
         DATETIME created_at
         BIGINT   course_id FK "nullable - 붙은 코스. 코스를 지워도 글은 남는다 SET NULL (#339)"
+        BIGINT   dog_id FK "nullable - 찍힌 아이. 아이가 사라져도 글은 남는다 SET NULL (#451)"
     }
 
     comment {

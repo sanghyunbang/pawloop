@@ -65,6 +65,9 @@ public record PostRequest(
          */
         Long courseId,
 
+        /** 이 글에 찍힌 아이 (#451 5번). 내 아이의 id 만 받는다 — 남의 아이면 400. */
+        Long dogId,
+
         /**
          * 붙일 사진·영상 (#429). <b>업로드가 먼저다</b> — {@code POST /media} 가 돌려준 id 를
          * 여기에 싣는다. 서버는 <b>내 것이고 아직 어디에도 안 붙은 것</b>만 붙이고, 하나라도
