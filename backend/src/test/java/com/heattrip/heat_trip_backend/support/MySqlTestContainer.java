@@ -1,6 +1,9 @@
 package com.heattrip.heat_trip_backend.support;
 
 import org.testcontainers.containers.MySQLContainer;
+
+import java.util.ArrayList;
+import java.util.List;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -28,12 +31,26 @@ public final class MySqlTestContainer {
                     .withPassword("heattrip")
                     // compose 와 같은 서버 플래그. 특히 --innodb-ft-min-token-size=2 가 없으면
                     // 2글자 한국어 FULLTEXT 검색이 조용히 0건이 된다. MySqlServerSpec 참조.
-                    .withCommand(MySqlServerSpec.command())
+                    .withCommand(testCommand())
                     // 한글 시드/검색어가 커넥션 단계에서 깨지지 않도록 명시한다.
                     .withUrlParam("characterEncoding", "UTF-8");
 
     static {
         CONTAINER.start();
+    }
+
+    /**
+     * compose 와 같은 플래그({@link MySqlServerSpec}) + <b>이 컨테이너에만</b> 커넥션 상한.
+     *
+     * <p>통합 테스트는 스프링 컨텍스트마다 Hikari 풀(기본 10)을 하나씩 열고, 캐시된 컨텍스트는 실행이 끝날 때까지
+     * 풀을 쥔다. 컨텍스트 설정이 열다섯을 넘자 MySQL 기본 {@code max_connections=151} 에 닿아 다음 컨텍스트가
+     * "Too many connections" 로 뜨지 못했다(2026-09-14, 비동기 요약 테스트가 열여섯째였다). 운영 서버의 값이
+     * 아니라 {@code MYSQLD_FLAGS}(compose 와 대조되는 목록)에는 넣지 않는다.
+     */
+    private static String[] testCommand() {
+        List<String> command = new ArrayList<>(List.of(MySqlServerSpec.command()));
+        command.add("--max_connections=1000");
+        return command.toArray(String[]::new);
     }
 
     /** 이미 기동된 공유 컨테이너. */

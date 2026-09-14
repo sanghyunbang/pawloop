@@ -310,6 +310,10 @@ class ServerWalkStats {
   /// AI 요약(#486) — 서버가 만들었을 때만. null 이면 카드 없음.
   final AiSummary? aiSummary;
 
+  /// 요약을 지금 **만드는 중**이다 — 서버가 모델을 요청 밖에서 부르고 있어 이 응답에는 아직 없다. 화면은 잠시 뒤
+  /// 한 번 더 읽는다. 옛 서버(필드 없음)는 false.
+  final bool aiSummaryPending;
+
   const ServerWalkStats({
     required this.weekKm,
     this.weekMinutes = const [0, 0, 0, 0, 0, 0, 0],
@@ -322,6 +326,7 @@ class ServerWalkStats {
     this.topPlaces = const [],
     this.summary = WeekSummaryData.empty,
     this.aiSummary,
+    this.aiSummaryPending = false,
   });
 
   /// 아무것도 없는 상태. 서버를 못 부른 화면이 그릴 값이다.
@@ -367,6 +372,7 @@ class ServerWalkStats {
       topPlaces: WalkTopPlace.parseList(json['topPlaces']),
       summary: WeekSummaryData.parse(json['summary']),
       aiSummary: AiSummary.parse(json['aiSummary']),
+      aiSummaryPending: json['aiSummaryPending'] == true,
     );
   }
 }

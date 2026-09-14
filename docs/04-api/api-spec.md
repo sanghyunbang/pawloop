@@ -615,7 +615,7 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 ### 5.5 산책 통계 — ✅ 구현(#145)
 
-`GET /api/walks/stats/weekly?dogId={id}` — 통계 차트(`fl_chart`)용 집계. **`period` 파라미터는 없다.** 응답 끝의 `aiSummary`(#486)는 모델이 만든 두 문장 + 제안이고 키 · 상한 · 숫자 검사에 따라 `null` 일 수 있다 — 앱은 `null` 이면 카드를 그리지 않는다. `aiSummary.id` 로 `PUT /api/walks/insights/{insightId}/feedback` `{ "value": "up" | "down" | null }` 에 👍/👎 를 남긴다(#486 후속) — 내 요약이 아니면 404, 다른 값은 400, 응답은 평가가 반영된 `AiSummary`. 문장이 다시 만들어지면 평가는 비워진다. 이번 주(KST 월~일)와 전체 기간을 한 응답에 함께 담아 화면 둘을 채운다. 2026-08 이전에는 이 절이 `/api/walks/stats` 에 `period ∈ {week, month}` 라고 적혀 있었고, 그대로 짜면 404 였다(#201).
+`GET /api/walks/stats/weekly?dogId={id}` — 통계 차트(`fl_chart`)용 집계. **`period` 파라미터는 없다.** 응답 끝의 `aiSummary`(#486)는 모델이 만든 두 문장 + 제안이고 키 · 상한 · 숫자 검사에 따라 `null` 일 수 있다 — 앱은 `null` 이면 카드를 그리지 않는다. `aiSummary.id` 로 `PUT /api/walks/insights/{insightId}/feedback` `{ "value": "up" | "down" | null }` 에 👍/👎 를 남긴다(#486 후속) — 내 요약이 아니면 404, 다른 값은 400, 응답은 평가가 반영된 `AiSummary`. 문장이 다시 만들어지면 평가는 비워진다. **모델 호출은 요청 밖에서 돈다** — 아직 문장이 없으면 `aiSummary: null` 에 `aiSummaryPending: true` 로 바로 돌아오고 앱이 4초쯤 뒤 한 번 더 읽는다(세 번까지); 통계 요청이 모델을 기다리는 일은 없다. 이번 주(KST 월~일)와 전체 기간을 한 응답에 함께 담아 화면 둘을 채운다. 2026-08 이전에는 이 절이 `/api/walks/stats` 에 `period ∈ {week, month}` 라고 적혀 있었고, 그대로 짜면 404 였다(#201).
 
 ```json
 // 200 OK — 계약의 WalkStats 그대로 (2026-09-05 까지 이 예시는 계약에 없는 period·range·daily·summary 모양이었다)

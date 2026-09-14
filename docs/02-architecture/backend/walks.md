@@ -29,7 +29,7 @@
 | --- | --- | --- | --- |
 | `GET /api/walks` | `list(@CurrentUser User user, Long dogId, String cursor, Integer limit)` | `WalkPageResponse` (`items: List<WalkResponse>` · `nextCursor` · `hasMore`) | O |
 | `POST /api/walks` | `save(@CurrentUser User user, @Valid @RequestBody WalkRequest request)` | `ResponseEntity<WalkResponse>` (201) | O |
-| `GET /api/walks/stats/weekly` | `stats(@CurrentUser User user, Long dogId)` | `WalkStatsResponse` — 통계 뒤에 `WeeklyInsightService.attach` 가 `aiSummary`(#486, 트랜잭션 밖 · `weekly_insight` 캐시)를 얹는다 | O |
+| `GET /api/walks/stats/weekly` | `stats(@CurrentUser User user, Long dogId)` | `WalkStatsResponse` — 통계 뒤에 `WeeklyInsightService.attach` 가 `aiSummary`(#486, `weekly_insight` 캐시)를 얹는다. **모델 호출은 요청 밖**(`insightExecutor`, 같은 사용자·아이·주는 한 번만)이고 아직 없으면 `aiSummaryPending=true` 로 바로 돌아간다 | O |
 | `GET /api/walks/{walkId}` | `detail(@CurrentUser User user, long walkId)` | `WalkResponse` — **경로가 실리는 유일한 응답이다** | O |
 | `PUT /api/walks/{walkId}/memo` | `rewriteMemo(@CurrentUser User user, long walkId, @Valid @RequestBody WalkMemoRequest request)` | `WalkResponse` (#187) | O |
 | `PUT /api/walks/insights/{insightId}/feedback` | `rateInsight(@CurrentUser User user, long insightId, @RequestBody InsightFeedbackRequest request)` | `WalkStatsResponse.AiSummary` — AI 요약 👍/👎(#486 후속). `WeeklyInsightService.rate` 가 내 요약 행에 `feedback`·`feedback_at` 을 남기거나 지운다(`value: null`). 남의/없는 요약은 404, `up`·`down` 밖은 400. 문장이 다시 만들어지면 평가는 비워진다 | O |
