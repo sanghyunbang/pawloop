@@ -23,10 +23,15 @@ class PostMediaStrip extends StatelessWidget {
   /// 세로 사진의 하한 비율. 카드는 `1`, 상세·벽은 [PostMedia.minFeedAspectRatio](4:5).
   final double minAspect;
 
+  /// 두 번 탭 — 카드가 귀여워요를 남기는 데 쓴다(#451 4번). 안 주면 두 번 탭 인식기가 없어
+  /// 한 번 탭이 늦어지지 않는다(상세 · 벽).
+  final VoidCallback? onDoubleTap;
+
   const PostMediaStrip({
     super.key,
     required this.media,
     this.minAspect = PostMedia.minFeedAspectRatio,
+    this.onDoubleTap,
   });
 
   /// 첫 장의 비율. [minAspect] 보다 세로로 길면 거기서 자른다.
@@ -44,8 +49,8 @@ class PostMediaStrip extends StatelessWidget {
       child: AspectRatio(
         aspectRatio: aspect,
         child: media.length == 1
-            ? _Tile(media: media.single, onTap: () => _open(context, 0))
-            : _Carousel(media: media, onOpen: (i) => _open(context, i)),
+            ? _Tile(media: media.single, onTap: () => _open(context, 0), onDoubleTap: onDoubleTap)
+            : _Carousel(media: media, onOpen: (i) => _open(context, i), onDoubleTap: onDoubleTap),
       ),
     );
   }
@@ -58,8 +63,9 @@ class PostMediaStrip extends StatelessWidget {
 class _Carousel extends StatefulWidget {
   final List<PostMedia> media;
   final ValueChanged<int> onOpen;
+  final VoidCallback? onDoubleTap;
 
-  const _Carousel({required this.media, required this.onOpen});
+  const _Carousel({required this.media, required this.onOpen, this.onDoubleTap});
 
   @override
   State<_Carousel> createState() => _CarouselState();
@@ -76,7 +82,8 @@ class _CarouselState extends State<_Carousel> {
         key: const Key('post-media-carousel'),
         itemCount: n,
         onPageChanged: (i) => setState(() => _index = i),
-        itemBuilder: (_, i) => _Tile(media: widget.media[i], onTap: () => widget.onOpen(i)),
+        itemBuilder: (_, i) =>
+            _Tile(media: widget.media[i], onTap: () => widget.onOpen(i), onDoubleTap: widget.onDoubleTap),
       ),
       // "1/N" — 사진이 여럿이라는 것을 첫눈에 알 수 있게(Instagram).
       Positioned(
@@ -122,14 +129,16 @@ class _CarouselState extends State<_Carousel> {
 class _Tile extends StatelessWidget {
   final PostMedia media;
   final VoidCallback onTap;
+  final VoidCallback? onDoubleTap;
 
-  const _Tile({required this.media, required this.onTap});
+  const _Tile({required this.media, required this.onTap, this.onDoubleTap});
 
   @override
   Widget build(BuildContext context) {
     final url = media.thumbnailUrl;
     return GestureDetector(
       onTap: onTap,
+      onDoubleTap: onDoubleTap,
       behavior: HitTestBehavior.opaque,
       child: Stack(fit: StackFit.expand, children: [
         if (url == null)
