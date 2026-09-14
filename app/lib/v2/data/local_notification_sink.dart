@@ -21,6 +21,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../domain/schedule_reminder.dart';
+import 'notification_route.dart';
 import 'walk_reminder.dart';
 import 'weekly_report_reminder.dart';
 
@@ -67,15 +68,27 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, W
       tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
     }
 
-    await _plugin.initialize(const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      iOS: DarwinInitializationSettings(
-        // 알림을 켜는 순간에만 묻는다 — 앱을 처음 여는 사람에게 권한부터 묻지 않는다.
-        requestAlertPermission: false,
-        requestBadgePermission: false,
-        requestSoundPermission: false,
+    await _plugin.initialize(
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(
+          // 알림을 켜는 순간에만 묻는다 — 앱을 처음 여는 사람에게 권한부터 묻지 않는다.
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
       ),
-    ));
+      // 앱이 떠 있는 동안 누른 알림. 어디로 갈지는 payload 가 말한다.
+      onDidReceiveNotificationResponse: (response) =>
+          NotificationRouteInbox.offer(destinationOf(response.payload)),
+    );
+
+    // **꺼져 있던 앱이 알림으로 떴을 때**는 위 콜백이 오지 않는다 — 그때는 플러그인이 들고 있던
+    // 것을 여기서 한 번 읽는다. 홈이 떠서 가져갈 때까지 [NotificationRouteInbox] 가 들고 있는다.
+    final launch = await _plugin.getNotificationAppLaunchDetails();
+    if (launch?.didNotificationLaunchApp ?? false) {
+      NotificationRouteInbox.offer(destinationOf(launch?.notificationResponse?.payload));
+    }
     _ready = true;
   }
 
@@ -127,6 +140,7 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, W
       ),
       // 산책 알림과 같은 이유로 정확 알람을 안 쓴다 — 몇 분 어긋나도 되는 알림이다.
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      payload: weeklyReportPayload,
     );
     if (kDebugMode) {
       debugPrint('[WeeklyReportReminder] 예약 $at');
@@ -160,6 +174,7 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, W
           iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: scheduleReminderPayload,
       );
     }
     if (kDebugMode) {
@@ -188,6 +203,7 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, W
       // 정확 알람 권한(안드로이드 12+)을 안 쓴다. 1분 어긋나도 되는 알림이고,
       // 그 권한은 사용자에게 한 번 더 묻는다.
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      payload: walkReminderPayload,
     );
     if (kDebugMode) {
       debugPrint('[WalkReminder] 예약 $at');
