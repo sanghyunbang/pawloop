@@ -191,4 +191,12 @@ public class Dog {
     public void rename(String name) {
         this.name = name;
     }
+
+    /**
+     * 프로필 사진의 S3 objectKey (#448). {@code null} 이면 사진이 없다 — 화면은 종 이모지로 돌아간다.
+     * 완성된 URL 이 아니라 키다(클래스 javadoc의 {@code avatar}).
+     */
+    public void changeAvatar(String objectKey) {
+        this.avatar = objectKey;
+    }
 }

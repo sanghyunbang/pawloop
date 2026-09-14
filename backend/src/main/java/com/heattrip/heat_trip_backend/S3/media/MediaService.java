@@ -140,6 +140,7 @@ public class MediaService implements MediaAttachment {
     }
 
     /** R: 공개 URL */
+    @Override
     public String publicUrl(String objectKey) {              // ← Long → String 변경 ③
         return storage.publicUrl(objectKey);
     }
@@ -389,7 +390,8 @@ public class MediaService implements MediaAttachment {
                 m.getPosterKey() == null ? null : storage.publicUrl(m.getPosterKey()),
                 m.getWidth(),
                 m.getHeight(),
-                m.getDurationMs());
+                m.getDurationMs(),
+                m.getObjectKey());
     }
 
     /**

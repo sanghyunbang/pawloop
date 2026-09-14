@@ -399,6 +399,17 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("PUT/DELETE /api/dogs/{dogId}/avatar 도 group-write 버킷이다 — S3 를 부르는 쓰기다 (#448)")
+    void dogAvatar_isMetered() throws Exception {
+        MockHttpServletResponse blocked = exhaust(
+                filterWithGroupWriteLimit(2), "PUT", "/api/dogs/7/avatar", 2);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+        assertThat(exhaust(filterWithGroupWriteLimit(2), "DELETE", "/api/dogs/7/avatar", 2).getStatus())
+                .isEqualTo(429);
+    }
+
+    @Test
     @DisplayName("DELETE /api/dogs/{dogId} 는 group-write 버킷이다 — 소프트 삭제라 지운 행이 상한에 안 센다")
     void dogDeletion_isRateLimited() throws Exception {
         // 등록·삭제를 반복하면 행이 계속 쌓인다(#156). 등록과 같은 속도 한도가 그 자리를 막는다.

@@ -321,9 +321,16 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 `DELETE /api/dogs/{dogId}` — `204 No Content`. `dog.deleted_at` 을 찍고 행은 남긴다 — 물리 삭제하면 `walk.fk_walk_dog` 의 CASCADE 로 그 아이의 산책 이력이 통째로 사라진다. 지운 뒤에는 어느 조회에도 안 나온다(목록·상세·산책의 `dogId` 전부 404). **산책은 남고 통계에도 계속 센다**(`dogId` 로 좁힐 때만 그 아이가 빠진다). 되살리기는 없다. 케어 기록은 #154 가 `care_log.dog_id` 를 `SET NULL` 로 정했다. `group-write` 버킷.
 
-### 3.6 아바타 업로드 — ⚪ post-MVP
+### 3.6 프로필 사진 — ✅ 구현(#448) · 미디어 id 로 붙인다
 
-`POST /api/dogs/{dogId}/avatar` (multipart/form-data, `file`) — 레거시 `S3/MediaController` 재사용 예정.
+`PUT /api/dogs/{dogId}/avatar` — 본문 `{ "mediaId": 41 }`. 먼저 `POST /media` 에 `category=PROFILE_IMAGE` 로 올리고
+그 id 를 보낸다(커뮤니티 글의 사진 #429 와 같은 두 단계 — 업로드 검증이 한 곳에 산다). **한 아이에 한 장** — 새 것이
+붙으면 옛 것은 파일까지 지워진다. 응답은 `avatarUrl` 이 채워진 3.1 항목 1건. 남의 미디어 · `pending` · 이미 붙은 것 ·
+영상은 `400`, 남의 아이·없는 아이는 `404`.
+
+`DELETE /api/dogs/{dogId}/avatar` — 파일도 지운다. 없는데 떼도 `200`(멱등), `avatarUrl: null` 인 아이를 돌려준다.
+
+둘 다 `group-write` 버킷. `dog.avatar` 에는 objectKey 만 저장하고 `avatarUrl` 은 응답에서 조립한다.
 
 ---
 

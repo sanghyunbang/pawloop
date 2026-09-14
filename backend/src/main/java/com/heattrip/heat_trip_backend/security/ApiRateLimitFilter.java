@@ -211,6 +211,10 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("DELETE".equals(method) && path.matches("^/api/dogs/\\d+$")) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
+        // 프로필 사진 붙이기·떼기(#448)도 같은 버킷 — S3 를 부르는 쓰기다. 표에 없으면 한도가 무한이다.
+        if (("PUT".equals(method) || "DELETE".equals(method)) && path.matches("^/api/dogs/\\d+/avatar$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         // ── 산책 쓰기 (이슈 #145) ──────────────────────────────
         //
         // group-write 에 얹지 않고 버킷을 새로 만든다. 산책 저장은 **오프라인 큐가 한 번에

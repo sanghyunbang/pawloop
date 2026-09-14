@@ -37,7 +37,8 @@
 | `GET /api/dogs/{dogId}` | `detail(@CurrentUser User user, long dogId)` | `DogResponse` (200 / 404) | 필요\* | `/api/dogs/{dogId}` get |
 | ~~`PATCH /api/dogs/{dogId}`~~ | **아직 없다.** 계약은 전용 `DogPatch` 로 정해졌다(ADR-0017 규약 4) — 자바 쪽 이름은 구현할 때 정한다 | — | — | `x-status: planned` |
 | `DELETE /api/dogs/{dogId}` | `delete(@CurrentUser User user, long dogId)` | `204` / 404 | 필요\* | `/api/dogs/{dogId}` delete — **소프트 삭제**(`deleted_at`, #156). 산책은 남고 통계에도 계속 센다. 케어 기록은 #154 가 `care_log.dog_id` 를 `ON DELETE SET NULL` 로 정했다 |
-| ~~`POST /api/dogs/{dogId}/avatar`~~ | **아직 없다.** 계약에도 없다 | — | — | (계약 미기재) |
+| `PUT /api/dogs/{dogId}/avatar` | `updateAvatar(@CurrentUser User user, @PathVariable long dogId, @Valid @RequestBody DogAvatarRequest request)` — 미디어 id 로 붙인다(`MediaAttachment.replace`, REF_DOG). 갈아 끼우기라 멱등(#448) | `DogResponse`(`avatarUrl` 조립) | ✔ | `/api/dogs/{dogId}/avatar` PUT |
+| `DELETE /api/dogs/{dogId}/avatar` | `removeAvatar(@CurrentUser User user, @PathVariable long dogId)` — 뗀다, 파일도 지운다. 없는데 떼도 200(#448) | `DogResponse` | ✔ | `/api/dogs/{dogId}/avatar` DELETE |
 
 - openapi `Dog` 스펙상 CRUD 응답은 순수 `Dog` 객체(커서 페이지네이션 대상 아님 — 목록은 배열 그대로). 따라서 `Page`/`nextCursor` 미적용.
 - `\*` 상세(get)는 openapi에 `security` 표기가 없으나, 소유권 검증이 필요하므로 인증 유지 권장(타인 dog 열람 차단). 정책 확정 필요 시 노트 참고.
@@ -96,7 +97,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | `void delete(Long userId, long dogId)` | 소프트 삭제 — `deleted_at` 을 UTC 로 찍는다. 남의 것·없는 것·이미 지운 것은 같은 404. 지운 아이는 상한에 안 센다(#156). |
 | `(private) Dog require(Long userId, long dogId)` | 조회 + 소유권. 위 셋의 공통 바닥. |
 
-> **`update`·`updateAvatar` 는 아직 없다** (`delete` 는 #156 에서 소프트 삭제로 생겼다). 위 §2 의 표시와 같은 이유다. 아래 §3.2·§6 의 PATCH 부분수정 서술은 **그 날을 위한 설계**이지 현재 동작이 아니다.
+> **`update` 는 아직 없다** (`delete` 는 #156 에서 소프트 삭제로, `updateAvatar`·`removeAvatar` 는 #448 에서 생겼다 — 미디어 id 를 `MediaAttachment.replace` 로 붙이고 `dog.avatar` 에 키를 적는다). 위 §2 의 표시와 같은 이유다. 아래 §3.2·§6 의 PATCH 부분수정 서술은 **그 날을 위한 설계**이지 현재 동작이 아니다.
 
 - **소유권 실패와 리소스 없음을 구분하지 않는다** — 둘 다 `404` 다. 계약의 Dogs 오퍼레이션에는 `403` 이 **하나도 없다**(ADR-0017 규약 3). `ResponseStatusException(HttpStatus.NOT_FOUND)` 하나만 쓴다.
 - 검증 실패(잘못된 size, name 누락)는 **400**(`IllegalArgumentException` → 컨트롤러에서 `badRequest`, social 패턴).
