@@ -346,6 +346,7 @@
 | 산책 회고 | `walk_detail_screen.dart` | 기록 카드 탭 | `PUT /api/walks/{id}/memo`(#187) |
 | 내 산책 기록 | `myrecords_screen.dart` | 프로필 → 내 산책 기록 | `GET /api/walks`(커서) + 전송 대기·거절 큐 |
 | 산책 통계 | `insight_screen.dart` | `me_screen` 에서 진입 | `GET /api/walks/stats/weekly` |
+| 아이 사진첩 | `dog_gallery_screen.dart` | 프로필 → 아이 머리 아래 "○○의 사진첩" | `GET /api/community/posts?dogId=`(커서). 그 아이가 찍힌 글 — 사진 글은 사진 벽, 글만 있는 글은 한 줄(#451 5번) |
 | 저장한 글 | `saved_posts_screen.dart` | 프로필 → 저장한 글 | `GET /api/community/bookmarks`(커서, **저장한 순**). 사진 글은 사진 벽, 글만 있는 글은 한 줄. 게스트는 서버를 안 부르고 로그인 안내(#451 4번) |
 | 글 상세 | `post_detail_screen.dart` | 커뮤니티 카드 탭 | `GET /api/community/posts/{id}/comments` · 멱등 반응 둘(#171) |
 | 커뮤니티 글쓰기 | `post_write_screen.dart` | 피드 글쓰기 버튼 · 빈 목록 · 지도 장소 시트 | `POST /api/community/posts`(#172). 지도에서 오면 `loc`·`contentId` 를 물고 온다 |

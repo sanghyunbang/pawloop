@@ -5,6 +5,7 @@ import '../widgets/aurora.dart';
 import '../widgets/pet_registration_sheet.dart';
 import 'settings_screen.dart';
 import 'saved_posts_screen.dart';
+import 'dog_gallery_screen.dart';
 import '../widgets/dog_avatar.dart';
 import '../data/walk_feed.dart';
 import '../widgets/walk_feed_builder.dart';
@@ -168,6 +169,32 @@ class MeScreen extends StatelessWidget {
       const SizedBox(height: 5),
       Text(dog.subtitle,
           style: const TextStyle(fontSize: 13.5, color: T.textSecondary)),
+      // 아이 사진첩 (#451 5번) — 이 아이가 찍힌 커뮤니티 글. 서버에 있는 아이만.
+      if (dog.serverId != null) ...[
+        const SizedBox(height: 10),
+        Builder(
+          builder: (context) => GestureDetector(
+          key: const Key('dog-gallery-open'),
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => DogGalleryScreen(dog: dog))),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+            decoration: BoxDecoration(
+              color: T.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: T.accentLine),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.photo_library_outlined, size: 15, color: T.accent),
+              const SizedBox(width: 5),
+              Text('${dog.name}의 사진첩',
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            ]),
+          ),
+          ),
+        ),
+      ],
       if (dog.neutered) ...[
         const SizedBox(height: 9),
         Container(

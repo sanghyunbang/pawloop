@@ -744,6 +744,32 @@ class _FeedScreenState extends State<FeedScreen> {
         null => T.warmMid,
       };
 
+  Widget _dogTag(PostDog dog) => Container(
+        key: Key('post-dog-${dog.id}'),
+        padding: const EdgeInsets.fromLTRB(3, 2, 8, 2),
+        decoration: BoxDecoration(
+          color: T.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: T.cardBorder),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          ClipOval(
+            child: SizedBox(
+              width: 16,
+              height: 16,
+              child: dog.avatarUrl == null
+                  ? Image.asset('assets/emoji/paw.png', width: 16, height: 16)
+                  : Image.network(dog.avatarUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Image.asset('assets/emoji/paw.png', width: 16, height: 16)),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(dog.name,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: T.textSecondary)),
+        ]),
+      );
+
   Widget _boardChip(CommunityBoard? board) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
@@ -887,6 +913,11 @@ class _FeedScreenState extends State<FeedScreen> {
           const SizedBox(height: 4),
           Row(children: [
             _boardChip(post.board),
+            // 찍힌 아이 (#451 5번) — 사진(없으면 발바닥) + 이름. 아이 사진첩으로 모이는 표식이다.
+            if (post.dog case final dog?) ...[
+              const SizedBox(width: 7),
+              _dogTag(dog),
+            ],
             if (post.loc != null) ...[
               const SizedBox(width: 7),
               const Icon(Icons.place_outlined, size: 12, color: T.textMuted),

@@ -35,6 +35,7 @@ class _Feed implements CommunityRepository {
     String? cursor,
     int? limit,
     bool myNeighborhood = false,
+    int? dogId,
   }) async {
     asked.add(myNeighborhood);
     return CommunityPage(
