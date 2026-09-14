@@ -22,8 +22,9 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../domain/schedule_reminder.dart';
 import 'walk_reminder.dart';
+import 'weekly_report_reminder.dart';
 
-class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink {
+class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, WeeklyReportReminderSink {
   LocalNotificationSink({FlutterLocalNotificationsPlugin? plugin})
       : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
@@ -33,6 +34,12 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink {
 
   /// 알림 하나만 쓴다 — 저녁 산책 알림은 언제나 최대 한 건이다(완료 조건 4).
   static const int notificationId = 341;
+
+  /// 일요일 저녁 주간 정리(#486 후속) — 산책 알림(341)·일정 알림(일정 id)과 겹치지 않는 번호.
+  static const int weeklyReportNotificationId = 486;
+  static const _weeklyChannelId = 'weekly_report';
+  static const _weeklyChannelName = '주간 정리 알림';
+  static const _weeklyChannelDescription = '일요일 저녁에 이번 주 산책 요약을 보러 오라고 한 번 알려 줍니다.';
 
   /// 지난번에 건 일정 알림의 id 들. 다음 번에 이것부터 거둔다.
   ///
@@ -92,6 +99,38 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink {
   Future<void> cancelAll() async {
     await _ensureReady();
     await _plugin.cancel(notificationId);
+  }
+
+  @override
+  Future<void> cancelWeeklyReport() async {
+    await _ensureReady();
+    await _plugin.cancel(weeklyReportNotificationId);
+  }
+
+  @override
+  Future<void> scheduleWeeklyReportAt(DateTime at, {required String title, required String body}) async {
+    await _ensureReady();
+    await _plugin.zonedSchedule(
+      weeklyReportNotificationId,
+      title,
+      body,
+      tz.TZDateTime.from(at, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _weeklyChannelId,
+          _weeklyChannelName,
+          channelDescription: _weeklyChannelDescription,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      // 산책 알림과 같은 이유로 정확 알람을 안 쓴다 — 몇 분 어긋나도 되는 알림이다.
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+    );
+    if (kDebugMode) {
+      debugPrint('[WeeklyReportReminder] 예약 $at');
+    }
   }
 
   @override

@@ -37,6 +37,7 @@ import '../widgets/neighborhood_tile.dart';
 import '../data/auth_state.dart';
 import '../widgets/schedule_reminder_tile.dart';
 import '../widgets/walk_reminder_tile.dart';
+import '../widgets/weekly_report_reminder_tile.dart';
 import 'intro_screen.dart';
 import 'settings/account_delete_screen.dart';
 import 'settings/legal_document_screen.dart';
@@ -84,6 +85,10 @@ class SettingsScreen extends StatelessWidget {
                     // 로그인·토큰과 상관이 없다.
                     _section('알림'),
                     _card(const [WalkReminderTile()]),
+                    const SizedBox(height: 10),
+                    // 일요일 저녁 주간 정리 (#486 후속). 산책 알림과 같은 기기 안 예약,
+                    // 카드를 나눈 이유도 같다 — 스위치 하나가 둘을 켜는 것처럼 보이면 안 된다.
+                    _card(const [WeeklyReportReminderTile()]),
                     const SizedBox(height: 10),
                     // 일정 알림 (#420). 산책 알림과 같은 절이지만 카드를 나눈 것은,
                     // 둘이 서로 다른 것을 켜고 끄기 때문이다 — 한 카드에 두면 스위치

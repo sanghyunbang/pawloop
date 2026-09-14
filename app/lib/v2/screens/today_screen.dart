@@ -6,6 +6,7 @@ import '../widgets/profile_avatar.dart';
 import '../widgets/today_care_card.dart';
 import '../widgets/today_course_card.dart';
 import '../widgets/today_schedule_line.dart';
+import '../widgets/weekly_report_reminder_sync.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../widgets/emergency_vets_sheet.dart';
 import '../widgets/walk_goal_row.dart';
@@ -304,6 +305,8 @@ class TodayScreen extends StatelessWidget {
         // 아무것도 안 그린다 — 저녁 알림 예약을 이 자료에 맞춰 두는 자리다(#341).
         // 홈이 자료를 다시 읽는 순간이 곧 "다시 걸어야 하는 순간" 이라 여기 붙인다.
         WalkReminderSync(data: data, dogName: dog?.name),
+        // 일요일 저녁 주간 정리 알림(#486 후속)도 같은 자리 — 앱을 열 때 한 번 건다.
+        WeeklyReportReminderSync(guest: data.guest),
       ]),
     );
   }

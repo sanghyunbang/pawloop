@@ -356,7 +356,7 @@
 | 커뮤니티 글쓰기 | `post_write_screen.dart` | 피드 글쓰기 버튼 · 빈 목록 · 지도 장소 시트 | `POST /api/community/posts`(#172). 지도에서 오면 `loc`·`contentId` 를 물고 온다 |
 | 프로필 | `me_screen.dart` | (push, 프로필 진입) | `kMyDog`, `GET /api/walks/stats/weekly` |
 | 프로필 편집 | `edit_screen.dart` | 프로필 → 편집 | `PUT /api/dogs/{id}`(미구현 — 이 기기에만) · 사진은 바로 서버: `POST /media`(PROFILE_IMAGE) → `PUT /api/dogs/{id}/avatar`, 지우기 `DELETE …/avatar`(#448) |
-| 설정 | `settings_screen.dart` | 프로필 → 설정 | 약관 넷 · 내 동네(#342) · 저녁 산책 알림(#341) · 탈퇴 · 연락처(#165) |
+| 설정 | `settings_screen.dart` | 프로필 → 설정 | 약관 넷 · 내 동네(#342) · 저녁 산책 알림(#341) · 일요일 저녁 주간 정리 알림(#486 후속, 기기 안 예약 · 기본 꺼짐) · 일정 알림(#420) · 탈퇴 · 연락처(#165) |
 | 내 동네 고르기 | `neighborhood_picker_screen.dart` | 설정 → 내 동네 | 시도→시군구→동 세 단계와 검색을 함께. "현재 위치로 찾기" 는 **기기 안에서** 후보만 고른다 — 좌표가 안 나간다(#342, A안 #235). 목록은 앱에 든 행정동 3,516개이고 출처 한 줄(CC BY 4.0)이 화면 아래에 있다 |
 | 약관 전문 | `settings/legal_document_screen.dart` | 설정·동의 → push | `assets/terms/*.md` |
 | 회원 탈퇴 | `settings/account_delete_screen.dart` | 설정 → push | `DELETE /auth/me` |
