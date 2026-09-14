@@ -1430,7 +1430,46 @@ CREATE TABLE media_objects (
 
 ---
 
-## 부록 A. 정본의 표 26개 — 어디에 적혀 있나
+## 38. `post_bookmark` — 글 저장 (**실재**)
+
+"내 사진첩" 에 넣어 둔 글(#451 4번). `post` 1:N, `users` 1:N, 사용자-글 조합 유니크. **§10 `bookmark`(장소 저장, 계획)와 다른 표다** — 대상이 글이다.
+
+```sql
+CREATE TABLE post_bookmark (
+  id          BIGINT      NOT NULL AUTO_INCREMENT,
+  post_id     BIGINT      NOT NULL,
+  user_id     BIGINT      NOT NULL COMMENT '저장한 사람. 탈퇴하면 행도 사라진다',
+  created_at  DATETIME(6) NOT NULL COMMENT '저장한 순간 - 목록의 정렬 축',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_post_bookmark (post_id, user_id),
+  KEY idx_post_bookmark_user (user_id, created_at, id),
+  CONSTRAINT fk_post_bookmark_post FOREIGN KEY (post_id) REFERENCES post (id) ON DELETE CASCADE,
+  CONSTRAINT fk_post_bookmark_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `post_id` | `BIGINT` | FK→`post.id` **CASCADE**, UNIQUE(post, user) | 저장한 글 |
+| `user_id` | `BIGINT` | FK→`users.id` **CASCADE**, NOT NULL | 저장한 사람 |
+| `created_at` | `DATETIME(6)` | NOT NULL | 저장한 순간 — 목록의 정렬 축 |
+
+> **각주 — `reaction` 과 닮았지만 다른 점 둘.** 탈퇴하면 **행이 사라진다**(`user_id` CASCADE) —
+> 반응은 집계가 남아야 해서 SET NULL 이지만 저장은 그 사람만 보는 목록이라 사람이 없으면 목록도
+> 없다. 그리고 **정렬 축이 이 표의 시각**이다 — 저장한 글 목록은 "언제 저장했나" 순이지 글이 쓰인
+> 순이 아니다(Instagram 의 저장됨). `idx_post_bookmark_user (user_id, created_at, id)` 가 커서의
+> 두 축을 그대로 든다.
+
+> **각주 — 세지 않는다.** "몇 명이 저장했나" 는 화면에 없다. 있으면 글쓴이에게 남의 사진첩을
+> 들여다보는 숫자가 된다. 그래서 집계 쿼리도 그것을 위한 인덱스도 없다.
+
+> **각주 — 이 UNIQUE 가 멱등을 딛는다.** 계약의 쓰기는 `POST`/`DELETE .../bookmark` 둘이고 둘 다
+> 멱등이다(반응과 같은 모양, `40_post_bookmark.sql`).
+
+---
+
+## 부록 A. 정본의 표 27개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
@@ -1455,6 +1494,7 @@ CREATE TABLE media_objects (
 | `place_catalog` | 실재 §24 | `place` | 장소 한 벌 — 출처별 한 행(kto·localdata·durunubi, #291) |
 | `place_cell` | 실재 §22 | `place` | 주변 장소 셀 스냅샷 |
 | `post` | 실재 §7 | `community` | 커뮤니티 게시글 |
+| `post_bookmark` | 실재 §38 | `community` | 글 저장(#451 4번) — "내 사진첩". 저장한 순이 정렬 축, 탈퇴하면 행이 사라진다. §10 `bookmark`(장소, 계획)와 다른 표 |
 | `push_preference` | 실재 §30 | `push` | 알림 전체 끄기 — 행이 없으면 켜짐(#83) |
 | `reaction` | 실재 §9 | `community` | 게시글 반응 |
 | `refresh_token` | 실재 §2 | `user` | refresh 토큰 원장 |

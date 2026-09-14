@@ -14,6 +14,7 @@ erDiagram
     users ||--o{ post      : "작성"
     users ||--o{ comment   : "작성"
     users ||--o{ reaction  : "남긴다"
+    users ||--o{ post_bookmark : "저장한다 (#451)"
     users ||--o{ bookmark  : "저장 (계획 - bookmark 표는 아직 없다)"
     users ||--o{ chat_room_member : "방 참여 (DB FK 제약은 없음)"
     users ||--o{ chat_message : "작성 (DB FK 제약은 없음)"
@@ -45,6 +46,7 @@ erDiagram
 
     post     ||--o{ comment   : "댓글"
     post     ||--o{ reaction  : "반응"
+    post     ||--o{ post_bookmark : "저장됨 (#451)"
     post     ||--o{ media_objects : "첨부 사진·영상 (ref_type POST, ref_id post.id - DB FK 없음, #429)"
 
     users ||--o{ report        : "신고한다 (FK 없음 - 탈퇴가 신고를 못 지운다)"
@@ -299,6 +301,13 @@ erDiagram
         DATETIME created_at
     }
 
+    post_bookmark {
+        BIGINT   id PK
+        BIGINT   post_id FK
+        BIGINT   user_id FK "탈퇴하면 행이 사라진다 (CASCADE)"
+        DATETIME created_at "저장한 순간 - 목록의 정렬 축"
+    }
+
     media_objects {
         BIGINT   id PK
         VARCHAR  category    "JOURNEY_IMAGE|PROFILE_IMAGE|REVIEW_IMAGE|POST_IMAGE|POST_VIDEO"
@@ -430,6 +439,7 @@ erDiagram
 | `post` | 실재 | 커뮤니티 게시글. 게시판(board) 분류, 장소(`place`) 선택 태그 가능. `users` 1:N `post`. |
 | `comment` | 실재 | 게시글 댓글. `post` 1:N, `users` 1:N. |
 | `reaction` | 실재 | 게시글 반응(도움돼요/귀여워요/공감). `post` 1:N, `users` 1:N. |
+| `post_bookmark` | 실재 | 글 저장 — "내 사진첩"(#451 4번). `post` 1:N, `users` 1:N, 사용자-글 조합 유니크. 저장한 순이 정렬 축이고 탈퇴하면 행이 사라진다. §10 의 `bookmark`(장소, 계획)와 다른 표. [schema.md §38](./schema.md). |
 | `media_objects` | 실재 | 업로드 객체 원장 — S3 에 올린 파일 하나에 행 하나(#429). 감정 여행 시절부터 있던 표에 커뮤니티 글의 사진·영상을 얹었다: `ref_type=POST`·`ref_id=post.id` 로 붙고 **FK 는 없다**(불투명한 쌍, 모듈 경계). 안 붙은 채 하루 지난 것은 서버가 거둔다. `status` 는 영상 때문에 있다 — 앱이 S3 에 직접 올려서 "아직 안 올라온" 상태가 생긴다. |
 | `bookmark` | 계획 | 사용자가 저장한 장소. `users`·`place` 각각 1:N (사용자-장소 조합 유니크 권장). |
 | `kto_call_budget` | 실재 | KTO 일 호출 예산. `PRIMARY KEY(day, pool)` 이 1,000콜 한도를 지키는 유일한 장치다(#40). [schema.md §21](./schema.md). |

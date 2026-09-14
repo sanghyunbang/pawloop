@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.community.controller;
 
+import com.heattrip.heat_trip_backend.community.dto.BookmarkStateResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.CommentResponse;
@@ -235,6 +236,31 @@ public class CommunityController {
                                                   @PathVariable long postId,
                                                   @PathVariable String type) {
         return community.removeReaction(me, postId, type);
+    }
+
+    // ─────────────────────────── 저장 (인증 필수, #451 4번) ───────────────────────────
+
+    /**
+     * 내가 저장한 글 — 저장한 순. 남의 목록은 물을 길이 없다(경로에 사람이 없다).
+     * 게스트에게 열지 않는다 — 누구의 것도 아닌 목록은 없다.
+     */
+    @GetMapping("/bookmarks")
+    public PostPageResponse bookmarks(@CurrentUser User me,
+                                      @RequestParam(required = false) String cursor,
+                                      @RequestParam(required = false) Integer limit) {
+        return community.bookmarks(me, cursor, limit);
+    }
+
+    /** 멱등이다 — 이미 저장해 뒀어도 200 이다. 반응과 같은 모양(켜기·끄기 둘). */
+    @PostMapping("/posts/{postId}/bookmark")
+    public BookmarkStateResponse bookmark(@CurrentUser User me, @PathVariable long postId) {
+        return community.bookmark(me, postId);
+    }
+
+    /** 멱등이다 — 안 저장했던 것을 빼도 200 이다. */
+    @DeleteMapping("/posts/{postId}/bookmark")
+    public BookmarkStateResponse unbookmark(@CurrentUser User me, @PathVariable long postId) {
+        return community.unbookmark(me, postId);
     }
 
     // ─────────────────────────── 지그 ───────────────────────────

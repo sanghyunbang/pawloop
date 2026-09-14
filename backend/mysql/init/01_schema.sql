@@ -329,6 +329,18 @@ CREATE TABLE `post` (
   CONSTRAINT `chk_post_board` CHECK ((`board` in (_utf8mb4'walk_review',_utf8mb4'pet_place',_utf8mb4'health',_utf8mb4'free',_utf8mb4'brag')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `post_bookmark` (
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `post_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_post_bookmark` (`post_id`,`user_id`),
+  KEY `idx_post_bookmark_user` (`user_id`,`created_at`,`id`),
+  CONSTRAINT `fk_post_bookmark_post` FOREIGN KEY (`post_id`) REFERENCES `post` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_post_bookmark_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `push_preference` (
   `enabled` bit(1) NOT NULL,
   `updated_at` datetime(6) NOT NULL,

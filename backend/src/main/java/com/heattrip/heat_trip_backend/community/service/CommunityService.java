@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.community.service;
 
 import com.heattrip.heat_trip_backend.community.CommunityTime;
+import com.heattrip.heat_trip_backend.community.dto.BookmarkStateResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
 import com.heattrip.heat_trip_backend.community.dto.CommentResponse;
@@ -11,10 +12,12 @@ import com.heattrip.heat_trip_backend.community.dto.PostResponse;
 import com.heattrip.heat_trip_backend.community.dto.ReactionSummaryResponse;
 import com.heattrip.heat_trip_backend.community.entity.Comment;
 import com.heattrip.heat_trip_backend.community.entity.Post;
+import com.heattrip.heat_trip_backend.community.entity.PostBookmark;
 import com.heattrip.heat_trip_backend.walk.CourseAttachment;
 import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.community.entity.Reaction;
 import com.heattrip.heat_trip_backend.community.repository.CommentRepository;
+import com.heattrip.heat_trip_backend.community.repository.PostBookmarkRepository;
 import com.heattrip.heat_trip_backend.community.repository.PostRepository;
 import com.heattrip.heat_trip_backend.moderation.Blocks;
 import com.heattrip.heat_trip_backend.moderation.ReportReason;
@@ -87,6 +90,9 @@ public class CommunityService {
     private final CommentRepository comments;
     private final ReactionRepository reactions;
 
+    /** 글 저장 (#451 4번). 반응과 같은 모양의 멱등 켜기·끄기. */
+    private final PostBookmarkRepository bookmarks;
+
     /**
      * 신고 접수 — {@code moderation} 모듈의 공개 표면이다(#166).
      *
@@ -126,8 +132,10 @@ public class CommunityService {
     public CommunityService(PostRepository posts, CommentRepository comments,
                             ReactionRepository reactions, Reports reports, Blocks blocks,
                             CourseAttachment courses, NeighborhoodCatalog neighborhoods,
-                            ViewerNeighborhood viewerNeighborhood, MediaAttachment media) {
+                            ViewerNeighborhood viewerNeighborhood, MediaAttachment media,
+                            PostBookmarkRepository bookmarks) {
         this.media = media;
+        this.bookmarks = bookmarks;
         this.posts = posts;
         this.comments = comments;
         this.reactions = reactions;
@@ -205,30 +213,7 @@ public class CommunityService {
             return new PostPageResponse(List.of(), null, false);
         }
 
-        List<Long> ids = rows.stream().map(Post::getId).toList();
-        Map<Long, ReactionSummaryResponse> reactionsById = summarize(ids, viewerId);
-        Map<Long, Integer> commentCounts = countComments(ids);
-
-        // 한 장에 한 번 묻는다. 글마다 "가렸나" 를 물으면 20건 조회에 쿼리가 21개다 —
-        // ChatMessages 가 같은 함정을 이미 피해 뒀다.
-        Set<Long> blocked = blockedBy(viewerId);
-
-        // 붙은 코스도 한 장에 한 번 묻는다 — 글마다 물으면 20건 조회에 쿼리가 21개다(#339).
-        Map<Long, CourseAttachment.AttachedCourse> courseCards = cardsFor(rows);
-
-        // 붙은 사진·영상도 한 장에 한 번 묻는다 (#429). 코스와 같은 이유다.
-        Map<Long, List<PostResponse.PostMedia>> mediaByPost = mediaFor(rows);
-
-        List<PostResponse> items = new ArrayList<>(rows.size());
-        for (Post p : rows) {
-            items.add(PostResponse.of(p,
-                    commentCounts.getOrDefault(p.getId(), 0),
-                    reactionsById.getOrDefault(p.getId(), emptySummary(viewerId)),
-                    isBlocked(blocked, p.getUser()),
-                    toPostCourse(cardOf(p, courseCards)),
-                    districtOf(p),
-                    mediaByPost.getOrDefault(p.getId(), List.of())));
-        }
+        List<PostResponse> items = itemsOf(rows, viewerId);
 
         Post last = rows.get(rows.size() - 1);
         String next = hasMore ? CommunityCursor.of(last.getCreatedAt(), last.getId()) : null;
@@ -244,7 +229,44 @@ public class CommunityService {
                 isBlocked(blockedBy(viewerId), post.getUser()),
                 toPostCourse(cardOf(post, cardsFor(List.of(post)))),
                 districtOf(post),
-                mediaOf(post));
+                mediaOf(post),
+                isBookmarked(postId, viewerId));
+    }
+
+    /**
+     * 목록 한 장의 항목들. 글마다 묻지 않고 <b>관심사마다 한 번씩</b> 묻는다 — 반응 · 댓글 수 ·
+     * 가리기 · 코스 · 사진 · 저장. 글마다 물으면 20건 조회에 쿼리가 백 개를 넘는다.
+     */
+    private List<PostResponse> itemsOf(List<Post> rows, Long viewerId) {
+        List<Long> ids = rows.stream().map(Post::getId).toList();
+        Map<Long, ReactionSummaryResponse> reactionsById = summarize(ids, viewerId);
+        Map<Long, Integer> commentCounts = countComments(ids);
+
+        // 한 장에 한 번 묻는다. 글마다 "가렸나" 를 물으면 20건 조회에 쿼리가 21개다 —
+        // ChatMessages 가 같은 함정을 이미 피해 뒀다.
+        Set<Long> blocked = blockedBy(viewerId);
+
+        // 붙은 코스도 한 장에 한 번 묻는다 — 글마다 물으면 20건 조회에 쿼리가 21개다(#339).
+        Map<Long, CourseAttachment.AttachedCourse> courseCards = cardsFor(rows);
+
+        // 붙은 사진·영상도 한 장에 한 번 묻는다 (#429). 코스와 같은 이유다.
+        Map<Long, List<PostResponse.PostMedia>> mediaByPost = mediaFor(rows);
+
+        // 저장해 둔 글도 한 장에 한 번 (#451 4번). 게스트는 빈 집합이다.
+        Set<Long> bookmarked = bookmarkedIn(ids, viewerId);
+
+        List<PostResponse> items = new ArrayList<>(rows.size());
+        for (Post p : rows) {
+            items.add(PostResponse.of(p,
+                    commentCounts.getOrDefault(p.getId(), 0),
+                    reactionsById.getOrDefault(p.getId(), emptySummary(viewerId)),
+                    isBlocked(blocked, p.getUser()),
+                    toPostCourse(cardOf(p, courseCards)),
+                    districtOf(p),
+                    mediaByPost.getOrDefault(p.getId(), List.of()),
+                    bookmarked.contains(p.getId())));
+        }
+        return items;
     }
 
     @Transactional
@@ -270,7 +292,8 @@ public class CommunityService {
         return PostResponse.of(saved, 0, emptySummary(me.getId()), false,
                 toPostCourse(cardOf(saved, cardsFor(List.of(saved)))),
                 districtOf(saved),
-                attached);
+                attached,
+                false);
     }
 
     /**
@@ -500,7 +523,8 @@ public class CommunityService {
         return PostResponse.of(post,
                 countComments(List.of(postId)).getOrDefault(postId, 0),
                 summarizeOne(postId, me.getId()),
-                attached);
+                attached,
+                isBookmarked(postId, me.getId()));
     }
 
     /**
@@ -520,7 +544,8 @@ public class CommunityService {
                 summarizeOne(postId, me.getId()),
                 false,
                 toPostCourse(card),
-                mediaOf(post));
+                mediaOf(post),
+                isBookmarked(postId, me.getId()));
     }
 
     /** 붙은 코스를 뗀다. 코스 자체는 그대로다 — 글에서 그림만 빠진다. */
@@ -534,7 +559,8 @@ public class CommunityService {
                 summarizeOne(postId, me.getId()),
                 false,
                 null,
-                mediaOf(post));
+                mediaOf(post),
+                isBookmarked(postId, me.getId()));
     }
 
     /**
@@ -665,6 +691,65 @@ public class CommunityService {
         requirePost(postId);
         reactions.deleteIfPresent(postId, me.getId(), type);
         return summarizeOne(postId, me.getId());
+    }
+
+    // ─────────────────────────── 저장 (#451 4번) ───────────────────────────
+
+    /**
+     * 글을 저장한다. <b>멱등</b>이다 — 이미 저장해 뒀어도 200 이고 행이 안 는다. 반응과 같은
+     * 한 문장짜리 삽입({@link PostBookmarkRepository#insertIfAbsent})이라 동시 요청에서도 그렇다.
+     */
+    @Transactional
+    public BookmarkStateResponse bookmark(User me, long postId) {
+        requirePost(postId);
+        bookmarks.insertIfAbsent(postId, me.getId(), CommunityTime.nowUtc());
+        return new BookmarkStateResponse(true);
+    }
+
+    /** 저장을 뺀다. <b>멱등</b>이다 — 안 저장했던 것을 빼도 200 이다. */
+    @Transactional
+    public BookmarkStateResponse unbookmark(User me, long postId) {
+        requirePost(postId);
+        bookmarks.deleteIfPresent(postId, me.getId());
+        return new BookmarkStateResponse(false);
+    }
+
+    /**
+     * 내가 저장한 글 — <b>저장한 순</b>이지 글이 쓰인 순이 아니다(Instagram 의 저장됨). 커서의 두
+     * 축이 {@code post_bookmark.(created_at, id)} 인 이유다. 남의 목록은 물을 길이 없다 — 보는
+     * 사람의 것만 묻는다.
+     */
+    public PostPageResponse bookmarks(User me, String cursor, Integer limit) {
+        int size = clamp(limit);
+        Limit fetch = Limit.of(size + 1);
+        List<PostBookmark> rows = CommunityCursor.parse(cursor)
+                .map(c -> bookmarks.findPageAfter(me.getId(), c.createdAt(), c.id(), fetch))
+                .orElseGet(() -> bookmarks.findPage(me.getId(), fetch));
+
+        boolean hasMore = rows.size() > size;
+        if (hasMore) {
+            rows = rows.subList(0, size);
+        }
+        if (rows.isEmpty()) {
+            return new PostPageResponse(List.of(), null, false);
+        }
+
+        List<PostResponse> items = itemsOf(rows.stream().map(PostBookmark::getPost).toList(), me.getId());
+        PostBookmark last = rows.get(rows.size() - 1);
+        String next = hasMore ? CommunityCursor.of(last.getCreatedAt(), last.getId()) : null;
+        return new PostPageResponse(items, next, hasMore);
+    }
+
+    /** 목록 한 장 중 내가 저장한 글의 id. 게스트는 빈 집합이다. */
+    private Set<Long> bookmarkedIn(List<Long> postIds, Long viewerId) {
+        if (viewerId == null || postIds.isEmpty()) {
+            return Set.of();
+        }
+        return bookmarks.findPostIdsIn(viewerId, postIds);
+    }
+
+    private boolean isBookmarked(long postId, Long viewerId) {
+        return bookmarkedIn(List.of(postId), viewerId).contains(postId);
     }
 
     // ─────────────────────────── 지그 ───────────────────────────
