@@ -67,7 +67,7 @@ lib/
 | `pin_picker_screen.dart` | 지도에서 장소 핀 선택 | 보조 |
 | `walk_detail_screen.dart` | 산책 회고 — 글을 나중에 고친다 → `PUT /api/walks/{id}/memo` · 맨 위 사진 띠(`Walk.media`, #450) | 기록 카드 탭 (#187) |
 | `family_screen.dart` | 우리 가족 — 그룹·구성원·오늘의 케어 | me → push |
-| `family_chat_screen.dart` | 가족 채팅방 (폴링) | family → push |
+| `family_chat_screen.dart` | 가족 채팅방 (폴링) · 사진 메시지(#452: 고르기 → `CHAT_IMAGE` 올리기 → `mediaId` 전송, 말풍선은 4:5 규칙) | family → push |
 | `chat_list_screen.dart` | 방 목록 · 미읽음 | 탭 4 |
 | `invite_join_screen.dart` | 초대 코드로 방 참여 | 링크·코드 입력 |
 | `settings_screen.dart` | 설정 — 약관 넷 · 내 동네 · 저녁 알림 · 회원 탈퇴 · 운영자 연락처 | me → push (#165) |
@@ -107,7 +107,8 @@ lib/
   - ✅ 관광공사 키는 **이미 앱에서 사라졌다**. 예전 서술: 이 키는 앱 바이너리에 박히는 과금성 자격증명이다. [#40](https://github.com/sanghyunbang/heattrip/issues/40) 에서 호출을 백엔드 프록시로 옮기면 앱에서 완전히 사라진다 — 그때 이 레포는 KTO 대신 자체 백엔드를 호출한다.
   - 병원(vet)·펫샵(shop)·산책로(trail)는 **서버가 같은 카탈로그에 이어 붙인다**(#291) — 앱에 별도 레포가 없고 `PetPlace.categoryKey`(`contentTypeId` 가 없으면 `category`)로 칩을 가른다. 산책로의 선만 `trail_route_repository.dart` 가 따로 받는다.
 - `chat_unread.dart` — 채팅 탭의 안 읽음 점(#452): `ChatUnread.any`(탭 바가 듣는 `ValueNotifier<bool>`) 와 `ChatUnreadWatcher`(로그인한 동안 60초마다 · 앱이 앞으로 올 때 `GET /api/chat/rooms` 를 봐서 `any` 를 갱신, 게스트면 안 부름). 음소거한 방은 안 센다.
-- `post_media_repository.dart` · `image_prep.dart` · `media_picker.dart` — 커뮤니티 글의 사진 첨부(#429). 고른 사진은 `ImagePrep` 이 **다시 인코딩**해(긴 변 1600px · EXIF 없음 → 촬영 좌표가 안 나간다, `image_prep_test` 가 값으로 잰다) `POST /media`(`category=POST_IMAGE`) 로 한 장씩 올리고, 글에는 돌려받은 `mediaIds` 만 싣는다. `MediaPicker` 는 `image_picker` 를 인터페이스 뒤에 둔 것(갤러리 `pickImages`·`pickVideo` + 카메라 `takePhoto`, #450) — 위젯 테스트가 가짜를 꽂는다. 도메인은 `domain/post_media.dart`(`PostMedia` · `PostMediaKind`). **영상**(#435 서버)은 `video_prep.dart` 가 720p 로 다시 인코딩한 뒤 `mp4_metadata_scrubber.dart` 가 `moov` 의 `udta`·`meta` 상자(Android `©xyz`·`loci`, iPhone `com.apple.quicktime.location.ISO6709`)를 **제자리에서 `free` 로 덮고** 다시 훑어 흔적이 남으면 올리지 않는다 — `mp4_metadata_scrubber_test`·`video_prep_test` 가 바이트로 잰다. 그 파일을 `POST /media/videos`(서명 PUT) → S3 직접 PUT(토큰 없이) → `POST /media/{id}/complete`(포스터) 로 올린다. 60초 · 150MB · 한 글에 하나.
+-- `chat_outbox.dart` 의 `PendingPhoto`(#452) — 보낼 사진(다시 인코딩한 JPEG · 크기)과 올린 id 를 대기 항목이 든다: 올리기만 성공하고 전송이 끊긴 재시도는 다시 올리지 않는다(같은 사진이 버킷에 두 번 남지 않게). `chat_repository.dart` 의 `ChatMessageItem.media`(글의 `PostMedia` 와 같은 파서)와 `send(mediaId:)`. 방 목록의 마지막 말은 `chat_list_screen.dart` 의 `chatRoomPreview` 가 사진이면 "사진" 이라고 말한다.
+ `post_media_repository.dart` · `image_prep.dart` · `media_picker.dart` — 커뮤니티 글의 사진 첨부(#429). 고른 사진은 `ImagePrep` 이 **다시 인코딩**해(긴 변 1600px · EXIF 없음 → 촬영 좌표가 안 나간다, `image_prep_test` 가 값으로 잰다) `POST /media`(`category=POST_IMAGE`) 로 한 장씩 올리고, 글에는 돌려받은 `mediaIds` 만 싣는다. `MediaPicker` 는 `image_picker` 를 인터페이스 뒤에 둔 것(갤러리 `pickImages`·`pickVideo` + 카메라 `takePhoto`, #450) — 위젯 테스트가 가짜를 꽂는다. 도메인은 `domain/post_media.dart`(`PostMedia` · `PostMediaKind`). **영상**(#435 서버)은 `video_prep.dart` 가 720p 로 다시 인코딩한 뒤 `mp4_metadata_scrubber.dart` 가 `moov` 의 `udta`·`meta` 상자(Android `©xyz`·`loci`, iPhone `com.apple.quicktime.location.ISO6709`)를 **제자리에서 `free` 로 덮고** 다시 훑어 흔적이 남으면 올리지 않는다 — `mp4_metadata_scrubber_test`·`video_prep_test` 가 바이트로 잰다. 그 파일을 `POST /media/videos`(서명 PUT) → S3 직접 PUT(토큰 없이) → `POST /media/{id}/complete`(포스터) 로 올린다. 60초 · 150MB · 한 글에 하나.
 - `walk_photos.dart` — 산책 사진(#450). `WalkPhotoStore` 는 산책 중 찍은 바이트를 앱 문서 폴더 `walk_photos/<산책>/` 에 파일로 두고 경로만 돌려준다(`discard` 로 지움 — 카메라의 캐시 파일은 OS 가 지우므로 그대로 들고 있으면 안 된다). `WalkPhotoUploader` 는 경로를 읽어 `ImagePrep` 으로 다시 인코딩한 뒤 `POST /media`(`category=WALK_IMAGE`) 로 올려 id 를 돌려준다. `WalkSync` 가 저장 직전에 부른다 — 올린 id 는 그때그때 초안(`WalkDraft.mediaIds`)에 적어 재전송 때 앞의 것을 또 올리지 않고, 서버가 거절한 한 장은 빼고 가며, 저장되면 기기 파일을 지운다. `walk_sync_photo_test` 가 이 순서를 잰다.
 
 ### 2.4 `widgets/` — 공용 위젯

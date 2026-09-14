@@ -140,6 +140,9 @@ class PostMediaRepository {
   /// 아이 프로필 사진의 카테고리 (#448) — 서버의 `profiles/` 접두, 5MB 까지.
   static const String profileCategory = 'PROFILE_IMAGE';
 
+  /// 채팅 말풍선 사진(#452) — 메시지에 하나씩 붙는다.
+  static const String chatCategory = 'CHAT_IMAGE';
+
   /// S3 로 직접 올리는 시간. 720p 60초는 수십 MB 다 — 카페 wifi 로 몇 분이다.
   static const Duration videoPutTimeout = Duration(minutes: 5);
 

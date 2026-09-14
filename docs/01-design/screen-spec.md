@@ -359,7 +359,7 @@
 | 약관 전문 | `settings/legal_document_screen.dart` | 설정·동의 → push | `assets/terms/*.md` |
 | 회원 탈퇴 | `settings/account_delete_screen.dart` | 설정 → push | `DELETE /auth/me` |
 | 우리 가족 | `family_screen.dart` | 프로필 → 우리 가족 | `GET /api/groups/me` · 케어 로그 |
-| 가족 채팅 | `family_chat_screen.dart` | 우리 가족 → push | 폴링. **첫 진입에 약관 동의**(#82) |
+| 가족 채팅 | `family_chat_screen.dart` | 우리 가족 → push | 폴링. **첫 진입에 약관 동의**(#82). **사진 메시지**(#452): 글자 칸 왼쪽의 사진 버튼 → 고른 만큼 메시지(사진 하나에 메시지 하나) · `POST /media`(CHAT_IMAGE) 뒤 `mediaId` 로 전송 · 말풍선은 커뮤니티 카드와 같은 4:5 규칙, 누르면 전체 보기 |
 | 초대 참여 | `invite_join_screen.dart` | 초대 코드 | `POST /api/chat/invites/{code}/join` |
 | 핀 선택 | `pin_picker_screen.dart` | 보조 | 지도 |
 | 로그인 | `login_screen.dart` | 미로그인 진입 | 카카오·구글 · 그냥 둘러보기 |

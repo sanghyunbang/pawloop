@@ -248,7 +248,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ]),
               const SizedBox(height: 5),
               Text(
-                _preview(room),
+                chatRoomPreview(room),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12.5, color: T.textMuted),
@@ -270,22 +270,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ]),
       ),
     );
-  }
-
-  /// 마지막 메시지 한 줄. 아직 아무도 안 썼으면 그렇게 말한다 — **가짜 문장을 넣지 않는다.**
-  ///
-  /// 가린 사람이 마지막으로 말했으면 **여기서도 접는다.** 방 안에서 접어 놓고 목록에서
-  /// 그대로 보여 주면 가린 말이 거기로 샌다 (#82).
-  static String _preview(ChatRoomSummary room) {
-    final body = room.lastMessageBody;
-    if (body == null || body.isEmpty) {
-      return '아직 대화가 없어요';
-    }
-    if (room.lastMessageHidden) {
-      return '가린 사람의 메시지입니다';
-    }
-    final sender = room.lastMessageSender;
-    return sender == null || sender.isEmpty ? body : '$sender · $body';
   }
 
   /// 방 색. **서버의 `tag` 는 자유 문자열이라 모르는 값이 올 수 있다** — 그때도 화면이
@@ -355,3 +339,24 @@ class _ChatListScreenState extends State<ChatListScreen> {
     ]);
   }
 }
+
+/// 방 목록의 마지막 말 한 줄 — 최상위 함수인 이유: 상태 클래스가 비공개라 테스트가 못 부른다(#452).
+/// 마지막 메시지 한 줄. 아직 아무도 안 썼으면 그렇게 말한다 — **가짜 문장을 넣지 않는다.**
+///
+/// 가린 사람이 마지막으로 말했으면 **여기서도 접는다.** 방 안에서 접어 놓고 목록에서
+/// 그대로 보여 주면 가린 말이 거기로 샌다 (#82).
+String chatRoomPreview(ChatRoomSummary room) {
+  // 사진 메시지(#452)는 본문이 캡션이라 비어 있을 수 있다 — 그때 "사진" 이라고 말한다(카카오톡과 같다).
+  final body = room.lastMessageIsImage && (room.lastMessageBody ?? '').isEmpty
+      ? '사진'
+      : room.lastMessageBody;
+  if (body == null || body.isEmpty) {
+    return '아직 대화가 없어요';
+  }
+  if (room.lastMessageHidden) {
+    return '가린 사람의 메시지입니다';
+  }
+  final sender = room.lastMessageSender;
+  return sender == null || sender.isEmpty ? body : '$sender · $body';
+}
+

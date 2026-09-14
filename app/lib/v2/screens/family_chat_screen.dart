@@ -8,11 +8,15 @@ import '../data/chat_outbox.dart';
 import '../data/chat_polling_policy.dart';
 import '../data/chat_repository.dart';
 import '../data/chat_terms_gate.dart';
+import '../data/image_prep.dart';
+import '../data/media_picker.dart';
+import '../data/post_media_repository.dart';
 import '../domain/pet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/chat_terms_dialog.dart';
 import '../widgets/message_actions_sheet.dart';
+import '../widgets/post_media_viewer.dart';
 
 /// 채팅방 하나. **서버에 붙어 있다.** (이슈 #81)
 ///
@@ -54,11 +58,19 @@ class FamilyChatScreen extends StatefulWidget {
     this.isOwner = false,
     ChatRepository? repository,
     ChatTermsGate? termsGate,
+    this.picker,
+    this.media,
+    this.prepare = ImagePrep.prepare,
   })  : _injected = repository,
         _injectedGate = termsGate;
 
   final ChatRepository? _injected;
   final ChatTermsGate? _injectedGate;
+
+  /// 사진 보내기(#452)의 세 부품 — 고르기 · 다시 인코딩 · 올리기. 위젯 테스트가 가짜를 꽂는다.
+  final MediaPicker? picker;
+  final PostMediaRepository? media;
+  final ImagePreparer prepare;
 
   @override
   State<FamilyChatScreen> createState() => _FamilyChatScreenState();
@@ -78,6 +90,9 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
 
   final List<ChatMessageItem> _messages = [];
   final List<PendingMessage> _pending = [];
+  late final PostMediaRepository _media = widget.media ?? PostMediaRepository();
+  late final MediaPicker _picker = widget.picker ?? ImagePickerMediaPicker();
+  bool _picking = false;
 
   Timer? _timer;
   int _lastSeq = 0;
@@ -238,8 +253,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       if (message.senderUserId != _myUserId) {
         continue;
       }
+      // 사진 메시지(#452)는 올린 사진 id 로, 글자는 본문으로 맞춘다.
       final index = _pending.indexWhere(
-        (p) => p.body == message.body && p.state == PendingState.sending,
+        (p) => p.state == PendingState.sending &&
+            (p.mediaId != null ? message.media?.id == p.mediaId : !p.isPhoto && p.body == message.body),
       );
       if (index >= 0) {
         _pending.removeAt(index);
@@ -270,13 +287,60 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     await _deliver(message);
   }
 
-  /// 실제 전송. [PendingMessage.retrying] 이 준 것도 여기로 온다 — **같은 멱등키**다.
-  Future<void> _deliver(PendingMessage message) async {
+  /// 사진 보내기(#452) — 고른 만큼 메시지가 된다(**사진 하나에 메시지 하나**, 카카오톡과 같다).
+  /// 열 장까지. 글 사진과 같은 길이다: 다시 인코딩(위치 정보 제거 · 긴 변 1600) → `POST /media`
+  /// (CHAT_IMAGE) → 전송. 한 장씩 차례로 보내 순서가 고른 순서다.
+  Future<void> _pickPhotos() async {
+    if (_picking) return;
+    _picking = true;
     try {
-      final sent = await _repo.send(widget.roomId, message.body, message.clientMsgId);
+      final picked = await _picker.pickImages(limit: 10);
+      if (!mounted || picked.isEmpty) return;
+      for (final image in picked) {
+        final PendingPhoto photo;
+        try {
+          final prepared = await widget.prepare(image.bytes);
+          photo = PendingPhoto(bytes: prepared.bytes, width: prepared.width, height: prepared.height);
+        } on ImagePrepException {
+          if (mounted) _toast('이 사진은 읽을 수 없어요');
+          continue;
+        }
+        if (!mounted) return;
+        final message = PendingMessage.photo(photo);
+        setState(() => _pending.add(message));
+        _scrollToBottom();
+        await _deliver(message);
+        if (!mounted) return;
+      }
+    } finally {
+      _picking = false;
+    }
+  }
+
+  /// 실제 전송. [PendingMessage.retrying] 이 준 것도 여기로 온다 — **같은 멱등키**다.
+  ///
+  /// 사진이면 **먼저 올린다**(#452). 올린 id 는 대기 항목에 적어 두므로 전송만 실패한 재시도는
+  /// 다시 올리지 않는다 — 같은 사진이 버킷에 두 번 남지 않는다.
+  Future<void> _deliver(PendingMessage message) async {
+    var current = message;
+    try {
+      final photo = current.photo;
+      if (photo != null && current.mediaId == null) {
+        final uploaded = await _media.upload(
+          jpegBytes: photo.bytes,
+          width: photo.width,
+          height: photo.height,
+          filename: 'chat.jpg',
+          category: PostMediaRepository.chatCategory,
+        );
+        current = current.uploaded(uploaded.id);
+        if (!mounted) return;
+        setState(() => _replacePending(current));
+      }
+      final sent = await _repo.send(widget.roomId, current.body, current.clientMsgId, mediaId: current.mediaId);
       if (!mounted) return;
       setState(() {
-        _pending.remove(message);
+        _pending.removeWhere((p) => p.clientMsgId == current.clientMsgId);
         if (sent.roomSeq > _lastSeq) {
           _messages.add(sent);
           _lastSeq = sent.roomSeq;
@@ -287,12 +351,20 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     } on ChatFailure {
       if (!mounted) return;
       // **지우지 않는다.** 사용자가 쓴 글이 사라지면 안 되고, 그냥 두면 보낸 것처럼 보인다.
-      setState(() {
-        final index = _pending.indexOf(message);
-        if (index >= 0) {
-          _pending[index] = message.failed();
-        }
-      });
+      setState(() => _replacePending(current.failed()));
+    } on PostMediaFailure catch (e) {
+      if (!mounted) return;
+      // 사진을 못 올렸다 — 같은 자리에 남기고 다시 보내기. 거절(너무 큼 등)이면 이유를 말한다.
+      setState(() => _replacePending(current.failed()));
+      if (e.kind == PostMediaFailureKind.rejected) _toast(e.label);
+    }
+  }
+
+  /// 같은 멱등키의 대기 항목을 바꿔 끼운다 — 올린 id 가 붙거나 상태가 바뀔 때.
+  void _replacePending(PendingMessage next) {
+    final index = _pending.indexWhere((p) => p.clientMsgId == next.clientMsgId);
+    if (index >= 0) {
+      _pending[index] = next;
     }
   }
 
@@ -427,7 +499,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxW),
-          child: Container(
+          child: message.photo != null ? _pendingPhoto(message, maxW) : Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: const Color(0xFFB9AECB),
@@ -461,10 +533,128 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     );
   }
 
+  /// 사진 말풍선의 폭 — 말풍선 최대 폭(화면의 68%)의 0.85. 카카오톡(말풍선 폭의 2/3)보다 조금 크고
+  /// 인스타그램 DM(사진이 주인공)보다 작다 — 사진은 보이되 대화가 사진에 묻히지 않게.
+  static const double _photoWidthFactor = 0.85;
+
+  /// 보내는 중인 사진 — 확정되면 같은 자리에 서버 사진이 온다. 흐리게 두어 "아직" 임을 말한다.
+  Widget _pendingPhoto(PendingMessage message, double maxW) {
+    final photo = message.photo!;
+    return Opacity(
+      opacity: 0.6,
+      child: ClipRRect(
+        key: Key('chat-photo-pending-${message.clientMsgId}'),
+        borderRadius: _photoRadius(mine: true),
+        child: SizedBox(
+          width: maxW * _photoWidthFactor,
+          child: AspectRatio(
+            aspectRatio: photo.aspectRatio,
+            child: Image.memory(photo.bytes,
+                fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => _photoFallback()),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 사진 메시지의 줄(#452) — 사진이 말풍선이다. 캡션이 있으면 그 아래 작은 말풍선.
+  Widget _photoRow(BuildContext context, ChatMessageItem m,
+      {required double maxW, required bool mine, required String time}) {
+    final tile = _photoTile(m, maxW, mine: mine);
+    final caption = m.body.isEmpty ? null : _captionBubble(m, maxW, mine: mine);
+    final timeText = Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted));
+    if (mine) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          tile,
+          if (caption != null) ...[const SizedBox(height: 4), caption],
+          const SizedBox(height: 4),
+          timeText,
+        ]),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _avatar(m.senderName),
+        const SizedBox(width: 9),
+        Flexible(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(m.senderName,
+                style: const TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
+            const SizedBox(height: 4),
+            tile,
+            if (caption != null) ...[const SizedBox(height: 4), caption],
+            const SizedBox(height: 4),
+            timeText,
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  /// 사진 한 장 — 커뮤니티 카드와 같은 4:5 규칙([PostMedia.aspectRatio]): 세로 사진은 4:5 까지
+  /// 자르고 원본은 전체 보기(누르면)에서. 길게 누르면 다른 말풍선과 같은 메뉴다.
+  Widget _photoTile(ChatMessageItem m, double maxW, {required bool mine}) {
+    final media = m.media!;
+    return GestureDetector(
+      onTap: () => PostMediaViewer.open(context, [media]),
+      onLongPress: () => _openMessageActions(m),
+      child: ClipRRect(
+        key: Key('chat-photo-${m.id}'),
+        borderRadius: _photoRadius(mine: mine),
+        child: SizedBox(
+          width: maxW * _photoWidthFactor,
+          child: AspectRatio(
+            aspectRatio: media.aspectRatio,
+            child: Image.network(media.url,
+                fit: BoxFit.cover, errorBuilder: (_, __, ___) => _photoFallback()),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _captionBubble(ChatMessageItem m, double maxW, {required bool mine}) => ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxW),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: mine ? _warm : null,
+            color: mine ? null : T.cardBg,
+            borderRadius: _photoRadius(mine: mine),
+            border: mine ? null : Border.all(color: T.cardBorder),
+          ),
+          child: Text(m.body,
+              style: TextStyle(fontSize: 13.5, height: 1.45, color: mine ? Colors.white : T.textPrimary)),
+        ),
+      );
+
+  static BorderRadius _photoRadius({required bool mine}) => BorderRadius.only(
+        topLeft: const Radius.circular(16),
+        topRight: const Radius.circular(16),
+        bottomLeft: Radius.circular(mine ? 16 : 4),
+        bottomRight: Radius.circular(mine ? 4 : 16),
+      );
+
+  /// 못 받은 사진의 자리 — 말풍선이 흔들리지 않게 같은 크기.
+  Widget _photoFallback() => Container(
+        color: T.surface,
+        alignment: Alignment.center,
+        child: const Icon(Icons.broken_image_outlined, color: T.textMuted),
+      );
+
   Widget _bubbleRow(BuildContext context, ChatMessageItem m) {
     final maxW = MediaQuery.of(context).size.width * 0.68;
     final mine = _myUserId != null && m.senderUserId == _myUserId;
     final time = _hhmm(m.createdAt);
+
+    // 사진 메시지(#452) — 지워졌거나 가려 접힌 것은 글자 말풍선의 규칙을 그대로 따른다.
+    if (m.isImage && m.media != null && !m.deleted && !_isFolded(m)) {
+      return _photoRow(context, m, maxW: maxW, mine: mine, time: time);
+    }
 
     if (mine) {
       return Padding(
@@ -817,6 +1007,23 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 6, 16, bottom + 14),
       child: Row(children: [
+        // 사진 보내기(#452) — 글자 칸 왼쪽. 앨범에서 고른 사진이 말풍선이 된다.
+        GestureDetector(
+          key: const Key('chat-photo'),
+          onTap: _pickPhotos,
+          child: Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: T.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: T.cardBorder),
+            ),
+            child: const Icon(Icons.photo_outlined, size: 21, color: T.textSecondary),
+          ),
+        ),
+        const SizedBox(width: 8),
         Expanded(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
