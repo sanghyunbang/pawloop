@@ -8,6 +8,7 @@ import 'package:heat_trip_flutter/v2/data/walk_feed.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/screens/me_screen.dart';
+import 'package:heat_trip_flutter/v2/screens/dog_gallery_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/saved_posts_screen.dart';
 
 /// 로그인 상태에서 화면이 서버를 부르지 않게 — 진짜 저장소는 12초 타이머를 남긴다.
@@ -58,6 +59,19 @@ void main() {
     expect(find.text('북마크'), findsNothing);
     expect(find.text('저장한 글'), findsOneWidget, reason: '죽은 북마크 행의 자리에 진짜 기능이 들어왔다(#451 4번)');
     expect(find.text('내 산책 기록'), findsOneWidget, reason: '나머지 메뉴는 그대로');
+  });
+
+  testWidgets('아이 머리 아래 "보리의 사진첩" 을 누르면 아이 사진첩이 열린다 (#451 5번)', (t) async {
+    AuthState.status.value = AuthStatus.unauthenticated; // 그 화면은 게스트면 서버를 안 부른다
+    await pump(t);
+
+    expect(find.byKey(const Key('dog-gallery-open')), findsOneWidget);
+    await t.tap(find.byKey(const Key('dog-gallery-open')));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(DogGalleryScreen), findsOneWidget);
+    expect(find.text('Bori의 사진첩'), findsWidgets, reason: '내 정보의 단추와 열린 화면의 머리말 둘 다');
   });
 
   testWidgets('"저장한 글" 을 누르면 내 사진첩 화면이 열린다 (#451 4번)', (t) async {

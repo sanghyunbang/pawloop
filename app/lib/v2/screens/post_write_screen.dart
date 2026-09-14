@@ -38,6 +38,8 @@ import '../widgets/course_picker_sheet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/post_media_field.dart';
+import '../domain/pet.dart';
+import '../widgets/dog_avatar.dart';
 import 'login_screen.dart';
 
 /// 글쓰기를 여는 **유일한 문**. 미로그인이면 로그인부터 안내한다.
@@ -186,6 +188,9 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
   /// 별도 오퍼레이션이라 이 화면의 저장과 섞지 않는다).
   Course? _course;
 
+  /// 이 글에 찍힌 아이 (#451 5번). 고치기로 열면 원래 값, 새 글이면 지금 고른 아이(있으면).
+  int? _dogId;
+
   late final PostMediaRepository _media = widget.media ?? PostMediaRepository();
   late final MediaPicker _picker = widget.picker ?? ImagePickerMediaPicker();
 
@@ -204,6 +209,13 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
     end: Alignment.bottomRight,
     colors: [T.warmStart, T.warmEnd],
   );
+
+  @override
+  void initState() {
+    super.initState();
+    // 새 글이면 지금 고른 아이가 기본이다 — 한 마리 집은 고를 것도 없다. 여럿이면 바꿀 수 있다.
+    _dogId = widget.editing?.dog?.id ?? kMyDog.value?.serverId;
+  }
 
   @override
   void dispose() {
@@ -278,6 +290,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
               loc: widget.loc,
               contentId: widget.contentId,
               mediaIds: _mediaSel.ids,
+              dogId: _dogId,
             );
       if (!mounted) return;
       Navigator.of(context).pop(post);
@@ -310,6 +323,7 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
       board: _board == original.board ? null : _board,
       title: title == original.title ? null : title,
       body: body == original.body ? null : body,
+      dogId: _dogId == original.dog?.id ? null : _dogId,
     );
   }
 
@@ -345,6 +359,19 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
                     prepare: widget.prepare ?? ImagePrep.prepare,
                     prepareVideo: widget.prepareVideo ?? VideoPrep.prepare,
                     onChanged: (sel) => setState(() => _mediaSel = sel),
+                  ),
+                  // 어떤 아이? (#451 5번) — 아이 사진첩의 재료. 아이가 없으면 줄 자체가 없다.
+                  ValueListenableBuilder<List<DogProfile>>(
+                    valueListenable: kMyPets,
+                    builder: (_, pets, __) {
+                      final mine = pets.where((p) => p.serverId != null).toList();
+                      if (mine.isEmpty) return const SizedBox.shrink();
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const SizedBox(height: 18),
+                        _label('어떤 아이?'),
+                        _dogChips(mine),
+                      ]);
+                    },
                   ),
                   const SizedBox(height: 18),
                   _label('게시판'),
@@ -537,6 +564,43 @@ class _PostWriteScreenState extends State<PostWriteScreen> {
     if (picked == null || !mounted) return;
     setState(() => _course = picked);
   }
+
+  /// 아이 칩 — 사진(없으면 이모지) + 이름. 다시 누르면 뺀다(아이 없는 글도 된다). 고치기에서는
+  /// 비울 수 없다(계약이 비우는 길을 안 둔다) — 원래 아이가 있으면 바꾸기만.
+  Widget _dogChips(List<DogProfile> mine) => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final dog in mine)
+            GestureDetector(
+              key: Key('write-dog-${dog.serverId}'),
+              onTap: _sending
+                  ? null
+                  : () => setState(() {
+                        final canClear = widget.editing?.dog == null;
+                        _dogId = _dogId == dog.serverId && canClear ? null : dog.serverId;
+                      }),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
+                decoration: BoxDecoration(
+                  gradient: _dogId == dog.serverId ? _warm : null,
+                  color: _dogId == dog.serverId ? null : T.surface,
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(color: T.cardBorder),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  DogAvatar(dog: dog, size: 22, emojiSize: 20),
+                  const SizedBox(width: 6),
+                  Text(dog.name,
+                      style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: _dogId == dog.serverId ? Colors.white : T.textSecondary)),
+                ]),
+              ),
+            ),
+        ],
+      );
 
   Widget _boardChips() => Wrap(
         spacing: 8,

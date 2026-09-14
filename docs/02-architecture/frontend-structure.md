@@ -114,6 +114,7 @@ lib/
   - `AuroraBackground` — 파스텔 오라 그라데이션 배경. 전역 `AppThemeCtl.index`를 구독해 테마 변경이 앱 전체에 반영됨.
   - `GlassCard` — `BackdropFilter` blur 기반 반투명 글래스 카드.
 - `profile_avatar.dart` — 강아지 프로필 아바타(테두리색 선택 반영).
+- `dog_gallery_screen.dart` — 아이 사진첩(#451 5번): 내 정보의 아이 머리 아래 "○○의 사진첩" 으로 연다. `feed(dogId:)` 로 그 아이가 찍힌 글만 — 사진 글은 `PostPhotoWall`, 글만 있는 글은 한 줄. 재료는 글쓰기의 "어떤 아이?" 칩(`_dogChips`, 새 글은 지금 고른 아이가 기본)이고 카드에는 아이 꼬리표(`_dogTag`)가 붙는다.
 - `saved_posts_screen.dart` — 내 정보 > 저장한 글(#451 4번): `CommunityRepository.bookmarks()` 를 저장한 순으로 읽어 사진 글은 `PostPhotoWall`(하트 알약 없음), 글만 있는 글은 한 줄로. 게스트는 서버를 안 부르고 로그인 안내. 상세에서 저장을 빼고 돌아오면 다시 읽는다.
 - `dog_avatar.dart` — 아이 아바타(#448): 사진(`DogProfile.photoUrl`)이 있으면 `ClipOval` 사진, 없으면 종 이모지. 홈 히어로·내 정보·아이 고르기·편집 화면이 전부 이것을 쓴다. 못 불러오면 이모지로 돌아간다.
 - `like_burst.dart` — 두 번 탭 하트(#451 4번): `trigger` 가 바뀔 때마다 사진 위에서 한 번 튄다. 응답을 안 기다린다 — 손가락에 대한 대답이지 집계가 아니다.

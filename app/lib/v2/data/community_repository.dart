@@ -172,6 +172,23 @@ class ReactionSummary {
 ///
 /// [path] 는 **이미 잘라 낸 선을 더 줄인 것**(최대 40점)이다. 카드에 그릴 그림용이고, 온전한
 /// 선이 필요하면 `CourseRepository.one` 을 부른다.
+/// 글에 찍힌 아이의 꼬리표 — 계약의 `PostDog` (#451 5번). 카드가 그리는 셋만: id · 이름 · 사진.
+class PostDog {
+  final int id;
+  final String name;
+  final String? avatarUrl;
+
+  const PostDog({required this.id, required this.name, this.avatarUrl});
+
+  static PostDog? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final id = json['id'];
+    final name = json['name'];
+    if (id is! num || name is! String) return null;
+    return PostDog(id: id.toInt(), name: name, avatarUrl: json['avatarUrl'] as String?);
+  }
+}
+
 class PostCourse {
   final int id;
   final String name;
@@ -258,6 +275,9 @@ class CommunityPost {
   /// 붙은 사진·영상 (#429). **항상 있다** — 없으면 빈 목록. 순서는 올린 순서다.
   final List<PostMedia> media;
 
+  /// 이 글에 찍힌 아이 (#451 5번). 안 골랐거나 아이를 보냈으면 `null`.
+  final PostDog? dog;
+
   /// 보는 사람이 이 글을 **저장해 뒀는가** (#451 4번). 게스트는 `false` 다 — 게스트인지는
   /// `reactions.mine == null` 이 말한다. 켜고 끄는 것은 [CommunityRepository.bookmark] ·
   /// [CommunityRepository.unbookmark] 이고 둘 다 멱등이다.
@@ -280,6 +300,7 @@ class CommunityPost {
     this.authorDistrict,
     this.media = const [],
     this.bookmarked = false,
+    this.dog,
   });
 
   /// 한 자리만 바꾼 사본.
@@ -306,6 +327,7 @@ class CommunityPost {
         authorDistrict: authorDistrict,
         media: media,
         bookmarked: bookmarked ?? this.bookmarked,
+        dog: dog,
       );
 
   /// 모양이 아니면 `null`. 한 건이 깨졌다고 목록 전체를 버리지 않는다.
@@ -337,6 +359,7 @@ class CommunityPost {
       authorDistrict: json['authorDistrict'] as String?,
       media: PostMedia.parseList(json['media']),
       bookmarked: json['bookmarked'] == true,
+      dog: PostDog.tryParse(json['dog']),
     );
   }
 }
@@ -509,10 +532,14 @@ class CommunityRepository {
     String? cursor,
     int? limit,
     bool myNeighborhood = false,
+
+    /// 찍힌 아이로 좁힌다 (#451 5번, 아이 사진첩).
+    int? dogId,
   }) async {
     final uri = Uri.parse('$baseUrl/api/community/posts').replace(
       queryParameters: <String, String>{
         if (board != null) 'board': board.wire,
+        if (dogId != null) 'dogId': '$dogId',
         if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
         if (limit != null) 'limit': '$limit',
         if (myNeighborhood) 'neighborhood': 'mine',
@@ -563,6 +590,9 @@ class CommunityRepository {
 
     /// 미리 올려 둔 사진의 id — `POST /media` 가 돌려준 값 (#429). 순서는 올린 순서다.
     List<int>? mediaIds,
+
+    /// 이 글에 찍힌 아이 (#451 5번). 내 아이의 id — 남의 아이면 서버가 400.
+    int? dogId,
   }) async {
     final uploadLoc = LocationUploadPolicy.placeNameForUpload(loc);
     final uploadContentId = LocationUploadPolicy.placeIdForUpload(contentId);
@@ -582,6 +612,7 @@ class CommunityRepository {
           // 코스는 좌표가 아니다 — 서버가 이미 양 끝을 자른 선의 식별자다(#339).
           if (courseId != null) 'courseId': courseId,
           if (mediaIds != null && mediaIds.isNotEmpty) 'mediaIds': mediaIds,
+          if (dogId != null) 'dogId': dogId,
         },
       ),
     );
@@ -670,12 +701,16 @@ class CommunityRepository {
     /// 붙은 사진을 **통째로 갈아 끼운다** (#429). `null` 이면 안 바꾸고, 빈 목록이면 전부 뗀다 —
     /// `PostPatch` 의 "키가 없으면 안 바꿈" 과 같은 규약이다.
     List<int>? mediaIds,
+
+    /// 찍힌 아이를 바꾼다 (#451 5번). 안 보내면 그대로 — 비우는 길은 없다(계약의 PostPatch).
+    int? dogId,
   }) async {
     final patch = <String, Object?>{
       if (board != null) 'board': board.wire,
       if (title != null) 'title': title,
       if (body != null) 'body': body,
       if (mediaIds != null) 'mediaIds': mediaIds,
+      if (dogId != null) 'dogId': dogId,
     };
     if (patch.isEmpty) return null;
 
