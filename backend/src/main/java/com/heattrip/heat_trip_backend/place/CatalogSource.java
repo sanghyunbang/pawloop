@@ -39,7 +39,7 @@ public enum CatalogSource {
      * <p>두루누비와 행을 나눈 이유: 두루누비가 아픈 날 동네 길까지 사라지면 안 된다.
      * 사용자에게는 둘 다 산책로 한 종류다.
      */
-    LOCALTRAIL(4, "localtrail"),
+    LOCALTRAIL(4, "localtrail", true),
 
     /**
      * 반려견 놀이터 — 지자체 현황(#346). {@code LOCALTRAIL} 과 같이 <b>외부를 안 부른다</b>.
@@ -47,14 +47,29 @@ public enum CatalogSource {
      * <p>전국 표준데이터가 없어 시·군·구 파일을 사람이 받아 자산으로 만든다. 그래서
      * 갱신 주기가 "파일이 늘 때" 다 — 스케줄이 아니라 배포가 갱신이다.
      */
-    PLAYGROUND(5, "playground");
+    PLAYGROUND(5, "playground", true);
 
     private final int id;
     private final String wireValue;
+    private final boolean asset;
 
     CatalogSource(int id, String wireValue) {
+        this(id, wireValue, false);
+    }
+
+    CatalogSource(int id, String wireValue, boolean asset) {
         this.id = id;
         this.wireValue = wireValue;
+        this.asset = asset;
+    }
+
+    /**
+     * 우리가 만든 자산인가(놀이터 · 동네 길). 겹치는 자리에서 다른 출처에 <b>진다</b>(#411 —
+     * 사진이 있는 쪽을 남긴다). 새 출처를 더하면 여기서 편을 정해야 한다 — 정리 규칙은
+     * 출처 이름을 손으로 안 센다({@code LayerPlaceIndex.merged}).
+     */
+    public boolean isAsset() {
+        return asset;
     }
 
     /** {@code place_catalog.id}. */

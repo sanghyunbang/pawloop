@@ -1,9 +1,13 @@
 package com.heattrip.heat_trip_backend.place.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.place.CatalogSource;
 import com.heattrip.heat_trip_backend.place.KtoBudgetProperties;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
 import com.heattrip.heat_trip_backend.place.entity.PlaceCatalog;
+import com.heattrip.heat_trip_backend.place.layer.LayerPlaceIndex;
+import com.heattrip.heat_trip_backend.place.layer.PlaceDedupe;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,24 +65,40 @@ public class PlaceCatalogService {
      */
     static final int MAX_PAGES = 30;
 
+    /**
+     * 이어 붙인 본문의 <b>모양</b> 번호 — ETag 에 섞는다(#411). 겹침 정리가 들어가면 같은 행들로도
+     * 본문이 달라지는데, 행의 ETag 만 섞으면 옛 본문을 캐시한 앱이 304 만 받는다.
+     * <b>정리 규칙을 바꾸면 이 번호도 올린다</b> — 행이 그대로인 하루 동안 옛 본문이 남는다.
+     */
+    static final String SERVE_FORMAT = "dedupe-v1";
+
     private final CatalogSnapshotStore snapshots;
     private final KtoApiClient kto;
     private final KtoCallBudget budget;
     private final UpstreamGate gate;
     private final KtoBudgetProperties properties;
+    private final LayerPlaceIndex layers;
+    private final ObjectMapper objectMapper;
     private final Clock clock;
+
+    /** 마지막으로 이어 붙인 본문 — ETag 가 같으면 다시 만들지 않는다(#411). */
+    private volatile Served lastServed;
 
     public PlaceCatalogService(CatalogSnapshotStore snapshots,
                                KtoApiClient kto,
                                KtoCallBudget budget,
                                UpstreamGate gate,
                                KtoBudgetProperties properties,
+                               LayerPlaceIndex layers,
+                               ObjectMapper objectMapper,
                                Clock clock) {
         this.snapshots = snapshots;
         this.kto = kto;
         this.budget = budget;
         this.gate = gate;
         this.properties = properties;
+        this.layers = layers;
+        this.objectMapper = objectMapper;
         this.clock = clock;
     }
 
@@ -132,11 +152,41 @@ public class PlaceCatalogService {
             snapshots.find(layer).filter(r -> r.getItemCount() > 0).ifPresent(rows::add);
         }
         if (rows.size() == 1) {
+            // 레이어가 없으면 겹칠 것도 없다 — #273 과 바이트까지 같다.
             return Optional.of(new Served(kto.get().getPayload(), kto.get().getEtag()));
         }
-        return Optional.of(new Served(
-                CatalogPayloads.concat(rows.stream().map(PlaceCatalog::getPayload).toList()),
-                CatalogPayloads.combinedEtag(rows.stream().map(PlaceCatalog::getEtag).toList())));
+        List<String> etags = new ArrayList<>(rows.stream().map(PlaceCatalog::getEtag).toList());
+        etags.add(SERVE_FORMAT);
+        String etag = CatalogPayloads.combinedEtag(etags);
+        Served cached = lastServed;
+        if (cached != null && cached.etag().equals(etag)) {
+            return Optional.of(cached);
+        }
+
+        // 겹침 정리 (#411) — 우리 자산이 관광공사 항목과 같은 자리면 빠지고, 놀이터에 밀린
+        // 관광공사 항목은 놀이터를 옮겨 단 사본으로 나간다. 그래서 문자열을 그대로 잇지 못하고
+        // 객체로 다시 쓴다 — ETag 가 바뀔 때 한 번이다.
+        PlaceDedupe.Merged merged = layers.merged();
+        Served served;
+        if (merged.kto().isEmpty()) {
+            // 관광공사 한 벌을 객체로 못 읽었다(저장 경로가 깨진 것 — LayerPlaceIndex 가 로그를
+            // 남긴다). 정리를 포기하고 옛 방식으로 잇는다 — 겹치는 두 줄이 빈 지도보다 낫다.
+            served = new Served(
+                    CatalogPayloads.concat(rows.stream().map(PlaceCatalog::getPayload).toList()), etag);
+        } else {
+            served = new Served(
+                    CatalogPayloads.concat(List.of(toJson(merged.kto()), toJson(merged.layers()))), etag);
+        }
+        lastServed = served;
+        return Optional.of(served);
+    }
+
+    private String toJson(List<PlaceDto> places) {
+        try {
+            return objectMapper.writeValueAsString(places);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("카탈로그를 쓰지 못했다.", e);
+        }
     }
 
     /**
