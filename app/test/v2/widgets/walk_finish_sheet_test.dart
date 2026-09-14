@@ -1,5 +1,6 @@
 // 산책 완료 시트 — 이슈 #310. 경로 사진이 갤러리로만 가는가, 실패가 화면을 안 죽이는가.
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -38,6 +39,9 @@ final _fakePng = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]);
   String timeLabel = '18:40',
   String distanceLabel = '1.24km',
   String paceLabel = "15'03\"",
+  // 지도 스냅숏(#483) — 있으면 디코더도 가짜로 꽂는다. 진짜 디코더는 route_image_test 가 잰다.
+  MapGround? map,
+  MapDecoder? decodeMap,
 }) {
   final names = <String>[];
   final bytes = <Uint8List>[];
@@ -53,7 +57,9 @@ final _fakePng = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]);
       timeLabel: timeLabel,
       dateLabel: WalkFinishSheet.dateLabel(DateTime(2026, 9, 6, 14, 20)),
       moments: moments,
+      map: map,
     ),
+    decodeMap: decodeMap ?? decodeImageFromList,
     walkedAt: DateTime(2026, 9, 6, 14, 20),
     // 렌더러는 가짜 — 실제 PNG 는 route_image_test 가 잰다. 여기서는 "만든 바이트가 그대로
     // 저장기로 가는가" 만 본다.
@@ -351,6 +357,65 @@ void main() {
     testWidgets('폭 360dp — 버튼이 둘이 되어도 가로로 안 넘친다', (tester) async {
       await pumpSheetAt(tester, fixture(dogName: '보리').sheet, widthDp: 360);
 
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // ── 지도 바닥 (#483) ─────────────────────────────────────────
+  group('지도 바닥 (#483)', () {
+    ui.Image solid() {
+      final rec = ui.PictureRecorder();
+      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 40, 80), Paint()..color = const Color(0xFF00C853));
+      return rec.endRecording().toImageSync(40, 80);
+    }
+
+    MapGround ground() => MapGround(
+          bytes: _fakePng,
+          viewSize: const Size(100, 200),
+          screenPoints: [for (var i = 0; i < _path.length; i++) Offset(10.0 + i * 3, 20.0 + i * 5)],
+        );
+
+    RouteCanvasPainter previewPainter(WidgetTester tester) => tester
+        .widget<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is RouteCanvasPainter))
+        .painter as RouteCanvasPainter;
+
+    testWidgets('스냅숏이 있으면 한 번 디코딩해 미리보기가 지도 위에 그리고, 공유 카드에는 같은 스냅숏이 간다',
+        (tester) async {
+      var decoded = 0;
+      final g = ground();
+      final f = fixture(dogName: '보리', map: g, decodeMap: (bytes) async {
+        decoded++;
+        expect(bytes, same(g.bytes));
+        return solid();
+      });
+      await pumpSheet(tester, f.sheet);
+
+      expect(previewPainter(tester).map, isNotNull, reason: '미리보기의 바닥이 지도다');
+      expect(decoded, 1, reason: '바이트는 한 번만 디코딩한다');
+
+      await tester.tap(find.text('공유하기'));
+      await tester.pumpAndSettle();
+      expect(f.sharedCards.single.map, same(g), reason: '카드도 같은 스냅숏 위에 그린다');
+    });
+
+    testWidgets('스냅숏이 없으면 캔버스다 — painter 의 map 이 null 이고 디코더를 부르지 않는다', (tester) async {
+      var decoded = 0;
+      final f = fixture(decodeMap: (bytes) async {
+        decoded++;
+        return solid();
+      });
+      await pumpSheet(tester, f.sheet);
+
+      expect(previewPainter(tester).map, isNull);
+      expect(decoded, 0);
+    });
+
+    testWidgets('바이트를 못 읽으면 캔버스로 그리고 시트는 살아 있다', (tester) async {
+      final f = fixture(map: ground(), decodeMap: (bytes) async => throw StateError('깨진 바이트'));
+      await pumpSheet(tester, f.sheet);
+
+      expect(previewPainter(tester).map, isNull);
+      expect(find.text('경로 사진 저장'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

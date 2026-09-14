@@ -7,10 +7,12 @@
 //
 // ## 경로 사진은 갤러리에만 간다
 //
-// 그림은 `RouteCanvasPainter` 가 타일 없이 그리고(#235 C1 — 네이버 지도 위에 그리면 카메라
-// 궤적이 곧 경로라 좌표가 네이버에 간다), PNG 는 `RoutePhotoSaver` 가 기기 갤러리에 넣는다.
+// 그림은 `RouteCanvasPainter` 가 그리고, PNG 는 `RoutePhotoSaver` 가 기기 갤러리에 넣는다.
+// 바닥은 트래킹 화면이 끝내기 순간 찍은 지도 스냅숏(#483, `RouteArt.map`)이고 — 이 시트는
+// 그 바이트를 **한 번** 디코딩해 미리보기와 공유 카드에 같이 쓴다 — 없으면 단색 캔버스다.
 // 업로드 경로를 타지 않는다 — `route_photo_no_network_test.dart` 가 소스로 잠근다.
 import 'dart:typed_data';
+import 'dart:ui' as ui show Image;
 
 import 'package:flutter/material.dart';
 
@@ -24,6 +26,9 @@ import 'walk_summary_row.dart';
 
 /// 화면 트리 밖에서 PNG 를 만드는 함수 — 테스트가 가짜를 꽂는 자리.
 typedef RouteRenderer = Future<Uint8List> Function(RouteArt art);
+
+/// 지도 스냅숏 바이트 → 그림. 기본은 `decodeMapBytes`(dart:ui), 위젯 테스트가 가짜를 꽂는다.
+typedef MapDecoder = Future<ui.Image> Function(Uint8List bytes);
 
 class WalkFinishSheet extends StatefulWidget {
   final String timeLabel;
@@ -46,6 +51,8 @@ class WalkFinishSheet extends StatefulWidget {
 
   final RoutePhotoSaver saver;
   final RouteRenderer renderer;
+
+  final MapDecoder decodeMap;
 
   /// 공유 카드에 들어가는 우리 아이 (#344). 아이가 없으면 카드도 없다 —
   /// "누구와 걸었나" 가 이 카드의 첫 줄이라 이름 없이 낼 것이 아니다.
@@ -78,6 +85,7 @@ class WalkFinishSheet extends StatefulWidget {
     required this.onDiscard,
     required this.warm,
     this.renderer = RouteImage.renderPng,
+    this.decodeMap = decodeMapBytes,
     this.dogName,
     this.dogColor = T.warmMid,
     this.placeName,
@@ -103,10 +111,31 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
   Future<Uint8List?> _thumb(String path) =>
       _thumbs.putIfAbsent(path, () => widget.readPhoto?.call(path) ?? Future<Uint8List?>.value(null));
 
+  /// 디코딩된 지도 스냅숏(#483). 미리보기가 그리고 공유 카드에는 바이트가 간다.
+  ui.Image? _map;
+
   @override
   void initState() {
     super.initState();
     assert(widget.photoPaths.isEmpty || widget.readPhoto != null, '사진이 있으면 읽는 함수도 있어야 한다');
+    final ground = widget.art.map;
+    if (ground != null) {
+      widget.decodeMap(ground.bytes).then((img) {
+        if (!mounted) {
+          img.dispose();
+          return;
+        }
+        setState(() => _map = img);
+      }, onError: (Object _) {
+        // 못 읽는 바이트 — 캔버스로 그린다.
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _map?.dispose();
+    super.dispose();
   }
 
   /// 카드를 그리는 동안 두 번 누르는 것을 막는다.
@@ -286,7 +315,7 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
           height: 150,
           width: double.infinity,
           child: CustomPaint(
-            painter: RouteCanvasPainter(widget.art, withCaption: false),
+            painter: RouteCanvasPainter(widget.art, withCaption: false, map: _map),
             child: const SizedBox.expand(),
           ),
         ),
@@ -347,6 +376,7 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
         placeName: widget.placeName,
         lngLat: widget.art.lngLat,
         photo: photo,
+        map: widget.art.map,
       ));
     } on WalkShareException catch (e) {
       if (mounted) _toast(e.message);

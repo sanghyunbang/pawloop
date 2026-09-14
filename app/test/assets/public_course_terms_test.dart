@@ -40,12 +40,13 @@ void main() {
   });
 
   test('버전이 올랐다 — 내용이 바뀌면 다시 동의를 받는다', () {
-    // v1.5 가 공개 코스(#339), v1.6 이 동네(#342)다. 수집 항목이 늘 때마다 올린다.
-    expect(privacy, contains('버전: v1.6'),
+    // v1.5 가 공개 코스(#339), v1.6 이 동네(#342), v1.7 이 지도 SDK 의 위치 처리(#483)다.
+    // 수집 항목이나 처리 주체가 늘 때마다 올린다.
+    expect(privacy, contains('버전: v1.7'),
         reason: '수집 항목이 늘어난 것은 다시 알려야 하는 변경이다');
 
     final screen = _read(File('lib/v2/screens/settings/legal_document_screen.dart'));
-    expect(screen, contains("ConsentKind.privacy, 'v1.6'"),
+    expect(screen, contains("ConsentKind.privacy, 'v1.7'"),
         reason: '문서만 올리고 상수를 안 올리면 아무에게도 다시 안 묻는다');
   });
 

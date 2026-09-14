@@ -127,5 +127,6 @@ UI/UX 이슈에 붙이는 그림들입니다. **탭별 UI/UX 이슈**(하단 메
 | `strava-athlete-intelligence.jpg` | Strava Stories — Athlete Intelligence(2024-10 공개 베타): 활동 아래 짧은 AI 카드 두세 문장, 베타 라벨, 👍/👎 | https://stories.strava.com/articles/meet-athlete-intelligence-personalized-ai-insights-that-help-you-reach-your |
 | `strava-athlete-intelligence-help.jpg` | Strava 도움말 — Athlete Intelligence 가 무엇을 읽고 무엇을 쓰는지(입력은 활동 데이터, 출력은 요약과 제안) | https://support.strava.com/hc/en-us/articles/26786795557005-Athlete-Intelligence-on-Strava |
 | `oura-advisor.jpg` | Oura Advisor — 주간 흐름을 대화체로 풀어 주는 AI. 우리는 대화까지 안 가고 두 문장 + 제안 한 줄 | https://ouraring.com/blog/oura-advisor |
+| `ours-483-map-ground.jpg` | 우리 앱 (#483 뒤) | 끝내기 시트 미리보기 · 경로 사진 · 공유 카드의 바닥이 끝내기 순간의 지도 — 선 · 시작/끝 · 순간 표식은 그림 파일이 그린다 | 에뮬레이터 |
 | `ours-485-today-course.jpg` | 우리 앱 (#485 뒤) | 홈의 오늘의 코스 카드 — 규칙으로 고른 하나 · 이유 한 줄 · 다른 코스 · 여기서 산책 시작 → 트래킹 → 기록 저장하기의 장소 칸에 코스 이름 | 에뮬레이터 |
 | `hig-charts.jpg` | Apple HIG — Charts: 숫자 카드(막대 · 목표 대비)가 근거이고 글은 그 아래의 해석 | https://developer.apple.com/design/human-interface-guidelines/charts |

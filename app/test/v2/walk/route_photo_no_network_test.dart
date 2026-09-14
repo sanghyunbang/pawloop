@@ -22,6 +22,9 @@ const _forbidden = [
   'dart:io',
   'HttpClient',
   'WebSocket',
+  // 지도 스냅숏(#483)은 트래킹 화면만 찍는다 — 그림·저장·시트 파일은 바이트만 받는다.
+  'flutter_naver_map',
+  'takeSnapshot',
 ];
 
 String _codeOnly(String path) => File(path)
