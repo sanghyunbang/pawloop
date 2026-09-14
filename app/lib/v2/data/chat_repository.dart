@@ -142,6 +142,9 @@ class ChatRoomSummary {
   /// 마지막 말이 사진 메시지(#452)다 — 본문(캡션)이 비어 있으면 목록은 "사진" 이라고 말한다.
   final bool lastMessageIsImage;
 
+  /// 마지막 말의 시각(#452 목록 시각) — 계약의 `lastMessage.createdAt`. 말이 없으면 null.
+  final DateTime? lastMessageAt;
+
   /// 이 방에서의 내 역할. `OWNER` 면 방장이라 강퇴할 수 있다.
   ///
   /// 서버가 늘 주지만 모르는 값이 올 수 있어 문자열 그대로 든다 — [isOwner] 로만 읽는다.
@@ -165,6 +168,7 @@ class ChatRoomSummary {
     this.lastMessageSender,
     this.lastMessageHidden = false,
     this.lastMessageIsImage = false,
+    this.lastMessageAt,
     this.myRole = '',
     this.muted = false,
   });
@@ -190,6 +194,7 @@ class ChatRoomSummary {
       lastMessageSender: last is Map ? last['senderName']?.toString() : null,
       lastMessageHidden: last is Map && last['hiddenByBlock'] == true,
       lastMessageIsImage: last is Map && last['contentType'] == 'image',
+      lastMessageAt: last is Map ? DateTime.tryParse('${last['createdAt'] ?? ''}') : null,
       myRole: '${json['myRole'] ?? ''}',
       muted: json['muted'] == true,
     );

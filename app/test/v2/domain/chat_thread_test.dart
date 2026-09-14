@@ -83,4 +83,35 @@ void main() {
 
     expect(slots[1].tight, isTrue);
   });
+
+  // ── 방 목록의 시각 (#452) ──────────────────────────────────
+  group('chatListTimeLabel', () {
+    final now = DateTime(2026, 9, 14, 21, 5);
+
+    test('오늘이면 HH:mm — 자정 직후의 말도 "오늘" 이다', () {
+      expect(chatListTimeLabel(DateTime(2026, 9, 14, 9, 7), now: now), '09:07');
+      expect(chatListTimeLabel(DateTime(2026, 9, 14, 0, 0), now: now), '00:00');
+    });
+
+    test('어제면 "어제" — 시각은 안 쓴다(카카오톡 · 당근)', () {
+      expect(chatListTimeLabel(DateTime(2026, 9, 13, 23, 59), now: now), '어제');
+    });
+
+    test('올해 안이면 "9월 12일", 해가 다르면 "2025. 9. 12."', () {
+      expect(chatListTimeLabel(DateTime(2026, 9, 12, 8, 0), now: now), '9월 12일');
+      expect(chatListTimeLabel(DateTime(2026, 1, 3), now: now), '1월 3일');
+      expect(chatListTimeLabel(DateTime(2025, 9, 12), now: now), '2025. 9. 12.');
+    });
+
+    test('UTC 로 온 시각도 기기 시간대로 본다', () {
+      final at = DateTime.utc(2026, 9, 14, 0, 5); // 로컬로 바꿔 오늘인지 어제인지 판단한다
+      final local = at.toLocal();
+      final expected = DateTime(local.year, local.month, local.day) == DateTime(now.year, now.month, now.day)
+          ? '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}'
+          : (DateTime(now.year, now.month, now.day).difference(DateTime(local.year, local.month, local.day)).inDays == 1
+              ? '어제'
+              : '${local.month}월 ${local.day}일');
+      expect(chatListTimeLabel(at, now: now), expected);
+    });
+  });
 }

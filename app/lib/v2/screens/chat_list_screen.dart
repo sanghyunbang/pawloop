@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/chat_repository.dart';
 import '../data/chat_unread.dart';
+import '../domain/chat_thread.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
@@ -256,17 +257,29 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ]),
           ),
           const SizedBox(width: 10),
-          if (room.unread > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [T.warmStart, T.warmEnd]),
-                borderRadius: BorderRadius.circular(10),
+          // 오른쪽 열 — 마지막 말의 시각(#452) 위, 안 읽음 뱃지 아래(당근 · 카카오톡 배치).
+          // 시각을 제목 줄에 두면 긴 방 이름이 그만큼 잘린다. 말이 없으면 시각도 없다.
+          Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
+            if (room.lastMessageAt != null)
+              Text(
+                chatListTimeLabel(room.lastMessageAt!, now: DateTime.now()),
+                key: Key('room-time-${room.id}'),
+                style: const TextStyle(fontSize: 11, color: T.textMuted),
               ),
-              child: Text('${room.unread}',
-                  style: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
-            ),
+            if (room.unread > 0) ...[
+              if (room.lastMessageAt != null) const SizedBox(height: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [T.warmStart, T.warmEnd]),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('${room.unread}',
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+              ),
+            ],
+          ]),
         ]),
       ),
     );
