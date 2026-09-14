@@ -313,6 +313,7 @@ CREATE TABLE `place_cell` (
 CREATE TABLE `post` (
   `course_id` bigint DEFAULT NULL,
   `created_at` datetime(6) NOT NULL,
+  `dog_id` bigint DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `updated_at` datetime(6) DEFAULT NULL,
   `user_id` bigint DEFAULT NULL,
@@ -325,6 +326,8 @@ CREATE TABLE `post` (
   PRIMARY KEY (`id`),
   KEY `idx_post_board_created` (`board`,`created_at`,`id`),
   KEY `idx_post_user` (`user_id`),
+  KEY `idx_post_dog` (`dog_id`,`created_at`,`id`),
+  CONSTRAINT `fk_post_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_post_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `chk_post_board` CHECK ((`board` in (_utf8mb4'walk_review',_utf8mb4'pet_place',_utf8mb4'health',_utf8mb4'free',_utf8mb4'brag')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

@@ -73,7 +73,17 @@ public record PostResponse(
          * 보는 사람이 이 글을 <b>저장해 뒀는가</b> (#451 4번). 게스트는 {@code false} 다 —
          * 게스트인지는 {@code reactions.mine == null} 이 이미 말하므로 여기서 셋째 값을 두지 않는다.
          */
-        boolean bookmarked) {
+        boolean bookmarked,
+
+        /**
+         * 이 글에 찍힌 아이 (#451 5번). 안 골랐거나 아이를 보냈으면 {@code null}. 사진첩·카드의 꼬리표가
+         * 그리는 만큼만 — id · 이름 · 사진.
+         */
+        PostDog dog) {
+
+    /** 카드의 아이 꼬리표 — 계약의 {@code PostDog}. */
+    public record PostDog(long id, String name, String avatarUrl) {
+    }
 
     /**
      * 카드에 그릴 만큼의 코스. 선은 <b>이미 잘라 낸 것을 더 줄인 것</b>(최대 40점)이라
@@ -96,14 +106,14 @@ public record PostResponse(
 
     /** 가리기와 무관한 자리 — 방금 내가 쓰거나 고친 글이다. 저장 여부는 그대로 물어 넣는다. */
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
-                                  List<PostMedia> media, boolean bookmarked) {
-        return of(post, commentCount, reactions, false, null, null, media, bookmarked);
+                                  List<PostMedia> media, boolean bookmarked, PostDog dog) {
+        return of(post, commentCount, reactions, false, null, null, media, bookmarked, dog);
     }
 
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
                                   boolean hiddenByBlock, PostCourse course, List<PostMedia> media,
-                                  boolean bookmarked) {
-        return of(post, commentCount, reactions, hiddenByBlock, course, null, media, bookmarked);
+                                  boolean bookmarked, PostDog dog) {
+        return of(post, commentCount, reactions, hiddenByBlock, course, null, media, bookmarked, dog);
     }
 
     /**
@@ -114,7 +124,7 @@ public record PostResponse(
      */
     public static PostResponse of(Post post, int commentCount, ReactionSummaryResponse reactions,
                                   boolean hiddenByBlock, PostCourse course, String authorDistrict,
-                                  List<PostMedia> media, boolean bookmarked) {
+                                  List<PostMedia> media, boolean bookmarked, PostDog dog) {
         return new PostResponse(
                 post.getId(),
                 PersonRefResponse.of(post.getUser()),
@@ -131,6 +141,7 @@ public record PostResponse(
                 course,
                 authorDistrict,
                 media == null ? List.of() : List.copyOf(media),
-                bookmarked);
+                bookmarked,
+                dog);
     }
 }

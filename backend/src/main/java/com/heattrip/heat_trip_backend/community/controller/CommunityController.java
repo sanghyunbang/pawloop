@@ -83,8 +83,10 @@ public class CommunityController {
                                   * "우리 동네" (#342). 지금 받는 값은 mine 하나다 —
                                   * 구 코드를 받지 않는 이유는 CommunityService 에 적었다.
                                   */
-                                 @RequestParam(required = false) String neighborhood) {
-        return community.pageForNeighborhood(viewerId, board, cursor, limit, neighborhood);
+                                 @RequestParam(required = false) String neighborhood,
+                                 /* 아이 사진첩 (#451 5번) — 찍힌 아이로 좁힌다. */
+                                 @RequestParam(required = false) Long dogId) {
+        return community.pageForNeighborhood(viewerId, board, cursor, limit, neighborhood, dogId);
     }
 
     @GetMapping("/posts/{postId}")

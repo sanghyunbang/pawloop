@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.community.entity;
 
 import com.heattrip.heat_trip_backend.community.CommunityTime;
+import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
 import jakarta.persistence.Column;
@@ -90,7 +91,9 @@ import java.time.LocalDateTime;
                 // 목록이 딛는 인덱스. 계약의 커서 페이지네이션이 (created_at, id) 로 내려간다.
                 @Index(name = "idx_post_board_created", columnList = "board, created_at, id"),
                 // 탈퇴 시 SET NULL 이 훑는 자리. 없으면 users 삭제가 이 표 전체 스캔이다.
-                @Index(name = "idx_post_user", columnList = "user_id")
+                @Index(name = "idx_post_user", columnList = "user_id"),
+                // 아이 사진첩(#451 5번)이 딛는 인덱스. ?dogId= 로 좁혀 커서(created_at, id)로 내려간다.
+                @Index(name = "idx_post_dog", columnList = "dog_id, created_at, id")
         })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -141,6 +144,16 @@ public class Post {
      */
     @Column(name = "course_id")
     private Long courseId;
+
+    /**
+     * 이 글에 찍힌 아이 (#451 5번). 글 하나에 아이 하나 — 여럿이 찍혔으면 대표 하나를 고른다.
+     * 아이가 사라져도 글은 남는다({@code ON DELETE SET NULL}). 글쓴이의 아이여야 한다 — 그 판정은
+     * 서비스가 {@code DogOwnership} 으로 한다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "dog_id", foreignKey = @ForeignKey(name = "fk_post_dog"))
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private Dog dog;
 
     /**
      * 작성 시점 닉네임 스냅샷. <b>응답에는 안 싣는다</b> — 클래스 javadoc 참조.
@@ -208,6 +221,11 @@ public class Post {
     /** 한 번도 안 고쳤으면 {@code null} 이다 — 응답의 {@code updatedAt} 도 그대로 없다. */
     public Instant updatedAtInstant() {
         return updatedAt == null ? null : CommunityTime.toInstant(updatedAt);
+    }
+
+    /** 찍힌 아이를 바꾼다 (#451 5번). 고치기가 부른다 — 비우는 길은 아직 없다(PostPatch 규약과 같다). */
+    public void attachDog(Dog dog) {
+        this.dog = dog;
     }
 
     /**

@@ -321,13 +321,16 @@ CREATE TABLE post (
   body        TEXT         NOT NULL,
   content_id  VARCHAR(64)  NULL COMMENT '연결 장소. Place.contentId 와 같은 키. FK 없음',
   course_id   BIGINT       NULL COMMENT '붙은 코스(#339). FK → course.id ON DELETE SET NULL',
+  dog_id      BIGINT       NULL COMMENT '찍힌 아이(#451 5번). FK → dog.id ON DELETE SET NULL',
   loc         VARCHAR(100) NULL COMMENT '표시용 장소 이름',
   handle      VARCHAR(50)  NULL COMMENT '작성 시점 닉네임 스냅샷. 응답에는 안 싣는다',
   created_at  DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
   KEY idx_post_board_created (board, created_at, id),
   KEY idx_post_user (user_id),
-  CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
+  KEY idx_post_dog (dog_id, created_at, id),
+  CONSTRAINT fk_post_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT fk_post_dog FOREIGN KEY (dog_id) REFERENCES dog (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
@@ -340,6 +343,7 @@ CREATE TABLE post (
 | `body` | `TEXT` | NOT NULL | 본문 |
 | `content_id` | `VARCHAR(64)` | nullable, **FK 없음** | 연결 장소. `Place.contentId` 와 같은 키 |
 | `course_id` | `BIGINT` | nullable, FK→`course.id` **SET NULL** | 붙은 코스(#339). 코스를 지워도 글은 남고 연결만 빈다. 붙일 수 있는 것은 내 것이면서 공개된 코스뿐이고, 그 판정은 서버가 한다 |
+| `dog_id` | `BIGINT` | nullable, FK→`dog.id` **SET NULL**, INDEX(dog_id, created_at, id) | 찍힌 아이(#451 5번, `41_post_dog.sql`). 글 하나에 아이 하나. 내 아이만 붙고 그 판정은 서버가 한다. 아이 사진첩이 `?dogId=` 로 이 인덱스를 탄다 |
 | `loc` | `VARCHAR(100)` | nullable | 표시용 장소 이름. `content_id` 와 별개다 |
 | `handle` | `VARCHAR(50)` | nullable | 작성 시점 닉네임 스냅샷 |
 

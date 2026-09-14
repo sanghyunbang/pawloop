@@ -265,6 +265,10 @@ step "40_post_bookmark.sql"
 want 1 "$(has_table post_bookmark)" "post_bookmark 표 (없으면 부팅이 validate 에서 죽는다)"
 want 1 "$(has_index post_bookmark idx_post_bookmark_user)" "idx_post_bookmark_user (없으면 저장한 글 목록이 표 전체를 훑는다)"
 
+step "41_post_dog.sql"
+want 1 "$(has_column post dog_id)" "post.dog_id 컬럼 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(has_index post idx_post_dog)" "idx_post_dog (없으면 아이 사진첩이 표 전체를 훑는다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

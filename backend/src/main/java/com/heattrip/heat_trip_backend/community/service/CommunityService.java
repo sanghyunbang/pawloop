@@ -11,6 +11,8 @@ import com.heattrip.heat_trip_backend.community.dto.PostRequest;
 import com.heattrip.heat_trip_backend.community.dto.PostResponse;
 import com.heattrip.heat_trip_backend.community.dto.ReactionSummaryResponse;
 import com.heattrip.heat_trip_backend.community.entity.Comment;
+import com.heattrip.heat_trip_backend.dog.DogOwnership;
+import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.community.entity.Post;
 import com.heattrip.heat_trip_backend.community.entity.PostBookmark;
 import com.heattrip.heat_trip_backend.walk.CourseAttachment;
@@ -93,6 +95,9 @@ public class CommunityService {
     /** 글 저장 (#451 4번). 반응과 같은 모양의 멱등 켜기·끄기. */
     private final PostBookmarkRepository bookmarks;
 
+    /** 글에 찍힌 아이 (#451 5번) — 내 아이인지는 dog 모듈이 판정한다. 모듈 뿌리의 공개 타입만 든다. */
+    private final DogOwnership dogs;
+
     /**
      * 신고 접수 — {@code moderation} 모듈의 공개 표면이다(#166).
      *
@@ -133,9 +138,10 @@ public class CommunityService {
                             ReactionRepository reactions, Reports reports, Blocks blocks,
                             CourseAttachment courses, NeighborhoodCatalog neighborhoods,
                             ViewerNeighborhood viewerNeighborhood, MediaAttachment media,
-                            PostBookmarkRepository bookmarks) {
+                            PostBookmarkRepository bookmarks, DogOwnership dogs) {
         this.media = media;
         this.bookmarks = bookmarks;
+        this.dogs = dogs;
         this.posts = posts;
         this.comments = comments;
         this.reactions = reactions;
@@ -154,7 +160,7 @@ public class CommunityService {
      * @param viewerId 보는 사람. {@code null} 이면 <b>게스트</b>이고 {@code mine} 은 {@code null} 이다
      */
     public PostPageResponse page(Long viewerId, String board, String cursor, Integer limit) {
-        return page(viewerId, board, cursor, limit, (String) null);
+        return page(viewerId, board, cursor, limit, (String) null, null);
     }
 
     /**
@@ -167,9 +173,9 @@ public class CommunityService {
      * 조용히 전국을 주면 화면은 "우리 동네" 라고 적힌 채 전국 글을 보여 준다.
      */
     public PostPageResponse pageForNeighborhood(Long viewerId, String board, String cursor,
-                                                Integer limit, String neighborhood) {
+                                                Integer limit, String neighborhood, Long dogId) {
         if (neighborhood == null || neighborhood.isBlank()) {
-            return page(viewerId, board, cursor, limit, (String) null);
+            return page(viewerId, board, cursor, limit, (String) null, dogId);
         }
         if (!"mine".equals(neighborhood)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -182,7 +188,7 @@ public class CommunityService {
         String sgg = viewerNeighborhood.sggOf(viewerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "동네를 먼저 골라 주세요."));
-        return page(viewerId, board, cursor, limit, sgg);
+        return page(viewerId, board, cursor, limit, sgg, dogId);
     }
 
     /**
@@ -193,8 +199,12 @@ public class CommunityService {
      *                  받으면 아무 구나 골라 훑을 수 있고, 그건 "우리 동네" 가 아니라
      *                  남의 동네 구경이다
      */
+    /**
+     * @param dogId 찍힌 아이로 좁힌다(#451 5번, 아이 사진첩). {@code null} 이면 전부. 글은 공개라 남의
+     *              아이 id 를 넣어도 400 이 아니다 — 그 아이의 글이 있으면 보인다.
+     */
     public PostPageResponse page(Long viewerId, String board, String cursor, Integer limit,
-                                 String sggPrefix) {
+                                 String sggPrefix, Long dogId) {
         String filter = normalizeBoardFilter(board);
         int size = clamp(limit);
 
@@ -202,8 +212,8 @@ public class CommunityService {
         // 바뀌고, 두 번 읽는 비용이 한 줄 더 읽는 비용보다 크다.
         Limit fetch = Limit.of(size + 1);
         List<Post> rows = CommunityCursor.parse(cursor)
-                .map(c -> posts.findPageAfter(filter, sggPrefix, c.createdAt(), c.id(), fetch))
-                .orElseGet(() -> posts.findPage(filter, sggPrefix, fetch));
+                .map(c -> posts.findPageAfter(filter, sggPrefix, dogId, c.createdAt(), c.id(), fetch))
+                .orElseGet(() -> posts.findPage(filter, sggPrefix, dogId, fetch));
 
         boolean hasMore = rows.size() > size;
         if (hasMore) {
@@ -230,7 +240,8 @@ public class CommunityService {
                 toPostCourse(cardOf(post, cardsFor(List.of(post)))),
                 districtOf(post),
                 mediaOf(post),
-                isBookmarked(postId, viewerId));
+                isBookmarked(postId, viewerId),
+                dogOf(post));
     }
 
     /**
@@ -264,7 +275,8 @@ public class CommunityService {
                     toPostCourse(cardOf(p, courseCards)),
                     districtOf(p),
                     mediaByPost.getOrDefault(p.getId(), List.of()),
-                    bookmarked.contains(p.getId())));
+                    bookmarked.contains(p.getId()),
+                    dogOf(p)));
         }
         return items;
     }
@@ -283,6 +295,8 @@ public class CommunityService {
                 // 썼는지 아는 유일한 기록이다(PersonRefResponse javadoc).
                 .handle(displayNameOf(me))
                 .courseId(request.courseId() == null ? null : requireAttachable(request.courseId(), me).id())
+                // 찍힌 아이 — 내 아이만 (#451 5번). 남의 아이 id 는 400 이다.
+                .dog(request.dogId() == null ? null : requireMyDog(me, request.dogId()))
                 .build());
         // 업로드가 먼저고 글이 나중이다 (#429). 붙일 수 없는 것이 하나라도 있으면 여기서 던지고,
         // 같은 트랜잭션이라 방금 저장한 글도 함께 되돌아간다 — 사진 없는 글이 조용히 남지 않는다.
@@ -293,7 +307,8 @@ public class CommunityService {
                 toPostCourse(cardOf(saved, cardsFor(List.of(saved)))),
                 districtOf(saved),
                 attached,
-                false);
+                false,
+                dogOf(saved));
     }
 
     /**
@@ -513,6 +528,9 @@ public class CommunityService {
         Post post = requirePost(postId);
         requireMine(post.getUser(), me.getId(), "글");
         post.edit(request.board(), request.title(), request.body());
+        if (request.dogId() != null) {
+            post.attachDog(requireMyDog(me, request.dogId()));
+        }
 
         // 사진·영상은 키가 왔을 때만 통째로 갈아 끼운다 (#429). 안 왔으면 지금 것 그대로다.
         List<PostResponse.PostMedia> attached = request.mediaIds() == null
@@ -524,7 +542,8 @@ public class CommunityService {
                 countComments(List.of(postId)).getOrDefault(postId, 0),
                 summarizeOne(postId, me.getId()),
                 attached,
-                isBookmarked(postId, me.getId()));
+                isBookmarked(postId, me.getId()),
+                dogOf(post));
     }
 
     /**
@@ -545,7 +564,8 @@ public class CommunityService {
                 false,
                 toPostCourse(card),
                 mediaOf(post),
-                isBookmarked(postId, me.getId()));
+                isBookmarked(postId, me.getId()),
+                dogOf(post));
     }
 
     /** 붙은 코스를 뗀다. 코스 자체는 그대로다 — 글에서 그림만 빠진다. */
@@ -560,7 +580,8 @@ public class CommunityService {
                 false,
                 null,
                 mediaOf(post),
-                isBookmarked(postId, me.getId()));
+                isBookmarked(postId, me.getId()),
+                dogOf(post));
     }
 
     /**
@@ -738,6 +759,26 @@ public class CommunityService {
         PostBookmark last = rows.get(rows.size() - 1);
         String next = hasMore ? CommunityCursor.of(last.getCreatedAt(), last.getId()) : null;
         return new PostPageResponse(items, next, hasMore);
+    }
+
+    // ─────────────────────────── 찍힌 아이 (#451 5번) ───────────────────────────
+
+    /** 내 아이여야 붙는다. 남의 아이 id 는 400 — 404 로 가르면 남의 아이 id 를 훑을 수 있다. */
+    private Dog requireMyDog(User me, long dogId) {
+        if (!dogs.myDogIds(me.getId()).contains(dogId)) {
+            throw new IllegalArgumentException("내 아이만 글에 붙일 수 있습니다.");
+        }
+        return dogs.requireMineEntity(me.getId(), dogId);
+    }
+
+    /** 카드의 아이 꼬리표. 보낸 아이(소프트 삭제)는 안 그린다 — 이름만 남은 꼬리표는 헛갈린다. */
+    private PostResponse.PostDog dogOf(Post post) {
+        Dog dog = post.getDog();
+        if (dog == null || dog.getDeletedAt() != null) {
+            return null;
+        }
+        return new PostResponse.PostDog(dog.getId(), dog.getName(),
+                dog.getAvatar() == null ? null : media.publicUrl(dog.getAvatar()));
     }
 
     /** 목록 한 장 중 내가 저장한 글의 id. 게스트는 빈 집합이다. */

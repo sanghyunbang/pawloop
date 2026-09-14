@@ -653,7 +653,7 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
 
 ### 6.1 글 목록 — ✅ 구현(#170) · **인증 선택**
 
-`GET /api/community/posts?board={code}&limit=20&cursor=...` — **인증 선택**(있으면 `reactions.mine` 이 채워집니다 — ADR-0017 규약 6).
+`GET /api/community/posts?board={code}&limit=20&cursor=...&dogId=7` — **인증 선택**(있으면 `reactions.mine` 이 채워집니다 — ADR-0017 규약 6). `dogId` 는 찍힌 아이로 좁힙니다(#451 5번, 아이 사진첩) — 글은 공개라 남의 아이 id 도 400 이 아닙니다.
 
 - `board` 미지정 = 전체. **장소 필터는 계약에 없다** — `Post.contentId` 는 응답에만 있다.
 
@@ -671,6 +671,7 @@ reaction 코드: `help`(도움돼요) · `cute`(귀여워요) · `empathy`(공�
       "body": "이른 아침엔 사람이 적어서 대형견도 편해요. 잔디마당은 목줄 필수!",
       "commentCount": 4,
       "reactions": { "help": 7, "cute": 3, "empathy": 2, "mine": ["cute"] },
+      "dog": { "id": 7, "name": "보리", "avatarUrl": "https://.../profiles/42/bori.jpg" },
       "createdAt": "2026-06-30T09:00:00+09:00"
     }
   ],
