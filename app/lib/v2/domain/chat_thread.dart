@@ -72,3 +72,20 @@ String dayLabelOf(DateTime local) {
 bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
 bool _sameMinute(DateTime a, DateTime b) => _sameDay(a, b) && a.hour == b.hour && a.minute == b.minute;
+
+/// 방 목록의 시각 한 조각(#452) — 카카오톡 · 당근의 규칙. 오늘이면 `HH:mm`, 어제면 "어제", 올해면
+/// "9월 12일", 그보다 전이면 "2025. 9. 12.". 기기 시간대로 본다.
+String chatListTimeLabel(DateTime at, {required DateTime now}) {
+  final a = at.toLocal();
+  final n = now.toLocal();
+  final today = DateTime(n.year, n.month, n.day);
+  final day = DateTime(a.year, a.month, a.day);
+  final days = today.difference(day).inDays;
+  if (days <= 0) {
+    return '${a.hour.toString().padLeft(2, '0')}:${a.minute.toString().padLeft(2, '0')}';
+  }
+  if (days == 1) return '어제';
+  if (a.year == n.year) return '${a.month}월 ${a.day}일';
+  return '${a.year}. ${a.month}. ${a.day}.';
+}
+

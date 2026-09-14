@@ -342,7 +342,7 @@
 | 커뮤니티 | `feed_screen.dart` | 탭 3 | `GET /api/community/posts` 커서 페이지 — 서버(#170·#171) |
 | 크루 목록 | `crew_section.dart` | 탭 3 **안의 갈래** | `GET /api/crews?scope=mine\|neighborhood`(#417). 우리 동네는 **시군구 앞 다섯 자리**로 찾는다 — 좌표를 안 쓴다(A안 #235) |
 | 크루 홈 | `crew_home_screen.dart` | 크루 카드 탭 | `GET /api/crews/{id}`. 안 든 공개 크루는 **인원 수까지만** 보이고 멤버는 안 온다 |
-| 채팅 방 목록 | `chat_list_screen.dart` | 탭 4 | `GET /api/chat/rooms` — 받을 때마다 탭 바의 안 읽음 점(`ChatUnread.any`, #452)도 갱신 |
+| 채팅 방 목록 | `chat_list_screen.dart` | 탭 4 | `GET /api/chat/rooms` — 받을 때마다 탭 바의 안 읽음 점(`ChatUnread.any`, #452)도 갱신. 제목 줄 오른쪽에 **마지막 말의 시각**(#452): 오늘 `HH:mm` · 어제 · 올해 `M월 D일` · 그 전 `YYYY. M. D.`(`chatListTimeLabel`), 말이 없으면 없음 |
 | 산책 트래킹 | `walk_tracking_screen.dart` | 홈 CTA / 중앙 FAB (**둘 다 `startWalk()` 를 지난다**) | 실 GPS. **위치를 못 잡으면 이유를 말하는 화면**을 띄우고 아무것도 그리지 않는다(#160) |
 | 산책 기록 작성 | `create_screen.dart` | 트래킹 완료 / 내 기록 | `POST /api/walks`. 초안 없이 열리면 "직접 입력" 이라고 말한다. 초안에 사진이 있으면 **먼저 `POST /media`(WALK_IMAGE) 로 올리고 `mediaIds` 로 붙인다**(#450) |
 | 코스로 남기기 | `widgets/course_save_sheet.dart` | 산책 회고 화면의 "이 길을 코스로 남기기" | `POST /api/courses`(#339). **선은 안 보낸다** — 서버가 그 산책에서 베껴 와 양 끝 100m 를 자른다. 시트는 잘린 선을 미리 그려 "0.60km 중 0.40km 가 코스가 돼요" 라고 말한다. **공모전 빌드에서는 이 줄이 화면에 없습니다** — 코스의 선은 서버가 `walk.path` 를 베껴 만드는데, A안(#235)에서는 그 선이 올라가지 않아 서버의 모든 산책이 `path IS NULL` 입니다. `--dart-define=UPLOAD_LOCATION=true` 를 켜면 함께 돌아옵니다(`LocationUploadPolicy.sharesRoutes`). |
