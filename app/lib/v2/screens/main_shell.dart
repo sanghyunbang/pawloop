@@ -9,6 +9,9 @@ import 'chat_list_screen.dart';
 import 'schedule_screen.dart';
 import '../data/chat_unread.dart';
 import '../data/local_notification_sink.dart';
+import '../data/notification_route.dart';
+import '../widgets/notification_route_sync.dart';
+import 'insight_screen.dart';
 import 'walk_tracking_screen.dart';
 import '../data/walk_in_progress.dart';
 import '../widgets/walk_resume_prompt.dart';
@@ -28,6 +31,19 @@ class RootTab {
     Navigator.of(context).popUntil((r) => r.isFirst);
     if (exView != null) exploreView.value = exView;
     index.value = i;
+  }
+}
+
+/// 눌린 알림이 가리키는 곳으로 — 탭을 바꾸고, 통계는 그 위에 얹는다.
+///
+/// [NotificationRouteSync] 가 이것을 부른다. 셸이 들고 있는 이유는 **탭과 화면을 아는 곳이 여기** 라서다 —
+/// 알림 쪽은 "무엇을 눌렀는가" 까지만 안다(`data/notification_route.dart`).
+void goToNotificationDestination(BuildContext context, NotificationDestination destination) {
+  // 통계 위에 또 통계를 얹지 않는다 — 알림을 두 번 누르면 뒤로 가기가 두 번 필요해진다.
+  Navigator.of(context).popUntil((r) => r.isFirst);
+  RootTab.index.value = tabOf(destination);
+  if (destination == NotificationDestination.weeklyReport) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen()));
   }
 }
 
@@ -76,6 +92,8 @@ class MainShell extends StatelessWidget {
             const Align(alignment: Alignment.bottomCenter, child: _ShellNav()),
             // 채팅 탭의 점 — 로그인한 동안 방 목록을 가끔 본다(#452). 그리는 것은 없다.
             const ChatUnreadWatcher(),
+            // 눌린 알림이 가리키는 곳으로 한 번 보낸다(#486 후속). 그리는 것은 없다.
+            NotificationRouteSync(onGo: goToNotificationDestination),
             // 앱이 죽었다 살아났을 때 끊긴 산책을 이어 갈지 묻는다(#335). 그리는 것은 없다.
             WalkResumeGate(
               store: resumeStore,
