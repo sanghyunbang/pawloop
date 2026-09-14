@@ -111,6 +111,20 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
 
   /// 답장(#452)으로 고른 원문 — 입력창 위 인용 띠가 이것을 그리고, 보내면 비운다.
   ChatMessageItem? _replyingTo;
+
+  /// 그려진 메시지 줄의 열쇠 — 인용을 눌렀을 때 그 줄이 지금 화면에 있는지 묻는 데 쓴다.
+  /// 지연 생성 목록이라 **안 그려진 줄에는 열쇠에 context 가 없다** — 그때는 위로 올라가며 찾는다.
+  final Map<int, GlobalKey> _rowKeys = {};
+
+  /// 방금 찾아간 원문 — 잠깐 바탕을 물들여 "이 말이다" 라고 말한다. 카카오톡도 같은 짧은 강조다.
+  int? _highlightedId;
+  Timer? _highlightOff;
+
+  /// 강조가 남아 있는 시간. 길면 새 말이 온 것처럼 보이고, 짧으면 눈이 못 따라간다.
+  static const Duration _highlightFor = Duration(milliseconds: 1400);
+
+  /// 위로 올라가며 찾는 횟수. 한 장(50건)을 훑기에 넉넉하고, 없는 말에 매달리지 않을 만큼 짧다.
+  static const int _jumpTries = 12;
   final FocusNode _focus = FocusNode();
   late final PostMediaRepository _media = widget.media ?? PostMediaRepository();
   late final MediaPicker _picker = widget.picker ?? ImagePickerMediaPicker();
@@ -199,6 +213,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     _timer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _ctrl.dispose();
+    _highlightOff?.cancel();
     _focus.dispose();
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
@@ -578,9 +593,18 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       itemCount: _messages.length + _pending.length,
       itemBuilder: (_, i) {
         final slot = slots[i];
-        final row = i < _messages.length
-            ? _bubbleRow(context, _messages[i], slot)
-            : _pendingRow(context, _pending[i - _messages.length], slot);
+        if (i >= _messages.length) {
+          final row = _pendingRow(context, _pending[i - _messages.length], slot);
+          final day = slot.dayLabel;
+          if (day == null) return row;
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_dayChip(day), row]);
+        }
+        final message = _messages[i];
+        // 열쇠는 **줄 자체**에 단다 — 날짜 구분선까지 감싸면 찾아갔을 때 그 칩이 화면을 차지한다.
+        Widget row = KeyedSubtree(
+          key: _rowKeys.putIfAbsent(message.id, () => GlobalKey()),
+          child: _highlightBox(message.id, _bubbleRow(context, message, slot)),
+        );
         final day = slot.dayLabel;
         if (day == null) return row;
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_dayChip(day), row]);
@@ -1296,13 +1320,76 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     ]);
   }
 
+  /// 방금 찾아간 원문의 바탕 — 잠깐만 물든다.
+  Widget _highlightBox(int messageId, Widget row) => AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        decoration: BoxDecoration(
+          color: _highlightedId == messageId ? T.accentSoft : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: row,
+      );
+
+  /// 인용을 눌렀다 — 원문으로 간다(#452).
+  ///
+  /// 목록은 **지연 생성**이라 안 그려진 줄에는 열쇠에 context 가 없다. 그래서 한 번에 못 가고,
+  /// 보이면 그 자리로 맞추고 안 보이면 한 화면씩 위로 올라가며 다시 본다. 방의 첫 줄까지 올라가도
+  /// 못 찾으면(이 장에 아직 안 불러온 옛 말) 그렇다고 말한다 — 조용히 아무 일도 안 하면 고장으로 읽힌다.
+  Future<void> _jumpToMessage(int messageId) async {
+    if (!_messages.any((m) => m.id == messageId)) {
+      _toast('그 말은 아직 안 불러왔어요 · 위로 올려 보세요');
+      return;
+    }
+    for (var tries = 0; tries < _jumpTries; tries++) {
+      if (!mounted) return;
+      final target = _rowKeys[messageId]?.currentContext;
+      if (target != null && target.mounted) {
+        await Scrollable.ensureVisible(target,
+            alignment: 0.3, duration: const Duration(milliseconds: 260), curve: Curves.easeOut);
+        _flash(messageId);
+        return;
+      }
+      if (!mounted || !_scroll.hasClients) return;
+      final position = _scroll.position;
+      if (position.pixels <= position.minScrollExtent) break;
+      await _scroll.animateTo(
+        (position.pixels - position.viewportDimension * 0.8).clamp(position.minScrollExtent, position.maxScrollExtent),
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+      );
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    // 위까지 올라갔는데 못 찾았다 — 마지막으로 한 번 더 본다(막 그려졌을 수 있다).
+    if (!mounted) return;
+    final target = _rowKeys[messageId]?.currentContext;
+    if (target != null && target.mounted) {
+      await Scrollable.ensureVisible(target, alignment: 0.3, duration: const Duration(milliseconds: 200));
+      _flash(messageId);
+      return;
+    }
+    _toast('그 말을 찾지 못했어요');
+  }
+
+  void _flash(int messageId) {
+    if (!mounted) return;
+    _highlightOff?.cancel();
+    setState(() => _highlightedId = messageId);
+    _highlightOff = Timer(_highlightFor, () {
+      if (mounted) setState(() => _highlightedId = null);
+    });
+  }
+
   /// 인용 블록 — 왼쪽 세로선, 이름 한 줄, 첫 줄. 내 말풍선(어두운 바탕)에서는 흰색 계열.
   /// 지워진 원문은 기울임 — 본문의 "삭제된 메시지예요" 와 같은 어조.
   Widget _quoteBlock(ChatReplyTo quote, {required Key key, required bool onDark}) {
     final name = onDark ? Colors.white : T.textPrimary;
     final text = onDark ? Colors.white.withValues(alpha: 0.86) : T.textSecondary;
     final bar = onDark ? Colors.white.withValues(alpha: 0.7) : T.accent;
-    return Container(
+    // 누르면 원문으로(#452). 지워진 원문도 자리는 남아 있으므로 간다 — 거기 "삭제된 메시지" 가 있다.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _jumpToMessage(quote.id),
+      child: Container(
       key: key,
       padding: const EdgeInsets.only(left: 8),
       decoration: BoxDecoration(border: Border(left: BorderSide(color: bar, width: 2))),
@@ -1322,6 +1409,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
               fontStyle: quote.deleted ? FontStyle.italic : FontStyle.normal,
             )),
       ]),
+      ),
     );
   }
 
