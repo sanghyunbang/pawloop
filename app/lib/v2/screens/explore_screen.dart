@@ -807,11 +807,23 @@ class _ExploreScreenState extends State<ExploreScreen> {
         ]),
       );
 
+  /// 칩 줄에서 먼저 보이는 다섯 — 자주 쓰는 것(#449). 나머지는 "더보기" 뒤다.
+  ///
+  /// Google 지도의 카테고리 줄이 같은 꼴이다(자주 쓰는 몇 개 + More). 순서는 여기서만 정한다 —
+  /// `kPetCategories` 는 색 · 아이콘 · 범례의 SSOT 이고 순서까지 맡기면 범례도 따라 바뀐다.
+  static const List<String> _primaryChipKeys = ['trail', 'vet', '39', '12', 'playground'];
+
+  /// "더보기" 를 눌러 나머지 칩을 펼쳤나. 나머지 중 하나가 켜져 있는 동안은 "접기" 를 안 보인다 —
+  /// 켜진 칩이 사라지면 무엇을 골랐는지 볼 수 없다. (나머지는 펼친 뒤에만 고를 수 있으니
+  /// 켜져 있으면 이 값은 이미 true 다.)
+  bool _moreChips = false;
+
   // 카테고리 필터 칩 (가로 스크롤).
   Widget _catChips() {
     Widget chip(String label, String? key, Color color) {
       final on = _catFilter == key;
       return GestureDetector(
+        key: Key('chip-${key ?? 'all'}'),
         onTap: () {
           if (_catFilter == key) return;
           setState(() {
@@ -834,11 +846,49 @@ class _ExploreScreenState extends State<ExploreScreen> {
       );
     }
 
+    // 펼치기 · 접기 칩 — 카테고리 칩과 같은 꼴에 화살표 하나. 누르는 것은 조회가 아니라 줄이다.
+    Widget toggle(String label, IconData icon, Key key, VoidCallback onTap) => GestureDetector(
+          key: key,
+          onTap: onTap,
+          child: Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
+            decoration: BoxDecoration(
+              color: T.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: T.line),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(label,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
+              const SizedBox(width: 2),
+              Icon(icon, size: 16, color: T.textMuted),
+            ]),
+          ),
+        );
+
+    final primary = [
+      for (final key in _primaryChipKeys) kPetCategories.firstWhere((c) => c.key == key),
+    ];
+    final secondary = kPetCategories.where((c) => !_primaryChipKeys.contains(c.key)).toList();
+    final secondarySelected = secondary.any((c) => c.key == _catFilter);
+    final expanded = _moreChips;
+
     return SizedBox(
+      key: const Key('chip-row'),
       height: 40,
       child: ListView(scrollDirection: Axis.horizontal, children: [
         chip('전체', null, T.warmMid),
-        for (final c in kPetCategories) chip(c.label, c.key, c.color),
+        for (final c in primary) chip(c.label, c.key, c.color),
+        if (!expanded)
+          toggle('더보기', Icons.expand_more_rounded, const Key('chip-more'),
+              () => setState(() => _moreChips = true)),
+        if (expanded) ...[
+          for (final c in secondary) chip(c.label, c.key, c.color),
+          if (!secondarySelected)
+            toggle('접기', Icons.expand_less_rounded, const Key('chip-less'),
+                () => setState(() => _moreChips = false)),
+        ],
         // 병원을 고른 뒤에만 나온다. 이름에 24시가 있는 곳만 남긴다(#337).
         if (_catFilter == 'vet') _only24hChip(),
         // 산책로를 고른 뒤에만 나온다. 공공데이터 대신 사람들이 올린 코스를 본다(#339).

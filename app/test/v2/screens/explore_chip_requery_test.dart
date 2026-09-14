@@ -123,6 +123,9 @@ void main() {
 
     await tester.tap(_chip('동물병원'));
     await tester.pump(); // 병원 조회가 떠 있다 — 3초 뒤에 돌아온다.
+    // 펫샵은 "더보기" 뒤에 있다(#449) — 펼치는 것은 조회가 아니다.
+    await tester.tap(find.byKey(const Key('chip-more')));
+    await tester.pump();
     await tester.tap(_chip('펫샵'));
     await tester.pumpAndSettle();
 
