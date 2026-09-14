@@ -145,6 +145,9 @@ class ChatRoomSummary {
   /// 미리보기의 발신자를 내가 가렸다. 방 안에서 접어 놓고 목록에서 그대로 보여 주면 샌다.
   final bool lastMessageHidden;
 
+  /// 음소거한 방 — 목록의 개수 뱃지는 그대로고, 탭 바의 점(#452)만 안 켠다.
+  final bool muted;
+
   const ChatRoomSummary({
     required this.id,
     required this.title,
@@ -157,6 +160,7 @@ class ChatRoomSummary {
     this.lastMessageSender,
     this.lastMessageHidden = false,
     this.myRole = '',
+    this.muted = false,
   });
 
   /// 내가 이 방의 방장인가. 강퇴 버튼을 띄울지의 유일한 근거다.
@@ -180,6 +184,7 @@ class ChatRoomSummary {
       lastMessageSender: last is Map ? last['senderName']?.toString() : null,
       lastMessageHidden: last is Map && last['hiddenByBlock'] == true,
       myRole: '${json['myRole'] ?? ''}',
+      muted: json['muted'] == true,
     );
   }
 }

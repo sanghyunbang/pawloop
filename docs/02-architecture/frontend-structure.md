@@ -106,6 +106,7 @@ lib/
   - **앱에 관광공사 서비스키가 없다.** 서버가 대신 부른다. 서버가 실패하면 빈 리스트다(앱이 죽지 않음).
   - ✅ 관광공사 키는 **이미 앱에서 사라졌다**. 예전 서술: 이 키는 앱 바이너리에 박히는 과금성 자격증명이다. [#40](https://github.com/sanghyunbang/heattrip/issues/40) 에서 호출을 백엔드 프록시로 옮기면 앱에서 완전히 사라진다 — 그때 이 레포는 KTO 대신 자체 백엔드를 호출한다.
   - 병원(vet)·펫샵(shop)·산책로(trail)는 **서버가 같은 카탈로그에 이어 붙인다**(#291) — 앱에 별도 레포가 없고 `PetPlace.categoryKey`(`contentTypeId` 가 없으면 `category`)로 칩을 가른다. 산책로의 선만 `trail_route_repository.dart` 가 따로 받는다.
+- `chat_unread.dart` — 채팅 탭의 안 읽음 점(#452): `ChatUnread.any`(탭 바가 듣는 `ValueNotifier<bool>`) 와 `ChatUnreadWatcher`(로그인한 동안 60초마다 · 앱이 앞으로 올 때 `GET /api/chat/rooms` 를 봐서 `any` 를 갱신, 게스트면 안 부름). 음소거한 방은 안 센다.
 - `post_media_repository.dart` · `image_prep.dart` · `media_picker.dart` — 커뮤니티 글의 사진 첨부(#429). 고른 사진은 `ImagePrep` 이 **다시 인코딩**해(긴 변 1600px · EXIF 없음 → 촬영 좌표가 안 나간다, `image_prep_test` 가 값으로 잰다) `POST /media`(`category=POST_IMAGE`) 로 한 장씩 올리고, 글에는 돌려받은 `mediaIds` 만 싣는다. `MediaPicker` 는 `image_picker` 를 인터페이스 뒤에 둔 것 — 위젯 테스트가 가짜를 꽂는다. 도메인은 `domain/post_media.dart`(`PostMedia` · `PostMediaKind`). **영상**(#435 서버)은 `video_prep.dart` 가 720p 로 다시 인코딩한 뒤 `mp4_metadata_scrubber.dart` 가 `moov` 의 `udta`·`meta` 상자(Android `©xyz`·`loci`, iPhone `com.apple.quicktime.location.ISO6709`)를 **제자리에서 `free` 로 덮고** 다시 훑어 흔적이 남으면 올리지 않는다 — `mp4_metadata_scrubber_test`·`video_prep_test` 가 바이트로 잰다. 그 파일을 `POST /media/videos`(서명 PUT) → S3 직접 PUT(토큰 없이) → `POST /media/{id}/complete`(포스터) 로 올린다. 60초 · 150MB · 한 글에 하나.
 
 ### 2.4 `widgets/` — 공용 위젯
