@@ -421,8 +421,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     WidgetsBinding.instance.addPostFrameCallback((_) => _settleToBottom(3));
   }
 
-  /// 바닥까지 — 지연 생성 목록은 아직 안 만든 줄의 높이를 어림하므로, 내려가 보니 더 남았으면
-  /// 한 번 더 간다(최대 [tries] 번). 안 그러면 새 말 두어 개 위에서 멈춘다.
+  /// 바닥까지 — 지연 생성 목록은 아직 안 만든 줄의 높이를 **어림**하므로 목표가 실제 끝과
+  /// 어긋난다. 작게 어림하면 새 말 두어 개 위에서 멈추고, 크게 어림하면(위에 사진이 여럿일 때)
+  /// 실제 끝을 지나 **빈 자리 위에** 멈춘다 — 프레임워크는 그 자리를 손이 닿기 전까지 안 고친다.
+  /// 그래서 애니메이션 뒤 레이아웃이 끝날 때마다 실제 끝과 대조해 맞춘다(최대 [tries] 번).
   Future<void> _settleToBottom(int tries) async {
     if (!_scroll.hasClients) return;
     await _scroll.animateTo(
@@ -430,9 +432,13 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOut,
     );
-    if (!mounted || !_scroll.hasClients || tries <= 1) return;
-    if (_scroll.position.maxScrollExtent - _scroll.offset > 1) {
-      await _settleToBottom(tries - 1);
+    for (var i = 0; i < tries; i++) {
+      if (!mounted || !_scroll.hasClients) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_scroll.hasClients) return;
+      final p = _scroll.position;
+      if ((p.maxScrollExtent - p.pixels).abs() <= 1) return;
+      _scroll.jumpTo(p.maxScrollExtent);
     }
   }
 

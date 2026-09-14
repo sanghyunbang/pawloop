@@ -161,6 +161,33 @@ void main() {
       expect(find.text('하나 더'), findsOneWidget, reason: '바닥으로 내려왔다');
     });
 
+    testWidgets('위에 긴 말이 여럿이고 아래는 짧은 말 — 알약을 누르면 빈 자리 위가 아니라 진짜 바닥에 선다', (tester) async {
+      // 지연 생성 목록은 안 만든 줄의 높이를 어림한다. 위쪽(긴 말)만 만든 채로 바닥을 향하면
+      // 어림이 실제보다 커서 실제 끝을 지나 빈 자리 위에 멈춘다 — 에뮬레이터에서 본 것(사진 셋 뒤 글 여섯).
+      final long = List.filled(14, '긴 말입니다').join(' ');
+      final items = [
+        for (var i = 1; i <= 12; i++) _msg(i, "보리", 8, "$long $i", "2026-09-14T00:${i.toString().padLeft(2, "0")}:00Z"),
+        for (var i = 13; i <= 40; i++) _msg(i, "보리", 8, "짧 $i", "2026-09-14T01:${(i - 13).toString().padLeft(2, "0")}:00Z"),
+      ];
+      final server = _Server()..items = '[${items.join(",")}]';
+      await _pump(tester, server, size: const Size(600, 900));
+      await tester.drag(find.byType(ListView), const Offset(0, 6000));
+      await tester.pumpAndSettle();
+      server.items = '[${_msg(41, "콩이", 9, "새로 온 말", "2026-09-14T02:00:00Z")}]';
+      await _nextPoll(tester);
+      expect(find.byKey(const Key('chat-new-messages')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('chat-new-messages')));
+      await tester.pumpAndSettle();
+
+      final pos = tester.widget<ListView>(find.byType(ListView)).controller!.position;
+      expect(pos.pixels, lessThanOrEqualTo(pos.maxScrollExtent + 0.5), reason: '실제 끝을 지나 빈 자리 위에 서 있다');
+      expect(pos.maxScrollExtent - pos.pixels, lessThan(2), reason: '바닥까지 못 갔다');
+      final listBottom = tester.getBottomLeft(find.byType(ListView)).dy;
+      final lastBottom = tester.getBottomLeft(find.text('새로 온 말')).dy;
+      expect(listBottom - lastBottom, lessThan(80), reason: '마지막 말이 화면 아래 가까이 있어야 한다 — 위에 떠 있으면 아래가 비어 있다');
+    });
+
     testWidgets('바닥에 있으면 알약 없이 따라 내려간다', (tester) async {
       final server = _Server()..items = many(40);
       await _pump(tester, server, size: const Size(600, 900));
