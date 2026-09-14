@@ -5,6 +5,7 @@ import '../widgets/aurora.dart';
 import '../widgets/pet_registration_sheet.dart';
 import 'settings_screen.dart';
 import 'saved_posts_screen.dart';
+import '../widgets/dog_avatar.dart';
 import '../data/walk_feed.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../data/auth_state.dart';
@@ -160,7 +161,7 @@ class MeScreen extends StatelessWidget {
           gradient: RadialGradient(colors: [T.glowStart, T.glowEnd]),
           boxShadow: [BoxShadow(color: T.sigGlow, blurRadius: 30, offset: Offset(0, 14))],
         ),
-        child: Image.asset(dog.avatarAsset, width: 62, height: 62, gaplessPlayback: true),
+        child: DogAvatar(dog: dog, size: 96, emojiSize: 62),
       ),
       const SizedBox(height: 14),
       Text(dog.name, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: T.textPrimary)),
@@ -263,7 +264,7 @@ class MeScreen extends StatelessWidget {
                             width: 2.5,
                           ),
                         ),
-                        child: Image.asset(pets[i].avatarAsset, width: 32, height: 32, gaplessPlayback: true),
+                        child: DogAvatar(dog: pets[i], size: 54, emojiSize: 32),
                       ),
                       const SizedBox(height: 6),
                       Text(pets[i].name,

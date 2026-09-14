@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import '../theme/app_tokens.dart';
 import '../theme/themes.dart';
 import '../data/pet_sync.dart';
+import '../data/image_prep.dart';
+import '../data/media_picker.dart';
+import '../data/post_media_repository.dart';
+import '../widgets/dog_avatar.dart';
 import '../data/walk_repository.dart' show WalkFailure, WalkFailureKindX;
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
@@ -19,7 +23,19 @@ class EditScreen extends StatefulWidget {
   /// 테스트가 가짜 서버를 꽂는 자리. 운영 경로에서는 null 이다.
   final PetSync? sync;
 
-  const EditScreen({super.key, required this.pet, this.sync});
+  /// 사진 바꾸기(#448)의 부품 — 테스트가 물린다.
+  final PostMediaRepository? media;
+  final MediaPicker? picker;
+  final ImagePreparer prepare;
+
+  const EditScreen({
+    super.key,
+    required this.pet,
+    this.sync,
+    this.media,
+    this.picker,
+    this.prepare = ImagePrep.prepare,
+  });
   @override
   State<EditScreen> createState() => _EditScreenState();
 }
@@ -41,6 +57,61 @@ class _EditScreenState extends State<EditScreen> {
 
   late final PetSync _sync = widget.sync ?? PetSync();
   bool _deleting = false;
+
+  late final PostMediaRepository _media = widget.media ?? PostMediaRepository();
+  late final MediaPicker _picker = widget.picker ?? ImagePickerMediaPicker();
+  bool _photoBusy = false;
+
+  /// 사진 바꾸기 — 고르기 → 줄이기 → 올리기 → 그 아이에 붙이기. **바로 서버에 저장된다**(이 화면의
+  /// "저장" 은 아직 이 기기에만 반영되지만 사진은 서버 API 가 있다, #448).
+  Future<void> _changePhoto() async {
+    if (_photoBusy || _deleting) return;
+    final picked = await _picker.pickImages(limit: 1);
+    if (picked.isEmpty || !mounted) return;
+    setState(() => _photoBusy = true);
+    try {
+      final prepared = await widget.prepare(picked.first.bytes);
+      final uploaded = await _media.upload(
+        jpegBytes: prepared.bytes,
+        width: prepared.width,
+        height: prepared.height,
+        filename: picked.first.name,
+        category: PostMediaRepository.profileCategory,
+      );
+      await _sync.setPhoto(kMyDog.value ?? widget.pet, uploaded.id);
+      notifyPetsChanged();
+      if (!mounted) return;
+      _toast('사진을 바꿨어요');
+    } on PostMediaFailure catch (e) {
+      if (mounted) _toast(e.label);
+    } on WalkFailure catch (e) {
+      if (mounted) _toast(e.message);
+    } on ImagePrepException {
+      if (mounted) _toast('이 사진은 읽을 수 없어요');
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  Future<void> _removePhoto() async {
+    if (_photoBusy || _deleting) return;
+    setState(() => _photoBusy = true);
+    try {
+      await _sync.clearPhoto(kMyDog.value ?? widget.pet);
+      notifyPetsChanged();
+      if (mounted) _toast('사진을 지웠어요');
+    } on WalkFailure catch (e) {
+      if (mounted) _toast(e.message);
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   void initState() {
@@ -159,8 +230,32 @@ class _EditScreenState extends State<EditScreen> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
                   children: [
-                    Center(child: _avatar()),
-                    const SizedBox(height: 16),
+                    Center(
+                      child: GestureDetector(
+                        key: const Key('edit-photo-pick'),
+                        onTap: _changePhoto,
+                        behavior: HitTestBehavior.opaque,
+                        child: _avatar(),
+                      ),
+                    ),
+                    ValueListenableBuilder<DogProfile?>(
+                      valueListenable: kMyDog,
+                      builder: (_, dog, __) => Center(
+                        child: TextButton(
+                          key: const Key('edit-photo-clear'),
+                          onPressed: (dog ?? widget.pet).photoUrl == null || _photoBusy ? null : _removePhoto,
+                          child: Text(
+                            _photoBusy
+                                ? '사진 올리는 중…'
+                                : (dog ?? widget.pet).photoUrl == null
+                                    ? '사진을 누르면 바꿀 수 있어요'
+                                    : '사진 지우기',
+                            style: const TextStyle(fontSize: 12.5, color: T.textMuted),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     _borderPicker(),
                     const SizedBox(height: 22),
                     _field('이름', _name, hint: '우리 아이 이름'),
@@ -285,12 +380,7 @@ class _EditScreenState extends State<EditScreen> {
             ),
             child: ValueListenableBuilder<DogProfile?>(
               valueListenable: kMyDog,
-              builder: (_, dog, __) => Image.asset(
-                (dog ?? widget.pet).avatarAsset,
-                width: 60,
-                height: 60,
-                gaplessPlayback: true,
-              ),
+              builder: (_, dog, __) => DogAvatar(dog: dog ?? widget.pet, size: 89, emojiSize: 60),
             ),
           ),
         ),
@@ -305,7 +395,7 @@ class _EditScreenState extends State<EditScreen> {
               color: T.accent,
               border: Border.all(color: const Color(0xFFF7F0FB), width: 3),
             ),
-            child: const Icon(Icons.pets, size: 15, color: Colors.white),
+            child: const Icon(Icons.photo_camera_rounded, size: 15, color: Colors.white),
           ),
         ),
       ],

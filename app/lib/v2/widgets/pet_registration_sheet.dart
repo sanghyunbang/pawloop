@@ -22,7 +22,12 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'dart:typed_data';
+
+import '../data/image_prep.dart';
+import '../data/media_picker.dart';
 import '../data/pet_sync.dart';
+import '../data/post_media_repository.dart';
 import '../data/walk_repository.dart';
 import '../domain/pet.dart';
 import '../theme/app_tokens.dart';
@@ -36,25 +41,42 @@ import 'form_kit.dart';
 Future<DogProfile?> showPetRegistrationSheet(
   BuildContext context, {
   String? reason,
+  PetSync? sync,
+  PostMediaRepository? media,
+  MediaPicker? picker,
+  ImagePreparer prepare = ImagePrep.prepare,
 }) {
   return showModalBottomSheet<DogProfile>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _PetRegistrationSheet(reason: reason),
+    builder: (_) => PetRegistrationSheet(
+        reason: reason, sync: sync, media: media, picker: picker, prepare: prepare),
   );
 }
 
-class _PetRegistrationSheet extends StatefulWidget {
+/// 등록 폼. 시트 밖에서도 띄울 수 있게 공개다 — 테스트가 저장소·고르기·준비를 물린다.
+class PetRegistrationSheet extends StatefulWidget {
   final String? reason;
+  final PetSync? sync;
+  final PostMediaRepository? media;
+  final MediaPicker? picker;
+  final ImagePreparer prepare;
 
-  const _PetRegistrationSheet({this.reason});
+  const PetRegistrationSheet({
+    super.key,
+    this.reason,
+    this.sync,
+    this.media,
+    this.picker,
+    this.prepare = ImagePrep.prepare,
+  });
 
   @override
-  State<_PetRegistrationSheet> createState() => _PetRegistrationSheetState();
+  State<PetRegistrationSheet> createState() => _PetRegistrationSheetState();
 }
 
-class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
+class _PetRegistrationSheetState extends State<PetRegistrationSheet> {
   final _name = TextEditingController();
   final _breed = TextEditingController();
 
@@ -63,6 +85,56 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
 
   bool _saving = false;
   String? _error;
+
+  late final PetSync _sync = widget.sync ?? PetSync();
+  late final PostMediaRepository _media = widget.media ?? PostMediaRepository();
+  late final MediaPicker _picker = widget.picker ?? ImagePickerMediaPicker();
+
+  /// 고른 사진 — 미리보기 바이트와 올라간 미디어 id. 등록이 끝난 뒤 그 아이에 붙인다(#448).
+  Uint8List? _photoBytes;
+  int? _photoMediaId;
+  bool _uploading = false;
+  String? _photoError;
+
+  /// 사진 고르기 → 줄이기(EXIF 지움) → 올리기. 등록 전에 올려 두고 id 만 들고 있는다 — 글쓰기의
+  /// 사진 칸과 같은 두 단계라 업로드 검증이 서버 한 곳에 산다.
+  Future<void> _pickPhoto() async {
+    if (_uploading || _saving) return;
+    final picked = await _picker.pickImages(limit: 1);
+    if (picked.isEmpty || !mounted) return;
+    setState(() {
+      _uploading = true;
+      _photoError = null;
+    });
+    try {
+      final prepared = await widget.prepare(picked.first.bytes);
+      final uploaded = await _media.upload(
+        jpegBytes: prepared.bytes,
+        width: prepared.width,
+        height: prepared.height,
+        filename: picked.first.name,
+        category: PostMediaRepository.profileCategory,
+      );
+      if (!mounted) return;
+      setState(() {
+        _photoBytes = prepared.bytes;
+        _photoMediaId = uploaded.id;
+        _uploading = false;
+      });
+    } on PostMediaFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _photoError = e.label;
+      });
+    } on ImagePrepException {
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _photoError = '이 사진은 읽을 수 없어요';
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -84,12 +156,22 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
     });
 
     try {
-      final saved = await PetSync().register(
+      var saved = await _sync.register(
         name: name,
         species: _species,
         size: _size,
         breed: _breed.text.trim(),
       );
+      // 사진은 등록된 뒤에 붙는다 — 아이의 id 가 있어야 하니까. 붙이기가 실패해도 등록은 됐다:
+      // 아이는 남고 사진만 없다(편집 화면에서 다시 고를 수 있다).
+      final mediaId = _photoMediaId;
+      if (mediaId != null) {
+        try {
+          saved = await _sync.setPhoto(saved, mediaId);
+        } on WalkFailure {
+          // 등록은 성공했다 — 여기서 시트를 붙들지 않는다.
+        }
+      }
       notifyPetsChanged();
       if (!mounted) return;
       Navigator.of(context).pop(saved);
@@ -117,6 +199,10 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
       title: '우리 아이를 등록해 주세요',
       subtitle: widget.reason,
       children: [
+            // 사진이 먼저다(#448) — 홈 한가운데가 이 사진이 된다. 안 골라도 등록은 된다.
+            Center(child: _photoPicker()),
+            const SizedBox(height: 14),
+
             _label('이름'),
             GlassField(
               controller: _name,
@@ -171,6 +257,66 @@ class _PetRegistrationSheetState extends State<_PetRegistrationSheet> {
             ),
       ],
     );
+  }
+
+  /// 원형 사진 칸 — 고르기 전엔 종 이모지에 카메라 배지, 고른 뒤엔 사진.
+  Widget _photoPicker() {
+    final bytes = _photoBytes;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      GestureDetector(
+        key: const Key('pet-photo-pick'),
+        onTap: _pickPhoto,
+        behavior: HitTestBehavior.opaque,
+        child: Stack(clipBehavior: Clip.none, children: [
+          Container(
+            width: 84,
+            height: 84,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const RadialGradient(colors: [T.glowStart, T.glowEnd]),
+              border: Border.all(color: T.accentLine, width: 1.5),
+            ),
+            child: bytes == null
+                ? Image.asset(
+                    switch (_species) {
+                      PetSpecies.dog => 'assets/emoji/dog.png',
+                      PetSpecies.cat => 'assets/emoji/cat.png',
+                      PetSpecies.other => 'assets/emoji/paw.png',
+                    },
+                    width: 52,
+                    height: 52)
+                : ClipOval(
+                    key: const Key('pet-photo-preview'),
+                    child: Image.memory(bytes, width: 84, height: 84, fit: BoxFit.cover, gaplessPlayback: true),
+                  ),
+          ),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: T.accent,
+                border: Border.all(color: T.cardBg, width: 2.5),
+              ),
+              child: _uploading
+                  ? const Padding(
+                      padding: EdgeInsets.all(7),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.photo_camera_rounded, size: 14, color: Colors.white),
+            ),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        _photoError ?? (bytes == null ? '사진 고르기 (선택)' : '사진을 바꾸려면 다시 눌러 주세요'),
+        style: TextStyle(fontSize: 12, color: _photoError == null ? T.textMuted : const Color(0xFFD9534F)),
+      ),
+    ]);
   }
 
   Widget _label(String text) => Padding(

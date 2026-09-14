@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/pet.dart';
 import '../theme/app_tokens.dart';
+import 'dog_avatar.dart';
 
 class WalkDogPicker extends StatefulWidget {
   /// 고를 수 있는 아이들. **서버 id 가 있는 것만** 온다.
@@ -127,7 +128,7 @@ class _WalkDogPickerState extends State<WalkDogPicker> {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
         child: Row(children: [
-          Image.asset(pet.avatarAsset, width: 34, height: 34),
+          DogAvatar(dog: pet, size: 34, emojiSize: 34),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

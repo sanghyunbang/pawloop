@@ -16,6 +16,7 @@ import 'main_shell.dart';
 import 'start_walk.dart';
 import 'family_screen.dart';
 import 'insight_screen.dart';
+import '../widgets/dog_avatar.dart';
 import '../widgets/neighbor_photo_strip.dart';
 
 /// 홈 — 우리 아이 · 오늘 산책 · 근처 동반 장소. (감정 도메인 제거, 강아지 산책 중심)
@@ -209,7 +210,7 @@ class TodayScreen extends StatelessWidget {
               ),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Image.asset(pets[i].avatarAsset, width: 18, height: 18, gaplessPlayback: true),
+              DogAvatar(dog: pets[i], size: 18, emojiSize: 18),
               const SizedBox(width: 5),
               Text(pets[i].name,
                   style: TextStyle(
@@ -235,7 +236,8 @@ class TodayScreen extends StatelessWidget {
         gradient: RadialGradient(colors: [T.glowStart, T.glowEnd]),
         boxShadow: [BoxShadow(color: T.sigGlow, blurRadius: 34, offset: Offset(0, 16))],
       ),
-      child: Image.asset(dog?.avatarAsset ?? 'assets/emoji/paw.png', width: 96, height: 96, gaplessPlayback: true),
+      // 사진을 등록한 아이는 사진이 히어로다(#448) — 이모지는 사진이 없을 때만.
+      child: DogAvatar(dog: dog, size: 150, emojiSize: 96),
     );
   }
 
