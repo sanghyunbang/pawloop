@@ -29,7 +29,7 @@
 | --- | --- | --- | --- |
 | `GET /api/walks` | `list(@CurrentUser User user, Long dogId, String cursor, Integer limit)` | `WalkPageResponse` (`items: List<WalkResponse>` · `nextCursor` · `hasMore`) | O |
 | `POST /api/walks` | `save(@CurrentUser User user, @Valid @RequestBody WalkRequest request)` | `ResponseEntity<WalkResponse>` (201) | O |
-| `GET /api/walks/stats/weekly` | `stats(@CurrentUser User user, Long dogId)` | `WalkStatsResponse` | O |
+| `GET /api/walks/stats/weekly` | `stats(@CurrentUser User user, Long dogId)` | `WalkStatsResponse` — 통계 뒤에 `WeeklyInsightService.attach` 가 `aiSummary`(#486, 트랜잭션 밖 · `weekly_insight` 캐시)를 얹는다 | O |
 | `GET /api/walks/{walkId}` | `detail(@CurrentUser User user, long walkId)` | `WalkResponse` — **경로가 실리는 유일한 응답이다** | O |
 | `PUT /api/walks/{walkId}/memo` | `rewriteMemo(@CurrentUser User user, long walkId, @Valid @RequestBody WalkMemoRequest request)` | `WalkResponse` (#187) | O |
 | `DELETE /api/walks/{walkId}` | `delete(@CurrentUser User user, long walkId)` | `void` (204) | O |

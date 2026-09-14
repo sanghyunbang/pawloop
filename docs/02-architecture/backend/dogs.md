@@ -94,6 +94,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | `DogResponse register(User owner, DogRequest request)` | 검증 후 신규 저장(소유자=owner), 저장 결과를 응답으로. |
 | `void requireMine(Long userId, long dogId)` | 소유권만 확인한다. **다른 도메인(walk 등)이 부르는 공개 지점이다.** |
 | `Dog requireMineEntity(Long userId, Long dogId)` | 소유권 확인 + 엔티티 반환. 연관을 걸어야 하는 쪽이 쓴다. |
+| `DogProfileView profileOf(long userId, Long dogId)` | 크기(`small`·`medium`·`large`)와 나이대(개월)만 — AI 주간 요약(#486)이 모델에 보내는 아이 정보의 전부. `dogId` 가 있으면 그 아이(남의 아이면 404), 없으면 첫째 아이, 아이가 없으면 `null`. `dog.entity`·`dog.dto` 를 밖으로 내지 않으려는 공개 표면이다. |
 | `void delete(Long userId, long dogId)` | 소프트 삭제 — `deleted_at` 을 UTC 로 찍는다. 남의 것·없는 것·이미 지운 것은 같은 404. 지운 아이는 상한에 안 센다(#156). |
 | `(private) Dog require(Long userId, long dogId)` | 조회 + 소유권. 위 셋의 공통 바닥. |
 

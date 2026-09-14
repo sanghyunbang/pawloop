@@ -54,7 +54,20 @@ public record WalkStatsResponse(
          * 서버가 완성된 문장을 주면 문구 하나를 고치는 데 배포가 필요하고, 앱 버전마다
          * 다른 문장을 줘야 하는 날이 온다.
          */
-        WeekSummary summary) {
+        WeekSummary summary,
+        AiSummary aiSummary) {
+
+    /**
+     * AI 주간 요약(#486) — 모델이 만든 두 문장 + 제안 한 줄. 키가 없거나 · 실패 · 상한 · 숫자 검사에서
+     * 버렸으면 {@code null} 이고, 그때 앱은 카드도 라벨도 그리지 않는다.
+     */
+    public record AiSummary(String text, java.time.Instant generatedAt) {
+    }
+
+    public WalkStatsResponse withAiSummary(AiSummary ai) {
+        return new WalkStatsResponse(weekStart, weekEnd, weekKm, weekMinutes, totalKm, walkCount, avgKm,
+                allTimeKm, allTimeCount, allTimeMinutes, topPlaces, summary, ai);
+    }
 
     /**
      * 계약의 {@code WalkStats.summary} — 이슈 #359.

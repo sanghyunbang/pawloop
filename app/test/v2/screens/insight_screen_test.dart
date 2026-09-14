@@ -10,7 +10,7 @@ import 'package:heat_trip_flutter/v2/domain/weekly_summary.dart';
 import 'package:heat_trip_flutter/v2/screens/insight_screen.dart';
 
 class _Repo implements WalkRepository {
-  _Repo(this.weekKm, {this.topPlaces = const [], this.weekMinutes, this.summary});
+  _Repo(this.weekKm, {this.topPlaces = const [], this.weekMinutes, this.summary, this.aiSummary});
   final List<double> weekKm;
   final List<WalkTopPlace> topPlaces;
 
@@ -19,6 +19,9 @@ class _Repo implements WalkRepository {
 
   /// 서버가 주는 "이번 주 요약" 계산 결과 (#359).
   final WeekSummaryData? summary;
+
+  /// 서버가 모델로 만든 "AI 요약" (#486). 없으면 카드도 라벨도 없다.
+  final AiSummary? aiSummary;
 
   @override
   Future<ServerWalkPage> walks({int? dogId, String? cursor, int? limit}) async =>
@@ -36,6 +39,7 @@ class _Repo implements WalkRepository {
         allTimeMinutes: 1,
         topPlaces: topPlaces,
         summary: summary ?? WeekSummaryData.empty,
+        aiSummary: aiSummary,
       );
 
   @override
@@ -51,6 +55,7 @@ Future<void> _pump(
   List<WalkTopPlace> topPlaces = const [],
   List<int>? weekMinutes,
   WeekSummaryData? summary,
+  AiSummary? aiSummary,
 }) async {
   t.view.physicalSize = const Size(1080, 2400);
   t.view.devicePixelRatio = 1.0;
@@ -59,7 +64,7 @@ Future<void> _pump(
     home: InsightScreen(
       feed: WalkFeed(
         repository: _Repo(weekKm,
-            topPlaces: topPlaces, weekMinutes: weekMinutes, summary: summary),
+            topPlaces: topPlaces, weekMinutes: weekMinutes, summary: summary, aiSummary: aiSummary),
       ),
     ),
   ));
@@ -148,5 +153,27 @@ void main() {
     await _pump(t, const [0, 0, 0, 0, 0, 0, 0]);
 
     expect(find.text('이번 주는 아직 기록이 없어요. 오늘 한 바퀴 어때요.'), findsOneWidget);
+  });
+
+  // ── AI 요약 (#486) ─────────────────────────────────────────
+  testWidgets('서버가 AI 요약을 주면 규칙 카드 아래 "AI 요약 · 베타" 카드 — 두 문장과 제안 한 줄', (t) async {
+    await _pump(t, const [1.5, 0, 0, 0, 0, 0, 0],
+        aiSummary: const AiSummary(
+            text: '이번 주는 1회 걸어 1.5km 를 채웠어요.\n아침 산책이 잘 맞는 것 같아요.\n내일 한 번 더 어떠세요?'));
+
+    expect(find.byKey(const Key('ai-summary')), findsOneWidget);
+    expect(find.text('AI 요약'), findsOneWidget);
+    expect(find.text('베타'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('ai-summary')), matching: find.textContaining('1.5km')), findsOneWidget);
+    expect(find.text('내일 한 번 더 어떠세요?'), findsOneWidget, reason: '마지막 줄은 제안 — 따로 굵게');
+    expect(find.text('이번 주 요약'), findsOneWidget, reason: '규칙 카드는 그대로 있다 — AI 카드는 그 아래에 더해진다');
+  });
+
+  testWidgets('AI 요약이 없으면 카드도 "AI" 라는 글자도 화면에 없다 — 정직한 라벨(#347)', (t) async {
+    await _pump(t, const [1.5, 0, 0, 0, 0, 0, 0]);
+
+    expect(find.byKey(const Key('ai-summary')), findsNothing);
+    expect(find.textContaining('AI'), findsNothing);
+    expect(find.text('베타'), findsNothing);
   });
 }

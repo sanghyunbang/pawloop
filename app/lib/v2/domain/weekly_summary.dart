@@ -215,3 +215,30 @@ class WeeklySummary {
     return '다음 주엔 ${missing.first}요일 $part에 한 번 더 어때요.';
   }
 }
+
+/// 서버가 모델로 만든 "AI 요약" (#486). 두 문장 + 제안 한 줄이 줄바꿈으로 온다.
+///
+/// null 이면 카드도 라벨도 없다 — 키가 없거나 · 실패 · 상한 · 숫자 검사에서 버린 경우이고, 그 자리는
+/// [WeeklySummary](규칙 문장)가 그대로 맡는다. "AI" 라벨은 진짜 모델 문장에만 붙는다(#347 · #332).
+class AiSummary {
+  final String text;
+  final DateTime? generatedAt;
+
+  const AiSummary({required this.text, this.generatedAt});
+
+  /// 계약의 `WalkStats.aiSummary` — 없거나 글이 비면 null.
+  static AiSummary? parse(Object? json) {
+    if (json is! Map) return null;
+    final text = json['text'];
+    if (text is! String || text.trim().isEmpty) return null;
+    final at = json['generatedAt'];
+    return AiSummary(
+      text: text.trim(),
+      generatedAt: at is String ? DateTime.tryParse(at) : null,
+    );
+  }
+
+  /// 줄 단위 — 마지막 줄이 제안이다(서버 규칙: 첫 두 줄 요약, 셋째 줄 제안).
+  List<String> get lines => text.split(RegExp(r'\r?\n')).map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+}
+

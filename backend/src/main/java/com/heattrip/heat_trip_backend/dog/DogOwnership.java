@@ -56,4 +56,10 @@ public interface DogOwnership {
      * 필요한 것은 <b>id 뿐</b>이라, 이름·품종까지 실어 나르지 않는다.
      */
     java.util.List<Long> myDogIds(long userId);
+
+    /**
+     * 아이의 크기 · 나이대만(#486). [dogId] 가 있으면 그 아이(내 아이가 아니면 404), 없으면 첫째 아이.
+     * 아이가 없으면 null.
+     */
+    DogProfileView profileOf(long userId, Long dogId);
 }

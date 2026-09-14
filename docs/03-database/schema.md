@@ -1473,7 +1473,45 @@ CREATE TABLE post_bookmark (
 
 ---
 
-## 부록 A. 정본의 표 27개 — 어디에 적혀 있나
+## 39. `weekly_insight` — AI 주간 요약 캐시 (**실재**)
+
+통계 화면의 "AI 요약"(#486) — 모델(OpenAI)이 만든 문장을 **사용자 · 아이 · 주(週)에 하나** 남긴다. 같은 입력에 두 번 부르지 않기 위한 표이고, 좌표 · 장소 · 이름은 여기에도 모델 입력에도 없다. 탈퇴하면 CASCADE.
+
+```sql
+CREATE TABLE weekly_insight (
+  id            BIGINT       NOT NULL AUTO_INCREMENT,
+  user_id       BIGINT       NOT NULL COMMENT '탈퇴하면 행도 사라진다',
+  dog_id        BIGINT       NOT NULL COMMENT '아이 id. 0 = 모든 아이 (NULL 이면 유니크가 안 선다)',
+  week_start    DATE         NOT NULL COMMENT '이번 주 월요일(KST)',
+  input_hash    VARCHAR(64)  NOT NULL COMMENT '모델 입력(WeeklyInsightInput.render)의 SHA-256 — 같으면 다시 안 부른다',
+  model         VARCHAR(64)  NOT NULL,
+  text          TEXT         NULL     COMMENT '문장. NULL = 만들었다가 버렸다(숫자 검사 실패)',
+  calls         INT          NOT NULL COMMENT '이 주에 모델을 부른 횟수 — 주당 상한(3)의 근거',
+  generated_at  DATETIME(6)  NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_weekly_insight (user_id, dog_id, week_start),
+  KEY idx_weekly_insight_generated (generated_at),
+  CONSTRAINT fk_weekly_insight_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `user_id` | `BIGINT` | FK→`users.id` **CASCADE**, UNIQUE(user, dog, week) | 누구의 요약인가 |
+| `dog_id` | `BIGINT` | NOT NULL | 아이 id, 0 은 모든 아이 |
+| `week_start` | `DATE` | NOT NULL | KST 월요일 |
+| `input_hash` | `VARCHAR(64)` | NOT NULL | 입력의 해시 — 캐시의 열쇠 |
+| `model` | `VARCHAR(64)` | NOT NULL | 어느 모델의 문장인가 |
+| `text` | `TEXT` | NULL | 문장. NULL 은 버린 것 |
+| `calls` | `INT` | NOT NULL | 이 주의 호출 횟수 |
+| `generated_at` | `DATETIME(6)` | NOT NULL | 만든 순간(UTC) |
+
+마이그레이션 `44_weekly_insight.sql`. 실제 컬럼 순서는 `01_schema.sql`(엔티티에서 뽑은 것) 그대로다.
+
+---
+
+## 부록 A. 정본의 표 28개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
@@ -1498,6 +1536,7 @@ CREATE TABLE post_bookmark (
 | `place_catalog` | 실재 §24 | `place` | 장소 한 벌 — 출처별 한 행(kto·localdata·durunubi, #291) |
 | `place_cell` | 실재 §22 | `place` | 주변 장소 셀 스냅샷 |
 | `post` | 실재 §7 | `community` | 커뮤니티 게시글 |
+| `weekly_insight` | 실재 §39 | `walk` | AI 주간 요약 캐시(#486) — 사용자·아이·주에 행 하나. 입력 해시가 같으면 모델을 다시 안 부르고, `text` NULL 은 버린 문장. 탈퇴하면 CASCADE |
 | `post_bookmark` | 실재 §38 | `community` | 글 저장(#451 4번) — "내 사진첩". 저장한 순이 정렬 축, 탈퇴하면 행이 사라진다. §10 `bookmark`(장소, 계획)와 다른 표 |
 | `push_preference` | 실재 §30 | `push` | 알림 전체 끄기 — 행이 없으면 켜짐(#83) |
 | `reaction` | 실재 §9 | `community` | 게시글 반응 |

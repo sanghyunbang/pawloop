@@ -333,7 +333,8 @@ public class WalkService {
                 all.walks(),
                 (int) (all.seconds() / 60),
                 topPlaces(userId, dogId),
-                summaryOf(userId, dogId, weekStart, week));
+                summaryOf(userId, dogId, weekStart, week),
+                null);
     }
 
     /**
