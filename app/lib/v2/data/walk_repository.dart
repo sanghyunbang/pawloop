@@ -178,6 +178,9 @@ class ServerWalk {
   /// 어디를 걸었나 (#338). 안 붙였으면 `null` 이다 — 빈 객체가 오지 않는다.
   final WalkPlaceRef? place;
 
+  /// 붙은 사진(#450) — 올린 순서. 없으면 빈 목록.
+  final List<WalkMedia> media;
+
   const ServerWalk({
     required this.id,
     required this.dogId,
@@ -191,6 +194,7 @@ class ServerWalk {
     this.memo,
     this.weather,
     this.place,
+    this.media = const [],
   });
 
   double get km => distanceM / 1000.0;
@@ -233,6 +237,33 @@ class ServerWalk {
       memo: json['memo'] as String?,
       weather: json['weather'] as String?,
       place: WalkPlaceRef.tryParse(json['place']),
+      media: json['media'] is List
+          ? [for (final m in json['media'] as List) if (m is Map<String, dynamic>) WalkMedia.tryParse(m)]
+              .whereType<WalkMedia>()
+              .toList()
+          : const [],
+    );
+  }
+}
+
+/// 산책에 붙은 사진 하나 — 계약의 `PostMedia` 모양(#450). 지금은 사진뿐이라 URL 과 크기만 읽는다.
+class WalkMedia {
+  final int id;
+  final String url;
+  final int? width;
+  final int? height;
+
+  const WalkMedia({required this.id, required this.url, this.width, this.height});
+
+  static WalkMedia? tryParse(Map<String, dynamic> json) {
+    final id = json['id'];
+    final url = json['url'];
+    if (id is! int || url is! String || url.isEmpty) return null;
+    return WalkMedia(
+      id: id,
+      url: url,
+      width: (json['width'] as num?)?.toInt(),
+      height: (json['height'] as num?)?.toInt(),
     );
   }
 }
@@ -494,6 +525,9 @@ class WalkRepository {
 
     /// 어디를 걸었나 (#338). 카탈로그에서 고른 곳이면 출처·id 가 함께 간다.
     WalkPlaceRef? place,
+
+    /// 산책 중 찍은 사진(#450) — `POST /media`(WALK_IMAGE) 로 올린 id. 비어 있으면 키를 안 보낸다.
+    List<int> mediaIds = const [],
   }) async {
     final uploadPath = LocationUploadPolicy.pathForUpload(path);
     final uploadPathT = LocationUploadPolicy.pathTimesForUpload(pathT);
@@ -528,6 +562,8 @@ class WalkRepository {
           if (place != null) 'placeName': place.title,
           if (place != null && place.isCatalog) 'placeSource': place.source,
           if (place != null && place.isCatalog) 'placeContentId': place.contentId,
+          // 산책 중 찍은 사진(#450) — POST /media(WALK_IMAGE) 로 올린 id. 없으면 키 자체를 안 보낸다.
+          if (mediaIds.isNotEmpty) 'mediaIds': mediaIds,
         },
       ),
     );

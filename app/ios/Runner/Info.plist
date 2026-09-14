@@ -51,6 +51,9 @@
 	     촬영 좌표는 앱이 다시 인코딩할 때 빠진다 (lib/v2/data/image_prep.dart). -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>커뮤니티 글에 우리 아이 사진을 붙이기 위해 사진을 골라요. 사진의 위치 정보는 지우고 올려요.</string>
+	<!-- 산책 중 사진을 찍는다 (이슈 #450). 찍은 사진은 산책 기록에 붙고, 위치 정보는 지우고 올린다. -->
+	<key>NSCameraUsageDescription</key>
+	<string>산책 중 우리 아이 사진을 찍어 기록에 붙이기 위해 카메라를 써요. 사진의 위치 정보는 지우고 올려요.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

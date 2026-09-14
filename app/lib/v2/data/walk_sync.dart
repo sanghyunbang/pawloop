@@ -18,6 +18,8 @@ library;
 
 import 'walk_feed.dart';
 import 'walk_outbox.dart';
+import 'post_media_repository.dart' show PostMediaFailure, PostMediaFailureKind;
+import 'walk_photos.dart';
 import 'walk_repository.dart';
 
 /// 한 번의 밀어올리기 결과.
@@ -56,10 +58,18 @@ class WalkSync {
   final WalkRepository _repo;
   final WalkOutbox _outbox;
 
-  WalkSync(this._repo, this._outbox);
+  /// 산책 사진을 올리는 손(#450). 테스트가 가짜를 꽂는다.
+  final WalkPhotoUpload _uploadPhoto;
 
-  static Future<WalkSync> open({WalkRepository? repository}) async =>
-      WalkSync(repository ?? WalkRepository(), await WalkOutbox.open());
+  /// 서버에 붙은 뒤 기기 파일을 지우는 손.
+  final WalkPhotoStore _photos;
+
+  WalkSync(this._repo, this._outbox, {WalkPhotoUpload? uploadPhoto, WalkPhotoStore? photos})
+      : _uploadPhoto = uploadPhoto ?? WalkPhotoUploader().upload,
+        _photos = photos ?? const WalkPhotoStore();
+
+  static Future<WalkSync> open({WalkRepository? repository, WalkPhotoUpload? uploadPhoto}) async =>
+      WalkSync(repository ?? WalkRepository(), await WalkOutbox.open(), uploadPhoto: uploadPhoto);
 
   List<WalkDraft> get pending => _outbox.pending;
 
@@ -87,9 +97,37 @@ class WalkSync {
       );
     }
 
-    final withDog = draft.copyWith(dogId: resolved);
+    var withDog = draft.copyWith(dogId: resolved);
     await _outbox.put(withDog);
 
+    // 사진이 먼저다(#450). 올린 id 는 그때그때 초안에 적는다 — 연결이 끊겨 다시 보낼 때 앞의 것을
+    // 또 올리지 않는다. 서버가 거절한 사진(너무 큼 등)은 그 한 장만 빼고 간다 — 사진 한 장이
+    // 산책 기록을 영영 막으면 안 된다.
+    if (withDog.photoPaths.length > withDog.mediaIds.length) {
+      final paths = List<String>.of(withDog.photoPaths);
+      final ids = List<int>.of(withDog.mediaIds);
+      var i = ids.length;
+      while (i < paths.length) {
+        try {
+          ids.add(await _uploadPhoto(paths[i]));
+          i++;
+        } on PostMediaFailure catch (e) {
+          if (e.kind == PostMediaFailureKind.rejected) {
+            await _photos.discard([paths[i]]);
+            paths.removeAt(i);
+            continue;
+          }
+          withDog = withDog.copyWith(photoPaths: paths, mediaIds: ids, lastError: e.message);
+          await _outbox.put(withDog);
+          return WalkSyncResult(WalkSyncOutcome.queued, reason: '사진을 올리지 못했어요 · 연결되면 다시 올릴게요');
+        } catch (_) {
+          // 파일이 사라졌다(OS 가 지웠다) — 그 장은 없는 것으로.
+          paths.removeAt(i);
+        }
+        withDog = withDog.copyWith(photoPaths: paths, mediaIds: ids);
+        await _outbox.put(withDog);
+      }
+    }
     try {
       final walk = await _repo.saveWalk(
         dogId: resolved,
@@ -104,8 +142,11 @@ class WalkSync {
         memo: withDog.memo,
         weather: withDog.weather,
         place: withDog.place,
+        mediaIds: withDog.mediaIds,
       );
       await _outbox.remove(withDog.clientWalkId);
+      // 서버가 정본이 됐다 — 기기의 사진 파일은 지운다(#450).
+      await _photos.discard(withDog.photoPaths);
       // 화면들이 이 신호를 듣고 다시 불러온다. 없으면 저장하고 홈으로 돌아와도
       // "오늘 0회" 가 그대로다.
       notifyWalksChanged();

@@ -35,6 +35,9 @@ class WalkDetailScreen extends StatefulWidget {
   final int minutes;
   final String initialMemo;
 
+  /// 붙은 사진 URL(#450) — 목록이 이미 알고 있어 다시 조회하지 않는다.
+  final List<String> photoUrls;
+
   /// 서버를 어디로 부르는가. **테스트만 넘긴다.**
   final WalkRepository? repository;
 
@@ -48,6 +51,7 @@ class WalkDetailScreen extends StatefulWidget {
     required this.km,
     required this.minutes,
     required this.initialMemo,
+    this.photoUrls = const [],
     this.repository,
     this.courses,
   });
@@ -124,6 +128,11 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
                 children: [
+                  // 산책 중 찍은 사진 (#450) — 기록을 열면 사진이 먼저다.
+                  if (widget.photoUrls.isNotEmpty) ...[
+                    _photosCard(),
+                    const SizedBox(height: 16),
+                  ],
                   _summaryCard(),
                   const SizedBox(height: 16),
                   // 걸은 길을 남기는 자리 (#339). 회고 위에 둔다 — 기록을 열어 처음 드는
@@ -217,6 +226,29 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
             ),
             const Icon(Icons.chevron_right, size: 18, color: T.textFaint),
           ]),
+        ),
+      );
+
+  /// 산책 중 찍은 사진(#450) — 4:5 타일을 한 줄로. 첫 장이 크게, 나머지는 옆으로 넘긴다.
+  Widget _photosCard() => SizedBox(
+        key: const Key('detail-photos'),
+        height: 200,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: widget.photoUrls.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (_, i) => ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              width: 160,
+              height: 200,
+              child: Image.network(widget.photoUrls[i],
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                      color: T.surface,
+                      child: const Icon(Icons.broken_image_outlined, color: T.textMuted))),
+            ),
+          ),
         ),
       );
 

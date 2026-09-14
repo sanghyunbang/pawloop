@@ -4,11 +4,11 @@
 // 못 띄우므로 가짜를 꽂는다 — `MediaPicker` 가 그 자리다. `walk_dog_picker` 가 반려 프로필을
 // 받는 것과 같은 판단이다.
 //
-// ## 갤러리만이다
+// ## 갤러리 + 카메라
 //
-// 카메라는 이 PR 에 없다. 카메라를 열면 iOS 에 `NSCameraUsageDescription` 이 있어야 하고,
-// 없으면 누르는 순간 앱이 죽는다. 필요해지는 날 이 파일에 한 메서드를 더하면서 그 문구를
-// 함께 넣는다.
+// 글 사진은 갤러리에서 고르고(#429), 산책 중 사진은 카메라로 찍는다(#450, `takePhoto`).
+// 카메라를 열면 iOS 에 `NSCameraUsageDescription` 이 있어야 하고, 없으면 누르는 순간 앱이
+// 죽는다 — #450 에서 그 문구를 함께 넣었다.
 //
 // ## `requestFullMetadata: false`
 //
@@ -57,6 +57,12 @@ abstract class MediaPicker {
 
   /// 갤러리에서 영상 하나를 고른다. 사용자가 닫으면 `null`.
   Future<PickedVideo?> pickVideo();
+
+  /// 카메라로 한 장 찍는다 — 산책 중 사진(#450). 사용자가 닫으면 `null`.
+  ///
+  /// iOS 는 `NSCameraUsageDescription` 이 있어야 한다(`ios/Runner/Info.plist`) — 없으면 누르는
+  /// 순간 앱이 죽는다. 촬영 좌표는 `ImagePrep` 이 다시 인코딩할 때 빠진다.
+  Future<PickedImage?> takePhoto();
 }
 
 class ImagePickerMediaPicker implements MediaPicker {
@@ -95,5 +101,15 @@ class ImagePickerMediaPicker implements MediaPicker {
     );
     if (file == null) return null;
     return PickedVideo(name: file.name, path: file.path);
+  }
+
+  @override
+  Future<PickedImage?> takePhoto() async {
+    final file = await _picker.pickImage(
+      source: ImageSource.camera,
+      requestFullMetadata: false,
+    );
+    if (file == null) return null;
+    return PickedImage(name: file.name, bytes: await file.readAsBytes());
   }
 }

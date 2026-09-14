@@ -242,6 +242,7 @@ class MyRecordsScreen extends StatelessWidget {
         km: w.km,
         minutes: w.minutes,
         initialMemo: w.memo,
+        photoUrls: w.photoUrls,
       ),
     ));
   }
@@ -386,17 +387,33 @@ class MyRecordsScreen extends StatelessWidget {
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: _warm,
-              boxShadow: const [BoxShadow(color: Color(0x40FF7E8A), blurRadius: 10, offset: Offset(0, 4))],
+          // 사진이 있으면 아이콘 자리에 첫 장(#450) — 기록 목록도 사진 앱이다.
+          if (w.photoUrls.isNotEmpty)
+            ClipRRect(
+              key: Key('record-photo-${w.walkId}'),
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Image.network(w.photoUrls.first,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                        decoration: BoxDecoration(gradient: _warm),
+                        child: const Icon(Icons.directions_walk_rounded, size: 20, color: Colors.white))),
+              ),
+            )
+          else
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: _warm,
+                boxShadow: const [BoxShadow(color: Color(0x40FF7E8A), blurRadius: 10, offset: Offset(0, 4))],
+              ),
+              child: const Icon(Icons.directions_walk_rounded, size: 20, color: Colors.white),
             ),
-            child: const Icon(Icons.directions_walk_rounded, size: 20, color: Colors.white),
-          ),
           const SizedBox(width: 11),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -608,7 +625,11 @@ class _RecordView {
     this.reason,
     this.walkId,
     this.clientWalkId,
+    this.photoUrls = const [],
   });
+
+  /// 산책에 붙은 사진 URL(#450) — 있으면 카드의 아이콘 자리에 첫 장이 들어가고 상세에 띠로 보인다.
+  final List<String> photoUrls;
 
   String get pace =>
       minutes == 0 ? '-' : '${(minutes / (km == 0 ? 1 : km)).round()}분/km';
@@ -624,6 +645,7 @@ class _RecordView {
         dogIds: w.dogIds,
         walkId: w.id,
         clientWalkId: w.clientWalkId,
+        photoUrls: [for (final m in w.media) m.url],
       );
 
   factory _RecordView.ofDraft(WalkDraft d) => _RecordView(

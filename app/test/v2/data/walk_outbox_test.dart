@@ -82,6 +82,7 @@ class _ScriptedRepository implements WalkRepository {
     String? memo,
     String? weather,
     WalkPlaceRef? place,
+    List<int> mediaIds = const [],
   }) async {
     saveCalls++;
     savedKeys.add(clientWalkId);

@@ -57,15 +57,15 @@ lib/
 | `crew_section.dart` | 크루 목록 — 커뮤니티 탭 **안의 갈래**(#417). 내 크루 · 우리 동네 두 범위 · 만들기 · 초대 코드로 참여. 화면이 아니라 본문 조각이라 `Scaffold` 를 안 만든다 | 탭 3 안 |
 | `crew_home_screen.dart` | 크루 홈 — 소개 · 멤버 · 대화방으로 가기 · 초대 코드 보내기(방장) · 나가기 · 강퇴(방장) · **품앗이**(목록 · 부탁 올리기 시트 `widgets/crew_favor_sheet.dart` · 제가 할게요 · 무르기 · 거둬들이기) · 방장 넘기기 · 크루 지우기(혼자일 때만) | `crew_section` → push |
 | `insight_screen.dart` | 통계 — 이번 주 요약 + 주간 거리 막대(fl_chart). 자주 가는 곳은 빈 상태 | `me_screen` → push |
-| `walk_tracking_screen.dart` | 실시간 산책 트래킹 (실 GPS, 경로 폴리라인 + 라이브 스탯) | FAB·홈 CTA → `startWalk()` |
-| `create_screen.dart` | 산책 기록 작성 → `POST /api/walks` | 트래킹 종료 후 push (초안 동반) · 기록 목록에서 손입력 |
+| `walk_tracking_screen.dart` | 실시간 산책 트래킹 (실 GPS, 경로 폴리라인 + 라이브 스탯) · 한 손 기록 줄 넷째 칸 **카메라**(#450) | FAB·홈 CTA → `startWalk()` |
+| `create_screen.dart` | 산책 기록 작성 → `POST /api/walks` | 트래킹 종료 후 push (초안 동반 — 사진 경로도, #450) · 기록 목록에서 손입력 |
 | `post_detail_screen.dart` | 커뮤니티 글 상세 — 반응 셋(멱등)·댓글 스레드 | feed → push |
 | `post_write_screen.dart` | 커뮤니티 글쓰기 → `POST /api/community/posts`. `writePost()` 가 유일한 문이고 미로그인을 거기서 안내한다 | 피드의 글쓰기 버튼 · 빈 목록 안내 · 지도 장소 시트 |
 | `me_screen.dart` | 프로필 — 강아지 프로필 + 활동 요약 + 메뉴 | 메뉴 → push |
 | `edit_screen.dart` | 강아지 프로필 편집 + 프로필 테두리색 선택 | me → push |
 | `myrecords_screen.dart` | 내 산책 기록 목록 | me → push |
 | `pin_picker_screen.dart` | 지도에서 장소 핀 선택 | 보조 |
-| `walk_detail_screen.dart` | 산책 회고 — 글을 나중에 고친다 → `PUT /api/walks/{id}/memo` | 기록 카드 탭 (#187) |
+| `walk_detail_screen.dart` | 산책 회고 — 글을 나중에 고친다 → `PUT /api/walks/{id}/memo` · 맨 위 사진 띠(`Walk.media`, #450) | 기록 카드 탭 (#187) |
 | `family_screen.dart` | 우리 가족 — 그룹·구성원·오늘의 케어 | me → push |
 | `family_chat_screen.dart` | 가족 채팅방 (폴링) | family → push |
 | `chat_list_screen.dart` | 방 목록 · 미읽음 | 탭 4 |
@@ -107,7 +107,8 @@ lib/
   - ✅ 관광공사 키는 **이미 앱에서 사라졌다**. 예전 서술: 이 키는 앱 바이너리에 박히는 과금성 자격증명이다. [#40](https://github.com/sanghyunbang/heattrip/issues/40) 에서 호출을 백엔드 프록시로 옮기면 앱에서 완전히 사라진다 — 그때 이 레포는 KTO 대신 자체 백엔드를 호출한다.
   - 병원(vet)·펫샵(shop)·산책로(trail)는 **서버가 같은 카탈로그에 이어 붙인다**(#291) — 앱에 별도 레포가 없고 `PetPlace.categoryKey`(`contentTypeId` 가 없으면 `category`)로 칩을 가른다. 산책로의 선만 `trail_route_repository.dart` 가 따로 받는다.
 - `chat_unread.dart` — 채팅 탭의 안 읽음 점(#452): `ChatUnread.any`(탭 바가 듣는 `ValueNotifier<bool>`) 와 `ChatUnreadWatcher`(로그인한 동안 60초마다 · 앱이 앞으로 올 때 `GET /api/chat/rooms` 를 봐서 `any` 를 갱신, 게스트면 안 부름). 음소거한 방은 안 센다.
-- `post_media_repository.dart` · `image_prep.dart` · `media_picker.dart` — 커뮤니티 글의 사진 첨부(#429). 고른 사진은 `ImagePrep` 이 **다시 인코딩**해(긴 변 1600px · EXIF 없음 → 촬영 좌표가 안 나간다, `image_prep_test` 가 값으로 잰다) `POST /media`(`category=POST_IMAGE`) 로 한 장씩 올리고, 글에는 돌려받은 `mediaIds` 만 싣는다. `MediaPicker` 는 `image_picker` 를 인터페이스 뒤에 둔 것 — 위젯 테스트가 가짜를 꽂는다. 도메인은 `domain/post_media.dart`(`PostMedia` · `PostMediaKind`). **영상**(#435 서버)은 `video_prep.dart` 가 720p 로 다시 인코딩한 뒤 `mp4_metadata_scrubber.dart` 가 `moov` 의 `udta`·`meta` 상자(Android `©xyz`·`loci`, iPhone `com.apple.quicktime.location.ISO6709`)를 **제자리에서 `free` 로 덮고** 다시 훑어 흔적이 남으면 올리지 않는다 — `mp4_metadata_scrubber_test`·`video_prep_test` 가 바이트로 잰다. 그 파일을 `POST /media/videos`(서명 PUT) → S3 직접 PUT(토큰 없이) → `POST /media/{id}/complete`(포스터) 로 올린다. 60초 · 150MB · 한 글에 하나.
+- `post_media_repository.dart` · `image_prep.dart` · `media_picker.dart` — 커뮤니티 글의 사진 첨부(#429). 고른 사진은 `ImagePrep` 이 **다시 인코딩**해(긴 변 1600px · EXIF 없음 → 촬영 좌표가 안 나간다, `image_prep_test` 가 값으로 잰다) `POST /media`(`category=POST_IMAGE`) 로 한 장씩 올리고, 글에는 돌려받은 `mediaIds` 만 싣는다. `MediaPicker` 는 `image_picker` 를 인터페이스 뒤에 둔 것(갤러리 `pickImages`·`pickVideo` + 카메라 `takePhoto`, #450) — 위젯 테스트가 가짜를 꽂는다. 도메인은 `domain/post_media.dart`(`PostMedia` · `PostMediaKind`). **영상**(#435 서버)은 `video_prep.dart` 가 720p 로 다시 인코딩한 뒤 `mp4_metadata_scrubber.dart` 가 `moov` 의 `udta`·`meta` 상자(Android `©xyz`·`loci`, iPhone `com.apple.quicktime.location.ISO6709`)를 **제자리에서 `free` 로 덮고** 다시 훑어 흔적이 남으면 올리지 않는다 — `mp4_metadata_scrubber_test`·`video_prep_test` 가 바이트로 잰다. 그 파일을 `POST /media/videos`(서명 PUT) → S3 직접 PUT(토큰 없이) → `POST /media/{id}/complete`(포스터) 로 올린다. 60초 · 150MB · 한 글에 하나.
+- `walk_photos.dart` — 산책 사진(#450). `WalkPhotoStore` 는 산책 중 찍은 바이트를 앱 문서 폴더 `walk_photos/<산책>/` 에 파일로 두고 경로만 돌려준다(`discard` 로 지움 — 카메라의 캐시 파일은 OS 가 지우므로 그대로 들고 있으면 안 된다). `WalkPhotoUploader` 는 경로를 읽어 `ImagePrep` 으로 다시 인코딩한 뒤 `POST /media`(`category=WALK_IMAGE`) 로 올려 id 를 돌려준다. `WalkSync` 가 저장 직전에 부른다 — 올린 id 는 그때그때 초안(`WalkDraft.mediaIds`)에 적어 재전송 때 앞의 것을 또 올리지 않고, 서버가 거절한 한 장은 빼고 가며, 저장되면 기기 파일을 지운다. `walk_sync_photo_test` 가 이 순서를 잰다.
 
 ### 2.4 `widgets/` — 공용 위젯
 
@@ -122,7 +123,7 @@ lib/
 - `post_photo_wall.dart` — 커뮤니티의 **사진 벽**(#451): 사진·영상이 있는 글만 두 열 벽돌(masonry)로. 열 나누기는 순수 함수 `split`(순서대로 더 짧은 열에, 높이는 폭 1 기준 `1/비율 + 글 두 줄`), 타일은 첫 장 하나에 4:5…1.91:1 로 잘린 비율. 피드의 카드/목록/격자 전환 중 격자가 이것이다.
 - `neighbor_photo_strip.dart` — 홈의 **이웃의 사진** 한 줄(#451): 커뮤니티 목록 한 장에서 사진·영상 있는 글의 첫 장을 열두 개까지. 게스트에게는 없고, 없거나 못 불러오면 줄 자체가 없다. 타일은 글 상세로, "더 보기" 는 `RootTab.communityView = 'grid'` 로 커뮤니티 탭을 사진 벽으로 연다(피드가 읽고 되돌리는 한 번짜리 부탁).
 - `form_kit.dart` — 폼 부품 한 벌(#445): `SheetFrame` · `PrimaryButton`/`SecondaryButton`(머티리얼 버튼을 감싼다 — 테스트의 `find.widgetWithText(FilledButton, …)` 이 그대로 산다) · `PickerButton` · `GlassField` · `PillChip` · `FormLabel` · `SigFab`. 일정 시트 · 아이 등록 시트 · 크루 만들기/고치기 시트가 쓴다.
-- `walk_finish_sheet.dart` — 산책 완료 바텀시트(`WalkFinishSheet`, #310). 요약 셋 + **경로 미리보기** + "경로 사진 저장" + 기록 저장/저장 안 함. 트래킹 화면이 geolocator·네이버 지도를 물고 있어 위젯 테스트로 못 띄우므로 시트를 밖으로 꺼냈다.
+- `walk_finish_sheet.dart` — 산책 완료 바텀시트(`WalkFinishSheet`, #310). 요약 셋 + **경로 미리보기** + "경로 사진 저장" + 기록 저장/저장 안 함. 찍은 사진이 있으면 **사진 띠**, 공유 카드에는 첫 장이 배경으로 간다(#450). 트래킹 화면이 geolocator·네이버 지도를 물고 있어 위젯 테스트로 못 띄우므로 시트를 밖으로 꺼냈다.
 - `post_media_field.dart` — 글쓰기의 사진 칸(#429): 고르는 순간 올리기 시작하고 밖으로는 `PostMediaSelection`(올라간 id 순서 · 올리는 중인가 · 실패가 있는가)을 낸다. 글쓰기 화면은 올리는 중이면 저장을 잠근다. `post_media_strip.dart` 는 카드·상세의 사진 자리(한 장 크게 · 둘 이상은 옆으로 넘기는 캐러셀에 "1/N" 과 점, #465) — `minAspect` 로 세로 사진 하한을 정한다(카드 1:1 · 상세 4:5), `post_media_viewer.dart` 는 전체 보기 대화상자 — 화면이 아니라 위젯이라 라우트 없이 `showDialog` 로 뜬다. 영상 칸은 하나이고(서버 상한) 압축 중 → 올리는 중(%) → 올라감을 그린다. 전체 보기의 영상 페이지는 포스터·재생 버튼으로 시작해 **눌러야** `video_player` 컨트롤러를 만든다 — 넘겨 보다 스친 영상이 데이터를 먹지 않는다.
 - `crew_favor_sheet.dart` — 크루 홈의 부탁 올리기 시트(#417): 날짜(오늘부터) · 시간대(오전·오후·저녁, **기본값 없음** — 미리 골라 두면 안 바꾼 채 올리는 사람이 생긴다) · 내 아이(`kMyPets` 중 서버 id 가 있는 것만, 한 마리면 미리 골라짐) · 한 줄. 금액 칸이 없다 — 결제·평점·보증·중개는 안 한다는 이슈의 선을 시트 첫 줄이 말한다.
 - `today_care_card.dart` · `message_actions_sheet.dart` 등 — 각 화면 문서 참조.
@@ -131,6 +132,7 @@ lib/
 
 - `route_image.dart` — `RouteProjection.fit`(경도·위도 → 상자 안 점, 등방 확대) · `RouteCanvasPainter`(단색+격자 배경, 폴리라인, 시작/끝, 거리·시간·날짜) · `RouteImage.renderPng`(`dart:ui` 로 위젯 트리 없이 PNG). **타일을 쓰지 않는다** — 네이버 지도 위에 그리면 카메라 궤적이 곧 경로라 좌표가 네이버에 간다(#235 C1).
 - `route_photo_saver.dart` — `gal` 로 기기 갤러리 앨범 Pawloop 에 넣는다. 업로드 경로 없음. `route_photo_no_network_test` 가 이 두 파일과 시트에 네트워크 import 가 없는 것을 소스로 잠근다.
+- `walk_share_card.dart` — 공유 카드(`WalkShareCard` · `WalkShareCardPainter` · `WalkShareImage.renderPng`). 사진(`photo` 바이트)이 있으면 cover 로 깔고 위아래 스크림 + 흰 글자, 없으면 단색 바닥. 못 읽는 바이트면 사진 없이 그린다 — `walk_share_card_photo_test` 가 가운데 띠의 평균 색으로 잰다(#450).
 
 ### 2.5 `theme/` — 디자인 토큰 + 배경 테마
 
