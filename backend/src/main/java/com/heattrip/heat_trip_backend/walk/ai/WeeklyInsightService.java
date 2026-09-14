@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.NoSuchElementException;
 
 /**
  * AI 주간 요약 — 이슈 #486. 통계 응답에 {@code aiSummary} 를 얹는다.
@@ -123,11 +124,36 @@ public class WeeklyInsightService {
         return insights.save(WeeklyInsight.first(user, dogKey, weekStart, hash, model.name(), text, now));
     }
 
+    /**
+     * 👍/👎(#486 후속) — 내 요약 행에 평가를 남기거나({@code up}·{@code down}) 지운다({@code null}).
+     * 남의 요약과 없는 요약은 구별 없이 404, 다른 값은 400. 다음 통계 응답의 {@code aiSummary.feedback} 이 이 값이다.
+     */
+    @Transactional
+    public WalkStatsResponse.AiSummary rate(long userId, long insightId, String value) {
+        String normalized = validFeedback(value);
+        WeeklyInsight row = insights.findById(insightId)
+                .filter(candidate -> candidate.getUser().getId().equals(userId))
+                .orElseThrow(() -> new NoSuchElementException("요약을 찾을 수 없습니다."));
+        row.rate(normalized, LocalDateTime.now(clock.withZone(ZoneOffset.UTC)));
+        return summaryOf(row);
+    }
+
+    private static String validFeedback(String value) {
+        if (value == null) {
+            return null;
+        }
+        if (WeeklyInsight.FEEDBACK_UP.equals(value) || WeeklyInsight.FEEDBACK_DOWN.equals(value)) {
+            return value;
+        }
+        throw new IllegalArgumentException("평가는 up 이나 down 입니다.");
+    }
+
     private static WalkStatsResponse.AiSummary summaryOf(WeeklyInsight row) {
         if (row.getText() == null) {
             return null;
         }
-        return new WalkStatsResponse.AiSummary(row.getText(), row.getGeneratedAt().toInstant(ZoneOffset.UTC));
+        return new WalkStatsResponse.AiSummary(row.getId(), row.getText(),
+                row.getGeneratedAt().toInstant(ZoneOffset.UTC), row.getFeedback());
     }
 
     /** 하루 호출 횟수 — 서버 하나의 메모리. 재시작하면 0 이지만, 상한의 목적(폭주 방지)에는 충분하다. */

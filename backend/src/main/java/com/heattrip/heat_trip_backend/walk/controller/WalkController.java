@@ -3,6 +3,7 @@ package com.heattrip.heat_trip_backend.walk.controller;
 import com.heattrip.heat_trip_backend.user.CurrentUser;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.walk.dto.WalkMemoRequest;
+import com.heattrip.heat_trip_backend.walk.dto.InsightFeedbackRequest;
 import com.heattrip.heat_trip_backend.walk.dto.WalkPageResponse;
 import com.heattrip.heat_trip_backend.walk.dto.WalkRequest;
 import com.heattrip.heat_trip_backend.walk.dto.WalkResponse;
@@ -94,6 +95,18 @@ public class WalkController {
                                    @RequestParam(required = false) Long dogId) {
         // AI 주간 요약(#486)은 통계 트랜잭션 밖에서 얹는다 — 모델 호출은 망이다.
         return insights.attach(user.getId(), dogId, walks.stats(user.getId(), dogId));
+    }
+
+    /**
+     * AI 요약 👍/👎 — #486 후속. {@code value} 가 {@code null} 이면 지운다. 내 요약이 아니면 404.
+     *
+     * <p>{@code walk-write} 버킷이다({@code ApiRateLimitFilter}) — 눌렀다 뗐다 하는 일이라 저장만큼 잦지 않다.
+     */
+    @PutMapping("/insights/{insightId}/feedback")
+    public WalkStatsResponse.AiSummary rateInsight(@CurrentUser User user,
+                                                  @PathVariable long insightId,
+                                                  @RequestBody InsightFeedbackRequest request) {
+        return insights.rate(user.getId(), insightId, request.value());
     }
 
     /** 상세. 경로가 여기에만 실린다. */

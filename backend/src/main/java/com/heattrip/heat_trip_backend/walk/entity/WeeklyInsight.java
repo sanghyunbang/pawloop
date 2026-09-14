@@ -18,6 +18,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.Check;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -42,12 +43,19 @@ import java.time.LocalDateTime;
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_weekly_insight", columnNames = {"user_id", "dog_id", "week_start"}),
         indexes = @Index(name = "idx_weekly_insight_generated", columnList = "generated_at"))
+@Check(name = "ck_weekly_insight_feedback", constraints = "feedback in ('up','down')")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class WeeklyInsight {
 
     /** "모든 아이" 의 dogKey. */
     public static final long ALL_DOGS = 0L;
+
+    /** 👍 — 이 문장이 도움이 됐다. */
+    public static final String FEEDBACK_UP = "up";
+
+    /** 👎 — 아니었다. */
+    public static final String FEEDBACK_DOWN = "down";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -84,6 +92,16 @@ public class WeeklyInsight {
     @Column(name = "generated_at", nullable = false)
     private LocalDateTime generatedAt;
 
+    /**
+     * 사용자의 평가(#486 후속) — {@link #FEEDBACK_UP} · {@link #FEEDBACK_DOWN} · {@code null}(안 누름).
+     * 값이 둘뿐이라 CHECK 로도 잠근다. 문장이 다시 만들어지면 지운다 — 옛 문장에 대한 평가다.
+     */
+    @Column(name = "feedback", length = 8)
+    private String feedback;
+
+    @Column(name = "feedback_at")
+    private LocalDateTime feedbackAt;
+
     public static WeeklyInsight first(User user, long dogKey, LocalDate weekStart,
                                       String inputHash, String model, String text, LocalDateTime at) {
         WeeklyInsight row = new WeeklyInsight();
@@ -105,5 +123,14 @@ public class WeeklyInsight {
         this.text = text;
         this.calls++;
         this.generatedAt = at;
+        // 새 문장이다 — 옛 문장에 대한 평가를 새 문장이 물려받으면 안 된다.
+        this.feedback = null;
+        this.feedbackAt = null;
+    }
+
+    /** 평가를 남기거나({@code up}·{@code down}) 지운다({@code null}). 값 검사는 서비스가 먼저 한다. */
+    public void rate(String value, LocalDateTime at) {
+        this.feedback = value;
+        this.feedbackAt = value == null ? null : at;
     }
 }

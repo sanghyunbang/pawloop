@@ -221,10 +221,19 @@ class WeeklySummary {
 /// null 이면 카드도 라벨도 없다 — 키가 없거나 · 실패 · 상한 · 숫자 검사에서 버린 경우이고, 그 자리는
 /// [WeeklySummary](규칙 문장)가 그대로 맡는다. "AI" 라벨은 진짜 모델 문장에만 붙는다(#347 · #332).
 class AiSummary {
+  /// 서버 요약 행의 id — 👍/👎 를 보낼 때 쓴다(#486 후속). 옛 서버가 안 주면 null 이고 그때는 버튼도 없다.
+  final int? id;
+
   final String text;
   final DateTime? generatedAt;
 
-  const AiSummary({required this.text, this.generatedAt});
+  /// 내가 남긴 평가 — `up` · `down` · null(안 누름). 문장이 다시 만들어지면 서버가 비운다.
+  final String? feedback;
+
+  const AiSummary({this.id, required this.text, this.generatedAt, this.feedback});
+
+  AiSummary withFeedback(String? value) =>
+      AiSummary(id: id, text: text, generatedAt: generatedAt, feedback: value);
 
   /// 계약의 `WalkStats.aiSummary` — 없거나 글이 비면 null.
   static AiSummary? parse(Object? json) {
@@ -232,9 +241,13 @@ class AiSummary {
     final text = json['text'];
     if (text is! String || text.trim().isEmpty) return null;
     final at = json['generatedAt'];
+    final id = json['id'];
+    final feedback = json['feedback'];
     return AiSummary(
+      id: id is int ? id : null,
       text: text.trim(),
       generatedAt: at is String ? DateTime.tryParse(at) : null,
+      feedback: feedback is String ? feedback : null,
     );
   }
 

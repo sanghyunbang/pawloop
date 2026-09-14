@@ -323,6 +323,8 @@ erDiagram
         TEXT     text "NULL = 만들었다가 버렸다"
         INT      calls "이 주의 호출 횟수"
         DATETIME generated_at
+        VARCHAR  feedback "up | down | NULL - 사용자의 평가, 다시 만들면 비운다 (#486 후속)"
+        DATETIME feedback_at
     }
 
     media_objects {
