@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/chat_outbox.dart';
+import '../domain/chat_thread.dart';
 import '../data/chat_polling_policy.dart';
 import '../data/chat_repository.dart';
 import '../data/chat_terms_gate.dart';
@@ -38,6 +39,13 @@ import '../widgets/post_media_viewer.dart';
 ///
 /// 방을 열 때와 새 메시지를 받을 때 `POST /rooms/{id}/read` 를 보낸다. 미읽음 뱃지는 서버가
 /// 계산하므로 앱이 0으로 지레짐작하지 않는다.
+///
+/// ## 읽기 흐름 (#452)
+///
+/// 말풍선은 [layoutThread] 가 묶는다 — 같은 사람의 같은 분(minute)은 한 묶음(이름은 첫 말,
+/// 시각은 마지막 말), 날이 바뀌면 날짜 구분선. 위로 올려 옛 말을 읽는 중에 새 말이 오면
+/// **끌어내리지 않는다** — 아래에 "새 메시지 N개" 알약을 띄우고, 누르거나 바닥에 닿으면 사라진다
+/// (카카오톡 · Instagram DM). 내가 보낸 말은 언제나 바닥으로 간다.
 class FamilyChatScreen extends StatefulWidget {
   final int roomId;
   final String title;
@@ -88,6 +96,15 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   final TextEditingController _ctrl = TextEditingController();
   final ScrollController _scroll = ScrollController();
 
+  /// 바닥 근처인가 — 이 안이면 새 말이 올 때 따라 내려간다.
+  bool _nearBottom = true;
+
+  /// 위에서 읽는 동안 온 남의 말 개수 — "새 메시지 N개" 알약.
+  int _unseen = 0;
+
+  /// 바닥에서 이만큼 안이면 "바닥 근처". 말풍선 한둘 높이다.
+  static const double _nearBottomPx = 160;
+
   final List<ChatMessageItem> _messages = [];
   final List<PendingMessage> _pending = [];
   late final PostMediaRepository _media = widget.media ?? PostMediaRepository();
@@ -118,7 +135,19 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scroll.addListener(_onScroll);
     _startAfterTerms();
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final near = _scroll.position.maxScrollExtent - _scroll.offset < _nearBottomPx;
+    if (near == _nearBottom && !(near && _unseen > 0)) return;
+    setState(() {
+      _nearBottom = near;
+      // 바닥에 닿으면 새 말은 본 것이다.
+      if (near) _unseen = 0;
+    });
   }
 
   /// 채팅 첫 진입에 약관 동의를 받는다 — Google Play UGC 정책(#82 완료 조건 6).
@@ -165,6 +194,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     _timer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _ctrl.dispose();
+    _scroll.removeListener(_onScroll);
     _scroll.dispose();
     super.dispose();
   }
@@ -227,7 +257,14 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
 
       if (fresh.isNotEmpty || initial) {
         _reportRead();
-        _scrollToBottom();
+        final me = _myUserId;
+        final others = fresh.where((m) => m.senderUserId != me).length;
+        if (initial || _nearBottom || others == 0) {
+          _scrollToBottom();
+        } else {
+          // 위에서 옛 말을 읽는 중이다 — 끌어내리지 말고 알약으로 알린다.
+          setState(() => _unseen += others);
+        }
       }
     } on ChatFailure catch (e) {
       if (!mounted) return;
@@ -380,15 +417,76 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   }
 
   void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
-      _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOut,
-      );
-    });
+    if (_unseen != 0) setState(() => _unseen = 0);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _settleToBottom(3));
   }
+
+  /// 바닥까지 — 지연 생성 목록은 아직 안 만든 줄의 높이를 어림하므로, 내려가 보니 더 남았으면
+  /// 한 번 더 간다(최대 [tries] 번). 안 그러면 새 말 두어 개 위에서 멈춘다.
+  Future<void> _settleToBottom(int tries) async {
+    if (!_scroll.hasClients) return;
+    await _scroll.animateTo(
+      _scroll.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
+    if (!mounted || !_scroll.hasClients || tries <= 1) return;
+    if (_scroll.position.maxScrollExtent - _scroll.offset > 1) {
+      await _settleToBottom(tries - 1);
+    }
+  }
+
+  /// "새 메시지 N개" 알약 — 위에서 읽는 동안 남의 말이 왔을 때만. 누르면 바닥으로.
+  Widget _newMessagesPill() => Positioned(
+        left: 0,
+        right: 0,
+        bottom: 10,
+        child: Center(
+          child: GestureDetector(
+            key: const Key('chat-new-messages'),
+            onTap: _scrollToBottom,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 8, 12, 8),
+              decoration: BoxDecoration(
+                color: T.accent,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: [
+                  BoxShadow(
+                    color: T.accent.withValues(alpha: 0.28),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('새 메시지 $_unseen개',
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w800, color: Colors.white)),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_downward_rounded, size: 15, color: Colors.white),
+              ]),
+            ),
+          ),
+        ),
+      );
+
+  /// 날짜 구분선 — "2026년 9월 14일 월요일", 가운데 회색 알약(카카오톡).
+  Widget _dayChip(String label) => Padding(
+        padding: const EdgeInsets.only(top: 14, bottom: 2),
+        child: Center(
+          child: Container(
+            key: const Key('chat-day-chip'),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: T.surface,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
+          ),
+        ),
+      );
 
   /// 발신자 이름 → 색. 가족 구성원이면 그 색, 아니면 이름 해시로 팔레트에서 고른다.
   Color _memberColor(String name) {
@@ -448,14 +546,30 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         ]),
       );
     }
-    return ListView.builder(
+    // 묶음 · 날짜 구분선은 순수 함수가 정한다(#452, `chat_thread.dart`). 보내는 중인 말은 내 말이다.
+    final me = 'u${_myUserId ?? 0}';
+    final slots = layoutThread([
+      for (final m in _messages) ThreadEntry(senderKey: 'u${m.senderUserId}', at: m.createdAt),
+      for (final p in _pending) ThreadEntry(senderKey: me, at: p.createdAt),
+    ], now: DateTime.now());
+    final list = ListView.builder(
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
       itemCount: _messages.length + _pending.length,
-      itemBuilder: (_, i) => i < _messages.length
-          ? _bubbleRow(context, _messages[i])
-          : _pendingRow(context, _pending[i - _messages.length]),
+      itemBuilder: (_, i) {
+        final slot = slots[i];
+        final row = i < _messages.length
+            ? _bubbleRow(context, _messages[i], slot)
+            : _pendingRow(context, _pending[i - _messages.length], slot);
+        final day = slot.dayLabel;
+        if (day == null) return row;
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_dayChip(day), row]);
+      },
     );
+    return Stack(children: [
+      list,
+      if (_unseen > 0 && !_nearBottom) _newMessagesPill(),
+    ]);
   }
 
   Widget _header(BuildContext context) {
@@ -491,11 +605,11 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   }
 
   /// 아직 서버가 확정하지 않은 말풍선. 회색이고, 실패하면 재전송 버튼이 붙는다.
-  Widget _pendingRow(BuildContext context, PendingMessage message) {
+  Widget _pendingRow(BuildContext context, PendingMessage message, ThreadSlot slot) {
     final maxW = MediaQuery.of(context).size.width * 0.68;
     final failed = message.state == PendingState.failed;
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: EdgeInsets.only(top: _gapAbove(slot)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxW),
@@ -558,42 +672,47 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   }
 
   /// 사진 메시지의 줄(#452) — 사진이 말풍선이다. 캡션이 있으면 그 아래 작은 말풍선.
-  Widget _photoRow(BuildContext context, ChatMessageItem m,
+  Widget _photoRow(BuildContext context, ChatMessageItem m, ThreadSlot slot,
       {required double maxW, required bool mine, required String time}) {
     final tile = _photoTile(m, maxW, mine: mine);
     final caption = m.body.isEmpty ? null : _captionBubble(m, maxW, mine: mine);
     final timeText = Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted));
     if (mine) {
       return Padding(
-        padding: const EdgeInsets.only(top: 12),
+        padding: EdgeInsets.only(top: _gapAbove(slot)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           tile,
           if (caption != null) ...[const SizedBox(height: 4), caption],
-          const SizedBox(height: 4),
-          timeText,
+          if (slot.showTime) ...[const SizedBox(height: 4), timeText],
         ]),
       );
     }
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: EdgeInsets.only(top: _gapAbove(slot)),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _avatar(m.senderName),
+        _avatarSlot(m.senderName, slot),
         const SizedBox(width: 9),
         Flexible(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(m.senderName,
-                style: const TextStyle(
-                    fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
-            const SizedBox(height: 4),
+            if (slot.showHeader) ...[_senderName(m.senderName), const SizedBox(height: 4)],
             tile,
             if (caption != null) ...[const SizedBox(height: 4), caption],
-            const SizedBox(height: 4),
-            timeText,
+            if (slot.showTime) ...[const SizedBox(height: 4), timeText],
           ]),
         ),
       ]),
     );
   }
+
+  /// 묶음 안은 촘촘하게(3), 묶음 사이는 넓게(12) — iMessage · 카카오톡의 간격.
+  static double _gapAbove(ThreadSlot slot) => slot.tight ? 3 : 12;
+
+  /// 묶음의 첫 말에만 아바타. 이어지는 말은 그 폭만큼 비워 말풍선 왼쪽 선을 맞춘다.
+  Widget _avatarSlot(String name, ThreadSlot slot) =>
+      slot.showHeader ? _avatar(name) : const SizedBox(width: 30);
+
+  Widget _senderName(String name) => Text(name,
+      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textSecondary));
 
   /// 사진 한 장 — 커뮤니티 카드와 같은 4:5 규칙([PostMedia.aspectRatio]): 세로 사진은 4:5 까지
   /// 자르고 원본은 전체 보기(누르면)에서. 길게 누르면 다른 말풍선과 같은 메뉴다.
@@ -646,19 +765,19 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         child: const Icon(Icons.broken_image_outlined, color: T.textMuted),
       );
 
-  Widget _bubbleRow(BuildContext context, ChatMessageItem m) {
+  Widget _bubbleRow(BuildContext context, ChatMessageItem m, ThreadSlot slot) {
     final maxW = MediaQuery.of(context).size.width * 0.68;
     final mine = _myUserId != null && m.senderUserId == _myUserId;
     final time = _hhmm(m.createdAt);
 
     // 사진 메시지(#452) — 지워졌거나 가려 접힌 것은 글자 말풍선의 규칙을 그대로 따른다.
     if (m.isImage && m.media != null && !m.deleted && !_isFolded(m)) {
-      return _photoRow(context, m, maxW: maxW, mine: mine, time: time);
+      return _photoRow(context, m, slot, maxW: maxW, mine: mine, time: time);
     }
 
     if (mine) {
       return Padding(
-        padding: const EdgeInsets.only(top: 12),
+        padding: EdgeInsets.only(top: _gapAbove(slot)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxW),
@@ -684,8 +803,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
                   style: const TextStyle(fontSize: 13.5, height: 1.45, color: Colors.white)),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted)),
+          if (slot.showTime) ...[
+            const SizedBox(height: 4),
+            Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted)),
+          ],
         ]),
       );
     }
@@ -697,16 +818,13 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       bottomRight: Radius.circular(16),
     );
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: EdgeInsets.only(top: _gapAbove(slot)),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _avatar(m.senderName),
+        _avatarSlot(m.senderName, slot),
         const SizedBox(width: 9),
         Flexible(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(m.senderName,
-                style: const TextStyle(
-                    fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
-            const SizedBox(height: 4),
+            if (slot.showHeader) ...[_senderName(m.senderName), const SizedBox(height: 4)],
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxW),
               child: GestureDetector(
@@ -741,8 +859,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
                 child: const Text('보기',
                     style: TextStyle(fontSize: 12, color: T.textSecondary)),
               ),
-            const SizedBox(height: 4),
-            Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted)),
+            if (slot.showTime) ...[
+              const SizedBox(height: 4),
+              Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted)),
+            ],
           ]),
         ),
       ]),

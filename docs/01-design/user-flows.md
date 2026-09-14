@@ -266,7 +266,7 @@ flowchart TD
     B([가족 화면 "가족 채팅"]) --> T
     T -->|아니오| R[대화상자 '대화를 시작하기 전에'<br/>두 줄 요약 · 자세히 → 신고 · 가리기 · 내보내기 · 탈퇴 뒤 표시 — 나중에 / 동의하고 시작]
     T -->|예| C
-    R -->|동의| C[family_chat_screen.dart<br/>적응형 폴링 afterSeq · ETag]
+    R -->|동의| C[family_chat_screen.dart<br/>적응형 폴링 afterSeq · ETag<br/>묶인 말풍선 · 날짜 구분선 · 새 메시지 알약 #452]
     C -->|보내기| S[낙관적 표시 → POST 메시지<br/>실패하면 재시도]
     C -->|길게 누르기| M[신고 · 가리기 시트 #82]
     C -->|방장| K[내보내기]
