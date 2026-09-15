@@ -45,6 +45,9 @@ class CourseCandidates implements CourseCandidateSource {
         title: p.title,
         kind: kindOf(p),
         distanceM: p.distM,
+        // 산책로만 길이를 안다(#539). 모르는 후보는 `null` 그대로 둔다 — 0 으로 눕히면
+        // "길이가 0인 코스" 가 되어 목표가 짧을수록 공원이 산책로를 이긴다.
+        lengthM: p.courseM?.toDouble(),
         image: p.image.isEmpty ? null : p.image,
         source: p.source,
         contentId: p.contentId,

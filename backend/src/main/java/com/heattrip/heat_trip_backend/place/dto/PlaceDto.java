@@ -33,6 +33,14 @@ import java.util.Set;
  * <h2>{@link #summary} — 산책로의 한 줄</h2>
  * <p>"12.3km · 약 4시간 · 보통" 처럼 카드에 그대로 얹는 문장이다. KTO 항목에는 없다
  * ({@code null} 이라 생략된다). 판매업은 상세 업무 구분(동물판매업/동물미용업)이 여기 온다.
+ *
+ * <h2>{@link #courseM} — 같은 길이를 숫자로도 (#539)</h2>
+ * <p>{@link #summary} 안에 이미 "4.2km" 가 있지만 <b>문장이라 셈에 못 쓴다.</b> 앱의 코스
+ * 추천이 "목표 2.0km" 에 가까운 코스를 고르려면 숫자가 필요한데, 그 값이 안 와서
+ * <b>점수의 길이 항이 통째로 죽어 있었다</b> — 후보가 전부 같은 기본값을 먹으니 남는 것은
+ * 거리뿐이라 그냥 가까운 순이었다.
+ *
+ * <p>둘 다 싣는다. 문장은 지도 시트가 그대로 찍고, 숫자는 추천이 쓴다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PlaceDto(
@@ -47,7 +55,8 @@ public record PlaceDto(
         String tel,
         String image,
         Double distM,
-        String summary) {
+        String summary,
+        Integer courseM) {
 
     /** 관광공사 반려동반 장소. {@code contentId} 가 KTO 의 {@code contentid} 그대로다. */
     public static final String SOURCE_KTO = "kto";
@@ -104,6 +113,19 @@ public record PlaceDto(
     }
 
     /**
+     * 코스 길이가 없는 출처의 편의 생성자 — 병원 · 펫샵 · 놀이터가 쓴다.
+     *
+     * <p>{@link #courseM} 은 <b>산책로만</b> 채운다(#539). 나머지 출처에 {@code null} 을
+     * 손으로 적게 하면 그 자리가 "아직 안 넣은 것" 인지 "없는 것" 인지 안 보인다.
+     */
+    public PlaceDto(String contentId, String title, String source, String category,
+                    String contentTypeId, double lat, double lng, String addr,
+                    String tel, String image, Double distM, String summary) {
+        this(contentId, title, source, category, contentTypeId, lat, lng, addr, tel, image,
+                distM, summary, null);
+    }
+
+    /**
      * 앱의 필터·아이콘이 보는 값 — KTO 면 {@code contentTypeId}, 아니면 {@code category}.
      *
      * <p>앱({@code PetPlace.categoryKey})과 같은 규칙이다. 갈리면 서버가 거른 것과 앱이 그리는
@@ -121,6 +143,21 @@ public record PlaceDto(
     /** 거리를 채운 사본. 캐시에서 꺼낸 뒤 서빙 직전에 부른다. */
     public PlaceDto withDistance(double meters) {
         return new PlaceDto(contentId, title, source, category, contentTypeId,
-                lat, lng, addr, tel, image, meters, summary);
+                lat, lng, addr, tel, image, meters, summary, courseM);
+    }
+
+    /** 코스 길이(m) — 없으면 0 보다 크지 않다. 셈하는 쪽이 null 을 두 번 안 보게. */
+    public boolean hasCourseLength() {
+        return courseM != null && courseM > 0;
+    }
+
+    /**
+     * 킬로미터를 미터로 — 원본이 주는 단위가 그것이다. 0 이하와 {@code null} 은 "모른다" 다.
+     *
+     * <p>두루누비에는 국토종주급 코스가 있어 값이 수백 km 일 수 있다. <b>자르지 않는다</b> —
+     * 자르면 그 코스가 목표에 딱 맞는 코스로 둔갑한다. 너무 긴 코스는 점수에서 밀리면 된다.
+     */
+    public static Integer metersOf(Double km) {
+        return km == null || km <= 0 ? null : (int) Math.round(km * 1000);
     }
 }

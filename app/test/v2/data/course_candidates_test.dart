@@ -28,8 +28,8 @@ const _base = 'https://api.example.test';
 
 // 서울숲(37.5445, 127.0374) 근처 — 산책로 · 동네 길 · 놀이터 · 여행지 · 카페 · 병원 · 먼 곳.
 const _catalog = '['
-    '{"contentId":"trail:101","title":"서울숲 둘레길","source":"trail","category":"trail","contentTypeId":"","addr":"","image":"","tel":"","lng":127.0400,"lat":37.5450},'
-    '{"contentId":"trail:lt9","title":"뚝섬 동네 길","source":"localtrail","category":"trail","contentTypeId":"","addr":"","image":"","tel":"","lng":127.0380,"lat":37.5440},'
+    '{"contentId":"trail:101","title":"서울숲 둘레길","source":"trail","category":"trail","contentTypeId":"","addr":"","image":"","tel":"","lng":127.0400,"lat":37.5450,"summary":"4.2km · 약 1시간","courseM":4200},'
+    '{"contentId":"trail:lt9","title":"뚝섬 동네 길","source":"localtrail","category":"trail","contentTypeId":"","addr":"","image":"","tel":"","lng":127.0380,"lat":37.5440,"summary":"1.9km · 약 30분","courseM":1900},'
     '{"contentId":"pg:1","title":"성수 놀이터","source":"playground","category":"playground","contentTypeId":"","addr":"","image":"","tel":"","lng":127.0390,"lat":37.5460},'
     '{"contentId":"2733847","title":"서울숲","source":"kto","category":"","contentTypeId":"12","addr":"","image":"https://cdn/park.jpg","tel":"","lng":127.0374,"lat":37.5445},'
     '{"contentId":"9001","title":"강아지 카페","source":"kto","category":"","contentTypeId":"39","addr":"","image":"","tel":"","lng":127.0376,"lat":37.5446},'
@@ -83,8 +83,29 @@ void main() {
     expect(park.image, 'https://cdn/park.jpg');
     expect(park.distanceM, closeTo(0, 1));
     expect(park.lengthM, isNull, reason: '점 하나짜리 장소의 길이를 지어내지 않는다');
+    expect(found.singleWhere((c) => c.id == 'trail:101').lengthM, 4200,
+        reason: '계약의 courseM 이 추천이 쓰는 lengthM 이다 (#539)');
+    expect(found.singleWhere((c) => c.id == 'trail:lt9').lengthM, 1900);
+    expect(found.singleWhere((c) => c.id == 'pg:1').lengthM, isNull,
+        reason: '놀이터는 코스가 아니라 길이가 없다 — 0 으로 눕히면 짧은 목표에서 산책로를 이긴다');
     expect(park.source, 'kto');
     expect(park.contentId, '2733847');
+  });
+
+  test('목표 2km 면 1.9km 코스가 4.2km 코스와 바로 앞 공원을 이긴다 (#539)', () async {
+    final source = CourseCandidates(catalog: catalog(), courses: courses('[]'));
+
+    final found = await source.around(lat: 37.5445, lng: 127.0374);
+    final ranked = CourseRecommender.rank(candidates: found, targetMinutes: 30);
+
+    expect(ranked.first.targetKm, closeTo(2.0, 0.001));
+    expect(ranked.first.course.id, 'trail:lt9',
+        reason: '길이가 안 오던 동안에는 후보가 전부 같은 기본값을 먹어, 0m 앞의 서울숲이 1등이었다');
+    expect(ranked.map((r) => r.course.id).toList().indexOf('trail:101'),
+        greaterThan(ranked.map((r) => r.course.id).toList().indexOf('trail:lt9')),
+        reason: '4.2km 는 목표에서 2.2km 멀다');
+    expect(ranked.any((r) => r.course.id == '2733847'), isTrue,
+        reason: '길이를 모르는 후보도 목록에서 사라지면 안 된다 — 지금의 0.5 자리 그대로');
   });
 
   test('내 코스는 시작점이 2km 안이면 코스 길이와 함께 든다 — 경로는 [경도, 위도] 순', () async {
