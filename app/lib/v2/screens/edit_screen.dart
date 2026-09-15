@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_tokens.dart';
 import '../theme/themes.dart';
+import '../data/avatar_border_store.dart';
 import '../data/pet_sync.dart';
 import '../data/image_prep.dart';
 import '../data/media_picker.dart';
 import '../data/post_media_repository.dart';
 import '../widgets/dog_avatar.dart';
-import '../data/walk_repository.dart' show WalkFailure, WalkFailureKindX;
+import '../data/walk_repository.dart' show WalkFailure, WalkFailureKind, WalkFailureKindX;
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
 
@@ -23,6 +24,9 @@ class EditScreen extends StatefulWidget {
   /// 테스트가 가짜 서버를 꽂는 자리. 운영 경로에서는 null 이다.
   final PetSync? sync;
 
+  /// 아바타 테두리 색을 남기는 자리 — 테스트가 가짜를 꽂는다.
+  final AvatarBorderStore borders;
+
   /// 사진 바꾸기(#448)의 부품 — 테스트가 물린다.
   final PostMediaRepository? media;
   final MediaPicker? picker;
@@ -32,6 +36,7 @@ class EditScreen extends StatefulWidget {
     super.key,
     required this.pet,
     this.sync,
+    this.borders = const AvatarBorderStore(),
     this.media,
     this.picker,
     this.prepare = ImagePrep.prepare,
@@ -57,6 +62,7 @@ class _EditScreenState extends State<EditScreen> {
 
   late final PetSync _sync = widget.sync ?? PetSync();
   bool _deleting = false;
+  bool _saving = false;
 
   late final PostMediaRepository _media = widget.media ?? PostMediaRepository();
   late final MediaPicker _picker = widget.picker ?? ImagePickerMediaPicker();
@@ -133,36 +139,103 @@ class _EditScreenState extends State<EditScreen> {
     super.dispose();
   }
 
-  /// 편집 저장.
+  /// 편집 저장 — **서버에 간다**(#516).
   ///
-  /// **이 화면의 편집은 아직 서버에 가지 않는다.** 계약에 `PATCH /api/dogs/{dogId}` 가
-  /// 선언돼 있지만 서버에 구현이 없고(#145 가 미뤘다), 계약이 생성용 `DogInput` 을
-  /// 그대로 재사용해서 **계약대로면 부분 수정이 불가능**하다 — `DogPatch` 분리는
-  /// 이슈 #24 가 소유한다.
+  /// 2026-09-15 이전에는 메모리의 `kMyPets` 만 바꾸고 "이 기기에만 반영했어요 · 서버 저장은
+  /// 준비 중이에요" 라고 말했다. 그 말도 사실이 아니었다 — 기기에도 안 남아서, 앱을 껐다
+  /// 켜면 `PetSync.load()` 가 서버 목록으로 통째로 갈아끼웠다. 한 번의 콜드 스타트에 편집이
+  /// 전부 사라졌다.
   ///
-  /// 그래서 화면이 "저장됐어요" 라고만 말하면 거짓말이 된다. 앱 안에서만 바뀐다는 것을
-  /// 문구로 밝힌다(#159).
-  void _save() {
-    final months = int.tryParse(_age.text.trim());
+  /// **나이는 개월 수로 편집하지만 서버가 드는 것은 `birth` 다** — `ageMonths` 는 거기서
+  /// 나오는 파생값이라 저장할 자리가 없다. 그래서 `오늘 − N개월` 로 바꿔 보낸다. 칸이
+  /// 비었거나 0 이면 안 보낸다: 0 을 보내면 생일이 오늘이 되어 "갓 태어났다" 가 된다.
+  ///
+  /// **안 바뀐 필드는 안 보낸다.** 부분 수정이라 보낸 것만 반영되고, 그래야 두 기기에서
+  /// 같은 아이를 고쳐도 서로의 편집을 덮지 않는다.
+  Future<void> _save() async {
+    if (_saving || _deleting) return;
     final base = widget.pet;
-    // 선택된 아이(kMyPets[kSelectedPetIdx])를 갱신 — 여러 마리 지원.
-    updateSelectedPet(
-      base.copyWith(
-        name: _name.text.trim().isEmpty ? base.name : _name.text.trim(),
-        breed: _breed.text.trim().isEmpty ? base.breed : _breed.text.trim(),
-        species: _species,
-        size: _size,
-        ageMonths: (months == null || months < 0) ? base.ageMonths : months,
-        neutered: _neutered,
-      ),
-    );
+    final serverId = base.serverId;
+    final name = _name.text.trim();
+    final breed = _breed.text.trim();
+    final months = int.tryParse(_age.text.trim());
+
+    if (serverId == null) {
+      // 서버에 없는 아이다(등록 전 임시 상태). 화면 안에서만 바꾸고 그 사실을 말한다.
+      _applyLocally(name, breed, months);
+      _tell('이 기기에만 반영했어요 · 아직 서버에 등록되지 않은 아이예요');
+      if (mounted) Navigator.of(context).maybePop();
+      return;
+    }
+
+    final changedName = name.isNotEmpty && name != base.name ? name : null;
+    final changedBreed = breed.isNotEmpty && breed != base.breed ? breed : null;
+    final changedSpecies = _species == base.species ? null : _species;
+    final changedSize = _size == base.size ? null : _size;
+    final changedNeutered = _neutered == base.neutered ? null : _neutered;
+    // 나이는 개월 수로 편집하지만 서버가 드는 것은 birth 다 — ageMonths 는 거기서 나오는
+    // 파생값이라 저장할 자리가 없다. 칸이 비었거나 0 이면 안 보낸다: 0 을 보내면 생일이
+    // 오늘이 되어 "갓 태어났다" 가 된다.
+    final now = DateTime.now();
+    final changedBirth = (months != null && months > 0 && months != base.ageMonths)
+        ? DateTime(now.year, now.month - months, now.day)
+        : null;
+
+    if (changedName == null &&
+        changedBreed == null &&
+        changedSpecies == null &&
+        changedSize == null &&
+        changedNeutered == null &&
+        changedBirth == null) {
+      // 바뀐 것이 없다. 빈 본문은 서버가 400 이고, 그건 오류가 아니라 할 일이 없는 것이다.
+      Navigator.of(context).maybePop();
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await _sync.edit(
+        serverId,
+        name: changedName,
+        species: changedSpecies,
+        size: changedSize,
+        breed: changedBreed,
+        birth: changedBirth,
+        neutered: changedNeutered,
+      );
+      if (!mounted) return;
+      _tell('저장했어요');
+      Navigator.of(context).maybePop();
+    } on WalkFailure catch (failure) {
+      if (!mounted) return;
+      _tell(switch (failure.kind) {
+        WalkFailureKind.network => '저장하지 못했어요 · 연결을 확인해 주세요',
+        WalkFailureKind.notFound => '그 아이를 찾을 수 없어요',
+        WalkFailureKind.rateLimited => '요청이 많아요 · 잠시 뒤 다시 시도해 주세요',
+        _ => '저장하지 못했어요 · 입력을 확인해 주세요',
+      });
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// 서버에 없는 아이를 화면 안에서만 고친다.
+  void _applyLocally(String name, String breed, int? months) {
+    final base = widget.pet;
+    updateSelectedPet(base.copyWith(
+      name: name.isEmpty ? base.name : name,
+      breed: breed.isEmpty ? base.breed : breed,
+      species: _species,
+      size: _size,
+      ageMonths: (months == null || months < 0) ? base.ageMonths : months,
+      neutered: _neutered,
+    ));
+  }
+
+  void _tell(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('이 기기에만 반영했어요 · 서버 저장은 준비 중이에요'),
-        duration: Duration(milliseconds: 2000),
-      ),
+      SnackBar(content: Text(message), duration: const Duration(milliseconds: 2000)),
     );
-    Navigator.of(context).maybePop();
   }
 
   /// 프로필 지우기 — 서버는 소프트 삭제다(#156). 산책 기록은 남고 통계에도 계속 센다.
@@ -421,7 +494,10 @@ class _EditScreenState extends State<EditScreen> {
             children: [
               for (final c in kAvatarBorders)
                 GestureDetector(
-                  onTap: () => AppThemeCtl.avatarBorder.value = c,
+                  key: Key('avatar-border-${c.toARGB32()}'),
+                  // 고른 색을 남긴다(#516). 예전에는 메모리만 바뀌어서 앱을 껐다 켜면
+                  // 기본색으로 돌아갔다 — 고르는 칸을 그려 놓고 안 지킨 셈이다.
+                  onTap: () => widget.borders.save(c),
                   child: Container(
                     width: 32,
                     height: 32,

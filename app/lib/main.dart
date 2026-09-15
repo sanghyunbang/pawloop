@@ -30,6 +30,7 @@ import 'package:heat_trip_flutter/shared/media/media.dart';
 import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
 // 전역 로그인 상태
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
+import 'package:heat_trip_flutter/v2/data/avatar_border_store.dart';
 import 'package:heat_trip_flutter/v2/data/local_notification_sink.dart';
 import 'package:heat_trip_flutter/v2/data/location_service.dart';
 import 'package:heat_trip_flutter/v2/data/session_traces.dart';
@@ -63,6 +64,10 @@ Future<void> main() async {
   // 위치 이용중지(위치정보법 제24조) 설정을 되살린다. **첫 화면이 그려지기 전에**
   // 해야 한다 — 늦으면 중단해 둔 사용자의 현위치를 한 번 조회한 뒤에 꺼진다.
   await LocationService.restorePaused();
+
+  // 고른 아바타 테두리 색을 되살린다(#516). 첫 프레임 전에 해야 기본색으로 한 번
+  // 그려졌다가 바뀌는 깜빡임이 없다.
+  await const AvatarBorderStore().restore();
 
   // 구버전(SharedPreferences 평문 'jwt_token') → 보안 저장소 1회 마이그레이션.
   // 로그인 상태를 복원하기 전에 돌려야 기존 사용자가 재로그인 없이 넘어온다.

@@ -41,6 +41,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/schedule_reminder.dart';
+import 'avatar_border_store.dart';
 import 'neighborhood_store.dart';
 import 'walk_goal_store.dart';
 import 'walk_in_progress.dart';
@@ -64,6 +65,7 @@ SessionNotificationSink Function()? sessionNotifications;
 
 /// 세션이 끝나면 지우는 키들. 각 저장소가 자기 키를 든다.
 const List<String> sessionScopedKeys = <String>[
+  AvatarBorderStore.key,
   NeighborhoodStore.key,
   WalkOutbox.pendingKey,
   WalkOutbox.rejectedKey,

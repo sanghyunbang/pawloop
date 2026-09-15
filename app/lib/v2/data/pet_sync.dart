@@ -70,6 +70,46 @@ class PetSync {
     return profile;
   }
 
+  /// 한 마리를 **부분 수정**한다 — 계약의 `PATCH /api/dogs/{dogId}`(#516).
+  ///
+  /// 등록·삭제와 같은 자리에 둔다. 화면이 `WalkRepository` 를 직접 부르면 도메인 enum 을
+  /// 화면이 옮겨야 하고, 그 변환이 두 벌이 된다.
+  ///
+  /// **인자는 "바꿀 것" 만 준다.** `null` 은 "안 바꿈" 이고, 생일은 [clearBirth] 로 지운다 —
+  /// 서버 계약이 그 둘을 가른다.
+  ///
+  /// 성공하면 목록의 그 아이를 서버가 돌려준 값으로 갈아끼운다. **서버의 답으로 바꾸는
+  /// 것이 요점이다** — 화면이 보낸 값으로 바꾸면 서버가 다듬은 것(공백 제거 · 파생 나이)이
+  /// 다음 조회 때 갑자기 달라진다.
+  ///
+  /// @throws WalkFailure 서버가 거절했거나 연결이 없을 때. 목록은 그대로다
+  Future<DogProfile> edit(
+    int dogId, {
+    String? name,
+    PetSpecies? species,
+    DogSize? size,
+    String? breed,
+    DateTime? birth,
+    bool clearBirth = false,
+    bool? neutered,
+  }) async {
+    final saved = await _repo.patchDog(
+      dogId,
+      name: name,
+      species: species == null ? null : _toServerSpecies(species),
+      size: size == null ? null : _toServerSize(size),
+      breed: breed,
+      birth: birth,
+      clearBirth: clearBirth,
+      neutered: neutered,
+    );
+    final profile = _toProfile(saved);
+    replacePets([
+      for (final pet in kMyPets.value) pet.serverId == dogId ? profile : pet,
+    ]);
+    return profile;
+  }
+
   /// 한 마리를 보낸다 — 서버는 소프트 삭제라 **산책 기록은 남고 통계에도 계속 센다**(#156).
   ///
   /// 성공하면 목록에서 빠지고 선택은 남은 아이 중 하나로 옮긴다([replacePets] 가 한다).

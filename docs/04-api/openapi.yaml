@@ -838,9 +838,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
-      x-status: planned
-      x-status-note: |
-        부분 수정은 아직 없다. `DogPatch` 를 `DogRequest` 와 어떻게 나눌지는 #24(계약 규약 ADR)가 소유한다 — `DogController` javadoc 이 같은 말을 한다.
       tags: [Dogs]
       summary: 반려견 수정(부분)
       description: |
@@ -848,7 +845,11 @@ paths:
         `required: [name, size]` 라, 그것을 재사용하면 `{"neutered": true}` 만 보내는 것이
         계약 위반이 되어 **부분 수정이 계약상 불가능**해집니다.
 
-        남의 것과 없는 것은 같은 `404` 입니다(규약 3).
+        **보낸 필드만 반영합니다.** 빈 본문은 `400` 입니다 — 200 으로 받으면 "저장했어요" 를
+        보고 아무것도 안 바뀐 화면을 보게 됩니다. `birth` 만 `null` 을 받고, 그건 "지운다" 는
+        뜻입니다 — 잘못 넣은 날짜를 비울 길이 없으면 그 사람은 영영 틀린 나이를 봅니다.
+
+        남의 것과 없는 것은 같은 `404` 입니다(규약 3). 버킷 `group-write`.
       requestBody:
         required: true
         content:

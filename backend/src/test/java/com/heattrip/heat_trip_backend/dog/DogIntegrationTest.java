@@ -343,6 +343,117 @@ class DogIntegrationTest extends AbstractMySqlIntegrationTest {
                 .isGreaterThan(10);
     }
 
+    // ─────────────────── 부분 수정 (#516) ───────────────────
+
+    @Test
+    @DisplayName("보낸 것만 바뀐다 — 안 보낸 필드는 그대로다")
+    void patchChangesOnlyWhatIsSent() throws Exception {
+        Account me = account("고치는사람");
+        long dogId = body(register(me, """
+                {"name":"보리","species":"dog","breed":"푸들","size":"small","birth":"2023-03-01","neutered":false}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        JsonNode patched = body(patch(me, dogId, """
+                {"neutered":true}
+                """).andExpect(status().isOk()));
+
+        assertThat(patched.path("neutered").asBoolean()).isTrue();
+        assertThat(patched.path("name").asText()).as("안 보낸 것은 그대로").isEqualTo("보리");
+        assertThat(patched.path("breed").asText()).isEqualTo("푸들");
+        assertThat(patched.path("size").asText()).isEqualTo("small");
+        assertThat(patched.path("birth").asText()).isEqualTo("2023-03-01");
+    }
+
+    @Test
+    @DisplayName("생일에 null 을 보내면 지운다 — 안 보낸 것과 다르다")
+    void explicitNullBirthClearsIt() throws Exception {
+        Account me = account("생일지우는사람");
+        long dogId = body(register(me, """
+                {"name":"보리","size":"small","birth":"2023-03-01"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        JsonNode cleared = body(patch(me, dogId, """
+                {"birth":null}
+                """).andExpect(status().isOk()));
+
+        assertThat(cleared.path("birth").isNull())
+                .as("잘못 넣은 날짜를 비울 길이 없으면 그 사람은 영영 틀린 나이를 본다")
+                .isTrue();
+        assertThat(cleared.path("ageMonths").isNull())
+                .as("파생값도 함께 비어야 한다 — 0 은 '갓 태어났다' 라는 다른 뜻이다")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("빈 본문은 400 이다 — 200 이면 '저장했어요' 를 보고 안 바뀐 화면을 본다")
+    void emptyPatchIsRejected() throws Exception {
+        Account me = account("빈본문보내는사람");
+        long dogId = body(register(me, """
+                {"name":"보리","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        patch(me, dogId, "{}").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("계약 밖의 몸집은 400 이고, 아무것도 안 바뀐다")
+    void patchRejectsValuesOutsideTheContract() throws Exception {
+        Account me = account("이상한값보내는사람");
+        long dogId = body(register(me, """
+                {"name":"보리","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        patch(me, dogId, """
+                {"size":"huge"}
+                """).andExpect(status().isBadRequest());
+
+        assertThat(body(detail(me, dogId).andExpect(status().isOk())).path("size").asText())
+                .isEqualTo("small");
+    }
+
+    @Test
+    @DisplayName("미래 생일은 400 이다 — 등록과 같은 규칙이다")
+    void patchRejectsFutureBirth() throws Exception {
+        Account me = account("미래생일보내는사람");
+        long dogId = body(register(me, """
+                {"name":"보리","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        patch(me, dogId, """
+                {"birth":"2999-01-01"}
+                """).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("남의 반려동물 수정은 없는 것과 같은 404 이고, 주인 것은 그대로다")
+    void patchingSomeoneElsesDogIsNotFound() throws Exception {
+        Account owner = account("주인");
+        Account stranger = account("남");
+        long dogId = body(register(owner, """
+                {"name":"보리","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        patch(stranger, dogId, """
+                {"name":"바뀐이름"}
+                """).andExpect(status().isNotFound());
+
+        assertThat(body(detail(owner, dogId).andExpect(status().isOk())).path("name").asText())
+                .isEqualTo("보리");
+    }
+
+    @Test
+    @DisplayName("이름을 빈 문자열로 보내면 400 이다 — 이름 없는 아이를 만들지 않는다")
+    void patchRejectsBlankName() throws Exception {
+        Account me = account("빈이름보내는사람");
+        long dogId = body(register(me, """
+                {"name":"보리","size":"small"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        patch(me, dogId, """
+                {"name":"   "}
+                """).andExpect(status().isBadRequest());
+    }
+
     // ─────────────────── 지그 ───────────────────
 
     /** 요청마다 달라지는 값 하나를 지운다. 나머지가 같아야 두 응답이 구분되지 않는다. */
@@ -352,6 +463,14 @@ class DogIntegrationTest extends AbstractMySqlIntegrationTest {
 
     private ResultActions register(Account account, String json) throws Exception {
         return mockMvc.perform(post("/api/dogs")
+                .header("Authorization", "Bearer " + account.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json));
+    }
+
+    private ResultActions patch(Account account, long dogId, String json) throws Exception {
+        return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .patch("/api/dogs/{dogId}", dogId)
                 .header("Authorization", "Bearer " + account.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json));

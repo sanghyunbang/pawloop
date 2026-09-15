@@ -506,6 +506,50 @@ class WalkRepository {
     return pet;
   }
 
+  /// 아이 하나를 **부분 수정**한다 — 계약의 `PATCH /api/dogs/{dogId}`(#516).
+  ///
+  /// **보낸 것만 바뀐다.** 안 보낸 필드는 서버가 그대로 둔다. `birth` 는 `null` 을 명시적으로
+  /// 보내면 지운다 — 그래서 이 함수는 "안 보냄" 과 "지움" 을 [clearBirth] 로 가른다.
+  ///
+  /// 나이는 개월 수로 편집하지만 서버가 드는 것은 `birth` 다(`ageMonths` 는 거기서 나오는
+  /// 파생값이라 저장할 자리가 없다). 부르는 쪽이 `오늘 − N개월` 로 바꿔 준다.
+  Future<ServerPet> patchDog(
+    int dogId, {
+    String? name,
+    ServerPetSpecies? species,
+    ServerPetSize? size,
+    String? breed,
+    DateTime? birth,
+    bool clearBirth = false,
+    bool? neutered,
+  }) async {
+    final body = <String, dynamic>{
+      if (name != null) 'name': name,
+      if (species != null) 'species': species.wire,
+      if (size != null) 'size': size.wire,
+      if (breed != null) 'breed': breed,
+      if (clearBirth) 'birth': null
+      else if (birth != null) 'birth': _yyyyMmDd(birth),
+      if (neutered != null) 'neutered': neutered,
+    };
+    if (body.isEmpty) {
+      // 빈 본문은 서버가 400 이다. 여기서 먼저 막는 이유는 "바꾼 것이 없는데 저장을 눌렀다"
+      // 가 오류가 아니기 때문이다 — 부르는 쪽이 이 경우를 안 부르게 해야 한다.
+      throw const WalkFailure(WalkFailureKind.rejected);
+    }
+    final json = await _send(
+      () => _authed.patchJson(Uri.parse('$baseUrl/api/dogs/$dogId'), body: body),
+    );
+    final pet = ServerPet.tryParse(json as Map<String, dynamic>);
+    if (pet == null) throw const WalkFailure(WalkFailureKind.network);
+    return pet;
+  }
+
+  static String _yyyyMmDd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
   // ─────────────────────────── 산책 ───────────────────────────
 
   /// 산책 하나를 저장한다.

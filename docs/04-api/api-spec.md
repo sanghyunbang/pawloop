@@ -262,7 +262,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ## 3. 강아지 프로필 (Dogs)
 
 프론트 도메인: `app/lib/v2/domain/pet.dart` → `DogProfile { name, breed, size(소형/중형/대형), ageMonths, neutered, avatarAsset }`.
-앱은 `pet_sync.dart` 가 `GET /api/dogs` 로 읽어 `kMyPets` 를 채운다(#159). 아직 서버로 안 가는 것은 편집 화면의 글자 칸뿐이다 — `PATCH /api/dogs/{dogId}` 는 계약에만 있다.
+앱은 `pet_sync.dart` 가 `GET /api/dogs` 로 읽어 `kMyPets` 를 채운다(#159). 편집 화면도 이제 서버로 간다 — `PATCH /api/dogs/{dogId}`(#516). 2026-09-15 이전에는 그 화면이 메모리의 목록만 바꾸고 "이 기기에만 반영했어요" 라고 말했는데, 기기에도 안 남아서 앱을 껐다 켜면 전부 사라졌다.
 
 ### 3.1 내 강아지 목록 — ✅ 구현(#145)
 
@@ -308,9 +308,11 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 `GET /api/dogs/{dogId}` → 3.1 항목 1건.
 
-### 3.4 강아지 수정(부분) — ⬜ 미구현 (계약 `x-status: planned`. 전용 `DogPatch` — ADR-0017 규약 4)
+### 3.4 강아지 수정(부분) — ✅ 구현(#516)
 
-`PATCH /api/dogs/{dogId}` — 본인 소유만(아니면 `403`). 변경 필드만 전송.
+`PATCH /api/dogs/{dogId}` — 전용 `DogPatch` 다(ADR-0017 규약 4). **보낸 필드만** 반영하고 안 보낸 것은 그대로 둔다. 남의 것과 없는 것은 같은 `404`(규약 3), 빈 본문은 `400`, `group-write` 버킷.
+
+`birth` 만 `null` 을 받는다 — **지운다**는 뜻이다. 서버가 "안 보냈다" 와 "`null` 을 보냈다" 를 가르는 방법은 Jackson 이 **키가 있을 때만 세터를 부른다**는 사실이다(`DogPatchRequest` javadoc). 앱의 편집 화면은 개월 수를 받아 `birth = 오늘 − N개월` 로 보낸다 — `ageMonths` 는 서버가 `birth` 에서 내는 파생값이라 저장할 자리가 없다.
 
 ```json
 // Request
