@@ -10,18 +10,29 @@
 산책을 wedge로 좁게 시작해 **반려 일상 로그(산책→건강·식사·병원·동네) + 동반장소 지도 + 커뮤니티**로 확장하는 앱입니다. (기존 감정 여행 heattrip에서 2026-07 피벗, 감정 요소 전부 제거)
 
 - **프론트**: Flutter 3.44.4 / Dart 3.12.2 · flutter_naver_map · fl_chart · Fluent Emoji 3D · Pretendard
-- **백엔드**: Spring Boot + MySQL(공간형 POINT/LINESTRING, SPATIAL INDEX)
+- **백엔드**: Spring Boot + MySQL(공간형 POINT/LINESTRING — `SPATIAL INDEX` 는 만들지 않습니다, ADR-0015)
 - **외부 데이터**: 관광공사 KorPetTourService2(반려동반), LOCALDATA(동물병원), 두루누비(산책로)
 
 ---
 
 ## 읽는 순서
 
-`① 설계·디자인(01) → ② 아키텍처(02) → ③ DB(03) → ④ API(04) → ⑤ 빌드(05) → ⑥ 테스트(06) → ⑦ 의사결정(99)`
+`⓪ 제품 기획(00) → ① 설계·디자인(01) → ② 아키텍처(02) → ③ DB(03) → ④ API(04) → ⑤ 빌드(05) → ⑥ 테스트(06) → ⑦ 의사결정(99)`
 
 ---
 
 ## 폴더별 문서 목록
+
+### 00-product — 제품 기획
+| 문서 | 설명 |
+|:---|:---|
+| [컨셉](00-product/concept.md) · [비전](00-product/vision.md) | 무엇을 만드는가 · 어디로 가는가 |
+| [페르소나](00-product/personas.md) · [시장·경쟁](00-product/market-competition.md) | 누구를 위한 것인가 |
+| [수익화](00-product/monetization.md) | 언제 무엇으로 |
+| [가족 케어](00-product/feature-family-care.md) | 기능 기획 하나 |
+| [위치정보법](00-product/legal-lbs-compliance.md) | 좌표가 기기를 떠나는 선 |
+
+> 기획 문서도 저장소에 둡니다 — [ADR-0014](99-decisions/decision-log.md#adr-0014--제품-기획-문서도-저장소에-넣는다) 가 "기획은 저장소 밖" 을 뒤집었습니다.
 
 ### 01-design — 설계·디자인
 | 문서 | 설명 |
@@ -45,13 +56,13 @@
 | 문서 | 설명 |
 |:---|:---|
 | [ERD](03-database/erd.md) | 개체-관계도 (mermaid erDiagram) |
-| [스키마](03-database/schema.md) | 테이블별 DDL · 인덱스(SPATIAL) |
+| [스키마](03-database/schema.md) | 테이블별 DDL · 인덱스 · 제약 |
 | [마이그레이션](03-database/migration.md) | 스키마 관리 · 공공데이터 동기화 배치 |
 
 ### 04-api — API
 | 문서 | 설명 |
 |:---|:---|
-| [API 명세](04-api/api-spec.md) | 장소·산책·커뮤니티·인증·프로필 엔드포인트 |
+| [API 명세](04-api/api-spec.md) | 인증·프로필·장소·산책·커뮤니티·가족·채팅·일정·크루·푸시·미디어 엔드포인트 |
 
 ### 05-build — 빌드·운영
 | 문서 | 설명 |

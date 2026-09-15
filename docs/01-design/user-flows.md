@@ -29,7 +29,7 @@
 | 17 | 크루 만들기 → 초대 코드 보내기 | 커뮤니티 탭 > 크루 | `widgets/crew_create_sheet.dart` → `crew_home_screen.dart`(초대 코드 보내기) |
 | 18 | 오늘의 코스 → 여기서 산책 시작 | 홈 · 산책 시작 버튼 아래 | `widgets/today_course_card.dart`(규칙 `domain/course_recommender.dart`) → `walk_tracking_screen.dart` |
 
-네비게이션 골격은 `main_shell.dart` 의 여섯 자리다: **홈 · 지도 · 일정 · [가운데 산책 FAB] · 커뮤니티 · 채팅**. 일정은 #419 가 더했다 — 왼쪽 셋 · 오른쪽 둘로 나눈 것은 FAB 오른쪽에 셋을 두면 알약의 무게가 쏠리기 때문이다. 통계·기록·가족·설정은 탭이 아니라 프로필(`me_screen.dart`)에서 들어간다. `pin_picker_screen.dart` 는 파일은 있으나 지금 어디에서도 열리지 않는다(#322 에서 확인 — 지울지는 따로 정한다).
+네비게이션 골격은 `main_shell.dart` 의 다섯 자리다: **홈 · 지도 · 일정 · 커뮤니티 · 채팅**(산책은 홈이 연다, #446). 일정은 #419 가 더했다 — 왼쪽 셋 · 오른쪽 둘로 나눈 것은 FAB 오른쪽에 셋을 두면 알약의 무게가 쏠리기 때문이다. 통계·기록·가족·설정은 탭이 아니라 프로필(`me_screen.dart`)에서 들어간다. `pin_picker_screen.dart` 는 파일은 있으나 지금 어디에서도 열리지 않는다(#322 에서 확인 — 지울지는 따로 정한다).
 
 ---
 
@@ -40,7 +40,7 @@
 ```mermaid
 flowchart TD
     A([홈 "산책 시작"]) --> S
-    B([가운데 산책 FAB]) --> S
+    B([홈 "산책 시작"]) --> S
     S{start_walk.dart<br/>로그인했나?}
     S -->|아니오| L[스낵바 '로그인하면 산책 기록이 남아요'<br/>→ login_screen.dart]
     S -->|예| C[walk_tracking_screen.dart<br/>_boot: 첫 위치 판정 → 지도 생성]
@@ -69,7 +69,7 @@ flowchart TD
 
 **구현 메모**
 
-- 진입 둘(홈 CTA · FAB)이 모두 `start_walk.dart` 의 `startWalk()` 를 지난다. 미로그인 안내는 거기 한 곳에 있다.
+- 진입은 홈의 "산책 시작" 하나이고 `start_walk.dart` 의 `startWalk()` 를 지난다. 미로그인 안내는 거기 한 곳에 있다.
 - `_boot()` 이 `LocationService.locate()` 로 첫 위치를 잡은 **뒤에야** 지도를 만든다. 판정 전에 그리면 대기 중 찍힌 점이 경로에 섞인다.
 - 지도 키(`NAVER_MAP_CLIENT_ID`)가 없으면 지도 자리에 안내 카드가 뜨고 기록은 계속된다(`map_unavailable.dart`, #182).
 - 저장 화면의 거리·시간은 GPS 로 온 값이면 **읽기 전용**이다(#327) — "GPS 로 잰 값이에요 · 여기서는 고칠 수 없어요". 손입력 기록일 때만 스텝퍼가 움직인다.
