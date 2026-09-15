@@ -29,8 +29,12 @@ import java.util.NoSuchElementException;
 /**
  * AI 주간 요약 — 이슈 #486. 통계 응답에 {@code aiSummary} 를 얹는다.
  *
- * <p>순서: 모델이 없으면 그대로 → 이 주의 행이 있고 입력이 같으면 그 문장(버린 것이면 null) →
- * 다시 만드는 횟수 · 하루 상한을 넘겼으면 마지막 문장 → 모델을 부른다 → 숫자 검사 → 저장.
+ * <p>순서: 모델이 없으면 그대로 → 이 주의 행이 있고 <b>입력이 같으면</b> 그 문장(버린 것이면 null) →
+ * 아니면 모델을 부른다(하루 상한 둘) → 숫자 검사 → 저장.
+ *
+ * <p><b>입력이 다른 문장은 안 내보낸다</b>(#538). 그 문장은 다른 숫자로 쓴 것이라 이번 주를 더 이상
+ * 설명하지 않는다. 만드는 중이거나 상한에 닿았으면 {@code aiSummary} 는 {@code null} 이고 앱은 카드를
+ * 그리지 않는다 — 규칙으로 만든 "이번 주 요약" 카드가 그대로 있으니 숫자를 잃지는 않는다.
  *
  * <p>통계 계산(트랜잭션)과 모델 호출(망)을 섞지 않는다 — 컨트롤러가 통계를 받은 뒤 이것을 부른다.
  * 저장은 {@code REQUIRES_NEW} 라 읽기 전용 트랜잭션에 묻히지 않는다.
@@ -62,6 +66,7 @@ public class WeeklyInsightService {
     private final WeeklyInsightProperties props;
     private final Clock clock;
     private final DailyCounter counter = new DailyCounter();
+    private final PerRowDailyCounter perRow = new PerRowDailyCounter();
 
     /** {@code AsyncConfig.INSIGHT_EXECUTOR} — 모듈 경계 밖의 상수를 참조하지 않으려고 문자열로 든다. */
     static final String INSIGHT_EXECUTOR = "insightExecutor";
@@ -104,18 +109,25 @@ public class WeeklyInsightService {
         long dogKey = dogId == null ? WeeklyInsight.ALL_DOGS : dogId;
 
         Optional<WeeklyInsight> row = insights.findByUser_IdAndDogKeyAndWeekStart(userId, dogKey, stats.weekStart());
-        if (row.isPresent() && (row.get().getInputHash().equals(hash)
-                || row.get().getCalls() >= props.maxRegenerations())) {
+        // **입력이 같을 때만** 저장된 문장을 쓴다(#538). 해시가 다르면 그 문장은 다른 숫자로 쓴 것이고,
+        // 그대로 내보내면 바로 위 "이번 주 요약" 카드와 다른 말을 한다.
+        if (row.isPresent() && row.get().getInputHash().equals(hash)) {
             return stats.withAiSummary(summaryOf(row.get()));
         }
         String key = jobKey(userId, dogKey, stats.weekStart());
         if (inFlight.contains(key)) {
             // 이미 만드는 중 — 모델을 또 부르지도, 하루 상한을 또 쓰지도 않는다.
-            return pending(stats, row);
+            return pending(stats);
+        }
+        // 한 줄의 하루 상한을 먼저 본다. 서버 상한을 먼저 쓰면, 여기서 막힐 요청이 남의 몫을 한 칸 깎는다.
+        if (!perRow.tryAcquire(today, key, props.perRowDailyCap())) {
+            log.info("[AI 주간 요약] 이 요약의 하루 상한 {}회에 닿았다 — 오늘은 카드 없이 (user {})",
+                    props.perRowDailyCap(), userId);
+            return stats;
         }
         if (!counter.tryAcquire(today, props.dailyCap())) {
             log.info("[AI 주간 요약] 하루 상한 {}회에 닿았다 — 오늘은 1단계 문장만 (user {})", props.dailyCap(), userId);
-            return stats.withAiSummary(row.map(WeeklyInsightService::summaryOf).orElse(null));
+            return stats;
         }
 
         Job job = new Job(userId, dogKey, stats.weekStart(), input, hash, row.orElse(null));
@@ -123,10 +135,12 @@ public class WeeklyInsightService {
             // 동기 — 테스트와 비상 스위치. 요청이 모델을 기다린다.
             generate(job);
             return stats.withAiSummary(insights.findByUser_IdAndDogKeyAndWeekStart(userId, dogKey, stats.weekStart())
+                    // 못 만들었으면(모델 실패) 행은 옛 해시 그대로다 — 그 문장은 안 내보낸다.
+                    .filter(saved -> saved.getInputHash().equals(hash))
                     .map(WeeklyInsightService::summaryOf).orElse(null));
         }
-        // 비동기 — 요청은 지금 있는 것(옛 문장이거나 null)에 "만드는 중" 을 붙여 바로 돌아간다.
-        // 문장은 실행기가 적고, 앱이 잠시 뒤 한 번 더 읽는다.
+        // 비동기 — 요청은 "만드는 중" 만 붙여 바로 돌아간다. 문장은 실행기가 적고, 앱이 잠시 뒤 한 번
+        // 더 읽는다. 옛 문장은 안 싣는다 — 여기까지 온 것은 숫자가 바뀌었다는 뜻이다(#538).
         if (inFlight.add(key)) {
             try {
                 executor.execute(() -> {
@@ -141,11 +155,17 @@ public class WeeklyInsightService {
                 log.warn("[AI 주간 요약] 실행기 큐가 찼다 — 이번 요청은 문장 없이 (user {})", userId);
             }
         }
-        return pending(stats, row);
+        return pending(stats);
     }
 
-    private static WalkStatsResponse pending(WalkStatsResponse stats, Optional<WeeklyInsight> row) {
-        return stats.withAiSummary(row.map(WeeklyInsightService::summaryOf).orElse(null)).withAiSummaryPending(true);
+    /**
+     * 만드는 중 — 앱이 잠시 뒤 한 번 더 읽는다("AI 요약을 만들고 있어요").
+     *
+     * <p><b>옛 문장을 함께 싣지 않는다</b>(#538). 여기까지 온 것은 숫자가 바뀌었다는 뜻이고, 그 문장은
+     * 이번 주를 더 이상 설명하지 않는다.
+     */
+    private static WalkStatsResponse pending(WalkStatsResponse stats) {
+        return stats.withAiSummaryPending(true);
     }
 
     private static String jobKey(long userId, long dogKey, LocalDate weekStart) {
@@ -220,6 +240,30 @@ public class WeeklyInsightService {
         }
         return new WalkStatsResponse.AiSummary(row.getId(), row.getText(),
                 row.getGeneratedAt().toInstant(ZoneOffset.UTC), row.getFeedback());
+    }
+
+    /**
+     * 요약 하나(사람 · 아이 · 주)가 하루에 모델을 부른 횟수 — 이슈 #538.
+     *
+     * <p>{@link DailyCounter} 와 같은 결이고 열쇠만 다르다. 한 사람이 서버 하루치를 혼자 쓰지 못하게
+     * 막는 자리다. 날이 바뀌면 <b>표를 통째로 비운다</b> — 그래야 열쇠가 무한정 쌓이지 않는다.
+     */
+    static final class PerRowDailyCounter {
+        private LocalDate day;
+        private final java.util.Map<String, Integer> calls = new java.util.HashMap<>();
+
+        synchronized boolean tryAcquire(LocalDate today, String key, int cap) {
+            if (!today.equals(day)) {
+                day = today;
+                calls.clear();
+            }
+            int used = calls.getOrDefault(key, 0);
+            if (used >= cap) {
+                return false;
+            }
+            calls.put(key, used + 1);
+            return true;
+        }
     }
 
     /** 하루 호출 횟수 — 서버 하나의 메모리. 재시작하면 0 이지만, 상한의 목적(폭주 방지)에는 충분하다. */

@@ -115,8 +115,8 @@ class WeeklyInsightIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
-    @DisplayName("새 산책이 오면(입력이 바뀌면) 다시 만든다 — 세 번째부터는 마지막 문장을 둔다(주당 상한 3)")
-    void regeneratesWhenTheInputChangesUpToTheWeeklyCap() throws Exception {
+    @DisplayName("새 산책이 오면(입력이 바뀌면) 그때마다 다시 만든다 — 주당 상한으로 멈추지 않는다 (#538)")
+    void regeneratesEveryTimeTheInputChanges() throws Exception {
         when(model.available()).thenReturn(true);
         when(model.name()).thenReturn("fake-model");
         when(model.complete(anyString(), anyString())).thenReturn(Optional.of("이번 주도 걸었어요.\n좋아요.\n계속해요."));
@@ -129,10 +129,41 @@ class WeeklyInsightIntegrationTest extends AbstractMySqlIntegrationTest {
         walkWithDog(me, dog, 1000, 600);
         stats(me);                       // 3 — 입력 바뀜
         walkWithDog(me, dog, 1000, 600);
-        JsonNode fourth = stats(me);     // 상한 — 부르지 않는다
+        JsonNode fourth = stats(me);     // 4 — 예전에는 여기서 멈추고 옛 문장을 내보냈다
 
-        verify(model, times(3)).complete(anyString(), anyString());
+        verify(model, times(4)).complete(anyString(), anyString());
         assertThat(fourth.path("aiSummary").path("text").asText()).contains("걸었어요");
+    }
+
+    @Test
+    @DisplayName("숫자가 바뀌었는데 다시 못 만들면 옛 문장을 안 내보낸다 — 위 카드와 다른 말을 하느니 카드를 안 그린다 (#538)")
+    void neverServesASentenceWrittenForOtherNumbers() throws Exception {
+        when(model.available()).thenReturn(true);
+        when(model.name()).thenReturn("fake-model");
+        // 처음엔 문장을 주고, 그다음부터는 못 준다(시간 초과 · 망). 그래서 새 문장이 안 쌓인다.
+        when(model.complete(anyString(), anyString()))
+                .thenReturn(Optional.of("이번 주 1km 걸었어요.\n좋아요.\n계속해요."))
+                .thenReturn(Optional.empty());
+        Account me = account("낡음");
+        long dog = dog(me, "보리");
+        walkWithDog(me, dog, 1000, 600);
+
+        JsonNode first = stats(me);
+        assertThat(first.path("aiSummary").path("text").asText())
+                .as("처음엔 그 주의 숫자로 쓴 문장이다").contains("1km");
+
+        walkWithDog(me, dog, 900, 540);   // 이번 주 숫자가 1km 에서 1.9km 로 바뀐다
+        JsonNode second = stats(me);
+
+        assertThat(second.path("aiSummary").isNull())
+                .as("""
+                        1km 이라고 쓴 문장을 1.9km 인 주에 그대로 내보내면, 바로 위 "이번 주 요약" \
+                        카드가 1.9km 라고 말하는 옆에서 다른 숫자를 말한다 (#538).""")
+                .isTrue();
+        assertThat(insights.findByUser_IdAndDogKeyAndWeekStart(
+                me.id(), WeeklyInsight.ALL_DOGS, LocalDate.parse(second.path("weekStart").asText())))
+                .as("행은 그대로 있다 — 지우는 것이 아니라 안 내보내는 것이다")
+                .isPresent();
     }
 
     @Test

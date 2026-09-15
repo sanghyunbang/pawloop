@@ -1503,7 +1503,7 @@ CREATE TABLE weekly_insight (
   input_hash    VARCHAR(64)  NOT NULL COMMENT '모델 입력(WeeklyInsightInput.render)의 SHA-256 — 같으면 다시 안 부른다',
   model         VARCHAR(64)  NOT NULL,
   text          TEXT         NULL     COMMENT '문장. NULL = 만들었다가 버렸다(숫자 검사 실패)',
-  calls         INT          NOT NULL COMMENT '이 주에 모델을 부른 횟수 — 주당 상한(3)의 근거',
+  calls         INT          NOT NULL COMMENT '이 주에 모델을 부른 횟수 — 남는 기록. 상한은 날 단위이고 메모리에서 센다(#538)',
   generated_at  DATETIME(6)  NOT NULL,
   feedback      VARCHAR(8)   NULL     COMMENT '사용자의 👍/👎 — up · down · NULL(안 누름). 문장이 다시 만들어지면 비운다',
   feedback_at   DATETIME(6)  NULL,
