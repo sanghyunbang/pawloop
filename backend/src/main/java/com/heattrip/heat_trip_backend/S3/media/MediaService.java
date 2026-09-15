@@ -3,7 +3,11 @@ package com.heattrip.heat_trip_backend.S3.media;
 import com.heattrip.heat_trip_backend.S3.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -97,6 +101,8 @@ public class MediaService implements MediaAttachment {
     static final String POSTER_SUB_PATH = "posters";
 
     private final FileStorage storage;
+    private static final Logger log = LoggerFactory.getLogger(MediaService.class);
+
     private final MediaObjectRepository repo;
 
     public MediaService(FileStorage storage, MediaObjectRepository repo) {
@@ -115,9 +121,20 @@ public class MediaService implements MediaAttachment {
      * "내 것이고 · 아직 안 붙었고 · {@code ready} 인가" 를 조건부 UPDATE 의 영향 행 수로
      * 잰다(#86 원칙 5).
      *
+     * <h2>트랜잭션을 안 연다</h2>
+     * <p>예전에는 이 메서드 전체가 하나의 트랜잭션이었다. 그러면 10MB 짜리 S3 업로드가 도는
+     * 내내 <b>DB 커넥션 한 자리가 묶인다</b> — 풀이 10이면 그런 업로드 열 개가 서버 전체의
+     * 읽기를 멈춘다. 📌 #86 원칙 5 와 {@code ChatRoomService} 의 "트랜잭션 안에서 밖으로
+     * 나가는 호출을 하지 않는다" 가 같은 말이다(#512).
+     *
+     * <p>지금은 S3 업로드가 트랜잭션 밖이고, 행 저장만 {@code repo.save} 의 짧은 트랜잭션에서
+     * 돈다. <b>여러 장 중 하나가 실패하면 앞의 행은 남는다</b> — 그게 더 낫다. 예전에는 롤백이
+     * 행만 지우고 <b>S3 객체는 남겨</b> 아무 행도 가리키지 않는 파일이 됐고, 그건 청소도
+     * 못 찾는다. 지금 남는 행은 참조가 없으므로 하루 뒤 {@link MediaOrphanSweeper} 가 객체와
+     * 함께 거둔다.
+     *
      * @param width  픽셀 폭. 앱이 다시 인코딩한 뒤 아는 값이다. 파일이 하나일 때만 뜻이 있다
      */
-    @Transactional
     public List<MediaObject> uploadMany(List<MultipartFile> files, UploadCategory cat,
                                         String ownerId, Integer width, Integer height) {
         return files.stream()
@@ -167,8 +184,13 @@ public class MediaService implements MediaAttachment {
         return repo.findByRefTypeAndRefId(refType, refId);
     }
 
-    /** U: 교체 (새 업로드 → 구 키 삭제 → 메타 갱신). 내 것이 아니면 404 다. */
-    @Transactional
+    /**
+     * U: 교체 (새 업로드 → 구 키 삭제 → 메타 갱신). 내 것이 아니면 404 다.
+     *
+     * <p><b>트랜잭션을 안 연다</b> — S3 왕복이 도는 동안 커넥션을 쥐지 않는다({@link #uploadMany}
+     * 와 같은 이유, #512). 행 읽기와 저장은 각자 짧은 트랜잭션이고, 그 사이 엔티티는 준영속이라
+     * {@code save} 가 merge 로 붙인다.
+     */
     public MediaObject replace(Long mediaId, MultipartFile file, String ownerId) {
         MediaObject m = mine(mediaId, ownerId);
 
@@ -263,7 +285,11 @@ public class MediaService implements MediaAttachment {
      * 그래도 포스터를 올린 뒤 DB 가 실패하면 그 한 장은 남는다 — 행이 가리키지 않는 키라 청소도
      * 모른다. 사진의 {@link #uploadMany} 와 같은 틈이고, 같은 이유로 여기서 안 막는다.
      */
-    @Transactional
+    /**
+     * <p><b>트랜잭션을 안 연다</b> — HEAD 한 번과 포스터 업로드 한 번이 밖으로 나가는 호출이고,
+     * 그 사이 커넥션을 쥐고 있을 이유가 없다({@link #uploadMany} 와 같은 이유, #512).
+     * 잠금으로 지키던 것이 원래 없다 — {@link #mine} 은 평범한 조회다.
+     */
     public MediaObject completeVideo(Long mediaId, MultipartFile poster, String ownerId) {
         MediaObject m = mine(mediaId, ownerId);
         if (!m.isVideo()) {
@@ -459,6 +485,23 @@ public class MediaService implements MediaAttachment {
      * 행이 남고, 다음 청소가 다시 시도한다. 반대로 하면 파일은 없는데 행이 남아 화면에 깨진
      * 그림이 뜬다.
      */
+    /**
+     * 행을 지우고 <b>커밋 뒤에</b> S3 객체를 지운다 — 이슈 #512.
+     *
+     * <h2>왜 커밋 뒤인가</h2>
+     * <p>이 메서드는 남의 트랜잭션 안에서도 불린다. 채팅 메시지 삭제가 그렇다 —
+     * {@code chatweb.ChatMessages.delete} 가 {@code deleteMessage}(그 안에서 {@code chat_room}
+     * 행을 <b>커밋까지 배타 잠금</b>한다)와 {@code detachAll} 을 한 트랜잭션으로 묶는다.
+     * 그 안에서 S3 를 부르면 <b>느린 왕복 하나가 그 방의 전송을 전부 막는다</b>
+     * ({@code innodb_lock_wait_timeout} 이 기본 50초다). {@code ChatRoomService} 의 javadoc 이
+     * 정확히 그것을 금지하고 있었는데 이 자리가 그 선을 넘고 있었다.
+     *
+     * <h2>실패하면 객체가 남는다 — 그쪽을 고른 이유</h2>
+     * <p>커밋 뒤에 S3 호출이 실패하면 행은 이미 없고 객체만 버킷에 남는다(참조가 없으니 청소도
+     * 못 찾는다). 반대로 커밋 전에 부르면, 실패가 <b>행 삭제까지 되돌려</b> 사용자가 지운 사진이
+     * 다시 보인다. 눈에 보이는 거짓말보다 요금 고지서에만 보이는 쓰레기가 낫다 — 대신 키를
+     * 로그에 남겨 사람이 찾을 수 있게 한다.
+     */
     private void remove(List<MediaObject> rows) {
         if (rows.isEmpty()) {
             return;
@@ -471,6 +514,29 @@ public class MediaService implements MediaAttachment {
             }
         }
         repo.deleteAllInBatch(rows);
-        storage.deleteAll(keys);
+        afterCommit(() -> storage.deleteAll(keys), keys);
+    }
+
+    /**
+     * 트랜잭션이 열려 있으면 <b>커밋 뒤에</b>, 아니면 지금 실행한다.
+     *
+     * <p>커밋 뒤의 예외는 삼킨다. 그 시점에는 DB 가 이미 끝났으므로 여기서 던지면 성공한 삭제가
+     * 실패로 보인다. 남은 키는 로그에 적는다.
+     */
+    private void afterCommit(Runnable action, List<String> keys) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    action.run();
+                } catch (RuntimeException e) {
+                    log.warn("S3 객체를 못 지웠다 — 행은 이미 지워졌다. 남은 키: {}", keys, e);
+                }
+            }
+        });
     }
 }

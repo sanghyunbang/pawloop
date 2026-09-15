@@ -26,6 +26,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +47,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -187,6 +190,26 @@ class VideoUploadIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(row.getStatus()).isEqualTo(MediaStatus.PENDING);
         assertThat(row.getPosterKey()).isNull();
         verify(storage, never()).upload(any(), any());
+    }
+
+    @Test
+    @DisplayName("끝내기는 트랜잭션 밖에서 S3 를 부른다 — HEAD 와 포스터 업로드가 커넥션을 쥐지 않는다 (#512)")
+    void completingDoesNotHoldADatabaseConnection() throws Exception {
+        Account me = account("영상끝내는사람");
+        JsonNode ticket = body(reserve(me, MP4, CLIP_BYTES, CLIP_MS).andExpect(status().isCreated()));
+        landsInBucket(ticket.path("key").asText(), CLIP_BYTES, MP4);
+        AtomicBoolean insideTransaction = new AtomicBoolean(true);
+        // when(...) 이 아니라 doAnswer(...) 다 — when 은 그 자리에서 목을 부른다.
+        doAnswer(invocation -> {
+            insideTransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
+            return Optional.ofNullable(bucket.get(invocation.<String>getArgument(0)));
+        }).when(storage).stat(anyString());
+
+        complete(me, ticket.path("id").asLong(), poster()).andExpect(status().isOk());
+
+        assertThat(insideTransaction.get())
+                .as("밖으로 나가는 호출이 커넥션을 쥐고 있으면 풀이 그만큼 좁아진다")
+                .isFalse();
     }
 
     @Test
