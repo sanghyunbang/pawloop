@@ -22,10 +22,13 @@ PetPlace _vet(String title, {double dist = 100, String tel = '02-1234-5678'}) =>
     );
 
 /// 홈의 "급할 때" 를 눌렀을 때와 같은 길로 연다 — 위치와 목록을 꽂는다.
+///
+/// [failure] 를 주면 목록 대신 그 실패를 던진다 — 저장소가 실패를 말하는 길(#515).
 Future<void> _open(
   WidgetTester t, {
   required List<PetPlace> places,
   bool located = true,
+  PlaceFailure? failure,
 }) async {
   await t.pumpWidget(MaterialApp(
     home: Scaffold(
@@ -34,7 +37,10 @@ Future<void> _open(
           onPressed: () => EmergencyVets.open(
             context,
             locate: () async => located ? (lat: 37.5445, lng: 127.0410) : null,
-            load: (lat, lng) async => places,
+            load: (lat, lng) async {
+              if (failure != null) throw failure;
+              return places;
+            },
           ),
           child: const Text('열기'),
         ),
@@ -103,4 +109,23 @@ void main() {
 
     expect(find.textContaining('못 찾았어요'), findsOneWidget);
   });
+
+  // ───────────── 못 받은 것과 없는 것은 다르다 (#515) ─────────────
+
+  testWidgets('목록을 못 받으면 "못 받았어요" 다 — 급할 때 "못 찾았어요" 는 거짓말이다', (t) async {
+    await _open(t, places: const [], failure: const PlaceFailure(PlaceFailureKind.network));
+
+    expect(find.byKey(const Key('emergency-vets-empty')), findsOneWidget);
+    expect(find.textContaining('목록을 못 받았어요'), findsOneWidget);
+    expect(find.textContaining('가까운 병원을 못 찾았어요'), findsNothing,
+        reason: '못 받은 것을 "없다" 로 말하면 사람이 병원이 없다고 믿고 다른 길을 찾는다');
+  });
+
+  testWidgets('정말 없을 때는 예전 문구 그대로다', (t) async {
+    await _open(t, places: const []);
+
+    expect(find.textContaining('가까운 병원을 못 찾았어요'), findsOneWidget);
+    expect(find.textContaining('목록을 못 받았어요'), findsNothing);
+  });
+
 }

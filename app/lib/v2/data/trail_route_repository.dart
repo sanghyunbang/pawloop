@@ -64,6 +64,16 @@ class TrailRouteRepository {
   /// 같은 코스를 두 번 받지 않는다 — 시트를 열 때마다 부르는 자리다.
   final Map<String, TrailRoute> _memory = {};
 
+  /// 코스 하나의 선. 못 받으면 `null` 이고 **화면은 선만 안 그린다**.
+  ///
+  /// <b>여기는 일부러 실패를 말하지 않는다</b>(#515 에서 다시 본 자리). 장소 목록과 다르다 —
+  /// 목록은 화면의 본문이라 못 받은 것을 "없다" 로 말하면 거짓말이 되지만, 선은 이미 떠 있는
+  /// 카드 위의 덧그림이다. 그 하나 때문에 실패 카드를 띄우면 카드의 나머지(이름·거리·시간)를
+  /// 읽던 사람의 흐름이 끊긴다.
+  ///
+  /// 다만 `null` 이 <b>세 가지를 뭉친다</b> — 없는 코스(404) · 서버가 못 줌(5xx) · 선이 두 점
+  /// 미만. 셋을 가를 필요가 생기면(예: "이 코스는 선이 없어요" 를 말해야 할 때) 그때
+  /// `PlaceFailure` 와 같은 모양을 여기도 둔다.
   Future<TrailRoute?> fetch(String courseId) async {
     final cached = _memory[courseId];
     if (cached != null) return cached;

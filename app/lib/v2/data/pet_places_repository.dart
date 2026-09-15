@@ -147,6 +147,45 @@ class PetPlace {
 /// 예전 동작 그대로다. 서버도 예산이 소진되면 200 + 빈 배열을 주므로, 앱에서는
 /// "한도 초과" 와 "이 주변에 장소가 없음" 이 같게 보인다. **한계를 그대로 적는다** —
 /// 그 둘을 구분해 보여 주는 것은 별건이고, 그전까지 오류 신호는 서버 지표에만 있다.
+/// 장소를 못 받은 이유 — 이슈 #515.
+///
+/// **빈 목록으로 뭉치지 않는다.** 빈 목록은 화면에서 "이 지역엔 등록된 곳이 없어요" 가 되고,
+/// 그건 서버가 죽었을 때 하는 거짓말이다. `pet.dart` 가 같은 문장을 커뮤니티 더미 앞에
+/// 적어 뒀다 — "화면이 서버를 못 불렀을 때 그릴 것은 빈 목록이 아니라 '불러오지 못했어요' 다."
+///
+/// 모양은 [CommunityFailure] 를 따른다. 화면이 실패를 다루는 법이 도메인마다 다르면
+/// 그때마다 새로 익혀야 한다.
+enum PlaceFailureKind {
+  /// 연결이 없거나 시간이 다 됐다. **다시 시도하면 된다.**
+  network,
+
+  /// 서버가 잠시 그만 보내라고 했다(429).
+  rateLimited,
+
+  /// 서버가 못 준다(5xx) 또는 계약과 다른 본문이 왔다. 다시 시도해 볼 수는 있다.
+  unavailable,
+}
+
+extension PlaceFailureKindX on PlaceFailureKind {
+  /// 화면에 그대로 그리는 문구.
+  String get message => switch (this) {
+        PlaceFailureKind.network => '연결이 불안정해요 · 다시 시도해 주세요',
+        PlaceFailureKind.rateLimited => '요청이 많아요 · 잠시 뒤 다시 시도해 주세요',
+        PlaceFailureKind.unavailable => '장소 목록을 못 받았어요 · 잠시 뒤 다시 시도해 주세요',
+      };
+}
+
+class PlaceFailure implements Exception {
+  final PlaceFailureKind kind;
+
+  const PlaceFailure(this.kind);
+
+  String get message => kind.message;
+
+  @override
+  String toString() => 'PlaceFailure($kind)';
+}
+
 class PetPlacesRepository {
   PetPlacesRepository({
     http.Client? client,
@@ -205,10 +244,13 @@ class PetPlacesRepository {
 
     try {
       final res = await _client.get(uri).timeout(const Duration(seconds: 12));
-      if (res.statusCode != 200) return const [];
+      if (res.statusCode == 429) throw const PlaceFailure(PlaceFailureKind.rateLimited);
+      if (res.statusCode != 200) throw const PlaceFailure(PlaceFailureKind.unavailable);
       return _parse(res.bodyBytes);
+    } on PlaceFailure {
+      rethrow; // 아래 catch 가 이유를 network 로 뭉개지 않게
     } catch (_) {
-      return const [];
+      throw const PlaceFailure(PlaceFailureKind.network);
     }
   }
 
@@ -219,14 +261,18 @@ class PetPlacesRepository {
   List<PetPlace> _parse(List<int> bodyBytes) {
     try {
       final decoded = jsonDecode(utf8.decode(bodyBytes));
-      if (decoded is! List) return const [];
+      // 200 인데 배열이 아니다 — 계약 위반이다. 빈 목록으로 돌려주면 화면이 "없어요" 라고
+      // 말하고, 그러면 계약이 깨진 것을 아무도 못 본다(#515).
+      if (decoded is! List) throw const PlaceFailure(PlaceFailureKind.unavailable);
       return decoded
           .whereType<Map>()
           .map((e) => PetPlace.fromJson(e.cast<String, dynamic>()))
           .where((p) => p.lat != 0 && p.lng != 0)
           .toList();
+    } on PlaceFailure {
+      rethrow;
     } catch (_) {
-      return const [];
+      throw const PlaceFailure(PlaceFailureKind.unavailable);
     }
   }
 }

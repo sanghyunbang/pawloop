@@ -28,6 +28,15 @@ class WalkSafetyRepository {
   static const Duration timeout = Duration(seconds: 8);
 
   /// 지금 값 한 묶음. 서버가 못 주면(503·연결 없음·깨진 본문) `null` — 카드 없음.
+  ///
+  /// <b>서버 실패에는 카드를 안 띄우기로 했다</b>(#515 에서 다시 본 자리). 사용자가 할 수
+  /// 있는 것이 없기 때문이다 — 안전 지수는 곁가지고, 홈에는 이미 할 수 있는 일을 말하는
+  /// 자리가 따로 있다(오늘의 케어의 "다시 시도", 그리고 #517 이 더한 "위치를 켜면 …").
+  /// 연결이 없는 날마다 홈에 "지수를 못 받았어요" 한 줄이 더 늘면 그건 안내가 아니라 소음이다.
+  ///
+  /// <b>권한이 없어서 못 받은 것은 다르다</b> — 그건 사용자가 고칠 수 있으므로 카드가 말한다
+  /// (`WalkSafetyCard._permissionRow`, #517). "할 수 있는 일이 있으면 말하고, 없으면 비운다"
+  /// 가 이 카드의 규칙이다.
   Future<WalkSafetyReading?> fetch(double lat, double lng) async {
     final grid = kmaGrid(lat, lng);
     // 인증 헤더를 붙이지 않는다 — AuthedClient 가 아니라 맨 http 다. 누구의 격자인지 서버가 모른다.

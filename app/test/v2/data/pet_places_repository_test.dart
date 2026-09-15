@@ -144,19 +144,52 @@ void main() {
         reason: '원래 값은 contentTypeId 에 그대로 있고, 앱이 그것으로 기타 폴백을 한다');
   });
 
-  test('실패는 빈 목록이다 — 예전 동작 그대로라 화면이 안 깨진다', () async {
-    for (final status in const [400, 429, 500]) {
+  // ───────────── 실패를 빈 목록으로 뭉치지 않는다 (#515) ─────────────
+  //
+  // 예전에는 이 셋이 전부 `const []` 였고, 화면은 그것을 받아 **"이 지역엔 등록된 곳이
+  // 없어요"** 를 그렸다 — 서버가 죽은 날 하는 거짓말이다. `pet.dart` 가 커뮤니티 더미 앞에
+  // 같은 문장을 적어 뒀다: "화면이 서버를 못 불렀을 때 그릴 것은 빈 목록이 아니라
+  // '불러오지 못했어요' 다."
+
+  test('서버가 거절하면 이유와 함께 던진다 — 429 는 429 라고 말한다', () async {
+    const probes = <(int, PlaceFailureKind)>[
+      (400, PlaceFailureKind.unavailable),
+      (429, PlaceFailureKind.rateLimited),
+      (500, PlaceFailureKind.unavailable),
+    ];
+    for (final (status, kind) in probes) {
       final repo = _repo(MockClient((req) async => _json('{}', status)));
 
-      expect(await repo.fetchNearby(lat: 37.5, lng: 127.0), isEmpty,
-          reason: '상태 $status');
+      await expectLater(
+        repo.fetchNearby(lat: 37.5, lng: 127.0),
+        throwsA(isA<PlaceFailure>().having((e) => e.kind, 'kind', kind)),
+        reason: '상태 $status',
+      );
     }
   });
 
-  test('연결이 끊겨도 던지지 않는다', () async {
+  test('연결이 끊기면 network 라고 말한다 — 다시 시도하면 되는 실패다', () async {
     final repo = _repo(MockClient((req) async => throw const _Boom()));
 
-    expect(await repo.fetchNearby(lat: 37.5, lng: 127.0), isEmpty);
+    await expectLater(
+      repo.fetchNearby(lat: 37.5, lng: 127.0),
+      throwsA(isA<PlaceFailure>().having((e) => e.kind, 'kind', PlaceFailureKind.network)),
+    );
+  });
+
+  test('200 인데 배열이 아니면 계약 위반이다 — 빈 목록으로 삼키면 아무도 못 본다', () async {
+    final repo = _repo(MockClient((req) async => _json('{"items":[]}', 200)));
+
+    await expectLater(
+      repo.fetchNearby(lat: 37.5, lng: 127.0),
+      throwsA(isA<PlaceFailure>().having((e) => e.kind, 'kind', PlaceFailureKind.unavailable)),
+    );
+  });
+
+  test('실패마다 화면에 그릴 문구가 있다 — 비어 있으면 화면이 할 말이 없다', () {
+    for (final kind in PlaceFailureKind.values) {
+      expect(PlaceFailure(kind).message, isNotEmpty, reason: '$kind');
+    }
   });
 }
 

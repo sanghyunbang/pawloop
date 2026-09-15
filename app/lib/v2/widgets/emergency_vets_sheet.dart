@@ -29,12 +29,23 @@ class EmergencyVets {
   }) async {
     final where = await (locate ?? _locate)();
     if (!context.mounted) return;
-    final places = where == null ? const <PetPlace>[] : await (load ?? _load)(where.lat, where.lng);
+    var places = const <PetPlace>[];
+    var failed = false;
+    if (where != null) {
+      try {
+        places = await (load ?? _load)(where.lat, where.lng);
+      } on PlaceFailure {
+        // **급할 때 "못 찾았어요" 는 거짓말이다**(#515). 못 받은 것과 없는 것은 다르고,
+        // 여기서 그 둘을 뭉치면 사람이 병원이 없다고 믿고 다른 길을 찾는다.
+        failed = true;
+      }
+    }
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => EmergencyVetsSheet(picks: nearestVets(places), located: where != null),
+      builder: (sheetCtx) =>
+          EmergencyVetsSheet(picks: nearestVets(places), located: where != null, failed: failed),
     );
   }
 
@@ -50,12 +61,21 @@ class EmergencyVets {
 
 /// 시트의 몸통. 위젯 테스트가 이것만 따로 띄울 수 있게 열어 둔다.
 class EmergencyVetsSheet extends StatelessWidget {
-  const EmergencyVetsSheet({super.key, required this.picks, required this.located});
+  const EmergencyVetsSheet({
+    super.key,
+    required this.picks,
+    required this.located,
+    this.failed = false,
+  });
 
   final List<PetPlace> picks;
 
   /// 위치를 알았는가. 모르면 목록 대신 켜 달라고 말한다.
   final bool located;
+
+  /// 목록을 **못 받았는가**. 없는 것과 다르다 — 급할 때 그 둘을 뭉치면 사람이 병원이
+  /// 없다고 믿는다(#515).
+  final bool failed;
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +115,12 @@ class EmergencyVetsSheet extends StatelessWidget {
             const SizedBox(height: 16),
             if (picks.isEmpty)
               Text(
-                located ? '가까운 병원을 못 찾았어요. 지도 탭의 동물병원 칩에서 찾아보세요.' : '지도 탭의 동물병원 칩에서도 찾을 수 있어요.',
+                key: const Key('emergency-vets-empty'),
+                failed
+                    ? '목록을 못 받았어요 · 연결을 확인하고 다시 열어 주세요. 지도 탭의 동물병원 칩에서도 찾을 수 있어요.'
+                    : located
+                        ? '가까운 병원을 못 찾았어요. 지도 탭의 동물병원 칩에서 찾아보세요.'
+                        : '지도 탭의 동물병원 칩에서도 찾을 수 있어요.',
                 style: const TextStyle(fontSize: 13, color: T.textMuted),
               )
             else
