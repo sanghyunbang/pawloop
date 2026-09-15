@@ -34,6 +34,7 @@ erDiagram
     chat_room ||--o{ chat_room_invite : "초대코드"
     chat_room ||--o{ chat_message     : "메시지(room_seq 순)"
     chat_message |o--o{ chat_message  : "답장의 원문 (reply_to_id, SET NULL, #452)"
+    chat_message ||--o{ chat_message_reaction : "반응 (#452)"
 
     dog      ||--o{ walk      : "산책 기록 (대표 아이)"
     walk     ||--|{ walk_dog  : "함께 나간 아이들 (#343)"
@@ -249,6 +250,14 @@ erDiagram
         BIGINT   change_seq     "마지막으로 바뀐 방 단위 번호. NULL = 한 번도 안 바뀜 (ADR-0023)"
     }
 
+    chat_message_reaction {
+        BIGINT   id PK
+        BIGINT   message_id FK  "CASCADE - 말이 하드 삭제되면 반응도 사라진다"
+        BIGINT   user_id        "users.id (DB FK 제약은 없음) - 탈퇴해도 남는다"
+        VARCHAR  kind           "like|heart|laugh|sad|check. message+user+kind UNIQUE"
+        DATETIME created_at
+    }
+
     walk_note {
         BIGINT   id PK
         BIGINT   group_id FK   "UNIQUE - 그룹당 한 장"
@@ -454,6 +463,7 @@ erDiagram
 | `chat_room_member` | 실재 | 방 멤버십. **멤버십 표는 이것 하나다**(`group_member` 를 따로 만들지 않는다). 강퇴는 행 삭제가 아니라 `removed_at`+`rejoin_blocked`, 미읽음은 `last_read_seq` 뺄셈. |
 | `chat_room_invite` | 실재 | 초대코드. 유효기간·사용횟수·회수를 갖는다. 재발급하면 이전 코드가 즉시 막히되 기존 멤버는 남는다. |
 | `chat_message` | 실재 | 채팅 메시지. 순서·델타·미읽음의 기준은 방별 `room_seq` 이고 **`id` 는 커서로 쓰지 않는다**(배정 시점과 가시성 시점이 달라 폴링이 메시지를 영구히 건너뛴다). 발신자는 값만 들고 `sender_name` 스냅샷을 함께 둔다. MVP는 폴링, 소켓은 트리거 기반(M2.9). |
+| `chat_message_reaction` | 실재 | 말풍선 아래 반응 줄(#452). `chat_message` 1:N, 말·사람·종류 조합 유니크라 한 사람이 한 말에 여러 종류를 누를 수 있다. `user_id` 는 **FK 가 아니다**(ADR-0011 결정 4) — 탈퇴해도 남는다. 반응이 붙으면 방의 변경 번호가 올라 남의 폴링에 `changed` 로 흐른다(ADR-0023). [schema.md §40](./schema.md). |
 | `walk_note` | 실재 | 산책 시 주의사항(가족 공유 메모). **`family_group` 1:1** — `UNIQUE(group_id)` 로 그룹당 한 장이고, 마지막으로 고친 사람(`updated_by`)과 시각을 든다. |
 | `place` | 계획 | 동반장소·동물병원·펫샵 POI 캐시. 좌표 `POINT` + `SPATIAL INDEX`. 공공데이터 원본 `raw_json` 보관. |
 | `trail_route` | 실재 | 산책로 코스의 선 — 두루누비 GPX 를 300점 이하로 줄인 `[[경도, 위도]]` JSON. 카탈로그에는 시작점만 실린다(#291). [schema.md §6](./schema.md). |

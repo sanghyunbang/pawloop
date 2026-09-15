@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **48개** 있다(전체 목록은 [부록 A](#부록-a-정본의-표-48개--어디에-적혀-있나)). 이 문서에 절이 있는 실재 표는 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§6 trail_route` · `§7 post` · `§8 comment` · `§9 reaction` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` · `§18 emotion_card` · `§19 card_comment` · `§20 card_reaction` · `§21 kto_call_budget` · `§22 place_cell` · `§23 pet_place_detail` · `§24 place_catalog` · `§25 report` · `§26 report_snapshot` · `§27 user_block` · `§28 user_consent` · `§31 course` · `§32 walk_dog` 스물여덟이다. 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 절이 없는 21개는 감정 여행·관광 수집 시절의 표라 부록 A 에만 적었다 — 지우지 않고 격리한다(#174). 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **49개** 있다(전체 목록은 [부록 A](#부록-a-정본의-표-49개--어디에-적혀-있나)). 이 문서에 절이 있는 실재 표는 `§1 users` · `§2 refresh_token` · `§3 dog` · `§4 walk` · `§6 trail_route` · `§7 post` · `§8 comment` · `§9 reaction` · `§11 family_group` · `§12 chat_room` · `§13 chat_room_member` · `§14 chat_room_invite` · `§15 chat_message` · `§16 walk_note` · `§17 care_log` · `§18 emotion_card` · `§19 card_comment` · `§20 card_reaction` · `§21 kto_call_budget` · `§22 place_cell` · `§23 pet_place_detail` · `§24 place_catalog` · `§25 report` · `§26 report_snapshot` · `§27 user_block` · `§28 user_consent` · `§31 course` · `§32 walk_dog` · `§40 chat_message_reaction` 스물아홉이다. 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 절이 없는 21개는 감정 여행·관광 수집 시절의 표라 부록 A 에만 적었다 — 지우지 않고 격리한다(#174). 둘을 섞어 읽으면 "있는 줄 알았는데 없는" 테이블에 쿼리를 짜게 된다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -1533,7 +1533,46 @@ CREATE TABLE weekly_insight (
 
 ---
 
-## 부록 A. 정본의 표 28개 — 어디에 적혀 있나
+## 40. `chat_message_reaction` — 채팅 반응 (**실재**)
+
+말풍선 아래 한 줄(#452) — 말 하나에 누가 어떤 종류를 눌렀는가. 종류는 다섯이다: `like` 👍 · `heart` ❤️ · `laugh` 😂 · `sad` 😢 · `check` ✅. 마지막 하나가 이 앱에 있는 이유가 있다 — 가족 방의 "밥 줬어?" 에 필요한 답은 감정이 아니라 **확인**이고, 그걸 말로 하면 방이 "응" 으로 채워진다.
+
+```sql
+CREATE TABLE chat_message_reaction (
+  id          BIGINT       NOT NULL AUTO_INCREMENT,
+  message_id  BIGINT       NOT NULL COMMENT '대상 말. 하드 삭제되면 반응도 사라진다',
+  user_id     BIGINT       NOT NULL COMMENT '누른 사람. **FK 가 아니다** — chat 은 사람을 id 로만 안다',
+  kind        VARCHAR(20)  NOT NULL COMMENT 'like · heart · laugh · sad · check. CHECK 를 안 건다 — 계약의 ChatReactionKind 가 단일 출처',
+  created_at  DATETIME(6)  NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_chat_reaction (message_id, user_id, kind),
+  CONSTRAINT fk_chat_reaction_message FOREIGN KEY (message_id) REFERENCES chat_message (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `message_id` | `BIGINT` | FK→`chat_message.id` **CASCADE**, UNIQUE(message, user, kind) | 어느 말에 붙었나 |
+| `user_id` | `BIGINT` | NOT NULL, **FK 없음** | 누가 눌렀나. 탈퇴해도 남는다 — 그 사람의 말이 방에 남는 것과 같은 규칙 |
+| `kind` | `VARCHAR(20)` | NOT NULL | 종류 다섯. 늘리는 것은 계약이 하고 마이그레이션은 안 따라온다 |
+| `created_at` | `DATETIME(6)` | NOT NULL | 누른 순간(UTC). 응답에 안 싣는다 — 집계만 나간다 |
+
+> **`user_id` 에 FK 가 없는 것이 핵심이다.** `chat` 은 `users`·`family_group`·`dog` 로 FK 를 내지 않는다([ADR-0011](../99-decisions/decision-log.md) 결정 4) — 걸면 탈퇴 경로가 DB 삭제 순서에 묶이고, `ON DELETE CASCADE` 면 탈퇴 한 번에 남의 대화에 남아 있던 반응이 사라진다. `ChatBoundaryArchitectureTest` 가 정본 DDL 을 빈 DB 에 적용해 `chat_*` 의 FK 가 다섯뿐인지 잰다.
+
+> **유니크가 셋(message, user, kind)이라 한 사람이 한 말에 여러 종류를 누를 수 있다.** §9 `reaction` 과 같은 판단이다([ADR-0016](../99-decisions/decision-log.md) 결정 2) — 좁혔다가 넓히는 것은 계약의 파괴적 변경이고, 넓혔다가 좁히는 것은 행을 지우는 마이그레이션이라 **넓은 쪽이 되돌리기 싸다**. 이 유니크가 멱등 삽입(`ON DUPLICATE KEY UPDATE id = id`)을 딛는 자리이기도 하다. 집계 전용 인덱스를 따로 두지 않는 것은 세는 축(`message_id`)이 이 유니크의 왼쪽 접두라서다.
+
+> **집계는 "몇 번" 이지 "몇 명" 이 아니다.** 한 사람이 여러 종류를 누를 수 있고 탈퇴한 사람의 반응도 세어진다. 화면이 "7명이 공감했어요" 로 읽히게 쓰면 거짓말이 된다.
+
+> **소프트 삭제된 말의 반응은 서버가 지운다.** FK 의 CASCADE 는 행을 하드 삭제할 때만 도는데 우리 삭제는 톰스톤이라 행이 남는다(§15) — 지운 말 밑에 반응이 남으면 지운 사람에게는 지워지지 않은 것이나 같다. 그래서 `ChatRoomService#deleteMessage` 가 같은 트랜잭션에서 거둬 간다.
+
+> **반응은 방의 변경 번호를 올린다**([ADR-0023](../99-decisions/decision-log.md#adr-0023--이미-보낸-말의-변화는-폴링으로-오지-않는다--반응을-넣기-전에-변경-피드를-정한다)). `room_seq` 는 안 건드린다 — 반응은 새 말이 아니라 **이미 보낸 말의 변화**라서, 그 축으로 올리면 오래된 말이 대화 맨 아래로 뛰고 모두의 미읽음이 1 는다. 대신 `chat_room.last_change_seq` 를 발급해 그 말의 `change_seq` 에 찍고, 델타가 `changed` 로 실어 나른다.
+
+마이그레이션 `48_chat_reaction.sql`. 실제 컬럼 순서는 `01_schema.sql`(엔티티에서 뽑은 것) 그대로다.
+
+---
+
+## 부록 A. 정본의 표 49개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
@@ -1543,6 +1582,7 @@ CREATE TABLE weekly_insight (
 | `walk_dog` | 실재 §32 | `walk`·`dog` | 한 번의 산책에 함께 나간 아이들(#343). 아이별 통계·목록이 이 표를 본다 |
 | `care_log` | 실재 §17 | `care` | 케어 로그 |
 | `chat_message` | 실재 §15 | `chat` | 채팅 메시지 |
+| `chat_message_reaction` | 실재 §40 | `chat` | 말풍선 아래 반응 줄(#452) — 말·사람·종류에 한 행. `user_id` 에 FK 가 없어 탈퇴해도 남고, 반응이 붙으면 방의 변경 번호가 올라 남의 폴링에 흐른다(ADR-0023) |
 | `chat_room` | 실재 §12 | `chat` | 채팅방(범용) |
 | `chat_room_invite` | 실재 §14 | `chat` | 초대코드 |
 | `chat_room_member` | 실재 §13 | `chat` | 방 멤버십 |

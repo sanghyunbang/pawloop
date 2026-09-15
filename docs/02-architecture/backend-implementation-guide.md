@@ -115,7 +115,7 @@ package com.heattrip.heat_trip_backend.care.api;
 
 | 밖에서 실제로 부름 → `api/` 로 (17) | 밖에서 이름이 안 보임 (5) |
 |:---|:---|
-| `ChatRoomService` · `ChatRoomView` · `ChatMessageView` · `ChatRoomSummaryView` · `ChatMessagePageView` · `ChatMemberView` · `ChatLimitViolationException` · `ChatReadView` · `ChatMessageSender` · `ChatMessageSendResult` · `ChatJoinResult` · `ChatInviteView` · `ChatReportService` · `ChatReportDraft` · `ChatBlocks` · `ChatTime` · `ChatMessagePosted`(저장 사건 — 푸시가 커밋 뒤에 듣는다, #83) | `ChatErrorCode` · `ChatLimits` · `FixedChatLimits` · `InviteCodeGenerator` · `ChatReportReason` |
+| `ChatRoomService` · `ChatRoomView` · `ChatMessageView` · `ChatReactionView`(반응 집계 — #452) · `ChatRoomSummaryView` · `ChatMessagePageView` · `ChatMemberView` · `ChatLimitViolationException` · `ChatReadView` · `ChatMessageSender` · `ChatMessageSendResult` · `ChatJoinResult` · `ChatInviteView` · `ChatReportService` · `ChatReportDraft` · `ChatBlocks` · `ChatTime` · `ChatMessagePosted`(저장 사건 — 푸시가 커밋 뒤에 듣는다, #83) | `ChatErrorCode` · `ChatLimits` · `FixedChatLimits` · `InviteCodeGenerator` · `ChatReportReason` |
 
 **오른쪽 칸의 이름이 "내부로 옮겨도 된다" 는 뜻은 아니다.** 세는 방식이 **밖의 소스에 그 이름이 적혀 있는가** 라서 맹점이 있다 — 공개 record 가 들고 있는 리스트의 원소 타입은 밖 어디에도 안 적혀 있지만, 내부로 내리면 **공개 record 의 시그니처가 깨진다.** `ChatReportedMessageView`(`ChatReportView` 의 원소)가 그 예였고, 둘 다 옛 신고 표와 함께 #281 로 사라졌다.
 

@@ -2,10 +2,12 @@ package com.heattrip.heat_trip_backend.chatweb;
 
 import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
+import com.heattrip.heat_trip_backend.chat.ChatReactionView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.chat.ChatTime;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * 계약({@code openapi.yaml})의 {@code ChatMessage} 모양 — 이슈 #78.
@@ -52,6 +54,8 @@ import java.time.Instant;
  *                  미읽음 뱃지가 영원히 남는다
  * @param media 사진 메시지의 사진. 글자 메시지는 {@code null}
  * @param replyTo 답장(#452)이면 원문의 미리보기. 아니면 {@code null}
+ * @param reactions 말풍선 아래 반응 줄(#452). <b>{@code null} 이 아니라 빈 배열</b>이다 — 아무도 안 누른 말과
+ *                  "반응을 모르는 응답" 을 구분할 이유가 없고, 앱이 매번 {@code null} 검사를 하게 만들 이유도 없다
  */
 public record ChatMessageResponse(
         long id,
@@ -65,7 +69,27 @@ public record ChatMessageResponse(
         Instant deletedAt,
         boolean hiddenByBlock,
         Media media,
-        ReplyTo replyTo) {
+        ReplyTo replyTo,
+        List<Reaction> reactions) {
+
+    /**
+     * 반응 한 종류의 집계 — 계약의 {@code ChatReaction}(#452).
+     *
+     * <p>{@code count} 는 "몇 번" 이지 "몇 명" 이 아니고, {@code mine} 은 {@code hiddenByBlock} 처럼
+     * <b>읽는 사람마다 다른 값</b>이다 — 캐시할 수 없다({@link ChatReactionView}).
+     *
+     * <p>0 인 종류는 실리지 않는다. 종류의 순서는 서버가 정한다 — 앱에 맡기면 같은 말이 기기마다
+     * 다르게 그려진다.
+     */
+    public record Reaction(String kind, int count, boolean mine) {
+        static Reaction of(ChatReactionView view) {
+            return new Reaction(view.kind(), view.count(), view.mine());
+        }
+
+        static List<Reaction> allOf(List<ChatReactionView> views) {
+            return views == null ? List.of() : views.stream().map(Reaction::of).toList();
+        }
+    }
 
     /**
      * 답장의 원문 미리보기(#452) — 원문을 보낸 사람의 <b>지금</b> 이름(메시지와 같은 규칙, #78)과
@@ -119,9 +143,17 @@ public record ChatMessageResponse(
 
     static ChatMessageResponse of(ChatMessageView message, String senderName,
                                   boolean hiddenByBlock, Media media, ReplyTo replyTo) {
+        return of(message, senderName, hiddenByBlock, media, replyTo, List.of());
+    }
+
+    /** 반응까지 실은 모양 — 목록과 전송이 쓰는 자리(#452). 방 목록의 미리보기는 반응을 안 싣는다. */
+    static ChatMessageResponse of(ChatMessageView message, String senderName,
+                                  boolean hiddenByBlock, Media media, ReplyTo replyTo,
+                                  List<Reaction> reactions) {
         return new ChatMessageResponse(message.id(), message.roomId(), message.roomSeq(),
                 message.senderUserId(), senderName, message.contentType(), message.body(),
                 ChatTime.toInstant(message.createdAt()),
-                ChatTime.toInstant(message.deletedAt()), hiddenByBlock, media, replyTo);
+                ChatTime.toInstant(message.deletedAt()), hiddenByBlock, media, replyTo,
+                reactions == null ? List.of() : reactions);
     }
 }

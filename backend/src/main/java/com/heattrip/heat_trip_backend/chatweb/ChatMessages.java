@@ -7,6 +7,7 @@ import com.heattrip.heat_trip_backend.chat.ChatMessagePageView;
 import com.heattrip.heat_trip_backend.chat.ChatMessageSendResult;
 import com.heattrip.heat_trip_backend.chat.ChatMessageSender;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
+import com.heattrip.heat_trip_backend.chat.ChatReactionView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
@@ -52,6 +53,14 @@ import java.util.stream.Stream;
  * 답장 행에 복사해 두지 않는 이유는 원문이 나중에 지워지거나(톰스톤) 보낸 사람의 이름이 바뀌기 때문이다 —
  * 미리보기는 <b>응답 때마다</b> 원문을 읽어 만든다. 한 장의 답장들이 가리키는 원문은 <b>한 번의 조회</b>로
  * 모은다(이름·사진과 같은 규칙) — 답장이 없는 장은 묻지 않는다.
+ *
+ * <h2>반응도 한 번의 조회다 (#452)</h2>
+ * <p>말풍선 아래 반응 줄은 {@code chat} 이 집계해 주고({@code ChatRoomService#reactionsOf}) 여기서 계약의
+ * 모양으로 옮긴다. 이름·사진·답장 원문과 같은 규칙이다 — <b>한 장에 한 번</b> 묻고, 반응이 하나도 없는
+ * 장이면 조회 자체를 안 한다.
+ *
+ * <p>전송 응답에는 반응이 없다(빈 배열). 방금 만든 말에 누가 반응했을 리 없다 — 그 자리에서 한 번 더
+ * 묻는 것은 언제나 0을 확인하는 왕복이다.
  *
  * <p>이 패키지가 하는 일은 여전히 셋뿐이다(package-info) — 사용자를 id 로 바꾸고,
  * {@code ChatRoomService} 를 부르고, 돌아온 값 레코드를 계약의 모양으로 옮긴다.
@@ -168,7 +177,17 @@ public class ChatMessages {
         // 한 장에 한 번 묻는다. 메시지마다 "가렸나" 를 물으면 100건 조회에 쿼리가 101개다 —
         // 바로 위 이름 해석이 이미 피해 둔 함정이다. 사진도 같은 규칙이다.
         return ChatMessagePageResponse.of(page, names, blocks.blockedBy(userId), photosOf(all),
-                repliesOf(roomId, all));
+                repliesOf(roomId, all), reactionsOf(all, userId));
+    }
+
+    /**
+     * 이 장의 반응 집계(#452) — 메시지 id → 종류별 {@code (count, mine)}, <b>한 번의 조회</b>.
+     *
+     * <p>{@code chat} 이 세고 여기서는 옮기기만 한다. {@code mine} 이 있어서 읽는 사람을 함께 넘긴다 —
+     * 같은 말이 누구에게는 "내가 누른 것" 이고 누구에게는 아니다({@code hiddenByBlock} 과 같은 종류의 값).
+     */
+    private Map<Long, List<ChatReactionView>> reactionsOf(List<ChatMessageView> messages, long viewerId) {
+        return chatRooms.reactionsOf(messages.stream().map(ChatMessageView::id).toList(), viewerId);
     }
 
     /**

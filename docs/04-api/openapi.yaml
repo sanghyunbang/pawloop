@@ -3688,6 +3688,71 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/chat/messages/{messageId}/reactions/{kind}:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: kind
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ChatReactionKind' }
+    post:
+      tags: [Chat]
+      summary: 반응 누르기(말풍선 아래 한 줄)
+      description: |
+        **멱등입니다** — 이미 눌러 뒀어도 `200` 이고 집계가 늘지 않습니다. 켜기(`POST`)와
+        끄기(`DELETE`)가 따로인 이유는 토글이 재시도에 약하기 때문입니다: 요청에 의도가 없으면
+        **네트워크 재시도 한 번이 사용자의 반응을 조용히 되돌립니다**(커뮤니티 반응이 2026-09 에
+        같은 이유로 갈라졌습니다).
+
+        **한 사람이 한 말에 여러 종류를 누를 수 있습니다** — 서로 배타적인 개념이 아닙니다.
+
+        **지워진 메시지에는 못 누릅니다(`409`).** 삭제가 그 말의 반응을 이미 거둬 갔고, 톰스톤
+        아래에 새 반응이 붙으면 지운 사람에게는 지워지지 않은 것처럼 보입니다.
+
+        누르면 **방의 변경 번호가 오릅니다**([ADR-0023](https://github.com/sanghyunbang/heattrip/issues/500)) —
+        그래야 그 말이 다른 사람의 다음 폴링에 `changed` 로 실립니다. 반응은 `roomSeq` 를 건드리지
+        않으므로 델타만으로는 영영 오지 않습니다. 같은 이유로 **미읽음도 "새 메시지" 알약도
+        올라가지 않습니다** — 반응은 새 말이 아닙니다.
+
+        응답에 **최신 집계**를 실어 왕복을 한 번으로 줄입니다.
+      responses:
+        '200':
+          description: 반영 후 그 말의 최신 집계
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatReactions' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 지워진 메시지 — 반응을 새로 붙일 수 없습니다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [Chat]
+      summary: 반응 취소
+      description: |
+        **멱등입니다** — 안 눌렀던 것을 취소해도 `200` 입니다. 없던 것과 있던 것을 상태 코드로
+        나누면 앱이 두 갈래를 다뤄야 하는데 **사용자에게는 결과가 같습니다.**
+
+        **지워진 메시지에도 통합니다** — 지울 반응이 없을 뿐입니다. 여기서 `409` 를 내면
+        "취소했는데 실패" 라는 없는 상태를 앱이 그려야 합니다.
+      responses:
+        '200':
+          description: 반영 후 그 말의 최신 집계
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatReactions' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /api/chat/rooms/{roomId}/reports:
     parameters:
       - $ref: '#/components/parameters/RoomId'
@@ -5849,6 +5914,62 @@ components:
           oneOf:
             - $ref: '#/components/schemas/ChatReplyTo'
             - type: "null"
+        reactions:
+          type: array
+          default: []
+          description: |
+            말풍선 아래 반응 줄(#452). **`null` 이 아니라 빈 배열입니다** — 아무도 안 누른 말과
+            "반응을 모르는 응답" 을 구분할 이유가 없습니다. 0 인 종류는 실리지 않고, 순서는
+            서버가 정합니다(앱에 맡기면 같은 말이 기기마다 다르게 그려집니다).
+
+            **방 목록의 `lastMessage` 에는 없습니다**(빈 배열) — 목록은 미리보기라 반응을 그리지 않습니다.
+          items: { $ref: '#/components/schemas/ChatReaction' }
+
+    ChatReactionKind:
+      type: string
+      enum: [like, heart, laugh, sad, check]
+      description: |
+        좋아요 👍 · 최고예요 ❤️ · 웃겨요 😂 · 슬퍼요 😢 · **확인했어요 ✅**.
+
+        마지막 하나가 이 앱에 있는 이유가 있습니다 — 가족 방의 "밥 줬어?" 에 필요한 답은 감정이
+        아니라 **확인**이고, 그걸 말로 하면 방이 "응" 으로 채워집니다. 커뮤니티의 셋(도움돼요 ·
+        귀여워요 · 공감)을 그대로 쓰지 않은 것도 같은 이유입니다 — 그건 글에 매기는 평가라
+        "밥 먹었어?" 에는 뜻이 없습니다.
+
+        DB 에 `CHECK` 가 없습니다 — 종류는 제품이 늘릴 수 있는 목록이고 **이 enum 이 단일
+        출처**입니다(커뮤니티 `ReactionType` 과 같은 규약). 모르는 값은 서버가 400 으로 막습니다.
+
+    ChatReaction:
+      type: object
+      description: 한 종류의 집계. 앱은 이것을 말풍선 아래 칩 하나로 그립니다.
+      required: [kind, count, mine]
+      properties:
+        kind: { $ref: '#/components/schemas/ChatReactionKind' }
+        count:
+          type: integer
+          description: |
+            **"몇 번" 이지 "몇 명" 이 아닙니다** — 한 사람이 한 말에 여러 종류를 누를 수 있습니다.
+            탈퇴한 사람의 반응도 남아서 세어집니다(그 사람의 말이 방에 남는 것과 같은 규칙).
+        mine:
+          type: boolean
+          description: |
+            **읽는 사람마다 다른 값입니다** — `hiddenByBlock` 과 같은 종류라 캐시할 수 없습니다.
+            앱은 이 값으로 칩을 채움/외곽선으로 가릅니다.
+
+    ChatReactions:
+      type: object
+      description: 반응을 켜고 끈 뒤의 최신 집계(#452).
+      required: [messageId, reactions]
+      properties:
+        messageId:
+          type: integer
+          format: int64
+          description: |
+            어느 말풍선에 얹을지. 요청 경로에 이미 있는 값이지만, 응답만 들고 처리하는 자리
+            (재시도 · 큐)에서 경로를 다시 꿰어 보게 만들 이유가 없습니다.
+        reactions:
+          type: array
+          items: { $ref: '#/components/schemas/ChatReaction' }
 
     ChatReplyTo:
       type: object

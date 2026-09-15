@@ -293,6 +293,10 @@ want 1 "$(has_column chat_room last_change_seq)" "chat_room.last_change_seq 컬�
 want 1 "$(has_column chat_message change_seq)" "chat_message.change_seq 컬럼 (없으면 부팅이 validate 에서 죽는다)"
 want 1 "$(has_index chat_message idx_chat_change)" "idx_chat_change (없으면 변경 피드가 표 전체를 훑는다)"
 
+step "48_chat_reaction.sql"
+want 1 "$(has_table chat_message_reaction)" "chat_message_reaction 표 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(has_index chat_message_reaction uq_chat_reaction)" "uq_chat_reaction (없으면 같은 반응이 여러 줄 쌓여 집계가 늘어난다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

@@ -85,6 +85,9 @@ class StoredTimestampsAreUtcTest {
     private static final List<Class<?>> WRITERS = List.of(
             ChatMessage.class, ChatRoom.class, ChatRoomMember.class,
             ChatRoomInvite.class,
+            // #452 — 말풍선 아래 반응. created_at 은 응답에 안 나가지만 같은 표의 다른 시각과
+            //        섞이면 9시간 어긋난 줄이 생긴다 — chat 의 모든 시각은 UTC 다.
+            com.heattrip.heat_trip_backend.chat.entity.ChatMessageReaction.class,
             FamilyGroup.class, User.class,
             // #306 — 훑는 범위를 chat·group·user 에서 전체로 넓히면서 들어온 반려 축 엔티티.
             Dog.class, CareLog.class, Walk.class,

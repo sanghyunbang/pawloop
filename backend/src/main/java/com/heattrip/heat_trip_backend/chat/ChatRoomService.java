@@ -1,10 +1,12 @@
 package com.heattrip.heat_trip_backend.chat;
 
 import com.heattrip.heat_trip_backend.chat.entity.ChatMessage;
+import com.heattrip.heat_trip_backend.chat.entity.ChatMessageReaction;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoom;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoomInvite;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoomMember;
 import com.heattrip.heat_trip_backend.chat.entity.ChatRoomMemberRole;
+import com.heattrip.heat_trip_backend.chat.repository.ChatMessageReactionRepository;
 import com.heattrip.heat_trip_backend.chat.repository.ChatMessageRepository;
 import com.heattrip.heat_trip_backend.chat.repository.ChatRoomInviteRepository;
 import com.heattrip.heat_trip_backend.chat.repository.ChatRoomMemberRepository;
@@ -29,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -85,6 +88,17 @@ public class ChatRoomService {
     /** 변경 피드가 훑는 최근 메시지 수 — ADR-0023 결정 5. 앱이 화면에 들고 있을 만한 범위다. */
     static final int CHANGED_WINDOW = 200;
 
+    /**
+     * 반응의 종류 — 계약의 {@code ChatReactionKind} 와 <b>글자까지 같다</b>. 이 순서가 앱이 그리는
+     * 순서다({@link #ordered}).
+     *
+     * <p>다섯인 것은 제품의 판단이다: 좋아요 · 최고예요 · 웃겨요 · 슬퍼요 · <b>확인했어요</b>.
+     * 마지막 하나가 이 앱에 있는 이유가 있다 — 가족 방의 "밥 줬어?" 에 필요한 답은 감정이 아니라
+     * <b>확인</b>이고, 그걸 말로 하면 방이 "응" 으로 채워진다. 커뮤니티의 셋(도움돼요 · 귀여워요 ·
+     * 공감)을 그대로 쓰지 않은 것도 같은 이유다 — 그건 글에 매기는 평가라 "밥 먹었어?" 에는 뜻이 없다.
+     */
+    public static final List<String> REACTION_KINDS = List.of("like", "heart", "laugh", "sad", "check");
+
     private static final String DEFAULT_CONTENT_TYPE = "text";
 
     /**
@@ -134,6 +148,9 @@ public class ChatRoomService {
     private final ChatRoomMemberRepository members;
     private final ChatRoomInviteRepository invites;
     private final ChatMessageRepository messages;
+
+    /** 말에 붙은 반응 — #452. 집계는 한 장에 한 번 읽는다({@link #reactionsOf}). */
+    private final ChatMessageReactionRepository reactions;
     private final ChatLimits limits;
     private final InviteCodeGenerator inviteCodes;
 
@@ -1069,6 +1086,141 @@ public class ChatRoomService {
         fresh.setDeletedAt(ChatTime.nowUtc(clock));
         fresh.setChangeSeq(changeSeq);
         messages.save(fresh);
+
+        // ③ 그 말에 붙은 반응도 지운다(#452). FK 의 CASCADE 는 행을 하드 삭제할 때만 도는데 이건
+        //    톰스톤이라 행이 남는다 — 지운 말 밑에 "5명이 공감" 이 남으면 지운 사람에게는 지워지지
+        //    않은 것이나 같다. 같은 트랜잭션이라 삭제와 함께 되돌아간다.
+        reactions.deleteByMessageId(messageId);
+    }
+
+    /**
+     * 반응을 켠다 — #452, ADR-0023(#500) 셋째 줄. <b>멱등이다</b>: 이미 눌러 뒀으면 집계가 안 늘고
+     * 같은 목록을 돌려준다({@code ChatMessageReactionRepository#insertIfAbsent}).
+     *
+     * @throws ResponseStatusException 404 없는 메시지 · 403 이 방의 살아 있는 멤버가 아님 ·
+     *                                 409 지워진 메시지 · 400 모르는 종류
+     */
+    @Transactional
+    public List<ChatReactionView> react(long messageId, long userId, String kind) {
+        return changeReaction(messageId, userId, kind, true);
+    }
+
+    /**
+     * 반응을 끈다. <b>멱등이다</b>: 안 눌렀던 것을 취소해도 같은 목록을 돌려준다. 지워진 메시지에도
+     * 통한다 — 삭제가 이미 반응을 거둬 갔으니 지울 것이 없을 뿐이고, 여기서 409 를 내면 앱이
+     * "취소했는데 실패" 라는 없는 상태를 다뤄야 한다.
+     */
+    @Transactional
+    public List<ChatReactionView> unreact(long messageId, long userId, String kind) {
+        return changeReaction(messageId, userId, kind, false);
+    }
+
+    /**
+     * 켜기·끄기의 공통 경로 — <b>잠금 순서와 변경 번호 발급이 여기 한 곳에 있다.</b>
+     *
+     * <h2>방의 변경 번호를 먼저 발급한다</h2>
+     * <p>{@link #deleteMessage} 와 같은 이유다(ADR-0023). 반응 행을 먼저 넣으면 FK 검사가
+     * {@code chat_message} 행에 공유 잠금을 걸고, 그 뒤에 {@code chat_room} 을 잡게 된다 —
+     * 전송·삭제 경로(방 → 말)와 <b>정확히 반대 방향</b>이라 그 순간 데드락이 가능해진다.
+     *
+     * <p>그래서 <b>이미 눌러 둔 것을 또 눌러도 번호 하나를 태운다.</b> 태우지 않으려면 삽입 결과를
+     * 보고 나서 발급해야 하는데 그것이 방금 말한 역순이다. 번호에 빈틈은 허용되고(삭제도 그렇다),
+     * 같은 내용이 한 번 더 흐를 뿐이다.
+     */
+    private List<ChatReactionView> changeReaction(long messageId, long userId, String kind, boolean on) {
+        String valid = validReactionKind(kind);
+        ChatMessage message = messages.findById(messageId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "메시지를 찾을 수 없습니다."));
+        long roomId = message.getRoom().getId();
+        // 남의 방도 없는 방도 같은 403 이다 — 메시지 id 를 훑어 방의 존재를 알아낼 문을 두지 않는다.
+        requireLiveMembership(roomId, userId);
+        if (on && message.getDeletedAt() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "지워진 메시지에는 반응할 수 없습니다.");
+        }
+
+        // ① 방의 변경 번호 먼저(잠금 순서 chat_room → chat_message).
+        rooms.assignNextChangeSeq(roomId);
+        long changeSeq = rooms.lastAssignedSeq();
+
+        // ② 발급이 영속성 컨텍스트를 비웠으므로 다시 읽어 번호를 찍는다. 이 번호가 찍혀야 남의 폴링이
+        //    이 말을 changed 로 받는다 — 반응은 room_seq 를 건드리지 않으므로 델타만으로는 안 온다.
+        ChatMessage fresh = messages.findById(messageId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "메시지를 찾을 수 없습니다."));
+        fresh.setChangeSeq(changeSeq);
+        messages.save(fresh);
+
+        // ③ 반응 행 — 유니크가 멱등을 딛는다(저장소 javadoc).
+        if (on) {
+            reactions.insertIfAbsent(messageId, userId, valid, ChatTime.nowUtc(clock));
+        } else {
+            reactions.deleteIfPresent(messageId, userId, valid);
+        }
+
+        return reactionsOf(List.of(messageId), userId).getOrDefault(messageId, List.of());
+    }
+
+    /**
+     * 이 말들의 반응 집계 — 말 id → 종류별 {@code (count, mine)}. <b>한 번의 조회</b>다.
+     *
+     * <p>말마다 물으면 50건짜리 한 장에 쿼리가 51개다. 이름·사진·답장 원문이 이미 피해 둔 함정이고
+     * ({@code chatweb.ChatMessages}), 폴링이라 그 곱셈이 그대로 초당 부하가 된다.
+     *
+     * <p>{@code mine} 은 읽는 사람마다 다른 값이라 집계와 <b>같은 결과</b>에서 만든다 — 따로 물으면
+     * 그 사이에 값이 바뀌어 카운트와 어긋난다.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, List<ChatReactionView>> reactionsOf(Collection<Long> messageIds, long viewerId) {
+        if (messageIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Map<String, int[]>> tally = new LinkedHashMap<>();
+        for (ChatMessageReaction row : reactions.findByMessageIdIn(messageIds)) {
+            int[] cell = tally.computeIfAbsent(row.getMessage().getId(), id -> new LinkedHashMap<>())
+                    .computeIfAbsent(row.getKind(), k -> new int[2]);
+            cell[0]++;
+            if (row.getUserId() == viewerId) {
+                cell[1] = 1;
+            }
+        }
+        Map<Long, List<ChatReactionView>> out = new HashMap<>();
+        tally.forEach((messageId, byKind) -> out.put(messageId, ordered(byKind)));
+        return out;
+    }
+
+    /**
+     * 그릴 순서를 서버가 정한다 — 아는 종류가 {@link #REACTION_KINDS} 순서로 먼저, 모르는 종류는
+     * 그 뒤에 이름순으로.
+     *
+     * <p>순서를 앱에 맡기면 같은 말이 기기마다 다르게 그려진다. 모르는 종류를 버리지 않는 것은
+     * <b>옛 서버가 새 앱의 반응을 지우지 않게</b> 하기 위해서다 — 배포 순서가 어긋나는 잠깐 동안
+     * 집계에서 사라지면 사용자는 자기가 누른 것이 안 눌린 줄 안다.
+     */
+    private static List<ChatReactionView> ordered(Map<String, int[]> byKind) {
+        List<ChatReactionView> out = new ArrayList<>(byKind.size());
+        for (String kind : REACTION_KINDS) {
+            int[] cell = byKind.get(kind);
+            if (cell != null) {
+                out.add(new ChatReactionView(kind, cell[0], cell[1] == 1));
+            }
+        }
+        byKind.keySet().stream().filter(k -> !REACTION_KINDS.contains(k)).sorted()
+                .forEach(k -> out.add(new ChatReactionView(k, byKind.get(k)[0], byKind.get(k)[1] == 1)));
+        return out;
+    }
+
+    /**
+     * 아는 종류만 받는다 — 계약의 {@code ChatReactionKind} 가 단일 출처이고 이 목록이 그 사본이다.
+     *
+     * <p>표에 {@code CHECK} 를 안 거는 대신 여기가 문이다({@code ChatMessageReaction} javadoc).
+     * 모르는 문자열을 그냥 넣으면 종류가 사실상 자유 입력이 되고, 그 방의 말풍선 아래에 남이 만든
+     * 아무 글자나 뜬다.
+     */
+    private static String validReactionKind(String requested) {
+        String kind = requested == null ? "" : requested.strip();
+        if (!REACTION_KINDS.contains(kind)) {
+            throw new IllegalArgumentException("반응 종류는 " + String.join(" · ", REACTION_KINDS) + " 입니다.");
+        }
+        return kind;
     }
 
     /**
