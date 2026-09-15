@@ -3,6 +3,10 @@ package com.heattrip.heat_trip_backend;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -150,6 +154,45 @@ class ModularityBaselineTest {
      */
     private static final int BASELINE_VIOLATIONS = 96;
 
+    /**
+     * 같은 빚을 <b>(부르는 모듈 → 불리는 패키지) 쌍</b>으로 적은 것 — 이슈 #518.
+     *
+     * <h2>총계 하나로는 스왑을 못 잡는다</h2>
+     * <p>위 {@link #BASELINE_VIOLATIONS} 는 <b>수 하나</b>다. 새 위반을 하나 만들면서 다른
+     * 하나를 없애면 그 수는 안 움직이고 검사는 통과한다. 이 파일의 javadoc 이 그 일을
+     * 이미 한 번 기록해 뒀다 — {@code chatweb} 에 {@code "user :: entity"} 를 더했을 때
+     * {@code -3 + 3 = 0} 이라 <b>"총계만 보면 아무 일도 안 일어난 것처럼 보이지만 실제로는
+     * 바뀌었다"</b>. 그때는 사람이 목록을 떠서 확인했다. 이제 검사가 한다.
+     *
+     * <h2>왜 타입이 아니라 패키지인가</h2>
+     * <p>타입 단위로 적으면 리팩터링 한 번에 목록이 통째로 흔들려 아무도 안 고치게 된다.
+     * 패키지 단위는 <b>"어느 모듈이 어느 내부를 보는가"</b> 를 그대로 담으면서, 그 안에서
+     * 클래스를 옮기는 것은 허용한다 — 경계의 문제는 그 자리에 있지 클래스 이름에 있지 않다.
+     * {@code ModuleCycleTest} 가 순환을 쌍으로 보는 것과 같은 눈금이다.
+     *
+     * <h2>수를 함께 적는 이유</h2>
+     * <p>쌍만 적으면 {@code OAuth -> user.repository} 가 20건에서 40건이 돼도 통과한다. 수까지
+     * 적으면 "그 자리를 더 깊이 파는 것" 도 보인다. 줄었으면 그 수를 내린다 — 총계와 같은 규칙이다.
+     */
+    private static final Map<String, Integer> BASELINE_PAIRS = Map.ofEntries(
+            Map.entry("OAuth -> user.dto", 9),
+            Map.entry("OAuth -> user.entity", 13),
+            Map.entry("OAuth -> user.repository", 20),
+            Map.entry("OAuth -> user.service", 5),
+            Map.entry("care -> group.entity", 18),
+            Map.entry("care -> group.repository", 4),
+            Map.entry("chatweb -> user.repository", 4),
+            Map.entry("config -> OAuth.handler", 6),
+            Map.entry("config -> OAuth.jwt", 5),
+            Map.entry("config -> OAuth.service", 3),
+            Map.entry("config -> OAuth.state", 4),
+            Map.entry("error -> observability.logging", 1),
+            Map.entry("group -> user.repository", 4));
+
+    /** {@code - Module 'A' depends on non-exposed type <FQCN> within module 'B'!} */
+    private static final Pattern VIOLATION_LINE = Pattern.compile(
+            "^- Module '([^']+)' depends on non-exposed type ([\\w.$]+) within module '([^']+)'!$");
+
     private static final char NL = (char) 10;
 
     private static Violations detect() {
@@ -176,6 +219,66 @@ class ModularityBaselineTest {
                           안 내리면 그만큼 이 눈금자가 다시 무뎌진다.
                         """.formatted(BASELINE_VIOLATIONS, actual, actual))
                 .isEqualTo(BASELINE_VIOLATIONS);
+    }
+
+
+    @Test
+    @DisplayName("위반이 쌍으로도 그대로다 — 하나를 만들면서 다른 하나를 없애면 총계는 속는다")
+    void violationsMatchTheRecordedPairs() {
+        Parsed parsed = pairsOf(detect().getMessage());
+
+        assertThat(parsed.unmatched())
+                .as("""
+                        Modulith 의 위반 메시지 모양이 바뀌었다. 정규식(VIOLATION_LINE)을 고쳐라. \
+                        안 고치면 아래 단언이 **빈 목록을 빈 목록과 비교하며** 통과한다.""")
+                .isZero();
+        assertThat(parsed.pairs()).isNotEmpty();
+
+        assertThat(parsed.pairs())
+                .as("""
+                        모듈 경계 빚의 **모양**이 기준선과 다르다. 총계가 같아도 여기서 갈린다 — \
+                        새 위반 하나를 만들면서 다른 하나를 없앤 경우가 그렇다.
+
+                        늘거나 새 쌍이 생겼다면 — 남의 모듈 내부를 새로 부른 자리다. 열린 표면을 \
+                          쓰거나, 그 모듈이 표면을 내주게 하거나(#104 · #105 · #120), 정말 필요하면 \
+                          BASELINE_PAIRS 에 **왜 그 자리인지와 함께** 적어라.
+
+                        줄었다면 — 빚을 갚은 것이니 그 줄을 내리거나 지워라.""")
+                .isEqualTo(BASELINE_PAIRS);
+    }
+
+    @Test
+    @DisplayName("쌍의 합이 총계와 같다 — 두 기준선이 서로를 지킨다")
+    void thePairsAddUpToTheTotal() {
+        assertThat(BASELINE_PAIRS.values().stream().mapToInt(Integer::intValue).sum())
+                .as("""
+                        쌍 목록과 총계가 어긋났다. 둘 중 하나만 고친 것이다 — 한쪽만 고치면 \
+                        나머지 하나가 조용히 거짓이 된다.""")
+                .isEqualTo(BASELINE_VIOLATIONS);
+    }
+
+    /** 파싱 결과 — 못 읽은 줄 수를 함께 든다. 그것이 0 이어야 아래 비교에 뜻이 있다. */
+    private record Parsed(Map<String, Integer> pairs, long unmatched) { }
+
+    private static Parsed pairsOf(String message) {
+        Map<String, Integer> pairs = new TreeMap<>();
+        long unmatched = 0;
+        for (String line : message.split(String.valueOf(NL))) {
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("- ") || trimmed.startsWith("- Cycle detected:")) {
+                continue;
+            }
+            Matcher matcher = VIOLATION_LINE.matcher(trimmed);
+            if (!matcher.matches()) {
+                unmatched++;
+                continue;
+            }
+            String type = matcher.group(2);
+            String pkg = type.substring(0, type.lastIndexOf('.'))
+                    .replace("com.heattrip.heat_trip_backend.", "");
+            pairs.merge(matcher.group(1) + " -> " + pkg, 1, Integer::sum);
+        }
+        return new Parsed(pairs, unmatched);
     }
 
     /**
