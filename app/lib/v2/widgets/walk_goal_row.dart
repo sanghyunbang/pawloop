@@ -100,6 +100,10 @@ class _WalkGoalRowState extends State<WalkGoalRow> {
     // 아직 안 읽었으면 빈 자리다 — 제안값을 먼저 그렸다가 저장값으로 바뀌면 숫자가 튄다.
     if (!_loaded || goal == null) return const SizedBox.shrink();
 
+    // 숫자를 모르면 **달성치를 주장하지 않는다**(#568). `0/5일 · 0/150분` 과 빈 막대는
+    // 문장이 아니라 주장이라, 못 읽은 주를 "아무것도 안 한 주" 로 만든다. 목표는 기기에
+    // 저장된 값이라 서버가 죽어도 사실이므로 그것만 남긴다.
+    final unknown = widget.data.numbersUnknown;
     final progress = WalkGoalProgress(
       goal: goal,
       days: widget.data.daysWalkedThisWeek,
@@ -125,24 +129,34 @@ class _WalkGoalRowState extends State<WalkGoalRow> {
                     style: TextStyle(
                         fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textMuted)),
                 const SizedBox(width: 6),
-                Text(progress.label,
+                Text(
+                    unknown
+                        ? '${goal.daysPerWeek}일 · ${goal.minutesPerWeek}분'
+                        : progress.label,
+                    key: const Key('walk-goal-label'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
-                      color: progress.met ? const Color(0xFF4CAF88) : T.textSecondary,
+                      color: unknown
+                          ? T.textMuted
+                          : (progress.met ? const Color(0xFF4CAF88) : T.textSecondary),
                     )),
               ]),
               const SizedBox(height: 6),
               ClipRRect(
                 borderRadius: BorderRadius.circular(5),
-                child: LinearProgressIndicator(
-                  value: progress.ratio,
-                  minHeight: 7,
-                  backgroundColor: T.accentSoft,
-                  valueColor: AlwaysStoppedAnimation(
-                    progress.met ? const Color(0xFF4CAF88) : T.warmMid,
-                  ),
-                ),
+                // 모를 때는 **막대 자체를 안 그린다**. 값 0 으로 두면 "하나도 못 채웠다"
+                // 로 읽히고, 도는 스피너로 두면 "읽는 중" 이라는 또 다른 거짓말이 된다.
+                child: unknown
+                    ? Container(height: 7, color: T.accentSoft)
+                    : LinearProgressIndicator(
+                        value: progress.ratio,
+                        minHeight: 7,
+                        backgroundColor: T.accentSoft,
+                        valueColor: AlwaysStoppedAnimation(
+                          progress.met ? const Color(0xFF4CAF88) : T.warmMid,
+                        ),
+                      ),
               ),
             ]),
           ),

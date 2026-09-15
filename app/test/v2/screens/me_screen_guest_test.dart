@@ -36,6 +36,9 @@ void main() {
 
   testWidgets('로그인했는데 아이가 없으면 등록이 주 버튼이다', (tester) async {
     AuthState.signInForTest(const AuthUser(id: 1, nickname: 'walker'));
+    // **서버가 "아이 없음" 이라고 답한 상태로 둔다**(#568). 안 두면 "아직 안 읽음" 이라
+    // 화면이 조용하다 — 읽어 보지도 않고 "없어요" 라고 말하면 안 되기 때문이다.
+    replacePets(const []);
 
     await tester.pumpWidget(const MaterialApp(home: MeScreen()));
     await tester.pumpAndSettle();

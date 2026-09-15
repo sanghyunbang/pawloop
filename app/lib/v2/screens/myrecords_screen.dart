@@ -113,7 +113,9 @@ class MyRecordsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                   ],
-                  if (!data.hasAnything) ...[
+                  // 아직 안 읽었으면 아무 말도 안 한다(#568) — "불러오지 못했어요" 도
+                  // "아직 기록이 없어요" 도 첫 프레임에서는 둘 다 틀린 말이다.
+                  if (!data.hasAnything && !data.loading) ...[
                     Center(
                       child: Text(
                         data.offline ? '기록을 불러오지 못했어요' : '아직 산책 기록이 없어요',

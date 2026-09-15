@@ -89,6 +89,15 @@ class _WalkFeedBuilderState extends State<WalkFeedBuilder> {
 
   Future<void> _reload() async {
     final mine = ++_generation;
+    // 실패한 화면에서 다시 읽을 때는 **먼저 "모름" 으로 돌아간다**(#568). 안 그러면
+    // "다시 시도" 를 눌러도 화면이 그대로라 눌렸는지 알 수 없고, 같은 실패가 반복되면
+    // 아무 일도 안 일어난 것처럼 보인다.
+    //
+    // 이미 그린 **성공한** 자료는 안 버린다 — 갱신 신호마다 화면이 비면 산책을 저장할
+    // 때마다 목록이 한 번씩 사라진다.
+    if (_data.offline && !_data.loading) {
+      setState(() => _data = WalkFeedData.empty);
+    }
     final data = await _feed.load(dogId: widget.dogId);
     if (!mounted || mine != _generation) return;
     setState(() => _data = data);

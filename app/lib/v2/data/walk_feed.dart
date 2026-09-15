@@ -42,9 +42,20 @@ class WalkFeedData {
   /// 서버가 낸 통계. **대기 중인 것은 여기 안 들어 있다** — 서버가 모르는 값이다.
   final ServerWalkStats stats;
 
-  /// 서버를 못 불렀나. 참이면 화면은 통계를 0 으로 그리되 **"불러오지 못했다"** 를
-  /// 말해야 한다. 0 을 그냥 보여 주면 "산책을 한 번도 안 했다" 로 읽힌다.
+  /// 서버를 못 불렀나. 참이면 화면은 **숫자를 주장하지 않는다**(#568) — `0회` 가 아니라
+  /// `—` 를 그리고 "불러오지 못했다" 를 말한다. 0 은 값이고 `—` 는 "모른다" 다.
+  ///
+  /// 0 을 그냥 보여 주면 "산책을 한 번도 안 했다" 로 읽힌다. 특히 주간 목표의 빈 막대는
+  /// 문장이 아니라 **주장**이라서, 못 읽은 주를 "아무것도 안 한 주" 로 만든다.
   final bool offline;
+
+  /// **아직 안 읽었나**(#568). 첫 프레임이 이것이다.
+  ///
+  /// [offline] 과 나누는 이유: 둘 다 "숫자를 모른다" 지만 **할 말이 다르다.** 못 읽었으면
+  /// "불러오지 못했어요 · 다시 시도" 를 말해야 하고, 아직 안 읽었으면 아무 말도 하면
+  /// 안 된다 — 나누기 전에는 홈이 첫 프레임에서 "기록을 불러오지 못했어요" 를 한 번
+  /// 깜빡였다.
+  final bool loading;
 
   /// 다음 장의 커서. **`null` 이면 끝이다.**
   ///
@@ -67,13 +78,17 @@ class WalkFeedData {
     this.nextCursor,
     this.hasMore = false,
     this.guest = false,
+    this.loading = false,
   });
 
+  /// 첫 프레임. **`offline` 도 참**이다 — 숫자를 모르는 것은 같으므로 화면이 0 을
+  /// 그리면 안 된다. 다른 것은 `loading` 이 참인 동안 <b>말을 걸지 않는다</b>는 것뿐이다.
   static const empty = WalkFeedData(
     walks: [],
     pending: [],
     stats: ServerWalkStats.empty,
     offline: true,
+    loading: true,
   );
 
   /// 게스트. 비어 있지만 오류가 아니다.
@@ -95,6 +110,12 @@ class WalkFeedData {
         nextCursor: page.nextCursor,
         hasMore: page.hasMore,
       );
+
+  /// 숫자를 모르나 — 못 읽었거나 아직 안 읽었다. 참이면 화면은 `0` 대신 `—` 를 그린다(#568).
+  ///
+  /// 대기 중인 초안이 있으면 **거짓**이다. 서버를 못 불러도 그 초안은 사용자가 실제로
+  /// 걸은 것이라 숫자가 사실이다 — `today` 가 그것을 센다.
+  bool get numbersUnknown => (offline || loading) && pending.isEmpty;
 
   /// 화면에 그릴 것이 하나라도 있나. **거절된 것도 센다** — 그것마저 없는 것으로
   /// 치면 "아직 산책 기록이 없어요" 아래에 거절 카드가 놓이는 모순이 생긴다.

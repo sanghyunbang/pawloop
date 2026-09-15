@@ -48,6 +48,15 @@ class PetSync {
       replacePets((await _householdPets()).map(_toProfile).toList());
       return true;
     } on WalkFailure {
+      // **처음 읽기가 실패했을 때만** 못 읽었다고 말한다(#568).
+      //
+      // 이미 한 번 읽어 둔 뒤의 실패는 앞서 읽은 답을 뒤집지 않는다. 서버가 "아이 없음"
+      // 이라고 알려 준 뒤 새로고침이 실패했다고 [PetsLoad.failed] 로 내리면, 정말 아이가
+      // 없는 사람에게서 "우리 아이 등록하기" 를 빼앗는다. 목록이 있던 사람은 그 목록을
+      // 그대로 본다 — 옛 목록이 빈 화면보다 낫다.
+      if (kPetsLoad.value == PetsLoad.loading) {
+        kPetsLoad.value = PetsLoad.failed;
+      }
       return false;
     }
   }
@@ -157,7 +166,12 @@ class PetSync {
   }
 
   /// 로그아웃했다. **화면에서 지운다** — 다음 사람이 남의 아이를 보면 안 된다.
-  static void clear() => replacePets(const []);
+  /// 로그아웃. 목록을 비우고 **"아직 안 읽음" 으로 되돌린다** — 다음 사람의 첫 화면이
+  /// "아직 등록된 아이가 없어요" 로 시작하면 안 된다(#568). 그 사람은 아이가 있을 수 있다.
+  static void clear() {
+    replacePets(const []);
+    kPetsLoad.value = PetsLoad.loading;
+  }
 
   // ─────────────────────────── 변환 ───────────────────────────
   //
