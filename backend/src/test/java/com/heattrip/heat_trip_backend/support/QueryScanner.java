@@ -53,21 +53,37 @@ public final class QueryScanner {
      */
     public static List<String> queryLiteralsIn(String source) {
         List<String> out = new ArrayList<>();
-
-        Matcher blocks = TEXT_BLOCK.matcher(source);
-        StringBuilder withoutBlocks = new StringBuilder();
-        int last = 0;
-        while (blocks.find()) {
-            withoutBlocks.append(source, last, blocks.start());
-            collectIfQuery(blocks.group(1), out);
-            last = blocks.end();
+        for (String block : textBlocksIn(source)) {
+            collectIfQuery(block, out);
         }
-        withoutBlocks.append(source.substring(last));
+        for (String literal : stringLiteralsIn(source)) {
+            collectIfQuery(literal, out);
+        }
+        return out;
+    }
 
+    /** 텍스트 블록의 <b>속</b>들. 먼저 떼어 내야 아래 일반 문자열 정규식이 헷갈리지 않는다. */
+    public static List<String> textBlocksIn(String source) {
+        List<String> out = new ArrayList<>();
+        Matcher blocks = TEXT_BLOCK.matcher(source);
+        while (blocks.find()) {
+            out.add(blocks.group(1));
+        }
+        return out;
+    }
+
+    /**
+     * 한 줄짜리 문자열 리터럴의 <b>속</b>들 — 텍스트 블록을 뗀 뒤, 이어 붙인 것을 이어서.
+     *
+     * <p>길이를 재는 자리이기도 하다({@code QueryScannerTest}). 여기서 나온 것이 수백 자를 넘으면
+     * 소스가 아니라 <b>따옴표 짝이 깨진 것</b>이고, 그대로 두면 이 정규식이 글자마다 재귀하다 죽는다.
+     */
+    public static List<String> stringLiteralsIn(String source) {
+        List<String> out = new ArrayList<>();
         Matcher literals = STRING_LITERAL.matcher(
-                CONCATENATION.matcher(withoutBlocks).replaceAll(""));
+                CONCATENATION.matcher(TEXT_BLOCK.matcher(source).replaceAll("")).replaceAll(""));
         while (literals.find()) {
-            collectIfQuery(literals.group(1), out);
+            out.add(literals.group(1));
         }
         return out;
     }
@@ -137,16 +153,85 @@ public final class QueryScanner {
      * 주석을 걷는다 — 주석 속 예시 문구가 검사에 걸리면 그 테스트는 며칠 안에 지워진다.
      *
      * <p>줄 수는 그대로 둔다. 위반을 파일:줄 로 가리켜야 고칠 자리를 찾는다.
+     *
+     * <h2>문자열을 따라간다 — 정규식 한 줄로는 안 된다</h2>
+     * <p>예전에는 주석을 <b>정규식 한 줄</b>로 걷었다. 그러면
+     * {@code "https://appleid.apple.com"} 의 {@code //} 를 주석으로 보고 <b>닫는 따옴표까지</b>
+     * 지워 버린다. 남은 여는 따옴표는 다음 따옴표까지를 한 문자열로 만들고, 그 길이가 수백 자를
+     * 넘으면 {@link #queryLiteralsIn} 의 {@code "((?:\\.|[^"\\])*)"} 가 글자마다 재귀하다
+     * <b>{@code StackOverflowError}</b> 로 죽는다.
+     *
+     * <p>그 죽음은 <b>스택이 얼마나 남았는지</b>에 달려 있어서, 코드 몇 줄이 늘고 주는 것만으로
+     * 초록과 빨강을 오간다. 검사가 그렇게 흔들리면 다음 사람이 그 검사를 지운다. 그래서 한 글자씩
+     * 훑으며 <b>문자열 · 문자 리터럴 · 텍스트 블록 안에서는 주석을 찾지 않는다</b>(#540).
      */
     public static String stripComments(String source) {
-        Matcher m = Pattern.compile("(?s)/\\*.*?\\*/|//[^\\n]*").matcher(source);
         StringBuilder out = new StringBuilder(source.length());
-        int last = 0;
-        while (m.find()) {
-            out.append(source, last, m.start());
-            out.append("\n".repeat((int) m.group().chars().filter(c -> c == '\n').count()));
-            last = m.end();
+        int i = 0;
+        while (i < source.length()) {
+            char c = source.charAt(i);
+
+            if (c == '/' && i + 1 < source.length() && source.charAt(i + 1) == '/') {
+                while (i < source.length() && source.charAt(i) != '\n') {
+                    i++;
+                }
+                continue;
+            }
+            if (c == '/' && i + 1 < source.length() && source.charAt(i + 1) == '*') {
+                i += 2;
+                while (i + 1 < source.length()
+                        && !(source.charAt(i) == '*' && source.charAt(i + 1) == '/')) {
+                    if (source.charAt(i) == '\n') {
+                        out.append('\n');
+                    }
+                    i++;
+                }
+                i = Math.min(i + 2, source.length());
+                continue;
+            }
+            // 텍스트 블록은 통째로 그대로 둔다 — 안에 무엇이 있든 쿼리를 뽑는 쪽이 본다.
+            if (source.startsWith("\"\"\"", i)) {
+                int end = source.indexOf("\"\"\"", i + 3);
+                end = end < 0 ? source.length() : end + 3;
+                out.append(source, i, end);
+                i = end;
+                continue;
+            }
+            if (c == '"' || c == '\'') {
+                i = copyLiteral(source, i, c, out);
+                continue;
+            }
+
+            out.append(c);
+            i++;
         }
-        return out.append(source.substring(last)).toString();
+        return out.toString();
+    }
+
+    /**
+     * [{@code from}] 의 여는 따옴표부터 닫는 따옴표까지를 그대로 옮기고, 그다음 자리를 돌려준다.
+     *
+     * <p>안 닫힌 채 줄이 끝나면 <b>거기서 멈춘다</b> — 안 그러면 짝이 안 맞는 따옴표 하나가 파일
+     * 끝까지를 문자열로 만든다.
+     */
+    private static int copyLiteral(String source, int from, char quote, StringBuilder out) {
+        int j = from + 1;
+        while (j < source.length()) {
+            char d = source.charAt(j);
+            if (d == '\\') {
+                j += 2;
+                continue;
+            }
+            if (d == quote || d == '\n') {
+                break;
+            }
+            j++;
+        }
+        if (j < source.length() && source.charAt(j) == quote) {
+            j++;
+        }
+        int end = Math.min(j, source.length());
+        out.append(source, from, end);
+        return end;
     }
 }
