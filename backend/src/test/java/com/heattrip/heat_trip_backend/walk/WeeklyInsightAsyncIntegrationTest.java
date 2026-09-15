@@ -152,7 +152,11 @@ class WeeklyInsightAsyncIntegrationTest extends AbstractMySqlIntegrationTest {
                 .isTrue();
 
         release.countDown();
-        awaitCalls(calls, 2);
+        // **부른 횟수가 아니라 다 쓴 것을 기다린다.** complete() 가 돌아온 뒤에도 실행기 스레드는
+        // 숫자 검사와 저장을 더 하고, 저장은 model.name() 을 부른다. 거기서 멈추면 그 스레드가
+        // 다음 테스트의 when(model.name()) 과 같은 목을 동시에 건드려 스터빙이 깨진다
+        // (ClassCastException: Boolean cannot be cast to String).
+        awaitRegenerated(me);
     }
 
     // ── 도우미 ─────────────────────────────────────────────
@@ -165,6 +169,20 @@ class WeeklyInsightAsyncIntegrationTest extends AbstractMySqlIntegrationTest {
                                 {"name":"%s","breed":"푸들","size":"small","birth":"2024-09-01","neutered":false}
                                 """.formatted(name)))
                 .andExpect(status().isCreated());
+    }
+
+    /** 다시 만들기가 **끝날** 때까지 — 행의 `calls` 가 둘이 되면 저장까지 끝난 것이다. */
+    private void awaitRegenerated(Account me) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            Optional<WeeklyInsight> row = insights.findByUser_IdAndDogKeyAndWeekStart(
+                    me.id(), WeeklyInsight.ALL_DOGS, weekStart());
+            if (row.isPresent() && row.get().getCalls() >= 2) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("10초 안에 다시 만들어지지 않았다");
     }
 
     private WeeklyInsight awaitRow(Account me) throws Exception {
