@@ -87,8 +87,9 @@ public class CareController {
             @PathVariable long groupId,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(required = false) String type) {
-        return care.logsOf(groupId, date, type == null ? null : CareType.of(type), user.getId());
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Long dogId) {
+        return care.logsOf(groupId, date, type == null ? null : CareType.of(type), dogId, user.getId());
     }
 
     /**

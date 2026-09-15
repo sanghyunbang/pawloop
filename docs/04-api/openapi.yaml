@@ -2344,6 +2344,17 @@ paths:
           in: query
           description: 케어 종류 필터(생략 시 전체)
           schema: { $ref: '#/components/schemas/CareType' }
+        - name: dogId
+          in: query
+          description: |
+            아이 필터(생략 시 전체). **그 아이의 기록과 `dogId` 가 `null` 인 옛 기록을 함께**
+            줍니다 — 옛 행을 빼면 어제 준 밥이 화면에서 사라지고, 사라지면 "아직" 으로 읽혀
+            한 번 더 주게 됩니다([#563](https://github.com/sanghyunbang/heattrip/issues/563)).
+
+            아이가 둘인 집에서는 그 옛 행이 두 아이 카드에 모두 뜹니다. 어느 아이 것인지 모르는
+            값이라 어느 쪽으로 눕혀도 지어내는 것이 됩니다 — 새로 쌓이는 행에는 아이가 붙으므로
+            이 겹침은 전환기 하루짜리입니다.
+          schema: { type: integer, format: int64 }
       responses:
         '200':
           description: 케어 기록 목록
@@ -5740,10 +5751,13 @@ components:
           type: [integer, "null"]
           format: int64
           description: |
-            대상 반려동물(`dog.id`). **지금은 항상 `null` 입니다** — 컬럼은 #154 에서 `dog` 에
-            FK 로 이어졌지만, 이 경로가 아직 `dogId` 를 받지 않습니다. 받으려면 "가족 구성원이
-            남의 반려동물 id 를 알 수 있는가" 가 먼저 정해져야 합니다(#209 Dogs-high-3). 필드를
-            미리 두는 것은 그날 앱이 스키마를 바꾸지 않아도 되게 하려는 것입니다.
+            대상 반려동물(`dog.id`). 2026-09-15 부터 채워집니다
+            ([#563](https://github.com/sanghyunbang/heattrip/issues/563)).
+
+            **그 전에 쌓인 행은 `null` 입니다** — 쓰기 경로가 이 값을 안 받았기 때문입니다.
+            그래서 `?dogId=` 로 걸러도 **`null` 인 행은 함께 나옵니다**: 빼면 어제 준 밥이
+            화면에서 사라지고, 사라지면 "아직" 으로 읽혀 한 번 더 주게 됩니다. 이 표가 막으려는
+            것이 정확히 그 이중 급여입니다(#76).
         groupId:
           type: [integer, "null"]
           format: int64
@@ -5769,14 +5783,26 @@ components:
     CareLogInput:
       type: object
       description: |
-        필드가 둘뿐입니다. `dogId` 는 아직 받지 않습니다(위 `CareLog.dogId` 참조) — 필수로 두면
-        앱이 더미 id 를 지어내야 하고, `occurredAt`·`doneBy` 는 서버가 정합니다 — 그 둘이 곧
-        "오늘 누가 했는지" 를 가르는 기준이라 클라이언트가 정하면 화면의 문구를 믿을 수 없게
-        됩니다. 지난 일을 나중에 적는 화면은 M4 입니다.
+        `occurredAt`·`doneBy` 는 서버가 정합니다 — 그 둘이 곧 "오늘 누가 했는지" 를 가르는
+        기준이라 클라이언트가 정하면 화면의 문구를 믿을 수 없게 됩니다. 지난 일을 나중에 적는
+        화면은 M4 입니다.
       required: [type]
       properties:
         type: { $ref: '#/components/schemas/CareType' }
         memo: { type: string, maxLength: 500 }
+        dogId:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            **어느 아이에게 한 일인가.** 2026-09-15 부터 받습니다
+            ([#563](https://github.com/sanghyunbang/heattrip/issues/563)).
+
+            **필수가 아닙니다.** 아이를 한 마리도 등록하지 않은 집도 케어를 기록하고, 이미 나가
+            있는 앱은 이 필드를 모릅니다 — 하위 호환은 서버가 지는 짐입니다.
+
+            보낸 값은 **우리 집 아이**(`GET /api/groups/{groupId}/dogs`)여야 하고, 아니면 **400**
+            입니다. **누구 것인지는 안 따집니다** — 엄마가 등록한 보리에게 아빠가 물을 주는 것이
+            이 기능의 목적(업무 분담)입니다.
 
     PushTokenInput:
       type: object

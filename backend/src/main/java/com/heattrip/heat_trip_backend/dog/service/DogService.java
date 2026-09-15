@@ -77,6 +77,24 @@ public class DogService implements DogOwnership {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>집 아이 목록을 한 번 읽어 그 안에 있는지 본다. 목록이 길어야 열 마리 남짓이라
+     * 전용 쿼리를 따로 두지 않는다 — 두면 "집 아이" 의 정의가 두 벌이 된다.
+     */
+    @Override
+    public Dog requireInFamilyEntity(long groupId, Long dogId) {
+        if (dogId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "어느 아이인지 알려 주세요.");
+        }
+        return dogs.findOfUsers(family.memberUserIds(groupId)).stream()
+                .filter(dog -> dog.getId().equals(dogId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "우리 집 아이가 아닙니다."));
+    }
+
+    /**
      * <b>우리 집 아이</b> — 그 가족의 식구들이 등록한 아이 전부. 이슈 #563.
      *
      * <h2>왜 이 경로가 있나</h2>

@@ -5,6 +5,8 @@ import com.heattrip.heat_trip_backend.care.dto.CareLogResponse;
 import com.heattrip.heat_trip_backend.care.dto.WalkNoteResponse;
 import com.heattrip.heat_trip_backend.care.entity.CareLog;
 import com.heattrip.heat_trip_backend.care.entity.CareType;
+import com.heattrip.heat_trip_backend.dog.DogOwnership;
+import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.care.entity.WalkNote;
 import com.heattrip.heat_trip_backend.care.repository.CareLogRepository;
 import com.heattrip.heat_trip_backend.care.repository.WalkNoteRepository;
@@ -69,6 +71,9 @@ public class CareService {
     private static final int MAX_TEXT_LENGTH = 500;
 
     private final CareLogRepository careLogs;
+
+    /** "그 집 아이인가" — dog 모듈의 공개 표면(#563). 판정이 두 곳에 생기지 않게 한 자리에서만 묻는다. */
+    private final DogOwnership dogs;
     private final WalkNoteRepository walkNotes;
     private final FamilyGroupRepository familyGroups;
     private final ChatRoomService chatRooms;
@@ -86,7 +91,8 @@ public class CareService {
      * @throws ResponseStatusException 403 — 그 그룹의 방 멤버가 아니면
      */
     @Transactional(readOnly = true)
-    public List<CareLogResponse> logsOf(long groupId, LocalDate date, CareType type, long actorUserId) {
+    public List<CareLogResponse> logsOf(long groupId, LocalDate date, CareType type,
+                                        Long dogId, long actorUserId) {
         requireMemberGroup(groupId, actorUserId);
 
         LocalDate day = date == null ? LocalDate.now(clock) : date;
@@ -95,8 +101,28 @@ public class CareService {
 
         return found.stream()
                 .filter(log -> type == null || log.getType() == type)
+                .filter(log -> matchesDog(log, dogId))
                 .map(CareLogResponse::of)
                 .toList();
+    }
+
+    /**
+     * 아이 필터 — <b>그 아이의 기록과 아이 없는 옛 기록</b>을 함께 통과시킨다. 이슈 #563.
+     *
+     * <h2>옛 기록을 왜 함께 주나</h2>
+     *
+     * <p>2026-09-15 전의 행은 {@code dog_id} 가 전부 {@code null} 이다 — 쓰기 경로가 그 값을
+     * 안 받았기 때문이다. 아이로 거르면서 그 행들을 빼면 <b>어제 준 밥이 화면에서 사라진다.</b>
+     *
+     * <p>사라지면 화면은 "아직" 이라고 말하고, 그걸 본 사람이 한 번 더 준다. 이 표가 있는
+     * 이유가 정확히 그 이중 급여를 막는 것이다(#76) — <b>못 본 채로 두는 쪽이 더 나쁘다.</b>
+     *
+     * <p>대신 아이가 둘인 집에서는 그 옛 행이 두 아이 카드에 모두 뜬다. 어느 아이 것인지
+     * 모르는 값이라 어느 쪽으로 눕혀도 지어내는 것이 된다 — 둘 다 보여 주고 사람이 판단한다.
+     * 새로 쌓이는 행에는 아이가 붙으므로 이 겹침은 <b>오늘 하루짜리</b>다.
+     */
+    private static boolean matchesDog(CareLog log, Long dogId) {
+        return dogId == null || log.dogId() == null || dogId.equals(log.dogId());
     }
 
     /**
@@ -131,10 +157,15 @@ public class CareService {
         }
         String memo = trimmedToNull(request.memo(), "메모");
 
+        // 어느 아이인가 (#563). **선택이다** — 아이를 한 마리도 등록 안 한 집도 기록하고,
+        // 이미 나가 있는 앱은 이 필드를 모른다. 보냈으면 그 집 아이여야 한다: 누구 것인지는
+        // 안 따진다 — 엄마가 등록한 보리에게 아빠가 물을 주는 것이 이 기능의 목적이다.
+        Dog dog = request.dogId() == null
+                ? null
+                : dogs.requireInFamilyEntity(groupId, request.dogId());
+
         CareLog saved = careLogs.saveAndFlush(CareLog.builder()
-                // dogId 는 요청에서 읽지 않는다 — 이 경로는 그룹 단위 기록이라 대상 개체를
-                // 아직 받지 않는다(CareLog javadoc). FK 는 #154 에서 걸렸고, 받는 날의 전제
-                // (가족 구성원이 남의 반려동물 id 를 알 수 있는가)는 #209 Dogs-high-3 이 정한다.
+                .dog(dog)
                 .group(group)
                 .type(request.type())
                 .doneBy(actor)
