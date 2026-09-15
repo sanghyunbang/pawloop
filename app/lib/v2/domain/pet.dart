@@ -260,14 +260,14 @@ IconData careIcon(CareType t) => switch (t) {
   CareType.etc => Icons.favorite_rounded,
 };
 
-Color careColor(CareType t) => switch (t) {
-  CareType.water => const Color(0xFF5B8DEF),
-  CareType.meal => const Color(0xFFFF8F63),
-  CareType.walk => const Color(0xFF57C98A),
-  CareType.med => const Color(0xFF9B7BFF),
-  CareType.snack => const Color(0xFFEFA13C),
-  CareType.etc => const Color(0xFFFF7E8A),
-};
+// 케어 종류마다 다른 색이 여기 있었다 — 물 파랑 · 투약 라일락 · 기타 분홍(#546).
+//
+// 걷어낸 이유는 셋이다. (1) `app_tokens.dart` 머리말이 정한 예외는 **지도 카테고리색과
+// 상태색뿐**이고 케어는 거기 없다. (2) 라일락은 사장님이 내리신 색이다. (3) "색은 토큰
+// 파일에서만 정한다" 는 규칙을 이 파일이 어기고 있었다 — 인라인 `Color(0x…)` 여섯이었다.
+//
+// 지금 완료한 칸은 **코랄 하나**다. 칸마다 아이콘과 이름이 이미 있어 색으로 가를 필요가 없고,
+// 색이 말하는 것은 종류가 아니라 **"했다"** 다.
 
 /// 케어 목록 변경 알림(추가/삭제/토글) — 홈 카드 등 다른 화면 동기화용.
 final ValueNotifier<int> kCareRev = ValueNotifier<int>(0);
@@ -320,7 +320,7 @@ void ensureCareFreshForToday() {
 ///
 /// ⚠️ **화면은 더 이상 이것을 그리지 않는다** — 이슈 #76. 홈과 `family_screen` 의
 /// "오늘의 케어" 는 `TodayCareCard` 가 `GET /api/groups/{id}/care-logs` 로 그린다.
-/// 여기 남은 것은 `CareType`·`careIcon`·`careColor`(아이콘·색 팔레트)를 쓰기 위해서다.
+/// 여기 남은 것은 `CareType`·`careIcon`(아이콘)을 쓰기 위해서다. 색은 `app_tokens.dart` 다.
 ///
 /// 이 리스트로 돌아가면 안 되는 이유: 로컬 리스트는 **한 기기 안에서만** 산다.
 /// 엄마가 밥을 줘도 아빠 화면에는 아무 일도 일어나지 않고, 그게 이 이슈가 막으려는
