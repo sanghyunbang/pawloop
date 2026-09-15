@@ -24,6 +24,7 @@ import 'package:heat_trip_flutter/v2/screens/settings/legal_document_screen.dart
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
+import 'package:heat_trip_flutter/v2/data/session_traces.dart';
 
 const _base = 'https://api.example.test';
 
@@ -310,6 +311,23 @@ void main() {
       expect(store.refresh, isNull);
     });
 
+    test('로그아웃하면 기기에 남은 앞사람의 흔적도 지운다 — 토큰만으로는 안 끝난다', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        for (final key in sessionScopedKeys) key: '앞사람의 것',
+        'intro_seen_v1': true,
+      });
+      _install((req) async => http.Response('', 204));
+      AuthState.signInForTest(const AuthUser(id: 12, nickname: '나가는사람'));
+
+      await AuthState.logout();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getKeys().where(sessionScopedKeys.contains), isEmpty,
+          reason: '동네 · 전송 대기 산책 · 끊긴 산책 · 알림 설정 셋 (#513)');
+      expect(prefs.getBool('intro_seen_v1'), isTrue,
+          reason: '소개를 본 것은 기기의 사실이다 — 무엇을 안 지우는지는 session_traces.dart 에 적혀 있다');
+    });
+
     test('이 계정의 약관 동의도 지운다 — 같은 id 로 다시 온 사람에게 남으면 안 된다', () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       _install((req) async => http.Response('', 204));
@@ -426,10 +444,24 @@ void main() {
       await AuthState.init();
       expect(AuthState.user, isNotNull);
 
-      AuthState.markSessionExpired();
+      await AuthState.markSessionExpired();
 
       expect(AuthState.status.value, AuthStatus.unauthenticated);
       expect(AuthState.user, isNull);
+    });
+
+    test('만료로 끝난 세션도 기기의 흔적을 지운다 — 세션이 끝나는 길이 로그아웃만은 아니다', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        for (final key in sessionScopedKeys) key: '앞사람의 것',
+      });
+      _install((req) async => _json(_userJson()));
+      await AuthState.init();
+
+      await AuthState.markSessionExpired();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getKeys().where(sessionScopedKeys.contains), isEmpty,
+          reason: '만료된 세션의 동네·산책 초안·알림 설정이 남으면 다음에 로그인한 사람이 그것을 본다 (#513)');
     });
   });
 }

@@ -500,14 +500,22 @@ class MeScreen extends StatelessWidget {
         ),
       );
 
-  /// messenger 를 await 전에 잡는다 — 로그아웃은 네트워크를 타고, 그 사이 이 화면이 사라져 있을 수 있다.
+  /// messenger 와 navigator 를 await 전에 잡는다 — 로그아웃은 네트워크를 타고,
+  /// 그 사이 이 화면이 사라져 있을 수 있다.
   Future<void> _logout(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     await AuthState.logout();
     messenger.showSnackBar(const SnackBar(
       content: Text('로그아웃되었습니다'),
       duration: Duration(milliseconds: 1800),
     ));
+    // **얹힌 화면을 걷는다.** 이 화면은 go_router 의 라우트가 아니라 셸 위에
+    // `Navigator.push` 로 얹혀 있어서, 라우터가 자기 스택을 `/auth/login` 으로
+    // 바꿔도 그 위에 그대로 선다 — 로그아웃을 눌렀는데 내 정보 화면이 남는다.
+    // 어디로 갈지는 정하지 않는다. 길만 터 주면 라우터가 바꿔 둔 화면이 드러난다.
+    // 탈퇴(`AccountDeleteScreen`)가 같은 이유로 같은 줄을 쓴다(#513).
+    navigator.popUntil((route) => route.isFirst);
   }
 
   Widget _menuCard(BuildContext context, DogProfile dog) {

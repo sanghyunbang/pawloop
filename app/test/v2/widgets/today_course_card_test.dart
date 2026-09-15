@@ -89,7 +89,7 @@ TodayCourseCard _card({
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    WalkSafetyStore.resetForTest();
+    WalkSafetyStore.clear();
   });
 
   testWidgets('후보가 있으면 1등 하나를 카드로 — 이름 · 거리 · 코스 길이 · 이유', (tester) async {

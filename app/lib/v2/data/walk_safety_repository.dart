@@ -114,7 +114,9 @@ class WalkSafetyStore {
     return run;
   }
 
-  static void resetForTest() {
+  /// 캐시를 비운다. 세션이 끝날 때([clearSessionTraces])와 테스트가 부른다 —
+  /// 앞사람의 위치로 낸 판정이 다음 사람 홈 카드에 남으면 안 된다(#513).
+  static void clear() {
     latest.value = null;
     reading = null;
     fetchedAt = null;

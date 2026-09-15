@@ -22,10 +22,12 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../domain/schedule_reminder.dart';
 import 'notification_route.dart';
+import 'session_traces.dart';
 import 'walk_reminder.dart';
 import 'weekly_report_reminder.dart';
 
-class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, WeeklyReportReminderSink {
+class LocalNotificationSink
+    implements WalkReminderSink, ScheduleReminderSink, WeeklyReportReminderSink, SessionNotificationSink {
   LocalNotificationSink({FlutterLocalNotificationsPlugin? plugin})
       : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
@@ -111,6 +113,17 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, W
   Future<void> cancelAll() async {
     await _ensureReady();
     await _plugin.cancel(notificationId);
+  }
+
+  /// 세션이 끝났다 — 이 기기에 걸린 우리 알림을 <b>전부</b> 지운다(#513).
+  ///
+  /// [cancelAll] 은 이름과 달리 산책 알림 하나만 지운다(그쪽은 `WalkReminderSink`
+  /// 의 규약이다). 일정 알림은 id 가 여럿이고 주간 정리는 또 다른 id 라, 하나씩
+  /// 지우면 빠뜨린다. 여기서는 플러그인에게 통째로 맡긴다.
+  @override
+  Future<void> cancelEverything() async {
+    await _ensureReady();
+    await _plugin.cancelAll();
   }
 
   @override

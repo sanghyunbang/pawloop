@@ -54,11 +54,12 @@ final ValueNotifier<int> kWeeklyReportReminderRev = ValueNotifier<int>(0);
 class WeeklyReportReminderStore {
   const WeeklyReportReminderStore();
 
-  static const _key = 'v2.weekly_report_reminder';
+  /// 설정이 남는 자리. **세션 것이다** — 로그아웃하면 지운다(#513).
+  static const String key = 'v2.weekly_report_reminder';
 
   Future<WeeklyReportReminderSettings> read() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
+    final raw = prefs.getString(key);
     if (raw == null) return const WeeklyReportReminderSettings();
     try {
       return WeeklyReportReminderSettings.tryParse(jsonDecode(raw)) ?? const WeeklyReportReminderSettings();
@@ -69,7 +70,7 @@ class WeeklyReportReminderStore {
 
   Future<void> save(WeeklyReportReminderSettings settings) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, jsonEncode(settings.toJson()));
+    await prefs.setString(key, jsonEncode(settings.toJson()));
     kWeeklyReportReminderRev.value++;
   }
 }

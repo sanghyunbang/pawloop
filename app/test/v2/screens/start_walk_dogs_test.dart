@@ -76,7 +76,7 @@ void main() {
   tearDown(() {
     AuthState.resetForTest();
     LocationPriming.resetForTest();
-    WalkSafetyStore.resetForTest();
+    WalkSafetyStore.clear();
   });
 
   group('묻는가', () {

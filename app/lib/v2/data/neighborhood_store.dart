@@ -37,12 +37,13 @@ class NeighborhoodStore {
   final AuthedClient _authed;
   final String _baseUrl;
 
-  static const _key = 'v2.neighborhood';
+  /// 고른 동네가 남는 자리. **세션 것이다** — 로그아웃하면 지운다(#513).
+  static const String key = 'v2.neighborhood';
 
   /// 고른 동네. 없으면 `null`.
   Future<Neighborhood?> read() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
+    final raw = prefs.getString(key);
     if (raw == null) return null;
     try {
       return Neighborhood.tryParse(jsonDecode(raw));
@@ -58,7 +59,7 @@ class NeighborhoodStore {
   /// **서버까지 갔는가**다.
   Future<bool> save(Neighborhood neighborhood) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, jsonEncode(neighborhood.toJson()));
+    await prefs.setString(key, jsonEncode(neighborhood.toJson()));
     kNeighborhoodRev.value++;
     return syncToServer(neighborhood.code);
   }
@@ -66,7 +67,7 @@ class NeighborhoodStore {
   /// 지운다. 서버 쪽도 빈 문자열로 지운다.
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_key);
+    await prefs.remove(key);
     kNeighborhoodRev.value++;
     await syncToServer('');
   }

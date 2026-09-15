@@ -40,6 +40,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/v2/data/consent_gate.dart';
+import 'package:heat_trip_flutter/v2/data/session_traces.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 
 /// 인증 상태 머신의 상태값.
@@ -369,13 +370,19 @@ class AuthState {
     if (leaving != null) await const ConsentGate().clear(leaving.id);
 
     await _store.clear();
+    await clearSessionTraces();
     _user = null;
     _sessionEnded = true;
     status.value = AuthStatus.unauthenticated;
   }
 
   /// `AuthedClient` 가 갱신에 실패했을 때 부르는 훅(#11). 토큰은 그쪽이 이미 지웠다.
-  static void markSessionExpired() {
+  ///
+  /// 기기에 남은 흔적은 **여기서도** 지운다 — 세션이 끝나는 길이 로그아웃만은 아니다.
+  /// 만료로 끝난 세션의 동네·산책 초안·예약 알림이 남으면, 다음에 로그인한 사람이
+  /// 그것을 본다(#513).
+  static Future<void> markSessionExpired() async {
+    await clearSessionTraces();
     _user = null;
     _sessionEnded = true;
     status.value = AuthStatus.unauthenticated;
