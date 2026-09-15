@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.S3.FileStorage;
+import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.S3.StoredObject;
 import com.heattrip.heat_trip_backend.S3.UploadCategory;
 import com.heattrip.heat_trip_backend.S3.UploadRequest;
@@ -24,7 +25,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -38,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +51,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -99,6 +106,7 @@ class MediaAttachmentIntegrationTest extends AbstractMySqlIntegrationTest {
     @Autowired private MediaOrphanSweeper sweeper;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private MultipartProperties multipartProperties;
+    @Autowired private PlatformTransactionManager transactions;
 
     @MockitoBean
     private FileStorage storage;
@@ -396,6 +404,72 @@ class MediaAttachmentIntegrationTest extends AbstractMySqlIntegrationTest {
         JsonNode detail = body(mockMvc.perform(get("/api/community/posts/{id}", postId)
                 .header("Authorization", "Bearer " + me.token())).andExpect(status().isOk()));
         assertThat(idsOf(detail.path("media"))).as("실패한 고치기는 아무것도 안 바꾼다").containsExactly(mine);
+    }
+
+    // ───────────── 잠금을 쥔 채 밖을 부르지 않는다 (#512) ─────────────
+
+    @Test
+    @DisplayName("사진 행은 트랜잭션 안에서 지우고, S3 객체는 커밋 뒤에 지운다")
+    void objectsAreDeletedAfterCommit() throws Exception {
+        Account me = account("사진지우는사람");
+        long photo = uploadId(me, "gone.jpg");
+        long postId = body(createPost(me, List.of(photo)).andExpect(status().isCreated()))
+                .path("id").asLong();
+
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            mediaService.detachAll(MediaAttachment.REF_POST, String.valueOf(postId));
+            // 여기서 부르면 채팅 삭제 경로에서 chat_room 잠금을 쥔 채 S3 를 기다리게 된다.
+            verify(storage, never()).deleteAll(any());
+        });
+
+        verify(storage).deleteAll(any());
+        assertThat(mediaRepository.findById(photo)).as("행은 트랜잭션 안에서 지운다").isEmpty();
+    }
+
+    @Test
+    @DisplayName("올리기는 트랜잭션 밖에서 S3 를 부른다 — 업로드가 도는 동안 커넥션을 쥐지 않는다")
+    void uploadDoesNotHoldADatabaseConnection() throws Exception {
+        Account me = account("큰사진올리는사람");
+        AtomicBoolean insideTransaction = new AtomicBoolean(true);
+        // when(...) 이 아니라 doAnswer(...) 다 — when 은 **그 자리에서 목을 부르므로**
+        // setUp 이 걸어 둔 답이 null 인자로 한 번 돌아 NPE 가 난다.
+        doAnswer(invocation -> {
+            insideTransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
+            MultipartFile file = invocation.getArgument(0);
+            UploadRequest request = invocation.getArgument(1);
+            String key = request.category().prefix + "/" + request.ownerId() + "/"
+                    + UUID.randomUUID() + "_" + file.getOriginalFilename();
+            return new StoredObject(key, CDN + key, file.getContentType(), file.getSize());
+        }).when(storage).upload(any(), any());
+
+        upload(me, "big.jpg", 64, 1600, 1200);
+
+        assertThat(insideTransaction.get())
+                .as("""
+                        10MB 업로드가 도는 내내 커넥션 한 자리가 묶이면 풀이 10일 때 그런 업로드 \
+                        열 개가 서버 전체의 읽기를 멈춘다 (#512).""")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("교체도 트랜잭션 밖에서 S3 를 부른다")
+    void replaceDoesNotHoldADatabaseConnection() throws Exception {
+        Account me = account("사진바꾸는사람");
+        long photo = uploadId(me, "before.jpg");
+        AtomicBoolean insideTransaction = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            insideTransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
+            MultipartFile file = invocation.getArgument(1);
+            String key = "posts/" + me.id() + "/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
+            return new StoredObject(key, CDN + key, file.getContentType(), file.getSize());
+        }).when(storage).replace(anyString(), any(), any());
+
+        MockMultipartFile fresh = new MockMultipartFile("file", "after.jpg", "image/jpeg", new byte[32]);
+        mockMvc.perform(multipart(HttpMethod.PUT, "/media/{mediaId}", photo).file(fresh)
+                        .header("Authorization", "Bearer " + me.token()))
+                .andExpect(status().isOk());
+
+        assertThat(insideTransaction.get()).isFalse();
     }
 
     // ───────────── 완료 조건 5 — 고아만 거둔다 ─────────────
