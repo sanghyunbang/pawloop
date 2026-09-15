@@ -29,7 +29,7 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/family_repository.dart';
-import '../domain/pet.dart' show careColor, careIcon, CareType;
+import '../domain/pet.dart' show careIcon, CareType;
 import '../theme/app_tokens.dart';
 import 'aurora.dart';
 
@@ -527,7 +527,6 @@ class _TodayCareCardState extends State<TodayCareCard> {
 
   Widget _cell(ServerCareType type) {
     final done = _latestOf(type);
-    final color = careColor(_iconTypeOf(type));
     final busy = _sending == type;
 
     return GestureDetector(
@@ -538,17 +537,19 @@ class _TodayCareCardState extends State<TodayCareCard> {
       child: Container(
         key: Key('care-cell-${type.wire}'),
         padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
+        // 완료한 칸은 **코랄 하나**다(#546). 종류마다 다른 색을 쓰던 자리인데, 칸마다
+        // 아이콘과 이름이 이미 있어 색으로 가를 필요가 없고 — 색이 말하는 것은 종류가
+        // 아니라 "했다" 다. 토큰 머리말이 정한 색 예외는 지도 카테고리색과 상태색뿐이다.
         decoration: BoxDecoration(
-          color: done != null ? color.withValues(alpha: 0.13) : T.surface,
+          color: done != null ? T.accentSoft : T.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: done != null ? color.withValues(alpha: 0.35) : T.surface),
+          border: Border.all(color: done != null ? T.accentLine : T.surface),
         ),
         child: Column(children: [
           Icon(
             done != null ? Icons.check_circle_rounded : careIcon(_iconTypeOf(type)),
             size: 19,
-            color: done != null ? color : T.textMuted,
+            color: done != null ? T.accent : T.textMuted,
           ),
           const SizedBox(height: 4),
           Text(type.label,
@@ -568,12 +569,12 @@ class _TodayCareCardState extends State<TodayCareCard> {
               key: Key('care-line1-${type.wire}'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 10, color: color),
+              style: const TextStyle(fontSize: 10, color: T.accent),
             ),
             Text(
               done.timeLabel,
               maxLines: 1,
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: T.accent),
             ),
             // 산책 칸에만 거리가 붙는다 (#343). 다른 종류의 메모는 사용자가 쓴 글이라
             // 다섯 칸 폭에 넣으면 잘려서 뜻을 잃는다.
@@ -582,7 +583,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
                 done.memo!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 10, color: color),
+                style: const TextStyle(fontSize: 10, color: T.accent),
               ),
           ],
         ]),

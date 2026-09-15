@@ -19,6 +19,7 @@ import 'package:http/testing.dart';
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
+import 'package:heat_trip_flutter/v2/theme/app_tokens.dart';
 import 'package:heat_trip_flutter/v2/widgets/today_care_card.dart';
 
 const _base = 'https://api.example.test';
@@ -355,6 +356,53 @@ void main() {
       expect(subjectParticle('Dad'), '가', reason: '한글이 아니면 기본값이다');
       expect(subjectParticle(''), '가');
     });
+  });
+
+  // ── 색 (#546) ───────────────────────────────────────────────────────
+
+  testWidgets('완료한 칸은 종류와 상관없이 코랄 하나다 (#546)', (tester) async {
+    final f = fixture(logs: [
+      _log(id: 1, type: 'water', who: '아빠', at: '2026-08-30T09:10:00'),
+      _log(id: 2, type: 'med', who: '엄마', at: '2026-08-30T09:20:00'),
+    ]);
+    await pumpCard(tester, f.repo);
+
+    Color checkOf(String wire) => tester
+        .widget<Icon>(find.descendant(
+            of: find.byKey(Key('care-cell-$wire')), matching: find.byType(Icon)))
+        .color!;
+
+    expect(checkOf('water'), T.accent, reason: '물은 파랑(#5B8DEF)이었다');
+    expect(checkOf('med'), T.accent,
+        reason: '''
+투약은 라일락(#9B7BFF)이었다 — 사장님이 내리신 색이다. 토큰 머리말이 정한 색 예외는
+지도 카테고리색과 상태색뿐이고 케어는 거기 없다 (#546).''');
+    expect(checkOf('water'), checkOf('med'),
+        reason: '종류마다 색을 다시 나누면 한 줄에 파랑·라일락·초록이 다시 선다');
+  });
+
+  testWidgets('완료한 칸의 바탕과 테두리도 토큰에서 온다 (#546)', (tester) async {
+    final f = fixture(logs: [
+      _log(id: 1, type: 'water', who: '아빠', at: '2026-08-30T09:10:00'),
+    ]);
+    await pumpCard(tester, f.repo);
+
+    final box = tester
+        .widget<Container>(find.byKey(const Key('care-cell-water')))
+        .decoration! as BoxDecoration;
+
+    expect(box.color, T.accentSoft);
+    expect((box.border as Border).top.color, T.accentLine);
+  });
+
+  testWidgets('안 한 칸은 회색 그대로다 — 색이 말하는 것은 "했다" 다', (tester) async {
+    final f = fixture(logs: const []);
+    await pumpCard(tester, f.repo);
+
+    final icon = tester.widget<Icon>(find.descendant(
+        of: find.byKey(const Key('care-cell-water')), matching: find.byType(Icon)));
+
+    expect(icon.color, T.textMuted);
   });
 
   // ── 배변·마킹 (#549) ────────────────────────────────────────────────
