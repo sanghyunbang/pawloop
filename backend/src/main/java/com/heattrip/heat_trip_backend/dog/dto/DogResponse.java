@@ -25,13 +25,39 @@ public record DogResponse(
         LocalDate birth,
         Integer ageMonths,
         boolean neutered,
-        String avatarUrl) {
+        String avatarUrl,
+
+        /**
+         * <b>요청자가 등록한 아이인가</b> — 이슈 #563.
+         *
+         * <p>{@code GET /api/groups/&#123;id&#125;/dogs} 가 <b>남이 등록한 아이를 섞어</b> 주기
+         * 시작하면서 필요해졌다. 앱은 그 목록으로 홈 히어로 · 아이 스위처 · 케어 카드를 그리는데,
+         * <b>고칠 수 있는 아이와 돌보는 아이가 다르다.</b> 이 값이 없으면 아빠가 스위처에서
+         * 보리를 고르고 "우리 아이 정보 관리" 를 눌렀을 때 그제서야 404 를 만난다.
+         *
+         * <p>주인의 {@code userId} 를 싣지 않고 <b>불리언 하나</b>인 이유: 앱이 묻는 질문이
+         * "누구 것인가" 가 아니라 "내가 고칠 수 있나" 다. id 를 실으면 답하지 않은 질문에
+         * 답하는 것이고, 그 값으로 남의 마릿수를 세는 길이 하나 생긴다(#209 가 404 규칙을
+         * 그 이유로 정했다).
+         *
+         * <p>{@code GET /api/dogs} 에서는 <b>항상 {@code true}</b> 다 — 그 경로가 주는 것이
+         * 내가 등록한 아이뿐이기 때문이다. 경로마다 다른 뜻이 되지 않게 그쪽에도 싣는다.
+         */
+        boolean mine) {
 
     /**
      * @param avatarUrl 이미 조립된 공개 URL. 키({@code dog.getAvatar()})를 그대로 넣으면 앱이 상대 경로를
      *                  그리려다 깨진다 — 조립은 부르는 쪽({@code DogService})의 일이다.
      */
     public static DogResponse of(Dog dog, String avatarUrl) {
+        return of(dog, avatarUrl, true);
+    }
+
+    /**
+     * @param mine 요청자가 등록한 아이인가. 집 아이 목록(#563)만 {@code false} 를 실을 수 있다 —
+     *             {@code GET /api/dogs} 는 늘 내 것뿐이라 위 오버로드가 {@code true} 로 부른다
+     */
+    public static DogResponse of(Dog dog, String avatarUrl, boolean mine) {
         return new DogResponse(
                 dog.getId(),
                 dog.getName(),
@@ -41,7 +67,8 @@ public record DogResponse(
                 dog.getBirth(),
                 ageMonths(dog.getBirth()),
                 dog.isNeutered(),
-                avatarUrl);
+                avatarUrl,
+                mine);
     }
 
     /**
