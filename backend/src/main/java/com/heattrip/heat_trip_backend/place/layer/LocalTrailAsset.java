@@ -110,7 +110,8 @@ public class LocalTrailAsset {
                 emptyToNull(t.path("tel").asText("")),
                 null,
                 null,
-                summaryOf(t));
+                summaryOf(t),
+                PlaceDto.metersOf(t.hasNonNull("lengthKm") ? t.path("lengthKm").asDouble() : null));
     }
 
     /**

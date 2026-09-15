@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
 import com.heattrip.heat_trip_backend.place.layer.LocalTrailAsset;
 
+import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -121,6 +122,36 @@ class LocalTrailAssetTest {
             assertThat(p.source()).isEqualTo(PlaceDto.SOURCE_TRAIL);
             assertThat(p.category()).isEqualTo(PlaceDto.SOURCE_TRAIL);
             assertThat(p.title()).isNotBlank();
+        });
+    }
+
+    @Test
+    @DisplayName("길이가 숫자로도 실린다 — 문장만으로는 추천이 못 센다 (#539)")
+    void courseLengthComesAsANumber() {
+        List<PlaceDto> withNumber = trails.stream().filter(PlaceDto::hasCourseLength).toList();
+
+        assertThat(withNumber)
+                .as("summary 의 \"3.4km\" 는 문장이라 셈에 못 쓴다. 이 값이 안 오면 오늘의 코스가"
+                        + " \"목표 2.0km\" 를 적어 놓고 그냥 가까운 순으로 고른다(#539).")
+                .hasSizeGreaterThan(trails.size() / 2);
+        assertThat(withNumber).allSatisfy(p -> assertThat(p.courseM()).isPositive());
+    }
+
+    @Test
+    @DisplayName("숫자와 문장이 같은 길이를 말한다 — 카드와 추천이 다른 말을 하면 안 된다 (#539)")
+    void theNumberAgreesWithTheSentence() {
+        List<PlaceDto> both = trails.stream()
+                .filter(p -> p.hasCourseLength() && p.summary() != null && p.summary().contains("km"))
+                .limit(200)
+                .toList();
+
+        assertThat(both).as("훑은 것이 없으면 이 검사는 언제나 초록이다").isNotEmpty();
+        assertThat(both).allSatisfy(p -> {
+            String head = p.summary().substring(0, p.summary().indexOf("km"));
+            double fromSentence = Double.parseDouble(head.replaceAll("[^0-9.]", ""));
+            assertThat(p.courseM() / 1000.0)
+                    .as("%s — 문장 %s · 숫자 %dm", p.title(), p.summary(), p.courseM())
+                    .isCloseTo(fromSentence, Offset.offset(0.05));
         });
     }
 

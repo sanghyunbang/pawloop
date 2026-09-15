@@ -218,6 +218,38 @@ public class LayerCatalogService {
      * <p>이미 {@code refreshDays} 안에 받은 코스의 GPX 는 다시 받지 않는다. GPX 는 예산에
      * 안 잡히지만 2,000 파일이다.
      */
+    /**
+     * 코스 한 줄과 받아 둔 선 → 카탈로그 항목 하나.
+     *
+     * <p>이 자리를 따로 뽑아 둔 이유는 <b>재 볼 수 있게</b> 하기 위해서다. 안에 있을 때는
+     * 공공데이터를 부르지 않고는 한 줄도 확인할 수 없어, 코스 길이를 안 싣는 실수(#539)를
+     * 잡는 테스트를 쓸 자리가 없었다.
+     *
+     * <p>점의 좌표는 <b>코스의 시작점</b>이다. 코스는 선이지만 지도에는 점 하나로 찍힌다 —
+     * 선은 {@code GET /api/places/trails/{courseId}/route} 로 따로 받는다(#291).
+     */
+    static PlaceDto toPlace(DurunubiApiClient.Course course, TrailRoute route) {
+        return new PlaceDto(
+                PlaceDto.SOURCE_TRAIL + ":" + course.courseId(),
+                course.name(),
+                PlaceDto.SOURCE_TRAIL,
+                PlaceDto.SOURCE_TRAIL,
+                null,
+                route.getStartLat(),
+                route.getStartLng(),
+                course.sigun() == null ? "" : course.sigun(),
+                null,
+                null,
+                null,
+                course.summary(),
+                // 문장(`summary`)의 "12.3km" 와 같은 값이다 — 문장은 카드가, 숫자는 추천이 쓴다(#539).
+                //
+                // `route.getLengthM()` 은 GPX 선을 실제로 잰 값이라 더 정확해 보이지만 안 쓴다.
+                // 두 값이 다를 때 홈 카드("코스 4.2km")와 지도 시트(`summary` 의 "4.2km")가 서로
+                // 다른 말을 하게 된다 — 사용자에게는 그쪽이 더 나쁘다.
+                PlaceDto.metersOf(course.distanceKm()));
+    }
+
     public Optional<PlaceCatalog> refreshDurunubi() {
         Optional<PlaceCatalog> result = gate.runIfOwner(GATE_DURUNUBI, () -> {
             List<DurunubiApiClient.Course> courses = new ArrayList<>();
@@ -276,19 +308,7 @@ public class LayerCatalogService {
                         pending.clear();
                     }
                 }
-                places.add(new PlaceDto(
-                        PlaceDto.SOURCE_TRAIL + ":" + course.courseId(),
-                        course.name(),
-                        PlaceDto.SOURCE_TRAIL,
-                        PlaceDto.SOURCE_TRAIL,
-                        null,
-                        route.getStartLat(),
-                        route.getStartLng(),
-                        course.sigun() == null ? "" : course.sigun(),
-                        null,
-                        null,
-                        null,
-                        course.summary()));
+                places.add(toPlace(course, route));
             }
             if (!pending.isEmpty()) {
                 routes.saveAll(pending);

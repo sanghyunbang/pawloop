@@ -75,6 +75,25 @@ void main() {
     expect(place.distM, 320.5);
   });
 
+  test('산책로의 코스 길이를 숫자로 읽는다 — 문장은 셈에 못 쓴다 (#539)', () async {
+    final repo = _repo(MockClient((req) async => _json(
+          '[{"contentId":"trail:T_ROUTE_1","title":"서울숲 둘레길","source":"trail",'
+          '"category":"trail","lat":37.5445,"lng":127.0374,"addr":"서울 성동구",'
+          '"summary":"4.2km · 약 1시간 · 보통","courseM":4200},'
+          '{"contentId":"2733967","title":"서울숲","source":"kto","category":"12",'
+          '"contentTypeId":"12","lat":37.5445,"lng":127.0374,"addr":""}]',
+          200,
+        )));
+
+    final places = await repo.fetchNearby(lat: 37.5665, lng: 126.9780);
+
+    expect(places.first.courseM, 4200);
+    expect(places.first.summary, '4.2km · 약 1시간 · 보통',
+        reason: '문장은 그대로다 — 지도 시트가 그것을 그린다');
+    expect(places.last.courseM, isNull,
+        reason: '공원은 코스가 아니라 길이가 없다. 0 으로 눕히면 "길이가 0인 코스" 가 된다');
+  });
+
   test('요청 파라미터가 계약과 같다', () async {
     Uri? called;
     final repo = _repo(MockClient((req) async {

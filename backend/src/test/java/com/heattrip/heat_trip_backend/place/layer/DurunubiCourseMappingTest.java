@@ -1,6 +1,8 @@
 package com.heattrip.heat_trip_backend.place.layer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
+import com.heattrip.heat_trip_backend.place.entity.TrailRoute;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,38 @@ class DurunubiCourseMappingTest {
         assertThat(course.minutes()).isEqualTo(240);
         assertThat(course.level()).isEqualTo(2);
         assertThat(course.sigun()).isEqualTo("서울 성동구");
+    }
+
+    @Test
+    @DisplayName("카드의 '12.3km' 와 추천이 쓰는 숫자가 한 값에서 온다 (#539)")
+    void theSummaryAndTheNumberComeFromOneValue() throws Exception {
+        DurunubiApiClient.Course course = DurunubiApiClient.toCourse(MAPPER.readTree(ITEM)).orElseThrow();
+
+        assertThat(course.summary()).contains("12.3km");
+        assertThat(PlaceDto.metersOf(course.distanceKm()))
+                .as("둘이 다른 값에서 오면 카드와 추천이 다른 말을 한다")
+                .isEqualTo(12_300);
+    }
+
+    @Test
+    @DisplayName("카탈로그 항목이 그 숫자를 싣는다 — 여기서 빠뜨리면 추천이 길이를 모른다 (#539)")
+    void theCatalogEntryCarriesTheCourseLength() throws Exception {
+        DurunubiApiClient.Course course = DurunubiApiClient.toCourse(MAPPER.readTree(ITEM)).orElseThrow();
+        TrailRoute route = TrailRoute.builder()
+                .courseId("T_ROUTE_1").name("서울숲 둘레길").pointCount(120).lengthM(12_000)
+                .startLat(37.5445).startLng(127.0374).payload("[]")
+                .fetchedAt(java.time.LocalDateTime.of(2026, 9, 15, 9, 0))
+                .build();
+
+        PlaceDto place = LayerCatalogService.toPlace(course, route);
+
+        assertThat(place.contentId()).isEqualTo("trail:T_ROUTE_1");
+        assertThat(place.source()).isEqualTo(PlaceDto.SOURCE_TRAIL);
+        assertThat(place.lat()).isEqualTo(37.5445);
+        assertThat(place.courseM())
+                .as("이 자리가 비어 있던 동안 오늘의 코스는 '목표 2.0km' 를 적어 놓고 그냥 가까운 순이었다")
+                .isEqualTo(12_300);
+        assertThat(place.summary()).as("문장은 그대로다 — 지도 시트가 쓴다").contains("12.3km");
     }
 
     @Test

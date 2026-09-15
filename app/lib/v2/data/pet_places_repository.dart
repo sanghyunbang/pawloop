@@ -26,6 +26,13 @@ class PetPlace {
 
   /// 카드 한 줄 — 산책로 "2.6km · 약 40분 · 쉬움", 판매업 "동물판매업". 없으면 빈 문자열.
   final String summary;
+
+  /// **코스 길이(m)** — 산책로만 온다. 모르면 `null` (#539).
+  ///
+  /// [summary] 안에 이미 "2.6km" 가 있지만 **문장이라 셈에 못 쓴다.** 오늘의 코스가
+  /// "목표 2.0km" 에 가까운 코스를 고르는 데 쓰는 값이 이것이다 — 이 값이 안 오던 동안
+  /// 점수의 길이 항이 죽어 있어서 추천이 그냥 **가까운 순**이었다.
+  final int? courseM;
   final String addr;
   final String image;
   final String tel;
@@ -40,6 +47,7 @@ class PetPlace {
     this.category = '',
     required this.contentTypeId,
     this.summary = '',
+    this.courseM,
     required this.addr,
     required this.image,
     required this.tel,
@@ -95,6 +103,9 @@ class PetPlace {
         category: category,
         contentTypeId: contentTypeId,
         summary: summary,
+        // 여기서 떨어뜨리면 카탈로그에는 있는데 추천에는 안 가는 값이 된다 — 서버의
+        // `PlaceDto.withDistance` 도 같은 자리에서 같은 실수를 할 수 있다(#539).
+        courseM: courseM,
         addr: addr,
         image: image,
         tel: tel,
@@ -119,6 +130,7 @@ class PetPlace {
         category: '${j['category'] ?? ''}',
         contentTypeId: '${j['contentTypeId'] ?? ''}',
         summary: '${j['summary'] ?? ''}',
+        courseM: _toIntOrNull(j['courseM']),
         addr: '${j['addr'] ?? ''}',
         image: '${j['image'] ?? ''}',
         tel: '${j['tel'] ?? ''}',
@@ -126,6 +138,12 @@ class PetPlace {
         lng: _toDouble(j['lng']),
         distM: _toDouble(j['distM']),
       );
+
+  /// 계약에 없거나 `null` 이면 `null` — 0 으로 눕히면 "길이가 0인 코스" 가 된다.
+  static int? _toIntOrNull(Object? value) {
+    if (value is num) return value.round();
+    return int.tryParse('${value ?? ''}');
+  }
 
   /// 숫자가 JSON 에서 `int` 로 올 수도 `double` 로 올 수도 있다.
   static double _toDouble(Object? value) {
