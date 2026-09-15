@@ -100,6 +100,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void dispose() {
     _ctrl.dispose();
+    // 나가면서 **한 번** 알린다(#548). 바뀔 때마다 알리면 반응을 세 번 누른 동안 목록이 세 번
+    // 다시 읽는다. 다음 프레임으로 미루는 것은, 지금 이 순간이 위젯을 걷어내는 중이라
+    // 듣는 쪽의 `setState` 가 그 안에서 터지기 때문이다.
+    if (_changed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => notifyCommunityChanged());
+    }
     super.dispose();
   }
 
@@ -259,6 +265,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       await _repo.deletePost(_post.id);
       if (!mounted) return;
       // 목록으로 돌아간다. 이 글은 이제 없으므로 상세에 머물 자리가 없다.
+      _changed = true;
       Navigator.of(context).pop(true);
     } on CommunityFailure catch (failure) {
       if (!mounted) return;
