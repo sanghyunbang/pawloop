@@ -130,13 +130,14 @@ Future<void> main() async {
     return true; // true 반환 시 프로세스 종료를 막음
   };
 
-  // 비동기 예외 수집
-  runZonedGuarded(() => runApp(const HeatTrip()), (error, stack) {
-    debugPrint('UNCAUGHT (runZonedGuarded): $error');
-    if (kDebugMode) {
-      debugPrintStack(stackTrace: stack);
-    }
-  });
+  // 존을 쓰지 않는다 — 비동기 예외는 바로 위의 `PlatformDispatcher.instance.onError`
+  // 한 곳으로 모인다(프레임워크 권장).
+  //
+  // 예전에는 `runZonedGuarded(() => runApp(...))` 였는데, 바인딩은 :38 에서 **존 밖**
+  // 에서 초기화되고 `runApp` 만 존 안에서 불렸다. 그래서 콜드 스타트마다 프레임워크가
+  // `Zone mismatch` assertion 을 던졌고(에뮬레이터 logcat 실측), **잡기로 한 비동기
+  // 예외가 실제로 그 존으로 안 갔다** — 잡는 장치를 달아 두고 안 잡히는 상태였다(#514).
+  runApp(const HeatTrip());
 }
 
 class HeatTrip extends StatelessWidget {

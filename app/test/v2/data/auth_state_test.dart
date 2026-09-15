@@ -438,6 +438,29 @@ void main() {
     });
   });
 
+  group('콜드 스타트가 멈추지 않는다 (#514)', () {
+    test('서버가 응답을 안 주면 스플래시(unknown)에 머물지 않는다', () async {
+      final store = _FakeTokenStore(access: 'stored-access-token');
+      final dead = MockClient((_) => Completer<http.Response>().future);
+      AuthState.configureForTest(
+        tokenStore: store,
+        repository: AuthRepositoryImpl(
+          baseUrl: _base,
+          authedClient: AuthedClient(inner: dead, baseUrl: _base, store: store),
+          requestTimeout: const Duration(milliseconds: 30),
+        ),
+      );
+
+      await AuthState.init();
+
+      expect(AuthState.status.value, isNot(AuthStatus.unknown),
+          reason: 'unknown 이면 라우터가 스플래시를 띄운 채 끝나지 않는다 — 재시도도 탈출구도 없다');
+      expect(AuthState.status.value, AuthStatus.authenticated,
+          reason: '네트워크 오류는 로그아웃이 아니다. 토큰을 두고 다음 요청의 401 에 맡긴다');
+      expect(store.access, 'stored-access-token', reason: '상한에 걸렸다고 토큰을 지우지 않는다');
+    });
+  });
+
   group('세션 만료 훅 (#11 배선)', () {
     test('markSessionExpired 는 상태를 내리고 user 를 비운다', () async {
       _install((req) async => _json(_userJson()));

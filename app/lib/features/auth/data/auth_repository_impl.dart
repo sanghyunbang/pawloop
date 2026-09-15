@@ -74,10 +74,30 @@ class AuthRepositoryImpl {
   /// 인증 요청용.
   final AuthedClient _authed;
 
-  AuthRepositoryImpl({String? baseUrl, http.Client? plainClient, AuthedClient? authedClient})
-    : baseUrl = baseUrl ?? Env.apiBase,
+  /// 실제로 걸리는 상한. 테스트가 짧게 줄일 수 있게 필드로 둔다 — 이것이 없으면
+  /// "상한이 걸리는가" 를 재는 데 12초가 든다.
+  final Duration _timeout;
+
+  /// `GET /auth/me` 한 왕복의 상한.
+  ///
+  /// 없으면 **응답을 안 주는 서버**(끊긴 연결 · 죽은 프로세스 · 중간 장비)에서 콜드
+  /// 스타트가 스플래시에 멈춘 채 끝나지 않는다. `AuthState.init` 이 이 왕복을 기다리고,
+  /// 그동안 상태는 `AuthStatus.unknown` 이라 라우터가 스플래시를 띄운다 — 재시도도
+  /// 탈출구도 없다(#514). `AuthedClient.refreshTimeout` 은 **갱신 왕복에만** 붙는다.
+  ///
+  /// 12초는 `CommunityRepository.timeout` 과 같은 수다. 만료는 [MeOutcome.networkError]
+  /// 로 떨어지고 **토큰을 지우지 않는다** — 비행기 모드로 켠 사람을 쫓아내지 않는다.
+  static const Duration timeout = Duration(seconds: 12);
+
+  AuthRepositoryImpl({
+    String? baseUrl,
+    http.Client? plainClient,
+    AuthedClient? authedClient,
+    Duration? requestTimeout,
+  }) : baseUrl = baseUrl ?? Env.apiBase,
       _plain = plainClient ?? http.Client(),
-      _authed = authedClient ?? AuthedClient.instance;
+      _authed = authedClient ?? AuthedClient.instance,
+      _timeout = requestTimeout ?? timeout;
 
   /// 로그인 요청 — `POST /auth/login`.
   ///
@@ -218,7 +238,9 @@ class AuthRepositoryImpl {
     final url = Uri.parse('$baseUrl/auth/me');
 
     try {
-      final response = await _authed.getJson(url);
+      // 상한이 여기 있어야 하는 이유는 클래스의 [timeout] 주석에 있다 — 콜드 스타트가
+      // 이 왕복을 기다린다. 만료는 아래 catch 로 떨어져 networkError 가 된다.
+      final response = await _authed.getJson(url).timeout(_timeout);
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);

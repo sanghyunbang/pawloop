@@ -3,12 +3,15 @@
 // 실제 네트워크를 타지 않는다 — `MockClient` 로 응답을 손으로 만든다(정책 #21).
 // baseUrl 과 클라이언트를 주입받는 생성자가 있어서 가능한 테스트다.
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/login_request.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/register_request.dart';
@@ -22,7 +25,43 @@ const _jsonHeaders = {'content-type': 'application/json; charset=utf-8'};
 AuthRepositoryImpl _repo(MockClient client) =>
     AuthRepositoryImpl(baseUrl: _base, plainClient: client);
 
+/// 토큰이 없는 저장소. `GET /auth/me` 는 헤더 없이도 나가고, 여기서 재는 것은 상한이다.
+class _NoTokens implements AuthTokenStore {
+  @override
+  Future<String?> readAccessToken() async => 'AT';
+  @override
+  Future<String?> readRefreshToken() async => null;
+  @override
+  Future<void> saveTokens({required String accessToken, String? refreshToken}) async {}
+  @override
+  Future<void> clear() async {}
+}
+
 void main() {
+  group('fetchMe — GET /auth/me 의 상한 (#514)', () {
+    test('응답을 안 주는 서버는 상한에 걸려 networkError 다 — 콜드 스타트가 스플래시에 멈추면 안 된다', () async {
+      // 연결은 되고 응답만 안 오는 서버. 끊긴 연결 · 죽은 프로세스 · 중간 장비가 이렇다.
+      final dead = MockClient((_) => Completer<http.Response>().future);
+      final repo = AuthRepositoryImpl(
+        baseUrl: _base,
+        authedClient: AuthedClient(inner: dead, baseUrl: _base, store: _NoTokens()),
+        requestTimeout: const Duration(milliseconds: 30),
+      );
+
+      final result = await repo.fetchMe();
+
+      expect(result.outcome, MeOutcome.networkError,
+          reason: '이 분기는 토큰을 안 지운다 — 비행기 모드로 켠 사람을 쫓아내지 않는다');
+    });
+
+    test('상한이 실제로 걸려 있다 — 갱신 왕복보다 짧고, 사람이 기다릴 만한 길이다', () {
+      expect(AuthRepositoryImpl.timeout, lessThanOrEqualTo(AuthedClient.refreshTimeout),
+          reason: '갱신(15초)보다 길면 이 상한은 아무것도 안 막는다');
+      expect(AuthRepositoryImpl.timeout, greaterThanOrEqualTo(const Duration(seconds: 5)),
+          reason: '너무 짧으면 느린 모바일 네트워크에서 멀쩡한 세션이 매번 끊긴 것처럼 보인다');
+    });
+  });
+
   group('login — POST /auth/login', () {
     test('AuthTokens JSON 에서 accessToken 과 refreshToken 을 읽는다', () async {
       late http.Request seen;
