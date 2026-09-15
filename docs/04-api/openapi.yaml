@@ -3283,6 +3283,7 @@ paths:
         실제 방어입니다.
       parameters:
         - $ref: '#/components/parameters/AfterSeq'
+        - $ref: '#/components/parameters/AfterChangeSeq'
         - $ref: '#/components/parameters/BeforeSeq'
         - $ref: '#/components/parameters/ChatLimit'
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -3292,7 +3293,9 @@ paths:
           headers:
             ETag:
               description: |
-                `"{roomId}:{lastSeq}"`. 다음 폴링에 `If-None-Match` 로 그대로 되보냅니다.
+                `"{roomId}:{lastSeq}:{lastChangeSeq}"`. 다음 폴링에 `If-None-Match` 로 그대로 되보냅니다.
+                **변경 번호가 들어 있는 이유**(ADR-0023): 이미 보낸 말이 바뀌면 `lastSeq` 는 그대로라
+                304 가 그 변화를 가려 버립니다.
                 **`afterSeq` 를 보냈고 `hasMore` 가 `false` 인 응답에만 붙습니다** — 그
                 응답만이 "`lastSeq` 까지 전부 받았다" 를 뜻합니다.
               schema: { type: string }
@@ -3895,6 +3898,15 @@ components:
         `0` 은 "아직 아무것도 못 받았다" 이고, 방의 `lastSeq` 보다 큰 값도 400 이 아니라
         **빈 델타**입니다 — 앱의 커서가 앞서 있는 것은 오류가 아니고, 그때도 응답의 `lastSeq`
         로 커서를 되맞출 수 있어야 합니다.
+      schema: { type: integer, format: int64 }
+    AfterChangeSeq:
+      name: afterChangeSeq
+      in: query
+      description: |
+        **이미 받은 말의 변화**를 어디까지 봤는가(ADR-0023). 응답의 `lastChangeSeq` 를 그대로 되돌려 보냅니다.
+        주면 그 번호 뒤에 바뀐 말이 `changed` 에 실립니다 — 지금 그 변화는 삭제 하나이고 앞으로 반응이 붙습니다.
+        생략하면 `changed` 는 빈 배열입니다(첫 진입 · 과거 스크롤은 그 장이 이미 최신입니다).
+        창은 최근 200개 `roomSeq` 라 그 밖의 변화는 방을 다시 열 때 장 조회가 가져옵니다.
       schema: { type: integer, format: int64 }
     BeforeSeq:
       name: beforeSeq
@@ -5864,6 +5876,10 @@ components:
       description: |
         채팅 목록 응답. 공용 `Page`(`nextCursor`)를 쓰지 않습니다 — 커서가 `roomSeq` 이고,
         클라이언트가 미읽음을 맞추려면 방의 현재 `lastSeq` 가 함께 필요하기 때문입니다.
+
+        **`items` 는 새 말이고 `changed` 는 옛 말의 새 모양입니다**(ADR-0023). 둘을 한 목록에 섞으면 앱이
+        바뀐 말을 대화 맨 아래에 다시 그립니다 — 지워진 말이 새 말처럼 올라옵니다. 앱은 `changed` 를
+        **같은 id 의 자리에 덮어쓰고** 순서는 그대로 `roomSeq` 가 정합니다.
       required: [items, lastSeq, hasMore]
       properties:
         items:
@@ -5874,6 +5890,20 @@ components:
           format: int64
           description: 방의 현재 마지막 `room_seq`
         hasMore: { type: boolean }
+        changed:
+          type: array
+          description: |
+            그 커서(`afterChangeSeq`) 뒤에 **바뀐** 말들(ADR-0023). 변경 번호 오름차순이고, 커서를 안 주면
+            빈 배열입니다. 지금 여기 오는 것은 **지워진 말**(`deletedAt` 이 찬 톰스톤)이고 앞으로 반응이 붙습니다.
+            앱은 같은 `id` 의 자리에 덮어씁니다 — 목록 끝에 붙이면 지워진 말이 새 말처럼 올라옵니다.
+          items: { $ref: '#/components/schemas/ChatMessage' }
+        lastChangeSeq:
+          type: integer
+          format: int64
+          default: 0
+          description: |
+            방의 현재 **변경 번호**. 다음 폴링에 `afterChangeSeq` 로 그대로 돌려보냅니다. `ETag` 도 이 값을 담아
+            `"{roomId}:{lastSeq}:{lastChangeSeq}"` 입니다 — 말이 바뀌면 값이 달라져 304 가 변화를 가리지 않습니다.
 
     ScheduleOwnerKind:
       type: string

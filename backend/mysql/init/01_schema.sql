@@ -56,6 +56,7 @@ CREATE TABLE `care_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `chat_message` (
+  `change_seq` bigint DEFAULT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `deleted_at` datetime(6) DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -72,6 +73,7 @@ CREATE TABLE `chat_message` (
   UNIQUE KEY `uq_chat_msg_client` (`room_id`,`sender_user_id`,`client_msg_id`),
   KEY `idx_chat_sender` (`sender_user_id`),
   KEY `idx_chat_reply_to` (`reply_to_id`),
+  KEY `idx_chat_change` (`room_id`,`change_seq`),
   CONSTRAINT `fk_chat_reply_to` FOREIGN KEY (`reply_to_id`) REFERENCES `chat_message` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_chat_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -79,6 +81,7 @@ CREATE TABLE `chat_message` (
 CREATE TABLE `chat_room` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `id` bigint NOT NULL AUTO_INCREMENT,
+  `last_change_seq` bigint NOT NULL DEFAULT '0',
   `last_seq` bigint NOT NULL DEFAULT '0',
   `origin_kind` varchar(20) NOT NULL,
   `tag` varchar(20) NOT NULL,

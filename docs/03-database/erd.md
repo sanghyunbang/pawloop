@@ -205,6 +205,7 @@ erDiagram
         VARCHAR  origin_ref  "그 도메인의 id (문자열, FK 아님). kind+ref UNIQUE"
         VARCHAR  title
         BIGINT   last_seq    "room_seq 발급 카운터 = 미읽음 뺄셈의 좌변"
+        BIGINT   last_change_seq "바뀐 말의 발급 카운터 - 미읽음에는 안 들어간다 (ADR-0023)"
         DATETIME created_at
     }
 
@@ -245,6 +246,7 @@ erDiagram
         DATETIME created_at
         DATETIME deleted_at    "소프트 삭제 - seq 에 빈틈을 내지 않는다"
         BIGINT   reply_to_id FK "답장 대상 - 같은 방의 메시지, SET NULL (#452)"
+        BIGINT   change_seq     "마지막으로 바뀐 방 단위 번호. NULL = 한 번도 안 바뀜 (ADR-0023)"
     }
 
     walk_note {

@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 /**
  * 메시지 목록을 <b>계약의 모양</b>으로 만든다 — 조회와 이름 해석을 한 자리에서 묶는다.
@@ -158,14 +159,16 @@ public class ChatMessages {
      * 최댓값으로 자른다).
      */
     public ChatMessagePageResponse page(long roomId, long userId,
-                                        Long afterSeq, Long beforeSeq, int limit) {
-        ChatMessagePageView page = chatRooms.messagePage(roomId, userId, afterSeq, beforeSeq, limit);
+                                        Long afterSeq, Long beforeSeq, Long afterChangeSeq, int limit) {
+        ChatMessagePageView page = chatRooms.messagePage(roomId, userId, afterSeq, beforeSeq, afterChangeSeq, limit);
+        // 새 말과 바뀐 말을 함께 놓고 한 번에 묻는다(ADR-0023, #500) — 이름도 사진도 답장 원문도 조회는 한 번이다.
+        List<ChatMessageView> all = Stream.concat(page.items().stream(), page.changed().stream()).toList();
         Map<Long, String> names = senderNames.of(
-                page.items().stream().map(ChatMessageView::senderUserId).toList());
+                all.stream().map(ChatMessageView::senderUserId).toList());
         // 한 장에 한 번 묻는다. 메시지마다 "가렸나" 를 물으면 100건 조회에 쿼리가 101개다 —
         // 바로 위 이름 해석이 이미 피해 둔 함정이다. 사진도 같은 규칙이다.
-        return ChatMessagePageResponse.of(page, names, blocks.blockedBy(userId), photosOf(page.items()),
-                repliesOf(roomId, page.items()));
+        return ChatMessagePageResponse.of(page, names, blocks.blockedBy(userId), photosOf(all),
+                repliesOf(roomId, all));
     }
 
     /**

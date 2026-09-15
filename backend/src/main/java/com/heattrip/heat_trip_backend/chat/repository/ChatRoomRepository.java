@@ -143,6 +143,19 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
     long lastAssignedSeq();
 
     /**
+     * 이 방의 다음 <b>변경 번호</b>를 발급한다 — ADR-0023(#500). {@link #assignNextSeq} 와 같은 한 문장이고
+     * 값은 같은 자리({@link #lastAssignedSeq()})에서 읽는다 — {@code LAST_INSERT_ID()} 는 세션 하나에 값 하나다.
+     *
+     * <p><b>잠금 순서가 여기서도 chat_room 먼저다.</b> 말을 고치기 전에 이것을 부른다 —
+     * 메시지를 먼저 잠그고 방을 잠그는 경로를 하나라도 만들면 그 순간 데드락이 가능해진다
+     * ({@link #lockForMemberChange} javadoc).
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "UPDATE chat_room SET last_change_seq = LAST_INSERT_ID(last_change_seq + 1) WHERE id = ?1",
+            nativeQuery = true)
+    int assignNextChangeSeq(long roomId);
+
+    /**
      * 방의 {@code origin_kind} 만. <b>메트릭 태그 하나를 위한 것이다.</b> (이슈 #80)
      *
      * <p>엔티티를 읽지 않는 이유가 있다. {@code postMessage} 는 방을 프록시로만 든다 —

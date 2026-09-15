@@ -24,5 +24,6 @@ public record ChatRoomView(
         String name,
         String tag,
         long lastSeq,
+        long lastChangeSeq,
         LocalDateTime createdAt) {
 }

@@ -907,7 +907,8 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse();
         String etag = first.getHeader("ETag");
-        assertThat(etag).isEqualTo("\"%d:1\"".formatted(room.id()));
+        assertThat(etag).as("ETag 는 방 · 마지막 번호 · 변경 번호 셋이다 — ADR-0023(#500) 이 셋째를 더했다")
+                .isEqualTo("\"%d:1:0\"".formatted(room.id()));
 
         MockHttpServletResponse unchanged = mockMvc.perform(
                 get("/api/chat/rooms/{roomId}/messages", room.id())
@@ -929,7 +930,7 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                         .header("Authorization", "Bearer " + poller.token()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse();
-        assertThat(changed.getHeader("ETag")).isEqualTo("\"%d:2\"".formatted(room.id()));
+        assertThat(changed.getHeader("ETag")).isEqualTo("\"%d:2:0\"".formatted(room.id()));
         assertThat(changed.getContentAsString(StandardCharsets.UTF_8)).contains("둘째 줄");
     }
 
@@ -943,7 +944,7 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
 
         mockMvc.perform(get("/api/chat/rooms/{roomId}/messages", theirs.id())
                         .param("afterSeq", "1")
-                        .header("If-None-Match", "\"%d:1\"".formatted(theirs.id()))
+                        .header("If-None-Match", "\"%d:1:0\"".formatted(theirs.id()))
                         .header("Authorization", "Bearer " + outsider.token()))
                 .andExpect(status().isForbidden());
     }
@@ -1012,7 +1013,7 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andReturn().getResponse().getHeader("ETag");
         assertThat(currentEtag)
                 .as("한 장에 다 담긴 폴링 응답은 '이제 lastSeq 까지 전부 받았다' 라 ETag 가 붙는다")
-                .isEqualTo("\"%d:3\"".formatted(room.id()));
+                .isEqualTo("\"%d:3:0\"".formatted(room.id()));
 
         MockHttpServletResponse firstScreen = mockMvc.perform(
                 get("/api/chat/rooms/{roomId}/messages", room.id())
