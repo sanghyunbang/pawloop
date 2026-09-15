@@ -104,33 +104,31 @@ public class MediaService implements MediaAttachment {
         this.repo = repo;
     }
 
-    /** C: 여러 장 업로드 */
-    @Transactional
-    public List<MediaObject> uploadMany(List<MultipartFile> files, UploadCategory cat,
-                                        String ownerId, String refType, String refId) {
-        return uploadMany(files, cat, ownerId, refType, refId, null, null);
-    }
-
     /**
      * C: 여러 장 업로드 — 크기와 함께 (#429).
+     *
+     * <h2>올리기는 붙이기가 아니다</h2>
+     * <p>예전에는 {@code refType}·{@code refId} 를 질의 파라미터로 받아 <b>검증 없이</b> 행에
+     * 적었다. 읽는 쪽 {@link #attachedTo} 는 참조로만 찾고 소유자를 안 보므로, 남의 글 id 를
+     * 실어 올린 사진이 그 글의 피드·상세에 그대로 그려졌다(#509). 붙이는 길은
+     * {@link com.heattrip.heat_trip_backend.S3.MediaAttachment#attach} 하나뿐이고, 거기서만
+     * "내 것이고 · 아직 안 붙었고 · {@code ready} 인가" 를 조건부 UPDATE 의 영향 행 수로
+     * 잰다(#86 원칙 5).
      *
      * @param width  픽셀 폭. 앱이 다시 인코딩한 뒤 아는 값이다. 파일이 하나일 때만 뜻이 있다
      */
     @Transactional
     public List<MediaObject> uploadMany(List<MultipartFile> files, UploadCategory cat,
-                                        String ownerId, String refType, String refId,
-                                        Integer width, Integer height) {
+                                        String ownerId, Integer width, Integer height) {
         return files.stream()
             .filter(f -> f != null && !f.isEmpty())
             .map(f -> {
                 // 업로드 수행 → S3 key/메타를 가진 StoredObject 반환 가정 ②
-                StoredObject so = storage.upload(
-                    f,
-                    UploadRequest.of(cat, ownerId).withSubPath(refId)
-                );
-                // 엔티티 팩토리: objectKey 사용(과거 key 아님) ①
+                StoredObject so = storage.upload(f, UploadRequest.of(cat, ownerId));
+                // 엔티티 팩토리: objectKey 사용(과거 key 아님) ①. 참조 두 자리는 붙일 때
+                // 적힌다 — 영상의 reserveVideo 도 같은 자리에 null 을 넣는다.
                 MediaObject m = MediaObject.of(
-                    cat, ownerId, refType, refId,
+                    cat, ownerId, null, null,
                     so.key(),                       // ← String S3 object key
                     f.getOriginalFilename(),
                     f.getContentType(),
@@ -148,9 +146,19 @@ public class MediaService implements MediaAttachment {
         return storage.publicUrl(objectKey);
     }
 
-    /** R: 프리사인드 URL */
-    public String presignedUrl(String objectKey, Duration ttl) {
-        return storage.presignedUrl(objectKey, ttl).toString();
+    /**
+     * R: 프리사인드 URL — <b>내 키만</b>. 아니면 404 다({@link #mine} 과 같은 선).
+     *
+     * <p>예전에는 받은 키를 그대로 서명했다. 서명은 <b>서버 자격증명</b>으로 하므로, 인증만
+     * 있으면 버킷의 어떤 객체든 최대 120분 동안 읽을 수 있었다 — 키는 응답 DTO 와 CDN URL 로
+     * 이미 밖에 나가 있다(#509). {@code media_key} 에 유니크 제약이 있어 행은 많아야 하나다.
+     */
+    @Transactional(readOnly = true)
+    public String presignedUrl(String objectKey, Duration ttl, String ownerId) {
+        MediaObject m = repo.findByObjectKey(objectKey)
+                .filter(found -> found.getOwnerId().equals(ownerId))
+                .orElseThrow(() -> new NoSuchElementException("미디어를 찾을 수 없습니다."));
+        return storage.presignedUrl(m.getObjectKey(), ttl).toString();
     }
 
     /** R: refType/refId로 이미지 목록 조회 (컨트롤러에서 사용) */

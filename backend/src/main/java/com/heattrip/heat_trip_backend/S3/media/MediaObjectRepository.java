@@ -9,9 +9,17 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface MediaObjectRepository extends JpaRepository<MediaObject, Long> {
     boolean existsByObjectKey(String objectKey);
+
+    /**
+     * 키 하나로 행을 찾는다 — <b>"이 키가 내 것인가"</b> 를 묻는 유일한 길이다(#509).
+     * {@code media_key} 에 유니크 제약이 있어 많아야 하나다.
+     */
+    Optional<MediaObject> findByObjectKey(String objectKey);
+
     /** 컨트롤러/서비스에서 사용 */
     List<MediaObject> findByRefTypeAndRefId(String refType, String refId);
     List<MediaObject> findByOwnerIdAndCategory(String ownerId, UploadCategory category);

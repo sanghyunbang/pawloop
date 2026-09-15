@@ -32,6 +32,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -45,6 +46,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -86,6 +88,7 @@ class MediaAttachmentIntegrationTest extends AbstractMySqlIntegrationTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final AtomicLong ACCOUNT_SEQUENCE = new AtomicLong();
     private static final String CDN = "https://cdn.test/";
+    private static final String SIGNED = "https://signed.test/";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private UserRepository userRepository;
@@ -110,6 +113,8 @@ class MediaAttachmentIntegrationTest extends AbstractMySqlIntegrationTest {
             return new StoredObject(key, CDN + key, file.getContentType(), file.getSize());
         });
         when(storage.publicUrl(anyString())).thenAnswer(invocation -> CDN + invocation.getArgument(0));
+        when(storage.presignedUrl(anyString(), any())).thenAnswer(invocation ->
+                URI.create(SIGNED + invocation.getArgument(0)).toURL());
     }
 
     // ───────────── 완료 조건 1 — 폰 사진 크기가 들어온다 ─────────────
@@ -263,6 +268,63 @@ class MediaAttachmentIntegrationTest extends AbstractMySqlIntegrationTest {
         }
 
         createPost(me, ids).andExpect(status().isBadRequest());
+    }
+
+    // ───────────── 남의 자리 — 첨부 위조와 임의 키 서명 (#509) ─────────────
+
+    @Test
+    @DisplayName("올리면서 남의 글 id 를 실어도 그 글에 안 붙는다 — 올리기는 붙이기가 아니다")
+    void uploadNeverAttachesToSomeoneElsesPost() throws Exception {
+        Account owner = account("글주인");
+        Account sneak = account("끼워넣는사람");
+        long theirPost = body(createPost(owner, List.of()).andExpect(status().isCreated()))
+                .path("id").asLong();
+
+        MockMultipartFile file = new MockMultipartFile("files", "sneak.jpg", "image/jpeg", new byte[64]);
+        JsonNode uploaded = body(mockMvc.perform(multipart("/media").file(file)
+                        .param("category", "POST_IMAGE")
+                        .param("refType", "POST")
+                        .param("refId", String.valueOf(theirPost))
+                        .header("Authorization", "Bearer " + sneak.token()))
+                .andExpect(status().isOk())).get(0);
+
+        MediaObject row = mediaRepository.findById(uploaded.path("id").asLong()).orElseThrow();
+        assertThat(row.getRefType())
+                .as("올리기는 참조를 안 적는다 — 붙이는 길은 MediaAttachment.attach 하나뿐이다")
+                .isNull();
+        assertThat(row.getRefId()).isNull();
+
+        JsonNode detail = body(mockMvc.perform(get("/api/community/posts/{id}", theirPost)
+                .header("Authorization", "Bearer " + owner.token())).andExpect(status().isOk()));
+        assertThat(detail.path("media"))
+                .as("남의 글의 상세에 사진이 끼어들면 글쓴이는 자기가 안 올린 사진을 자기 글에서 본다")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("서명 URL 은 내가 올린 키만 내준다 — 남의 키도, 없는 키도 404")
+    void presignedSignsOnlyTheKeysIUploaded() throws Exception {
+        Account owner = account("키주인");
+        Account stranger = account("키를아는사람");
+        String key = mediaRepository.findById(uploadId(owner, "private.jpg"))
+                .orElseThrow().getObjectKey();
+
+        JsonNode signed = body(mockMvc.perform(get("/media/presigned").param("key", key)
+                .header("Authorization", "Bearer " + owner.token())).andExpect(status().isOk()));
+        assertThat(signed.path("url").asText()).startsWith(SIGNED);
+
+        mockMvc.perform(get("/media/presigned").param("key", key)
+                        .header("Authorization", "Bearer " + stranger.token()))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/media/presigned")
+                        .param("key", "posts/1/2026/09/there-is-no-such-object.jpg")
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/media/presigned").param("key", key))
+                .andExpect(status().isUnauthorized());
+
+        // 키가 밖에 나가 있어도 서명은 주인 것 한 번뿐이다 — 서명은 서버 자격증명으로 한다.
+        verify(storage, times(1)).presignedUrl(anyString(), any());
     }
 
     // ───────────── 완료 조건 4 — 글이 사라지면 파일도 사라진다 ─────────────

@@ -49,7 +49,8 @@ public class MediaController {
     // ─────────────────────────────────────────────────────────────────────
     @Operation(
         summary = "Upload multiple files",
-        description = "Uploads multiple files to S3 and returns stored metadata and public URLs.", // [C]
+        description = "Uploads multiple files to S3 and returns stored metadata and public URLs. "
+                + "Uploading is not attaching — the rows come back with no reference (#509).", // [C]
         security = { @SecurityRequirement(name = "bearerAuth") } // [D] Swagger UI에서 Bearer 토큰 필요
     )
     @ApiResponses({
@@ -74,8 +75,8 @@ public class MediaController {
         @RequestPart("files") List<MultipartFile> files,
         @Parameter(description = "Upload category")
         @RequestParam(name = "category") UploadCategory category, // [F] Enum → 문서에서 선택형
-        @RequestParam(name = "refType", required = false) String refType, // [G] 도메인 연결 메타
-        @RequestParam(name = "refId",   required = false) String refId,
+        // [G] refType·refId 를 여기서 안 받는다. 받아서 그대로 적으면 남의 글 id 를 실은
+        // 사진이 그 글에 붙었다(#509) — 붙이기는 MediaAttachment.attach 한 길뿐이다.
         @Parameter(description = "Pixel width — only with a single file (#429)")
         @RequestParam(name = "width",  required = false) @Min(1) Integer width,
         @Parameter(description = "Pixel height — only with a single file (#429)")
@@ -95,7 +96,7 @@ public class MediaController {
         if ((width == null) != (height == null)) {
             throw new IllegalArgumentException("width·height 는 함께 줘야 합니다.");
         }
-        var saved = mediaService.uploadMany(files, category, me.getId().toString(), refType, refId,
+        var saved = mediaService.uploadMany(files, category, me.getId().toString(),
                 width, height); // [I] 업로드+저장
         return ResponseEntity.ok(saved.stream().map(this::toItem).toList()); // [K] 200 OK + DTO 리스트
     }
@@ -202,12 +203,20 @@ public class MediaController {
     // ─────────────────────────────────────────────────────────────────────
     @Operation(
         summary = "Issue a presigned URL",
-        description = "Issues a time-limited presigned URL for private delivery." // [N]
+        description = "Issues a time-limited presigned URL for private delivery. "
+                + "Only for a key you uploaded — anything else is 404.", // [N]
+        security = { @SecurityRequirement(name = "bearerAuth") }
     )
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "OK",
             content = @Content(schema = @Schema(implementation = UrlResponse.class))),
         @ApiResponse(responseCode = "400", description = "Bad request",
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = ErrorResponse.class))),
+        // 401 은 Spring Security 의 HttpStatusEntryPoint 가 만들고 본문이 없다.
+        // 계약(openapi.yaml components/responses/Unauthorized)도 본문 없음으로 확정돼 있다. (#5)
+        @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @ApiResponse(responseCode = "404", description = "Media not found",
             content = @Content(mediaType = "application/json",
                 schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "500", description = "Internal Server Error",
@@ -216,12 +225,16 @@ public class MediaController {
     })
     @GetMapping(path = "/presigned", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<UrlResponse> getPresigned(
-        @Parameter(description = "S3 object key", required = true)
+        @Parameter(description = "S3 object key — one you uploaded", required = true)
         @RequestParam(name = "key") String objectKey,
         @Parameter(description = "Expiration in minutes (1~120)") // [O] 제약 문서화
-        @RequestParam(name = "minutes", defaultValue = "10") @Min(1) @Max(120) int minutes // [P] Bean Validation
+        @RequestParam(name = "minutes", defaultValue = "10") @Min(1) @Max(120) int minutes, // [P] Bean Validation
+        @CurrentUser User me
     ) {
-        var url = mediaService.presignedUrl(objectKey, Duration.ofMinutes(minutes));
+        // 서명은 서버 자격증명으로 한다 — 받은 키를 그대로 서명하면 인증만 있는 사람이
+        // 버킷의 어떤 객체든 읽는다(#509). 키는 응답 DTO 와 CDN URL 로 이미 밖에 나가 있다.
+        var url = mediaService.presignedUrl(objectKey, Duration.ofMinutes(minutes),
+                me.getId().toString());
         return ResponseEntity.ok(new UrlResponse(url));
     }
 
