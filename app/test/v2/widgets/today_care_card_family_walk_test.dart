@@ -123,15 +123,41 @@ void main() {
     expect(find.text('산책'), findsOneWidget);
   });
 
-  testWidgets('산책 칸에 거리가 함께 보인다 — 엄마 · 08:10 · 1.2km', (t) async {
+  testWidgets('산책 칸은 거리 · 시각이고, 이름은 바로 위 한 줄이 말한다 (#561)', (t) async {
     await _pump(
       t,
       [_walkLog(userId: 11, who: '엄마', at: '2026-09-08T08:10:00', memo: '1.2km')],
       me: 22,
     );
 
-    expect(find.text('엄마'), findsOneWidget);
-    expect(find.text('08:10'), findsOneWidget);
-    expect(find.text('1.2km'), findsOneWidget);
+    expect(t.widget<Text>(find.byKey(const Key('care-line1-walk'))).data, '1.2km');
+    expect(t.widget<Text>(find.byKey(const Key('care-line2-walk'))).data, '08:10');
+    expect(find.text('엄마가 아침에 1.2km 걸었어요'), findsOneWidget,
+        reason: '칸에서 이름이 빠져도 화면에서 사라지지 않는다 — 이 줄이 이름과 거리를 둘 다 말한다');
+  });
+
+  testWidgets('거리가 없으면 칸은 이름을 말한다 — 손으로 누른 산책이다', (t) async {
+    await _pump(
+      t,
+      [_walkLog(userId: 11, who: '엄마', at: '2026-09-08T08:10:00')],
+      me: 22,
+    );
+
+    expect(t.widget<Text>(find.byKey(const Key('care-line1-walk'))).data, '엄마');
+  });
+
+  testWidgets('두 번 걸었으면 거리보다 횟수가 먼저다 — 두 번째를 막으려고 보는 자리다 (#561)', (t) async {
+    await _pump(
+      t,
+      [
+        _walkLog(userId: 11, who: '엄마', at: '2026-09-08T08:10:00', memo: '1.2km'),
+        _walkLog(userId: 11, who: '아빠', at: '2026-09-08T19:30:00', memo: '0.8km'),
+      ],
+      me: 22,
+    );
+
+    expect(t.widget<Text>(find.byKey(const Key('care-line1-walk'))).data, '2회');
+    expect(t.widget<Text>(find.byKey(const Key('care-line2-walk'))).data, '19:30',
+        reason: '가장 최근 시각이다');
   });
 }

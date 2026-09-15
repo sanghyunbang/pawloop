@@ -421,7 +421,7 @@ void main() {
     expect(find.text('18:40'), findsOneWidget, reason: '가장 최근 시각은 그대로 둔다');
   });
 
-  testWidgets('물 칸은 여전히 누가 했는지를 말한다 — 두 번 주지 않으려고 보는 자리다',
+  testWidgets('물 칸은 한 번이면 누가 했는지를 말한다 — 두 번 주지 않으려고 보는 자리다',
       (tester) async {
     final f = fixture(logs: [
       _log(id: 1, type: 'water', who: '아빠', at: '2026-08-30T09:10:00'),
@@ -429,6 +429,54 @@ void main() {
     await pumpCard(tester, f.repo);
 
     expect(tester.widget<Text>(find.byKey(const Key('care-line1-water'))).data, '아빠');
+  });
+
+  // ── 횟수는 배변·마킹만의 것이 아니다 (#561) ─────────────────────────
+
+  testWidgets('밥을 두 번 줬으면 칸이 "2회" 라고 말한다 — 예전에는 마지막 사람 이름뿐이었다 (#561)',
+      (tester) async {
+    final f = fixture(logs: [
+      _log(id: 1, type: 'meal', who: '엄마', at: '2026-08-30T08:00:00'),
+      _log(id: 2, type: 'meal', who: '아빠', at: '2026-08-30T19:00:00'),
+    ]);
+    await pumpCard(tester, f.repo);
+
+    expect(tester.widget<Text>(find.byKey(const Key('care-line1-meal'))).data, '2회',
+        reason: '두 번째를 막으려고 보는 자리인데, 두 번 줬다는 사실이 화면에 없었다');
+    expect(tester.widget<Text>(find.byKey(const Key('care-line2-meal'))).data, '19:00',
+        reason: '가장 최근 시각이다');
+  });
+
+  testWidgets('물도 세 번이면 "3회" 다 — 종류마다 다른 규칙을 두지 않는다 (#561)',
+      (tester) async {
+    final f = fixture(logs: [
+      _log(id: 1, type: 'water', who: '엄마', at: '2026-08-30T08:00:00'),
+      _log(id: 2, type: 'water', who: '엄마', at: '2026-08-30T13:00:00'),
+      _log(id: 3, type: 'water', who: '아빠', at: '2026-08-30T19:00:00'),
+    ]);
+    await pumpCard(tester, f.repo);
+
+    expect(tester.widget<Text>(find.byKey(const Key('care-line1-water'))).data, '3회');
+  });
+
+  testWidgets('한 번이면 횟수를 안 적는다 — "1회" 는 체크 표시가 이미 말한 것이다',
+      (tester) async {
+    final f = fixture(logs: [
+      _log(id: 1, type: 'poop', who: '엄마', at: '2026-08-30T07:05:00'),
+    ]);
+    await pumpCard(tester, f.repo);
+
+    expect(tester.widget<Text>(find.byKey(const Key('care-line1-poop'))).data, '엄마');
+  });
+
+  testWidgets('아직 안 한 칸도 둘째 줄 자리를 지킨다 — 누를 때마다 칸이 자라면 안 된다 (#561)',
+      (tester) async {
+    final f = fixture(logs: const []);
+    await pumpCard(tester, f.repo);
+
+    expect(tester.widget<Text>(find.byKey(const Key('care-line1-meal'))).data, '아직');
+    expect(tester.widget<Text>(find.byKey(const Key('care-line2-meal'))).data, '',
+        reason: '빈 줄이 자리를 지킨다 — 없애면 누르는 순간 그 줄의 이웃이 통째로 밀린다');
   });
 
   testWidgets('배변·마킹 칸이 카드에 있다 — 예전에는 care_log 에 쌓이기만 했다 (#549)',

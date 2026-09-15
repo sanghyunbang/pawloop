@@ -147,13 +147,28 @@ class _TodayCareCardState extends State<TodayCareCard> {
     return found;
   }
 
-  /// 이름 대신 횟수를 적는 칸인가 — 배변·마킹(#549).
-  static bool _countsInsteadOfName(ServerCareType type) =>
-      type == ServerCareType.poop || type == ServerCareType.pee;
-
   /// 오늘 그 종류가 몇 번인가.
   int _countOf(ServerCareType type) =>
       _logs.where((log) => log.type == type).length;
+
+  /// 칸의 둘째 줄 — **한 줄에 하나만** 적는다. 셋 중 무엇을 적을지는 순서가 있다.
+  ///
+  /// 1. **아직 안 했으면** `아직`.
+  /// 2. **두 번 이상이면 `N회`.** 하루 한 번이 아닌 것이 정상이다 — 밥 두 끼, 물 여러 번,
+  ///    배변·마킹은 원래 세는 값이다(#549). 예전에는 배변·마킹만 횟수를 적어서, 밥을 두 번
+  ///    준 날에도 칸은 마지막 사람 이름만 말했다. **두 번째를 막으려고 보는 자리인데 두 번
+  ///    줬다는 사실이 화면에 없었다.**
+  /// 3. **산책이고 거리가 있으면 거리.** 이름을 지우는 것이 아니다 — 남이 걸었으면 바로 위
+  ///    한 줄이 "엄마가 아침에 1.2km 걸었어요" 로 이름을 말하고, 내가 걸었으면 이름이 나다.
+  ///    거리는 이 칸 말고는 홈에 적을 자리가 없다.
+  /// 4. 나머지는 **누가**. 물·밥은 두 번 주지 않으려고 보는 자리다.
+  String _firstLine(ServerCareType type, CareLogEntry? done) {
+    if (done == null) return '아직';
+    final count = _countOf(type);
+    if (count >= 2) return '$count회';
+    if (type == ServerCareType.walk && (done.memo ?? '').isNotEmpty) return done.memo!;
+    return done.doneByName;
+  }
 
   Future<void> _tap(ServerCareType type) async {
     final group = _group;
@@ -397,8 +412,15 @@ class _TodayCareCardState extends State<TodayCareCard> {
               height: 14,
               child: CircularProgressIndicator(strokeWidth: 2, color: T.warmText)),
           SizedBox(width: 8),
-          Text('오늘의 케어를 불러오는 중',
-              style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+          // 아래 두 줄(게스트 · 실패)은 `Expanded` 인데 이 줄만 아니었다. 글자 2.0배 ·
+          // 390dp 에서 16px 넘쳐 노란 줄무늬가 떴다 — 데이터가 오기 전 잠깐이라 아무도
+          // 못 봤을 뿐이다(#561). `Flexible` 이라 가운데 정렬은 그대로다.
+          Flexible(
+            child: Text('오늘의 케어를 불러오는 중',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+          ),
         ]),
       );
     }
@@ -545,6 +567,12 @@ class _TodayCareCardState extends State<TodayCareCard> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: done != null ? T.accentLine : T.surface),
         ),
+        // **칸 일곱은 언제나 같은 크기다**(#561). 아이콘 한 줄 + 글 세 줄 — 상태가 무엇이든
+        // 줄 수가 같아서, 한 번 누를 때마다 칸이 자라거나 이웃이 따라 움직이지 않는다.
+        //
+        // 예전에는 "아직"(세 줄) · 완료(네 줄) · 거리 붙은 산책(다섯 줄)이 섞여서 한 줄 안의
+        // 칸들이 서로 다른 높이로 앉았다. 실측 [89, 75, 103, 89, 75, 89, 89] — 글자 2.0배에서는
+        // 58px 이 벌어졌다.
         child: Column(children: [
           Icon(
             done != null ? Icons.check_circle_rounded : careIcon(_iconTypeOf(type)),
@@ -557,35 +585,22 @@ class _TodayCareCardState extends State<TodayCareCard> {
                   fontSize: 11, fontWeight: FontWeight.w700, color: T.textSecondary)),
           const SizedBox(height: 2),
           // 한 줄 "walker · 15:40" 은 다섯 칸 폭에서 "walker · 1…" 로 잘렸다(#326).
-          // 이름과 시각을 따로 그린다 — 시각은 잘리지 않는다.
-          if (done == null)
-            const Text('아직', style: TextStyle(fontSize: 10, color: T.textMuted))
-          else ...[
-            // 배변·마킹은 "했나" 가 아니라 **몇 번**이 답이다(#549). 하루에 여러 번이 정상이고,
-            // 병원에서 묻는 것도 그 수다. 나머지 칸은 "누가" 가 답이라 이름을 그대로 둔다 —
-            // 물·밥은 두 번 주지 않으려고 보는 자리다.
-            Text(
-              _countsInsteadOfName(type) ? '${_countOf(type)}회' : done.doneByName,
-              key: Key('care-line1-${type.wire}'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: T.accent),
-            ),
-            Text(
-              done.timeLabel,
-              maxLines: 1,
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: T.accent),
-            ),
-            // 산책 칸에만 거리가 붙는다 (#343). 다른 종류의 메모는 사용자가 쓴 글이라
-            // 다섯 칸 폭에 넣으면 잘려서 뜻을 잃는다.
-            if (type == ServerCareType.walk && (done.memo ?? '').isNotEmpty)
-              Text(
-                done.memo!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10, color: T.accent),
-              ),
-          ],
+          // 둘째 줄과 셋째 줄로 나눈다 — 시각은 잘리지 않는다.
+          Text(
+            _firstLine(type, done),
+            key: Key('care-line1-${type.wire}'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10, color: done == null ? T.textMuted : T.accent),
+          ),
+          // 아직 안 한 칸도 **빈 줄로 자리를 지킨다.** 이 줄을 없애면 누르는 순간 칸이
+          // 한 줄만큼 자라고, 같은 줄의 이웃들이 통째로 밀린다.
+          Text(
+            done?.timeLabel ?? '',
+            key: Key('care-line2-${type.wire}'),
+            maxLines: 1,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: T.accent),
+          ),
         ]),
       ),
     );
