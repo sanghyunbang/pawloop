@@ -118,7 +118,7 @@ void main() {
     final f = fixture();
     await _pump(t, f.repo);
 
-    await t.tap(find.text('밥'));
+    await t.tap(find.byKey(const Key('care-cell-meal')));
     await t.pumpAndSettle();
 
     expect(f.posts, hasLength(1));
@@ -132,7 +132,7 @@ void main() {
 
     expect(f.gets.single, isNot(contains('dogId=')));
 
-    await t.tap(find.text('밥'));
+    await t.tap(find.byKey(const Key('care-cell-meal')));
     await t.pumpAndSettle();
 
     expect(jsonDecode(f.posts.single).containsKey('dogId'), isFalse,

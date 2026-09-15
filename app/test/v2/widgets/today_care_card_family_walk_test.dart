@@ -38,6 +38,9 @@ http.Response _json(Object body, {int status = 200}) => http.Response(
       headers: const {'content-type': 'application/json; charset=utf-8'},
     );
 
+/// [id] 는 행마다 달라야 한다 — "오늘 한 일" 줄이 id 로 열쇠를 만든다(#570).
+int _walkLogSeq = 40;
+
 Map<String, Object?> _walkLog({
   required int userId,
   required String who,
@@ -45,7 +48,7 @@ Map<String, Object?> _walkLog({
   String? memo,
 }) =>
     {
-      'id': 41,
+      'id': ++_walkLogSeq,
       'dogId': null,
       'groupId': 3,
       'type': 'walk',
@@ -120,7 +123,8 @@ void main() {
     );
 
     // 칸이 사라지거나 잠기지 않는다. "알게 한다" 이지 "막는다" 가 아니다.
-    expect(find.text('산책'), findsOneWidget);
+    // (#570 뒤로는 "오늘 한 일" 줄에도 '산책' 이 있어서 **칸을 열쇠로** 찾는다.)
+    expect(find.byKey(const Key('care-cell-walk')), findsOneWidget);
   });
 
   testWidgets('산책 칸은 거리 · 시각이고, 이름은 바로 위 한 줄이 말한다 (#561)', (t) async {
@@ -157,7 +161,9 @@ void main() {
     );
 
     expect(t.widget<Text>(find.byKey(const Key('care-line1-walk'))).data, '2회');
-    expect(t.widget<Text>(find.byKey(const Key('care-line2-walk'))).data, '19:30',
-        reason: '가장 최근 시각이다');
+    // **#570 이 바꿨다** — 두 번 이상이면 사람이다. 여기서는 둘 다 같은 `userId` 라
+    // 한 사람으로 접힌다(닉네임만 다른 같은 계정).
+    expect(t.widget<Text>(find.byKey(const Key('care-line2-walk'))).data, '아빠',
+        reason: '분담이 보이려면 시각이 아니라 사람이 보여야 한다');
   });
 }
