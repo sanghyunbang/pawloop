@@ -668,45 +668,58 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   /// 시트의 주 동작 — 전화 · 지도에서 보기(산책로) · 길찾기. 글쓰기는 그 아래 두 번째다(#328).
+  ///
+  /// ## 폭은 **글자가 차지할 만큼** 나눈다
+  ///
+  /// 예전에는 셋이 `Expanded` 로 폭을 똑같이 나눴다. 그러면 `여기서 산책 시작` 은 좌우 여백이
+  /// 0 이 되어 글자가 모서리에 닿고, `전화` 는 양쪽이 텅 빈다 — 같은 줄인데 한 칸만 꽉 차
+  /// 보인다(#535). 그래서 **남는 자리만** 똑같이 나눠 준다. 여백이 세 칸 모두 같아진다.
   Widget _sheetActions(BuildContext sheetCtx, PetPlace p) {
-    Widget action(IconData icon, String label, Future<void> Function() onTap, {bool primary = false}) =>
-        Expanded(
-          child: GestureDetector(
-            onTap: onTap,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              height: 46,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                gradient: primary
-                    ? const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [T.warmStart, T.warmEnd],
-                      )
-                    : null,
-                color: primary ? null : T.surface,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              // 넷이 설 때가 있다 — 동네 길은 관리기관 전화번호가 있어서 "여기서 산책 시작 ·
-              // 전화 · 길찾기" 셋에 하나가 더 붙는 화면이 나온다. 그때 393dp 에서 28px 넘쳤다
-              // (2026-09-08 에뮬레이터). 말줄임으로 자르면 무엇을 누르는지 알 수 없어
-              // **줄여서 넣는다** — 버튼 이름은 짧고, 안 잘리는 쪽이 낫다.
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(icon, size: 16, color: primary ? Colors.white : T.textSecondary),
-                  const SizedBox(width: 6),
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w800, color: primary ? Colors.white : T.textSecondary)),
-                ]),
-              ),
-            ),
+    final labelStyle = DefaultTextStyle.of(context)
+        .style
+        .merge(const TextStyle(fontSize: 14, fontWeight: FontWeight.w800));
+
+    ({double width, Widget child}) action(
+            IconData icon, String label, Future<void> Function() onTap, {bool primary = false}) =>
+        (
+      // 아이콘(16) + 사이(6) + 글자. 여기에 여백을 더한 것이 이 칸의 폭이다.
+      width: 22 + _labelWidth(label, labelStyle),
+      child: GestureDetector(
+        key: Key('place-action-$label'),
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: 46,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: primary
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [T.warmStart, T.warmEnd],
+                  )
+                : null,
+            color: primary ? null : T.surface,
+            borderRadius: BorderRadius.circular(14),
           ),
-        );
+          // 넷이 설 때가 있다 — 동네 길은 관리기관 전화번호가 있어서 "여기서 산책 시작 ·
+          // 전화 · 길찾기" 셋에 하나가 더 붙는 화면이 나온다. 그때는 자연폭의 합이 이미
+          // 줄보다 넓어 여백이 없다. 말줄임으로 자르면 무엇을 누르는지 알 수 없어
+          // **줄여서 넣는다** — 버튼 이름은 짧고, 안 잘리는 쪽이 낫다.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon, size: 16, color: primary ? Colors.white : T.textSecondary),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: labelStyle.copyWith(color: primary ? Colors.white : T.textSecondary)),
+            ]),
+          ),
+        ),
+      )
+    );
     final messenger = ScaffoldMessenger.of(context);
-    final actions = <Widget>[
+    final actions = <({double width, Widget child})>[
       // 발견에서 기록으로 잇는 자리 (#338). 걸을 만한 곳에만 둔다 — 병원·펫샵·숙박에
       // "여기서 산책 시작" 은 뜻이 없다.
       if (kWalkStartCategories.contains(p.categoryKey))
@@ -743,12 +756,36 @@ class _ExploreScreenState extends State<ExploreScreen> {
         }
       }, primary: p.tel.isEmpty && !p.hasTrailRoute),
     ];
-    return Row(children: [
-      for (var i = 0; i < actions.length; i++) ...[
-        if (i > 0) const SizedBox(width: 8),
-        actions[i],
-      ],
-    ]);
+
+    const gap = 8.0;
+    return LayoutBuilder(builder: (context, box) {
+      final room = box.maxWidth - gap * (actions.length - 1);
+      final natural = actions.fold(0.0, (sum, a) => sum + a.width);
+      // 남는 자리를 똑같이 나눈다 — 그래야 칸마다 여백이 같다. 자연폭이 이미 줄보다 넓으면
+      // (버튼 넷) 같은 비율로 함께 줄인다. 그때 글자는 위의 FittedBox 가 줄여서 넣는다.
+      final slack = room - natural;
+      double widthOf(int i) => slack >= 0
+          ? actions[i].width + slack / actions.length
+          : actions[i].width * room / natural;
+
+      return Row(children: [
+        for (var i = 0; i < actions.length; i++) ...[
+          if (i > 0) const SizedBox(width: gap),
+          SizedBox(width: widthOf(i), child: actions[i].child),
+        ],
+      ]);
+    });
+  }
+
+  /// 버튼 이름이 [style] 로 그려질 때의 폭. 글자 수로 어림하면 "전화" 와 "산책" 이 같은 폭이
+  /// 되는데 실제로는 다르다 — 재서 나눈다.
+  double _labelWidth(String label, TextStyle style) {
+    final tp = TextPainter(
+      text: TextSpan(text: label, style: style),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    return tp.width;
   }
 
   /// 목록 머리의 출처 한 마디 — 칩에 따라 다르다 (#291).

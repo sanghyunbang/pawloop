@@ -199,4 +199,61 @@ void main() {
     expect(tester.takeException(), isNull,
         reason: '동네 길은 전화번호가 있어 버튼이 하나 더 선다 — 393dp 에서 28px 넘쳤다');
   });
+
+  testWidgets('버튼 여백이 셋 다 같다 — 긴 이름만 모서리에 닿으면 안 된다 (#535)', (tester) async {
+    await _pumpWide(tester, ExploreScreen(repository: _FakeRepo()));
+    await tester.tap(_chip('산책로'));
+    await tester.pumpAndSettle();
+
+    tester.view.physicalSize = const Size(393 * 3, 780 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('3.1운동길B'));
+    await tester.pumpAndSettle();
+
+    /// 칸의 왼쪽 끝부터 아이콘까지 · 글자 끝부터 칸의 오른쪽 끝까지.
+    ({double left, double right}) padding(String label) {
+      final box = find.byKey(Key('place-action-$label'));
+      expect(box, findsOneWidget, reason: '$label 칸을 못 찾았다');
+      final outer = tester.getRect(box);
+      final icon = tester.getRect(find.descendant(of: box, matching: find.byType(Icon)));
+      final text = tester.getRect(find.descendant(of: box, matching: find.byType(Text)));
+      return (left: icon.left - outer.left, right: outer.right - text.right);
+    }
+
+    final pads = {for (final l in ['여기서 산책 시작', '전화', '길찾기']) l: padding(l)};
+
+    for (final e in pads.entries) {
+      expect(e.value.left, greaterThan(4),
+          reason: '${e.key} 의 글자가 모서리에 닿는다 — 폭을 똑같이 나누면 긴 이름부터 그렇게 된다');
+      expect(e.value.left, closeTo(e.value.right, 1.0),
+          reason: '${e.key} 의 좌우가 다르다');
+    }
+    final first = pads['여기서 산책 시작']!.left;
+    for (final e in pads.entries) {
+      expect(e.value.left, closeTo(first, 1.0),
+          reason: '한 줄에 선 칸들의 여백이 서로 다르면 한 칸만 꽉 차 보인다 — '
+              '지금 ${pads.map((k, v) => MapEntry(k, v.left.toStringAsFixed(1)))}');
+    }
+  });
+
+  testWidgets('이름이 길면 칸도 넓다 — 폭을 똑같이 나누지 않는다 (#535)', (tester) async {
+    await _pumpWide(tester, ExploreScreen(repository: _FakeRepo()));
+    await tester.tap(_chip('산책로'));
+    await tester.pumpAndSettle();
+
+    tester.view.physicalSize = const Size(393 * 3, 780 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('3.1운동길B'));
+    await tester.pumpAndSettle();
+
+    double widthOf(String label) => tester.getSize(find.byKey(Key('place-action-$label'))).width;
+
+    expect(widthOf('여기서 산책 시작'), greaterThan(widthOf('길찾기')));
+    expect(widthOf('길찾기'), greaterThan(widthOf('전화')),
+        reason: '세 글자가 두 글자보다 넓어야 한다 — 같으면 폭을 n등분하고 있는 것이다');
+  });
 }
