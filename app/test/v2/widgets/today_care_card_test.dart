@@ -180,7 +180,7 @@ void main() {
     // 이름과 시각은 두 줄이다 — 한 줄 "엄마 · 07:05" 는 다섯 칸 폭에서 잘렸다(#326).
     expect(find.text('엄마'), findsOneWidget);
     expect(find.text('07:05'), findsOneWidget);
-    expect(find.text('아직'), findsNWidgets(4), reason: '다섯 칸 중 넷은 아직이다');
+    expect(find.text('아직'), findsNWidgets(6), reason: '일곱 칸 중 여섯은 아직이다');
   });
 
   // ── 잘못 찍은 내 기록 지우기 (#209 Groups-medium-1) ──────────────────────
@@ -357,7 +357,43 @@ void main() {
     });
   });
 
-  test('카드의 칸은 다섯이다 — 서버 종류가 늘어도 여기가 저절로 늘지 않는다 (#340)', () {
+  // ── 배변·마킹 (#549) ────────────────────────────────────────────────
+
+  testWidgets('배변 칸은 이름 대신 "몇 번" 을 말한다 — 하루에 여러 번이 정상이다 (#549)',
+      (tester) async {
+    final f = fixture(logs: [
+      _log(id: 1, type: 'poop', who: '엄마', at: '2026-08-30T07:05:00'),
+      _log(id: 2, type: 'poop', who: '아빠', at: '2026-08-30T18:40:00'),
+    ]);
+    await pumpCard(tester, f.repo);
+
+    expect(find.byKey(const Key('care-line1-poop')), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('care-line1-poop'))).data, '2회',
+        reason: '배변은 건강 신호라 "오늘 몇 번" 이 실제로 세는 값이다 — 누가 봤는지가 아니다');
+    expect(find.text('18:40'), findsOneWidget, reason: '가장 최근 시각은 그대로 둔다');
+  });
+
+  testWidgets('물 칸은 여전히 누가 했는지를 말한다 — 두 번 주지 않으려고 보는 자리다',
+      (tester) async {
+    final f = fixture(logs: [
+      _log(id: 1, type: 'water', who: '아빠', at: '2026-08-30T09:10:00'),
+    ]);
+    await pumpCard(tester, f.repo);
+
+    expect(tester.widget<Text>(find.byKey(const Key('care-line1-water'))).data, '아빠');
+  });
+
+  testWidgets('배변·마킹 칸이 카드에 있다 — 예전에는 care_log 에 쌓이기만 했다 (#549)',
+      (tester) async {
+    final f = fixture(logs: const []);
+    await pumpCard(tester, f.repo);
+
+    expect(find.text('배변'), findsOneWidget);
+    expect(find.text('마킹'), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: '두 줄로 접어 390dp 에서 안 넘친다');
+  });
+
+    test('카드의 칸은 손으로 적은 일곱이다 — 서버 종류가 늘어도 저절로 늘지 않는다 (#340 · #549)', () {
     expect(
       kCareCardColumns,
       const [
@@ -366,12 +402,32 @@ void main() {
         ServerCareType.walk,
         ServerCareType.med,
         ServerCareType.vet,
+        ServerCareType.poop,
+        ServerCareType.pee,
       ],
       reason: """
-예전에는 ServerCareType.values 를 그대로 돌려서, 배변·마킹이 계약에 생기자 칸이 일곱으로
-저절로 늘었다 — 다섯도 이미 좁아 라벨이 잘리던 자리다(#326). 칸을 더하는 것은 배치를
-함께 봐야 하는 결정이라(#340 완료 조건 4) 목록을 손으로 적는다.""",
+예전에는 ServerCareType.values 를 그대로 돌려서, 배변·마킹이 계약에 생기자 칸이 저절로
+늘었다. 화면에 무엇을 보일지는 계약이 아니라 이 화면이 정할 일이라 목록을 손으로 적는다.
+배변·마킹은 2026-09-15 에 다시 넣었다(#549) — 빼 두는 동안 care_log 에 쌓이기만 하고 앱
+어디에서도 볼 수 없었다. 순서는 그대로 두고 뒤에 붙인다.""",
     );
-    expect(kCareCardColumns.contains(ServerCareType.poop), isFalse);
+  });
+
+  testWidgets('390dp 에서 칸 하나가 70px 아래로 좁아지지 않는다 (#326 · #549)', (tester) async {
+    tester.view.physicalSize = const Size(390, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final f = fixture(logs: const []);
+    await pumpCard(tester, f.repo);
+
+    final width = tester.getSize(find.byKey(const Key('care-cell-poop'))).width;
+
+    expect(width, greaterThanOrEqualTo(70),
+        reason: '''
+칸이 좁아지면 라벨이 먼저 잘린다 — 다섯 칸일 때 "walker · 15:40" 이 그래서 두 줄이 됐다(#326).
+일곱을 한 줄에 넣으면 46px 이라 이름도 시각도 못 읽는다. 넘침 경고는 안 뜨므로(칸 안에서
+잘린다) 이 단언이 그 자리를 지킨다.''');
+    expect((kCareCardColumns.length / kCareCardColumnsPerRow).ceil(), 2,
+        reason: '세 줄이 되면 카드가 화면의 절반을 먹는다 — 그때는 배치를 다시 본다');
   });
 }

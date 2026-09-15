@@ -147,6 +147,14 @@ class _TodayCareCardState extends State<TodayCareCard> {
     return found;
   }
 
+  /// 이름 대신 횟수를 적는 칸인가 — 배변·마킹(#549).
+  static bool _countsInsteadOfName(ServerCareType type) =>
+      type == ServerCareType.poop || type == ServerCareType.pee;
+
+  /// 오늘 그 종류가 몇 번인가.
+  int _countOf(ServerCareType type) =>
+      _logs.where((log) => log.type == type).length;
+
   Future<void> _tap(ServerCareType type) async {
     final group = _group;
     if (group == null || _sending != null) return;
@@ -475,12 +483,20 @@ class _TodayCareCardState extends State<TodayCareCard> {
         ]),
         const SizedBox(height: 9),
       ],
-      Row(children: [
-        for (int i = 0; i < kCareCardColumns.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
-          Expanded(child: _cell(kCareCardColumns[i])),
-        ],
-      ]),
+      for (int start = 0; start < kCareCardColumns.length; start += kCareCardColumnsPerRow) ...[
+        if (start > 0) const SizedBox(height: 6),
+        Row(children: [
+          for (int i = 0; i < kCareCardColumnsPerRow; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: start + i < kCareCardColumns.length
+                  ? _cell(kCareCardColumns[start + i])
+                  // 마지막 줄의 빈 자리. 칸 폭을 두 줄에서 같게 두려고 자리만 잡는다.
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ]),
+      ],
     ]);
   }
 
@@ -520,6 +536,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
       onLongPress: busy ? null : () => _deleteLatest(type),
       behavior: HitTestBehavior.opaque,
       child: Container(
+        key: Key('care-cell-${type.wire}'),
         padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
         decoration: BoxDecoration(
           color: done != null ? color.withValues(alpha: 0.13) : T.surface,
@@ -543,8 +560,12 @@ class _TodayCareCardState extends State<TodayCareCard> {
           if (done == null)
             const Text('아직', style: TextStyle(fontSize: 10, color: T.textMuted))
           else ...[
+            // 배변·마킹은 "했나" 가 아니라 **몇 번**이 답이다(#549). 하루에 여러 번이 정상이고,
+            // 병원에서 묻는 것도 그 수다. 나머지 칸은 "누가" 가 답이라 이름을 그대로 둔다 —
+            // 물·밥은 두 번 주지 않으려고 보는 자리다.
             Text(
-              done.doneByName,
+              _countsInsteadOfName(type) ? '${_countOf(type)}회' : done.doneByName,
+              key: Key('care-line1-${type.wire}'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 10, color: color),
@@ -587,21 +608,31 @@ class _TodayCareCardState extends State<TodayCareCard> {
       };
 }
 
-/// 이 카드가 그리는 칸. **서버의 종류 전부가 아니다** (#340).
+/// 이 카드가 그리는 칸. **서버의 종류 전부가 아니다** — 목록을 여기 적는다(#340).
 ///
 /// 예전에는 `ServerCareType.values` 를 그대로 돌렸다. 그러다 배변·마킹이 계약에 생기자
-/// 칸이 다섯에서 일곱으로 **저절로** 늘었다 — 다섯도 이미 좁아 라벨이 잘리던 자리다(#326).
-/// 화면에 무엇을 보일지는 계약이 아니라 이 화면이 정할 일이라 목록을 여기 적는다.
+/// 칸이 다섯에서 일곱으로 **저절로** 늘었다. 화면에 무엇을 보일지는 계약이 아니라 이 화면이
+/// 정할 일이라, 그때 목록을 여기로 옮기고 배변·마킹은 뺐다.
 ///
-/// 배변 칸을 더할지는 사장님 결정이다(#340 완료 조건 4) — 더하는 날 두 줄 배치를 함께
-/// 봐야 한다. 그때까지 그 기록은 산책 저장 화면과 가족 목록에서 보인다.
+/// **2026-09-15 에 다시 넣었다**(#549 · 사장님 A). 빼 두는 동안 그 기록은 `care_log` 에
+/// 쌓이기만 하고 앱 어디에서도 볼 수 없었다 — 산책 끝내기 시트가 "배변 1회" 라고 말해 놓고
+/// 저장하면 사라졌다. 배변은 건강 신호라 "오늘 몇 번" 이 실제로 세는 값이다.
+///
+/// 순서는 그대로 두고 뒤에 붙였다. 한 줄에 일곱은 라벨이 잘리므로([kCareCardColumnsPerRow])
+/// **넷에서 접는다** — 접는 자리를 옮기면 익숙한 순서가 바뀐다.
 const List<ServerCareType> kCareCardColumns = [
   ServerCareType.water,
   ServerCareType.meal,
   ServerCareType.walk,
   ServerCareType.med,
   ServerCareType.vet,
+  ServerCareType.poop,
+  ServerCareType.pee,
 ];
+
+/// 한 줄에 몇 칸인가. 390dp 에서 다섯도 이미 좁아 라벨이 잘렸다(#326) — 일곱은 두 줄이다.
+/// 마지막 줄의 빈 자리는 **비워 둔다**: 줄마다 칸 폭이 달라지면 같은 카드가 두 벌처럼 보인다.
+const int kCareCardColumnsPerRow = 4;
 
 /// "14:20 에 남긴 밥 기록을 지웁니다. 가족 화면에서도 사라져요."
 ///
