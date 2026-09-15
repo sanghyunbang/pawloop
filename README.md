@@ -1,232 +1,213 @@
 # Pawloop(포루프) 🐾
 
-> 검증은 `bash scripts/local-ci.sh` 로 로컬에서 돕니다 — 깃헙 액션 워크플로는 지금 꺼져 있습니다([아래](#ci)).
-
 > **반려동물과 함께 걷고, 가족과 나누고, 동네 반려인들과 연결되는 공간.**
-> 산책 GPS 트래킹 · 반려동반 장소 지도 · 가족 케어 공유 · 채팅 · 동네 커뮤니티 — Flutter 앱과 Spring Boot 서버를 함께 담은 모노레포입니다.
+> 산책 GPS 트래킹 · 반려동반 장소 지도 · 가족 케어 공유 · 일정 · 커뮤니티 · 채팅 — Flutter 앱과 Spring Boot 서버를 함께 담은 모노레포입니다.
 
-산책을 wedge로 좁게 시작해 **반려 일상 로그(산책 → 건강·식사·병원·동네) + 동반장소 지도 + 커뮤니티**로 확장합니다.
+<p>
+  <img src="docs/01-design/references/ours-white-home.jpg" width="156" alt="홈" />
+  <img src="docs/01-design/references/ours-white-map.jpg" width="156" alt="지도" />
+  <img src="docs/01-design/references/ours-white-schedule.jpg" width="156" alt="일정" />
+  <img src="docs/01-design/references/ours-white-feed.jpg" width="156" alt="커뮤니티" />
+  <img src="docs/01-design/references/ours-white-chat.jpg" width="156" alt="채팅" />
+</p>
+
+산책을 좁은 쐐기로 시작해 **반려 일상(산책 → 건강·식사·병원·동네)** 으로 넓히는 앱입니다. 다섯 탭 — 홈 · 지도 · 일정 · 커뮤니티 · 채팅 — 이고 다섯 칸이 같은 폭입니다. 산책은 홈의 "산책 시작" 이 열고, 통계는 홈과 프로필에서 들어갑니다.
 
 ---
 
 ## 무엇을 하는 앱인가
 
-5탭 구조입니다 — 홈 / 지도 / **일정** / 커뮤니티 / 채팅. 다섯 칸이 같은 폭이고, **산책은 홈의 "산책 시작"** 이 엽니다. 통계는 탭이 아니라 홈과 프로필에서 들어갑니다.
-
 | | |
 | :--- | :--- |
-| **산책** | 실 GPS 경로 기록 · 라이브 스탯 · 산책 중 사진 · 종료 시 서버 저장 · 코스로 남기기 |
-| **지도** | 반려동반 장소(관광공사) · 동물병원 · 펫샵(행정안전부 인허가) · 산책로(두루누비 · 동네 길) · 놀이터 — 전부 실데이터 |
-| **일정** | 월 달력 · 반복 · 담당자 · 알림(전날 저녁·당일 아침) · 완료하면 오늘의 케어에 남습니다 |
+| **산책** | 실 GPS 경로 기록 · 라이브 스탯 · 산책 중 사진 · 끝내면 서버 저장(못 보내면 초안 큐) · 코스로 남기기 |
+| **지도** | 반려동반 장소(관광공사) · 동물병원 · 펫샵(행정안전부 인허가) · 산책로(두루누비 · 동네 길 1,302개) · 놀이터 — 전부 실데이터 |
+| **일정** | 월 달력 · 반복 · 담당자 · 알림(전날 저녁·당일 아침) · 완료하면 오늘의 케어에 한 줄이 남습니다 |
 | **가족** | 초대코드로 묶인 가족 그룹 · 오늘의 케어 공유(밥·물·산책·투약·병원) · 산책 주의사항 |
-| **채팅** | 가족 방 · 크루 방 · 사진 · 답장(인용) · 반응 · 미읽음 · 신고/차단/강퇴 |
-| **커뮤니티** | 동네 반려인 게시판 — 글·댓글·반응·사진/영상·저장한 글, 그리고 **크루**(품앗이) |
-| **통계** | 주간 산책 거리 차트 · 요약 · 자주 가는 곳 · **AI 주간 요약 두 문장** |
-| **프로필** | 반려동물 프로필(사진 · 종·품종·크기·나이·중성화) |
-
-> [!NOTE]
-> **산책·인증·가족 케어·채팅·커뮤니티·일정·크루·장소가 전부 서버 연동입니다.**
-> 남은 더미는 없습니다. 아직 자리만 있는 것은 **지도 검색창**과 **기록 화면의 날짜 선택** 둘입니다.
-> 서버 푸시는 발송 경로까지 서 있고 **Firebase 키 파일 둘**을 기다립니다.
-> 화면·기능별 정확한 상태는 [구현 현황](docs/05-build/implementation-status.md)에 정리돼 있습니다.
+| **채팅** | 가족 방 · 크루 방 · 사진 · 답장(인용) · 반응 · 미읽음 · 신고/가리기/강퇴 |
+| **커뮤니티** | 동네 반려인 게시판 — 글·댓글·반응·사진/영상·저장한 글, 그리고 **크루**(동네 모임 · 품앗이) |
+| **통계** | 주간 산책 차트 · 자주 가는 곳 · **AI 주간 요약 두 문장**(규칙 문장이 먼저, AI 는 그 아래) |
 
 ---
 
-## 저장소 이름이 `heattrip` 인 이유
+## 숫자로 보는 저장소
 
-이 프로젝트는 2026-07에 **감정 여행 앱 heattrip → 반려 앱 Pawloop(포루프)** 로 피벗했습니다([ADR-0001](docs/99-decisions/decision-log.md#adr-0001--감정여행heattrip--반려앱pawloop-피벗)). 제품·도메인·화면은 전부 교체됐지만, **기술 식별자에는 옛 이름이 남아 있습니다.**
+| | 앱 (Flutter) | 서버 (Spring Boot) |
+| :--- | ---: | ---: |
+| 제품 코드 | 172 파일 · 44,824 줄 | 395 파일 · 38,001 줄 |
+| 테스트 코드 | 215 파일 · 35,178 줄 | 208 파일 · 51,951 줄 |
+| 테스트 수 | 1,673 | 1,600 |
 
-| 남아 있는 곳 | 값 |
-| :--- | :--- |
-| 저장소 이름 | `heattrip` |
-| Android `applicationId` / `namespace` | `com.cetacealab.heattrip` |
-| 로그인 콜백 딥링크 스킴 | `heattrip://login-callback` |
-| Gradle group / DB 이름 | `com.heattrip` / `heat_trip_db` |
+| | |
+| :--- | ---: |
+| 화면 | 32 |
+| 계약(openapi) 경로 | 78 |
+| DB 테이블 | 35 |
+| 마이그레이션 스크립트 | 48 |
+| 결정 기록(ADR) | 23 |
+| 문서 | 43 파일 · 15,972 줄 |
 
-이는 방치가 아니라 **의도된 유지**입니다 — 식별자 변경은 스토어 등록·재서명·OAuth 콘솔 재등록을 연쇄로 요구하므로, 마이그레이션 비용을 피해 **스토어 등록/재서명 시점에 일괄 정리**하기로 결정했습니다([ADR-0002](docs/99-decisions/decision-log.md#adr-0002--앱-이름-pawloop포루프-채택)). 문서와 UI 표기는 항상 **Pawloop(포루프)** 입니다.
+> 서버는 **테스트 코드가 제품 코드보다 깁니다.** 대부분이 목이 아니라 Testcontainers 로 진짜 MySQL 을 띄우는 통합 테스트이고, 나머지는 계약·문서·마이그레이션을 코드와 대조하는 게이트입니다.
 
 ---
 
-## 저장소 구조
+## 아키텍처
 
+```mermaid
+flowchart LR
+    subgraph app["Flutter 앱"]
+        UI["화면 v2/screens"] --> DATA["저장소·정책 v2/data"]
+        UI --> DOMAIN["순수 규칙 v2/domain"]
+        DATA --> HTTP["AuthedClient<br/>401 자동 갱신"]
+    end
+
+    HTTP -->|"REST · openapi.yaml"| API["Spring Boot"]
+
+    subgraph server["서버 · Spring Modulith 경계"]
+        API --> CHAT["chat"]
+        API --> WALK["walk"]
+        API --> COMMUNITY["community"]
+        API --> PLACE["place"]
+        API --> SCHEDULE["schedule"]
+        API --> MOD["moderation"]
+    end
+
+    PLACE -->|"서버만 키를 든다"| KTO["관광공사 · 행정안전부 · 두루누비"]
+    WALK --> AI["OpenAI · 주간 요약 두 문장"]
+    server --> DB[("MySQL 8<br/>LINESTRING · 격자 캐시")]
+    server --> S3[("S3 · 미디어")]
 ```
-heattrip/
-├── app/               Flutter 앱 — 화면 · 지도 · 산책 트래킹 · 소셜 로그인
-├── backend/           Spring Boot API 서버 + MySQL · 관측성(Prometheus/Grafana)
-├── docs/              기술 문서 — 설계 · 아키텍처 · DB · API 계약 · 빌드 · 테스트 · ADR
-├── design_refactor/   피벗 이전 디자인 프로토타입 핸드오프 (정리 대상)
-└── .github/           이슈·PR 템플릿 · CI 워크플로 · 문서 드리프트 검사 스크립트
-```
 
-- **`docs/`** 는 "코드와 함께 리뷰되어야 하는 문서" 를 담고, **제품 기획 문서도 `docs/00-product/` 에 함께 담습니다** — [ADR-0014](docs/99-decisions/decision-log.md#adr-0014--제품-기획-문서도-저장소에-넣는다) 가 ADR-0008 의 "기획 문서는 저장소 밖" 한 줄을 뒤집었습니다.
-- **`design_refactor/`** 는 감정 여행 앱 시절의 HTML 디자인 프로토타입 2개(+런타임 스크립트, 설명 README)입니다. 2026-06 모노레포 통합 이후 손대지 않았고 현재 코드베이스와 연결점이 없는 **피벗 이전 산출물이라 정리(아카이브 또는 삭제) 대상**입니다.
+| | 무엇 | 왜 이 선택인가 |
+| :--- | :--- | :--- |
+| 앱 | Flutter 3.44.4 / Dart 3.12.2 · `flutter_naver_map` · `fl_chart` · `go_router` · `provider` | 한 코드베이스로 양대 스토어. 지도는 국내 좌표·POI 품질 때문에 네이버 |
+| 서버 | Java 21 · Spring Boot 3.5.4 · Spring Modulith · JPA · JWT | 모듈 경계를 **구조 검사**로 강제하되 이벤트는 들이지 않았습니다([ADR-0012](docs/99-decisions/decision-log.md)) |
+| DB | MySQL 8 + `hibernate-spatial` | 경로는 `LINESTRING`, 장소는 0.02° 격자 캐시. **`SPATIAL INDEX` 는 만들지 않습니다**([ADR-0015](docs/99-decisions/decision-log.md)) |
+| 계약 | `docs/04-api/openapi.yaml` 하나가 정본 | 앱과 서버가 같은 문서를 보고, 스펙 테스트가 컨트롤러와 대조합니다([ADR-0017](docs/99-decisions/decision-log.md)) |
+| 관측 | Micrometer · Prometheus · Grafana | 폴링의 빈 응답 비율처럼 **설계를 바꿀 근거**가 되는 수만 봅니다 |
 
 ---
 
-## 스택
+## 엔지니어링에서 볼 만한 것
 
-### 앱 (`app/`)
+### 1. 채팅 폴링의 커서는 `id` 가 아니라 방별 순번입니다
 
-| | 버전 | 비고 |
-| :--- | :--- | :--- |
-| Flutter / Dart | **3.44.4** / 3.12.2 (`sdk: ^3.8.1`) | CI에서 버전 고정 |
-| 지도 | `flutter_naver_map` ^1.3.1 | 네이버 Dynamic Map |
-| 차트 | `fl_chart` ^1.2.0 | 산책 통계 |
-| 라우팅 · 상태 | `go_router` ^16.1.0 · `provider` ^6.1.5 | |
-| 인증 | `flutter_web_auth_2` ^4.1.0 · `flutter_secure_storage` ^9.2.4 | 소셜 로그인 · 토큰 보관 |
-| 위치 | `geolocator` ^13.0.1 | |
-| Android 툴체인 | compileSdk 36 · minSdk 23 · Java 17 | `minSdk 23`은 지도 SDK 요구 |
+`AUTO_INCREMENT` 는 배정 시점에 정해지고 가시성은 커밋 시점에 생깁니다. `id` 를 커서로 쓰면 **늦게 커밋된 작은 id 를 영구히 건너뜁니다.** 그래서 방마다 `room_seq` 를 발급하고, 발급은 MySQL 이 문서로 제시한 한 문장(`UPDATE … SET last_seq = LAST_INSERT_ID(last_seq + 1)`)으로 합니다. 스레드 20개를 같은 방에 붙여 재 보니, 읽고-더해-쓰는 판은 **20개 중 17개가 죽었습니다.**
 
-### 서버 (`backend/`)
+미읽음은 캐시가 아니라 `room.last_seq − member.last_read_seq` 뺄셈이고, 지워진 말도 목록에서 빼지 않습니다 — 빼면 그 번호가 클라이언트에 도달하지 않아 뱃지가 영원히 안 지워집니다. → [ADR-0011](docs/99-decisions/decision-log.md)
 
-| | 버전 | 비고 |
-| :--- | :--- | :--- |
-| Java | **21** | Gradle toolchain. Kotlin 은 감정 추천에만 있었고 #94 로 뺐습니다 |
-| Spring Boot | **3.5.4** | Web · WebFlux · Data JPA · Validation |
-| 모듈 경계 | Spring Modulith 1.4.13 | 구조 검사만 들입니다 — 이벤트는 보류([ADR-0012](docs/99-decisions/decision-log.md#adr-0012--모듈-경계는-spring-modulith-의-구조-검사만-들인다)) |
-| 인증 | Spring Security + OAuth2 Client · JJWT 0.11.5 | 카카오 · 구글 |
-| DB | **MySQL 8.0** + `hibernate-spatial` | 산책 경로를 `walk.path LINESTRING SRID 4326` 으로 저장합니다. **`SPATIAL INDEX` 는 만들지 않습니다** — 공간으로 묻는 질의가 없고, 인덱스가 `NOT NULL` 을 요구해 경로 없는 산책을 못 담게 됩니다([ADR-0015](docs/99-decisions/decision-log.md#adr-0015--산책-경로는-linestring-으로-저장하되-spatial-index-는-만들지-않는다)). 장소 캐시는 공간형이 아니라 0.02° 격자입니다([ADR-0013](docs/99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)) |
-| API 문서 | springdoc-openapi 2.7.0 | 계약 원본은 [`docs/04-api/openapi.yaml`](docs/04-api/openapi.yaml) |
-| 관측성 | Micrometer + Prometheus · Grafana | |
+### 2. 이미 보낸 말이 바뀌면 폴링이 못 봅니다 — 축을 하나 더 놨습니다
 
-### 외부 데이터
+델타는 커서보다 **큰** 번호만 줍니다. 그래서 남이 지운 말도, 반응이 붙은 말도 영영 오지 않았습니다. 방 단위 **변경 번호**를 따로 발급해 바뀐 행에 찍고 응답에 `changed` 를 더했습니다. `room_seq` 를 다시 발급하는 길은 기각했습니다 — 오래된 말이 대화 맨 아래로 뛰고 모두의 미읽음이 1 늘기 때문입니다. → [ADR-0023](docs/99-decisions/decision-log.md)
 
-- **한국관광공사 `KorPetTourService2`** — 반려동반 가능 장소. **앱은 관광공사를 직접 부르지 않습니다** — `GET /api/places/nearby` 만 부르고, 서비스키는 서버 환경변수 `TOUR_API_SECRET` 으로만 존재합니다([#40](https://github.com/sanghyunbang/heattrip/issues/40)). 캐시는 0.02° 격자 스냅샷이고 일일 호출 예산은 `kto_call_budget` 표가 지킵니다([ADR-0013](docs/99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)).
-- **행정안전부 인허가**(동물병원·동물판매업 — 전국), **두루누비**(걷기여행길 — 선 포함) — 실데이터입니다([#291](https://github.com/sanghyunbang/heattrip/issues/291)). 서버가 월 1회 받아 같은 카탈로그에 이어 붙입니다.
+<p><img src="docs/01-design/references/ours-452-chat-reaction.jpg" width="680" alt="길게 눌러 고른 반응이 칩으로 붙고, 남이 누른 반응이 폴링에 따라온다" /></p>
 
-> 감정 여행 시절의 백엔드 패키지(관광 수집 · 탐색 · OpenAI 감정 추천 · 감정카드 · 여정 · v1 북마크 · 피드백 · 카카오 백필)와 앱의 레거시 셸은 2026-09-06 에 [#94](https://github.com/sanghyunbang/heattrip/issues/94) 로 지웠습니다. 표는 운영 DB 에 남아 있습니다.
+### 3. 멱등을 DB 제약 위에 세웁니다
+
+- 전송은 `clientMsgId` 와 `UNIQUE (room_id, sender_user_id, client_msg_id)`. 재전송은 409 가 아니라 **200** 입니다 — 재시도한 쪽 입장에서 그 요청은 성공했습니다.
+- 반응·저장은 토글 하나가 아니라 **켜기(`POST`)와 끄기(`DELETE`)** 입니다. 토글이면 네트워크 재시도 한 번이 사용자의 반응을 조용히 되돌립니다.
+- 삽입은 `ON DUPLICATE KEY UPDATE id = id` 한 문장입니다. 예외를 삼키는 판은 트랜잭션이 rollback-only 로 표시돼 **동시 요청에서만** 500 이 납니다.
+
+### 4. 좌표와 EXIF 는 기기에서 지우고 올립니다
+
+사진에는 촬영 위치가 실려 있습니다. 앱이 올리기 전에 다시 인코딩해 EXIF 를 지우고, 영상은 위치 상자를 덮은 뒤 흔적이 남으면 **올리지 않습니다.** 테스트가 나간 바이트를 값으로 잽니다. 좌표가 기기를 떠나는 경로 자체도 컴파일 타임 정책 한 곳으로 모았습니다. → [ADR-0018](docs/99-decisions/decision-log.md) · [위치정보법 정리](docs/00-product/legal-lbs-compliance.md)
+
+### 5. 마이그레이션은 문서가 아니라 검사입니다
+
+`backend/mysql/post-start/` 의 48개 스크립트는 전부 **멱등**이고, 사전 점검과 사후 검증(`[D]` 블록)이 붙어 있어 모양이 다르면 스스로 멈춥니다. 스크립트마다 **진짜 MySQL 컨테이너에 돌려 보는 실행 테스트**가 있고, 런북과 확인 스크립트에 빠진 파일이 없는지도 테스트가 잠급니다.
+
+```bash
+bash scripts/check-migrations.sh    # 이 DB 에 무엇이 덜 들어갔는지 묻고, 돌릴 파일 이름을 찍는다
+```
+
+### 6. 모듈 경계를 테스트가 지킵니다
+
+`chat` 은 `users`·`family_group`·`dog` 로 **FK 를 내지 않습니다.** 걸면 탈퇴 경로가 DB 삭제 순서에 묶이고, `CASCADE` 면 탈퇴 한 번에 남의 대화가 사라집니다. 이 규칙은 주석이 아니라 검사입니다 — 커밋된 DDL 을 빈 DB 에 **실제로 적용해** `chat_*` 의 FK 목록을 읽고, 밖으로 나간 것이 하나라도 있으면 빨간불입니다.
+
+### 7. 문서와 계약이 코드와 어긋나면 빌드가 멈춥니다
+
+계약의 경로 집합과 컨트롤러 매핑, 스키마 문서와 정본 DDL, 결정 기록의 목차와 본문, 화면 문서와 실제 화면 파일 — 넷 다 테스트가 대조합니다. 이 저장소에서 문서는 "나중에 고치는 것" 이 아닙니다.
+
+### 8. "테스트를 넣었다" 를 근거로 치지 않습니다
+
+기능마다 **되돌려서 빨간불**을 남깁니다. 코드에 변형을 하나 넣고(들어갔는지 `grep` 으로 확인), 테스트가 실제로 빨간불인지 보고, 되돌린 뒤 해시로 대조한 표를 PR 에 붙입니다. 이 방법으로 *테스트는 초록인데 아무것도 지키지 못하던* 자리를 여러 번 찾았습니다 — 가장 최근에는 알림 정책이 플러그인을 아는 파일 안에 있어 테스트가 닿지 못하던 것을 순수 함수로 떼어 냈습니다.
+
+---
+
+## 화면 몇 장 더
+
+| 산책 기록과 사진 | AI 주간 요약 | 경로 위 지도 |
+| :---: | :---: | :---: |
+| <img src="docs/01-design/references/ours-450-walk-photos.jpg" width="240" alt="산책 사진" /> | <img src="docs/01-design/references/ours-486-ai-summary.jpg" width="240" alt="AI 주간 요약" /> | <img src="docs/01-design/references/ours-483-map-ground.jpg" width="240" alt="경로 위 지도" /> |
+
+레퍼런스와 우리 화면의 전·후 캡처는 [`docs/01-design/references/`](docs/01-design/references/) 에 출처와 함께 모여 있습니다.
 
 ---
 
 ## 시작하기
 
-설치 도구·환경변수·에뮬레이터·빌드 명령은 **[개발 환경 세팅 문서](docs/05-build/setup.md)** 에 전부 정리돼 있습니다. 아래는 요약입니다.
-
 ```bash
 git clone https://github.com/sanghyunbang/heattrip.git
 cd heattrip
 
-# 앱 — Flutter 3.44.4 필요
+# 앱 — Flutter 3.44.4
 cd app
 flutter pub get
-flutter run               # 키가 없어도 앱은 뜹니다 (지도 탭만 비활성 — 장소는 백엔드가 대신 부릅니다)
+flutter run --dart-define-from-file=dart-define.json   # 예시는 dart-define.example.json
 
-# 서버 (선택) — JDK 21 + MySQL 8 필요
+# 서버 — JDK 21 + MySQL 8 (+ Docker: 통합 테스트가 Testcontainers 를 쓴다)
 cd ../backend
 ./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
-환경값은 `.env` 파일이 아니라 **컴파일 타임 `--dart-define`** 으로 들어갑니다. 에셋으로 번들된 `.env` 는 APK 안에 원본 그대로 실려 나가기 때문입니다([이슈 #29](https://github.com/sanghyunbang/heattrip/issues/29)).
+환경값은 `.env` 에셋이 아니라 **컴파일 타임 `--dart-define`** 으로 들어갑니다 — 번들된 `.env` 는 APK 안에 원문 그대로 실려 나갑니다. 외부 API 서비스키는 **서버 환경변수로만** 존재하고 앱에는 지도 SDK 키 하나만 남습니다.
+
+설치·에뮬레이터·소셜 로그인 로컬 테스트는 [개발 환경 세팅](docs/05-build/setup.md)에 있습니다.
+
+## 검증
 
 ```bash
-cd app
-cp dart-define.example.json dart-define.json     # 값을 채웁니다 (gitignore 대상)
-flutter run --dart-define-from-file=dart-define.json
-
-# 한두 개만 잠깐 바꾸려면
-flutter run --dart-define=API_BASE=http://10.0.2.2:8080
+bash scripts/local-ci.sh            # 앱 · 서버 · 문서 전부
+bash scripts/local-ci.sh backend    # 하나만 (backend | app | docs)
 ```
 
-검증 명령:
-
-```bash
-(cd app     && flutter analyze --no-fatal-warnings --no-fatal-infos && flutter test)
-(cd backend && ./gradlew test jacocoTestCoverageVerification)   # Docker 필요 (Testcontainers)
-```
-
----
-
-## 현재 상태
-
-**커뮤니티(M3.1)·실데이터(M3)·일정·크루까지 닫혔습니다.** 남은 것은 푸시의 Firebase 키(M2.8)와 iOS 실기기 QA 이고, 그 뒤가 확장 로그(M4)와 출시(M5)입니다. 전체 마일스톤은 [로드맵](docs/05-build/roadmap.md)에 있습니다.
-
-| 마일스톤 | 한 줄 | 상태 |
-| :--- | :--- | :---: |
-| **M0** — 더미 UX 완성 | 5탭 전 화면을 더미 데이터로 완성 | ✅ 완료 |
-| **M1** — 실위치 + 실시간 트래킹 | 시뮬 좌표를 실 GPS로, 경로를 서버에 저장 | ✅ 완료 |
-| **M2** — 로그인(소셜 인증) | 카카오·구글 계정, 서버 동기화의 기반 | ✅ 하위 닫힘 |
-| **M2.5** — 가족 그룹 & 케어 공유 | 가족이 함께 돌본다 | ✅ 하위 닫힘 |
-| **M2.6** — 채팅(폴링) | 방 목록·미읽음·폴링 송수신 | ✅ 하위 닫힘 |
-| **M2.7** — 채팅 안전 & 스토어 요건 | 신고·차단·강퇴·연령 게이트 | ✅ 완료 |
-| **M2.8** — 알림(푸시) | FCM/APNs · 방별 음소거 | 🟡 서버 완료 · Firebase 키 대기 |
-| **M2.9** — 실시간(소켓) | 받기만 소켓 | ⬜ 트리거 기반 |
-| **M3** — 실데이터 + 백엔드 프록시 | KTO 프록시·캐싱 · 인허가 병원·펫샵 · 두루누비 · 동네 길 · 놀이터 | ✅ 완료 |
-| **M3.1** — 커뮤니티 | 글·댓글·반응·사진/영상·저장·수정·신고 · 크루(#417) | ✅ 완료 |
-| **M4** — 확장 로그 | 산책 wedge를 "반려 일상 로그"로 확장 | ⬜ 예정 |
-| **M5** — 출시 | 양대 스토어 정식 배포 | ⬜ 예정 |
-
-의존은 이렇습니다 — 2.x 밴드 안에서 **M2.5 → M2.6 이 하드 의존**(방이 있어야 메시지를 붙입니다)이고, M2.7·M2.8 은 그 뒤에서 병렬, M2.9 는 실측 트리거가 걸릴 때만 엽니다. **M3.1(커뮤니티)은 M3 과 병렬이되 M4 앞**이어야 합니다 — M4 가 "커뮤니티 건강·병원 보드와 연동" 을 서버가 이미 있다는 전제로 적습니다. **M2.7 은 M5 의 하드 전제**입니다(스토어 UGC 요건).
+깃헙 액션 워크플로(`.github/workflows/ci.yml`)는 **지금 꺼져 있습니다.** private 저장소라 액션이 계정의 Actions 분을 쓰고, 분이 떨어지면 잡이 시작조차 못 합니다. 같은 명령을 로컬에서 돌리고 그 로그를 PR 본문에 근거로 남깁니다 — 워크플로를 다시 켤 때의 잡 구성은 파일에 그대로 있습니다.
 
 ---
 
 ## 문서
 
-전체 인덱스는 **[`docs/README.md`](docs/README.md)** 에 있습니다. 자주 찾는 문서만 추리면:
+전체 인덱스는 [`docs/README.md`](docs/README.md) 입니다. 이 저장소를 처음 본다면 이 순서를 권합니다.
 
 | | |
 | :--- | :--- |
-| [개발 환경 세팅](docs/05-build/setup.md) | 설치 · `--dart-define` · 에뮬레이터 · 빌드 · 소셜 로그인 로컬 테스트 |
-| [로드맵](docs/05-build/roadmap.md) · [구현 현황](docs/05-build/implementation-status.md) | 마일스톤 · 화면별 실제 상태 |
-| [시스템 개요](docs/02-architecture/system-overview.md) · [기술 스택](docs/02-architecture/tech-stack.md) | 구성도 · 버전 표 |
-| [ERD](docs/03-database/erd.md) · [스키마](docs/03-database/schema.md) | MySQL 공간형 데이터 모델 |
-| [API 명세](docs/04-api/api-spec.md) · [`openapi.yaml`](docs/04-api/openapi.yaml) | 프론트/백엔드 합의 계약 |
-| [디자인 시스템](docs/01-design/design-system.md) · [화면 명세](docs/01-design/screen-spec.md) | 오라 배경 · 글래스 카드 · 토큰 |
-| [제품 기획](docs/00-product/concept.md) · [비전](docs/00-product/vision.md) | 컨셉 · 페르소나 · 시장 · 수익화 · 위치정보법 |
-| [결정 기록(ADR)](docs/99-decisions/decision-log.md) | 피벗 · 네이밍 · RDB · KTO · 채팅 · 모듈 경계 · 산책 경로 · 계약 규약 |
+| [구현 현황](docs/05-build/implementation-status.md) | 화면·기능이 지금 어디까지 와 있는가 |
+| [결정 기록(ADR) 23건](docs/99-decisions/decision-log.md) | 무엇을 **고르지 않았는지**까지 적혀 있습니다 |
+| [시스템 개요](docs/02-architecture/system-overview.md) · [백엔드 구조](docs/02-architecture/backend-structure.md) · [프론트 구조](docs/02-architecture/frontend-structure.md) | 구성도와 패키지 규약 |
+| [ERD](docs/03-database/erd.md) · [스키마](docs/03-database/schema.md) | 표 35개의 DDL·제약·인덱스와 그 이유 |
+| [openapi.yaml](docs/04-api/openapi.yaml) · [API 명세](docs/04-api/api-spec.md) | 계약 정본과 사람이 읽는 판 |
+| [디자인 시스템](docs/01-design/design-system.md) · [화면 명세](docs/01-design/screen-spec.md) | 흰 바탕 · 외곽선 카드 · 코랄레드 하나 |
+| [제품 기획](docs/00-product/concept.md) · [페르소나](docs/00-product/personas.md) · [수익화](docs/00-product/monetization.md) | 왜 이 제품인가 |
 
 ---
 
-## CI
+## 지금 상태
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 의 **CI** 워크플로는 **지금 꺼져 있습니다**(`gh workflow disable CI`). 이 저장소는 private 이라 액션이 계정의 Actions 분을 쓰고, 분이 떨어지면 잡이 시작조차 못 하기 때문입니다 — 같은 검사를 `bash scripts/local-ci.sh` 로 돌리고 그 로그를 PR 에 붙여 근거로 남깁니다. 아래는 워크플로를 다시 켤 때의 모양입니다.
+커뮤니티 · 실데이터 지도 · 일정 · 크루 · 채팅(사진·답장·반응·변경 피드)까지 서버 연동이 끝났습니다. 남은 것은 **푸시의 Firebase 키 파일 둘**과 **iOS 실기기 QA**, 그 뒤가 확장 로그와 출시입니다. 화면에 아직 자리만 있는 것은 지도 검색창과 기록 화면의 날짜 선택 둘입니다. 마일스톤은 [로드맵](docs/05-build/roadmap.md)에 있습니다.
 
-- **경로 필터** — 바뀐 경로에 따라 검증 잡 넷을 각각 켭니다. `docs` 필터는 `docs/**` 뿐 아니라 **`app/lib/**` 변경에도 켜집니다**(화면이 바뀌면 화면 문서도 봐야 하므로).
-- **백엔드 — 테스트 + 커버리지** — `./gradlew test jacocoTestReport jacocoTestCoverageVerification`. 커버리지 게이트는 인증 패키지에만 걸려 있고 **내리는 것은 금지**입니다. 검색 테스트가 MySQL FULLTEXT 를 Testcontainers 로 실제 실행하므로 **로컬에서도 Docker 가 필요**합니다([#26](https://github.com/sanghyunbang/heattrip/issues/26)).
-- **프론트 — 정적분석 + 테스트** — `flutter analyze` (에러 0건) + `flutter test --coverage`.
-- **문서 — 코드와의 드리프트** — `.github/scripts/check-docs-drift.sh` 가 낡은 서술을 잡습니다([#59](https://github.com/sanghyunbang/heattrip/issues/59)).
-- **문서 — 계약 테스트** — 백엔드 잡이 안 켜진 문서 PR 에서만 돕니다. `DecisionLogTest`·`DocDriftTest`·`OpenApiAuthContractTest`·`PackageConventionDocTest`([#113](https://github.com/sanghyunbang/heattrip/issues/113)).
-- **`CI 통과`** 잡 하나가 최종 판정입니다. 브랜치 보호 규칙에는 이 잡만 등록하면 됩니다.
+<details>
+<summary><strong>저장소 이름이 <code>heattrip</code> 인 이유</strong></summary>
 
-### 로컬에서 같은 검사 돌리기
+<br/>
 
-```bash
-bash scripts/local-ci.sh            # 문서 · 서버 · 앱 전부
-bash scripts/local-ci.sh backend    # 하나만 (backend | app | docs)
-```
+이 프로젝트는 2026-07 에 **감정 여행 앱 heattrip → 반려 앱 Pawloop(포루프)** 로 피벗했습니다. 제품·도메인·화면은 전부 교체됐지만 기술 식별자에는 옛 이름이 남아 있습니다 — 저장소 이름, Android `applicationId`(`com.cetacealab.heattrip`), 로그인 콜백 스킴, Gradle group 과 DB 이름.
 
-`ci.yml` 과 **같은 명령**을 돌리고 로그를 `build/local-ci/` 에 남깁니다. 이 저장소는 private 이라 액션이 계정의 Actions 분(minutes, 월 3,000분)을 씁니다. 분이 떨어지면 잡이 **시작조차 못 하고** 1~2초 만에 실패합니다(단계 0개·로그 없음) — 그때는 코드를 의심하기 전에 [Billing](https://github.com/settings/billing) 을 먼저 보고, 이 스크립트로 근거를 남긴 뒤 머지합니다.
+방치가 아니라 **의도된 유지**입니다. 식별자 변경은 스토어 등록·재서명·OAuth 콘솔 재등록을 연쇄로 요구하므로 스토어 등록 시점에 일괄 정리하기로 했습니다([ADR-0002](docs/99-decisions/decision-log.md)). 감정 여행 시절의 서버 패키지와 앱 셸은 2026-09-06 에 지웠습니다. **문서와 UI 표기는 언제나 Pawloop(포루프)** 입니다.
 
-### 이 DB 에 마이그레이션이 어디까지 들어갔는지 보기
-
-```bash
-bash scripts/check-migrations.sh                                  # backend/.env 의 dev DB
-DB_HOST=… DB_PORT=… DB_NAME=… DB_USER=… DB_PASS=… bash scripts/check-migrations.sh
-```
-
-**저장소에 스크립트가 있는 것과 DB 에 들어간 것은 다른 사실입니다.** dev 는 `ddl-auto=update` 라 Hibernate 가 표와 컬럼을 만들어 주지만 **`CHECK` 제약은 절대 안 건드리고**, 운영의 `validate` 도 `CHECK` 와 PK 는 안 봅니다. 그래서 `CHECK` 만 고치는 마이그레이션은 양쪽 어디서도 안 잡힙니다 — 2026-09-08 에 실제로 둘이 빠져 있었고([#399](https://github.com/sanghyunbang/heattrip/pull/399)), 하나는 부팅마다 병원·펫샵 8,110곳을 받아 놓고 버리고 있었습니다.
-
-마이그레이션마다 "들어갔으면 반드시 참인 사실" 을 DB 에 묻고, 빠진 것이 있으면 **돌려야 할 파일 이름**을 찍고 1 로 끝납니다. 비밀번호는 `MYSQL_PWD` 로만 넘기므로 명령줄에도 화면에도 안 남습니다. `MigrationChecksAreCompleteTest` 가 "빠뜨린 파일이 없다" 를 잠급니다.
-
-### 외부 API 키가 아직 살아 있는지 보기
-
-```bash
-bash scripts/check-external-keys.sh          # 공공데이터 API 여덟 + .env 자리 점검
-bash scripts/check-external-keys.sh public   # API 만
-```
-
-공공데이터포털은 계정 하나에 인증키 하나지만 **API 마다 활용신청이 따로**입니다. "키는 있는데 이 API 만 안 된다" 가 정상적으로 일어나고, 앱에서는 카드 하나가 안 뜨는 것으로만 보입니다. 키를 새로 신청한 날·갈아 끼운 날·배포 전날에 여기서 물어봅니다.
-
-**키를 찍지 않습니다** — 응답에 섞여 와도 가리고, `backend/.env` 는 이름과 채움 여부만 읽습니다(앱 쪽 값은 `--dart-define` 이라 `app/dart-define.json` 을 같은 방식으로 봅니다). 출력을 그대로 이슈에 붙여도 됩니다. 무엇을 더 받아야 하는지는 [키·승인 목록 #393](https://github.com/sanghyunbang/heattrip/issues/393) 에 있습니다.
-
-테스트 정책과 기여 규약은 이슈로 관리합니다 — [규약 #4](https://github.com/sanghyunbang/heattrip/issues/4) · [테스트 정책 #21](https://github.com/sanghyunbang/heattrip/issues/21) · [로드맵 #20](https://github.com/sanghyunbang/heattrip/issues/20).
-
----
+</details>
 
 ## 라이선스
 
-**아직 라이선스 파일이 없습니다.** 라이선스가 명시되지 않은 저장소는 기본적으로 저작권자에게 모든 권리가 있으며, 복제·수정·재배포가 허용되지 않습니다.
-
-공개 전환 시 어떤 라이선스를 붙일지(또는 붙이지 않을지)는 저장소 소유자가 결정할 사항이라 임의로 고르지 않았습니다. 결정되면 `LICENSE` 파일을 추가하고 이 절을 갱신합니다.
+아직 라이선스 파일이 없습니다. 라이선스가 명시되지 않은 저장소는 저작권자에게 모든 권리가 있으며 복제·수정·재배포가 허용되지 않습니다. 공개 전환 시 무엇을 붙일지는 소유자가 정할 사항이라 임의로 고르지 않았습니다.
 
 ---
 

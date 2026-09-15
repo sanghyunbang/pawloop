@@ -11,7 +11,7 @@
 
 - **프론트**: Flutter 3.44.4 / Dart 3.12.2 · flutter_naver_map · fl_chart · Fluent Emoji 3D · Pretendard
 - **백엔드**: Spring Boot + MySQL(공간형 POINT/LINESTRING — `SPATIAL INDEX` 는 만들지 않습니다, ADR-0015)
-- **외부 데이터**: 관광공사 KorPetTourService2(반려동반), LOCALDATA(동물병원), 두루누비(산책로)
+- **외부 데이터**: 관광공사 KorPetTourService2(반려동반) · 행정안전부 인허가(동물병원·펫샵) · 두루누비(걷기여행길) · 동네 길과 놀이터(저장소 자산)
 
 ---
 
@@ -37,10 +37,10 @@
 ### 01-design — 설계·디자인
 | 문서 | 설명 |
 |:---|:---|
-| [정보구조(IA)](01-design/information-architecture.md) | 5탭 + 화면 트리 (mermaid) |
+| [정보구조(IA)](01-design/information-architecture.md) | 다섯 탭 + 화면 트리 (mermaid) |
 | [사용자 플로우](01-design/user-flows.md) | 산책·장소·커뮤니티·온보딩 플로우 (mermaid) |
 | [기능 명세](01-design/feature-spec.md) | MVP + 확장 기능 상세 |
-| [디자인 시스템](01-design/design-system.md) | 오라 배경 · 글래스 카드 · 토큰 · Fluent Emoji |
+| [디자인 시스템](01-design/design-system.md) | 흰 바탕 · 외곽선 카드 · 코랄레드 하나 · 토큰 |
 | [화면 명세](01-design/screen-spec.md) | 화면별 구성·상호작용·데이터 |
 
 ### 02-architecture — 아키텍처
@@ -69,7 +69,7 @@
 |:---|:---|
 | [MVP 범위](05-build/mvp-scope.md) | In/Out-of-scope · 완료 정의 |
 | [로드맵](05-build/roadmap.md) | 마일스톤(위치→로그인→실데이터→확장로그→출시) |
-| [구현 현황](05-build/implementation-status.md) | 화면·기능별 상태(완료/더미/미구현) |
+| [구현 현황](05-build/implementation-status.md) | 화면·기능별 상태(서버/기기/더미/미구현) |
 | [개발 환경 세팅](05-build/setup.md) | Flutter · `--dart-define` · 에뮬 · 빌드 명령 |
 
 ### 06-testing — 테스트
