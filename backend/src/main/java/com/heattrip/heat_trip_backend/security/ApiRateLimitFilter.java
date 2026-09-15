@@ -100,6 +100,44 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/login/oauth2/code/")) {
             return new Rule("auth", rateLimitProperties.getAuthMaxRequests());
         }
+        // ── 계정 셋 (이슈 #511) ────────────────────────────────────────────────
+        //
+        // 셋 다 인증이 걸려 있지만 표에는 없었다. **인증은 "누구인가" 를 묻지 "몇 번인가" 를
+        // 안 묻는다.** `PublicPathsAreRateLimitedTest` 는 SecurityConfig 의 공개 경로만 돌아서
+        // 인증이 걸린 쓰기 경로는 어떤 검사도 보지 않았고, 그래서 이 셋이 오래 무한이었다.
+        //
+        // 탈퇴는 한 번이면 끝나는 일인데 그 한 번이 여러 표의 행을 지운다. 로그아웃은
+        // 멱등이지만 매번 그 사용자의 살아 있는 refresh 토큰 **전부**에 UPDATE 를 날리고
+        // 이벤트를 하나 낸다(푸시 토큰 폐기가 거기 매달려 있다). 둘 다 토큰을 다루는 일이라
+        // 갱신·코드 교환과 같은 auth 버킷이다.
+        if ("DELETE".equals(method) && "/auth/me".equals(path)) {
+            return new Rule("auth", rateLimitProperties.getAuthMaxRequests());
+        }
+        if ("POST".equals(method) && "/auth/logout".equals(path)) {
+            return new Rule("auth", rateLimitProperties.getAuthMaxRequests());
+        }
+        // 프로필 수정은 행 하나를 바꾸고 그 값(닉네임)이 **남의 화면에** 보인다 — 채팅 목록과
+        // 커뮤니티 글쓴이 줄이 그 값을 그린다. 성격이 PUT /api/consents 와 같아 group-write 다.
+        if ("PUT".equals(method) && "/auth/me".equals(path)) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        // ── 가리기 (이슈 #511) ──────────────────────────────────────────────────
+        //
+        // 행을 만들고 지운다. **대상이 실재하는지 안 본다** — 계약이 그렇게 정했다(없는 사람을
+        // 가려도 성공이고, 그래야 "그 id 가 있는지" 를 이 경로로 물을 수 없다). 그 대신 표에
+        // 없으면 아무 id 로나 행을 쌓을 수 있는 자리가 된다.
+        if (WRITE_METHODS.contains(method) && path.startsWith("/api/blocks")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        // ── 방 멤버십 (이슈 #511) ───────────────────────────────────────────────
+        //
+        // 강퇴와 재입장 허용. 방을 운영하는 쓰기라 초대 발급·음소거와 같은 버킷이다.
+        // 방장만 부를 수 있지만, 방장이 스크립트를 돌리면 남의 멤버 행이 그만큼 흔들린다.
+        if ("DELETE".equals(method)
+                && (path.matches("^/api/chat/rooms/\\d+/members/\\d+$")
+                    || path.matches("^/api/chat/rooms/\\d+/bans/\\d+$"))) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         // ── 가족·채팅 쓰기 버킷 (이슈 #75 · 📌 #86 원칙 4) ─────────────────────
         //
         // 요청 한 건이 **행을 만드는** 두 경로다. `POST /api/groups` 하나가

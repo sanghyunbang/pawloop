@@ -148,6 +148,17 @@ public class ChatRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.matches("^/api/chat/invites/[^/]+/join$")) {
             return new Rule("chat-join", rateLimitProperties.getChatJoinMaxRequests());
         }
+        // 반응 누르기·거두기(#500 · 이슈 #511 이 표에서 빠진 것을 찾았다). 행을 만들거나 지우고,
+        // 그때마다 방의 변경 번호가 오른다 — 그 번호는 같은 방의 **모든 기기**가 다음 폴링에서
+        // 읽는다. 사람 손가락 속도로 오는 요청이라 IP 가 아니라 사용자로 세야 한다(전송과 같다).
+        //
+        // 버킷을 새로 만들지 않고 chat-send 를 함께 쓴다 — 요청 하나가 방의 상태를 바꾸고 다른
+        // 기기를 깨운다는 점에서 비용이 전송과 같은 급이다. 커뮤니티가 반응을 community-write 에
+        // 함께 둔 것과 같은 판단이다.
+        if (("POST".equals(method) || "DELETE".equals(method))
+                && path.matches("^/api/chat/messages/\\d+/reactions/[^/]+$")) {
+            return new Rule("chat-send", rateLimitProperties.getChatSendMaxRequests());
+        }
         return null;
     }
 }
