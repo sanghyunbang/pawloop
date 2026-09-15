@@ -26,6 +26,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 /**
  * 품앗이 — 서로 맡아 주기. 이슈 #417.
@@ -130,7 +131,7 @@ public class CrewFavorService {
         if (!favor.isOpen()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 다른 분이 맡았습니다.");
         }
-        if (favor.getAskedBy() != null && favor.getAskedBy().getId() == me.getId()) {
+        if (isMe(favor.getAskedBy(), me.getId())) {
             throw new IllegalArgumentException("내가 올린 부탁은 내가 맡을 수 없습니다.");
         }
 
@@ -151,7 +152,7 @@ public class CrewFavorService {
         requireMember(crewId, me.getId());
         CrewFavor favor = favorOf(crewId, favorId);
 
-        if (favor.getTakenBy() == null || favor.getTakenBy().getId() != me.getId()) {
+        if (!isMe(favor.getTakenBy(), me.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "맡은 분만 무를 수 있습니다.");
         }
 
@@ -173,7 +174,7 @@ public class CrewFavorService {
         requireMember(crewId, me.getId());
         CrewFavor favor = favorOf(crewId, favorId);
 
-        if (favor.getAskedBy() == null || favor.getAskedBy().getId() != me.getId()) {
+        if (!isMe(favor.getAskedBy(), me.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "올린 분만 지울 수 있습니다.");
         }
 
@@ -225,6 +226,23 @@ public class CrewFavorService {
             throw new NoSuchElementException("부탁을 찾을 수 없습니다.");
         }
         return favor;
+    }
+
+    /**
+     * 그 사람이 나인가 — 부탁을 맡고 · 무르고 · 거둬들이는 <b>세 자리가 함께 쓰는 판정</b>이다.
+     *
+     * <p><b>{@code ==} 가 아니다.</b> 양쪽 다 {@code Long} 이라 언박싱이 없고, 그러면 값이 아니라
+     * 참조를 견주게 된다(#510). 지금까지 통과한 이유는 {@code spring.jpa.open-in-view} 가 어디에도
+     * 안 적혀 있어 기본값 {@code true} 이고, 요청 하나가 영속성 컨텍스트를 공유해 Hibernate 가
+     * 같은 {@code User} 인스턴스를 돌려주기 때문이다. <b>그 설정을 끄는 날</b> id 가 127 을 넘는
+     * 사용자는 무르기·거둬들이기가 전원 403 이 되고("자기 부탁은 자기가 못 맡는다" 는 반대로
+     * 풀린다) — {@code Long} 캐시가 그 위로는 없다. 같은 저장소의 다른 소유권 검사는 전부
+     * {@code equals} 이거나 primitive 언박싱이다.
+     *
+     * <p>{@code null} 이면 거짓이다 — 아무도 안 맡은 부탁의 {@code takenBy} 가 그렇다.
+     */
+    static boolean isMe(User who, Long meId) {
+        return who != null && Objects.equals(who.getId(), meId);
     }
 
     /** 그 크루의 살아 있는 멤버인가. 아니거나 크루가 없으면 <b>같은 404</b> 다. */

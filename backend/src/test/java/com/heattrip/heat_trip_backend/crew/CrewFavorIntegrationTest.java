@@ -228,6 +228,24 @@ class CrewFavorIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("아무도 안 맡은 부탁은 무를 수 없다 — 403, 그리고 부탁은 그대로 열려 있다")
+    void aFavorNobodyTookCannotBeReleased() throws Exception {
+        Account asker = accountIn("부탁하는사람", SEONGDONG);
+        Account member = account("구경하는사람");
+        Crew crew = crewWith(asker, member);
+        long favorId = postFavor(asker, crew.id(), null, null).path("id").asLong();
+
+        // takenBy 가 null 인 자리다 — 그 null 을 안 보면 여기서 500 이 나간다(#510).
+        mockMvc.perform(delete("/api/crews/{c}/favors/{f}/take", crew.id(), favorId)
+                        .header("Authorization", "Bearer " + member.token()))
+                .andExpect(status().isForbidden());
+
+        assertThat(favorRepository.findById(favorId).orElseThrow().getStatus())
+                .as("무르기가 실패했으면 부탁은 열린 채로 남아 다른 사람이 맡을 수 있어야 한다")
+                .isEqualTo(CrewFavorStatus.OPEN);
+    }
+
+    @Test
     @DisplayName("남의 아이로는 부탁할 수 없고, 지난 날짜로도 못 한다")
     void aFavorNeedsMyOwnDogAndAFutureDate() throws Exception {
         Account asker = accountIn("부탁하는사람", SEONGDONG);

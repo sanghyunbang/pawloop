@@ -232,7 +232,7 @@ class ChatPhotoMessageIntegrationTest extends AbstractMySqlIntegrationTest {
     private long upload(Account who, String name) {
         MockMultipartFile file = new MockMultipartFile("files", name, "image/jpeg", new byte[64]);
         return mediaService.uploadMany(java.util.List.of(file), UploadCategory.CHAT_IMAGE,
-                String.valueOf(who.id()), null, null, 1200, 1600).get(0).getId();
+                String.valueOf(who.id()), 1200, 1600).get(0).getId();
     }
 
     private ResultActions send(Account account, long roomId, String json) throws Exception {
