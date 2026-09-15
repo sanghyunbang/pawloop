@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static java.util.Map.entry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -137,6 +138,29 @@ class FamilyDogsIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("남이 등록한 아이는 mine=false 다 — 앱이 이 값으로 '고칠 수 있나' 를 가른다 (#563)")
+    void otherPeoplesDogsAreMarked() throws Exception {
+        Account mom = account("엄마");
+        Account dad = account("아빠");
+        dog(mom, "보리");
+        dog(dad, "뭉치");
+        JsonNode group = createGroup(mom, "보리네");
+        join(dad, invite(mom, group.path("roomId").asLong()));
+
+        JsonNode dogs = body(familyDogs(dad, group.path("id").asLong()));
+
+        assertThat(mineFlags(dogs))
+                .as("이 값이 없으면 아빠가 스위처에서 보리를 고르고 \"우리 아이 정보 관리\" 를"
+                        + " 눌렀을 때 그제서야 404 를 만난다")
+                .containsExactly(entry("보리", false), entry("뭉치", true));
+
+        assertThat(mineFlags(body(mockMvc.perform(get("/api/dogs")
+                        .header("Authorization", "Bearer " + dad.token())))))
+                .as("내 아이 목록은 늘 true 다 — 경로마다 다른 뜻이 되면 안 된다")
+                .containsExactly(entry("뭉치", true));
+    }
+
+    @Test
     @DisplayName("내가 등록한 아이 목록은 안 변한다 — 두 경로가 다른 질문에 답한다")
     void myOwnListIsUnchanged() throws Exception {
         Account mom = account("엄마");
@@ -241,6 +265,14 @@ class FamilyDogsIntegrationTest extends AbstractMySqlIntegrationTest {
     private ResultActions familyDogs(Account account, long groupId) throws Exception {
         return mockMvc.perform(get("/api/groups/{groupId}/dogs", groupId)
                 .header("Authorization", "Bearer " + account.token()));
+    }
+
+    /** {@code 이름 -> mine} 순서 그대로. */
+    private List<java.util.Map.Entry<String, Boolean>> mineFlags(JsonNode array) {
+        return java.util.stream.StreamSupport.stream(array.spliterator(), false)
+                .map(node -> java.util.Map.entry(
+                        node.path("name").asText(), node.path("mine").asBoolean()))
+                .toList();
     }
 
     private List<String> names(JsonNode array) {

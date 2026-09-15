@@ -4503,10 +4503,28 @@ components:
           items: { $ref: '#/components/schemas/Consent' }
     Dog:
       type: object
-      required: [id, name, size, species, neutered]
+      required: [id, name, size, species, neutered, mine]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string, example: "보리" }
+        mine:
+          type: boolean
+          example: true
+          description: |
+            **요청자가 등록한 아이인가**([#563](https://github.com/sanghyunbang/heattrip/issues/563)).
+
+            `GET /api/groups/{groupId}/dogs` 가 **남이 등록한 아이를 섞어** 주기 때문에 필요합니다.
+            앱은 그 목록으로 홈 히어로 · 아이 스위처 · 오늘의 케어를 그리는데, **고칠 수 있는
+            아이와 돌보는 아이가 다릅니다.** 이 값이 없으면 아빠가 스위처에서 보리를 고르고
+            "우리 아이 정보 관리" 를 눌렀을 때 그제서야 404 를 만납니다.
+
+            주인의 `userId` 를 싣지 않고 **불리언 하나**인 이유: 앱이 묻는 질문이 "누구 것인가"
+            가 아니라 **"내가 고칠 수 있나"** 입니다. id 를 실으면 답하지 않은 질문에 답하는
+            것이고, 그 값으로 남의 마릿수를 세는 길이 하나 생깁니다(#209 가 404 규칙을 그 이유로
+            정했습니다).
+
+            `GET /api/dogs` 에서는 **항상 `true`** 입니다 — 그 경로가 주는 것이 내가 등록한
+            아이뿐이기 때문입니다. 경로마다 다른 뜻이 되지 않게 그쪽에도 싣습니다.
         species: { $ref: '#/components/schemas/PetSpecies' }
         breed:
           type: [string, "null"]

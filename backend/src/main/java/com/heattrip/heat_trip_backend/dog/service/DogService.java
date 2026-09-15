@@ -139,7 +139,11 @@ public class DogService implements DogOwnership {
         family.requireMember(groupId, actorUserId);
         // 요청자가 그 방의 살아 있는 멤버라는 것을 방금 확인했으므로 목록은 비지 않는다 —
         // 빈 목록 가드를 두지 않는 이유다(`in ()` 은 DB 마다 다르게 죽지만 여기 도달할 수 없다).
-        return dogs.findOfUsers(family.memberUserIds(groupId)).stream().map(this::toResponse).toList();
+        return dogs.findOfUsers(family.memberUserIds(groupId)).stream()
+                // 남이 등록한 아이는 mine=false 다(#563). 앱이 이 값으로 "고칠 수 있나" 를 가른다 —
+                // 없으면 아빠가 보리를 고르고 "우리 아이 정보 관리" 를 눌렀을 때 그제서야 404 다.
+                .map(dog -> toResponse(dog, dog.isOwnedBy(actorUserId)))
+                .toList();
     }
 
     @Override
@@ -267,7 +271,13 @@ public class DogService implements DogOwnership {
     }
 
     private DogResponse toResponse(Dog dog) {
-        return DogResponse.of(dog, dog.getAvatar() == null ? null : media.publicUrl(dog.getAvatar()));
+        return toResponse(dog, true);
+    }
+
+    /** {@code mine} 은 집 아이 목록에서만 {@code false} 가 될 수 있다(#563). */
+    private DogResponse toResponse(Dog dog, boolean mine) {
+        return DogResponse.of(
+                dog, dog.getAvatar() == null ? null : media.publicUrl(dog.getAvatar()), mine);
     }
 
     /**
