@@ -248,7 +248,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ### 2.8 로그아웃 — ✅ 구현(#9)
 
-`POST /auth/logout` — 인증된 주체를 받아 `204 No Content`(멱등) / `401`. 어느 쪽 토큰(소셜·이메일 가입)으로 불러도 204 다.
+`POST /auth/logout` — 인증된 주체를 받아 `204 No Content`(멱등) / `401`. 어느 쪽 토큰(소셜·이메일 가입)으로 불러도 204 다. 버킷 `auth` — 멱등이지만 매번 그 사용자의 살아 있는 refresh 토큰 **전부**에 UPDATE 가 나가고 푸시 토큰 폐기가 거기 매달려 있다. `DELETE /auth/me` 도 같은 버킷이고, `PUT /auth/me` 는 `group-write` 다(#511). 2026-09-15 이전에는 셋 다 **무한**이었다 — 인증은 "누구인가" 를 묻지 "몇 번인가" 를 안 묻는다.
 
 > **전 기기 로그아웃이다.** 그 사용자의 서버측 refresh 토큰을 전부 폐기한다. 요청 본문은 없다 — 기기 하나만 끊는 경로는 정의하지 않는다.
 > **다만 이미 발급된 액세스 토큰은 만료(≤1시간)까지 유효하다.** `jti` 블록리스트가 없기 때문이고, 그건 M2 이후 별도 Epic 이다. 따라서 클라이언트가 저장한 토큰을 반드시 스스로 지워야 한다.
@@ -893,16 +893,17 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `DELETE` | `/api/chat/rooms/{roomId}/invites/{code}` | 초대코드 폐기. **행을 지우지 않는다**(회수된 코드와 없던 코드를 구별해야 한다). 기존 멤버는 남는다 | M2.5 ✅ |
 | `POST` | `/api/chat/invites/{code}/join` | 코드로 입장. 없음 `404` → 만료 `410` → 회수 `410` → **이미 멤버면 `200`** → 소진 `409` → 정원 `409`. 재입장 금지 대상이면 `403` | M2.5 ✅ |
 | `DELETE` | `/api/chat/rooms/{roomId}/members/me` | 나가기 | M2.6 |
-| `DELETE` | `/api/chat/rooms/{roomId}/members/{userId}` | 강퇴(방장). `removed_at` + `rejoin_blocked` | M2.7 ✅ |
+| `DELETE` | `/api/chat/rooms/{roomId}/members/{userId}` | 강퇴(방장). `removed_at` + `rejoin_blocked`. 버킷 `group-write` | M2.7 ✅ |
 | `DELETE` | `/api/chat/messages/{messageId}` | 삭제 — **소프트**(`deleted_at`). 빈틈이 나면 델타가 깨진다. 사진 메시지면 사진 파일도, 반응도 같은 트랜잭션에서 지운다(#452) | M2.6 ✅ |
 | `POST` | `/api/chat/rooms/{roomId}/reports` | 신고(사유 코드 + 메모 + `room_seq` 구간). 서버가 본문 스냅샷을 남긴다 | M2.7 ✅ |
-| `POST`·`DELETE` | `/api/chat/messages/{messageId}/reactions/{kind}` | 말풍선 반응 — 멱등 둘. 누르면 방의 변경 번호가 올라 `changed` 로 퍼진다(#452 · ADR-0023) | M2.6 ✅ |
-| `DELETE` | `/api/chat/rooms/{roomId}/bans/{userId}` | 재입장 금지 해제 | M2.7 ✅ |
-| `POST`·`DELETE` | `/api/blocks` · `/api/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다. **2026-09-03 에 `/api/chat/blocks` 에서 옮겼습니다** — 처음부터 사람 단위였는데(경로에 방 id 가 없습니다) 커뮤니티가 같은 것을 쓰게 되면서 이름이 거짓이 됐습니다(#166) | M2.7 |
+| `POST`·`DELETE` | `/api/chat/messages/{messageId}/reactions/{kind}` | 말풍선 반응 — 멱등 둘. 누르면 방의 변경 번호가 올라 `changed` 로 퍼진다(#452 · ADR-0023). 버킷 `chat-send`(사용자 단위) | M2.6 ✅ |
+| `DELETE` | `/api/chat/rooms/{roomId}/bans/{userId}` | 재입장 금지 해제. 버킷 `group-write` | M2.7 ✅ |
+| `POST`·`DELETE` | `/api/blocks` · `/api/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다. **2026-09-03 에 `/api/chat/blocks` 에서 옮겼습니다** — 처음부터 사람 단위였는데(경로에 방 id 가 없습니다) 커뮤니티가 같은 것을 쓰게 되면서 이름이 거짓이 됐습니다(#166). 버킷 `group-write`(#511 — 대상이 실재하는지 안 보므로 아무 id 로나 부를 수 있습니다) | M2.7 |
 
 - **✅ 표시는 구현됐다는 뜻이다**(이슈 #75 · #79). 아직 계획인 것은 **방 상세 조회와 나가기 둘뿐**이고, 계약에 `x-status: planned` 로 적혀 있다.
 - 방 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 확인은 서비스 경계 한 곳이다 — 발급·회수는 `ChatRoomService.requireOwner(roomId, userId)`, 나머지는 `requireLiveMembership(roomId, userId)` 다. **`removed_at` 이 찍힌 사람도 403**이다(행을 지우지 않으므로 '행이 있는가' 로 묻는 검사는 강퇴된 사람을 통과시킨다). **404 가 아니라 403 인 것은 의도다**: 404 로 답하면 남의 방 id 를 훑어 있는 방과 없는 방을 가려낼 수 있다.
-- **참여 경로와 #79 의 네 경로에 rate limit 이 아직 없다.** `ApiRateLimitFilter.resolveRule` 의 표에 없는 경로는 한도가 0 이 아니라 **무한**이다(`resolveRule` 이 `null` 을 돌려주면 필터가 그대로 통과시킨다). 참여 경로는 이슈 #75 의 NOTE 가, 채팅 네 경로는 #79 가 **#80** 으로 넘겼다 — 폴링 주기와 함께 정해야 숫자에 근거가 생긴다. 미룬 것이지 안전한 것이 아니다.
+- **채팅 경로의 한도는 `ChatRateLimitFilter` 가 사용자 단위로 센다**(#80). 목록·메시지 조회·읽음은 `chat-poll`, 전송과 반응은 `chat-send`, 초대코드 참여는 `chat-join`, 신고는 `chat-report` 다. 방을 운영하는 쓰기(초대 발급·음소거·강퇴·재입장 허용)는 IP 단위의 `group-write` 다 — 빈도가 낮아 IP 로 충분하다.
+- **표에 없는 경로는 한도가 0 이 아니라 무한이다**(`resolveRule` 이 `null` 을 돌려주면 필터가 그대로 통과시킨다). 지금 일부러 비워 둔 채팅 쓰기는 둘뿐이다 — 메시지 삭제(내 말의 본문을 비우는 멱등 갱신)와 초대 회수(자기 방의 코드를 죽이는 일, 유출 대응을 한도로 막으면 그게 더 나쁘다). 그 둘은 `WriteEndpointsAreRateLimitedTest` 의 예외 목록에 **이유와 함께** 적혀 있고, 새 쓰기 경로가 표에서 빠지면 그 검사가 빨간불이다(#511).
 - 한도·상태 위반은 봉투를 새로 만들지 않고 공통 `Error` 의 `error.code` 로 갈린다 — `ROOM_MEMBER_LIMIT`(409) · `INVITE_EXPIRED`(410) · `INVITE_REVOKED`(410) · `INVITE_USES_EXHAUSTED`(409).
 - 만 14세 미만(`users.age_group = 'UNDER14'`)은 방 생성과 초대코드로 새 방 참여를 막고 **가족방만 예외로 허용**한다(M2.7).
 
