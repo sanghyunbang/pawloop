@@ -136,10 +136,15 @@ tags:
       "그 id 는 존재한다" 를 알려 주는 셈이라, id 를 훑으면 남이 몇 마리를 키우는지 셀 수 있습니다.
       그래서 Dogs 오퍼레이션에는 `403` 이 없습니다.
 
-      **가족 공유 가시성은 아직 정하지 않았습니다** (#209 `Dogs-high-3`). 초대받아 들어온 가족은
-      서로의 반려동물을 이 API 로 볼 수 없고, `Group` 에도 반려동물이 없습니다. 정하는 날
-      `GET /api/groups/{groupId}/dogs`(그룹 구성원의 반려동물)를 열고, 케어 기록이 `dogId` 를 받기
-      시작합니다(`CareLogInput` — #154 가 FK 만 먼저 걸어 뒀습니다). 그 전까지 `CareLog.dogId` 는 항상 `null` 입니다.
+      **돌봄은 집이 나눠 갖고, 소유는 안 나눕니다** (#563, 2026-09-15 결정 — #209 `Dogs-high-3` 이
+      미뤄 둔 자리입니다). `GET /api/groups/{groupId}/dogs` 가 **그 집 식구들이 등록한 아이 전부**를
+      줍니다 — 이 목록이 홈과 오늘의 케어가 보는 것입니다. 그 전까지는 가족에 합류한 사람의 홈이
+      "아직 등록된 아이가 없어요" 였습니다.
+
+      **표에는 아무것도 안 더했습니다.** 아이의 주인은 그대로 등록한 계정이고, 집 목록은 식구
+      목록에서 파생합니다 — 가족에 들어오는 순간 보이고 나가는 순간 빠집니다. 그래서 위의 404
+      규칙은 **그대로**입니다: 남이 등록한 아이의 상세 · 수정 · 삭제는 여전히 404 입니다.
+      공유되는 것은 **돌봄**이지 소유가 아닙니다.
   - name: Consents
     description: |
       약관 동의의 기록 (이슈 #190). 서버는 "누가 어느 문서의 어느 버전에 언제 동의(철회)했는가" 만
@@ -2262,6 +2267,55 @@ paths:
               schema: { $ref: '#/components/schemas/Group' }
         '404': { $ref: '#/components/responses/NotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/groups/{groupId}/dogs:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    get:
+      tags: [Groups]
+      summary: 우리 집 아이 목록
+      description: |
+        **그 가족의 식구들이 등록한 아이 전부**입니다. `GET /api/dogs`(내가 등록한 아이)와
+        모양이 같아 앱은 파서를 하나만 둡니다.
+
+        **두 경로가 답하는 질문이 다릅니다.**
+
+        | 경로 | 무엇 | 할 수 있는 것 |
+        |:---|:---|:---|
+        | `GET /api/dogs` | 내가 등록한 아이 | 보기 · 고치기 · 지우기 |
+        | `GET /api/groups/{groupId}/dogs` | **우리 집 아이** | 보기 · **돌보기** |
+
+        이 앱의 목적이 업무 분담과 누락 방지라서([#76](https://github.com/sanghyunbang/heattrip/issues/76)),
+        홈과 오늘의 케어가 보는 것은 뒤엣것입니다. 엄마가 등록했든 아빠가 등록했든 보리는
+        그 집 아이이고 물은 둘 다 줍니다. 이 경로가 없던 동안, 가족에 합류한 아빠의 홈은
+        **"아직 등록된 아이가 없어요"** 였습니다
+        ([#563](https://github.com/sanghyunbang/heattrip/issues/563)).
+
+        **표에는 아무것도 안 더했습니다.** 아이의 주인은 그대로 등록한 사람이고, 이 목록은
+        식구 목록에서 파생합니다 — 가족에 들어오는 순간 보이고 나가는 순간 빠집니다.
+
+        **공유되는 것은 돌봄이지 소유가 아닙니다.** 남이 등록한 아이의 상세(`GET /api/dogs/{dogId}`)
+        · 수정 · 삭제는 여전히 **404** 입니다.
+
+        **요청자가 그 그룹의 방 멤버가 아니면 403 입니다.** 없는 `groupId` 도 같은 403 입니다 —
+        `care-logs` 와 같은 규칙입니다.
+
+        순서는 **등록한 사람별로 모아서** 등록순입니다. 홈의 아이 스위처가 이 순서로 그려지는데,
+        엄마 아이 · 아빠 아이 · 엄마 아이 로 섞이면 누구 아이인지 읽는 데 매번 이름을 봐야 합니다.
+      responses:
+        '200':
+          description: 우리 집 아이 목록(배열 그대로)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Dog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: 그 가족의 식구가 아님(없는 그룹도 같은 403)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /api/groups/{groupId}/care-logs:
     parameters:

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,6 +47,25 @@ public interface DogRepository extends JpaRepository<Dog, Long> {
                and d.deletedAt is null
             """)
     Optional<Dog> findMineById(@Param("dogId") long dogId, @Param("userId") long userId);
+
+    /**
+     * 이 사람들이 등록한 아이 전부 — <b>집 아이</b>를 구하는 자리다(#563).
+     *
+     * <p>정렬이 {@code (user.id, id)} 인 이유는 <b>한 사람의 아이들이 흩어지지 않게</b> 하려는
+     * 것이다. 홈의 아이 스위처가 이 순서로 그려지는데, 엄마 아이 · 아빠 아이 · 엄마 아이 로
+     * 섞이면 누구 아이인지 읽는 데 매번 이름을 봐야 한다.
+     *
+     * <p>빈 목록을 주면 빈 결과다 — {@code in ()} 은 DB 마다 다르게 죽으므로 부르는 쪽이
+     * 먼저 거른다({@code DogService.ofFamily}).
+     */
+    @Query("""
+            select d from Dog d
+              join fetch d.user
+             where d.user.id in :userIds
+               and d.deletedAt is null
+             order by d.user.id asc, d.id asc
+            """)
+    List<Dog> findOfUsers(@Param("userIds") Collection<Long> userIds);
 
     /**
      * 그 사용자의 반려동물인가. 산책 저장이 {@code dogId} 를 받을 때 쓴다 — 행 전체를

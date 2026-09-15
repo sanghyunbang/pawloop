@@ -4,6 +4,7 @@ import com.heattrip.heat_trip_backend.chat.ChatMemberView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.chat.ChatRoomView;
 import com.heattrip.heat_trip_backend.chat.ChatTime;
+import com.heattrip.heat_trip_backend.group.FamilyMembership;
 import com.heattrip.heat_trip_backend.group.dto.GroupMemberResponse;
 import com.heattrip.heat_trip_backend.group.dto.GroupResponse;
 import com.heattrip.heat_trip_backend.group.entity.FamilyGroup;
@@ -52,7 +53,7 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
-public class FamilyGroupService {
+public class FamilyGroupService implements FamilyMembership {
 
     /**
      * 이 도메인이 방에 자기를 밝히는 이름. {@code chat_room.origin_kind} 에 그대로 들어간다.
@@ -61,6 +62,48 @@ public class FamilyGroupService {
      * 갈라져 이 패키지를 부르는 코드가 chat 에 생기는 순간 ADR-0011 이 사라진다.
      */
     public static final String ORIGIN_KIND = "FAMILY";
+
+    // ─────────────────────── FamilyMembership (#563) ───────────────────────
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@code family_group} 이 아니라 <b>방</b>을 본다. 멤버십의 원본이 거기 하나이기
+     * 때문이다(ADR-0011) — 그룹 행이 있어도 방에 없으면 식구가 아니다.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public void requireMember(long groupId, long actorUserId) {
+        requireLiveRoom(groupId, actorUserId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> memberUserIds(long groupId) {
+        return chatRooms.findRoom(ORIGIN_KIND, String.valueOf(groupId))
+                .map(room -> chatRooms.liveMembers(room.id()).stream()
+                        .map(ChatMemberView::userId)
+                        .toList())
+                // 방이 없으면 식구도 없다. 빈 목록이다 — 여기서 던지면 인가를 이미 지난
+                // 부르는 쪽이 같은 이유로 두 번 죽는다.
+                .orElseGet(List::of);
+    }
+
+    /** 방을 찾고 그 방의 살아 있는 멤버인지 본다. 아니면 403 — 없는 그룹도 같은 403 이다. */
+    private ChatRoomView requireLiveRoom(long groupId, long actorUserId) {
+        ChatRoomView room = chatRooms.findRoom(ORIGIN_KIND, String.valueOf(groupId))
+                .orElseThrow(FamilyGroupService::notThisFamily);
+        if (!chatRooms.isLiveMember(room.id(), actorUserId)) {
+            throw notThisFamily();
+        }
+        return room;
+    }
+
+    /** 세 가지 거절이 같은 답을 쓴다 — id 를 훑어 남의 가족을 세지 못하게. */
+    private static ResponseStatusException notThisFamily() {
+        return new ResponseStatusException(HttpStatus.FORBIDDEN, "이 가족 그룹의 멤버가 아닙니다.");
+    }
 
     /** 화면이 방 종류를 표시할 때 쓰는 이름표. 앱의 {@code kChatRooms} 가 쓰는 값과 같다. */
     static final String ROOM_TAG = "가족";
