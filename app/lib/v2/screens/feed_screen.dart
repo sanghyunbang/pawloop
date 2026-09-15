@@ -127,12 +127,15 @@ class _FeedScreenState extends State<FeedScreen> {
     RootTab.communityView.value = 'card';
     _loadNeighborhood();
     kNeighborhoodRev.addListener(_loadNeighborhood);
+    // 상세에서 반응 · 저장 · 댓글이 바뀌면 여기로 온다 — 어떻게 나왔든(#548).
+    kCommunityRev.addListener(_load);
     _load();
   }
 
   @override
   void dispose() {
     kNeighborhoodRev.removeListener(_loadNeighborhood);
+    kCommunityRev.removeListener(_load);
     super.dispose();
   }
 
@@ -700,17 +703,17 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _open(CommunityPost post) async {
-    final changed = await Navigator.of(context).push<bool>(
+    await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => PostDetailScreen(post: post, repository: _repo),
       ),
     );
-    // 상세에서 **실제로 뭔가 바뀌었을 때만** 다시 부른다.
+    // 다시 읽기는 `kCommunityRev` 가 맡는다(#548) — pop 결과는 **안드로이드 뒤로가기**로
+    // 나올 때 안 온다. 여기서 또 부르면 화면 안 `←` 로 나온 길만 두 번 읽는다.
     //
-    // 예전에는 무조건 불렀다. 그러면 글 하나를 열어 보고 나온 것만으로 '더 보기' 로
-    // 쌓아 둔 장이 전부 사라지고 스크롤이 맨 위로 돌아간다 — 목록을 훑어보는 사람에게
-    // 그건 앱이 자기를 되돌리는 것으로 느껴진다.
-    if (mounted && changed == true) await _load();
+    // "바뀌었을 때만" 이라는 규칙은 그대로다. 예전에 무조건 불렀더니, 글 하나를 열어 보고
+    // 나온 것만으로 '더 보기' 로 쌓아 둔 장이 전부 사라지고 스크롤이 맨 위로 돌아갔다 —
+    // 목록을 훑어보는 사람에게 그건 앱이 자기를 되돌리는 것으로 느껴진다.
   }
 
   // 닉네임 원형 아바타 (닉 첫 글자, 따뜻한 그라데이션).

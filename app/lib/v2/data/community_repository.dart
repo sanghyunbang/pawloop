@@ -29,6 +29,7 @@
 // 아직 아무것도 안 누른 것이다.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -488,6 +489,24 @@ class CommunityFailure implements Exception {
 }
 
 /// 커뮤니티 서버 연동의 유일한 입구.
+/// 커뮤니티 글이 바뀌었다 — 반응 · 저장 · 댓글 · 수정 · 삭제 — 이슈 #548.
+///
+/// ## 왜 pop 결과로는 안 되나
+///
+/// 예전에는 상세가 `Navigator.pop(_changed)` 로만 알렸고 목록이 그 값을 보고 다시 읽었다.
+/// 그런데 **안드로이드 뒤로가기**(제스처 · 버튼)는 결과 없이 pop 한다 — 그래서 반응을 바꾸고
+/// 시스템 뒤로가기로 나오면 목록이 그대로였다. 화면 안 `←` 로 나올 때만 맞았다. 안드로이드에서
+/// 시스템 뒤로가기가 기본 동작이라, 틀리는 쪽이 오히려 더 흔한 길이었다.
+///
+/// 그래서 **나오는 방법과 상관없이** 알린다. 알림 딥링크(#498)처럼 목록을 거치지 않고 상세로
+/// 들어오는 길이 이미 있는 것도 같은 이유로 이 방식이 맞다.
+///
+/// 저장소의 다른 자리와 같은 모양이다 — `walkFeedRevision` · `kCareRev` · `kNeighborhoodRev`.
+final ValueNotifier<int> kCommunityRev = ValueNotifier<int>(0);
+
+/// 글 하나가 바뀌었다고 알린다. 듣는 쪽은 목록들(피드 · 저장한 글 · 사진첩)이다.
+void notifyCommunityChanged() => kCommunityRev.value++;
+
 class CommunityRepository {
   /// 요청 하나의 상한. 없으면 응답을 주지 않는 서버에서 화면이 영원히 로딩만 돈다.
   static const Duration timeout = Duration(seconds: 12);

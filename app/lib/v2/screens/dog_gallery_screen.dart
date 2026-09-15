@@ -38,7 +38,15 @@ class _DogGalleryScreenState extends State<DogGalleryScreen> {
   @override
   void initState() {
     super.initState();
+    // 상세에서 저장 · 반응 · 댓글이 바뀌면 여기로 온다 — 어떻게 나왔든(#548).
+    kCommunityRev.addListener(_load);
     _load();
+  }
+
+  @override
+  void dispose() {
+    kCommunityRev.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -103,10 +111,11 @@ class _DogGalleryScreenState extends State<DogGalleryScreen> {
   }
 
   Future<void> _open(CommunityPost post) async {
-    final changed = await Navigator.of(context).push<bool>(
+    // 다시 읽기는 `kCommunityRev` 가 맡는다(#548) — 안드로이드 뒤로가기로 나오면 pop 결과가
+    // 안 온다. 저장을 뺐는데 목록에 그대로 남는 것이 정확히 그 길이었다.
+    await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => PostDetailScreen(post: post, repository: _repo)),
     );
-    if (mounted && changed == true) await _load();
   }
 
   @override
