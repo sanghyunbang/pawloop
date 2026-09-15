@@ -7,25 +7,32 @@ import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
+import com.heattrip.heat_trip_backend.walk.ai.WeeklyInsightModel;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -60,6 +67,19 @@ class HouseholdWalkIntegrationTest extends AbstractMySqlIntegrationTest {
     @Autowired private UserRepository users;
     @Autowired private JWTProvider jwtProvider;
     @Autowired private ChatRoomService chatRooms;
+
+    /**
+     * AI 주간 요약의 모델을 가짜로 바꾼다 — <b>#563 을 놓친 이유가 정확히 이 빈이다.</b>
+     *
+     * <p>{@code WeeklyInsightService.attach} 는 {@code model.available()} 이 거짓이면 첫 줄에서
+     * 돌아간다. CI 에는 키가 없어 늘 거짓이었고, 그래서 그 뒤의
+     * {@code DogOwnership.profileOf}(당시 <b>내 아이</b> 판정)까지 아무 테스트도 안 갔다.
+     * 키가 있는 dev 서버에서는 아빠가 보리를 고르는 순간 통계가 통째로 404 였다.
+     *
+     * <p>기본값은 {@code false} 라(Mockito) 이 빈을 켜지 않는 다른 테스트는 전과 똑같이 돈다.
+     */
+    @MockitoBean
+    private WeeklyInsightModel model;
 
     @Test
     @DisplayName("아빠가 엄마 아이 보리를 산책시키면 저장되고, 둘 다 그 기록을 본다")
@@ -172,7 +192,72 @@ class HouseholdWalkIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(ids(list(mom))).containsExactly(walkId);
     }
 
+    @Test
+    @DisplayName("아이를 골라서 봐도 집 기준이다 — AI 요약이 켜져 있어도 404 가 아니다")
+    void pickingAHouseholdDogDoesNotBreakTheStats() throws Exception {
+        aiOn();
+        Account mom = account("엄마");
+        Account dad = account("아빠");
+        long bori = dog(mom, "보리");
+        family(mom, dad);
+        walk(dad, bori).andExpect(status().isCreated());
+
+        JsonNode weekly = body(stats(dad, bori).andExpect(status().isOk()));
+
+        assertThat(weekly.path("walkCount").asInt())
+                .as("목록은 집 기준인데 통계만 404 면 홈이 \"기록을 불러오지 못했어요\" 로 멈춘다")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("자기 아이가 없어도 집 아이로 요약을 쓴다 — 아이 줄이 비면 하루 권장이 사라진다")
+    void theHouseholdDogFillsThePromptWhenIOwnNone() throws Exception {
+        aiOn();
+        Account mom = account("엄마");
+        Account dad = account("아빠");
+        long bori = dog(mom, "보리");
+        family(mom, dad);
+        walk(dad, bori).andExpect(status().isCreated());
+
+        stats(dad, null).andExpect(status().isOk());
+
+        ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
+        verify(model).complete(anyString(), prompt.capture());
+        assertThat(prompt.getValue())
+                .as("아빠는 자기 아이가 없다 — 사람 기준으로 찾으면 프로필이 null 이라 이 줄이 통째로 빠진다")
+                .contains("- 아이: 소형견");
+    }
+
+    @Test
+    @DisplayName("남의 집 아이로는 통계를 못 본다 — 404")
+    void statsForADogFromAnotherHouseAreNotFound() throws Exception {
+        aiOn();
+        Account mom = account("엄마");
+        Account stranger = account("남");
+        long theirDog = dog(stranger, "남의개");
+        family(mom);
+
+        stats(mom, theirDog).andExpect(status().isNotFound());
+    }
+
     // ─────────────────────────── 지그 ───────────────────────────
+
+    /** 키 없이 AI 경로를 지나가게 한다. 문장은 비게 둔다 — 여기서 재는 것은 문장이 아니라 범위다. */
+    private void aiOn() {
+        when(model.available()).thenReturn(true);
+        when(model.name()).thenReturn("fake-model");
+        when(model.complete(anyString(), anyString())).thenReturn(Optional.empty());
+    }
+
+    /** {@code dogId} 가 {@code null} 이면 안 싣는다 — 앞에 빈 값을 실으면 다른 걸 재게 된다. */
+    private ResultActions stats(Account actor, Long dogId) throws Exception {
+        var request = get("/api/walks/stats/weekly")
+                .header("Authorization", "Bearer " + actor.token());
+        if (dogId != null) {
+            request = request.param("dogId", String.valueOf(dogId));
+        }
+        return mockMvc.perform(request);
+    }
 
     private record Account(long id, String token) { }
 

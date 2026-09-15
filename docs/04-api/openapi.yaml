@@ -1547,10 +1547,16 @@ paths:
         **이번 주 고정입니다** — 지난 주를 고르는 파라미터는 없습니다(화면 요구가 없어 두지
         않았습니다, #209 `Walks-medium-2`). 대신 응답의 `weekStart`·`weekEnd` 가 어느 주인지
         말합니다 — 앱이 "서버가 이번 주를 줬겠지" 라고 가정하고 축 라벨을 그리지 않아도 됩니다.
+
+        **우리 집 기준입니다**(#563). 가족이 있으면 식구들이 등록한 아이 전부를 셉니다 —
+        `GET /api/walks` 와 같은 범위입니다. 가족이 없으면 자기 아이만이라 1인 사용자에게는
+        전과 같습니다. `aiSummary` 가 참고하는 아이의 크기·나이대도 같은 범위에서 고릅니다.
       parameters:
         - name: dogId
           in: query
-          description: 생략하면 내 반려동물 전체를 합칩니다.
+          description: |
+            생략하면 우리 집 아이 전부를 합칩니다. **우리 집 아이가 아니면 404 입니다** —
+            없는 id 와 남의 집 아이가 같은 답을 받습니다(`GET /api/dogs/{dogId}` 와 같은 규칙).
           schema: { type: integer, format: int64 }
       responses:
         '200':
@@ -1559,6 +1565,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/WalkStats' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /api/walks/insights/{insightId}/feedback:
     put:

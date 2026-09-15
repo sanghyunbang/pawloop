@@ -98,8 +98,14 @@ public interface DogOwnership {
     java.util.List<Long> myDogIds(long userId);
 
     /**
-     * 아이의 크기 · 나이대만(#486). [dogId] 가 있으면 그 아이(내 아이가 아니면 404), 없으면 첫째 아이.
-     * 아이가 없으면 null.
+     * 아이의 크기 · 나이대만(#486). [dogId] 가 있으면 그 아이, 없으면 <b>우리 집</b> 첫째 아이.
+     * 집에 아이가 하나도 없으면 null.
+     *
+     * <p><b>우리 집 기준이다</b>(#563) — {@link #requireInHouseholdEntity} 와 같은 범위다.
+     * 이 값을 읽는 주간 통계가 이미 집 산책을 세므로, 여기만 "내가 등록한 아이인가" 로 두면
+     * 아빠가 엄마의 보리를 고른 순간 통계 전체가 404 로 죽는다.
+     *
+     * @throws org.springframework.web.server.ResponseStatusException 우리 집 아이가 아니면 404
      */
     DogProfileView profileOf(long userId, Long dogId);
 }

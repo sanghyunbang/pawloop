@@ -146,9 +146,23 @@ public class DogService implements DogOwnership {
                 .toList();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p><b>집 기준이다</b>(#563). 이 값을 읽는 곳은 주간 통계 하나뿐인데
+     * ({@code GET /api/walks/stats/weekly} → {@code WeeklyInsightService.attach}) 그 통계는 이미
+     * <b>집</b> 산책을 센다. 여기만 "내가 등록한 아이인가" 로 두면 판정 둘이 어긋나고,
+     * 아빠가 엄마의 보리를 고르는 순간 <b>통계 응답 전체가 404</b> 가 된다 — 실제로 그랬다.
+     * 목록({@code GET /api/walks})은 집 기준이라 초록이었던 탓에 조각 3 의 테스트를 다 지나갔다.
+     *
+     * <p>아이를 안 고른 경우도 집에서 고른다. 그쪽 통계가 집 전체라서이기도 하고, 자기 아이
+     * 없이 배우자의 아이만 있는 집에서 프로필이 통째로 {@code null} 이 되기 때문이다.
+     */
     @Override
     public DogProfileView profileOf(long userId, Long dogId) {
-        Dog dog = dogId != null ? require(userId, dogId) : dogs.findMine(userId).stream().findFirst().orElse(null);
+        Dog dog = dogId != null
+                ? requireInHouseholdEntity(userId, dogId)
+                : dogs.findOfUsers(family.householdUserIds(userId)).stream().findFirst().orElse(null);
         if (dog == null) {
             return null;
         }
