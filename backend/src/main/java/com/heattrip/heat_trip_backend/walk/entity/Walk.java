@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.walk.entity;
 
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
+import com.heattrip.heat_trip_backend.user.entity.User;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -102,14 +103,37 @@ public class Walk {
     private Long id;
 
     /**
-     * 누가 걸었나. 소유권은 이 연관을 타고 {@code dog.user_id} 로 간다 — 산책에 사용자
-     * 컬럼을 따로 두면 그 둘이 어긋나는 날이 온다.
+     * <b>누구의 산책인가.</b> 기록의 주인은 아이다 — 아이를 지우면 산책도 따라 지운다.
+     *
+     * <p>2026-09-15 까지 이 자리의 주석은 "누가 걸었나. 소유권은 이 연관을 타고
+     * {@code dog.user_id} 로 간다 — 산책에 사용자 컬럼을 따로 두면 그 둘이 어긋나는 날이
+     * 온다" 였다. <b>그 둘이 같다는 전제가 규칙에서 나왔다</b> — 그때는 남의 아이로 산책을
+     * 저장할 수 없었다. 집이 아이를 함께 돌보기 시작하면(#563) 전제가 깨진다: 아빠가 엄마
+     * 아이 보리를 산책시키면 <b>아이 주인은 엄마, 걸은 사람은 아빠</b>다. 어긋나는 것이
+     * 아니라 <b>원래 다른 두 값</b>이었다.
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "dog_id", nullable = false,
             foreignKey = @ForeignKey(name = "fk_walk_dog"))
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Dog dog;
+
+    /**
+     * <b>걸은 사람.</b> 이슈 #563. 이 앱의 목적이 업무 분담과 누락 방지라서(#76), 산책에도
+     * "누가" 가 붙어야 분담이 보인다.
+     *
+     * <p><b>nullable 이다.</b> 탈퇴하면 {@code SET NULL} 로 떨어진다 —
+     * {@code care_log.done_by} 와 같은 판단이다. 걸은 사람이 계정을 지웠다고 <b>그 산책이
+     * 없던 일이 되면 안 된다.</b> 기록의 주인은 아이이고 그 아이는 살아 있다.
+     *
+     * <p>마이그레이션 49 가 옛 행을 {@code dog.user_id} 로 채웠다. 지어내기가 아니다 —
+     * 그때는 남의 아이로 산책을 저장할 수 없어서 둘이 같은 값이었다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "walked_by",
+            foreignKey = @ForeignKey(name = "fk_walk_walkedby"))
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private User walkedBy;
 
     /**
      * 함께 나간 아이들 — 이슈 #343. {@link #dog} 도 <b>여기 한 줄로 들어 있다.</b>

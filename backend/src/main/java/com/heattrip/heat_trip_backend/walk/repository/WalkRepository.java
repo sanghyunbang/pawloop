@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,7 +61,9 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
     /**
      * 목록 첫 장. 정렬은 {@code (createdAt, id)} 내림차순이다 — {@code startedAt} 이 아니다.
      *
-     * <p>{@code dogId} 가 {@code null} 이면 내 반려동물 전체를 섞는다.
+     * <p>{@code dogId} 가 {@code null} 이면 <b>우리 집 아이 전체</b>를 섞는다(#563).
+     * 예전에는 "내가 등록한 아이" 였다 — 그 상태에서는 아빠가 엄마 아이 보리를 산책시켜도
+     * 아빠 목록에 안 보였다. 업무 분담이 목적인 앱에서 그건 화면이 거짓말하는 것이다.
      *
      * <p><b>{@code limit + 1} 을 읽어서 {@code hasMore} 를 정한다.</b> 별도 {@code count}
      * 쿼리를 돌리지 않는 이유는 그 값이 다음 장을 여는 사이에 바뀔 수 있고, 두 번 읽는
@@ -69,12 +72,13 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
     @Query("""
             select w from Walk w
               join fetch w.dog d
-             where d.user.id = :userId
+              left join fetch w.walkedBy
+             where d.user.id in :householdIds
                and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
              order by w.createdAt desc, w.id desc
             """)
-    List<Walk> findPage(@Param("userId") long userId,
+    List<Walk> findPage(@Param("householdIds") Collection<Long> householdIds,
                         @Param("dogId") Long dogId,
                         Limit limit);
 
@@ -87,26 +91,26 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
     @Query("""
             select w from Walk w
               join fetch w.dog d
-             where d.user.id = :userId
+             where d.user.id in :householdIds
                and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
                and (w.createdAt < :cursorAt
                     or (w.createdAt = :cursorAt and w.id < :cursorId))
              order by w.createdAt desc, w.id desc
             """)
-    List<Walk> findPageAfter(@Param("userId") long userId,
+    List<Walk> findPageAfter(@Param("householdIds") Collection<Long> householdIds,
                              @Param("dogId") Long dogId,
                              @Param("cursorAt") LocalDateTime cursorAt,
                              @Param("cursorId") long cursorId,
                              Limit limit);
 
-    /** 상세. 남의 것과 없는 것이 똑같이 비어 있다. */
+    /** 상세 — <b>우리 집 아이의 산책</b>이면 보인다(#563). 남의 집 것과 없는 것이 똑같이 비어 있다. */
     @Query("""
             select w from Walk w
               join fetch w.dog d
-             where w.id = :walkId and d.user.id = :userId
+             where w.id = :walkId and d.user.id in :householdIds
             """)
-    Optional<Walk> findMineById(@Param("walkId") long walkId, @Param("userId") long userId);
+    Optional<Walk> findInHouseholdById(@Param("walkId") long walkId, @Param("householdIds") Collection<Long> householdIds);
 
     /**
      * 멱등키로 찾는다. 재전송이면 이 행을 그대로 돌려준다.
@@ -117,11 +121,11 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
     @Query("""
             select w from Walk w
               join fetch w.dog d
-             where d.id = :dogId and w.clientWalkId = :clientWalkId and d.user.id = :userId
+             where d.id = :dogId and w.clientWalkId = :clientWalkId and d.user.id in :householdIds
             """)
     Optional<Walk> findByClientKey(@Param("dogId") long dogId,
                                    @Param("clientWalkId") String clientWalkId,
-                                   @Param("userId") long userId);
+                                   @Param("householdIds") Collection<Long> householdIds);
 
     /**
      * 한 주치 원본 행. 요일별로 접는 것은 <b>Java 가</b> 한다.
@@ -131,12 +135,12 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
      */
     @Query("""
             select w from Walk w
-             where w.dog.user.id = :userId
+             where w.dog.user.id in :householdIds
                and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
                and w.startedAt >= :fromUtc and w.startedAt < :toUtc
             """)
-    List<Walk> findStartedBetween(@Param("userId") long userId,
+    List<Walk> findStartedBetween(@Param("householdIds") Collection<Long> householdIds,
                                   @Param("dogId") Long dogId,
                                   @Param("fromUtc") LocalDateTime fromUtc,
                                   @Param("toUtc") LocalDateTime toUtc);
@@ -153,11 +157,11 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
                        count(w),
                        coalesce(sum(w.durationS), 0L))
               from Walk w
-             where w.dog.user.id = :userId
+             where w.dog.user.id in :householdIds
                and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
             """)
-    WalkTotals sumAllTime(@Param("userId") long userId, @Param("dogId") Long dogId);
+    WalkTotals sumAllTime(@Param("householdIds") Collection<Long> householdIds, @Param("dogId") Long dogId);
 
     /**
      * 자주 간 곳 — 이슈 #338.
@@ -173,7 +177,7 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
             select new com.heattrip.heat_trip_backend.walk.repository.TopPlaceRow(
                        w.placeSource, w.placeContentId, max(w.placeName), count(w))
               from Walk w
-             where w.dog.user.id = :userId
+             where w.dog.user.id in :householdIds
                and (:dogId is null or w.dog.id = :dogId or exists (
                     select 1 from WalkDog wd where wd.walk = w and wd.dog.id = :dogId))
                and w.placeSource is not null
@@ -182,15 +186,27 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
              group by w.placeSource, w.placeContentId
              order by count(w) desc, max(w.placeName) asc
             """)
-    List<TopPlaceRow> topPlaces(@Param("userId") long userId,
+    List<TopPlaceRow> topPlaces(@Param("householdIds") Collection<Long> householdIds,
                                 @Param("dogId") Long dogId,
                                 Limit limit);
 
-    /** 삭제. 소유자 조건이 안에 있어서 남의 산책은 0행이 지워진다. */
+    /**
+     * 삭제 — <b>걸은 사람이거나 아이 주인</b>만. 조건이 안에 있어서 남의 산책은 0행이 지워진다.
+     *
+     * <p>보기는 집 전체인데 지우기는 왜 좁은가(#563): <b>공유되는 것은 돌봄이지 남의 기록이
+     * 아니다.</b> 아빠가 걸은 경로와 회고를 엄마가 지울 수 있으면, 분담을 보이게 하려던 화면이
+     * 서로의 기록을 지우는 자리가 된다. 케어 로그도 같은 규칙이다 — 길게 눌러 지우는 것은
+     * 내 기록뿐이다(#209).
+     *
+     * <p>아이 주인을 함께 두는 이유는 <b>주인 없는 행을 막기 위해서</b>다. 걸은 사람이
+     * 탈퇴하면 {@code walked_by} 가 {@code NULL} 이 되는데, 그때 아무도 못 지우면 그 행은
+     * 영원히 남는다.
+     */
     @Query("""
             delete from Walk w
              where w.id = :walkId
-               and w.dog.id in (select d.id from Dog d where d.user.id = :userId)
+               and (w.walkedBy.id = :userId
+                    or w.dog.id in (select d.id from Dog d where d.user.id = :userId))
             """)
     @org.springframework.data.jpa.repository.Modifying
     int deleteMine(@Param("walkId") long walkId, @Param("userId") long userId);

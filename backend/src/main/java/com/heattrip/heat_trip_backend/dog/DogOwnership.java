@@ -63,6 +63,28 @@ public interface DogOwnership {
     Dog requireInFamilyEntity(long groupId, Long dogId);
 
     /**
+     * <b>우리 집 아이</b>를 꺼낸다 — 그룹이 아니라 <b>사람</b> 기준이다. 이슈 #563.
+     *
+     * <p>산책은 그룹 경로가 아니다({@code POST /api/walks}). 부르는 쪽이 그룹 id 를 모르므로
+     * 여기서 {@code FamilyMembership.householdUserIds} 로 집을 찾는다 — 가족이 없으면 자기
+     * 아이만이라, 1인 사용자에게는 {@link #requireMineEntity} 와 똑같이 동작한다.
+     *
+     * <p>404 다(400 이 아니다). 산책 저장은 <b>그룹 안에서 벌어지는 일이 아니라</b> 내 요청이고,
+     * 여기서 400 을 주면 "그 id 는 있다" 를 알려 주는 셈이 된다 — {@code requireMineEntity} 와
+     * 같은 규칙을 지킨다.
+     *
+     * @throws org.springframework.web.server.ResponseStatusException 우리 집 아이가 아니면 404
+     */
+    Dog requireInHouseholdEntity(long actorUserId, Long dogId);
+
+    /**
+     * 우리 집 아이가 맞는지만 확인한다. 행이 필요 없을 때 쓴다.
+     *
+     * @throws org.springframework.web.server.ResponseStatusException 아니면 404
+     */
+    void requireInHousehold(long actorUserId, long dogId);
+
+    /**
      * 이 사람의 아이 id 전부 — 이슈 #418 이 이 표면에 더했다. 지운 아이는 안 들어간다(#156).
      *
      * <p><b>왜 여기인가.</b> 일정표의 기본이 "합쳐 보기" 다 — 내 아이들 것과 우리 가족 것이

@@ -94,6 +94,29 @@ public class DogService implements DogOwnership {
                         HttpStatus.BAD_REQUEST, "우리 집 아이가 아닙니다."));
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public Dog requireInHouseholdEntity(long actorUserId, Long dogId) {
+        if (dogId == null) {
+            throw notFound();
+        }
+        return dogs.findOfUsers(family.householdUserIds(actorUserId)).stream()
+                .filter(dog -> dog.getId().equals(dogId))
+                .findFirst()
+                .orElseThrow(DogService::notFound);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void requireInHousehold(long actorUserId, long dogId) {
+        requireInHouseholdEntity(actorUserId, dogId);
+    }
+
+    /** 남의 것과 없는 것이 같은 404 다 — id 를 훑어 남의 마릿수를 세지 못하게. */
+    private static ResponseStatusException notFound() {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "반려동물을 찾을 수 없습니다.");
+    }
+
     /**
      * <b>우리 집 아이</b> — 그 가족의 식구들이 등록한 아이 전부. 이슈 #563.
      *
