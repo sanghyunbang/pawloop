@@ -1406,7 +1406,7 @@ paths:
       parameters:
         - name: dogId
           in: query
-          description: 생략하면 내 반려동물 전체의 산책을 섞어서 줍니다.
+          description: 생략하면 우리 집 아이 전부의 산책을 섞어서 줍니다(#563).
           schema: { type: integer, format: int64 }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
@@ -1448,7 +1448,7 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
-          description: 그런 `dogId` 가 없거나 내 반려동물이 아닙니다. 두 경우를 구분하지 않습니다.
+          description: 그런 `dogId` 가 없거나 우리 집 아이가 아닙니다. 두 경우를 구분하지 않습니다.
 
   /api/walks/{walkId}:
     get:
@@ -2503,7 +2503,7 @@ paths:
         달력이 묻는 것은 늘 "이 기간" 이라 **페이지 커서를 두지 않습니다** — 한 달치가 수십 건이라
         자를 것이 없고, 커서를 두면 화면이 달을 넘길 때마다 커서를 버려야 합니다.
 
-        **`ownerKind` 를 생략하면 내가 볼 수 있는 전부**가 옵니다 — 내 아이들 것과 우리 가족 것이
+        **`ownerKind` 를 생략하면 내가 볼 수 있는 전부**가 옵니다 — 우리 집 아이들 것과 우리 가족 것이
         한 목록입니다. 주면 `ownerRef` 도 있어야 하고, 그 주인을 못 보는 사람에게는 **404** 입니다.
 
         `dogId` 는 `ownerKind` 와 **겹쳐 쓸 수 있습니다** — "우리 가족 일정 중 보리 것". 아이에 안
@@ -2552,7 +2552,7 @@ paths:
       tags: [Schedules]
       summary: 일정 만들기
       description: |
-        **`ownerKind`+`ownerRef` 의 소유권을 서버가 확인합니다** — 내 아이거나, 내가 든 가족
+        **`ownerKind`+`ownerRef` 의 소유권을 서버가 확인합니다** — 우리 집 아이거나, 내가 든 가족
         그룹이어야 합니다. 아니면 404 입니다.
 
         `dogId` 는 `ownerRef` 와 **별개**입니다 — "가족 소유인데 보리 것" 이 흔합니다. 없어도
@@ -3045,7 +3045,7 @@ paths:
       description: |
         **멤버만**입니다. 지난 날짜는 **400**, 남의 아이는 **404** 입니다.
 
-        아이는 **내 아이**여야 합니다. 올릴 때 한 번 확인하고 그 행을 들어 둡니다 — 맡는 사람
+        아이는 **우리 집 아이**여야 합니다(#563). 올릴 때 한 번 확인하고 그 행을 들어 둡니다 — 맡는 사람
         눈으로는 그 아이가 남의 것이라 나중에는 확인할 수 없습니다.
 
         **금액도 기간도 없습니다.** "두 시간만" 같은 말은 `note` 에 사람 말로 적습니다.
@@ -5601,7 +5601,7 @@ components:
         dogId:
           type: integer
           format: int64
-          description: 찍힌 아이를 바꿉니다 (#451 5번). 키가 없으면 안 바꾸고, 비우는 길은 없습니다(`loc` 과 같은 이유). 내 아이만.
+          description: 찍힌 아이를 바꿉니다 (#451 5번). 키가 없으면 안 바꾸고, 비우는 길은 없습니다(`loc` 과 같은 이유). 우리 집 아이만(#563).
         mediaIds:
           type: array
           maxItems: 10
@@ -5650,7 +5650,7 @@ components:
           type: integer
           format: int64
           description: |
-            이 글에 찍힌 아이 (#451 5번). **내 아이만** — 남의 아이 id 는 `400` 입니다. 글 하나에 아이 하나,
+            이 글에 찍힌 아이 (#451 5번). **우리 집 아이만**(#563) — 남의 집 아이 id 는 `400` 입니다. 글 하나에 아이 하나,
             여럿이 찍혔으면 대표 하나를 고릅니다.
         courseId:
           type: integer
@@ -6290,7 +6290,10 @@ components:
         dogId:
           type: [integer, "null"]
           format: int64
-          description: 없어도 됩니다 — "사료 주문" 은 아이 하나에 안 묶입니다
+          description: |
+            없어도 됩니다 — "사료 주문" 은 아이 하나에 안 묶입니다.
+            **우리 집 아이여야 합니다**(#563) — 아니면 404 입니다. 엄마가 등록한 보리의 검진을
+            아빠가 잡을 수 있어야 합니다. 그게 안 되면 업무 분담이 아닙니다.
         kind: { $ref: '#/components/schemas/ScheduleKind' }
         title: { type: string, maxLength: 100, example: "보리 병원" }
         memo: { type: [string, "null"], maxLength: 500 }
@@ -6457,7 +6460,7 @@ components:
         dogId:
           type: [integer, "null"]
           format: int64
-          description: '**내 아이**여야 합니다 — 아니면 404 입니다. 없어도 됩니다'
+          description: '**우리 집 아이**여야 합니다(#563) — 아니면 404 입니다. 없어도 됩니다'
         note: { type: [string, "null"], maxLength: 200 }
 
     CrewVisibility:

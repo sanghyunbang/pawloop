@@ -92,11 +92,19 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | `List<DogResponse> mine(Long userId)` | 해당 사용자의 dog 전체를 조회해 응답 목록으로. |
 | `DogResponse one(Long userId, long dogId)` | 단건 조회 → 없거나 타인 소유면 404. |
 | `DogResponse register(User owner, DogRequest request)` | 검증 후 신규 저장(소유자=owner), 저장 결과를 응답으로. |
-| `void requireMine(Long userId, long dogId)` | 소유권만 확인한다. **다른 도메인(walk 등)이 부르는 공개 지점이다.** |
-| `Dog requireMineEntity(Long userId, Long dogId)` | 소유권 확인 + 엔티티 반환. 연관을 걸어야 하는 쪽이 쓴다. |
-| `DogProfileView profileOf(long userId, Long dogId)` | 크기(`small`·`medium`·`large`)와 나이대(개월)만 — AI 주간 요약(#486)이 모델에 보내는 아이 정보의 전부. `dogId` 가 있으면 그 아이(남의 아이면 404), 없으면 첫째 아이, 아이가 없으면 `null`. `dog.entity`·`dog.dto` 를 밖으로 내지 않으려는 공개 표면이다. |
+| `List<DogResponse> ofFamily(long groupId, long actorUserId)` | 그 가족 식구들이 등록한 아이 전부. 각 행의 `mine` 이 "내가 고칠 수 있나" 다(#563). |
+| `Dog requireInHouseholdEntity(long actorUserId, Long dogId)` | **우리 집 아이**인가 + 엔티티 반환 — 아니면 404. 산책·일정·품앗이·커뮤니티가 부르는 공개 지점이다(#563). |
+| `void requireInHousehold(long actorUserId, long dogId)` | 같은 판정, 행이 필요 없을 때. |
+| `Dog requireInFamilyEntity(long groupId, Long dogId)` | 그룹 경로(`/api/groups/{id}/...`)용 — 아니면 **400**. 부르는 쪽이 이미 식구 확인을 지났다는 전제다. |
+| `List<Long> householdDogIds(long actorUserId)` | 우리 집 아이 id 전부. 일정의 "합쳐 보기" 와 커뮤니티가 쓴다. |
+| `DogProfileView profileOf(long userId, Long dogId)` | 크기(`small`·`medium`·`large`)와 나이대(개월)만 — AI 주간 요약(#486)이 모델에 보내는 아이 정보의 전부. `dogId` 가 있으면 그 아이(**우리 집 아이가 아니면 404**), 없으면 우리 집 첫째 아이, 아이가 없으면 `null`. `dog.entity`·`dog.dto` 를 밖으로 내지 않으려는 공개 표면이다. |
 | `void delete(Long userId, long dogId)` | 소프트 삭제 — `deleted_at` 을 UTC 로 찍는다. 남의 것·없는 것·이미 지운 것은 같은 404. 지운 아이는 상한에 안 센다(#156). |
-| `(private) Dog require(Long userId, long dogId)` | 조회 + 소유권. 위 셋의 공통 바닥. |
+| `(private) Dog require(Long userId, long dogId)` | 조회 + **등록한 사람인가**. `one`·`delete`·아바타 교체의 공통 바닥이다. |
+
+> **"내 아이" 판정은 표면에 없다**(#563). `requireMine`·`requireMineEntity` 는 지웠다 — 아이가
+> 집의 것이 되면서 밖에서 부를 이유가 사라졌고, 남겨 두면 다음 사람이 그쪽을 집어 판정이
+> 다시 두 벌이 된다. 실제로 그 날이 하루에 두 번 왔다(주간 통계 404 · 일정 404). "등록한
+> 사람만" 이 맞는 일(정보 고치기·지우기)은 이 모듈 **안에서** 끝난다.
 
 > **`update` 는 아직 없다** (`delete` 는 #156 에서 소프트 삭제로, `updateAvatar`·`removeAvatar` 는 #448 에서 생겼다 — 미디어 id 를 `MediaAttachment.replace` 로 붙이고 `dog.avatar` 에 키를 적는다). 위 §2 의 표시와 같은 이유다. 아래 §3.2·§6 의 PATCH 부분수정 서술은 **그 날을 위한 설계**이지 현재 동작이 아니다.
 

@@ -271,6 +271,23 @@ class CrewFavorIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("우리 집 아이로는 부탁할 수 있다 — 아빠가 엄마의 보리 산책을 부탁한다 (#563)")
+    void aHouseholdDogCanBeAskedFor() throws Exception {
+        Account dad = accountIn("아빠", SEONGDONG);
+        Account mom = account("엄마");
+        Account neighbour = account("이웃");
+        long bori = dogOf(mom, "보리");
+        joinFamily(mom, dad);
+
+        Crew crew = crewWith(dad, neighbour);
+        JsonNode favor = postFavor(dad, crew.id(), bori, "두 시간만 부탁드려요");
+
+        assertThat(favor.path("dog").path("dogId").asLong())
+                .as("부탁 시트가 집 아이를 보여 준다 — 거기서 고른 보리가 404 면 안 된다")
+                .isEqualTo(bori);
+    }
+
+    @Test
     @DisplayName("크루에 안 든 사람은 부탁을 보지도 올리지도 못한다 — 공개 크루라도 404")
     void favorsAreForMembersOnly() throws Exception {
         Account owner = accountIn("방장", SEONGDONG);
@@ -440,6 +457,21 @@ class CrewFavorIntegrationTest extends AbstractMySqlIntegrationTest {
                 .ageGroup(User.AgeGroup.OVER14)
                 .build());
         return new Account(user.getId(), jwtProvider.createAccessToken(user.getId(), user.getRole()));
+    }
+
+    /** 방장의 가족에 넣는다 — 멤버십의 원본은 방이다(ADR-0011). 크루 방과는 다른 종류다. */
+    private void joinFamily(Account owner, Account joiner) throws Exception {
+        long roomId = body(mockMvc.perform(post("/api/groups")
+                        .header("Authorization", "Bearer " + owner.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"보리네\"}"))
+                .andExpect(status().isCreated())).path("roomId").asLong();
+        String code = body(mockMvc.perform(post("/api/chat/rooms/{roomId}/invites", roomId)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isCreated())).path("code").asText();
+        mockMvc.perform(post("/api/chat/invites/{code}/join", code)
+                        .header("Authorization", "Bearer " + joiner.token()))
+                .andExpect(status().isOk());
     }
 
     private long dogOf(Account owner, String name) {

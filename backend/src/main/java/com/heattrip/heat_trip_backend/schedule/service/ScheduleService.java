@@ -385,7 +385,7 @@ public class ScheduleService {
 
         List<Schedule> found = new ArrayList<>();
         if (ownerKind == null) {
-            found.addAll(ofDogs(userId, myDogIds(userId), from, to));
+            found.addAll(ofDogs(householdDogIds(userId), from, to));
             found.addAll(ofRooms(ScheduleOwnerKind.GROUP,
                     myOwnerRefs(userId, FamilyGroupService.ORIGIN_KIND), from, to));
             // 크루 일정(#417). 품앗이를 맡으면 여기 한 줄이 남고, 그 줄은 **내 달력**에
@@ -395,7 +395,7 @@ public class ScheduleService {
         } else {
             requireOwner(userId, ownerKind, ownerRef);
             found.addAll(ownerKind == ScheduleOwnerKind.DOG
-                    ? ofDogs(userId, List.of(ownerRef), from, to)
+                    ? ofDogs(List.of(ownerRef), from, to)
                     : ofRooms(ownerKind, List.of(ownerRef), from, to));
         }
 
@@ -464,11 +464,21 @@ public class ScheduleService {
         return time != 0 ? time : Long.compare(a.getId(), b.getId());
     }
 
-    private List<Schedule> ofDogs(long userId, List<Long> dogIds, LocalDate from, LocalDate to) {
-        List<Long> mine = dogIds.stream().filter(id -> isMyDog(userId, id)).toList();
-        return mine.isEmpty()
+    /**
+     * 아이 소유 일정. <b>여기서 아이를 다시 검사하지 않는다</b>(#563).
+     *
+     * <p>부르는 곳이 둘인데 <b>둘 다 이미 지났다</b> — 합쳐 보기는 {@code householdDogIds} 가
+     * 준 목록이라 전부 우리 집 아이고, {@code ownerKind=dog} 는 바로 위에서
+     * {@code requireOwner} 가 던진 뒤다. 한 번 더 걸러 봐야 지워지는 id 가 없고, 아이마다
+     * 집 목록을 다시 읽어 왕복만 는다.
+     *
+     * <p>되돌려서 확인했다 — 필터를 지워도 빨개지는 테스트가 없다. 아무것도 안 하는 검사는
+     * 안전장치가 아니라 다음 사람을 헷갈리게 하는 줄이다.
+     */
+    private List<Schedule> ofDogs(List<Long> dogIds, LocalDate from, LocalDate to) {
+        return dogIds.isEmpty()
                 ? List.of()
-                : schedules.findRange(ScheduleOwnerKind.DOG, mine, from, to);
+                : schedules.findRange(ScheduleOwnerKind.DOG, dogIds, from, to);
     }
 
     /** 방을 낀 주인들(가족·크루)의 일정. 둘의 차이는 {@code owner_kind} 하나다. */
@@ -493,7 +503,7 @@ public class ScheduleService {
             throw notFound();
         }
         switch (kind) {
-            case DOG -> dogs.requireMine(userId, ref);
+            case DOG -> dogs.requireInHousehold(userId, ref);
             case GROUP -> requireRoomMember(userId, FamilyGroupService.ORIGIN_KIND, ref);
             case ROOM -> requireRoomMember(userId, ScheduleOwnerKind.CREW_ORIGIN_KIND, ref);
         }
@@ -516,17 +526,8 @@ public class ScheduleService {
         return schedule;
     }
 
-    private boolean isMyDog(long userId, Long dogId) {
-        try {
-            dogs.requireMine(userId, dogId);
-            return true;
-        } catch (RuntimeException notMine) {
-            return false;
-        }
-    }
-
-    private List<Long> myDogIds(long userId) {
-        return dogs.myDogIds(userId);
+    private List<Long> householdDogIds(long userId) {
+        return dogs.householdDogIds(userId);
     }
 
     /**
@@ -557,8 +558,9 @@ public class ScheduleService {
 
     // ─────────────────────────── 지그 ───────────────────────────
 
+    /** 아이는 <b>우리 집</b> 아이면 된다(#563) — 누가 등록했는지는 안 따진다. */
     private Dog dogOrNull(long userId, Long dogId) {
-        return dogId == null ? null : dogs.requireMineEntity(userId, dogId);
+        return dogId == null ? null : dogs.requireInHouseholdEntity(userId, dogId);
     }
 
     /**

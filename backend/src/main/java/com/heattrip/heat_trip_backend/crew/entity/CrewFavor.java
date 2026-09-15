@@ -52,7 +52,7 @@ import java.time.LocalDateTime;
  *
  * <h2>아이는 <b>부탁한 사람</b>의 것이다</h2>
  * <p>맡는 사람 눈으로는 남의 아이다. 그래서 소유권은 <b>올릴 때</b> 한 번 확인하고
- * ({@code DogOwnership.requireMineEntity}) 행을 든다. {@code ON DELETE SET NULL} 이라
+ * ({@code DogOwnership.requireInHouseholdEntity}) 행을 든다. {@code ON DELETE SET NULL} 이라
  * 아이를 보내도 부탁은 남는다 — 이미 맡은 사람이 있는 약속이 조용히 사라지면 안 된다.
  */
 @Entity

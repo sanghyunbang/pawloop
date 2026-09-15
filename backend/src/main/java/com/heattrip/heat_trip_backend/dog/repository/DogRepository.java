@@ -67,10 +67,4 @@ public interface DogRepository extends JpaRepository<Dog, Long> {
             """)
     List<Dog> findOfUsers(@Param("userIds") Collection<Long> userIds);
 
-    /**
-     * 그 사용자의 반려동물인가. 산책 저장이 {@code dogId} 를 받을 때 쓴다 — 행 전체를
-     * 끌어올 이유가 없다.
-     */
-    @Query("select count(d) > 0 from Dog d where d.id = :dogId and d.user.id = :userId and d.deletedAt is null")
-    boolean isMine(@Param("dogId") long dogId, @Param("userId") long userId);
 }
