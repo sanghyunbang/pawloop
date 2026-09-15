@@ -203,6 +203,39 @@ class ChatRoomSummary {
 }
 
 /// 메시지 하나.
+/// 말풍선 아래 반응 한 종류의 집계 — #452. 계약의 `ChatReaction`.
+///
+/// [count] 는 **"몇 번" 이지 "몇 명" 이 아니다** — 한 사람이 한 말에 여러 종류를 누를 수 있고,
+/// 탈퇴한 사람의 반응도 세어진다. [mine] 은 [ChatMessageItem.hiddenByBlock] 과 같은 종류의 값이라
+/// 읽는 사람마다 다르다 — 캐시하면 남의 화면에 내 상태가 보인다.
+class ChatReaction {
+  final String kind;
+  final int count;
+  final bool mine;
+
+  const ChatReaction({required this.kind, required this.count, required this.mine});
+
+  static ChatReaction? tryParse(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    final kind = json['kind'];
+    if (kind is! String || kind.isEmpty) {
+      return null;
+    }
+    return ChatReaction(kind: kind, count: _asInt(json['count']), mine: json['mine'] == true);
+  }
+
+  /// 응답의 배열을 **순서 그대로**. 순서는 서버가 정한다 — 앱이 다시 정렬하면 같은 말이
+  /// 기기마다 다르게 보인다.
+  static List<ChatReaction> parseAll(Object? json) {
+    if (json is! List) {
+      return const [];
+    }
+    return json.map(ChatReaction.tryParse).whereType<ChatReaction>().toList(growable: false);
+  }
+}
+
 class ChatMessageItem {
   final int id;
 
@@ -231,6 +264,10 @@ class ChatMessageItem {
   /// 서버가 응답 때마다 원문을 읽어 만든다 — 원문이 지워지면 다음 조회부터 `deleted` 다.
   final ChatReplyTo? replyTo;
 
+  /// 이 말에 붙은 반응(#452) — 0 인 종류는 안 온다. **빈 배열이지 null 이 아니다.**
+  /// 옛 서버(키 없음)도 빈 배열이라 앱은 같은 코드로 그린다.
+  final List<ChatReaction> reactions;
+
   bool get isImage => contentType == 'image';
 
   const ChatMessageItem({
@@ -245,7 +282,24 @@ class ChatMessageItem {
     this.contentType = 'text',
     this.media,
     this.replyTo,
+    this.reactions = const [],
   });
+
+  /// 반응만 바꾼 사본 — 누른 직후 그 말풍선 하나만 다시 그린다. 나머지는 서버가 준 그대로다.
+  ChatMessageItem withReactions(List<ChatReaction> updated) => ChatMessageItem(
+        id: id,
+        roomSeq: roomSeq,
+        senderUserId: senderUserId,
+        senderName: senderName,
+        body: body,
+        createdAt: createdAt,
+        deleted: deleted,
+        hiddenByBlock: hiddenByBlock,
+        contentType: contentType,
+        media: media,
+        replyTo: replyTo,
+        reactions: updated,
+      );
 
   static ChatMessageItem? tryParse(Map<String, dynamic> json) {
     final id = json['id'];
@@ -265,6 +319,7 @@ class ChatMessageItem {
       contentType: '${json['contentType'] ?? 'text'}',
       media: PostMedia.tryParse(json['media']),
       replyTo: ChatReplyTo.tryParse(json['replyTo']),
+      reactions: ChatReaction.parseAll(json['reactions']),
     );
   }
 }
@@ -496,6 +551,27 @@ class ChatRepository {
   /// 메시지에 다시 불러도 성공(204)이다. 남의 메시지는 403 이라 [ChatFailure] 다.
   Future<void> deleteMessage(int messageId) async {
     await _send(() => _authed.deleteJson(Uri.parse('$baseUrl/api/chat/messages/$messageId')));
+  }
+
+  /// 이 말에 반응을 켠다 — #452. 돌아오는 것은 **그 말의 최신 집계**다.
+  ///
+  /// **멱등이다** — 이미 눌러 뒀어도 200 이고 숫자가 안 는다. 그래서 네트워크가 끊겼을 때 그냥 다시
+  /// 부르면 된다(토글 하나였다면 재시도가 내 반응을 조용히 껐을 것이다).
+  ///
+  /// 누르면 방의 변경 번호가 올라 **같은 말이 다른 사람의 다음 폴링에 `changed` 로** 간다
+  /// (ADR-0023) — 그래서 여기서 돌아온 값은 "먼저 보여 주는 것" 이지 유일한 경로가 아니다.
+  /// 지워진 말에는 못 켠다(409 — [ChatFailureKind] 의 일반 실패로 온다).
+  Future<List<ChatReaction>> react(int messageId, String kind) async {
+    final json = await _send(() => _authed.postJson(
+        Uri.parse('$baseUrl/api/chat/messages/$messageId/reactions/$kind')));
+    return ChatReaction.parseAll((json as Map<String, dynamic>?)?['reactions']);
+  }
+
+  /// 반응을 끈다. **멱등이다** — 안 눌렀던 것을 취소해도 200 이고, 지워진 말에도 통한다.
+  Future<List<ChatReaction>> unreact(int messageId, String kind) async {
+    final json = await _send(() => _authed.deleteJson(
+        Uri.parse('$baseUrl/api/chat/messages/$messageId/reactions/$kind')));
+    return ChatReaction.parseAll((json as Map<String, dynamic>?)?['reactions']);
   }
 
   /// 이 사람을 방에서 내보낸다. **방장만.**
