@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.chat;
 
+import com.heattrip.heat_trip_backend.support.QueryScanner;
 import com.heattrip.heat_trip_backend.support.ScratchDatabase;
 import com.heattrip.heat_trip_backend.support.TestProjectPaths;
 
@@ -699,53 +700,13 @@ class ChatBoundaryArchitectureTest {
     }
 
     // ── 쿼리 문자열 뽑기 ──
+    //
+    // 장치는 support/QueryScanner 에 있다(#518 §2). 이 검사가 chat 모양이라 헬퍼도 chat 안에
+    // 있었는데, 같은 눈을 다른 모듈에도 쓰려면 "무엇이 밖인가" 라는 전제만 밖으로 빼면 된다.
+    // **판단은 여기 남는다** — chat 은 "0 이어야 한다" 는 게이트고, 다른 모듈은 기준선이다.
 
-    /** 텍스트 블록. 먼저 떼어 내야 아래 일반 문자열 정규식이 헷갈리지 않는다. */
-    private static final Pattern TEXT_BLOCK = Pattern.compile("(?s)\"\"\"(.*?)\"\"\"");
-
-    /** 한 줄짜리 문자열 리터럴. 이스케이프된 따옴표를 넘어간다. */
-    private static final Pattern STRING_LITERAL = Pattern.compile("\"((?:\\\\.|[^\"\\\\])*)\"");
-
-    /** {@code "a" + "b"} 를 잇는다. 안 이으면 FROM 과 표 이름이 갈라져 아무것도 못 잡는다. */
-    private static final Pattern CONCATENATION = Pattern.compile("\"\\s*\\+\\s*\"");
-
-    /** 쿼리로 볼 문자열 — 동사와 절이 함께 있어야 한다. 산문 메시지를 훑지 않으려는 것이다. */
-    private static final Pattern LOOKS_LIKE_A_QUERY = Pattern.compile(
-            "(?is)^(?=.*\\b(select|insert|update|delete)\\b)(?=.*\\b(from|join|into|set)\\b).*$");
-
-    /**
-     * 소스에서 <b>쿼리로 보이는</b> 문자열만 뽑는다.
-     *
-     * <p>주석은 호출부가 먼저 걷는다. 이어 붙인 문자열을 잇고, 텍스트 블록도 함께 본다 —
-     * {@code @Query} 뿐 아니라 {@code createNativeQuery("…")} 도 같은 그물에 들어온다.
-     */
     private static List<String> queryLiteralsIn(String source) {
-        List<String> out = new ArrayList<>();
-        String rest = source;
-
-        Matcher blocks = TEXT_BLOCK.matcher(rest);
-        StringBuilder withoutBlocks = new StringBuilder();
-        int last = 0;
-        while (blocks.find()) {
-            withoutBlocks.append(rest, last, blocks.start());
-            collectIfQuery(blocks.group(1), out);
-            last = blocks.end();
-        }
-        withoutBlocks.append(rest.substring(last));
-
-        Matcher literals = STRING_LITERAL.matcher(
-                CONCATENATION.matcher(withoutBlocks).replaceAll(""));
-        while (literals.find()) {
-            collectIfQuery(literals.group(1), out);
-        }
-        return out;
-    }
-
-    private static void collectIfQuery(String candidate, List<String> out) {
-        String flattened = candidate.replaceAll("\\s+", " ").strip();
-        if (LOOKS_LIKE_A_QUERY.matcher(flattened).matches()) {
-            out.add(flattened);
-        }
+        return QueryScanner.queryLiteralsIn(source);
     }
 
     // ── 쿼리 안에서 경계 밖 이름 찾기 ──
@@ -774,32 +735,8 @@ class ChatBoundaryArchitectureTest {
      * </ol>
      */
     private static List<String> outsideReferencesIn(String query, Set<String> chatEntityNames) {
-        String normalized = query
-                .replaceAll("(?i)\\bon\\s+duplicate\\s+key\\s+update\\b", "on duplicate key")
-                .replaceAll("(?i)\\bjoin\\s+fetch\\b", "join");
-
-        Set<String> aliases = new LinkedHashSet<>();
-        Matcher aliasScan = TABLE_POSITION.matcher(normalized);
-        while (aliasScan.find()) {
-            String alias = aliasScan.group(2);
-            if (alias != null && !CLAUSE_KEYWORDS.contains(alias.toLowerCase())) {
-                aliases.add(alias);
-            }
-        }
-
         List<String> offenders = new ArrayList<>();
-        Matcher targets = TABLE_POSITION.matcher(normalized);
-        while (targets.find()) {
-            String name = targets.group(1);
-            if (CLAUSE_KEYWORDS.contains(name.toLowerCase())) {
-                continue;
-            }
-            if (name.contains(".")) {
-                if (!aliases.contains(name.substring(0, name.indexOf('.')))) {
-                    offenders.add(name);
-                }
-                continue;
-            }
+        for (String name : QueryScanner.tableReferencesIn(query)) {
             if (!name.toLowerCase().startsWith("chat_") && !chatEntityNames.contains(name)) {
                 offenders.add(name);
             }
@@ -807,20 +744,8 @@ class ChatBoundaryArchitectureTest {
         return offenders;
     }
 
-    /**
-     * 주석을 걷는다 — 주석 속 예시 문구가 검사에 걸리면 그 테스트는 며칠 안에 지워진다.
-     *
-     * <p>줄 수는 그대로 둔다. 위반을 파일:줄 로 가리켜야 고칠 자리를 찾는다.
-     */
+    /** 주석을 걷는다 — 장치는 {@link QueryScanner#stripComments}. */
     private static String stripComments(String source) {
-        Matcher m = Pattern.compile("(?s)/\\*.*?\\*/|//[^\\n]*").matcher(source);
-        StringBuilder out = new StringBuilder(source.length());
-        int last = 0;
-        while (m.find()) {
-            out.append(source, last, m.start());
-            out.append("\n".repeat((int) m.group().chars().filter(c -> c == '\n').count()));
-            last = m.end();
-        }
-        return out.append(source.substring(last)).toString();
+        return QueryScanner.stripComments(source);
     }
 }

@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend;
 
+import com.heattrip.heat_trip_backend.support.ModuleTables;
 import com.heattrip.heat_trip_backend.support.ScratchDatabase;
 
 import org.junit.jupiter.api.DisplayName;
@@ -40,47 +41,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CrossModuleForeignKeysTest {
 
     /**
-     * 표 → 그 표를 소유한 모듈. 엔티티의 패키지에서 온 값이다({@code @Table(name = ...)}).
-     *
-     * <p>모듈 이름은 최상위 패키지 이름 그대로다 — {@code walk_note} 가 {@code care} 인 것처럼
-     * 이름과 소유가 다른 자리가 있으니 표 이름으로 짐작하지 말 것.
+     * 표 → 그 표를 소유한 모듈. 지도는 {@link ModuleTables} 한 곳에 있다 — 쿼리 검사
+     * ({@code CrossModuleQueryJoinsTest})와 같은 것을 본다. 둘이 각자 분류하면 한쪽만 낡는다.
      */
-    private static final Map<String, String> TABLE_MODULE = Map.ofEntries(
-            Map.entry("care_log", "care"),
-            Map.entry("walk_note", "care"),
-            Map.entry("chat_message", "chat"),
-            Map.entry("chat_message_reaction", "chat"),
-            Map.entry("chat_room", "chat"),
-            Map.entry("chat_room_invite", "chat"),
-            Map.entry("chat_room_member", "chat"),
-            Map.entry("comment", "community"),
-            Map.entry("post", "community"),
-            Map.entry("post_bookmark", "community"),
-            Map.entry("reaction", "community"),
-            Map.entry("course", "walk"),
-            Map.entry("walk", "walk"),
-            Map.entry("walk_dog", "walk"),
-            Map.entry("weekly_insight", "walk"),
-            Map.entry("crew", "crew"),
-            Map.entry("crew_favor", "crew"),
-            Map.entry("device_token", "push"),
-            Map.entry("push_preference", "push"),
-            Map.entry("dog", "dog"),
-            Map.entry("family_group", "group"),
-            Map.entry("kto_call_budget", "place"),
-            Map.entry("pet_place_detail", "place"),
-            Map.entry("place_catalog", "place"),
-            Map.entry("place_cell", "place"),
-            Map.entry("trail_route", "place"),
-            Map.entry("media_objects", "S3"),
-            Map.entry("refresh_token", "user"),
-            Map.entry("users", "user"),
-            Map.entry("user_consent", "consent"),
-            Map.entry("report", "moderation"),
-            Map.entry("report_snapshot", "moderation"),
-            Map.entry("user_block", "moderation"),
-            Map.entry("schedule", "schedule"),
-            Map.entry("schedule_exception", "schedule"));
+    private static final Map<String, String> TABLE_MODULE = ModuleTables.BY_TABLE;
 
     /**
      * 지금 모듈 밖으로 나가는 FK 전부. <b>줄이는 것이 목표다.</b>
