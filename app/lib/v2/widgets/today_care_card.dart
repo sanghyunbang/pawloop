@@ -29,7 +29,7 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/family_repository.dart';
-import '../domain/pet.dart' show careIcon, CareType;
+import '../domain/pet.dart' show careIcon, CareType, kMyDog;
 import '../theme/app_tokens.dart';
 import 'aurora.dart';
 
@@ -87,6 +87,9 @@ class _TodayCareCardState extends State<TodayCareCard> {
     super.initState();
     kServerCareRev.addListener(_reload);
     AuthState.status.addListener(_reload);
+    // 고른 아이가 바뀌면 다시 읽는다(#563). 이 카드는 props 가 안 바뀌므로 홈이 다시
+    // 그려도 State 가 그대로 살아 있다 — 신호를 직접 안 들으면 **앞 아이의 기록이 남는다.**
+    kMyDog.addListener(_reload);
     _load();
   }
 
@@ -94,6 +97,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
   void dispose() {
     kServerCareRev.removeListener(_reload);
     AuthState.status.removeListener(_reload);
+    kMyDog.removeListener(_reload);
     super.dispose();
   }
 
@@ -118,7 +122,9 @@ class _TodayCareCardState extends State<TodayCareCard> {
     _guest = false;
     try {
       final group = _group ?? await _repo.myGroup();
-      final logs = await _repo.careLogs(group.id);
+      // **고른 아이의 기록만 센다**(#563). 이게 없으면 아이가 둘인 집에서 보리 이름 아래
+      // 카드가 누리 밥까지 세고, "밥 2회" 가 보리한테 두 번인지 둘이 한 번씩인지 모르게 된다.
+      final logs = await _repo.careLogs(group.id, dogId: kMyDog.value?.serverId);
       if (!mounted) return;
       setState(() {
         _group = group;
@@ -201,7 +207,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
 
     setState(() => _sending = type);
     try {
-      await _repo.recordCare(group.id, type);
+      await _repo.recordCare(group.id, type, dogId: kMyDog.value?.serverId);
       if (!mounted) return;
       setState(() => _sending = null);
       // 다른 화면의 카드도 함께 다시 읽는다. 이 콜백이 자기 자신의 _load 도 부른다.

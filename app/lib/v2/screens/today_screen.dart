@@ -131,6 +131,10 @@ class TodayScreen extends StatelessWidget {
                   // 그 사이의 케어 · 일정 · CTA 는 자료가 필요 없지만 순서 때문에 같은 열에 둔다.
                   WalkFeedBuilder(
                     feed: feed,
+                    // **고른 아이의 숫자만 센다**(#563). 이게 없으면 목표는 이 아이의 것인데
+                    // 채우는 분은 집 전체 산책이라, 히어로가 뭉치인데 "3/225분" 의 3 은 보리와
+                    // 걸은 것이 된다. 아이가 하나인 집에서는 지금과 같은 숫자다.
+                    dogId: dog?.serverId,
                     builder: (_, data, __) => Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [

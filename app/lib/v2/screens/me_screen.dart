@@ -559,8 +559,17 @@ class MeScreen extends StatelessWidget {
     );
   }
 
-  // 메뉴 상단 따뜻한 배너 (프로필 편집 유도).
+  /// 메뉴 상단 배너.
+  ///
+  /// **남이 등록한 아이면 고치기로 안 간다**(#563). 가족이 아이를 함께 돌보기 시작하면서
+  /// 이 자리에 남의 아이가 올 수 있게 됐는데, 그대로 두면 눌렀을 때 **편집 화면까지 갔다가
+  /// 저장에서 404** 를 만난다. 누르기 전에 말해 주는 편이 낫다.
+  ///
+  /// 숨기지 않고 **이유를 적는 이유**는, 아이를 바꿀 때마다 메뉴 항목이 나타났다 사라지면
+  /// 화면이 흔들리고 "왜 없지" 를 묻게 되기 때문이다. 대신 누를 수 없다는 것이 보이게
+  /// 코랄 배너가 아니라 **조용한 줄**로 그린다 — 이 화면에서 코랄은 "누를 수 있다" 다.
   Widget _menuBanner(BuildContext context, DogProfile dog) {
+    if (!dog.mine) return _notMyDogBanner(dog);
     return GestureDetector(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EditScreen(pet: dog))),
       behavior: HitTestBehavior.opaque,
@@ -585,6 +594,40 @@ class MeScreen extends StatelessWidget {
           Icon(Icons.chevron_right, size: 20, color: Colors.white),
         ]),
       ),
+    );
+  }
+
+  /// 남이 등록한 아이 — 돌볼 수는 있고 고칠 수는 없다(#563).
+  ///
+  /// 누가 등록했는지는 **안 적는다.** 계약이 주는 것은 "내 것인가" 하나이고(`Dog.mine`),
+  /// 주인 id 를 싣지 않은 것이 그 결정이다 — 화면이 이름을 말하려면 서버가 답하지 않은
+  /// 질문에 답해야 한다.
+  Widget _notMyDogBanner(DogProfile dog) {
+    return Container(
+      key: const Key('not-my-dog-banner'),
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: T.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: T.line),
+      ),
+      child: Row(children: [
+        const Icon(Icons.pets, size: 22, color: T.textMuted),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${dog.name}는 가족이 등록한 아이예요',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 14.5, fontWeight: FontWeight.w800, color: T.textSecondary)),
+            const SizedBox(height: 2),
+            const Text('같이 돌볼 수 있어요. 정보 수정은 등록한 사람이 해요',
+                style: TextStyle(fontSize: 12, color: T.textMuted)),
+          ]),
+        ),
+      ]),
     );
   }
 }

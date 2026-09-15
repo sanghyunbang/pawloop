@@ -67,6 +67,16 @@ class _WalkFeedBuilderState extends State<WalkFeedBuilder> {
     _reload();
   }
 
+  /// 고른 아이가 바뀌면 다시 읽는다 — 이슈 #563.
+  ///
+  /// 이게 없으면 홈에서 아이를 바꿔도 **요약과 주간 목표가 앞 아이의 숫자로 남는다.**
+  /// 히어로는 뭉치인데 숫자는 보리 것인 화면이 된다.
+  @override
+  void didUpdateWidget(WalkFeedBuilder old) {
+    super.didUpdateWidget(old);
+    if (old.dogId != widget.dogId) _reload();
+  }
+
   @override
   void dispose() {
     walkFeedRevision.removeListener(_reload);

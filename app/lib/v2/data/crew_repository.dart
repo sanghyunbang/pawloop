@@ -271,8 +271,8 @@ class CrewRepository {
         () => _authed.getJson(Uri.parse('$baseUrl/api/crews/$crewId/favors'))));
   }
 
-  /// 부탁을 올린다. 지난 날짜는 [CrewFailureKind.invalid], 남의 아이는
-  /// [CrewFailureKind.notFound] 다.
+  /// 부탁을 올린다. 지난 날짜는 [CrewFailureKind.invalid], **남의 집** 아이는
+  /// [CrewFailureKind.notFound] 다 — 우리 집 아이는 내가 등록 안 했어도 된다(#563).
   ///
   /// [dogId] 를 안 주면 본문에 안 싣는다 — 아이를 아직 등록 안 한 사람도 부탁할 수 있다.
   /// [note] 는 다듬어서 싣고, 비면 안 싣는다. **금액 칸이 없다** — 파일 머리말 참조.

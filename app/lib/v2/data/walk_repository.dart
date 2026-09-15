@@ -89,6 +89,15 @@ class ServerPet {
   /// 프로필 사진의 공개 URL — 계약의 `avatarUrl` (#448). 없으면 `null`.
   final String? avatarUrl;
 
+  /// **내가 등록한 아이인가** — 계약의 `mine` (#563).
+  ///
+  /// 집 아이 목록(`GET /api/groups/{id}/dogs`)에는 **남이 등록한 아이가 섞여** 온다.
+  /// 그 아이는 보고 돌볼 수 있지만 **고치고 지울 수는 없다** — 서버가 404 다.
+  ///
+  /// 옛 서버(필드 없음)에서는 `true` 다. 못 읽었다고 고치기를 막으면, 자기 아이를 고치던
+  /// 사람이 이유 없이 막힌다.
+  final bool mine;
+
   const ServerPet({
     required this.id,
     required this.name,
@@ -98,6 +107,7 @@ class ServerPet {
     this.breed,
     this.ageMonths,
     this.avatarUrl,
+    this.mine = true,
   });
 
   /// 모양이 계약과 다르면 `null`. 목록 하나가 깨졌다고 화면 전체를 죽이지 않는다.
@@ -114,6 +124,8 @@ class ServerPet {
       ageMonths: json['ageMonths'] as int?,
       neutered: json['neutered'] == true,
       avatarUrl: json['avatarUrl'] as String?,
+      // 옛 서버는 이 필드를 안 보낸다. 그때는 `GET /api/dogs` 뿐이라 전부 내 아이다.
+      mine: json['mine'] is bool ? json['mine'] as bool : true,
     );
   }
 }
@@ -473,15 +485,34 @@ class WalkRepository {
 
   // ─────────────────────────── 반려동물 ───────────────────────────
 
-  /// 내 반려동물 목록. 등록순이라 첫 마리가 기본 선택이다.
+  /// 내가 등록한 아이 — 등록순이라 첫 마리가 기본 선택이다.
+  ///
+  /// **화면이 보는 것은 대개 이쪽이 아니다.** 홈 · 케어 · 산책은 [householdPets] 가 주는
+  /// **우리 집 아이**를 본다(#563). 이 목록은 "고칠 수 있는 아이" 이고, 가족이 없을 때의
+  /// 되돌아갈 자리다.
   Future<List<ServerPet>> pets() async {
-    final json = await _send(() => _authed.getJson(Uri.parse('$baseUrl/api/dogs')));
-    return (json as List)
-        .whereType<Map<String, dynamic>>()
-        .map(ServerPet.tryParse)
-        .whereType<ServerPet>()
-        .toList();
+    return _parsePets(await _send(() => _authed.getJson(Uri.parse('$baseUrl/api/dogs'))));
   }
+
+  /// **우리 집 아이** — 그 가족 식구들이 등록한 아이 전부 (#563).
+  ///
+  /// 이 앱의 목적이 업무 분담과 누락 방지라서(#76), 화면이 보는 것은 "내가 등록한 아이" 가
+  /// 아니라 "우리가 돌보는 아이" 다. 이 경로가 없던 동안, 가족에 합류한 사람의 홈은
+  /// **"아직 등록된 아이가 없어요"** 였다.
+  ///
+  /// 남이 등록한 아이는 [ServerPet.mine] 이 `false` 다 — 화면이 그 값으로 "고칠 수 있나" 를
+  /// 가른다.
+  Future<List<ServerPet>> householdPets(int groupId) async {
+    return _parsePets(
+        await _send(() => _authed.getJson(Uri.parse('$baseUrl/api/groups/$groupId/dogs'))));
+  }
+
+  /// 목록 하나가 깨져도 화면 전체를 죽이지 않는다 — 두 경로가 같은 규칙을 쓴다.
+  static List<ServerPet> _parsePets(Object? json) => (json as List)
+      .whereType<Map<String, dynamic>>()
+      .map(ServerPet.tryParse)
+      .whereType<ServerPet>()
+      .toList();
 
   /// 반려동물 등록. 산책을 저장하려면 **적어도 한 마리가 있어야 한다.**
   Future<ServerPet> registerPet({
