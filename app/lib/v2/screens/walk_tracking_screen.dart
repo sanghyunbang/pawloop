@@ -398,6 +398,12 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
         radius: 3000,
         numOfRows: 40,
       );
+    } on PlaceFailure catch (e) {
+      // **걷는 중에는 실패 카드로 흐름을 끊지 않는다**(#515). 이 화면의 일은 기록이고
+      // 장소 목록은 곁가지다 — 검색바가 '주변 반려 장소 찾기' 로 되돌아가므로 다시 누를 수
+      // 있다. 지도 탭은 반대로 실패를 그린다: 거기서는 장소가 화면의 본문이다.
+      if (kDebugMode) debugPrint('[WalkTracking] 주변 장소를 못 받았다: ${e.kind}');
+      return;
     } finally {
       if (mounted) setState(() => _poisLoading = false);
       // 시트가 열려 있으면 그것도 다시 그린다 — 안 그러면 스피너가 안 사라진다.

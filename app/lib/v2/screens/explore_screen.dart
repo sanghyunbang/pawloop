@@ -145,20 +145,40 @@ class _ExploreScreenState extends State<ExploreScreen> {
   List<Course> _nearbyCourses = const [];
   bool _coursesLoading = false;
 
+  /// 장소를 못 받은 이유. `null` 이면 못 받은 것이 아니라 **없는 것**이다(#515).
+  PlaceFailure? _placesFailure;
+
+  /// 이웃 코스를 못 받은 이유. 같은 규칙이다.
+  CourseFailure? _coursesFailure;
+
   int _loadSeq = 0;
 
   Future<void> _load() async {
     final seq = ++_loadSeq;
     setState(() => _loading = true);
     // 칩 키를 조회에 붙인다 — 받아 놓은 80곳 안에서 거르면 병원은 매장 뒤에 묻힌다(#291 실측).
-    final places = await _repo.fetchNearby(
-      lat: _center.latitude,
-      lng: _center.longitude,
-      contentTypeId: _catFilter,
-    );
+    List<PetPlace> places;
+    try {
+      places = await _repo.fetchNearby(
+        lat: _center.latitude,
+        lng: _center.longitude,
+        contentTypeId: _catFilter,
+      );
+    } on PlaceFailure catch (failure) {
+      // 못 받은 것을 "없다" 고 말하지 않는다(#515). 예전에는 저장소가 실패를 빈 목록으로
+      // 돌려줘서, 서버가 죽은 날 지도가 "이 지역엔 등록된 곳이 없어요" 를 그렸다.
+      if (!mounted || seq != _loadSeq) return;
+      setState(() {
+        _placesFailure = failure;
+        _places = const [];
+        _loading = false;
+      });
+      return;
+    }
     if (!mounted || seq != _loadSeq) return;
     setState(() {
       _places = places;
+      _placesFailure = null;
       _loading = false;
     });
     await _refreshMarkers();
@@ -174,11 +194,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
     List<Course> all;
     try {
       all = await _courses.publicCourses();
-    } catch (_) {
-      all = const [];
+    } on CourseFailure catch (failure) {
+      // "아직 이웃이 올린 코스가 없어요" 는 못 받았을 때 하는 거짓말이다(#515).
+      if (!mounted) return;
+      setState(() {
+        _coursesFailure = failure;
+        _nearbyCourses = const [];
+        _coursesLoading = false;
+      });
+      return;
     }
     if (!mounted) return;
     setState(() {
+      _coursesFailure = null;
       _nearbyCourses = nearestByStart<Course>(
         all,
         _center.latitude,
@@ -397,6 +425,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
             const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(child: CircularProgressIndicator(color: Color(0xFF0B7A75))))
+          else if (_coursesFailure != null)
+            Padding(
+              key: const Key('explore-courses-failed'),
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(children: [
+                Text(
+                    switch (_coursesFailure!.kind) {
+                      CourseFailureKind.network => '이웃 코스를 못 받았어요 · 연결을 확인해 주세요',
+                      _ => '이웃 코스를 못 받았어요 · 잠시 뒤 다시 시도해 주세요',
+                    },
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13, color: T.textMuted)),
+                TextButton(onPressed: _loadCourses, child: const Text('다시 시도')),
+              ]),
+            )
           else if (_nearbyCourses.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 28),
@@ -472,8 +515,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   /// 한 벌을 **아예 못 받은** 상태인가 — "이 지역에 없음" 과 다르다 (이슈 #275).
   ///
-  /// A안 빌드만 가를 수 있다. 서버 조회(B안)는 실패도 빈 목록으로 오고 그 구분은
-  /// 저장소 계약이 일부러 안 한다("실패를 빈 목록으로 다룬다"). 그쪽은 그대로 둔다.
+  /// 이것은 A안(기기 안 카탈로그)의 실패다. 서버 조회(B안)의 실패는 [_placesFailure] 가
+  /// 따로 든다 — 예전에는 그쪽이 실패를 빈 목록으로 돌려줘서 구분 자체가 없었고,
+  /// 그래서 서버가 죽은 날 "이 지역엔 등록된 곳이 없어요" 가 떴다(#515).
   bool get _catalogUnavailable =>
       !LocationUploadPolicy.canQueryNearbyPlaces && !PlaceCatalogRepository.instance.hasCatalog;
 
@@ -490,6 +534,25 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _emptyBox() {
     // 못 받은 것을 "없다" 고 말하면 안 된다. "지도를 움직여 보세요" 는 그 사람이 시킨
     // 대로 해도 소용이 없는 안내고, 5분 백오프 때문에 움직여도 다시 안 받는다.
+    final failure = _placesFailure;
+    if (failure != null) {
+      return GlassCard(
+        key: const Key('explore-places-failed'),
+        padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 18),
+        child: Column(children: [
+          const Icon(Icons.cloud_off_outlined, size: 36, color: T.textMuted),
+          const SizedBox(height: 10),
+          const Text('장소 목록을 못 받았어요',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textPrimary)),
+          const SizedBox(height: 4),
+          Text(failure.message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12.5, color: T.textMuted)),
+          const SizedBox(height: 12),
+          TextButton(onPressed: _load, child: const Text('다시 시도')),
+        ]),
+      );
+    }
     if (_catalogUnavailable) {
       return GlassCard(
         padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 18),
