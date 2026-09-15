@@ -116,8 +116,10 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                    child: SelectableText(
-                      _body!,
+                    // `SelectableText.rich` 다 — 약관은 **복사할 수 있어야** 한다(신고·문의에
+                    // 붙여 넣는다). 굵게만 해석하고 나머지는 글자 그대로다.
+                    child: SelectableText.rich(
+                      TextSpan(children: boldSpans(_body!)),
                       style: const TextStyle(
                         fontSize: 13.5,
                         height: 1.65,
@@ -128,4 +130,53 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
       ),
     );
   }
+}
+
+/// 마크다운의 `**굵게**` 만 해석한다 — 이슈 #550.
+///
+/// ## 왜 필요한가
+///
+/// 문서는 `assets/terms/*.md` 인데 화면은 그대로 글자로 그렸다. 그래서 약관 본문에
+/// `별도의 **위치기반서비스 이용약관**에서 정합니다` 처럼 **별표가 그대로** 보였다.
+/// 네 문서에서 마흔한 줄이었다.
+///
+/// **이 화면은 심사에서 열린다.** 애플·구글 심사자가 보는 것이 정확히 이 화면이고,
+/// 사용자도 문제가 생겼을 때 여기를 읽는다. 게다가 별표가 붙은 자리는 일부러 강조한
+/// 자리라("만 14세 미만", "별도의 위치기반서비스 이용약관"), 강조가 필요해서 붙인 것이
+/// 오히려 읽기를 방해하고 있었다.
+///
+/// ## 왜 마크다운 라이브러리를 안 넣나
+///
+/// 네 문서가 쓰는 문법이 **굵게와 목록뿐**이다(홑별표 · 머리글 · 표 · 링크가 하나도 없다).
+/// 목록(`- `)은 글머리표로 그대로 읽힌다. 의존성을 더할 이유가 없다.
+///
+/// 짝이 없는 `**` 는 **그대로 둔다** — 지우면 문서가 조용히 달라진다. 그 경우는
+/// `legal_document_markdown_test` 가 문서를 읽어 빨간불로 알린다.
+List<TextSpan> boldSpans(String source) {
+  const bold = TextStyle(fontWeight: FontWeight.w800);
+  final out = <TextSpan>[];
+  // `at` 은 **아직 안 실은** 자리, `from` 은 찾기 시작할 자리다. 둘을 나눠 두지 않으면
+  // 빈 강조를 건너뛸 때 그 앞 글자가 통째로 사라진다(`가****나` → `**나`).
+  var at = 0;
+  var from = 0;
+
+  while (true) {
+    final open = source.indexOf('**', from);
+    if (open < 0) break;
+    final close = source.indexOf('**', open + 2);
+    // 짝이 없다 — 남은 글자를 그대로 싣고 끝낸다.
+    if (close < 0) break;
+    // `****` 처럼 속이 빈 것은 강조가 아니다. 찾는 자리만 옮기고 글자는 그대로 둔다.
+    if (close == open + 2) {
+      from = open + 2;
+      continue;
+    }
+    if (open > at) out.add(TextSpan(text: source.substring(at, open)));
+    out.add(TextSpan(text: source.substring(open + 2, close), style: bold));
+    at = close + 2;
+    from = at;
+  }
+
+  if (at < source.length) out.add(TextSpan(text: source.substring(at)));
+  return out;
 }
