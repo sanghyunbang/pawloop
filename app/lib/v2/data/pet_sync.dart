@@ -22,13 +22,19 @@ library;
 import 'package:flutter/foundation.dart';
 
 import '../domain/pet.dart';
+import 'family_repository.dart';
 import 'walk_repository.dart';
 
 /// 서버의 반려동물과 앱의 [kMyPets] 를 맞춘다.
 class PetSync {
   final WalkRepository _repo;
 
-  PetSync({WalkRepository? repository}) : _repo = repository ?? WalkRepository();
+  /// 우리 집이 어디인가 — 아이 목록의 범위를 정한다(#563). 테스트가 가짜를 꽂는다.
+  final FamilyRepository _family;
+
+  PetSync({WalkRepository? repository, FamilyRepository? family})
+      : _repo = repository ?? WalkRepository(),
+        _family = family ?? FamilyRepository();
 
   /// 서버 목록을 불러 [kMyPets] 를 갈아 끼운다.
   ///
@@ -39,11 +45,32 @@ class PetSync {
   ///         그대로 그린다
   Future<bool> load() async {
     try {
-      final pets = await _repo.pets();
-      replacePets(pets.map(_toProfile).toList());
+      replacePets((await _householdPets()).map(_toProfile).toList());
       return true;
     } on WalkFailure {
       return false;
+    }
+  }
+
+  /// **우리 집 아이** — 가족이 있으면 그 집 아이 전부, 없으면 내가 등록한 아이 (#563).
+  ///
+  /// ## 왜 두 경로인가
+  ///
+  /// 이 앱의 목적이 업무 분담과 누락 방지라서(#76), 홈 · 케어 · 산책이 보는 것은 "내가
+  /// 등록한 아이" 가 아니라 **"우리가 돌보는 아이"** 다. 그 전까지 가족에 합류한 아빠의
+  /// 홈은 <b>"아직 등록된 아이가 없어요"</b> 였다 — 보리를 같이 키우는데도.
+  ///
+  /// ## 가족 조회가 실패해도 화면이 안 빈다
+  ///
+  /// 가족이 없으면(`noGroup`) 내 아이로 간다. 그 밖의 실패(연결 없음 · 401)도 마찬가지다 —
+  /// 여기서 던지면 **아이 목록 전체가 사라진다.** 가족을 못 읽은 것이 아이를 못 읽은 것보다
+  /// 가벼운 실패다.
+  Future<List<ServerPet>> _householdPets() async {
+    try {
+      final group = await _family.myGroup();
+      return await _repo.householdPets(group.id);
+    } on FamilyFailure {
+      return _repo.pets();
     }
   }
 
@@ -179,6 +206,8 @@ class PetSync {
         ageMonths: pet.ageMonths ?? 0,
         neutered: pet.neutered,
         photoUrl: pet.avatarUrl,
+        // 남이 등록한 아이는 false 다(#563). 화면이 이 값으로 "고칠 수 있나" 를 가른다.
+        mine: pet.mine,
       );
 
   static ServerPetSpecies _toServerSpecies(PetSpecies s) => switch (s) {

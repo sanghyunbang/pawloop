@@ -321,8 +321,16 @@ class FamilyRepository {
   }
 
   /// 그 그룹의 하루치 케어. [date] 를 생략하면 서버가 오늘로 답한다.
-  Future<List<CareLogEntry>> careLogs(int groupId, {DateTime? date}) async {
-    final query = date == null ? '' : '?date=${_isoDate(date)}';
+  ///
+  /// [dogId] 를 주면 **그 아이 것과 아이 없는 옛 기록**이 함께 온다(#563). 옛 기록을 빼면
+  /// 어제 준 밥이 화면에서 사라지고, 사라지면 "아직" 으로 읽혀 한 번 더 준다 — 이 표가
+  /// 막으려는 것이 정확히 그 이중 급여다(#76).
+  Future<List<CareLogEntry>> careLogs(int groupId, {DateTime? date, int? dogId}) async {
+    final params = <String>[
+      if (date != null) 'date=${_isoDate(date)}',
+      if (dogId != null) 'dogId=$dogId',
+    ];
+    final query = params.isEmpty ? '' : '?${params.join('&')}';
     final json = await _send(
       () => _authed.getJson(Uri.parse('$baseUrl/api/groups/$groupId/care-logs$query')),
     );
@@ -334,11 +342,20 @@ class FamilyRepository {
   }
 
   /// 케어 한 건 기록. **수행자와 시각은 서버가 정한다** — 보낼 것이 없다.
-  Future<CareLogEntry> recordCare(int groupId, ServerCareType type, {String? memo}) async {
+  ///
+  /// [dogId] 는 **어느 아이에게 한 일인가**다(#563). 이 앱의 목적이 업무 분담이라 "해당
+  /// 동물을 누르면 누가 무엇을 했는지" 가 보여야 하고, 그러려면 기록에 아이가 붙어야 한다.
+  /// 아이를 한 마리도 등록하지 않은 집도 기록하므로 **선택**이다.
+  Future<CareLogEntry> recordCare(int groupId, ServerCareType type,
+      {String? memo, int? dogId}) async {
     final json = await _send(
       () => _authed.postJson(
         Uri.parse('$baseUrl/api/groups/$groupId/care-logs'),
-        body: {'type': type.wire, if (memo != null && memo.isNotEmpty) 'memo': memo},
+        body: {
+          'type': type.wire,
+          if (memo != null && memo.isNotEmpty) 'memo': memo,
+          if (dogId != null) 'dogId': dogId,
+        },
       ),
     );
     final parsed = CareLogEntry.tryParse(json as Map<String, dynamic>);

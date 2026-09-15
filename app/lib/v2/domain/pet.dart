@@ -98,6 +98,12 @@ class DogProfile {
   /// 프로필 사진의 공개 URL (#448). 없으면 `null` — 화면은 [avatarAsset] 의 종 이모지로 돌아간다.
   final String? photoUrl;
 
+  /// **내가 등록한 아이인가** (#563). 아니면 보고 돌볼 수는 있어도 **고치고 지울 수 없다.**
+  ///
+  /// 가족이 아이를 함께 돌보기 시작하면서 생긴 구분이다. 엄마가 등록한 보리를 아빠도
+  /// 홈에서 고르고 물을 줄 수 있지만, 이름 · 품종 · 사진을 바꾸는 것은 등록한 사람의 일이다.
+  final bool mine;
+
   const DogProfile({
     this.serverId,
     required this.name,
@@ -107,6 +113,7 @@ class DogProfile {
     required this.ageMonths,
     this.neutered = false,
     this.photoUrl,
+    this.mine = true,
   });
 
   String get ageLabel =>
@@ -143,6 +150,7 @@ class DogProfile {
     bool? neutered,
     String? photoUrl,
     bool clearPhoto = false,
+    bool? mine,
   }) => DogProfile(
     serverId: serverId ?? this.serverId,
     name: name ?? this.name,
@@ -152,6 +160,9 @@ class DogProfile {
     ageMonths: ageMonths ?? this.ageMonths,
     neutered: neutered ?? this.neutered,
     photoUrl: clearPhoto ? null : (photoUrl ?? this.photoUrl),
+    // 여기서 빠뜨리면 편집 한 번에 남의 아이가 내 아이로 둔갑한다 — 필드를 손으로
+    // 나열하는 사본 메서드의 실패 모드다.
+    mine: mine ?? this.mine,
   );
 }
 

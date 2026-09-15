@@ -610,7 +610,7 @@ class CommunityRepository {
     /// 미리 올려 둔 사진의 id — `POST /media` 가 돌려준 값 (#429). 순서는 올린 순서다.
     List<int>? mediaIds,
 
-    /// 이 글에 찍힌 아이 (#451 5번). 내 아이의 id — 남의 아이면 서버가 400.
+    /// 이 글에 찍힌 아이 (#451 5번). **우리 집 아이**의 id — 남의 집 아이면 서버가 400(#563).
     int? dogId,
   }) async {
     final uploadLoc = LocationUploadPolicy.placeNameForUpload(loc);
