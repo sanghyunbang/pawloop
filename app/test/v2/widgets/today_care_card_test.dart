@@ -44,18 +44,23 @@ http.Response _json(Object body, {int status = 200}) => http.Response(
       headers: const {'content-type': 'application/json; charset=utf-8'},
     );
 
+/// [userId] 를 안 주면 **나(11)** 다 — 이 파일의 테스트 대부분이 "내 기록" 을 재기 때문이다.
+///
+/// 이름만 바꾸고 id 를 그대로 두면 **한 계정이 이름 둘을 가진 셈**이 된다. 계약은 한
+/// `userId` 에 닉네임 하나라, 두 사람이 필요한 테스트는 id 도 나눠야 한다(#570).
 Map<String, Object?> _log({
   required int id,
   required String type,
   required String who,
   required String at,
+  int userId = 11,
 }) =>
     {
       'id': id,
       'dogId': null,
       'groupId': 3,
       'type': type,
-      'doneBy': {'userId': 11, 'nickname': who},
+      'doneBy': {'userId': userId, 'nickname': who},
       'occurredAt': at,
       'memo': null,
     };
@@ -113,7 +118,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo);
 
-    await tester.tap(find.text('밥'));
+    await tester.tap(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
 
     expect(
@@ -131,7 +136,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo);
 
-    await tester.tap(find.text('밥'));
+    await tester.tap(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('취소'));
     await tester.pumpAndSettle();
@@ -146,7 +151,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo);
 
-    await tester.tap(find.text('밥'));
+    await tester.tap(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('그래도 기록'));
     await tester.pumpAndSettle();
@@ -160,7 +165,7 @@ void main() {
     final f = fixture(logs: const []);
     await pumpCard(tester, f.repo);
 
-    await tester.tap(find.text('밥'));
+    await tester.tap(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
 
     expect(
@@ -172,15 +177,18 @@ void main() {
   });
 
   testWidgets('누가·언제가 칸에 함께 보인다 — 체크 표시만으로는 이중 급여를 못 막는다',
-      (tester) async {
+      (t) async {
     final f = fixture(logs: [
       _log(id: 1, type: 'walk', who: '엄마', at: '2026-08-30T07:05:00'),
     ]);
-    await pumpCard(tester, f.repo);
+    await pumpCard(t, f.repo);
 
     // 이름과 시각은 두 줄이다 — 한 줄 "엄마 · 07:05" 는 다섯 칸 폭에서 잘렸다(#326).
-    expect(find.text('엄마'), findsOneWidget);
-    expect(find.text('07:05'), findsOneWidget);
+    //
+    // **칸 안에서 찾는다**(#570). 아래 "오늘 한 일" 줄에도 같은 이름과 시각이 있어서
+    // `find.text` 로는 둘이 안 갈린다.
+    expect(t.widget<Text>(find.byKey(const Key('care-line1-walk'))).data, '엄마');
+    expect(t.widget<Text>(find.byKey(const Key('care-line2-walk'))).data, '07:05');
     expect(find.text('아직'), findsNWidgets(6), reason: '일곱 칸 중 여섯은 아직이다');
   });
 
@@ -193,7 +201,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo, myUserId: 11); // _log 의 doneBy.userId 가 11 이다
 
-    await tester.longPress(find.text('밥'));
+    await tester.longPress(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
 
     expect(find.text('기록을 지울까요?'), findsOneWidget);
@@ -215,7 +223,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo, myUserId: 11);
 
-    await tester.longPress(find.text('밥'));
+    await tester.longPress(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('취소'));
     await tester.pumpAndSettle();
@@ -230,7 +238,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo, myUserId: 22); // 엄마(11)가 아니다
 
-    await tester.longPress(find.text('산책'));
+    await tester.longPress(find.byKey(const Key('care-cell-walk')));
     await tester.pumpAndSettle();
 
     expect(find.text('기록을 지울까요?'), findsNothing);
@@ -247,7 +255,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo, myUserId: 11);
 
-    await tester.tap(find.text('물'));
+    await tester.tap(find.byKey(const Key('care-cell-water')));
     await tester.pumpAndSettle();
 
     expect(find.text('이미 기록한 칸이에요'), findsOneWidget);
@@ -272,7 +280,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo, myUserId: 11);
 
-    await tester.tap(find.text('밥'));
+    await tester.tap(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('한 번 더 기록'));
     await tester.pumpAndSettle();
@@ -288,7 +296,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo, myUserId: 11);
 
-    await tester.tap(find.text('밥'));
+    await tester.tap(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('취소'));
     await tester.pumpAndSettle();
@@ -303,7 +311,7 @@ void main() {
     ]);
     await pumpCard(tester, f.repo, myUserId: 22); // 엄마(11)가 아니다
 
-    await tester.tap(find.text('산책'));
+    await tester.tap(find.byKey(const Key('care-cell-walk')));
     await tester.pumpAndSettle();
 
     expect(find.text('그래도 기록'), findsOneWidget);
@@ -436,15 +444,17 @@ void main() {
   testWidgets('밥을 두 번 줬으면 칸이 "2회" 라고 말한다 — 예전에는 마지막 사람 이름뿐이었다 (#561)',
       (tester) async {
     final f = fixture(logs: [
-      _log(id: 1, type: 'meal', who: '엄마', at: '2026-08-30T08:00:00'),
+      _log(id: 1, type: 'meal', who: '엄마', at: '2026-08-30T08:00:00', userId: 22),
       _log(id: 2, type: 'meal', who: '아빠', at: '2026-08-30T19:00:00'),
     ]);
     await pumpCard(tester, f.repo);
 
     expect(tester.widget<Text>(find.byKey(const Key('care-line1-meal'))).data, '2회',
         reason: '두 번째를 막으려고 보는 자리인데, 두 번 줬다는 사실이 화면에 없었다');
-    expect(tester.widget<Text>(find.byKey(const Key('care-line2-meal'))).data, '19:00',
-        reason: '가장 최근 시각이다');
+    // **#570 이 바꿨다.** 두 번 이상이면 시각이 아니라 사람이다 — `2회 · 19:00` 만으로는
+    // 둘이 한 번씩인지 한 사람이 두 번인지 알 수 없어서 분담이 안 보였다.
+    expect(tester.widget<Text>(find.byKey(const Key('care-line2-meal'))).data, '아빠·엄마',
+        reason: '분담을 보이게 하려던 칸이 분담을 가리면 안 된다');
   });
 
   testWidgets('물도 세 번이면 "3회" 다 — 종류마다 다른 규칙을 두지 않는다 (#561)',

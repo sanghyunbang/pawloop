@@ -90,10 +90,20 @@ Future<List<double>> _cellHeights(WidgetTester t,
   t.view.devicePixelRatio = 3.0;
   addTearDown(t.view.reset);
 
+  // **실제 배치대로 스크롤 안에 둔다**(#570). 홈은 `_fitOrScroll` 의 `SingleChildScrollView`,
+  // 우리 가족 화면은 `ListView` 라 카드가 화면보다 길어도 넘치지 않는다. 안 감싸고 재면
+  // "오늘 한 일" 이 붙은 카드가 2.0배에서 화면을 넘겨서, **호스트 탓인 넘침**이 칸의
+  // 결함처럼 잡힌다.
+  //
+  // 그래도 이 테스트가 잡는 것은 그대로다 — **칸 안의** 넘침은 여전히 예외를 던지고,
+  // 그게 #561 이 잡으려던 실패다(거리 한 줄이 칸을 밀어 올리던 것).
   await t.pumpWidget(MaterialApp(
     home: MediaQuery(
       data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
-      child: Scaffold(body: TodayCareCard(repository: _repo(logs ?? _mixed()))),
+      child: Scaffold(
+        body: SingleChildScrollView(
+            child: TodayCareCard(repository: _repo(logs ?? _mixed()))),
+      ),
     ),
   ));
   await t.pumpAndSettle();

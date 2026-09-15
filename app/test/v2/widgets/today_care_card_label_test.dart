@@ -58,8 +58,13 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: TodayCareCard(repository: repo))));
     await tester.pumpAndSettle();
 
-    expect(find.text('15:40'), findsOneWidget, reason: '시각은 제 줄에 온전히');
-    expect(find.text('walker-with-a-very-long-name'), findsOneWidget, reason: '이름은 제 줄에서 줄임표');
+    // **칸 안에서 찾는다**(#570). 아래 "오늘 한 일" 줄에도 같은 시각·이름이 있어서
+    // `find.text` 로는 둘이 안 갈린다.
+    expect(tester.widget<Text>(find.byKey(const Key('care-line2-water'))).data, '15:40',
+        reason: '시각은 제 줄에 온전히');
+    expect(tester.widget<Text>(find.byKey(const Key('care-line1-water'))).data,
+        'walker-with-a-very-long-name',
+        reason: '이름은 제 줄에서 줄임표');
     expect(find.textContaining(' · 15'), findsNothing, reason: '한 줄로 붙이지 않는다');
   });
 }

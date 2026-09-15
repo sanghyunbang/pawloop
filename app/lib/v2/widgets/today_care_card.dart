@@ -176,6 +176,44 @@ class _TodayCareCardState extends State<TodayCareCard> {
     return done.doneByName;
   }
 
+  /// 칸의 **셋째 줄**. 한 번이면 시각, 두 번 이상이면 **한 사람들**이다 — 이슈 #570.
+  ///
+  /// `2회` 만 있으면 둘이 한 번씩인지 한 사람이 두 번인지 화면이 구별을 못 한다. 이 앱의
+  /// 목적이 업무 분담이라 그 구별이 곧 화면의 값어치다(#76). 두 번 이상일 때 시각을 빼는
+  /// 이유는, 어느 시각을 적어도 나머지를 숨기기 때문이다 — 시각 전부는 "오늘 한 일" 이 적는다.
+  ///
+  /// 이름이 길면 `아빠 외 1` 로 접는다. 칸 폭이 좁아서(#326) 두 이름이 다 안 들어간다.
+  String _secondLine(ServerCareType type, CareLogEntry? done) {
+    if (done == null) return '';
+    // **횟수로 가른다, 사람 수가 아니라.** 한 사람이 두 번 한 날도 첫 줄은 `2회` 인데,
+    // 그때 시각 하나를 적으면 "누가" 가 화면에서 통째로 사라진다. `2회 · 아빠` 와
+    // `2회 · 아빠·엄마` 가 달라 보여야 분담이 보인다.
+    if (_countOf(type) < 2) return done.timeLabel;
+    final names = _doersOf(type);
+    if (names.length == 1) return names.first;
+    // 둘을 다 적을 수 있으면 다 적는다. 칸이 좁아서(#326) 다섯 자가 한계다 —
+    // `아빠·엄마` 는 들어가고 `아버지·할머니` 는 안 들어간다.
+    final joined = names.join('·');
+    return names.length == 2 && joined.characters.length <= 5
+        ? joined
+        : '${names.first} 외 ${names.length - 1}';
+  }
+
+  /// 오늘 이 칸을 누른 사람들. **중복 없이, 최근 순으로.**
+  ///
+  /// 최근 순인 이유: 한 번일 때 첫 줄이 **마지막에 한 사람**을 적는다. 둘 이상일 때
+  /// 앞에 오는 이름이 달라지면 같은 칸이 상황에 따라 다른 기준으로 읽힌다.
+  List<String> _doersOf(ServerCareType type) {
+    final seen = <int>{};
+    final names = <String>[];
+    for (final log in _logs.reversed) {
+      if (log.type != type) continue;
+      if (!seen.add(log.doneByUserId)) continue;
+      names.add(log.doneByName.isEmpty ? '누군가' : log.doneByName);
+    }
+    return names;
+  }
+
   Future<void> _tap(ServerCareType type) async {
     final group = _group;
     if (group == null || _sending != null) return;
@@ -525,8 +563,97 @@ class _TodayCareCardState extends State<TodayCareCard> {
           ],
         ]),
       ],
+      ..._todayLog(),
     ]);
   }
+
+  /// "오늘 한 일" 의 사람 칸 폭. 390dp 에서 `CrewOwner` 가 들어가는 값이다.
+  static const double _logNameWidth = 78;
+
+  /// 홈이 보여 줄 "오늘 한 일" 줄 수. 나머지는 헤더의 "우리 가족 →" 이 받는다.
+  static const int homeLogLines = 3;
+
+  /// **오늘 한 일** — 이슈 #570.
+  ///
+  /// 위의 칸 일곱은 "할 일" 이다. 각 칸은 **가장 최근 하나**만 말하므로, 아빠와 엄마가
+  /// 밥을 한 번씩 준 날 그 칸은 `2회` 하나로 접힌다 — 둘이 한 번씩인지 한 사람이 두
+  /// 번인지 알 수 없다. 이 앱의 목적이 업무 분담과 누락 방지라(#76) 그 구별이 곧 화면의
+  /// 값어치다. 이 줄이 "한 일" 을 시간까지 펼친다.
+  ///
+  /// **누락은 위 칸이, 분담은 이 줄이 말한다.** 아무도 안 한 칸은 여기 안 나온다.
+  ///
+  /// 홈에서는 [homeLogLines] 줄까지만 보이고 나머지는 "그 밖 N개" 한 줄로 접힌다.
+  /// 우리 가족 화면(`onOpenFamily == null`)에서는 전부 편다 — 그 화면이 "더 보기" 의
+  /// 목적지라, 거기서도 접으면 갈 곳이 없다.
+  List<Widget> _todayLog() {
+    if (_logs.isEmpty) return const [];
+    // **최근 순이다.** 목록은 이른 것부터 오는데(계약), 홈은 세 줄만 보이므로 이른 것부터
+    // 자르면 **방금 누른 것이 안 보인다** — 누르고 나서 "기록됐나?" 를 확인할 수 없다.
+    final newestFirst = _logs.reversed.toList();
+    final full = widget.onOpenFamily == null;
+    final shown = full ? newestFirst : newestFirst.take(homeLogLines).toList();
+    final rest = newestFirst.length - shown.length;
+
+    return [
+      const SizedBox(height: 10),
+      Container(height: 1, color: T.line),
+      const SizedBox(height: 8),
+      Row(children: [
+        const Text('오늘 한 일',
+            key: Key('care-log-title'),
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w800, color: T.textMuted)),
+        const SizedBox(width: 6),
+        Text('${_logs.length}',
+            style: const TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w800, color: T.textFaint)),
+      ]),
+      for (final log in shown) ...[
+        const SizedBox(height: 5),
+        _logLine(log),
+      ],
+      if (rest > 0) ...[
+        const SizedBox(height: 5),
+        Text('그 전에 $rest개',
+            key: const Key('care-log-rest'),
+            style: const TextStyle(fontSize: 11, color: T.textFaint)),
+      ],
+    ];
+  }
+
+  /// `10:39  아빠  물` — 시각 · 사람 · 무엇. 셋 다 왼쪽에 맞춘다.
+  ///
+  /// 사람 칸에 고정 폭을 주는 이유: 이름 길이가 제각각이라 그냥 두면 종류가 들쭉날쭉
+  /// 앉는다. 훑을 때 눈이 따라가는 세로줄이 "무엇" 이라 그 줄이 흔들리면 안 읽힌다.
+  ///
+  /// 폭 [_logNameWidth] 는 에뮬레이터에서 보고 늘린 값이다 — 58 로 뒀더니 `CrewOwner`
+  /// 가 `CrewOw…` 로 잘렸다. 그보다 긴 이름은 여전히 줄임표로 접는다(잘리는 편이
+  /// 종류 줄이 흔들리는 것보다 낫다).
+  Widget _logLine(CareLogEntry log) => Row(key: Key('care-log-${log.id}'), children: [
+        SizedBox(
+          width: 42,
+          child: Text(log.timeLabel,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: T.textMuted,
+                  fontFeatures: [FontFeature.tabularFigures()])),
+        ),
+        SizedBox(
+          width: _logNameWidth,
+          child: Text(log.doneByName.isEmpty ? '누군가' : log.doneByName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: T.textSecondary)),
+        ),
+        Expanded(
+          child: Text(log.type.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: T.textSecondary)),
+        ),
+      ]);
 
   /// "아빠가 아침에 1.2km 걸었어요" — 이슈 #343.
   ///
@@ -602,9 +729,10 @@ class _TodayCareCardState extends State<TodayCareCard> {
           // 아직 안 한 칸도 **빈 줄로 자리를 지킨다.** 이 줄을 없애면 누르는 순간 칸이
           // 한 줄만큼 자라고, 같은 줄의 이웃들이 통째로 밀린다.
           Text(
-            done?.timeLabel ?? '',
+            _secondLine(type, done),
             key: Key('care-line2-${type.wire}'),
             maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: T.accent),
           ),
         ]),
