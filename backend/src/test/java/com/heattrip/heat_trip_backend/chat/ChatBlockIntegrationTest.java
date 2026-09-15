@@ -99,7 +99,7 @@ class ChatBlockIntegrationTest extends AbstractMySqlIntegrationTest {
         blocks.block(f.reader.getId(), f.noisy.getId());
 
         ChatMessagePageResponse page = chatMessages.page(
-                f.roomId, f.reader.getId(), 0L, null, 50);
+                f.roomId, f.reader.getId(), 0L, null, null, 50);
 
         assertThat(page.items()).singleElement().satisfies(item -> {
             assertThat(item.roomSeq())
@@ -247,7 +247,7 @@ class ChatBlockIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     private List<ChatMessageResponse> pageOf(Fixture f, User reader) {
-        return chatMessages.page(f.roomId, reader.getId(), 0L, null, 50).items();
+        return chatMessages.page(f.roomId, reader.getId(), 0L, null, null, 50).items();
     }
 
     private ChatRoomResponse roomOf(Fixture f, User reader) {

@@ -119,6 +119,20 @@ public class ChatRoom {
     @Column(name = "last_seq", nullable = false)
     private Long lastSeq = 0L;
 
+    /**
+     * 이 방에서 <b>이미 보낸 말이 바뀐 횟수</b>의 발급 카운터 — ADR-0023(#500).
+     *
+     * <p>{@link #lastSeq} 와 축이 다르다. 그건 "방에 들어온 순서" 이고 이건 "바뀐 순서" 다. 삭제(#197)나
+     * 앞으로의 반응은 번호를 늘리지 않으므로 델타 폴링({@code afterSeq})이 영영 못 따라잡는다 — 그 변화를
+     * 흘려보내는 축이 이 카운터다. 발급은 {@code room_seq} 와 같은 한 문장이라 시계가 필요 없다.
+     *
+     * <p>미읽음 뺄셈에는 들어가지 않는다. 남이 지운 말이 내 뱃지를 올리면 안 된다.
+     */
+    @Builder.Default
+    @ColumnDefault("0")
+    @Column(name = "last_change_seq", nullable = false)
+    private Long lastChangeSeq = 0L;
+
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

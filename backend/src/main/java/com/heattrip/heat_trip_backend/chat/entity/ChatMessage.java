@@ -81,7 +81,8 @@ import java.time.LocalDateTime;
         },
         indexes = {
                 @Index(name = "idx_chat_sender", columnList = "sender_user_id"),
-                @Index(name = "idx_chat_reply_to", columnList = "reply_to_id")
+                @Index(name = "idx_chat_reply_to", columnList = "reply_to_id"),
+                @Index(name = "idx_chat_change", columnList = "room_id, change_seq")
         }
 )
 @Getter
@@ -217,6 +218,15 @@ public class ChatMessage {
      * {@code SET NULL} 로 답장만 남는다. 다른 방의 메시지는 {@code ChatRoomService#postMessage} 가
      * 400 으로 막는다. 이 표 안의 자기 참조라 chat 경계를 넘지 않는다.
      */
+    /**
+     * 이 말이 <b>마지막으로 바뀐</b> 방 단위 번호 — ADR-0023(#500). {@code null} 이면 한 번도 안 바뀐 말이다.
+     *
+     * <p>{@code room_seq} 를 다시 발급하지 않는 이유가 이 컬럼이 있는 이유다 — 그 번호를 흔들면 오래된 말이
+     * 대화 맨 아래로 뛰고 모두의 미읽음이 1 늘어난다(ADR-0011 결정 2).
+     */
+    @Column(name = "change_seq")
+    private Long changeSeq;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reply_to_id", foreignKey = @ForeignKey(name = "fk_chat_reply_to"))
     @OnDelete(action = OnDeleteAction.SET_NULL)

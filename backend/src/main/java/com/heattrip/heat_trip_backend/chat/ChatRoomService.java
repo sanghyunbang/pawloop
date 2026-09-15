@@ -82,6 +82,9 @@ public class ChatRoomService {
     private static final int CODE_ATTEMPTS = 5;
 
     /** 본문 종류의 기본값. 이미지·시스템 메시지가 오면 값이 는다(M2.7 이후). */
+    /** 변경 피드가 훑는 최근 메시지 수 — ADR-0023 결정 5. 앱이 화면에 들고 있을 만한 범위다. */
+    static final int CHANGED_WINDOW = 200;
+
     private static final String DEFAULT_CONTENT_TYPE = "text";
 
     /**
@@ -1049,9 +1052,33 @@ public class ChatRoomService {
         if (message.getDeletedAt() != null) {
             return;
         }
-        message.setBody("");
-        message.setDeletedAt(ChatTime.nowUtc(clock));
-        messages.save(message);
+        long roomId = message.getRoom().getId();
+
+        // ① 방의 변경 번호를 먼저 발급한다 — ADR-0023(#500). **잠금 순서가 chat_room → chat_message 다**:
+        //    말을 먼저 잠그고 방을 잠그면 전송 경로(방 → 말)와 엇갈려 데드락이 가능해진다.
+        rooms.assignNextChangeSeq(roomId);
+        long changeSeq = rooms.lastAssignedSeq();
+
+        // ② 발급이 영속성 컨텍스트를 비웠으므로(clearAutomatically) 다시 읽어 톰스톤을 찍는다.
+        ChatMessage fresh = messages.findById(messageId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "메시지를 찾을 수 없습니다."));
+        if (fresh.getDeletedAt() != null) {
+            return; // 그 사이 다른 요청이 지웠다. 번호 하나를 태우고 끝낸다 — 변경 번호에 빈틈은 허용된다.
+        }
+        fresh.setBody("");
+        fresh.setDeletedAt(ChatTime.nowUtc(clock));
+        fresh.setChangeSeq(changeSeq);
+        messages.save(fresh);
+    }
+
+    /**
+     * 델타가 훑는 <b>변경 창</b>의 바닥 — ADR-0023(#500) 결정 5. 방의 마지막 번호에서 이만큼 뒤까지만 본다.
+     *
+     * <p>창이 없으면 방을 오래 열어 둔 사람에게 1년 치 변경이 한 번에 간다. 창 밖의 변화는 방을 다시 열 때
+     * 장(page) 조회가 가져오므로 잃어버리는 것이 아니다.
+     */
+    static long changedWindowFloor(long lastSeq) {
+        return Math.max(0, lastSeq - CHANGED_WINDOW);
     }
 
     /**
@@ -1097,6 +1124,17 @@ public class ChatRoomService {
     @Transactional(readOnly = true)
     public ChatMessagePageView messagePage(long roomId, long userId,
                                            Long afterSeq, Long beforeSeq, int limit) {
+        return messagePage(roomId, userId, afterSeq, beforeSeq, null, limit);
+    }
+
+    /**
+     * 델타 + <b>바뀐 말</b> — ADR-0023(#500). {@code afterChangeSeq} 를 주면 그 번호 뒤에 바뀐 말들을
+     * {@code changed} 에 함께 싣는다(창은 {@link #changedWindowFloor}). 안 주면 예전과 같이 빈 목록이다 —
+     * 첫 진입과 과거 스크롤은 그 장이 이미 최신이라 따로 받을 것이 없다.
+     */
+    @Transactional(readOnly = true)
+    public ChatMessagePageView messagePage(long roomId, long userId,
+                                           Long afterSeq, Long beforeSeq, Long afterChangeSeq, int limit) {
         if (afterSeq != null && beforeSeq != null) {
             throw new IllegalArgumentException("afterSeq 와 beforeSeq 는 함께 줄 수 없습니다.");
         }
@@ -1135,8 +1173,17 @@ public class ChatRoomService {
             }
         }
 
+        // 바뀐 말(ADR-0023, #500) — 커서를 준 폴링에만 싣는다. 첫 진입 · 과거 스크롤은 그 장이 이미 최신이다.
+        List<ChatMessageView> changed = afterChangeSeq == null
+                ? List.of()
+                : messages.findChangedAfter(roomId, afterChangeSeq, changedWindowFloor(room.getLastSeq()),
+                                Limit.of(limit)).stream()
+                        .map(ChatRoomService::viewOf)
+                        .toList();
+
         return new ChatMessagePageView(
-                rows.stream().map(ChatRoomService::viewOf).toList(), room.getLastSeq(), hasMore);
+                rows.stream().map(ChatRoomService::viewOf).toList(), room.getLastSeq(), hasMore,
+                changed, room.getLastChangeSeq());
     }
 
     /**
@@ -1494,7 +1541,7 @@ public class ChatRoomService {
 
     private static ChatRoomView viewOf(ChatRoom room) {
         return new ChatRoomView(room.getId(), room.getOriginKind(), room.getOriginRef(),
-                room.getName(), room.getTag(), room.getLastSeq(), room.getCreatedAt());
+                room.getName(), room.getTag(), room.getLastSeq(), room.getLastChangeSeq(), room.getCreatedAt());
     }
 
     /**

@@ -288,6 +288,11 @@ step "46_weekly_insight_feedback.sql"
 want 1 "$(has_column weekly_insight feedback)" "weekly_insight.feedback 컬럼 (없으면 부팅이 validate 에서 죽는다)"
 want 1 "$(check_has ck_weekly_insight_feedback down)" "ck_weekly_insight_feedback 이 down 을 받는다 (없으면 아무 문자열이나 평가가 된다)"
 
+step "47_chat_change_feed.sql"
+want 1 "$(has_column chat_room last_change_seq)" "chat_room.last_change_seq 컬럼 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(has_column chat_message change_seq)" "chat_message.change_seq 컬럼 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(has_index chat_message idx_chat_change)" "idx_chat_change (없으면 변경 피드가 표 전체를 훑는다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

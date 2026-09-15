@@ -27,5 +27,7 @@ import java.util.List;
 public record ChatMessagePageView(
         List<ChatMessageView> items,
         long lastSeq,
-        boolean hasMore) {
+        boolean hasMore,
+        List<ChatMessageView> changed,
+        long lastChangeSeq) {
 }

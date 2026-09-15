@@ -112,6 +112,27 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
      */
     List<ChatMessage> findByRoomIdAndIdIn(Long roomId, Collection<Long> ids);
 
+    /**
+     * 이 방에서 {@code afterChangeSeq} 뒤에 <b>바뀐</b> 말들 — ADR-0023(#500). 변경 번호 오름차순.
+     *
+     * <p>{@code roomSeq > minRoomSeq} 로 창을 좁히는 것이 요점이다. 방을 오래 열어 둔 사람에게 1년 치 변경을
+     * 내려보내지 않기 위해서고, 그 범위 밖의 변화는 방을 다시 열 때 장(page) 조회가 가져온다.
+     *
+     * <p>{@code (room_id, change_seq)} 인덱스({@code idx_chat_change})의 범위 스캔이다 — 한 번도 안 바뀐 말은
+     * {@code change_seq} 가 NULL 이라 인덱스에서 이 조건에 걸리지 않는다.
+     */
+    @Query("""
+            select m from ChatMessage m
+             where m.room.id = :roomId
+               and m.changeSeq > :afterChangeSeq
+               and m.roomSeq > :minRoomSeq
+             order by m.changeSeq asc
+            """)
+    List<ChatMessage> findChangedAfter(@Param("roomId") Long roomId,
+                                       @Param("afterChangeSeq") long afterChangeSeq,
+                                       @Param("minRoomSeq") long minRoomSeq,
+                                       Limit limit);
+
     Optional<ChatMessage> findByRoomIdAndSenderUserIdAndClientMsgId(
             Long roomId, Long senderUserId, String clientMsgId);
 }

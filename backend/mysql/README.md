@@ -71,6 +71,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\44_weekly_insight.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\45_chat_reply.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\46_weekly_insight_feedback.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\47_chat_change_feed.sql
 ```
 
 | 파일 | 무엇을 |
@@ -121,6 +122,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `44_weekly_insight.sql` | **AI 주간 요약** — #486. `weekly_insight` 표 하나를 만듭니다(`user_id`·`dog_id`(0 = 모든 아이)·`week_start`·`input_hash`·`model`·`text`·`calls`·`generated_at`). 사용자·아이·주마다 행 하나(유니크)가 모델 호출의 캐시입니다 — 같은 입력에 두 번 부르지 않고, `text` 가 NULL 인 행은 "만들었다가 버렸다"(숫자 검사)입니다. 탈퇴하면 CASCADE. `users` 가 먼저여야 합니다. |
 | `45_chat_reply.sql` | **채팅 답장(인용)** — #452. `chat_message` 에 `reply_to_id`(NULL 허용) · `idx_chat_reply_to` · `fk_chat_reply_to`(**같은 표**를 가리키고 **SET NULL**)를 더합니다. 원문의 내용은 저장하지 않고 응답 때마다 읽습니다 — 원문이 지워지면 "삭제된 메시지" 로 보이고, 운영 정리로 아예 지우면 답장만 남습니다. 같은 방의 메시지만 가리킬 수 있습니다(서버가 400). `chat_message` 가 먼저여야 합니다. |
 | `46_weekly_insight_feedback.sql` | **AI 요약 👍/👎** — #486 후속. `weekly_insight` 에 `feedback`(`up`·`down`·NULL, CHECK `ck_weekly_insight_feedback`) · `feedback_at` 을 더합니다. 요약 하나에 평가 하나라 표를 더 만들지 않습니다. 문장이 다시 만들어지면 앱 서버가 평가를 비웁니다. `weekly_insight` 가 먼저여야 합니다. |
+| `47_chat_change_feed.sql` | **채팅 변경 피드** — ADR-0023(#500). `chat_room.last_change_seq`(NOT NULL 기본 0)와 `chat_message.change_seq`(NULL 허용) · `idx_chat_change(room_id, change_seq)` 를 더합니다. 델타 폴링이 **이미 보낸 말의 변화**(지금은 삭제, 앞으로 반응)를 따라잡는 축입니다 — `room_seq` 는 손대지 않습니다. 쌓인 방은 0, 쌓인 메시지는 NULL 로 시작합니다. `chat_room` · `chat_message` 가 먼저여야 합니다. |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 

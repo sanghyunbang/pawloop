@@ -524,6 +524,8 @@ CREATE TABLE family_group (
 
 ## 12. `chat_room` — 채팅방 (범용) (**실재**)
 
+`last_change_seq` 는 **이미 보낸 말이 바뀐 횟수**의 발급 카운터다(ADR-0023, #500) — `last_seq` 와 축이 다르다(들어온 순서 vs 바뀐 순서). 미읽음에는 들어가지 않는다.
+
 방은 가족 그룹에 종속되지 않는다. `origin_kind`(방을 만든 도메인)와 `origin_ref`(그 도메인의 id 를 문자열로) 한 쌍으로 출처를 들고, 산책 크루 방처럼 가족이 아닌 방도 같은 표에 산다. **`last_seq` 는 `chat_message.room_seq` 의 발급 카운터이자 미읽음 뺄셈의 좌변이다** — 두 값이 다른 문장에서 움직여 어긋날 여지를 없애려고 한 컬럼으로 둔다.
 
 ```sql
@@ -534,6 +536,7 @@ CREATE TABLE chat_room (
   name        VARCHAR(50) NOT NULL COMMENT '방 이름',
   tag         VARCHAR(20) NOT NULL COMMENT '화면이 방 종류를 가르는 꼬리표 — 가족·산책 크루',
   last_seq    BIGINT      NOT NULL DEFAULT 0 COMMENT 'room_seq 발급 카운터 = 미읽음 뺄셈의 좌변',
+  last_change_seq BIGINT  NOT NULL DEFAULT 0 COMMENT '이미 보낸 말이 바뀐 횟수의 발급 카운터 — ADR-0023',
   created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_room_origin (origin_kind, origin_ref)
@@ -670,11 +673,13 @@ CREATE TABLE chat_message (
   created_at     DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   deleted_at     DATETIME(6)  NULL COMMENT '삭제는 소프트 — 뺀 자리가 seq 빈틈이 되면 안 된다',
   reply_to_id    BIGINT       NULL COMMENT '답장 대상(#452) — 같은 방의 메시지. 원문 내용은 저장하지 않는다',
+  change_seq     BIGINT       NULL COMMENT '이 말이 마지막으로 바뀐 방 단위 번호(ADR-0023). NULL = 한 번도 안 바뀜',
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_room_seq (room_id, room_seq),
   UNIQUE KEY uq_chat_msg_client (room_id, sender_user_id, client_msg_id),
   KEY idx_chat_sender (sender_user_id),
   KEY idx_chat_reply_to (reply_to_id),
+  KEY idx_chat_change (room_id, change_seq),
   CONSTRAINT fk_chat_room FOREIGN KEY (room_id)
     REFERENCES chat_room (id) ON DELETE CASCADE,
   CONSTRAINT fk_chat_reply_to FOREIGN KEY (reply_to_id)
@@ -695,8 +700,11 @@ CREATE TABLE chat_message (
 | `created_at` | `DATETIME(6)` | NOT NULL, 기본 now | 전송 시각 |
 | `deleted_at` | `DATETIME(6)` | NULL | 소프트 삭제 |
 | `reply_to_id` | `BIGINT` | NULL, FK→`chat_message.id` **SET NULL**, INDEX | 답장 대상(#452). 같은 방의 메시지만 — 서버가 400 으로 막는다 |
+| `change_seq` | `BIGINT` | NULL, INDEX(room, change) | 이 말이 마지막으로 바뀐 방 단위 번호(ADR-0023). NULL 이면 한 번도 안 바뀐 말 |
 
 **`room_seq` 발급은 한 문장이다.** `UPDATE chat_room SET last_seq = LAST_INSERT_ID(last_seq + 1) WHERE id = ?` 로 올리고 같은 트랜잭션에서 `SELECT LAST_INSERT_ID()` 로 내 번호를 읽는다. 방을 읽어 `+1` 해서 쓰는 판은 두 트랜잭션이 같은 값을 읽어 같은 번호를 쓴다 — 스레드 20개로 재현했고 `Duplicate entry '1-1' for key 'uq_chat_room_seq'` 가 났다(#78). **발급과 INSERT 가 한 트랜잭션이라 롤백이 번호를 되돌린다** — `AUTO_INCREMENT` 와 달리 실패한 요청이 번호를 태우지 않는 이유가 그것이다.
+
+**바뀐 말은 `change_seq` 로 따라간다(ADR-0023, #500).** 델타 폴링은 `afterSeq` 보다 **큰 `room_seq`** 만 주므로 이미 보낸 말이 바뀌면(소프트 삭제 · 앞으로의 반응) 그 변화가 영영 안 온다 — 남이 지운 말이 내 화면에 그대로 남아 있던 것이 그것이다. `room_seq` 를 다시 발급하는 길은 기각했다(오래된 말이 대화 맨 아래로 뛰고 모두의 미읽음이 1 는다). 대신 방마다 `last_change_seq` 를 두고 바뀐 행에 그 번호를 찍는다 — 발급은 `room_seq` 와 같은 한 문장이라 시계가 필요 없다. 미읽음 뺄셈에는 들어가지 않는다.
 
 **`deleted_at` 은 톰스톤이다 — 조회에서 거르지 않는다.** 빼면 그 `room_seq` 가 클라이언트에 도달하지 않는다. 미읽음이 `room.last_seq − member.last_read_seq` 뺄셈이라 읽음 커서가 그 번호를 넘지 못하고 **뱃지가 영원히 안 지워진다**. 본문을 가리는 것은 응답을 만드는 쪽의 일이지 조회에서 빼는 것이 아니다.
 
@@ -1374,6 +1382,7 @@ CREATE TABLE crew (
 | `chat_message` | `uq_chat_msg_client(room_id, sender_user_id, client_msg_id)` | UNIQUE | 재전송 멱등. `NULL` 은 여러 번 허용된다. **범위에 보낸 사람이 들어 있다** — 방 전체로 두면 같은 방의 다른 멤버가 같은 키를 썼을 때 그 사람의 메시지가 사라진다(#79) |
 | `chat_message` | `idx_chat_sender(sender_user_id)` | 보조 | 발신자별 조회(신고 처리) |
 | `chat_message` | `idx_chat_reply_to(reply_to_id)` | 보조 | 답장 대상 FK(#452). 원문을 지울 때 SET NULL 이 이 인덱스로 답장들을 찾는다 |
+| `chat_message` | `idx_chat_change(room_id, change_seq)` | 보조 | 변경 피드(ADR-0023)가 "이 방에서 이 번호 뒤에 바뀐 것" 을 읽는 축. 한 번도 안 바뀐 말은 `change_seq` 가 NULL 이라 걸리지 않는다 |
 | `walk_note` | `uq_walknote_group(group_id)` | UNIQUE | 그룹당 주의사항 한 장 |
 | `care_log` | `idx_carelog_group(group_id, occurred_at)` | 보조 | 그룹별 "오늘의 케어" 조회 |
 | `care_log` | `idx_carelog_doneby(done_by)` | 보조 | 사용자 삭제 시 `SET NULL` 이 훑는 자리 |

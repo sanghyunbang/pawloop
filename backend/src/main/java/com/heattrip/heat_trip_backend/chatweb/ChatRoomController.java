@@ -146,22 +146,27 @@ public class ChatRoomController {
             @PathVariable long roomId,
             @RequestParam(required = false) Long afterSeq,
             @RequestParam(required = false) Long beforeSeq,
+            @RequestParam(required = false) Long afterChangeSeq,
             @RequestParam(required = false) Integer limit,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
 
         ChatRoomView room = chatRooms.roomForMember(roomId, user.getId());
+        // 바뀐 말이 있으면 304 가 아니다 — **그 판정은 ETag 하나가 한다**(ADR-0023, #500). 값에 변경 번호가
+        // 들어 있어, 말이 바뀌면 클라이언트가 들고 온 ETag 와 지금 값이 달라진다. 여기에 afterChangeSeq 비교를
+        // 따로 두면 같은 판정이 두 곳에 생기고 한쪽이 낡는다(📌 #86) — 실제로 그 가지는 되돌려도 빨간불이
+        // 나지 않는 죽은 코드였다.
         if (afterSeq != null
-                && etagOf(roomId, room.lastSeq()).equals(ifNoneMatch)
+                && etagOf(roomId, room.lastSeq(), room.lastChangeSeq()).equals(ifNoneMatch)
                 && afterSeq >= room.lastSeq()) {
             // 빈 폴링의 대부분이 여기서 끝난다 — 세지 않으면 chat.poll 의 empty 비율이 거짓이 된다(#197).
             chatRooms.notModifiedPoll();
             return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
-                    .eTag(etagOf(roomId, room.lastSeq()))
+                    .eTag(etagOf(roomId, room.lastSeq(), room.lastChangeSeq()))
                     .build();
         }
 
         ChatMessagePageResponse page =
-                chatMessages.page(roomId, user.getId(), afterSeq, beforeSeq, pageSize(limit));
+                chatMessages.page(roomId, user.getId(), afterSeq, beforeSeq, afterChangeSeq, pageSize(limit));
         return respondWithPage(roomId, afterSeq, page);
     }
 
@@ -179,7 +184,7 @@ public class ChatRoomController {
         if (!coversEverythingUpToLastSeq) {
             return ResponseEntity.ok(page);
         }
-        return ResponseEntity.ok().eTag(etagOf(roomId, page.lastSeq())).body(page);
+        return ResponseEntity.ok().eTag(etagOf(roomId, page.lastSeq(), page.lastChangeSeq())).body(page);
     }
 
     /**
@@ -257,8 +262,8 @@ public class ChatRoomController {
      * 쪽({@code If-None-Match} 헤더 값)은 따옴표가 있는 문자열이라 같은 모양으로 만들어야
      * 대조가 성립한다.
      */
-    private static String etagOf(long roomId, long lastSeq) {
-        return "\"%d:%d\"".formatted(roomId, lastSeq);
+    private static String etagOf(long roomId, long lastSeq, long lastChangeSeq) {
+        return "\"%d:%d:%d\"".formatted(roomId, lastSeq, lastChangeSeq);
     }
 
     /**
