@@ -4,6 +4,7 @@ import com.heattrip.heat_trip_backend.dog.DogTime;
 import com.heattrip.heat_trip_backend.dog.DogOwnership;
 import com.heattrip.heat_trip_backend.dog.DogProfileView;
 import com.heattrip.heat_trip_backend.dog.dto.DogRequest;
+import com.heattrip.heat_trip_backend.dog.dto.DogPatchRequest;
 import com.heattrip.heat_trip_backend.dog.dto.DogResponse;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.dog.entity.DogSize;
@@ -109,6 +110,56 @@ public class DogService implements DogOwnership {
                 .neutered(request.neuteredOrDefault())
                 .build();
 
+        return toResponse(dogs.save(dog));
+    }
+
+    /**
+     * 부분 수정 — 이슈 #516. <b>보낸 것만</b> 바꾸고 안 보낸 것은 그대로 둔다.
+     *
+     * <p>2026-09-15 이전에는 이 경로가 없었고, 앱의 편집 화면은 메모리의 목록만 바꾼 뒤
+     * <b>"이 기기에만 반영했어요"</b> 라고 말했다. 그 말도 사실이 아니었다 — 기기에도 안
+     * 남아서, 앱을 껐다 켜면 {@code PetSync.load()} 가 서버 목록으로 통째로 갈아끼웠다.
+     *
+     * <p>남의 것과 없는 것은 같은 <b>404</b> 다(ADR-0017 규약 3). 빈 본문은 <b>400</b> 이다 —
+     * 계약의 {@code minProperties: 1} 이고, 200 으로 받으면 "저장했어요" 를 보고 아무것도
+     * 안 바뀐 화면을 보게 된다.
+     */
+    @Transactional
+    public DogResponse patch(Long userId, long dogId, DogPatchRequest request) {
+        if (request.isEmpty()) {
+            throw new IllegalArgumentException("바꿀 것을 하나는 보내 주세요.");
+        }
+        // 계약 밖의 값이면 여기서 400 이다. 엔티티를 찾기 **전에** 판정한다 — 남의 id 로
+        // 틀린 값을 보냈을 때 400 과 404 중 어느 쪽이 먼저인지가 흔들리면 안 된다.
+        PetSpecies species = request.speciesOrNull();
+        DogSize size = request.sizeOrNull();
+        if (request.isBirthGiven() && request.getBirth() != null
+                && request.getBirth().isAfter(LocalDate.now(clock))) {
+            throw new IllegalArgumentException("생일은 미래일 수 없습니다.");
+        }
+        if (request.getName() != null && request.getName().isBlank()) {
+            throw new IllegalArgumentException("이름을 입력해 주세요.");
+        }
+
+        Dog dog = require(userId, dogId);
+        if (request.getName() != null) {
+            dog.rename(request.getName().strip());
+        }
+        if (species != null) {
+            dog.changeSpecies(species);
+        }
+        if (request.getBreed() != null) {
+            dog.changeBreed(blankToNull(request.getBreed()));
+        }
+        if (size != null) {
+            dog.changeSize(size);
+        }
+        if (request.isBirthGiven()) {
+            dog.changeBirth(request.getBirth());
+        }
+        if (request.getNeutered() != null) {
+            dog.changeNeutered(request.getNeutered());
+        }
         return toResponse(dogs.save(dog));
     }
 

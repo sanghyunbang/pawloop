@@ -246,6 +246,11 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         }
         // 삭제(#156)도 같은 버킷이다. 소프트 삭제라 지운 행은 상한(MAX_PETS)에 안 세므로,
         // 등록·삭제를 반복하면 행이 계속 쌓인다 — 등록과 같은 속도 한도가 그 자리를 막는다.
+        // 부분 수정(#516)도 같은 버킷이다 — 행 하나를 바꾸고, 그 값(이름)이 가족의 화면에
+        // 보인다. WriteEndpointsAreRateLimitedTest 가 이 줄이 없으면 빨간불이다.
+        if ("PATCH".equals(method) && path.matches("^/api/dogs/\\d+$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         if ("DELETE".equals(method) && path.matches("^/api/dogs/\\d+$")) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }

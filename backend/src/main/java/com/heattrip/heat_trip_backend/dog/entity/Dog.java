@@ -187,9 +187,35 @@ public class Dog {
         return userId != null && user != null && userId.equals(user.getId());
     }
 
-    /** 부분 수정이 아니다 — 계약에 {@code PATCH} 가 있지만 #145 는 구현하지 않는다. */
+    /** 이름을 바꾼다. 부분 수정({@code PATCH})도 이 자리를 지난다(#516). */
     public void rename(String name) {
         this.name = name;
+    }
+
+    /** 종을 바꾼다 — 강아지로 등록한 아이가 고양이였을 수 있다. */
+    public void changeSpecies(PetSpecies species) {
+        this.species = species;
+    }
+
+    /** 품종. 빈 문자열은 부르는 쪽이 이미 {@code null} 로 바꿔서 준다. */
+    public void changeBreed(String breed) {
+        this.breed = breed;
+    }
+
+    public void changeSize(DogSize size) {
+        this.size = size;
+    }
+
+    /**
+     * 생일. <b>{@code null} 이면 지운다</b> — 계약이 {@code birth: [string, "null"]} 로 그것을
+     * 선언했다. 잘못 넣은 날짜를 비울 길이 없으면 그 사람은 영영 틀린 나이를 본다.
+     */
+    public void changeBirth(LocalDate birth) {
+        this.birth = birth;
+    }
+
+    public void changeNeutered(boolean neutered) {
+        this.neutered = neutered;
     }
 
     /**
