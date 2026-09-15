@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'dart:ui' as ui;
 import 'package:heat_trip_flutter/v2/walk/route_image.dart';
+import 'package:heat_trip_flutter/v2/walk/walk_share_card.dart';
 
 // 서울숲 근처 — [경도, 위도] (계약·초안 큐와 같은 순서).
 const _seoul = [
@@ -103,6 +104,39 @@ void main() {
       final data = ByteData.sublistView(png);
       expect(data.getUint32(16), 300);
       expect(data.getUint32(20), 400);
+    });
+
+    test('내보내는 크기는 정사각이다 — 카드가 정사각까지만 그리기 때문이다 (#517)', () async {
+      final size = RouteImage.defaultSize;
+
+      expect(size.width, size.height,
+          reason: '커뮤니티 카드는 정사각까지만 그린다(#465). 4:5 를 넣으면 가운데를 맞추며 '
+              '위아래를 자르고, 이 그림은 아래 16% 가 캡션이라 "0.90km · 01:13" 이 먼저 잘린다. '
+              '홈의 "이웃의 사진" 96×96 썸네일도 같다.');
+      expect(size.width, greaterThanOrEqualTo(1080),
+          reason: '폰 화면 폭보다 작으면 피드에서 흐리게 보인다');
+    });
+
+    test('공유 카드는 4:5 그대로다 — 우리 피드에 안 들어간다', () {
+      expect(WalkShareImage.defaultSize.width / WalkShareImage.defaultSize.height,
+          closeTo(0.8, 0.001),
+          reason: '인스타 피드에서는 세로가 길수록 크게 보이고, 그쪽엔 자르는 카드가 없다. '
+              '경로 사진을 정사각으로 바꿨다고 이것까지 따라가면 안 된다');
+    });
+
+    test('정사각으로 그려도 캡션 글자가 그림 안에 남는다', () async {
+      final pixels = await _pixels(
+          await RouteImage.renderPng(art(), size: const Size(240, 240)));
+
+      // 캡션 띠(아래 16%)에 배경보다 어두운 픽셀이 있는가 — 글자가 거기 그려졌다는 뜻이다.
+      var inked = 0;
+      for (var y = 207; y < 240; y++) {
+        for (var x = 0; x < 240; x++) {
+          if (pixels.green(x, y) < 180) inked++;
+        }
+      }
+      expect(inked, greaterThan(20),
+          reason: '캡션 띠가 비었다면 글자가 그림 밖으로 나간 것이다 — 자르기 전에 이미 없다');
     });
 
     test('점이 하나뿐이어도 그림은 나온다 — 시트는 그리지 않지만 렌더러가 죽으면 안 된다', () async {
