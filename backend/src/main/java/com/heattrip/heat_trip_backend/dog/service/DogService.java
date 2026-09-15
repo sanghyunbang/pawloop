@@ -9,6 +9,7 @@ import com.heattrip.heat_trip_backend.dog.dto.DogResponse;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.dog.entity.DogSize;
 import com.heattrip.heat_trip_backend.dog.entity.PetSpecies;
+import com.heattrip.heat_trip_backend.group.FamilyMembership;
 import com.heattrip.heat_trip_backend.dog.repository.DogRepository;
 import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -62,6 +63,9 @@ public class DogService implements DogOwnership {
 
     private final DogRepository dogs;
 
+    /** "우리 집 식구는 누구인가" — group 모듈의 공개 표면. 멤버십 원본은 chat_room_member 다. */
+    private final FamilyMembership family;
+
     /** 프로필 사진 (#448). 모듈 경계의 공개 타입만 든다 — {@code S3.media.MediaService} 는 안 든다. */
     private final MediaAttachment media;
 
@@ -70,6 +74,31 @@ public class DogService implements DogOwnership {
 
     public List<DogResponse> mine(Long userId) {
         return dogs.findMine(userId).stream().map(this::toResponse).toList();
+    }
+
+    /**
+     * <b>우리 집 아이</b> — 그 가족의 식구들이 등록한 아이 전부. 이슈 #563.
+     *
+     * <h2>왜 이 경로가 있나</h2>
+     *
+     * <p>이 앱의 목적은 업무 분담과 누락 방지다(#76). 그런데 아이가 <b>사람 것</b>이라,
+     * 엄마가 보리를 등록하고 아빠가 가족에 들어오면 아빠 홈은 "아직 등록된 아이가 없어요"
+     * 였다. 아빠가 보리를 또 등록하면 같은 아이가 두 마리가 되고 케어 기록이 둘로 갈린다.
+     *
+     * <p><b>표를 안 바꾼다.</b> 아이의 주인은 그대로 등록한 사람이고, 여기서 식구 목록으로
+     * 파생한다 — 가족에 들어오는 순간 보이고 나가는 순간 빠진다. 옮기는 코드도 되돌리는
+     * 코드도 없다({@code FamilyMembership} javadoc).
+     *
+     * <p><b>공유되는 것은 돌봄이지 소유가 아니다.</b> {@code PATCH}·{@code DELETE}·상세는
+     * 그대로 등록한 사람만이고 남의 것은 404 다.
+     *
+     * @throws org.springframework.web.server.ResponseStatusException 그 가족의 식구가 아니면 403
+     */
+    public List<DogResponse> ofFamily(long groupId, long actorUserId) {
+        family.requireMember(groupId, actorUserId);
+        // 요청자가 그 방의 살아 있는 멤버라는 것을 방금 확인했으므로 목록은 비지 않는다 —
+        // 빈 목록 가드를 두지 않는 이유다(`in ()` 은 DB 마다 다르게 죽지만 여기 도달할 수 없다).
+        return dogs.findOfUsers(family.memberUserIds(groupId)).stream().map(this::toResponse).toList();
     }
 
     @Override
