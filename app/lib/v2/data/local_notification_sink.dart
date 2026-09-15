@@ -79,15 +79,14 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, W
         ),
       ),
       // 앱이 떠 있는 동안 누른 알림. 어디로 갈지는 payload 가 말한다.
-      onDidReceiveNotificationResponse: (response) =>
-          NotificationRouteInbox.offer(destinationOf(response.payload)),
+      onDidReceiveNotificationResponse: (response) => offerFromNotification(response.payload),
     );
 
     // **꺼져 있던 앱이 알림으로 떴을 때**는 위 콜백이 오지 않는다 — 그때는 플러그인이 들고 있던
     // 것을 여기서 한 번 읽는다. 홈이 떠서 가져갈 때까지 [NotificationRouteInbox] 가 들고 있는다.
     final launch = await _plugin.getNotificationAppLaunchDetails();
     if (launch?.didNotificationLaunchApp ?? false) {
-      NotificationRouteInbox.offer(destinationOf(launch?.notificationResponse?.payload));
+      offerFromNotification(launch?.notificationResponse?.payload);
     }
     _ready = true;
   }
@@ -157,12 +156,13 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, W
       ..clear()
       ..addAll(reminders.map((r) => r.id));
 
-    for (final r in reminders) {
+    // 무엇을 싣는가는 여기서 정하지 않는다 — `scheduleNotificationsFor` 가 정하고 테스트가 잰다.
+    for (final n in scheduleNotificationsFor(reminders)) {
       await _plugin.zonedSchedule(
-        r.id,
-        r.title,
-        r.body,
-        tz.TZDateTime.from(r.at, tz.local),
+        n.id,
+        n.title,
+        n.body,
+        tz.TZDateTime.from(n.at, tz.local),
         const NotificationDetails(
           android: AndroidNotificationDetails(
             _scheduleChannelId,
@@ -174,7 +174,8 @@ class LocalNotificationSink implements WalkReminderSink, ScheduleReminderSink, W
           iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        payload: scheduleReminderPayload,
+        // 종류만이 아니라 **그 일정**을 싣는다 — 누르면 그 날이 열린다(#420 후속).
+        payload: n.payload,
       );
     }
     if (kDebugMode) {

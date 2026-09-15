@@ -89,11 +89,22 @@ class ScheduleReminder {
   final String title;
   final String body;
 
+  /// 이 알림이 가리키는 일정. 누르면 그 일정이 있는 날이 열린다(#420 후속).
+  ///
+  /// [id] 에서 빼서 구할 수도 있지만(그 값이 `idBase + scheduleId` 다) 그러면 알림 id 규칙이
+  /// **두 곳의 약속**이 된다 — 한쪽을 바꾸는 날 다른 쪽이 조용히 틀린다.
+  final int scheduleId;
+
+  /// 그 일정이 있는 날(자정). 되풀이하는 일정은 id 하나로 "어느 날" 을 못 정한다.
+  final DateTime onDate;
+
   const ScheduleReminder({
     required this.id,
     required this.at,
     required this.title,
     required this.body,
+    required this.scheduleId,
+    required this.onDate,
   });
 
   /// 산책 알림(#341)이 쓰는 `341` 과 겹치지 않게 띄워 둔 자리.
@@ -112,13 +123,15 @@ class ScheduleReminder {
       other.id == id &&
       other.at == at &&
       other.title == title &&
-      other.body == body;
+      other.body == body &&
+      other.scheduleId == scheduleId &&
+      other.onDate == onDate;
 
   @override
-  int get hashCode => Object.hash(id, at, title, body);
+  int get hashCode => Object.hash(id, at, title, body, scheduleId, onDate);
 
   @override
-  String toString() => 'ScheduleReminder($id, $at, $title)';
+  String toString() => 'ScheduleReminder($id, $at, $title, #$scheduleId ${onDate.month}/${onDate.day})';
 }
 
 /// 이 일정들에 걸 알림.
@@ -157,6 +170,8 @@ List<ScheduleReminder> planReminders({
 
     out.add(ScheduleReminder(
       id: ScheduleReminder.idBase + s.id,
+      scheduleId: s.id,
+      onDate: DateTime(s.onDate.year, s.onDate.month, s.onDate.day),
       at: at,
       title: s.kind.label,
       body: s.isAllDay

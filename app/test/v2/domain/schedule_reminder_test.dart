@@ -125,6 +125,8 @@ void main() {
         now: _now,
       );
 
+      expect(plan.single.scheduleId, isPositive,
+          reason: '누르면 그 일정이 있는 날이 열린다(#420 후속) — 알림 id 에서 빼서 구하지 않는다');
       expect(plan.single.title, '병원');
       expect(plan.single.body, '보리 병원 · 14:00');
     });

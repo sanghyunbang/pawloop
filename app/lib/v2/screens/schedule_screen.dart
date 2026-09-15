@@ -16,9 +16,12 @@
 //
 // 종류별 **점**만 찍는다. 한 칸이 좁아서 "3" 같은 숫자를 적으면 무엇이 셋인지 알 수 없고,
 // 점 세 개면 색으로 병원인지 산책인지가 바로 보인다. 넷 이상이면 `+` 하나로 접는다.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/family_repository.dart';
+import '../data/notification_route.dart';
 import '../data/schedule_repository.dart';
 import '../domain/pet.dart';
 import '../domain/schedule.dart';
@@ -82,6 +85,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   ScheduleFilter _filter = ScheduleFilter.all;
 
+  /// 알림을 누르고 들어왔을 때 잠깐 물드는 줄(#420 후속). 1.4초 뒤에 스스로 꺼진다.
+  int? _focusedId;
+  Timer? _focusOff;
+  static const Duration _focusFor = Duration(milliseconds: 1400);
+
   List<Schedule> _items = const [];
   bool _loading = true;
   ScheduleFailureKind? _failure;
@@ -99,6 +107,40 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   void initState() {
     super.initState();
     _load();
+    // 알림이 가리킨 그 일정. 꺼져 있던 앱이 알림으로 떴으면 이미 와 있고(첫 프레임 뒤에 본다),
+    // 앱이 떠 있는 동안 누른 것은 듣고 있다가 받는다.
+    ScheduleFocusInbox.pending.addListener(_drainFocus);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _drainFocus());
+  }
+
+  @override
+  void dispose() {
+    ScheduleFocusInbox.pending.removeListener(_drainFocus);
+    _focusOff?.cancel();
+    super.dispose();
+  }
+
+  /// 알림이 말한 날로 옮기고 그 줄을 잠깐 물들인다.
+  ///
+  /// **달이 다르면 그 달을 다시 읽는다** — 이 화면은 한 달치만 들고 있어서(`_load`), 옮기기만 하면
+  /// 그 날이 빈 날로 보인다. 물드는 것은 잠깐이다: 계속 칠해 두면 사용자가 그 줄을 "고른 것" 으로 읽는다.
+  void _drainFocus() {
+    if (!mounted) return;
+    final focus = ScheduleFocusInbox.take();
+    if (focus == null) return;
+
+    final day = _dayOf(focus.onDate);
+    final sameMonth = day.year == _month.year && day.month == _month.month;
+    setState(() {
+      _selected = day;
+      if (!sameMonth) _month = DateTime(day.year, day.month);
+      _focusedId = focus.scheduleId;
+    });
+    _focusOff?.cancel();
+    _focusOff = Timer(_focusFor, () {
+      if (mounted) setState(() => _focusedId = null);
+    });
+    if (!sameMonth) _load();
   }
 
   Future<void> _load() async {
@@ -552,17 +594,22 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (s.repeats) s.repeatKind.label,
     ];
     final done = !s.status.isOpen;
+    // 알림을 누르고 들어온 그 줄(#420 후속). 색 하나로만 말한다 — 화살표나 배지를 얹으면
+    // 1.4초 뒤에 사라지는 것이 레이아웃을 흔든다.
+    final focused = _focusedId == s.id;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _openEditSheet(s),
-      child: Container(
+      child: AnimatedContainer(
+      key: Key('schedule-row-${s.id}'),
+      duration: const Duration(milliseconds: 240),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
       decoration: BoxDecoration(
-        color: T.cardBg,
+        color: focused ? T.accentSoft : T.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: T.cardBorder),
+        border: Border.all(color: focused ? T.accent : T.cardBorder),
       ),
       child: Row(children: [
         Icon(s.kind.icon, size: 20, color: done ? T.textFaint : s.kind.color),
