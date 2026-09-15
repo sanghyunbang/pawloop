@@ -6,6 +6,7 @@ import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
+import com.heattrip.heat_trip_backend.walk.ai.InsightNumberGuard;
 import com.heattrip.heat_trip_backend.walk.ai.WeeklyInsightModel;
 import com.heattrip.heat_trip_backend.walk.entity.WeeklyInsight;
 import com.heattrip.heat_trip_backend.walk.repository.WeeklyInsightRepository;
@@ -112,6 +113,48 @@ class WeeklyInsightIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(insights.findByUser_IdAndDogKeyAndWeekStart(
                 me.id(), WeeklyInsight.ALL_DOGS, LocalDate.parse(first.path("weekStart").asText()))
                 .orElseThrow().getText()).as("버린 것도 행으로 남는다 — 같은 입력에 같은 실수를 반복하지 않게").isNull();
+    }
+
+    @Test
+    @DisplayName("안 걸은 요일을 말한 문장은 버린다 — 숫자 검사는 요일 이름을 안 본다 (#543)")
+    void discardsASentenceNamingADayWithNoWalk() throws Exception {
+        when(model.available()).thenReturn(true);
+        when(model.name()).thenReturn("fake-model");
+        // 요일 일곱을 한 줄로 늘어놓는다 — 어느 요일에 돌려도 0km 인 요일이 여섯 들어간다.
+        // 숫자가 하나도 없어서 숫자 검사는 통과한다. 그게 #543 이 새 가드를 부른 이유다.
+        when(model.complete(anyString(), anyString()))
+                .thenReturn(Optional.of("이번 주는 월·화·수·목·금·토·일에 걸었어요."));
+        Account me = account("요일");
+        walkWithDog(me, dog(me, "보리"), 1500, 1200);
+
+        JsonNode stats = stats(me);
+
+        assertThat(InsightNumberGuard.allowed("이번 주는 월·화·수·목·금·토·일에 걸었어요.", ""))
+                .as("숫자가 없으니 숫자 검사는 통과한다 — 이 문장을 막는 것은 요일 검사다")
+                .isTrue();
+        assertThat(stats.path("aiSummary").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("걸은 요일을 말한 문장은 그대로 나간다 — 요일 검사가 전부를 버리는 것이 아니다 (#543)")
+    void keepsASentenceNamingTheDayThatWasWalked() throws Exception {
+        when(model.available()).thenReturn(true);
+        when(model.name()).thenReturn("fake-model");
+        // `walkWithDog` 이 한 시간 전으로 적는다 — 그 시각의 요일이 유일하게 km 가 있는 요일이다.
+        String day = "월화수목금토일".substring(walkedDayIndex(), walkedDayIndex() + 1);
+        when(model.complete(anyString(), anyString()))
+                .thenReturn(Optional.of(day + "요일에 걸었어요.\n좋아요.\n계속해요."));
+        Account me = account("걸은요일");
+        walkWithDog(me, dog(me, "보리"), 1500, 1200);
+
+        JsonNode stats = stats(me);
+
+        assertThat(stats.path("aiSummary").path("text").asText()).contains(day + "요일");
+    }
+
+    /** {@code walkWithDog} 이 적는 산책의 요일 — 월요일이 0. 자정 근처에서도 안 흔들리게 같은 식으로 잰다. */
+    private static int walkedDayIndex() {
+        return Instant.now().atZone(KST).minusHours(1).getDayOfWeek().getValue() - 1;
     }
 
     @Test

@@ -47,13 +47,16 @@ public class WeeklyInsightService {
 
     /**
      * 모델에 주는 규칙. 숫자는 입력에 있는 것만 — 어겨도 {@link InsightNumberGuard} 가 버리지만, 규칙을
-     * 먼저 말해 두면 버리는 일이 드물다. 질책 금지는 페르소나 P3(바쁜 보호자, #349).
+     * 먼저 말해 두면 버리는 일이 드물다. 요일도 같다({@link InsightWeekdayGuard}, #543) — 걸은 요일만
+     * 말하라고 먼저 시키고, 어긴 문장을 버린다. 질책 금지는 페르소나 P3(바쁜 보호자, #349).
      */
     static final String SYSTEM = """
             너는 반려견 보호자를 돕는 산책 코치다. 아래 '데이터'만 근거로 이번 주 산책을 한국어로 정리한다.
             형식: 첫 줄과 둘째 줄은 이번 주를 요약하는 문장 하나씩(합쳐서 90자 안팎), 셋째 줄은 다음 며칠의 제안 한 문장.
             규칙:
             - 숫자는 데이터에 적힌 것만 쓴다. 데이터에 없는 거리 · 횟수 · 시간 · 시각 · 날짜를 만들지 않는다.
+            - 요일은 '요일별 km' 가 0 이 아닌 요일만 말한다. 안 걸은 요일은 제안에서도 이름 대신 '주말' · '남은 날'로 쓴다.
+            - 시간대(새벽 · 아침 · 낮 · 저녁)도 '시간대별 횟수' 에 적힌 대로만 말한다. 0회인 시간대는 제안에만 쓴다.
             - 장소 이름 · 아이 이름 · 날씨를 지어내지 않는다. 아이는 '우리 아이'라고 부른다.
             - 질책하지 않는다. '부족했어요', '못 했어요' 같은 말 대신 제안형으로 쓴다.
             - 이모지 · 머리말 · 번호 · 따옴표 없이 문장만 쓴다.
@@ -183,8 +186,12 @@ public class WeeklyInsightService {
                 return;
             }
             String text = answer.get();
-            if (!InsightNumberGuard.allowed(text, job.input().render())) {
+            String input = job.input().render();
+            if (!InsightNumberGuard.allowed(text, input)) {
                 log.info("[AI 주간 요약] 입력에 없는 숫자가 있어 버린다 (user {}, week {})", job.userId(), job.weekStart());
+                text = null;
+            } else if (!InsightWeekdayGuard.allowed(text, input)) {
+                log.info("[AI 주간 요약] 안 걸은 요일을 말해서 버린다 (user {}, week {})", job.userId(), job.weekStart());
                 text = null;
             }
             store(job.existing(), job.userId(), job.dogKey(), job.weekStart(), job.hash(), text);
