@@ -24,6 +24,7 @@ import '../data/walk_outbox.dart';
 import '../data/walk_repository.dart';
 import '../walk/route_image.dart';
 import '../walk/route_photo_saver.dart';
+import '../widgets/snack.dart';
 import '../widgets/walk_finish_sheet.dart';
 import '../widgets/walk_moment_bar.dart';
 import 'create_screen.dart';
@@ -317,6 +318,8 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
         content: const Text('위치 갱신이 끊겼어요'),
         duration: const Duration(seconds: 6),
         action: SnackBarAction(label: '다시 연결', onPressed: _listenPositions),
+        // 안 적으면 이 말풍선이 산책을 끝내는 버튼 위에 영원히 남는다 — #531.
+        persist: snackBarPersists(context),
       ));
     });
   }

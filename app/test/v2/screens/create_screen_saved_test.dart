@@ -144,4 +144,64 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byType(MyRecordsScreen), findsOneWidget);
   });
+
+  testWidgets('스낵바는 시간이 지나면 사라진다 — 탭 바를 계속 덮으면 안 된다', (t) async {
+    t.view.physicalSize = const Size(1080, 2400);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.reset);
+
+    await t.pumpWidget(MaterialApp(
+      navigatorKey: rootNavigatorKey,
+      home: CreateScreen(
+        draft: _tracked(),
+        repository: _Walks(),
+        careLink: WalkCareLink(repository: _family().repo),
+      ),
+    ));
+    await t.pumpAndSettle();
+
+    await t.tap(find.text('저장'));
+    await t.pumpAndSettle();
+    expect(find.text('산책이 기록됐어요'), findsOneWidget);
+
+    // 적어 둔 시간(3.2초)의 세 배를 기다린다.
+    await t.pump(const Duration(seconds: 10));
+    await t.pumpAndSettle();
+
+    expect(find.text('산책이 기록됐어요'), findsNothing,
+        reason: 'SnackBar 는 action 이 있으면 persist 가 기본 참이라(Flutter 3.32) duration 을 '
+            '무시하고 영원히 남는다. 이 스낵바는 화면 맨 아래 탭 바를 덮으므로, 산책을 저장한 '
+            '사람은 탭을 못 누른다');
+  });
+
+  testWidgets('낭독기를 쓰면 그대로 남는다 — "보기" 까지 짚어 갈 시간이 필요하다', (t) async {
+    t.view.physicalSize = const Size(1080, 2400);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.reset);
+
+    await t.pumpWidget(MaterialApp(
+      navigatorKey: rootNavigatorKey,
+      home: Builder(
+        builder: (context) => MediaQuery(
+          // 화면 낭독기가 켜진 기기다.
+          data: MediaQuery.of(context).copyWith(accessibleNavigation: true),
+          child: CreateScreen(
+            draft: _tracked(),
+            repository: _Walks(),
+            careLink: WalkCareLink(repository: _family().repo),
+          ),
+        ),
+      ),
+    ));
+    await t.pumpAndSettle();
+
+    await t.tap(find.text('저장'));
+    await t.pumpAndSettle();
+    await t.pump(const Duration(seconds: 10));
+    await t.pumpAndSettle();
+
+    expect(find.text('산책이 기록됐어요'), findsOneWidget,
+        reason: '옛 플러터의 조건이 그것이었다 — 버튼이 있는 말풍선은 낭독기를 쓸 때만 남는다. '
+            '눈으로 읽는 사람에게는 3.2초, 짚어 가는 사람에게는 누를 때까지');
+  });
 }
