@@ -5,6 +5,7 @@ import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
+import '../widgets/marker_icons.dart';
 import '../widgets/vet_badge.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import '../data/community_repository.dart';
@@ -1184,8 +1185,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
     // (`_fitToPlaces`, #328): 가장 가까운 코스가 화면 밖이라 빈 지도가 됐었다.
   }
 
-  /// 카테고리색 핀(플랫폼 통일 — Flutter 위젯 렌더).
-  Future<NOverlayImage> _markerIcon(PetCategory cat) async {
+  /// 카테고리색 핀 — **카테고리마다 한 번만** 굽는다(#533). 장소마다 구우면 80곳에서
+  /// 31초가 든다(재 본 값: 전체 31730ms 중 아이콘 31471ms). 종류는 아홉(+기타)뿐이다.
+  late final MarkerIcons<NOverlayImage> _icons = MarkerIcons(_drawMarkerIcon);
+
+  Future<NOverlayImage> _markerIcon(PetCategory cat) => _icons.of(cat);
+
+  /// 실제로 굽는 일(플랫폼 통일 — Flutter 위젯 렌더). 이 자리는 캐시를 모른다.
+  Future<NOverlayImage> _drawMarkerIcon(PetCategory cat) async {
     return NOverlayImage.fromWidget(
       context: context,
       size: const Size(50, 50),

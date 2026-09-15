@@ -24,6 +24,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../v2/support/dart_source.dart';
+
 void main() {
   test('lib/ 의 버튼 달린 말풍선은 전부 persist: 를 적었다 — 안 적으면 영원히 남는다', () {
     final offenders = <String>[];
@@ -183,61 +185,6 @@ int _matchingParen(String source, int open) {
   return -1;
 }
 
-/// 주석을 공백으로 바꾼다 — **줄 수는 그대로 둔다**(위반을 파일:줄 로 가리켜야 고칠 자리를
-/// 찾는다). 문자열 안의 `//` 와 `/*` 는 주석이 아니므로 문자열을 함께 따라간다.
-String stripCommentsKeepingLines(String source) {
-  final out = StringBuffer();
-  var i = 0;
-  while (i < source.length) {
-    final c = source[i];
-
-    if (c == '/' && i + 1 < source.length) {
-      final n = source[i + 1];
-      if (n == '/') {
-        while (i < source.length && source[i] != '\n') {
-          i++;
-        }
-        continue;
-      }
-      if (n == '*') {
-        i += 2;
-        while (i < source.length && !(source[i] == '*' && i + 1 < source.length && source[i + 1] == '/')) {
-          if (source[i] == '\n') out.write('\n');
-          i++;
-        }
-        i += 2;
-        continue;
-      }
-    }
-
-    if (c == '"' || c == "'") {
-      final triple = source.startsWith(c * 3, i);
-      final quote = triple ? c * 3 : c;
-      // 날 문자열(r'…') 안에서는 역슬래시가 이스케이프가 아니다. 정규식 리터럴이 전부
-      // 그것이라, 여기서 안 가르면 역슬래시로 끝나는 날 문자열이 안 닫힌 것처럼 보인다.
-      final raw = i > 0 && source[i - 1] == 'r';
-      out.write(quote);
-      i += quote.length;
-      while (i < source.length && !source.startsWith(quote, i)) {
-        if (!raw && source[i] == r'\') {
-          i++; // 다음 글자는 따옴표여도 끝이 아니다
-          if (i < source.length && source[i] == '\n') out.write('\n');
-          i++;
-          continue;
-        }
-        if (source[i] == '\n') out.write('\n');
-        i++;
-      }
-      out.write(quote);
-      i += quote.length;
-      continue;
-    }
-
-    out.write(c);
-    i++;
-  }
-  return out.toString();
-}
 
 /// `lib/` 아래의 모든 `.dart`.
 Iterable<File> _dartFilesUnder(String root) sync* {
