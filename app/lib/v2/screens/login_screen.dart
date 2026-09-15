@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -41,14 +40,25 @@ const Color _googleFg = Color(0xFF1F1F1F);
 const Color _appleBg = Color(0xFF000000);
 const Color _appleFg = Color(0xFFFFFFFF);
 
-/// Pawloop 로그인 — 카카오/구글 소셜 로그인 + iOS 에서는 Apple(#301).
+/// Pawloop 로그인 — 카카오 · 구글 · Apple(#301). **세 개 다 플랫폼과 상관없이 보인다**(#544).
 ///
 /// 네이버는 화면에서만 내렸다. `NaverOAuth2User`와 백엔드 설정은 그대로 살아 있으므로
 /// `_login('naver')`를 부르는 버튼만 다시 넣으면 언제든 되살릴 수 있다. (이슈 #3)
 class LoginScreen extends StatefulWidget {
-  /// Apple 버튼을 그릴지. `null` 이면 **iOS 에서만** 그린다 — App Store 심사 지침 4.8 이
-  /// iOS 앱에 적용되고(#301), 안드로이드 사용자에게 Apple 계정을 권할 이유가 없다.
-  /// 테스트가 명시적으로 켜고 끈다.
+  /// Apple 버튼을 그릴지. `null` 이면 **어느 플랫폼에서든** 그린다(#544).
+  ///
+  /// 처음에는 iOS 에서만 그렸다 — 심사 지침 4.8 이 iOS 앱에 적용되고, 안드로이드 사용자에게
+  /// Apple 계정을 권할 이유가 없다고 봤다(#301). **그런데 그 규칙은 계정을 가둔다.** 아이폰에서
+  /// "Apple로 가입" 한 사람이 안드로이드 앱을 깔면 카카오 · 구글 계정이 따로 없어서 **들어올
+  /// 방법이 아예 없다.** 애플이 안드로이드 · 윈도우 · 웹에서 쓰라고 버튼을 열어 둔 이유가 이것이고,
+  /// 널리 쓰이는 안내(WillowTree 라이브러리 · Firebase · Google Identity Platform)도 "두 앱이
+  /// 있고 제3자 로그인을 쓰면 안드로이드에도 넣으라" 로 같다.
+  ///
+  /// 대칭도 맞는다 — iOS 에서 구글 · 카카오를 보여주면서 안드로이드에서만 Apple 을 빼는 것은
+  /// 한쪽으로만 기운 규칙이다. 맥북 · 아이패드를 쓰는 안드로이드폰 사용자도 애플 계정이 있다.
+  ///
+  /// 우리 Apple 로그인은 **카카오 · 구글과 같은 웹 왕복**이라(`SocialLoginService.signIn`)
+  /// 안드로이드 전용 SDK 가 필요 없다. 테스트가 명시적으로 켜고 끈다.
   final bool? showAppleSignIn;
 
   /// 왜 이 화면에 왔는지 한 줄. 게스트가 막힌 자리에서 보낼 때 그 자리가 넘긴다(#517).
@@ -124,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final showApple = widget.showAppleSignIn ?? (defaultTargetPlatform == TargetPlatform.iOS);
+    final showApple = widget.showAppleSignIn ?? true;
     return Scaffold(
       backgroundColor: T.bgTop,
       body: AuroraBackground(

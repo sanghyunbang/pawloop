@@ -1,8 +1,9 @@
 // 로그인 화면의 Apple 버튼 — 이슈 #301 (App Store 심사 지침 4.8).
 //
-// 버튼은 iOS 에서만 기본으로 보인다. 지침이 iOS 앱에 적용되고, 안드로이드 사용자에게 Apple
-// 계정을 권할 이유가 없다. 여기서는 플래그로 켜고 끄며, 플랫폼 기본값은 `debugDefaultTargetPlatformOverride`
-// 로 잰다. HIG 규격(검정 배경 · 흰 글자 · 승인된 문구)은 구글 버튼처럼 회귀로 잠근다.
+// 버튼은 **어느 플랫폼에서든** 보인다(#544). 처음에는 iOS 에서만 그렸는데, 그러면 아이폰에서
+// "Apple로 가입" 한 사람이 안드로이드 앱에서 들어올 방법이 없다 — 카카오 · 구글 계정이 따로 없다.
+// 여기서는 플래그로 켜고 끄며, 플랫폼 기본값은 `debugDefaultTargetPlatformOverride` 로 잰다.
+// HIG 규격(검정 배경 · 흰 글자 · 승인된 문구)은 구글 버튼처럼 회귀로 잠근다.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -47,18 +48,20 @@ void main() {
   // 플랫폼 오버라이드는 **테스트 본문 안에서** 되돌린다 — 테스트 프레임워크가 본문이 끝난 직후
   // (tearDown 보다 먼저) 이 변수가 원래대로인지 검사한다(실측: tearDown 에서 되돌리면 빨강).
   // 같은 const 위젯을 다시 pump 하면 재빌드가 안 되므로 플랫폼마다 테스트를 따로 둔다.
-  testWidgets('플래그가 없으면 안드로이드에서는 없다 — 지침은 iOS 앱에 적용된다', (tester) async {
+  testWidgets('플래그가 없으면 안드로이드에서도 보인다 — 아이폰에서 가입한 사람이 여기로 온다 (#544)', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
       await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
       await tester.pump();
-      expect(find.text(appleLabel), findsNothing);
+      expect(find.text(appleLabel), findsOneWidget,
+          reason: '안드로이드에서 숨기면 Apple 로 가입한 사람은 카카오 · 구글 계정이 없어 '
+              '들어올 방법이 아예 없다 — 계정이 갇힌다');
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
   });
 
-  testWidgets('플래그가 없으면 iOS 에서는 보인다', (tester) async {
+  testWidgets('플래그가 없으면 iOS 에서도 보인다', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     try {
       await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
