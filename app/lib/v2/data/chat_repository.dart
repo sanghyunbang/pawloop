@@ -275,6 +275,13 @@ class ChatMessagePage {
   final int lastSeq;
   final bool hasMore;
 
+  /// **이미 받은 말의 새 모양**(ADR-0023, #500). 새 말([messages])과 섞지 않는다 — 섞으면 지워진 말이
+  /// 대화 맨 아래에 새 말처럼 올라온다. 화면은 같은 `id` 의 자리에 덮어쓴다.
+  final List<ChatMessageItem> changed;
+
+  /// 방의 현재 **변경 번호**. 다음 폴링에 `afterChangeSeq` 로 그대로 되돌려 보낸다.
+  final int lastChangeSeq;
+
   /// 다음 요청에 `If-None-Match` 로 실어 보낼 값. 서버가 안 줬으면 null.
   final String? etag;
 
@@ -285,12 +292,16 @@ class ChatMessagePage {
     required this.messages,
     required this.lastSeq,
     required this.hasMore,
+    this.changed = const [],
+    this.lastChangeSeq = 0,
     this.etag,
     this.notModified = false,
   });
 
   /// 이번 폴링이 빈손이었나. 폴링 간격을 늘릴지의 입력이다 ([ChatPollingPolicy]).
-  bool get isEmpty => messages.isEmpty;
+  ///
+  /// **바뀐 말도 활동이다** — 남이 방금 말을 지웠으면 그 방은 조용한 방이 아니다.
+  bool get isEmpty => messages.isEmpty && changed.isEmpty;
 }
 
 int _asInt(Object? value) => value is int ? value : int.tryParse('$value') ?? 0;
@@ -325,17 +336,22 @@ class ChatRepository {
   ///
   /// [afterSeq] 를 주면 그다음부터(폴링), [beforeSeq] 를 주면 그 앞부터(과거 페이지) 읽는다.
   /// [etag] 를 주면 `If-None-Match` 로 나가고, 새 것이 없으면 서버가 304 를 준다.
+  ///
+  /// [afterChangeSeq] 는 **이미 받은 말의 변화**를 어디까지 봤는가다(ADR-0023, #500). 주면 그 뒤에 바뀐 말이
+  /// [ChatMessagePage.changed] 로 온다 — 지금은 남이 지운 말이고 앞으로 반응이 붙는다.
   Future<ChatMessagePage> messages(
     int roomId, {
     int? afterSeq,
     int? beforeSeq,
     int? limit,
+    int? afterChangeSeq,
     String? etag,
   }) async {
     final query = <String, String>{
       if (afterSeq != null) 'afterSeq': '$afterSeq',
       if (beforeSeq != null) 'beforeSeq': '$beforeSeq',
       if (limit != null) 'limit': '$limit',
+      if (afterChangeSeq != null) 'afterChangeSeq': '$afterChangeSeq',
     };
     final uri = Uri.parse('$baseUrl/api/chat/rooms/$roomId/messages')
         .replace(queryParameters: query.isEmpty ? null : query);
@@ -350,6 +366,8 @@ class ChatRepository {
         messages: const [],
         lastSeq: afterSeq ?? 0,
         hasMore: false,
+        // 304 는 "그대로다" 라 커서도 그대로다 — 0 으로 되돌리면 다음 폴링이 옛 변화를 다시 받는다.
+        lastChangeSeq: afterChangeSeq ?? 0,
         etag: etag,
         notModified: true,
       );
@@ -368,6 +386,13 @@ class ChatRepository {
           .toList(),
       lastSeq: _asInt(json['lastSeq']),
       hasMore: json['hasMore'] == true,
+      // 바뀐 말(ADR-0023) — 옛 서버는 이 키가 없고, 그때는 빈 목록이라 예전처럼 움직인다.
+      changed: (json['changed'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(ChatMessageItem.tryParse)
+          .whereType<ChatMessageItem>()
+          .toList(),
+      lastChangeSeq: _asInt(json['lastChangeSeq']),
       etag: res.headers['etag'],
     );
   }

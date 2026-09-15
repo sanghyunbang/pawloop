@@ -132,6 +132,9 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
 
   Timer? _timer;
   int _lastSeq = 0;
+
+  /// 이미 받은 말의 변화를 어디까지 봤는가(ADR-0023, #500). 서버가 준 값을 그대로 들고 되돌려 보낸다.
+  int _lastChangeSeq = 0;
   String? _etag;
   int _consecutiveEmptyPolls = 0;
   bool _inForeground = true;
@@ -255,6 +258,8 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       final page = await _repo.messages(
         widget.roomId,
         afterSeq: _lastSeq == 0 ? null : _lastSeq,
+        // 첫 진입에는 안 보낸다 — 그 장이 이미 최신이라 따로 받을 변화가 없다.
+        afterChangeSeq: _lastSeq == 0 ? null : _lastChangeSeq,
         etag: _etag,
       );
       if (!mounted) return;
@@ -264,6 +269,12 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         _loading = false;
         _failure = null;
         _etag = page.etag;
+        // 바뀐 말을 **같은 id 의 자리에 덮어쓴다**(ADR-0023). 목록 끝에 붙이면 남이 지운 말이 새 말처럼
+        // 대화 맨 아래로 올라온다. 창 밖의 것(우리가 안 들고 있는 말)은 그냥 버린다 — 방을 다시 열면 온다.
+        _applyChanged(page.changed);
+        if (!page.notModified) {
+          _lastChangeSeq = page.lastChangeSeq;
+        }
         if (fresh.isNotEmpty) {
           _messages.addAll(fresh);
           _messages.sort((a, b) => a.roomSeq.compareTo(b.roomSeq));
@@ -271,6 +282,9 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
           // 새 것이 왔으면 간격을 되돌린다 — 대화가 다시 시작된 순간 느리면 안 된다.
           _consecutiveEmptyPolls = 0;
           _dropConfirmedPending();
+        } else if (page.changed.isNotEmpty) {
+          // 새 말은 없지만 방에서 무언가 일어났다 — 조용한 방이 아니므로 간격을 되돌린다.
+          _consecutiveEmptyPolls = 0;
         } else {
           _consecutiveEmptyPolls++;
         }
@@ -423,6 +437,19 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       // 사진을 못 올렸다 — 같은 자리에 남기고 다시 보내기. 거절(너무 큼 등)이면 이유를 말한다.
       setState(() => _replacePending(current.failed()));
       if (e.kind == PostMediaFailureKind.rejected) _toast(e.label);
+    }
+  }
+
+  /// 바뀐 말을 목록에 반영한다 — **같은 id 의 자리에 덮어쓴다**(ADR-0023, #500).
+  ///
+  /// 지금 오는 것은 남이 지운 말이고 앞으로 반응이 붙는다. 우리가 안 들고 있는 말(창 밖 · 아직 안 불러온
+  /// 과거)은 버린다 — 그 변화는 방을 다시 열 때 장(page) 조회가 가져온다. `setState` 안에서 부른다.
+  void _applyChanged(List<ChatMessageItem> changed) {
+    for (final item in changed) {
+      final index = _messages.indexWhere((m) => m.id == item.id);
+      if (index >= 0) {
+        _messages[index] = item;
+      }
     }
   }
 
@@ -1136,6 +1163,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
     _messages.clear();
     _revealed.clear();
     _lastSeq = 0;
+    _lastChangeSeq = 0;
     _etag = null;
     await _poll(initial: true);
   }
