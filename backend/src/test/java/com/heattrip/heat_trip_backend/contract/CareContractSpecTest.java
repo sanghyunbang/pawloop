@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.contract;
 
 import com.heattrip.heat_trip_backend.care.controller.CareController;
+import com.heattrip.heat_trip_backend.care.dto.CareLogRequest;
 import com.heattrip.heat_trip_backend.care.dto.CareLogResponse;
 import com.heattrip.heat_trip_backend.care.dto.WalkNoteResponse;
 import com.heattrip.heat_trip_backend.care.entity.CareType;
@@ -127,21 +128,32 @@ class CareContractSpecTest {
     }
 
     @Test
-    @DisplayName("CareLogInput 에 dogId·occurredAt·doneBy·위치가 없고 type 만 필수다")
+    @DisplayName("CareLogInput 에 occurredAt·doneBy·위치가 없고 type 만 필수다 — dogId 는 선택이다")
     void careLogInput_letsTheServerDecideWhoAndWhen() {
         Map<String, Object> input = schema("CareLogInput");
 
         assertThat(propertyNames("CareLogInput"))
                 .as("""
-                        dogId 는 확인할 표가 없다 — dog 표가 정본 스키마에 없어 검증할 수 없는 외래 \
-                        id 를 저장하면 아무도 해석 못 하는 값이 남고, 필수로 두면 앱이 더미 id 를 \
-                        지어내야 한다.
                         occurredAt·doneBy 는 서버가 정한다 — 그 둘이 '오늘 누가 했는지' 를 가르는 \
                         기준이라 클라이언트가 정하면 남의 화면에 없던 기록을 만들어 넣을 수 있다.
                         위치도 없다 — 배변·마킹(#340)은 산책 중에 눌리지만 어디서 눴는지는 \
-                        기기에만 남는다(A안 #235). 이 목록에 좌표 키가 생기면 그 약속이 깨진다.""")
-                .containsExactly("type", "memo");
-        assertThat((List<String>) input.get("required")).containsExactly("type");
+                        기기에만 남는다(A안 #235). 이 목록에 좌표 키가 생기면 그 약속이 깨진다.
+                        dogId 는 2026-09-15 부터 받는다(#563) — 이 기능의 목적이 업무 분담이라 \
+                        '해당 동물을 누르면 누가 무엇을 했나' 가 보여야 하고, 그러려면 기록에 \
+                        아이가 붙어야 한다.""")
+                .containsExactly("type", "memo", "dogId");
+        assertThat(propertyNames("CareLogInput"))
+                .as("""
+                        여기까지는 계약 안에서만 도는 검사다 — 자바 레코드가 계약과 갈려도 \
+                        안 잡힌다. 응답(CareLog ↔ CareLogResponse)은 대조하는데 요청은 \
+                        안 하고 있었다(#563). 갈리면 앱이 보낸 필드를 서버가 조용히 버린다.""")
+                .containsExactlyInAnyOrderElementsOf(componentNames(CareLogRequest.class));
+        assertThat((List<String>) input.get("required"))
+                .as("""
+                        dogId 가 필수가 아닌 이유는 둘이다 — 아이를 한 마리도 등록 안 한 집도 \
+                        케어를 기록하고, 이미 나가 있는 앱은 이 필드를 모른다. 하위 호환은 \
+                        서버가 지는 짐이다.""")
+                .containsExactly("type");
     }
 
     // ─────────────────── C. walk-notes 는 목록이 아니다 ───────────────────

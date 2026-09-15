@@ -45,6 +45,24 @@ public interface DogOwnership {
     Dog requireMineEntity(Long userId, Long dogId);
 
     /**
+     * <b>그 집 아이</b>를 꺼낸다 — 이슈 #563. 아니면 <b>400</b>.
+     *
+     * <p>{@link #requireMineEntity} 와 다른 점은 <b>누구 것인지 안 따진다</b>는 것이다. 엄마가
+     * 등록한 보리에게 아빠가 물을 줄 수 있어야 한다 — 그게 이 앱의 목적(업무 분담)이다.
+     *
+     * <p><b>인가를 하지 않는다.</b> 부르는 쪽이 이미 "그 그룹의 식구인가" 를 지났다는 전제다
+     * ({@code CareService.requireMemberGroup}). 여기서 한 번 더 보면 같은 판정이 두 곳에
+     * 생기고, 그때부터 한쪽만 고쳐지는 날을 기다리게 된다.
+     *
+     * <p>404 가 아니라 400 인 이유: 여기까지 온 요청은 <b>그 가족의 식구</b>가 보낸 것이고,
+     * 그 집 아이 목록은 이미 {@code GET /api/groups/&#123;id&#125;/dogs} 로 볼 수 있다. 숨길
+     * 것이 없으므로 "잘못된 입력" 이라고 말해 주는 편이 낫다.
+     *
+     * @throws org.springframework.web.server.ResponseStatusException 그 집 아이가 아니면 400
+     */
+    Dog requireInFamilyEntity(long groupId, Long dogId);
+
+    /**
      * 이 사람의 아이 id 전부 — 이슈 #418 이 이 표면에 더했다. 지운 아이는 안 들어간다(#156).
      *
      * <p><b>왜 여기인가.</b> 일정표의 기본이 "합쳐 보기" 다 — 내 아이들 것과 우리 가족 것이
