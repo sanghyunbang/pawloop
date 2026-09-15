@@ -34,6 +34,7 @@ import 'package:http_parser/http_parser.dart';
 import '../../core/config/env.dart';
 import '../../core/net/authed_client.dart';
 import 'video_prep.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 올라간 사진 하나 — 계약의 `MediaItem` 중 앱이 쓰는 것.
 class UploadedPostMedia {
@@ -126,7 +127,7 @@ class PostMediaFailure implements Exception {
 
 class PostMediaRepository {
   /// 업로드는 글 저장보다 오래 걸린다 — 수백 KB 를 카페 wifi 로 보낸다.
-  static const Duration timeout = Duration(seconds: 30);
+  static const Duration timeout = NetTimeouts.long;
 
   /// 한 글에 붙일 수 있는 수. 서버 `PostRequest.MAX_MEDIA` 와 같은 값이다.
   static const int maxPerPost = 10;

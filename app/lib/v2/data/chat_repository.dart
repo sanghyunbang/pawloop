@@ -28,6 +28,7 @@ import 'package:http/http.dart' as http;
 
 import '../domain/chat_reply.dart';
 import '../domain/post_media.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 채팅 요청이 실패한 이유.
 enum ChatFailureKind {
@@ -369,8 +370,12 @@ int _asInt(Object? value) => value is int ? value : int.tryParse('$value') ?? 0;
 
 /// 채팅 API.
 class ChatRepository {
-  /// `AuthedClient.refreshTimeout` 이 갱신 왕복에 대해 같은 것을 한다.
-  static const Duration timeout = Duration(seconds: 15);
+  /// 보통 요청과 같은 상한이다(#573).
+  ///
+  /// 전에는 15초였고 주석이 `AuthedClient.refreshTimeout` 을 근거로 들었는데, **같은
+  /// 것이 아니다** — 갱신은 401 뒤에 조용히 붙는 숨은 왕복이라 사람이 안 보고 기다리지만,
+  /// 이건 대화를 열어 놓고 보는 화면이다. 사람이 보는 왕복은 주의 한계 안쪽이어야 한다.
+  static const Duration timeout = NetTimeouts.standard;
 
   final String baseUrl;
   final AuthedClient _authed;

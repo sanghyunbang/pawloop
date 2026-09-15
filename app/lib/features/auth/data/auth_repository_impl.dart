@@ -10,6 +10,7 @@ import 'package:heat_trip_flutter/features/auth/data/dto/auth_tokens.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/login_request.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/register_request.dart';
 import 'package:heat_trip_flutter/features/auth/data/dto/update_profile_request.dart';
+import '../../../core/net/net_timeouts.dart';
 
 /// 회원가입 결과. 화면이 사용자에게 무엇을 말해야 하는지 결정한다.
 ///
@@ -85,9 +86,15 @@ class AuthRepositoryImpl {
   /// 그동안 상태는 `AuthStatus.unknown` 이라 라우터가 스플래시를 띄운다 — 재시도도
   /// 탈출구도 없다(#514). `AuthedClient.refreshTimeout` 은 **갱신 왕복에만** 붙는다.
   ///
-  /// 12초는 `CommunityRepository.timeout` 과 같은 수다. 만료는 [MeOutcome.networkError]
-  /// 로 떨어지고 **토큰을 지우지 않는다** — 비행기 모드로 켠 사람을 쫓아내지 않는다.
-  static const Duration timeout = Duration(seconds: 12);
+  /// **이 앱에서 제일 아픈 상한이다**(#573). 스플래시가 이 왕복 하나를 기다리는데, 서버가
+  /// 안 뜨면 그동안 화면에 **로고와 점 하나뿐**이다 — 다른 화면은 최소한 뼈대라도 있다.
+  ///
+  /// 전에는 12초였고 주석이 "`CommunityRepository.timeout` 과 같은 수" 라고 근거를 댔다.
+  /// 그건 근거가 아니라 **복사해 온 흔적**이다 — [NetTimeouts] 머리말이 그 이야기다.
+  ///
+  /// 만료는 [MeOutcome.networkError] 로 떨어지고 **토큰을 지우지 않는다** — 비행기 모드로
+  /// 켠 사람을 쫓아내지 않는다.
+  static const Duration timeout = NetTimeouts.standard;
 
   AuthRepositoryImpl({
     String? baseUrl,

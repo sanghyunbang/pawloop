@@ -26,6 +26,7 @@ import '../../core/net/authed_client.dart';
 import '../domain/crew.dart';
 import '../domain/crew_favor.dart';
 import '../domain/schedule.dart' show Schedule;
+import '../../core/net/net_timeouts.dart';
 
 /// 목록이 묻는 질문 둘. 돌아오는 것은 같은 카드다.
 enum CrewScope {
@@ -107,7 +108,7 @@ class CrewFailure implements Exception {
 }
 
 class CrewRepository {
-  static const Duration timeout = Duration(seconds: 12);
+  static const Duration timeout = NetTimeouts.standard;
 
   /// 서버의 `CrewService.MAX_NAME_LENGTH` 와 같은 값이다.
   static const int maxNameLength = 30;

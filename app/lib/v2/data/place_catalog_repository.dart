@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/pet.dart';
 import 'pet_places_repository.dart';
 import '../../core/config/env.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 전국 반려동반 장소 **한 벌**을 기기에 두고 쓴다 — 이슈 #273 (#235 A4).
 ///
@@ -253,7 +254,7 @@ class PlaceCatalogRepository {
       final res = await _client.get(
         Uri.parse('$_baseUrl/api/places/catalog'),
         headers: {if (canRevalidate) 'If-None-Match': etag},
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(NetTimeouts.long);
 
       if (res.statusCode == 304) {
         _lastFailure = null;

@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 
 import '../../core/config/env.dart';
 import '../../core/net/authed_client.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 코스 하나 — 계약의 `Course`.
 class Course {
@@ -121,7 +122,7 @@ class CourseFailure implements Exception {
 }
 
 class CourseRepository {
-  static const Duration timeout = Duration(seconds: 12);
+  static const Duration timeout = NetTimeouts.standard;
 
   final String baseUrl;
   final AuthedClient _authed;

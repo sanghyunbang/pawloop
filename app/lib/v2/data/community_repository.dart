@@ -44,6 +44,7 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'location_upload_policy.dart';
 import '../domain/post_media.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 게시판 — 계약의 `Board`.
 ///
@@ -509,7 +510,7 @@ void notifyCommunityChanged() => kCommunityRev.value++;
 
 class CommunityRepository {
   /// 요청 하나의 상한. 없으면 응답을 주지 않는 서버에서 화면이 영원히 로딩만 돈다.
-  static const Duration timeout = Duration(seconds: 12);
+  static const Duration timeout = NetTimeouts.standard;
 
   /// 제목·본문의 최대 길이. 계약의 `maxLength` 이자 서버의 `@Size` 와 같은 수다.
   ///

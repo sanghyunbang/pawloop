@@ -17,6 +17,7 @@ import 'package:http/testing.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
+import 'package:heat_trip_flutter/v2/data/family_repository.dart';
 import 'package:heat_trip_flutter/v2/data/pet_sync.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
@@ -46,12 +47,23 @@ class _FakeTokenStore implements AuthTokenStore {
   }
 }
 
+/// **가족도 가짜를 준다**(#573).
+///
+/// 전에는 `family:` 를 안 넘겨서 `PetSync` 가 진짜 `FamilyRepository` 를 만들었고,
+/// 그 아이가 `/api/groups/me` 로 **진짜 망 요청**을 보냈다. 테스트마다 상한이 다 탈 때까지
+/// 12초를 기다린 뒤 그 실패를 타고 `/api/dogs` 로 떨어졌다 — 초록이긴 했지만
+/// **한 파일이 1분을 쓰고 있었고**, 재고 있던 것도 의도한 경로가 아니었다.
+///
+/// 여기 테스트들은 "가족이 없는 사람" 을 재는 것이므로 `/api/groups/me` 는 **404** 다.
 ({PetSync sync, List<http.Request> seen}) syncThatAnswers(
   http.Response Function(http.Request request) answer,
 ) {
   final seen = <http.Request>[];
   final client = AuthedClient(
     inner: MockClient((request) async {
+      if (request.url.path == '/api/groups/me') {
+        return _json({'error': 'no group'}, status: 404);
+      }
       seen.add(request);
       return answer(request);
     }),
@@ -59,7 +71,10 @@ class _FakeTokenStore implements AuthTokenStore {
     store: _FakeTokenStore(),
   );
   return (
-    sync: PetSync(repository: WalkRepository(baseUrl: _base, client: client)),
+    sync: PetSync(
+      repository: WalkRepository(baseUrl: _base, client: client),
+      family: FamilyRepository(baseUrl: _base, client: client),
+    ),
     seen: seen,
   );
 }
