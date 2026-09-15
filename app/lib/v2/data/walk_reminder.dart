@@ -89,11 +89,12 @@ final ValueNotifier<int> kWalkReminderRev = ValueNotifier<int>(0);
 class WalkReminderStore {
   const WalkReminderStore();
 
-  static const _key = 'v2.walk_reminder';
+  /// 설정이 남는 자리. **세션 것이다** — 로그아웃하면 지운다(#513).
+  static const String key = 'v2.walk_reminder';
 
   Future<WalkReminderSettings> read() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
+    final raw = prefs.getString(key);
     if (raw == null) return const WalkReminderSettings();
     try {
       return WalkReminderSettings.tryParse(jsonDecode(raw)) ??
@@ -105,7 +106,7 @@ class WalkReminderStore {
 
   Future<void> save(WalkReminderSettings settings) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, jsonEncode(settings.toJson()));
+    await prefs.setString(key, jsonEncode(settings.toJson()));
     kWalkReminderRev.value++;
   }
 }

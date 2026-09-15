@@ -56,7 +56,7 @@ void main() {
   tearDown(() {
     AuthState.resetForTest();
     LocationPriming.resetForTest();
-    WalkSafetyStore.resetForTest();
+    WalkSafetyStore.clear();
   });
 
   testWidgets('아직 물어본 적 없으면 시트가 먼저 뜨고, "허용하기" 전에는 추적 화면을 열지 않는다', (t) async {

@@ -41,7 +41,7 @@ Map<String, Object?> _now({double temp = 26.2, Object? pm25 = 18, Object? pm10 =
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    WalkSafetyStore.resetForTest();
+    WalkSafetyStore.clear();
   });
 
   test('우리 서버에 5km 격자 번호만 보낸다 — 위경도도 인증 헤더도 없다', () async {

@@ -40,7 +40,7 @@ Future<void> _pump(WidgetTester t, WalkSafetyRepository repo, {bool located = tr
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    WalkSafetyStore.resetForTest();
+    WalkSafetyStore.clear();
     kMyDog.value = null;
     LocationService.consented.value = false;
   });

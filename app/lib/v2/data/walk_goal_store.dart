@@ -37,9 +37,10 @@ final ValueNotifier<int> kWalkGoalRev = ValueNotifier<int>(0);
 class WalkGoalStore {
   const WalkGoalStore();
 
-  static const _prefix = 'v2.walk_goal';
+  /// 목표가 남는 자리의 앞머리 — 아이마다 하나다. **세션 것이다**(#513).
+  static const String prefix = 'v2.walk_goal';
 
-  static String _keyFor(int? petId) => petId == null ? _prefix : '$_prefix.$petId';
+  static String _keyFor(int? petId) => petId == null ? prefix : '$prefix.$petId';
 
   /// 저장된 목표. 세운 적이 없으면 `null` — 그때 화면이 제안값을 쓴다.
   Future<WalkGoal?> read({int? petId}) async {

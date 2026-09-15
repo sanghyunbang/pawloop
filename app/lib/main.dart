@@ -30,7 +30,9 @@ import 'package:heat_trip_flutter/shared/media/media.dart';
 import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart';
 // 전역 로그인 상태
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
+import 'package:heat_trip_flutter/v2/data/local_notification_sink.dart';
 import 'package:heat_trip_flutter/v2/data/location_service.dart';
+import 'package:heat_trip_flutter/v2/data/session_traces.dart';
 
 Future<void> main() async {
   // 비동기 초기화 전에 바인딩
@@ -74,8 +76,13 @@ Future<void> main() async {
   // 화면으로 밀려나고 공개 라우트(지도·탐색)에 있었다면 그대로 둘러보기를 이어간다.
   // 예전처럼 무조건 `goNamed('login')` 을 하면, 지도를 보던 사용자가 백그라운드
   // 요청 하나 때문에 로그인 화면으로 튕긴다.
+  // 세션이 끝날 때 예약된 알림을 지우는 구현을 꽂는다. `session_traces.dart` 가
+  // `flutter_local_notifications` 를 직접 import 하면 순수 테스트가 채널 없이
+  // 던지므로, 조립은 여기서 한다(#513).
+  sessionNotifications = () => LocalNotificationSink();
+
   AuthedClient.instance.onSessionExpired = () async {
-    AuthState.markSessionExpired();
+    await AuthState.markSessionExpired();
   };
 
   // 저장된 토큰을 서버(`GET /auth/me`)로 검증한다. **await 하지 않는다** —
