@@ -21,6 +21,7 @@ import '../data/walk_feed.dart';
 import '../data/course_repository.dart';
 import '../data/location_upload_policy.dart';
 import '../data/walk_repository.dart';
+import '../domain/walk_labels.dart';
 import '../widgets/course_save_sheet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -32,7 +33,9 @@ class WalkDetailScreen extends StatefulWidget {
   /// 동안 빈 화면을 보여 주면 사용자는 기록이 사라진 줄 안다.
   final DateTime startedAt;
   final double km;
-  final int minutes;
+
+  /// 걸린 시간 — **초**다(#537). 분으로 받으면 1분이 안 되는 산책이 `0분` 이 된다.
+  final int durationS;
   final String initialMemo;
 
   /// 붙은 사진 URL(#450) — 목록이 이미 알고 있어 다시 조회하지 않는다.
@@ -52,7 +55,7 @@ class WalkDetailScreen extends StatefulWidget {
     required this.walkId,
     required this.startedAt,
     required this.km,
-    required this.minutes,
+    required this.durationS,
     required this.initialMemo,
     this.photoUrls = const [],
     this.placeTitle,
@@ -199,7 +202,8 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
             context,
             walkId: widget.walkId,
             km: widget.km,
-            minutes: widget.minutes,
+            // 코스 저장은 분 단위다(코스 카드가 "약 N분" 으로 읽는다) — 여기서 내린다.
+            durationS: widget.durationS,
             walks: widget.repository,
             courses: widget.courses,
           );
@@ -301,7 +305,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
         Row(children: [
           cell('${widget.km.toStringAsFixed(1)}km', '거리'),
           Container(width: 1, height: 30, color: T.line),
-          cell('${widget.minutes}분', '시간'),
+          cell(walkTimeLabel(widget.durationS), '시간'),
         ]),
       ]),
     );

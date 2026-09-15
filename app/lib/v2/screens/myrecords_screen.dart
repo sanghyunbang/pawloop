@@ -5,6 +5,7 @@ import '../data/walk_feed.dart';
 import '../data/walk_outbox.dart';
 import '../data/walk_repository.dart';
 import '../domain/pet.dart';
+import '../domain/walk_labels.dart';
 import '../walk/walk_share.dart';
 import '../walk/walk_share_card.dart';
 import '../widgets/walk_feed_builder.dart';
@@ -240,7 +241,7 @@ class MyRecordsScreen extends StatelessWidget {
         walkId: w.walkId!,
         startedAt: w.startedAt,
         km: w.km,
-        minutes: w.minutes,
+        durationS: w.durationS,
         initialMemo: w.memo,
         photoUrls: w.photoUrls,
         placeTitle: w.placeTitle,
@@ -369,7 +370,7 @@ class MyRecordsScreen extends StatelessWidget {
         accent: T.warmMid,
         dateLabel: '${w.date} ${_timeOf(w.startedAt)} 출발',
         distanceLabel: '${w.km.toStringAsFixed(1)}km',
-        timeLabel: '${w.minutes}분',
+        timeLabel: w.timeLabel,
         paceLabel: w.pace,
       ));
     } on WalkShareException catch (e) {
@@ -505,7 +506,7 @@ class MyRecordsScreen extends StatelessWidget {
         Row(children: [
           _stat(Icons.straighten, '${w.km.toStringAsFixed(1)}km'),
           const SizedBox(width: 8),
-          _stat(Icons.schedule, '${w.minutes}분'),
+          _stat(Icons.schedule, w.timeLabel),
           const SizedBox(width: 8),
           _stat(Icons.speed, w.pace),
         ]),
@@ -598,7 +599,15 @@ class _RecordView {
   final String title;
   final String date;
   final double km;
-  final int minutes;
+  /// 걸린 시간 — **초**다. 분으로 들고 있던 것을 초로 바꿨다(#537): 1분이 안 되는 산책이
+  /// `0분` 이 되어 통째로 사라졌고, 페이스도 분으로 나누느라 `-` 였다.
+  final int durationS;
+
+  /// 화면에 적는 시간 — `44초` · `12분`.
+  String get timeLabel => walkTimeLabel(durationS);
+
+  /// 분 단위가 필요한 자리(공유 카드의 옛 서식 등)를 위해 남겨 둔다.
+  int get minutes => durationS ~/ 60;
   final String memo;
 
   /// 함께 나간 아이들의 서버 id (#343). 초안에는 아직 없어서 빈 목록이다 —
@@ -635,7 +644,7 @@ class _RecordView {
     required this.date,
     required this.startedAt,
     required this.km,
-    required this.minutes,
+    required this.durationS,
     required this.memo,
     required this.pending,
     this.dogIds = const [],
@@ -654,15 +663,15 @@ class _RecordView {
   /// 직접 적은 것도 같은 자리다. 없으면 `null` 이고 그때는 줄에 아무것도 안 붙는다.
   final String? placeTitle;
 
-  String get pace =>
-      minutes == 0 ? '-' : '${(minutes / (km == 0 ? 1 : km)).round()}분/km';
+  /// 1km 에 걸린 시간 — `1'02"`. 못 재면 `-`.
+  String get pace => walkPaceLabel(durationS: durationS, km: km) ?? '-';
 
   factory _RecordView.ofWalk(ServerWalk w) => _RecordView(
         title: MyRecordsScreen._titleOf(w.startedAt),
         date: MyRecordsScreen._dateOf(w.startedAt),
         startedAt: w.startedAt,
         km: w.km,
-        minutes: w.minutes,
+        durationS: w.durationS,
         memo: w.memo ?? '',
         pending: false,
         dogIds: w.dogIds,
@@ -677,7 +686,7 @@ class _RecordView {
         date: MyRecordsScreen._dateOf(d.startedAt),
         startedAt: d.startedAt,
         km: d.km,
-        minutes: d.minutes,
+        durationS: d.durationS,
         memo: d.lastError ?? d.memo ?? '',
         pending: true,
         clientWalkId: d.clientWalkId,
@@ -692,7 +701,7 @@ class _RecordView {
         date: MyRecordsScreen._dateOf(d.startedAt),
         startedAt: d.startedAt,
         km: d.km,
-        minutes: d.minutes,
+        durationS: d.durationS,
         memo: d.memo ?? '',
         pending: false,
         rejected: true,

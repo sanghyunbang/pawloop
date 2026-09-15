@@ -87,7 +87,7 @@ Future<void> _pumpWalkDetail(WidgetTester t, _Courses courses) async {
       walkId: 7,
       startedAt: DateTime(2026, 9, 7, 19, 18),
       km: 0.63,
-      minutes: 1,
+      durationS: 60,
       initialMemo: '',
       repository: _Walks(),
       courses: courses,

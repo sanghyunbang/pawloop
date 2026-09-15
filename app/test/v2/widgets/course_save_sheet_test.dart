@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:heat_trip_flutter/v2/data/course_repository.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/widgets/course_save_sheet.dart';
+import 'package:heat_trip_flutter/v2/walk/route_image.dart';
 
 /// 동쪽으로 [stepM]m 씩 [count] 개.
 List<List<double>> _line(int count, double stepM) {
@@ -66,6 +67,7 @@ Future<Course?> _open(
   WidgetTester tester, {
   required List<List<double>>? path,
   required _Courses courses,
+  int durationS = 15 * 60,
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -81,7 +83,7 @@ Future<Course?> _open(
               context,
               walkId: 12,
               km: 0.6,
-              minutes: 15,
+              durationS: durationS,
               walks: _Walks(path),
               courses: courses,
             );
@@ -103,6 +105,30 @@ void main() {
     expect(find.text('코스로 남기기'), findsOneWidget);
     expect(find.textContaining('시작·끝 100m 는 저장하지 않아요'), findsOneWidget);
     expect(find.textContaining('0.60km 중'), findsOneWidget);
+  });
+
+  testWidgets('1분이 안 되는 산책도 미리보기에 시간이 남는다 (#537)', (tester) async {
+    await _open(tester, path: _line(61, 10), courses: _Courses(), durationS: 44);
+
+    final art = tester
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .map((w) => w.painter)
+        .whereType<RouteCanvasPainter>()
+        .first
+        .art;
+    expect(art.timeLabel, '44초', reason: '예전에는 분으로 받아 "0분" 이 그려졌다');
+  });
+
+  testWidgets('1분이 넘으면 지금처럼 분이다', (tester) async {
+    await _open(tester, path: _line(61, 10), courses: _Courses(), durationS: 15 * 60);
+
+    final art = tester
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .map((w) => w.painter)
+        .whereType<RouteCanvasPainter>()
+        .first
+        .art;
+    expect(art.timeLabel, '15분');
   });
 
   testWidgets('300m 가 안 되면 이름 칸을 열지 않고 이유를 말한다', (tester) async {

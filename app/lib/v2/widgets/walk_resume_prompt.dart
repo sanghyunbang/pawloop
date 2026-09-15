@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/walk_in_progress.dart';
+import '../domain/walk_labels.dart';
 import '../theme/app_tokens.dart';
 
 enum WalkResumeChoice { resume, discard }
@@ -62,12 +63,14 @@ class WalkResumePrompt {
   }
 
   /// "지난 산책이 저장되지 않은 채 끝났어요. 0.32km · 12분 · 15:41 시작"
+  ///
+  /// 1분이 안 되면 `44초` 다(#537) — 여기서 `0분` 이면 "안 걸었다" 로 읽혀 이어걷기를 안 누른다.
   static String summary(WalkInProgress walk) {
     final at = walk.startedAt.toLocal();
     final hh = '${at.hour}'.padLeft(2, '0');
     final mm = '${at.minute}'.padLeft(2, '0');
     return '지난 산책이 저장되지 않은 채 끝났어요.\n'
-        '${walk.km.toStringAsFixed(2)}km · ${walk.seconds ~/ 60}분 · $hh:$mm 시작';
+        '${walk.km.toStringAsFixed(2)}km · ${walkTimeLabel(walk.seconds)} · $hh:$mm 시작';
   }
 }
 
