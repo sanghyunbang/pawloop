@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
+import '../data/pet_sync.dart';
 import '../widgets/aurora.dart';
 import '../widgets/pet_registration_sheet.dart';
 import 'settings_screen.dart';
@@ -94,14 +95,24 @@ class MeScreen extends StatelessWidget {
   // ───────────── 우리 아이 프로필 ─────────────
   /// 등록된 아이가 없을 때. **지어낸 프로필을 보여 주지 않는다.**
   ///
-  /// 로그인 전이거나, 아직 한 마리도 등록하지 않았거나, 서버를 못 불렀을 때다.
-  /// 셋을 구분하지 않는 이유: 사용자가 할 일은 셋 다 같다 — 로그인하고 등록하는 것이다.
-  Widget _emptyState(BuildContext context) => ValueListenableBuilder<AuthStatus>(
+  /// 로그인 전이거나, 아직 한 마리도 등록하지 않았거나, **서버를 못 불렀을 때**다.
+  ///
+  /// 셋 중 앞의 둘은 할 일이 같다(로그인하고 등록하기). **셋째는 다르다**(#568) — 아이는
+  /// 이미 있고 목록만 못 읽은 것이라, 여기서 등록을 권하면 같은 아이가 두 마리가 되고
+  /// 케어 기록이 둘로 갈린다. #563 이 막으려던 것이 정확히 그것이라 따로 가른다.
+  Widget _emptyState(BuildContext context) => ValueListenableBuilder<PetsLoad>(
+      valueListenable: kPetsLoad,
+      builder: (_, __, ___) => ValueListenableBuilder<AuthStatus>(
         valueListenable: AuthState.status,
         builder: (_, status, __) {
           // 로그인 전에는 "등록" 이 아니라 "로그인" 이 주 동작이다 — 등록은 로그인 없이는
           // 안 되는데 그걸 주 버튼으로 두면 사용자가 벽에 부딪힌다(#324).
           final guest = status == AuthStatus.unauthenticated;
+          // "없다" 와 "못 읽었다" 를 나눈다(#568). 못 읽은 화면이 등록을 권하면 같은 아이가
+          // 두 마리가 되고 케어 기록이 둘로 갈린다 — #563 이 막으려던 것이다.
+          final unknown = !guest && kPetsLoad.value == PetsLoad.failed;
+          // 아직 읽는 중이면 아무 말도 안 한다 — "없어요" 도 "못 읽었어요" 도 틀리다.
+          final quiet = !guest && kPetsLoad.value == PetsLoad.loading;
           return ListView(
             padding: const EdgeInsets.fromLTRB(22, 40, 22, 28),
             children: [
@@ -110,8 +121,14 @@ class MeScreen extends StatelessWidget {
                     width: 72, height: 72, gaplessPlayback: true),
               ),
               const SizedBox(height: 18),
+              if (quiet)
+                const SizedBox.shrink(key: Key('me-empty-quiet'))
+              else ...[
               Text(
-                guest ? '로그인하면 우리 아이가 여기 있어요' : '아직 등록된 아이가 없어요',
+                guest
+                    ? '로그인하면 우리 아이가 여기 있어요'
+                    : (unknown ? '아이 목록을 불러오지 못했어요' : '아직 등록된 아이가 없어요'),
+                key: const Key('me-empty-title'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
@@ -120,7 +137,9 @@ class MeScreen extends StatelessWidget {
               Text(
                 guest
                     ? '카카오나 Google 로 시작하고 우리 아이를 등록해요'
-                    : '우리 아이를 등록하면 산책이 기록되기 시작해요',
+                    : (unknown
+                        ? '등록한 아이가 있다면 그대로 있어요'
+                        : '우리 아이를 등록하면 산책이 기록되기 시작해요'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary),
               ),
@@ -129,14 +148,19 @@ class MeScreen extends StatelessWidget {
                 onPressed: guest
                     ? () => Navigator.of(context)
                         .push(MaterialPageRoute(builder: (_) => const LoginScreen()))
-                    : () => showPetRegistrationSheet(context),
+                    : (unknown
+                        ? () => petRevision.value++
+                        : () => showPetRegistrationSheet(context)),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(52),
                   shape:
                       RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                 ),
-                child: Text(guest ? '로그인 / 회원가입' : '우리 아이 등록하기'),
+                child: Text(guest
+                    ? '로그인 / 회원가입'
+                    : (unknown ? '다시 시도' : '우리 아이 등록하기')),
               ),
+              ],
               const SizedBox(height: 16),
               _accountLine(),
               // 아이가 없어도 설정·로그아웃은 닿아야 한다(#371).
@@ -148,7 +172,7 @@ class MeScreen extends StatelessWidget {
             ],
           );
         },
-      );
+      ));
 
   Widget _dogHeader(DogProfile dog) {
     return Column(children: [
@@ -366,7 +390,8 @@ class MeScreen extends StatelessWidget {
             cell('${weekKm.toStringAsFixed(1)}km', '이번주'),
           ]),
           // 서버를 못 불렀는데 0 을 그냥 보여 주면 "한 번도 안 걸었다" 로 읽힌다 (#161).
-          if (data.offline && !data.hasAnything) ...[
+          // 아직 안 읽은 것과 못 읽은 것은 다른 말을 한다(#568).
+          if (data.offline && !data.loading && !data.hasAnything) ...[
             const SizedBox(height: 10),
             const Text('기록을 불러오지 못했어요',
                 style: TextStyle(fontSize: 11.5, color: T.textMuted)),

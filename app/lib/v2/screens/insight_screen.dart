@@ -270,7 +270,8 @@ class _InsightScreenState extends State<InsightScreen> {
           ),
           // 서버를 못 불렀는데 0 을 그냥 보여 주면 "한 번도 안 걸었다" 로 읽힌다.
           // today_screen 에는 이 규칙을 넣어 놓고 여기는 빠뜨렸었다 (#161).
-          if (_data.offline && !_data.hasAnything) ...[
+          // 아직 안 읽은 것과 못 읽은 것은 다른 말을 한다(#568).
+          if (_data.offline && !_data.loading && !_data.hasAnything) ...[
             const SizedBox(height: 10),
             const Text(
               '기록을 불러오지 못했어요',

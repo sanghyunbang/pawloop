@@ -175,6 +175,29 @@ class DogProfile {
 final ValueNotifier<List<DogProfile>> kMyPets =
     ValueNotifier<List<DogProfile>>(const []);
 
+/// 아이 목록을 **읽어 봤는가**(#568).
+///
+/// [kMyPets] 가 비어 있는 데는 이유가 셋인데 **화면이 할 말이 다 다르다.**
+enum PetsLoad {
+  /// 아직 안 읽었다. 화면은 <b>아무 말도 하지 않는다</b> — "없어요" 도 "못 읽었어요" 도
+  /// 이 순간에는 둘 다 틀린 말이다.
+  loading,
+
+  /// 서버가 답했다. **빈 목록도 아는 답이다** → "아직 등록된 아이가 없어요 · 등록하기".
+  loaded,
+
+  /// 못 읽었다 → "아이 목록을 불러오지 못했어요 · 다시 시도".
+  failed,
+}
+
+/// 아이 목록을 읽어 봤는가(#568).
+///
+/// 나누기 전에는 셋이 한 화면이었고, **그게 제일 위험했다** — 못 읽은 화면이 등록을
+/// 권하면 사용자는 같은 아이를 한 번 더 등록한다. 그러면 아이가 두 마리가 되고 케어
+/// 기록이 둘로 갈린다. #563 이 막으려던 것이 정확히 그것이다.
+final ValueNotifier<PetsLoad> kPetsLoad =
+    ValueNotifier<PetsLoad>(PetsLoad.loading);
+
 /// 현재 선택된 아이 인덱스.
 final ValueNotifier<int> kSelectedPetIdx = ValueNotifier<int>(0);
 
@@ -197,6 +220,8 @@ void selectPet(int i) {
 /// 빈 목록이면 선택도 비운다 — 지운 아이가 화면에 남아 있으면 안 된다.
 void replacePets(List<DogProfile> pets) {
   kMyPets.value = pets;
+  // 여기까지 왔으면 서버가 답을 준 것이다 — 빈 목록도 **아는** 답이다(#568).
+  kPetsLoad.value = PetsLoad.loaded;
   if (pets.isEmpty) {
     kSelectedPetIdx.value = 0;
     kMyDog.value = null;
