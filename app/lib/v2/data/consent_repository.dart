@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../core/config/env.dart';
 import '../../core/net/authed_client.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 동의를 받는 문서 넷. 계약(`openapi.yaml`)의 `ConsentKind` 와 같은 이름이다.
 ///
@@ -90,7 +91,7 @@ class ConsentRepository {
   final AuthedClient _authed;
 
   /// 응답 전체의 상한. 동의 화면이 이 뒤에 서 있다 — 무한정 기다리게 하면 안 된다.
-  static const Duration timeout = Duration(seconds: 12);
+  static const Duration timeout = NetTimeouts.standard;
 
   static String _stripTrailingSlash(String url) =>
       url.endsWith('/') ? url.substring(0, url.length - 1) : url;

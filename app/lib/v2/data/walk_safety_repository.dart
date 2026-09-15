@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import '../../core/config/env.dart';
 import '../domain/pet.dart';
 import 'walk_safety.dart';
+import '../../core/net/net_timeouts.dart';
 
 class WalkSafetyRepository {
   WalkSafetyRepository({http.Client? client, String? baseUrl, DateTime Function()? now})
@@ -25,7 +26,9 @@ class WalkSafetyRepository {
   final String baseUrl;
   final DateTime Function() _now;
 
-  static const Duration timeout = Duration(seconds: 8);
+  /// 보통 요청과 같은 상한(#573). 전에는 8초였는데 **왜 8인지 적힌 곳이 없었다** —
+  /// 그런 숫자는 다음 사람이 또 복사한다.
+  static const Duration timeout = NetTimeouts.standard;
 
   /// 지금 값 한 묶음. 서버가 못 주면(503·연결 없음·깨진 본문) `null` — 카드 없음.
   ///

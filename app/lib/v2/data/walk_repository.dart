@@ -29,6 +29,7 @@ import 'package:heat_trip_flutter/core/net/authed_client.dart';
 
 import '../domain/weekly_summary.dart';
 import 'location_upload_policy.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 반려동물의 종 — 계약의 `PetSpecies`.
 ///
@@ -416,6 +417,12 @@ class WalkTopPlace {
 /// 이 구분이 없으면 전송 대기 큐가 영구 거절 요청을 영원히 재시도하면서
 /// 정상 기록을 밀어낸다.
 enum WalkFailureKind {
+  /// **서버에 못 닿았다** — 상한 안에 아무 답도 안 왔다(#573). **다시 보내면 된다.**
+  ///
+  /// [network] 와 나누는 이유는 `FamilyFailureKind.timeout` 에 적었다 — 5xx 는 다른
+  /// 경로가 살아 있을 수 있지만, 못 닿은 것이면 다음 요청도 같은 상한을 태운다.
+  timeout,
+
   /// 연결이 없다. **다시 보내면 된다.**
   network,
 
@@ -436,6 +443,7 @@ enum WalkFailureKind {
 extension WalkFailureKindX on WalkFailureKind {
   /// 다시 보내면 될 수도 있는가. 전송 대기 큐가 이 값으로 갈린다.
   bool get retryable => switch (this) {
+        WalkFailureKind.timeout => true,
         WalkFailureKind.network => true,
         WalkFailureKind.unauthorized => true,
         WalkFailureKind.rateLimited => true,
@@ -444,6 +452,7 @@ extension WalkFailureKindX on WalkFailureKind {
       };
 
   String get message => switch (this) {
+        WalkFailureKind.timeout => '연결이 불안정해요 · 나중에 다시 보낼게요',
         WalkFailureKind.network => '연결이 불안정해요 · 나중에 다시 보낼게요',
         WalkFailureKind.unauthorized => '다시 로그인하면 저장할게요',
         WalkFailureKind.rateLimited => '잠시 후 다시 보낼게요',
@@ -468,7 +477,7 @@ class WalkFailure implements Exception {
 /// `/api/dogs` 와 `/api/walks` 의 클라이언트.
 class WalkRepository {
   /// 요청 하나의 상한. 없으면 응답을 주지 않는 서버에서 화면이 영원히 로딩만 돈다.
-  static const Duration timeout = Duration(seconds: 12);
+  static const Duration timeout = NetTimeouts.standard;
 
   /// 메모의 최대 길이. 서버의 `walk.memo` 컬럼 폭이자 계약의 `maxLength` 와 같다.
   static const int maxMemoLength = 500;
@@ -773,6 +782,9 @@ class WalkRepository {
       res = await request().timeout(timeout);
     } on WalkFailure {
       rethrow;
+    } on TimeoutException {
+      // **못 닿았다**(#573). `network` 와 문구는 같지만 부르는 쪽이 가를 수 있다.
+      throw const WalkFailure(WalkFailureKind.timeout);
     } catch (_) {
       // 예외 메시지에 URL·본문 조각이 섞일 수 있어 타입도 문구도 옮기지 않는다.
       throw const WalkFailure(WalkFailureKind.network);

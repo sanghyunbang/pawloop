@@ -5,6 +5,7 @@ import 'location_upload_policy.dart';
 import 'place_catalog_repository.dart';
 import '../../core/config/env.dart';
 import '../domain/pet.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 반려동반 가능 장소 하나. 계약(`openapi.yaml`)의 `Place` 를 그대로 옮긴다.
 ///
@@ -261,7 +262,7 @@ class PetPlacesRepository {
     });
 
     try {
-      final res = await _client.get(uri).timeout(const Duration(seconds: 12));
+      final res = await _client.get(uri).timeout(NetTimeouts.standard);
       if (res.statusCode == 429) throw const PlaceFailure(PlaceFailureKind.rateLimited);
       if (res.statusCode != 200) throw const PlaceFailure(PlaceFailureKind.unavailable);
       return _parse(res.bodyBytes);

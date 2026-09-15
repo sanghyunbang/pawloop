@@ -47,6 +47,12 @@ class PetSync {
     try {
       replacePets((await _householdPets()).map(_toProfile).toList());
       return true;
+    } on FamilyFailure {
+      // 가족을 못 읽었고 내 아이도 안 물어봤다(#573) — 위 주석 참조.
+      if (kPetsLoad.value == PetsLoad.loading) {
+        kPetsLoad.value = PetsLoad.failed;
+      }
+      return false;
     } on WalkFailure {
       // **처음 읽기가 실패했을 때만** 못 읽었다고 말한다(#568).
       //
@@ -78,7 +84,14 @@ class PetSync {
     try {
       final group = await _family.myGroup();
       return await _repo.householdPets(group.id);
-    } on FamilyFailure {
+    } on FamilyFailure catch (failure) {
+      // **못 닿았으면 두 번째를 안 묻는다**(#573). 같은 서버에 같은 이유로 죽으면서
+      // 상한을 한 번 더 통째로 태울 뿐이다 — 서버를 끄고 재 보니 홈이 답하기까지
+      // 23초가 걸렸고, 그 절반이 이 두 번째 요청이었다.
+      //
+      // 5xx 나 403 이면 물어본다. 그건 **서버는 살아 있고 그 경로만 죽은 것**이라
+      // `/api/dogs` 는 될 수 있다.
+      if (failure.kind == FamilyFailureKind.timeout) rethrow;
       return _repo.pets();
     }
   }

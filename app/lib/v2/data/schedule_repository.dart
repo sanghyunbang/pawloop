@@ -18,6 +18,7 @@ import 'package:http/http.dart' as http;
 import '../../core/config/env.dart';
 import '../../core/net/authed_client.dart';
 import '../domain/schedule.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 일정을 못 다룬 이유. 화면이 그대로 말한다 — "실패했어요" 로 뭉개지 않는다.
 enum ScheduleFailureKind {
@@ -49,7 +50,7 @@ class ScheduleFailure implements Exception {
 }
 
 class ScheduleRepository {
-  static const Duration timeout = Duration(seconds: 12);
+  static const Duration timeout = NetTimeouts.standard;
 
   /// 한 번에 볼 수 있는 최대 기간. 서버의 `ScheduleService.MAX_RANGE_DAYS` 와 같은 값이다.
   static const int maxRangeDays = 92;

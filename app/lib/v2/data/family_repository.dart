@@ -28,6 +28,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 케어 일곱 종류. 계약(`openapi.yaml` 의 `CareType`)과 **같은 문자열**을 쓴다.
 ///
@@ -200,6 +201,15 @@ class FamilyGroupSummary {
 /// `null` 하나로 뭉치면 "비행기 모드" 와 "아직 가족을 안 만들었다" 가 같은 빈 화면이
 /// 되고, 사용자는 무엇을 해야 하는지 알 수 없다.
 enum FamilyFailureKind {
+  /// **서버에 못 닿았다** — 상한([NetTimeouts.standard]) 안에 아무 답도 안 왔다(#573).
+  ///
+  /// [network] 와 나누는 이유: `network` 는 5xx 도 담는데, 그건 **서버는 살아 있고 그
+  /// 경로만 죽은 것**이라 다른 경로는 될 수 있다. 못 닿은 것이면 다음 요청도 같은 상한을
+  /// 통째로 태우고 같은 이유로 죽는다 — 부르는 쪽이 그걸 알아야 두 번 안 기다린다.
+  ///
+  /// 사용자에게 보이는 문구는 [network] 와 같다. 사람이 할 일은 둘 다 "다시 시도" 다.
+  timeout,
+
   /// 아직 가족 그룹이 없다(`GET /api/groups/me` 404). **오류가 아니다** — 만들면 된다.
   noGroup,
 
@@ -252,6 +262,8 @@ class FamilyFailure implements Exception {
   /// 화면에 그대로 띄울 수 있는 문구. 서버 메시지를 쓰지 않는다 —
   /// 사용자에게 서버 내부 문구가 새는 것을 막고, 문구가 한 곳에 모인다.
   static String messageFor(FamilyFailureKind kind) => switch (kind) {
+        // 못 닿은 것과 연결이 불안정한 것은 사람이 할 일이 같다 — 문구도 같다(#573).
+        FamilyFailureKind.timeout => '연결이 불안정해요 · 다시 시도',
         FamilyFailureKind.noGroup => '아직 가족 그룹이 없어요',
         FamilyFailureKind.unauthorized => '다시 로그인해 주세요',
         FamilyFailureKind.forbidden => '이 가족의 멤버가 아니에요',
@@ -271,7 +283,7 @@ class FamilyFailure implements Exception {
 class FamilyRepository {
   /// 요청 하나의 상한. 없으면 응답을 주지 않는 서버에서 화면이 영원히 로딩만 돈다 —
   /// `AuthedClient.refreshTimeout` 이 갱신 왕복에 대해 같은 것을 한다.
-  static const Duration timeout = Duration(seconds: 12);
+  static const Duration timeout = NetTimeouts.standard;
 
   /// 주의사항 본문·케어 메모의 최대 길이. 서버의 `CareService.MAX_TEXT_LENGTH` 와 같은
   /// 값이고 계약(`openapi.yaml` 의 `WalkNoteInput.body.maxLength`)에도 같은 숫자가 있다.
@@ -433,6 +445,12 @@ class FamilyRepository {
       res = await request().timeout(timeout);
     } on FamilyFailure {
       rethrow;
+    } on TimeoutException {
+      // **못 닿았다.** 부르는 쪽이 이걸 보고 다음 요청을 접을 수 있다(#573).
+      throw FamilyFailure(
+        FamilyFailureKind.timeout,
+        FamilyFailure.messageFor(FamilyFailureKind.timeout),
+      );
     } catch (_) {
       // 예외 메시지에 URL·본문 조각이 섞일 수 있어 타입도 문구도 옮기지 않는다.
       throw FamilyFailure(

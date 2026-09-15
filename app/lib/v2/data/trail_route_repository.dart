@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../core/config/env.dart';
+import '../../core/net/net_timeouts.dart';
 
 /// 산책로 코스 하나의 선 — 계약의 `TrailRoute` (이슈 #291).
 ///
@@ -80,7 +81,7 @@ class TrailRouteRepository {
 
     final uri = Uri.parse('$_baseUrl/api/places/trails/${Uri.encodeComponent(courseId)}/route');
     try {
-      final res = await _client.get(uri).timeout(const Duration(seconds: 12));
+      final res = await _client.get(uri).timeout(NetTimeouts.standard);
       if (res.statusCode != 200) return null;
       // bodyBytes 에서 직접 디코딩한다 — res.body 는 charset 이 없으면 한글이 깨진다(#81).
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
