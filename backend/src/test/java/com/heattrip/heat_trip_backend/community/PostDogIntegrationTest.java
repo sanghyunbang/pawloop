@@ -83,6 +83,23 @@ class PostDogIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("우리 집 아이는 붙는다 — 아빠가 엄마의 보리 사진을 올린다 (#563)")
+    void aHouseholdDogCanBeAttached() throws Exception {
+        Account mom = account("엄마");
+        Account dad = account("아빠");
+        long bori = newDog(mom, "보리");
+        joinFamily(mom, dad);
+
+        JsonNode post = body(createPost(dad,
+                "{\"board\":\"free\",\"title\":\"보리\",\"body\":\"본문\",\"dogId\":" + bori + "}")
+                .andExpect(status().isCreated()));
+
+        assertThat(post.path("dog").path("id").asLong())
+                .as("아이를 고르는 화면이 집 아이를 보여 준다 — 거기서 고른 것이 저장에서 거절되면 안 된다")
+                .isEqualTo(bori);
+    }
+
+    @Test
     @DisplayName("?dogId= 는 그 아이의 글만 준다 — 다른 아이 · 아이 없는 글은 빠지고, board 와 함께 쓸 수 있다")
     void feedFiltersByDog() throws Exception {
         Account me = account("사진첩주인");
@@ -218,6 +235,21 @@ class PostDogIntegrationTest extends AbstractMySqlIntegrationTest {
                 .nickname(nickname)
                 .build());
         return new Account(user.getId(), jwtProvider.createAccessToken(user.getId(), user.getRole()));
+    }
+
+    /** 방장의 가족에 넣는다 — 멤버십의 원본은 방이다(ADR-0011). */
+    private void joinFamily(Account owner, Account joiner) throws Exception {
+        long roomId = body(mockMvc.perform(post("/api/groups")
+                        .header("Authorization", "Bearer " + owner.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"보리네\"}"))
+                .andExpect(status().isCreated())).path("roomId").asLong();
+        String code = body(mockMvc.perform(post("/api/chat/rooms/{roomId}/invites", roomId)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isCreated())).path("code").asText();
+        mockMvc.perform(post("/api/chat/invites/{code}/join", code)
+                        .header("Authorization", "Bearer " + joiner.token()))
+                .andExpect(status().isOk());
     }
 
     private record Account(long id, String token) { }

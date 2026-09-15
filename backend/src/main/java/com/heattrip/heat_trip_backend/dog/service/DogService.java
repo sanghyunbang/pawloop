@@ -312,48 +312,24 @@ public class DogService implements DogOwnership {
     }
 
     /**
-     * 내 반려동물이 맞는지 확인한다. 산책 저장이 {@code dogId} 를 받을 때 쓴다.
+     * 우리 집 아이 id 전부 — 이슈 #418, #563 이 집 기준으로 넓혔다.
+     * 이유는 {@link DogOwnership#householdDogIds} 에 적었다.
      *
-     * <p>{@code walk} 모듈이 {@code DogRepository} 를 직접 부르지 않고 여기를 지나게 하는
-     * 이유는, 소유권 판정이 두 곳에 생기면 <b>한쪽만 고쳐지는 날이 오기 때문</b>이다.
-     */
-    /**
-     * 이 사람의 아이 id 전부 — 이슈 #418. 이유는 {@link DogOwnership#myDogIds} 에 적었다.
-     *
-     * <p>{@code findMine} 을 그대로 쓴다 — 지운 아이를 거르는 규칙({@code deleted_at is null},
+     * <p>{@code findOfUsers} 를 그대로 쓴다 — 지운 아이를 거르는 규칙({@code deleted_at is null},
      * #156)이 그 쿼리 안에 있어서, 여기서 다시 적으면 두 곳이 된다.
      */
     @Override
     @Transactional(readOnly = true)
-    public java.util.List<Long> myDogIds(long userId) {
-        return dogs.findMine(userId).stream().map(Dog::getId).toList();
-    }
-
-    @Override
-    public void requireMine(Long userId, long dogId) {
-        if (!dogs.isMine(dogId, userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
+    public java.util.List<Long> householdDogIds(long actorUserId) {
+        return dogs.findOfUsers(family.householdUserIds(actorUserId)).stream()
+                .map(Dog::getId)
+                .toList();
     }
 
     /**
-     * 내 반려동물을 꺼낸다. 산책 저장이 {@code dogId} 를 받을 때 쓴다.
-     *
-     * <p>{@link #requireMine} 과 달리 <b>행을 돌려준다</b> — 산책 엔티티가
-     * {@code @ManyToOne Dog} 를 들어야 {@code fk_walk_dog} 가 생기기 때문이다.
-     *
-     * <p>{@code walk} 모듈이 {@code DogRepository} 를 직접 부르지 않고 여기를 지나게 하는
-     * 이유는 {@link #requireMine} 과 같다 — 소유권 판정이 두 곳에 생기면 <b>한쪽만 고쳐지는
-     * 날이 온다.</b>
+     * 조회 + <b>등록한 사람인가</b>. 이 판정은 모듈 밖으로 안 나간다(#563) —
+     * 아이 정보를 고치고 지우는 일만 "등록한 사람만" 이고, 나머지는 집 기준이다.
      */
-    @Override
-    public Dog requireMineEntity(Long userId, Long dogId) {
-        if (dogId == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
-        return require(userId, dogId);
-    }
-
     private Dog require(Long userId, long dogId) {
         return dogs.findMineById(dogId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));

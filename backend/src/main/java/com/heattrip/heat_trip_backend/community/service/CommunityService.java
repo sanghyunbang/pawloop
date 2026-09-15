@@ -296,7 +296,7 @@ public class CommunityService {
                 .handle(displayNameOf(me))
                 .courseId(request.courseId() == null ? null : requireAttachable(request.courseId(), me).id())
                 // 찍힌 아이 — 내 아이만 (#451 5번). 남의 아이 id 는 400 이다.
-                .dog(request.dogId() == null ? null : requireMyDog(me, request.dogId()))
+                .dog(request.dogId() == null ? null : requireOurDog(me, request.dogId()))
                 .build());
         // 업로드가 먼저고 글이 나중이다 (#429). 붙일 수 없는 것이 하나라도 있으면 여기서 던지고,
         // 같은 트랜잭션이라 방금 저장한 글도 함께 되돌아간다 — 사진 없는 글이 조용히 남지 않는다.
@@ -529,7 +529,7 @@ public class CommunityService {
         requireMine(post.getUser(), me.getId(), "글");
         post.edit(request.board(), request.title(), request.body());
         if (request.dogId() != null) {
-            post.attachDog(requireMyDog(me, request.dogId()));
+            post.attachDog(requireOurDog(me, request.dogId()));
         }
 
         // 사진·영상은 키가 왔을 때만 통째로 갈아 끼운다 (#429). 안 왔으면 지금 것 그대로다.
@@ -763,12 +763,18 @@ public class CommunityService {
 
     // ─────────────────────────── 찍힌 아이 (#451 5번) ───────────────────────────
 
-    /** 내 아이여야 붙는다. 남의 아이 id 는 400 — 404 로 가르면 남의 아이 id 를 훑을 수 있다. */
-    private Dog requireMyDog(User me, long dogId) {
-        if (!dogs.myDogIds(me.getId()).contains(dogId)) {
-            throw new IllegalArgumentException("내 아이만 글에 붙일 수 있습니다.");
+    /**
+     * <b>우리 집</b> 아이여야 붙는다(#563). 남의 아이 id 는 400 — 404 로 가르면 남의 아이
+     * id 를 훑을 수 있다.
+     *
+     * <p>집 기준인 이유는 아이를 고르는 화면이 집 아이를 보여 주기 때문이다. 화면이 고를 수
+     * 있다고 해 놓고 저장에서 거절하면 그게 더 나쁜 실패다.
+     */
+    private Dog requireOurDog(User me, long dogId) {
+        if (!dogs.householdDogIds(me.getId()).contains(dogId)) {
+            throw new IllegalArgumentException("우리 집 아이만 글에 붙일 수 있습니다.");
         }
-        return dogs.requireMineEntity(me.getId(), dogId);
+        return dogs.requireInHouseholdEntity(me.getId(), dogId);
     }
 
     /** 카드의 아이 꼬리표. 보낸 아이(소프트 삭제)는 안 그린다 — 이름만 남은 꼬리표는 헛갈린다. */

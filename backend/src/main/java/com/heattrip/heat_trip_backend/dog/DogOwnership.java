@@ -20,34 +20,21 @@ import com.heattrip.heat_trip_backend.dog.entity.Dog;
  * <p>{@code walk} 가 {@code DogRepository} 를 직접 부르게 두면 소유권 판정이 두 곳에 생기고,
  * <b>한쪽만 고쳐지는 날이 온다.</b> 남의 반려동물에 산책을 붙일 수 있게 되는 것이 그 날의
  * 모습이다.
+ *
+ * <h2>왜 "내 아이" 판정이 여기 없나</h2>
+ * <p>#563 이 아이를 <b>집</b>의 것으로 옮기면서 밖에서 부르던 {@code requireMine} —
+ * {@code requireMineEntity} 를 지웠다. 둘을 남겨 두면 다음 사람이 그쪽을 집고, 그러면
+ * 판정이 다시 두 벌이 된다 — 실제로 그 날이 하루에 두 번 왔다(주간 통계 404 · 일정 404).
+ *
+ * <p>"등록한 사람만" 이 맞는 일(아이 정보 고치기 — 지우기)은 {@code dog} 모듈 <b>안에서</b>
+ * 끝난다. 밖으로 낼 이유가 없다.
  */
 public interface DogOwnership {
 
     /**
-     * 내 반려동물이 맞는지 확인한다. 행이 필요 없을 때 쓴다.
-     *
-     * @throws org.springframework.web.server.ResponseStatusException 아니면 <b>404</b>.
-     *         403 이 아닌 이유는 "그 id 는 존재한다" 를 알려 주지 않기 위해서다
-     */
-    void requireMine(Long userId, long dogId);
-
-    /**
-     * 내 반려동물을 꺼낸다.
-     *
-     * <p>행을 돌려주는 이유는 {@code Walk} 가 {@code @ManyToOne Dog} 를 <b>들어야</b>
-     * Hibernate 가 {@code fk_walk_dog} 를 만들기 때문이다. 스칼라 {@code Long} 으로 두면
-     * {@code 01_schema.sql} 재생성 때 그 FK 가 조용히 사라진다.
-     *
-     * @param dogId {@code null} 이면 404 다 — 계약이 필수로 선언했고, 여기까지 온 이상
-     *              "안 보냈다" 와 "없는 id" 를 나눌 이유가 없다
-     * @throws org.springframework.web.server.ResponseStatusException 내 것이 아니면 404
-     */
-    Dog requireMineEntity(Long userId, Long dogId);
-
-    /**
      * <b>그 집 아이</b>를 꺼낸다 — 이슈 #563. 아니면 <b>400</b>.
      *
-     * <p>{@link #requireMineEntity} 와 다른 점은 <b>누구 것인지 안 따진다</b>는 것이다. 엄마가
+     * <p><b>누구 것인지 안 따진다.</b> 엄마가
      * 등록한 보리에게 아빠가 물을 줄 수 있어야 한다 — 그게 이 앱의 목적(업무 분담)이다.
      *
      * <p><b>인가를 하지 않는다.</b> 부르는 쪽이 이미 "그 그룹의 식구인가" 를 지났다는 전제다
@@ -67,7 +54,7 @@ public interface DogOwnership {
      *
      * <p>산책은 그룹 경로가 아니다({@code POST /api/walks}). 부르는 쪽이 그룹 id 를 모르므로
      * 여기서 {@code FamilyMembership.householdUserIds} 로 집을 찾는다 — 가족이 없으면 자기
-     * 아이만이라, 1인 사용자에게는 {@link #requireMineEntity} 와 똑같이 동작한다.
+     * 아이만이라, 1인 사용자에게는 "내 아이인가" 와 똑같이 동작한다.
      *
      * <p>404 다(400 이 아니다). 산책 저장은 <b>그룹 안에서 벌어지는 일이 아니라</b> 내 요청이고,
      * 여기서 400 을 주면 "그 id 는 있다" 를 알려 주는 셈이 된다 — {@code requireMineEntity} 와
@@ -85,17 +72,18 @@ public interface DogOwnership {
     void requireInHousehold(long actorUserId, long dogId);
 
     /**
-     * 이 사람의 아이 id 전부 — 이슈 #418 이 이 표면에 더했다. 지운 아이는 안 들어간다(#156).
+     * <b>우리 집</b> 아이 id 전부 — 이슈 #418 이 더했고 #563 이 집 기준으로 넓혔다.
+     * 지운 아이는 안 들어간다(#156). 가족이 없으면 자기 아이만이라 1인 사용자는 전과 같다.
      *
-     * <p><b>왜 여기인가.</b> 일정표의 기본이 "합쳐 보기" 다 — 내 아이들 것과 우리 가족 것이
-     * 한 목록으로 나온다. 그러려면 "내 아이가 누구누구인가" 를 물어야 하는데,
-     * {@code DogRepository} 를 직접 부르면 소유권 판정이 두 곳에 생긴다({@link #requireMine}
-     * 의 javadoc 이 경계하는 것이 정확히 그것이다).
+     * <p><b>왜 여기인가.</b> 일정표의 기본이 "합쳐 보기" 다 — 아이들 것과 우리 가족 것이
+     * 한 목록으로 나온다. 그러려면 "우리 집 아이가 누구누구인가" 를 물어야 하는데,
+     * {@code DogRepository} 를 직접 부르면 소유권 판정이 두 곳에 생긴다 — 이 인터페이스의
+     * 클래스 javadoc 이 경계하는 것이 정확히 그것이다.
      *
      * <p>{@code DogResponse} 목록을 주는 조회는 이미 있지만 그것은 화면용 모양이다. 여기
      * 필요한 것은 <b>id 뿐</b>이라, 이름·품종까지 실어 나르지 않는다.
      */
-    java.util.List<Long> myDogIds(long userId);
+    java.util.List<Long> householdDogIds(long actorUserId);
 
     /**
      * 아이의 크기 · 나이대만(#486). [dogId] 가 있으면 그 아이, 없으면 <b>우리 집</b> 첫째 아이.

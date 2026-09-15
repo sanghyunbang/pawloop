@@ -16,7 +16,7 @@ import java.util.Optional;
  * <p>일정({@code schedule})에는 <b>담당자</b>가 있다 — "토요일 보리 병원, 아빠". 그 담당자는
  * 지금 로그인한 사람이 아니라 <b>남</b>이라, {@code @CurrentUser} 로 받을 수 없다. 그런데
  * {@code Schedule} 은 {@code @ManyToOne User} 를 <b>들어야</b> Hibernate 가
- * {@code fk_schedule_assignee} 를 만든다({@code DogOwnership.requireMineEntity} 가 같은
+ * {@code fk_schedule_assignee} 를 만든다({@code DogOwnership.requireInHouseholdEntity} 가 같은
  * 이유로 행을 돌려준다). 그래서 행이 필요하다.
  *
  * <p>그렇다고 {@code schedule} 이 {@code user.repository.UserRepository} 를 직접 부르면

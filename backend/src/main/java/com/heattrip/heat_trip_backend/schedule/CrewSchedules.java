@@ -30,7 +30,7 @@ import java.time.LocalDate;
  * <h2>아이는 <b>행</b>으로 받는다</h2>
  * <p>{@code dogId} 를 받으면 이 모듈이 "그 아이가 누구 것인가" 를 다시 물어야 하는데, 품앗이의
  * 아이는 <b>맡은 사람이 아니라 부탁한 사람의</b> 것이다. 소유권은 부탁을 올릴 때 이미
- * 확인했으므로({@code DogOwnership.requireMineEntity}), 여기서는 그 행을 그대로 받는다 —
+ * 확인했으므로({@code DogOwnership.requireInHouseholdEntity}), 여기서는 그 행을 그대로 받는다 —
  * {@code Schedule} 이 {@code @ManyToOne Dog} 를 들어야 {@code fk_schedule_dog} 가 선다.
  */
 @Component

@@ -98,9 +98,10 @@ public class CrewFavorService {
             throw new IllegalArgumentException("지난 날짜로는 부탁할 수 없습니다.");
         }
 
+        // 우리 집 아이면 된다(#563) — 아빠가 엄마의 보리 산책을 부탁할 수 있어야 한다.
         Dog dog = request.dogId() == null
                 ? null
-                : dogs.requireMineEntity(me.getId(), request.dogId());
+                : dogs.requireInHouseholdEntity(me.getId(), request.dogId());
 
         CrewFavor saved = favors.save(CrewFavor.builder()
                 .crew(crew)

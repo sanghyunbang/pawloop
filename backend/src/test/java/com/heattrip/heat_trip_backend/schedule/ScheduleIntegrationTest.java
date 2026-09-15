@@ -66,6 +66,10 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
     @Autowired
     private JWTProvider jwtProvider;
 
+    /** 가족을 나가는 것은 방을 나가는 것이다(ADR-0011). */
+    @Autowired
+    private com.heattrip.heat_trip_backend.chat.ChatRoomService chatRooms;
+
     // ─────────────────── 만들고 · 받고 · 고치고 · 지운다 ───────────────────
 
     @Test
@@ -169,6 +173,51 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(range(mom, "2026-10-01", "2026-10-31", null).size())
                 .as("남이 두드리는 동안 주인의 일정은 그대로여야 한다")
                 .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("아빠가 엄마 아이 보리의 일정을 적고, 둘 다 그 일정을 본다 (#563)")
+    void aHouseholdDogCanBeScheduledByAnyoneInTheHouse() throws Exception {
+        Account mom = account("엄마");
+        Account dad = account("아빠");
+        long bori = dog(mom, "보리");
+        family(mom, "보리네", dad);
+
+        create(dad, """
+                {"ownerKind":"dog","ownerRef":%d,"dogId":%d,"kind":"vet",
+                 "title":"보리 검진","onDate":"2026-10-03"}
+                """.formatted(bori, bori))
+                .andExpect(status().isCreated());
+
+        assertThat(titles(range(dad, "2026-10-01", "2026-10-31", null)))
+                .as("화면이 보리를 고를 수 있다고 해 놓고 저장에서 404 면 그게 가장 나쁜 모양이다")
+                .contains("보리 검진");
+        assertThat(titles(range(mom, "2026-10-01", "2026-10-31", null)))
+                .as("엄마도 본다 — 안 보이면 병원에 두 번 전화한다")
+                .contains("보리 검진");
+    }
+
+    @Test
+    @DisplayName("가족을 나가면 그 집 아이 일정이 안 보인다 (#563)")
+    void leavingTheHouseholdHidesItsDogSchedules() throws Exception {
+        Account mom = account("엄마");
+        Account dad = account("아빠");
+        long bori = dog(mom, "보리");
+        long roomId = familyRoom(mom, "보리네", dad);
+
+        create(dad, """
+                {"ownerKind":"dog","ownerRef":%d,"dogId":%d,"kind":"vet",
+                 "title":"보리 검진","onDate":"2026-10-03"}
+                """.formatted(bori, bori))
+                .andExpect(status().isCreated());
+        assertThat(titles(range(dad, "2026-10-01", "2026-10-31", null))).contains("보리 검진");
+
+        chatRooms.leaveRoom(roomId, dad.id());
+
+        assertThat(titles(range(dad, "2026-10-01", "2026-10-31", null)))
+                .as("보리는 이제 아빠 집 아이가 아니다. 일정은 사라지지 않고 엄마에게 남는다")
+                .doesNotContain("보리 검진");
+        assertThat(titles(range(mom, "2026-10-01", "2026-10-31", null))).contains("보리 검진");
     }
 
     @Test
@@ -883,14 +932,24 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
         return family(owner, name, null);
     }
 
+    /** 방 id 를 돌려준다 — 가족을 나가는 것은 방을 나가는 것이다(ADR-0011). */
+    private long familyRoom(Account owner, String name, Account joiner) throws Exception {
+        family(owner, name, joiner);
+        return lastRoomId;
+    }
+
+    /** {@link #family} 가 만든 방 id. 나가기를 재는 테스트만 쓴다. */
+    private long lastRoomId;
+
     private long family(Account owner, String name, Account joiner) throws Exception {
         JsonNode created = body(mockMvc.perform(post("/api/groups")
                         .header("Authorization", "Bearer " + owner.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"%s\"}".formatted(name)))
                 .andExpect(status().isCreated()));
+        lastRoomId = created.path("roomId").asLong();
         if (joiner != null) {
-            long roomId = created.path("roomId").asLong();
+            long roomId = lastRoomId;
             String code = body(mockMvc.perform(post("/api/chat/rooms/{roomId}/invites", roomId)
                             .header("Authorization", "Bearer " + owner.token()))
                     .andExpect(status().isCreated()))
