@@ -13,6 +13,7 @@ import '../data/walk_outbox.dart';
 import '../data/walk_repository.dart';
 import '../data/walk_sync.dart';
 import '../widgets/pet_registration_sheet.dart';
+import '../widgets/snack.dart';
 
 /// 산책 기록 작성 (create) — 장소·거리·시간·메모·사진.
 ///
@@ -261,6 +262,8 @@ class _CreateScreenState extends State<CreateScreen> {
         content: Text(message),
         duration: Duration(milliseconds: seeRecords ? 3200 : 1800),
         action: seeRecords ? SnackBarAction(label: '보기', onPressed: _openRecords) : null,
+        // 안 적으면 버튼이 있는 말풍선이 영원히 남아 탭 바를 덮는다 — #531.
+        persist: snackBarPersists(context),
       ),
     );
   }
