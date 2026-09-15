@@ -243,6 +243,7 @@ class MyRecordsScreen extends StatelessWidget {
         minutes: w.minutes,
         initialMemo: w.memo,
         photoUrls: w.photoUrls,
+        placeTitle: w.placeTitle,
       ),
     ));
   }
@@ -464,6 +465,22 @@ class MyRecordsScreen extends StatelessWidget {
                 const Icon(Icons.calendar_today, size: 12.5, color: T.textMuted),
                 const SizedBox(width: 4),
                 Text(w.date, style: const TextStyle(fontSize: 12, color: T.textMuted)),
+                // 장소는 **날짜 다음**이다(#547). 줄어들어도 되는 것이 이것 하나뿐이라
+                // Flexible 을 여기만 건다 — 둘에 걸면 자리가 남아도 반씩 나눠 말줄임이 된다.
+                if (w.placeTitle != null) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.place_outlined, size: 12.5, color: T.textMuted),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      w.placeTitle!,
+                      key: Key('record-place-${w.clientWalkId ?? w.walkId}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: T.textMuted),
+                    ),
+                  ),
+                ],
               ]),
               // 함께 나간 아이들 (#343). **한 마리면 안 적는다** — 한 마리인 사람에게
               // 매 카드마다 자기 아이 이름을 한 번 더 보여 줄 이유가 없다.
@@ -526,8 +543,9 @@ class MyRecordsScreen extends StatelessWidget {
   /// 카드 하나가 그릴 것. 서버 산책과 전송 대기 초안을 **같은 모양**으로 만든다 —
   /// 화면이 둘을 다르게 다루면 "대기 중인 것은 목록에 없다" 같은 규칙이 조용히 생긴다.
   ///
-  /// `place` 축이 없다. 계약의 `Walk` 에 장소가 없어서다 — 통계의 `topPlaces` 가
-  /// 빈 배열인 것과 같은 이유다. 대신 **시작 시각**을 제목으로 쓴다(실제 정보다).
+  /// 제목은 **시작 시각**이다(`아침 산책`). 장소가 있으면 날짜 줄에 함께 적는다(#547) —
+  /// 제목에 붙이지 않는 이유는, 장소가 없는 기록과 있는 기록의 제목 모양이 갈리면
+  /// 목록을 훑을 때 줄이 들쭉날쭉해 보이기 때문이다.
   static String _titleOf(DateTime startedAt) {
     final hour = startedAt.hour;
     final part = hour < 6
@@ -626,10 +644,15 @@ class _RecordView {
     this.walkId,
     this.clientWalkId,
     this.photoUrls = const [],
+    this.placeTitle,
   });
 
   /// 산책에 붙은 사진 URL(#450) — 있으면 카드의 아이콘 자리에 첫 장이 들어가고 상세에 띠로 보인다.
   final List<String> photoUrls;
+
+  /// 저장할 때 적은 곳의 이름 — 계약의 `Walk.place.title`(#338). 카탈로그에서 고른 것도,
+  /// 직접 적은 것도 같은 자리다. 없으면 `null` 이고 그때는 줄에 아무것도 안 붙는다.
+  final String? placeTitle;
 
   String get pace =>
       minutes == 0 ? '-' : '${(minutes / (km == 0 ? 1 : km)).round()}분/km';
@@ -646,6 +669,7 @@ class _RecordView {
         walkId: w.id,
         clientWalkId: w.clientWalkId,
         photoUrls: [for (final m in w.media) m.url],
+        placeTitle: w.place?.title,
       );
 
   factory _RecordView.ofDraft(WalkDraft d) => _RecordView(
@@ -657,6 +681,7 @@ class _RecordView {
         memo: d.lastError ?? d.memo ?? '',
         pending: true,
         clientWalkId: d.clientWalkId,
+        placeTitle: d.place?.title,
       );
 
   /// 서버가 거절한 초안. **메모는 사용자가 쓴 것을 그대로** 두고, 사유는 따로
@@ -673,5 +698,6 @@ class _RecordView {
         rejected: true,
         reason: d.lastError ?? '서버가 이 기록을 받지 않았어요',
         clientWalkId: d.clientWalkId,
+        placeTitle: d.place?.title,
       );
 }

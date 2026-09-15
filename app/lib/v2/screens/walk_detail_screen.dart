@@ -38,6 +38,9 @@ class WalkDetailScreen extends StatefulWidget {
   /// 붙은 사진 URL(#450) — 목록이 이미 알고 있어 다시 조회하지 않는다.
   final List<String> photoUrls;
 
+  /// 저장할 때 적은 곳의 이름(#547). 목록과 같은 값이고, 없으면 그 줄이 안 생긴다.
+  final String? placeTitle;
+
   /// 서버를 어디로 부르는가. **테스트만 넘긴다.**
   final WalkRepository? repository;
 
@@ -52,6 +55,7 @@ class WalkDetailScreen extends StatefulWidget {
     required this.minutes,
     required this.initialMemo,
     this.photoUrls = const [],
+    this.placeTitle,
     this.repository,
     this.courses,
   });
@@ -271,9 +275,28 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
 
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
+        Row(children: [
+          // 날짜는 길이가 정해져 있다 — 줄어들어도 되는 것은 장소뿐이라 Flexible 을 거기만 건다.
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
+          // 어디를 걸었는지는 저장할 때 적은 것이다(#547). 예전에는 그 값이 화면까지 와 있는데
+          // 그리는 자리가 없어서, 적은 사람이 다시 볼 수 없었다.
+          if (widget.placeTitle != null) ...[
+            const SizedBox(width: 8),
+            const Icon(Icons.place_outlined, size: 13, color: T.textMuted),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(
+                widget.placeTitle!,
+                key: const Key('detail-place'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textMuted),
+              ),
+            ),
+          ],
+        ]),
         const SizedBox(height: 14),
         Row(children: [
           cell('${widget.km.toStringAsFixed(1)}km', '거리'),
