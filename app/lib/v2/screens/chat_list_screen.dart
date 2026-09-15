@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/chat_repository.dart';
 import '../data/chat_unread.dart';
+import '../domain/chat_reply.dart';
 import '../domain/chat_thread.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
@@ -359,6 +360,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
 /// 가린 사람이 마지막으로 말했으면 **여기서도 접는다.** 방 안에서 접어 놓고 목록에서
 /// 그대로 보여 주면 가린 말이 거기로 샌다 (#82).
 String chatRoomPreview(ChatRoomSummary room) {
+  // 지워진 말이 먼저다. 소프트 삭제(#197)는 **본문을 비워서** 오므로, 이 줄이 없으면
+  // 아래의 "아직 대화가 없어요" 로 떨어져 **있었던 대화를 없었다고** 말한다 — 게다가
+  // 그 옆에는 지워진 말의 시각(00:20)이 그대로 떠 있어서 한 줄 안에서 앞뒤가 안 맞는다(#517).
+  if (room.lastMessageDeleted) {
+    return deletedPreview;
+  }
   // 사진 메시지(#452)는 본문이 캡션이라 비어 있을 수 있다 — 그때 "사진" 이라고 말한다(카카오톡과 같다).
   final body = room.lastMessageIsImage && (room.lastMessageBody ?? '').isEmpty
       ? '사진'

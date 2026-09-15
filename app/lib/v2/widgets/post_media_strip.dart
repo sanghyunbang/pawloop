@@ -146,7 +146,10 @@ class _Tile extends StatelessWidget {
         else
           Image.network(
             url,
-            fit: BoxFit.cover,
+            // 서버가 크기를 모르면 자리는 1:1 로 잡히고, 거기에 4:5 사진을 cover 로 그리면
+            // 위아래가 잘린다 — 산책 경로 그림의 아래쪽 "0.90km · 01:13" 이 실제로 그렇게
+            // 잘렸다(#517). 모를 때는 **안 자른다**: 옆이 비는 편이 내용을 잃는 것보다 낫다.
+            fit: media.hasSize ? BoxFit.cover : BoxFit.contain,
             // 못 불러오면 회색 칸 — 깨진 그림 아이콘을 카드에 띄우지 않는다.
             errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x22000000)),
           ),

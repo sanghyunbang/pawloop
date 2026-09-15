@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -24,13 +25,33 @@ WalkSafetyRepository _repo({double temp = 22, int status = 200}) => WalkSafetyRe
       now: () => DateTime(2026, 9, 7, 14, 10),
     );
 
-Future<void> _pump(WidgetTester t, WalkSafetyRepository repo, {bool located = true}) async {
+LocationFix _fixAt() => LocationFix.found(Position(
+      latitude: 37.5445,
+      longitude: 127.0410,
+      timestamp: DateTime(2026, 9, 7, 14, 10),
+      accuracy: 5,
+      altitude: 0,
+      altitudeAccuracy: 0,
+      heading: 0,
+      headingAccuracy: 0,
+      speed: 0,
+      speedAccuracy: 0,
+    ));
+
+Future<void> _pump(
+  WidgetTester t,
+  WalkSafetyRepository repo, {
+  bool located = true,
+  LocationDenial denial = LocationDenial.notConsented,
+  Future<bool> Function(BuildContext context)? onAskLocation,
+}) async {
   await t.pumpWidget(MaterialApp(
     home: Scaffold(
       body: WalkSafetyCard(
         repository: repo,
-        locate: () async => located ? (lat: 37.5445, lng: 127.0410) : null,
+        locate: () async => located ? _fixAt() : LocationFix.denied(denial),
         now: () => DateTime(2026, 9, 7, 14, 10),
+        onAskLocation: onAskLocation,
       ),
     ),
   ));
@@ -95,7 +116,7 @@ void main() {
       home: Scaffold(
         body: WalkSafetyCard(
           repository: _repo(),
-          locate: () async => located ? (lat: 37.5445, lng: 127.0410) : null,
+          locate: () async => located ? _fixAt() : const LocationFix.denied(LocationDenial.notConsented),
           now: () => DateTime(2026, 9, 7, 14, 10),
         ),
       ),
@@ -118,7 +139,7 @@ void main() {
       home: Scaffold(
         body: WalkSafetyCard(
           repository: _repo(),
-          locate: () async => located ? (lat: 37.5445, lng: 127.0410) : null,
+          locate: () async => located ? _fixAt() : const LocationFix.denied(LocationDenial.notConsented),
           now: () => DateTime(2026, 9, 7, 14, 10),
         ),
       ),

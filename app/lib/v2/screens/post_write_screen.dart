@@ -57,17 +57,13 @@ Future<CommunityPost?> writePost(
   String? contentId,
 }) async {
   if (!AuthState.isAuthenticated) {
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('로그인하면 글을 남길 수 있어요'),
-        duration: Duration(milliseconds: 1600),
-      ),
-    );
+    // 이유는 로그인 화면이 들고 있는다(#517) — 산책 시작과 같은 길이다.
     await navigator.push(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(reason: '로그인하면 글을 남길 수 있어요'),
+      ),
     );
     // 로그인 화면은 **pop 을 먼저 하고** 그 뒤에 completeLogin() 을 부른다. 여기서
     // 바로 물으면 성공한 로그인도 아직 false 다 — 그러면 다 하고 돌아온 사람에게

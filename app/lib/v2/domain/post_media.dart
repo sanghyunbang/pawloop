@@ -73,9 +73,15 @@ class PostMedia {
   /// 가장 가로인 비율 — 인스타그램의 1.91:1 그대로. 파노라마는 가운데를 보여 준다.
   static const double maxFeedAspectRatio = 1.91;
 
+  /// 서버가 가로세로를 아는가. 모르면 카드가 자리를 **1:1 로 잡고**, 그 자리에 4:5 사진을
+  /// [BoxFit.cover] 로 그리면 위아래가 잘린다 — 산책 경로 그림(1080×1350)의 아래쪽
+  /// "0.90km · 01:13" 이 실제로 그렇게 잘렸다(#517). 모를 때는 카드가 안 자른다.
+  bool get hasSize => (width ?? 0) > 0 && (height ?? 0) > 0;
+
   /// 카드에서 자리를 잡을 가로세로비. 크기를 모르면 1 이다 — 사진이 도착할 때마다 화면이
   /// 뛰지 않게 **미리** 잡는 것이 이 값의 목적이다. [minFeedAspectRatio]~[maxFeedAspectRatio]
-  /// 밖은 그 끝으로 잘라 카드 안에서 가운데를 그린다(`BoxFit.cover`).
+  /// 밖은 그 끝으로 잘라 카드 안에서 가운데를 그린다(`BoxFit.cover`) — 크기를 **알 때만**
+  /// 그렇게 한다([hasSize]).
   double get aspectRatio {
     final w = width;
     final h = height;
