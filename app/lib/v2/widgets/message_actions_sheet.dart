@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/chat_repository.dart';
+import '../domain/chat_reaction.dart';
 import '../theme/app_tokens.dart';
 
 /// 메시지를 길게 눌렀을 때 뜨는 것 — 이슈 #82 완료 조건 6.
@@ -23,6 +24,15 @@ import '../theme/app_tokens.dart';
 ///
 /// 길게 눌러서 가장 자주 하는 일은 신고가 아니라 **답장**이다 — 카카오톡 · 인스타그램 DM 이 같은
 /// 메뉴의 첫 줄에 둔다. 내 말에도 남의 말에도 있고, 지워진 말에는 없다([canReply]).
+///
+/// ## 반응은 그보다 위, 줄 하나다 (#452)
+///
+/// 다섯을 목록의 줄로 늘어놓으면 시트가 화면을 덮는다. 카카오톡 · 인스타그램 DM 이 둘 다 **가로 한
+/// 줄**로 두고, 그래서 한 번의 탭으로 끝난다 — 길게 누른 손가락이 그대로 움직여 닿는 자리다.
+///
+/// 이미 누른 것은 **테두리로 표시**하고, 그것을 다시 누르면 취소다([myKinds]). 끄기를 따로 두지
+/// 않는 것은 같은 자리에서 켰기 때문이다 — 서버의 켜기·끄기가 갈라져 있어 앱이 어느 쪽인지
+/// 정해서 부른다(재시도가 반응을 되돌리지 않는 이유, `ChatRepository.react`).
 class MessageActionsSheet extends StatelessWidget {
   const MessageActionsSheet({
     super.key,
@@ -31,6 +41,8 @@ class MessageActionsSheet extends StatelessWidget {
     required this.canRemoveMember,
     this.isMine = false,
     this.canReply = true,
+    this.canReact = true,
+    this.myKinds = const {},
   });
 
   final String senderName;
@@ -47,15 +59,23 @@ class MessageActionsSheet extends StatelessWidget {
   /// 답장(#452)을 보여 줄 것인가 — 지워진 메시지에는 없다.
   final bool canReply;
 
-  static Future<MessageAction?> show(
+  /// 반응 줄(#452)을 보여 줄 것인가 — 지워진 메시지에는 없다(서버도 409 로 막는다).
+  final bool canReact;
+
+  /// 내가 이미 누른 종류들 — 계약의 값 그대로. 테두리로 표시하고, 다시 누르면 취소다.
+  final Set<String> myKinds;
+
+  static Future<MessageChoice?> show(
     BuildContext context, {
     required String senderName,
     required bool hiddenByBlock,
     required bool canRemoveMember,
     bool isMine = false,
     bool canReply = true,
+    bool canReact = true,
+    Set<String> myKinds = const {},
   }) {
-    return showModalBottomSheet<MessageAction>(
+    return showModalBottomSheet<MessageChoice>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => MessageActionsSheet(
@@ -64,6 +84,8 @@ class MessageActionsSheet extends StatelessWidget {
         canRemoveMember: canRemoveMember,
         isMine: isMine,
         canReply: canReply,
+        canReact: canReact,
+        myKinds: myKinds,
       ),
     );
   }
@@ -81,6 +103,9 @@ class MessageActionsSheet extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           clipBehavior: Clip.antiAlias,
+          // 짧은 화면·큰 글씨에서는 스크롤한다. 반응 줄이 생기면서 줄 수가 늘어 낮은 창에서
+          // 17px 이 잘렸다(위젯 테스트가 잡았다) — 잘린 자리는 "방에서 내보내기" 였다.
+          child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
@@ -95,6 +120,7 @@ class MessageActionsSheet extends StatelessWidget {
               ),
             ]),
           ),
+          if (canReact) _reactionRow(context),
           if (canReply)
             _tile(
               context,
@@ -135,9 +161,44 @@ class MessageActionsSheet extends StatelessWidget {
           const SizedBox(height: 6),
         ]),
         ),
+        ),
       ),
     );
   }
+
+  /// 반응 다섯 — 가로 한 줄. 이미 누른 것은 테두리가 있고, 그것을 다시 누르면 취소다.
+  Widget _reactionRow(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(14, 2, 14, 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            for (final kind in ChatReactionKind.values)
+              Semantics(
+                button: true,
+                selected: myKinds.contains(kind.wire),
+                label: kind.label,
+                child: InkResponse(
+                  key: Key('reaction-pick-${kind.wire}'),
+                  radius: 26,
+                  onTap: () => Navigator.of(context).pop(MessageChoice.react(kind.wire)),
+                  child: Container(
+                    width: 46,
+                    height: 46,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: myKinds.contains(kind.wire) ? T.accentSoft : Colors.transparent,
+                      border: myKinds.contains(kind.wire)
+                          ? Border.all(color: T.accent, width: 1.4)
+                          : null,
+                    ),
+                    child: Text(kind.emoji, style: const TextStyle(fontSize: 22)),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
 
   Widget _tile(
     BuildContext context, {
@@ -150,13 +211,28 @@ class MessageActionsSheet extends StatelessWidget {
     return ListTile(
       leading: Icon(icon, size: 20, color: color),
       title: Text(label, style: TextStyle(fontSize: 14, color: color)),
-      onTap: () => Navigator.of(context).pop(value),
+      onTap: () => Navigator.of(context).pop(MessageChoice(value)),
     );
   }
 }
 
 /// 시트에서 고른 것.
-enum MessageAction { reply, report, block, unblock, removeMember, delete }
+enum MessageAction { react, reply, report, block, unblock, removeMember, delete }
+
+/// 시트가 돌려주는 것 — 반응이면 [kind] 가 함께 온다.
+///
+/// 열거값 하나로는 "어느 반응인가" 를 실을 수 없다. 종류마다 열거값을 늘리면
+/// (`reactLike`·`reactHeart`…) 서버가 종류를 하나 늘릴 때마다 앱의 분기가 늘어난다.
+class MessageChoice {
+  const MessageChoice(this.action, {this.kind});
+
+  const MessageChoice.react(String kind) : this(MessageAction.react, kind: kind);
+
+  final MessageAction action;
+
+  /// 계약의 `ChatReactionKind` 값. [MessageAction.react] 일 때만 있다.
+  final String? kind;
+}
 
 /// 신고 사유를 고르는 화면 — 이슈 #82.
 ///

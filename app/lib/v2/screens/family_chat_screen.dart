@@ -17,6 +17,7 @@ import '../domain/pet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import '../widgets/chat_terms_dialog.dart';
+import '../domain/chat_reaction.dart';
 import '../widgets/message_actions_sheet.dart';
 import '../widgets/post_media_viewer.dart';
 
@@ -790,6 +791,47 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   static double _gapAbove(ThreadSlot slot) => slot.tight ? 3 : 12;
 
   /// 묶음의 첫 말에만 아바타. 이어지는 말은 그 폭만큼 비워 말풍선 왼쪽 선을 맞춘다.
+  /// 말풍선 아래 반응 줄(#452) — 숫자가 있는 종류만, **서버가 준 차례대로**.
+  ///
+  /// 칩을 누르면 켜고 끈다(길게 누를 것 없이). 내가 누른 것은 코랄 테두리라 한눈에 갈린다 —
+  /// 색 하나로 말하는 규칙 그대로다(design-system §2).
+  ///
+  /// 모르는 종류는 건너뛴다. 숫자는 서버에 그대로 있고, 새 앱이 받는 날 보인다 — 모르는 글자를
+  /// 그리면 말풍선 아래가 남이 만든 아무 글자나 뜨는 자리가 된다.
+  Widget _reactionRow(ChatMessageItem m) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            for (final reaction in m.reactions)
+              if (ChatReactionKind.tryOf(reaction.kind) case final kind?)
+                GestureDetector(
+                  key: Key('chat-reaction-${m.id}-${reaction.kind}'),
+                  onTap: () => _toggleReaction(m, reaction.kind),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: reaction.mine ? T.accentSoft : T.surface,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                          color: reaction.mine ? T.accent : T.cardBorder, width: reaction.mine ? 1.2 : 1),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(kind.emoji, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(width: 3),
+                      Text('${reaction.count}',
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              height: 1.1,
+                              color: reaction.mine ? T.accent : T.textSecondary)),
+                    ]),
+                  ),
+                ),
+          ],
+        ),
+      );
+
   Widget _avatarSlot(String name, ThreadSlot slot) =>
       slot.showHeader ? _avatar(name) : const SizedBox(width: 30);
 
@@ -893,6 +935,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
             ),
             ),
           ),
+          if (m.reactions.isNotEmpty) _reactionRow(m),
           if (slot.showTime) ...[
             const SizedBox(height: 4),
             Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted)),
@@ -953,6 +996,7 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
                 child: const Text('보기',
                     style: TextStyle(fontSize: 12, color: T.textSecondary)),
               ),
+            if (m.reactions.isNotEmpty) _reactionRow(m),
             if (slot.showTime) ...[
               const SizedBox(height: 4),
               Text(time, style: const TextStyle(fontSize: 11, color: T.textMuted)),
@@ -987,19 +1031,27 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       return; // 이미 지운 자리 — 할 수 있는 것이 없다.
     }
 
-    final action = await MessageActionsSheet.show(
+    final choice = await MessageActionsSheet.show(
       context,
       senderName: mine ? '내 메시지' : m.senderName,
       hiddenByBlock: m.hiddenByBlock,
       canRemoveMember: widget.isOwner,
       isMine: mine,
       canReply: !m.deleted,
+      // 지워진 말에는 반응을 못 붙인다 — 서버도 409 로 막는다(#452).
+      canReact: !m.deleted,
+      myKinds: {
+        for (final reaction in m.reactions)
+          if (reaction.mine) reaction.kind,
+      },
     );
-    if (!mounted || action == null) {
+    if (!mounted || choice == null) {
       return;
     }
 
-    switch (action) {
+    switch (choice.action) {
+      case MessageAction.react:
+        await _toggleReaction(m, choice.kind!);
       case MessageAction.reply:
         setState(() => _replyingTo = m);
         _focus.requestFocus();
@@ -1013,6 +1065,39 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         await _removeMember(m.senderUserId, m.senderName);
       case MessageAction.delete:
         await _deleteMine(m);
+    }
+  }
+
+  /// 반응을 켜거나 끈다 — #452. **이미 눌러 둔 것이면 끄기다**(같은 자리에서 켰으니 같은 자리가 끈다).
+  ///
+  /// 켜기와 끄기가 서버에서 갈라져 있어 앱이 어느 쪽인지 정해서 부른다 — 토글 하나였다면 네트워크
+  /// 재시도가 내 반응을 조용히 되돌린다. 둘 다 멱등이라 실패한 요청은 그냥 다시 부르면 된다.
+  ///
+  /// 돌아온 집계를 **그 말풍선 자리에만** 덮어쓴다. 같은 변화가 남에게는 다음 폴링의 `changed` 로
+  /// 가고(ADR-0023), 나에게도 곧 같은 값이 다시 온다 — 여기서 먼저 그리는 것은 기다리지 않게 하려는
+  /// 것뿐이다.
+  Future<void> _toggleReaction(ChatMessageItem m, String kind) async {
+    final pressed = m.reactions.any((r) => r.kind == kind && r.mine);
+    try {
+      final updated =
+          pressed ? await _repo.unreact(m.id, kind) : await _repo.react(m.id, kind);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _applyReactions(m.id, updated));
+    } on ChatFailure catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  /// 그 말의 반응만 바꾼다 — 목록의 순서도 다른 말도 건드리지 않는다.
+  void _applyReactions(int messageId, List<ChatReaction> updated) {
+    final index = _messages.indexWhere((m) => m.id == messageId);
+    if (index >= 0) {
+      _messages[index] = _messages[index].withReactions(updated);
     }
   }
 

@@ -3,6 +3,7 @@
 // 내 메시지에는 "삭제" 하나만, 남의 메시지에는 신고·가리기(·내보내기)만 뜬다. 두 목록이 섞이면
 // 내 메시지를 신고하거나 남의 메시지에 "삭제" 가 떠서 403 을 보게 된다.
 // "답장"(#452)은 둘 다의 첫 줄이다 — 지워진 말에는 없다(`canReply`, `family_chat_reply_test` 가 잰다).
+// 반응 다섯(#452)은 그보다 위의 가로 한 줄이다 — 목록의 줄로 늘어놓으면 시트가 화면을 덮는다.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,8 +53,64 @@ void main() {
     expect(find.byType(ListTile), findsNWidgets(4));
   });
 
+  testWidgets('반응 다섯이 한 줄로 뜬다 — 이미 누른 것은 표시가 있고, 지워진 말에는 줄이 없다', (tester) async {
+    await tester.pumpWidget(_host(const MessageActionsSheet(
+      senderName: '보리아빠',
+      hiddenByBlock: false,
+      canRemoveMember: false,
+      myKinds: {'check'},
+    )));
+
+    for (final wire in ['like', 'heart', 'laugh', 'sad', 'check']) {
+      expect(find.byKey(Key('reaction-pick-$wire')), findsOneWidget);
+    }
+    expect(
+      tester.getSemantics(find.byKey(const Key('reaction-pick-check'))),
+      containsSemantics(isSelected: true),
+      reason: '이미 누른 것을 표시 안 하면 그것을 또 눌러 취소되는 일을 예측할 수 없다',
+    );
+
+    await tester.pumpWidget(_host(const MessageActionsSheet(
+      senderName: '보리아빠',
+      hiddenByBlock: false,
+      canRemoveMember: false,
+      canReact: false,
+    )));
+    expect(find.byKey(const Key('reaction-pick-like')), findsNothing,
+        reason: '지워진 말에는 반응을 못 붙인다 — 서버도 409 다');
+  });
+
+  testWidgets('반응을 고르면 종류와 함께 돌아온다 — 열거값 하나로는 어느 반응인지 못 싣는다', (tester) async {
+    MessageChoice? picked;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              picked = await MessageActionsSheet.show(
+                context,
+                senderName: '보리아빠',
+                hiddenByBlock: false,
+                canRemoveMember: false,
+              );
+            },
+            child: const Text('열기'),
+          ),
+        ),
+      ),
+    ));
+
+    await tester.tap(find.text('열기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('reaction-pick-heart')));
+    await tester.pumpAndSettle();
+
+    expect(picked?.action, MessageAction.react);
+    expect(picked?.kind, 'heart');
+  });
+
   testWidgets('"이 메시지 삭제" 를 누르면 delete 가 돌아온다', (tester) async {
-    MessageAction? picked;
+    MessageChoice? picked;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: Builder(
@@ -78,6 +135,7 @@ void main() {
     await tester.tap(find.text('이 메시지 삭제'));
     await tester.pumpAndSettle();
 
-    expect(picked, MessageAction.delete);
+    expect(picked?.action, MessageAction.delete);
+    expect(picked?.kind, isNull, reason: '반응이 아닌 선택에는 종류가 없다');
   });
 }
