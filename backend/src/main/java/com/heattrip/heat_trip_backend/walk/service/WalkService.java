@@ -3,6 +3,8 @@ package com.heattrip.heat_trip_backend.walk.service;
 import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.dog.DogOwnership;
+import com.heattrip.heat_trip_backend.group.FamilyMembership;
+import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.walk.dto.WalkPageResponse;
 import com.heattrip.heat_trip_backend.walk.dto.WalkRequest;
 import com.heattrip.heat_trip_backend.walk.dto.WalkResponse;
@@ -86,6 +88,10 @@ public class WalkService {
 
     private final WalkRepository walks;
     private final DogOwnership dogs;
+
+    /** "우리 집 식구는 누구인가" — group 모듈의 공개 표면(#563). */
+    private final FamilyMembership family;
+
     /** 산책 사진(#450) — 글과 같은 붙이기. 모듈 경계는 {@code S3} 의 공개 인터페이스 하나다. */
     private final MediaAttachment media;
     private final Clock clock;
@@ -104,18 +110,22 @@ public class WalkService {
      * @return 새로 저장했으면 {@code true} 가 함께 온다(201), 재전송이면 {@code false}(200)
      */
     @Transactional
-    public Saved save(long userId, WalkRequest request) {
-        Dog dog = dogs.requireMineEntity(userId, request.dogId());
+    public Saved save(User walker, WalkRequest request) {
+        long userId = walker.getId();
+        // **우리 집 아이면 된다**(#563). 예전에는 내가 등록한 아이만이라, 아빠가 엄마 아이
+        // 보리를 산책시키면 다 걷고 나서 저장이 거절됐다. 업무 분담이 목적인 앱에서 그건
+        // 기능이 없는 것과 같다.
+        Dog dog = dogs.requireInHouseholdEntity(userId, request.dogId());
         validate(request);
 
-        // 함께 나간 아이들 — 대표 아이가 맨 앞이다 (#343). **하나하나 소유권을 확인한다.**
-        // 목록 어딘가에 남의 아이가 섞여 있으면 그 아이의 통계에 내 산책이 들어간다.
+        // 함께 나간 아이들 — 대표 아이가 맨 앞이다 (#343). **하나하나 확인한다.**
+        // 목록 어딘가에 남의 집 아이가 섞여 있으면 그 아이의 통계에 우리 산책이 들어간다.
         List<Dog> companions = request.resolvedDogIds().stream()
-                .map(id -> id.equals(dog.getId()) ? dog : dogs.requireMineEntity(userId, id))
+                .map(id -> id.equals(dog.getId()) ? dog : dogs.requireInHouseholdEntity(userId, id))
                 .toList();
 
         Optional<Walk> existing =
-                walks.findByClientKey(dog.getId(), request.clientWalkId(), userId);
+                walks.findByClientKey(dog.getId(), request.clientWalkId(), household(userId));
         if (existing.isPresent()) {
             // 재전송이다. 아이 목록도 **다시 안 쓴다** — 처음 저장한 것이 정본이고,
             // 여기서 덮으면 재전송 요청의 목록이 원본을 조용히 바꾼다. 사진도 처음 붙인 것을
@@ -125,6 +135,10 @@ public class WalkService {
 
         Walk walk = Walk.builder()
                 .dog(dog)
+                // 걸은 사람 — 토큰의 사용자다(#563). 본문으로 안 받는 이유는 care_log.done_by 와
+                // 같다: 받으면 남의 이름으로 기록을 남길 수 있고, 그러면 "아빠가 걸었어요" 를
+                // 믿을 수 없다.
+                .walkedBy(walker)
                 .clientWalkId(request.clientWalkId())
                 .startedAt(Walk.utc(request.startedAt()))
                 .endedAt(request.endedAt() == null ? null : Walk.utc(request.endedAt()))
@@ -148,7 +162,7 @@ public class WalkService {
             saved = walks.saveAndFlush(walk);
         } catch (DataIntegrityViolationException concurrentDuplicate) {
             // uq_walk_client 가 막았다. 같은 산책이므로 이미 들어간 것을 준다.
-            return walks.findByClientKey(dog.getId(), request.clientWalkId(), userId)
+            return walks.findByClientKey(dog.getId(), request.clientWalkId(), household(userId))
                     .map(row -> new Saved(WalkResponse.withPath(row, mediaOf(row)), false))
                     .orElseThrow(() -> concurrentDuplicate);
         }
@@ -201,16 +215,17 @@ public class WalkService {
      */
     public WalkPageResponse page(long userId, Long dogId, String cursor, Integer limit) {
         if (dogId != null) {
-            dogs.requireMine(userId, dogId);
+            dogs.requireInHousehold(userId, dogId);
         }
+        List<Long> household = household(userId);
         int size = clamp(limit);
 
         // 한 줄 더 읽어서 hasMore 를 정한다. 별도 count 쿼리는 다음 장을 여는 사이에 값이
         // 바뀌고, 두 번 읽는 비용이 한 줄 더 읽는 비용보다 크다.
         Limit fetch = Limit.of(size + 1);
         List<Walk> rows = WalkCursor.parse(cursor)
-                .map(c -> walks.findPageAfter(userId, dogId, c.createdAt(), c.id(), fetch))
-                .orElseGet(() -> walks.findPage(userId, dogId, fetch));
+                .map(c -> walks.findPageAfter(household, dogId, c.createdAt(), c.id(), fetch))
+                .orElseGet(() -> walks.findPage(household, dogId, fetch));
 
         boolean hasMore = rows.size() > size;
         if (hasMore) {
@@ -238,9 +253,9 @@ public class WalkService {
                 media.attachedTo(MediaAttachment.REF_WALK, List.of(ref)).getOrDefault(ref, List.of()));
     }
 
-    /** 상세. 경로가 여기에만 실린다. 남의 것과 없는 것이 같은 404 다. */
+    /** 상세. 경로가 여기에만 실린다. <b>우리 집 아이의 산책</b>이면 보인다(#563) — 남의 집 것과 없는 것이 같은 404 다. */
     public WalkResponse detail(long userId, long walkId) {
-        return walks.findMineById(walkId, userId)
+        return walks.findInHouseholdById(walkId, household(userId))
                 .map(w -> WalkResponse.withPath(w, mediaOf(w)))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
@@ -257,7 +272,11 @@ public class WalkService {
      */
     @Transactional
     public WalkResponse rewriteMemo(long userId, long walkId, String memo) {
-        Walk walk = walks.findMineById(walkId, userId)
+        // **고치는 것은 걸은 사람이거나 아이 주인만**이다(#563). 보기는 집 전체지만 회고는
+        // 그 사람이 쓴 글이라, 남이 고칠 수 있으면 분담을 보이게 하려던 화면이 서로의 글을
+        // 덮는 자리가 된다. 삭제와 같은 규칙이다.
+        Walk walk = walks.findInHouseholdById(walkId, household(userId))
+                .filter(w -> canEdit(w, userId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         walk.rewriteMemo(memo);
         // 경로를 실어 돌려준다 — 이 응답을 받는 곳이 상세 화면이고, 거기는 경로를 그린다.
@@ -274,6 +293,29 @@ public class WalkService {
         media.detachAll(MediaAttachment.REF_WALK, String.valueOf(walkId));
     }
 
+
+    /**
+     * <b>우리 집</b> — 이 사람과 같은 집 식구들의 {@code users.id}. 가족이 없으면 자기 자신 하나.
+     *
+     * <p>산책의 축이 사람에서 <b>집</b>으로 옮겨 온 자리다(#563). 이 앱의 목적이 업무 분담과
+     * 누락 방지라서, 아빠가 걸은 보리 산책이 엄마 화면에도 보여야 한다 — 안 보이면 "아직
+     * 안 나갔나" 싶어 한 번 더 나간다.
+     */
+    private List<Long> household(long userId) {
+        return family.householdUserIds(userId);
+    }
+
+    /**
+     * 고치고 지울 수 있는가 — <b>걸은 사람이거나 아이 주인</b>.
+     *
+     * <p>아이 주인을 함께 두는 이유는 주인 없는 행을 막기 위해서다. 걸은 사람이 탈퇴하면
+     * {@code walked_by} 가 {@code NULL} 이 되는데, 그때 아무도 못 고치면 그 행이 굳는다.
+     */
+    private static boolean canEdit(Walk walk, long userId) {
+        return (walk.getWalkedBy() != null && walk.getWalkedBy().getId() == userId)
+                || walk.getDog().getUser().getId() == userId;
+    }
+
     // ─────────────────────────── 통계 ───────────────────────────
 
     /**
@@ -284,7 +326,7 @@ public class WalkService {
      */
     public WalkStatsResponse stats(long userId, Long dogId) {
         if (dogId != null) {
-            dogs.requireMine(userId, dogId);
+            dogs.requireInHousehold(userId, dogId);
         }
 
         ZonedDateTime weekStart = clock.instant().atZone(KST)
@@ -293,7 +335,7 @@ public class WalkService {
         LocalDateTime fromUtc = Walk.utc(weekStart.toInstant());
         LocalDateTime toUtc = Walk.utc(weekStart.plusWeeks(1).toInstant());
 
-        List<Walk> week = walks.findStartedBetween(userId, dogId, fromUtc, toUtc);
+        List<Walk> week = walks.findStartedBetween(household(userId), dogId, fromUtc, toUtc);
 
         double[] perDay = new double[7];
         // 초로 모았다가 마지막에 분으로 내린다. 요일마다 분으로 내려 더하면 하루 7분 짜리
@@ -318,7 +360,7 @@ public class WalkService {
         }
         int walkCount = week.size();
 
-        WalkTotals all = walks.sumAllTime(userId, dogId);
+        WalkTotals all = walks.sumAllTime(household(userId), dogId);
 
         return new WalkStatsResponse(
                 weekStart.toLocalDate(),
@@ -353,7 +395,7 @@ public class WalkService {
 
         LocalDateTime lastFromUtc = Walk.utc(weekStart.minusWeeks(1).toInstant());
         LocalDateTime lastToUtc = Walk.utc(weekStart.toInstant());
-        List<Walk> lastWeek = walks.findStartedBetween(userId, dogId, lastFromUtc, lastToUtc);
+        List<Walk> lastWeek = walks.findStartedBetween(household(userId), dogId, lastFromUtc, lastToUtc);
 
         double lastKm = 0;
         long lastSeconds = 0;
@@ -410,7 +452,7 @@ public class WalkService {
      * 전체 기간이다. 이번 주로 자르면 대부분의 사람에게 늘 한두 개만 남는다.
      */
     private List<WalkStatsResponse.TopPlace> topPlaces(long userId, Long dogId) {
-        return walks.topPlaces(userId, dogId, Limit.of(TOP_PLACES)).stream()
+        return walks.topPlaces(household(userId), dogId, Limit.of(TOP_PLACES)).stream()
                 .map(row -> new WalkStatsResponse.TopPlace(
                         new WalkStatsResponse.PlaceRef(row.source(), row.contentId(), row.title()),
                         (int) row.count()))

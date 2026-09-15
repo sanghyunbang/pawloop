@@ -71,6 +71,11 @@ class CrossModuleForeignKeysTest {
             "schedule → dog",
             "schedule → users",
             "walk → dog",
+            // walk.walked_by → users (#563). 걸은 사람이다. ON DELETE SET NULL 이라
+            // 탈퇴가 산책을 지우지 않는다 — care_log.done_by 와 같은 판단이고, 근거는
+            // mysql/post-start/49_walk_walked_by.sql 의 머리말에 있다. 이 줄이 필요한 이유는
+            // 이 앱의 목적이 업무 분담이라 "누가 걸었나" 가 기록에 남아야 하기 때문이다.
+            "walk → users",
             "walk_dog → dog",
             "walk_note → family_group",
             "walk_note → users",

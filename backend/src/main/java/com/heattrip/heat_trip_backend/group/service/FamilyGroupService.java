@@ -90,6 +90,20 @@ public class FamilyGroupService implements FamilyMembership {
                 .orElseGet(List::of);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> householdUserIds(long actorUserId) {
+        List<ChatRoomView> rooms = chatRooms.roomsOfMember(ORIGIN_KIND, actorUserId);
+        if (rooms.isEmpty()) {
+            // 가족이 없는 1인. "우리 집" 은 자기 자신이다 — 빈 목록을 주면 화면이 통째로 빈다.
+            return List.of(actorUserId);
+        }
+        return chatRooms.liveMembers(rooms.get(0).id()).stream()
+                .map(ChatMemberView::userId)
+                .toList();
+    }
+
     /** 방을 찾고 그 방의 살아 있는 멤버인지 본다. 아니면 403 — 없는 그룹도 같은 403 이다. */
     private ChatRoomView requireLiveRoom(long groupId, long actorUserId) {
         ChatRoomView room = chatRooms.findRoom(ORIGIN_KIND, String.valueOf(groupId))

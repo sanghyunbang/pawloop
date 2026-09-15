@@ -43,4 +43,17 @@ public interface FamilyMembership {
      * 두 가지를 한 메서드에 묶으면 "식구 목록만 필요한 자리" 가 생길 때 인가가 조용히 빠진다.
      */
     List<Long> memberUserIds(long groupId);
+
+    /**
+     * <b>이 사람과 같은 집 식구들</b>의 {@code users.id} — 가족이 없으면 자기 자신 하나.
+     * 이슈 #563.
+     *
+     * <p>{@link #memberUserIds} 와 다른 점은 <b>그룹 id 를 안 받는다</b>는 것이다. 산책
+     * 목록처럼 "내가 보는 화면" 의 범위를 정할 때는 그룹을 먼저 찾아야 하는데, 그 찾기를
+     * 부르는 쪽마다 적으면 "가족이 없으면 어떻게 하나" 의 답이 여러 벌이 된다.
+     *
+     * <p><b>가족이 없어도 빈 목록이 아니다.</b> 1인 사용자의 화면이 통째로 비면 안 된다 —
+     * 그 사람에게 "우리 집" 은 자기 자신이다.
+     */
+    List<Long> householdUserIds(long actorUserId);
 }

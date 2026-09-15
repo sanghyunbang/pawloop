@@ -83,7 +83,9 @@ public class WalkController {
     @PostMapping
     public ResponseEntity<WalkResponse> save(@CurrentUser User user,
                                              @Valid @RequestBody WalkRequest request) {
-        WalkService.Saved saved = walks.save(user.getId(), request);
+        // 걸은 사람을 서비스가 다시 안 읽는다 — 토큰이 이미 준 것을 그대로 넘긴다(#563).
+        // CareController 가 doneBy 를 같은 방식으로 넘긴다.
+        WalkService.Saved saved = walks.save(user, request);
         return ResponseEntity
                 .status(saved.created() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(saved.walk());

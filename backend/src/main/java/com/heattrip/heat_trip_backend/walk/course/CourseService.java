@@ -49,10 +49,15 @@ public class CourseService implements CourseAttachment {
     private final CourseRepository courses;
     private final WalkRepository walks;
 
+    /** "우리 집 식구는 누구인가" — group 모듈의 공개 표면(#563). */
+    private final com.heattrip.heat_trip_backend.group.FamilyMembership family;
+
     /** 산책 하나를 코스로. 이미 만든 산책이어도 막지 않는다 — 이름이 다른 코스일 수 있다. */
     @Transactional
     public CourseResponse create(long userId, CourseRequest request) {
-        Walk walk = walks.findMineById(request.walkId(), userId)
+        // 우리 집 산책이면 코스로 만들 수 있다(#563). 아빠가 걸은 보리 산책을 엄마가
+        // 코스로 남기는 것이 정상이다 — 같은 길을 같이 걷는다.
+        Walk walk = walks.findInHouseholdById(request.walkId(), family.householdUserIds(userId))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "그 산책을 찾을 수 없습니다."));
 

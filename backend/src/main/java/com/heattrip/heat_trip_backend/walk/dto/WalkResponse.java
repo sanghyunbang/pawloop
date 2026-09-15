@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.walk.dto;
 
+import com.heattrip.heat_trip_backend.user.entity.User;
 import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.walk.entity.Walk;
 import com.heattrip.heat_trip_backend.walk.service.WalkPath;
@@ -51,6 +52,15 @@ public record WalkResponse(
          * {@code null} 이다 — 빈 객체를 주지 않는다.
          */
         WalkPlace place,
+
+        /**
+         * <b>걸은 사람</b> — 이슈 #563. 이 앱의 목적이 업무 분담이라 산책에도 "누가" 가 붙는다.
+         *
+         * <p>탈퇴하면 {@code walked_by} 가 {@code NULL} 이 되고 여기서는 <b>'알 수 없음'</b>
+         * 으로 떨어진다({@link WalkWalker#WITHDRAWN}) — {@code CareLog.doneBy} 와 같은 규칙이다.
+         * 그 산책이 없던 일이 되면 안 된다.
+         */
+        WalkWalker walkedBy,
 
         /** 산책 중 찍은 사진(#450) — 올린 순서. 없으면 빈 목록이지 {@code null} 이 아니다. */
         List<WalkMedia> media) {
@@ -110,6 +120,17 @@ public record WalkResponse(
     }
 
     /** 목록용 — 경로를 빼고, 붙은 사진을 실어 만든다(#450). */
+    /** 걸은 사람 한 사람 — {@code CareDoer} 와 같은 모양이다. 이름만으로는 '나' 와 '아빠' 를 못 가른다. */
+    public record WalkWalker(long userId, String nickname) {
+
+        /** 탈퇴한 계정의 자리. 문구는 {@link User#UNKNOWN_DISPLAY_NAME} 하나를 가리킨다. */
+        static final WalkWalker WITHDRAWN = new WalkWalker(0L, User.UNKNOWN_DISPLAY_NAME);
+
+        static WalkWalker of(User user) {
+            return user == null ? WITHDRAWN : new WalkWalker(user.getId(), user.displayName());
+        }
+    }
+
     public static WalkResponse summary(Walk walk, List<WalkMedia> media) {
         return new WalkResponse(
                 walk.getId(),
@@ -124,6 +145,7 @@ public record WalkResponse(
                 walk.getMemo(),
                 walk.getWeather(),
                 WalkPlace.of(walk),
+                WalkWalker.of(walk.getWalkedBy()),
                 media);
     }
 
@@ -147,6 +169,7 @@ public record WalkResponse(
                 walk.getMemo(),
                 walk.getWeather(),
                 WalkPlace.of(walk),
+                WalkWalker.of(walk.getWalkedBy()),
                 media);
     }
 }

@@ -544,6 +544,7 @@ CREATE TABLE `walk` (
   `ended_at` datetime(6) DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `started_at` datetime(6) NOT NULL,
+  `walked_by` bigint DEFAULT NULL,
   `place_source` varchar(16) DEFAULT NULL,
   `weather` varchar(30) DEFAULT NULL,
   `client_walk_id` varchar(64) NOT NULL,
@@ -557,7 +558,9 @@ CREATE TABLE `walk` (
   KEY `idx_walk_dog` (`dog_id`,`started_at`),
   KEY `idx_walk_dog_created` (`dog_id`,`created_at`,`id`),
   KEY `idx_walk_place` (`place_source`,`place_content_id`),
-  CONSTRAINT `fk_walk_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE CASCADE
+  KEY `fk_walk_walkedby` (`walked_by`),
+  CONSTRAINT `fk_walk_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_walk_walkedby` FOREIGN KEY (`walked_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `walk_dog` (

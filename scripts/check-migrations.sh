@@ -297,6 +297,10 @@ step "48_chat_reaction.sql"
 want 1 "$(has_table chat_message_reaction)" "chat_message_reaction 표 (없으면 부팅이 validate 에서 죽는다)"
 want 1 "$(has_index chat_message_reaction uq_chat_reaction)" "uq_chat_reaction (없으면 같은 반응이 여러 줄 쌓여 집계가 늘어난다)"
 
+step "49_walk_walked_by.sql"
+want 1 "$(has_column walk walked_by)" "walk.walked_by 컬럼 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(has_cons walk fk_walk_walkedby)" "fk_walk_walkedby (없으면 탈퇴한 사람의 id 가 산책에 남아 떠돈다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then
