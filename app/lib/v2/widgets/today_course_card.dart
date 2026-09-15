@@ -73,12 +73,15 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
     _load();
     // 첫 시도는 실패하기 쉽다 — 동의 값이 아직 안 읽혔거나 실내라 좌표가 안 잡힌 때다(안전 카드와 같다).
     LocationService.consented.addListener(_retry);
+    // 안전 카드나 산책 시작에서 권한을 허용하면 그 신호로 다시 시도한다(#517).
+    LocationService.permissionRev.addListener(_retry);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     LocationService.consented.removeListener(_retry);
+    LocationService.permissionRev.removeListener(_retry);
     super.dispose();
   }
 
@@ -128,8 +131,10 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
             : WalkGoal.recommendedFor(species: dog.species, size: dog.size, ageMonths: dog.ageMonths)));
   }
 
+  /// 권한이 없으면 **묻지 않는다** — 안전 카드와 같은 이유다(#517). 그쪽의 "허용" 줄이
+  /// 설명을 먼저 보여 주고, 허용되면 `permissionRev` 로 여기까지 온다.
   static Future<({double lat, double lng})?> _locate() async {
-    final fix = await LocationService.locate();
+    final fix = await LocationService.locate(prompt: false);
     final p = fix.position;
     if (p == null) return null;
     return (lat: p.latitude, lng: p.longitude);

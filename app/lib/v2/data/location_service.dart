@@ -108,8 +108,18 @@ class LocationService {
     }
   }
 
+  /// 권한이 새로 허용된 횟수. 화면이 뜬 뒤에 허용됐으면 배경에서 위치를 쓰던 카드들이
+  /// 다시 시도한다 — 안 그러면 허용해 놓고도 앱을 껐다 켤 때까지 카드가 없다(#517).
+  static final ValueNotifier<int> permissionRev = ValueNotifier<int>(0);
+
   /// 권한을 확보하고 현재 좌표를 얻는다. 못 얻으면 **이유를 함께** 준다.
-  static Future<LocationFix> locate() async {
+  ///
+  /// [prompt] 가 `false` 면 **OS 권한 대화상자를 띄우지 않는다.** 화면이 뜨자마자 배경에서
+  /// 위치를 잡는 자리(홈의 안전 카드 · 오늘의 코스)를 위한 것이다. 거기서 물으면 사용자는
+  /// **왜 묻는지 모르는 채** 대화상자를 만나고, 안드로이드는 두 번째 거부에서 영구 거부로
+  /// 굳는다 — 그러면 앱은 다시 물을 수 없다. 설명을 먼저 보여 주는 자리
+  /// (`LocationPrimingSheet`)를 지난 뒤에만 묻는다(#517).
+  static Future<LocationFix> locate({bool prompt = true}) async {
     // 동의를 가장 먼저 본다. 권한 대화상자를 띄우기도 전이다 — 동의 없이 권한을 묻는
     // 것 자체가 순서가 뒤집힌 것이다.
     if (!consented.value) {
@@ -123,7 +133,14 @@ class LocationService {
     }
     var perm = await Geolocator.checkPermission();
     if (perm == LocationPermission.denied) {
+      if (!prompt) {
+        return const LocationFix.denied(LocationDenial.denied);
+      }
       perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.always || perm == LocationPermission.whileInUse) {
+        // 방금 허용됐다 — 묻지 않고 기다리던 카드들이 이 신호로 다시 시도한다.
+        permissionRev.value++;
+      }
     }
     if (perm == LocationPermission.deniedForever) {
       return const LocationFix.denied(LocationDenial.deniedForever);

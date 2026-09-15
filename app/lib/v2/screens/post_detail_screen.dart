@@ -484,15 +484,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// 돌아오면 글을 다시 읽는다(#331). 토스트만 띄우면 로그인할 곳을 찾아 헤맨다.
   /// 로그인 화면은 pop 을 먼저 하고 completeLogin() 을 부르므로 [AuthState.settle] 을 기다린다.
   Future<bool> _askLogin(String what) async {
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('로그인하면 $what'),
-        duration: const Duration(milliseconds: 1600),
-      ));
-    await navigator.push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    // 이유는 로그인 화면이 들고 있는다(#517) — 스낵바는 전환 뒤 1.3초만 남는다.
+    await navigator.push(
+        MaterialPageRoute(builder: (_) => LoginScreen(reason: '로그인하면 $what')));
     await AuthState.settle();
     if (!mounted || !AuthState.isAuthenticated) return false;
     // 서버가 다시 말해야 게스트가 아니다 — `_isGuest` 는 응답의 `mine` 에서 나온다.

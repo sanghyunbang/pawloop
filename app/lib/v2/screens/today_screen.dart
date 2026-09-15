@@ -14,6 +14,7 @@ import '../widgets/walk_reminder_sync.dart';
 import '../widgets/walk_safety_card.dart';
 import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
+import 'location_priming_sheet.dart';
 import 'main_shell.dart';
 import 'start_walk.dart';
 import 'family_screen.dart';
@@ -162,7 +163,7 @@ class TodayScreen extends StatelessWidget {
                   }),
                   // 하드코딩 "맑음 · 24°C" 가 있던 자리(#326). 지금은 기상청·에어코리아 값으로 판정한
                   // 산책 안전 지수 한 줄이고, 키·위치·응답이 없으면 카드 자체가 없다(#336).
-                  const WalkSafetyCard(),
+                  WalkSafetyCard(onAskLocation: askLocationPermission),
                   // 급할 때 — 페르소나 P1 의 실패비용이 "아플 때 근처 병원을 못 찾음" 이다(#337).
                   // 목록도 지도도 아니고 전화까지 두 번 만에 닿게 둔다.
                   _emergency(context),

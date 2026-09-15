@@ -61,17 +61,13 @@ Future<void> startWalk(
   Future<List<int>?> Function(BuildContext context, List<DogProfile> pets)? askDogs,
 }) async {
   if (!AuthState.isAuthenticated) {
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('로그인하면 산책 기록이 남아요'),
-        duration: Duration(milliseconds: 1600),
-      ),
-    );
+    // 이유는 로그인 화면이 들고 있는다 — 스낵바는 1.6초 뒤 사라진다(#517).
     await navigator.push(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(reason: '로그인하면 산책 기록이 남아요'),
+      ),
     );
     // 로그인 화면은 **pop 을 먼저 하고** 그 뒤에 completeLogin() 을 부른다. 여기서
     // 바로 물으면 성공한 로그인도 아직 false 라, 걸으러 온 사람이 아무것도 못 하고

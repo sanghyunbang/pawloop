@@ -154,6 +154,10 @@ class ChatRoomSummary {
   /// 미리보기의 발신자를 내가 가렸다. 방 안에서 접어 놓고 목록에서 그대로 보여 주면 샌다.
   final bool lastMessageHidden;
 
+  /// 마지막 말이 지워졌다 — 계약의 `lastMessage.deletedAt`. 소프트 삭제라 서버가 본문을
+  /// 비워 보내므로, 이 값이 없으면 목록이 **"아직 대화가 없어요"** 라고 거짓말한다(#517).
+  final bool lastMessageDeleted;
+
   /// 음소거한 방 — 목록의 개수 뱃지는 그대로고, 탭 바의 점(#452)만 안 켠다.
   final bool muted;
 
@@ -168,6 +172,7 @@ class ChatRoomSummary {
     this.lastMessageBody,
     this.lastMessageSender,
     this.lastMessageHidden = false,
+    this.lastMessageDeleted = false,
     this.lastMessageIsImage = false,
     this.lastMessageAt,
     this.myRole = '',
@@ -194,6 +199,7 @@ class ChatRoomSummary {
       lastMessageBody: last is Map ? last['body']?.toString() : null,
       lastMessageSender: last is Map ? last['senderName']?.toString() : null,
       lastMessageHidden: last is Map && last['hiddenByBlock'] == true,
+      lastMessageDeleted: last is Map && last['deletedAt'] != null,
       lastMessageIsImage: last is Map && last['contentType'] == 'image',
       lastMessageAt: last is Map ? DateTime.tryParse('${last['createdAt'] ?? ''}') : null,
       myRole: '${json['myRole'] ?? ''}',

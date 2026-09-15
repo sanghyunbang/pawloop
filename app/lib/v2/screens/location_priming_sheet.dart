@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/location_service.dart';
 import '../theme/app_tokens.dart';
 
 /// 시트가 말하는 상태.
@@ -67,6 +68,29 @@ class LocationPriming {
   static Future<void> markAsked() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(askedKey, true);
+  }
+}
+
+/// 설명 시트를 먼저 보여 주고, "허용하기" 면 그때 OS 에 묻는다. 쓸 수 있게 됐으면 `true`.
+///
+/// `startWalk` 이 흐름 중간에 직접 하던 순서와 같은 것이다. 홈 카드는 이 함수를 꽂아 쓴다 —
+/// 위젯이 화면을 import 하지 않기 때문이다(`TodayCourseCard.onStart` 와 같은 이유, #517).
+Future<bool> askLocationPermission(BuildContext context) async {
+  final state = await LocationPriming.stateFor();
+  if (!context.mounted) return false;
+  if (state == null) return true; // 이미 권한이 있다 — 설명할 것이 없다
+  final answer = await LocationPrimingSheet.show(context, state);
+  if (!context.mounted) return false;
+  switch (answer) {
+    case LocationPrimingAnswer.later:
+      return false;
+    case LocationPrimingAnswer.openSettings:
+      await LocationPriming.openSettings();
+      return false;
+    case LocationPrimingAnswer.allow:
+      // 다음에 또 거부 상태면 "설정에서 켜기" 길을 보여 준다.
+      await LocationPriming.markAsked();
+      return (await LocationService.locate()).ok;
   }
 }
 

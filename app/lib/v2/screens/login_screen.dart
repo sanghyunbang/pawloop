@@ -51,7 +51,15 @@ class LoginScreen extends StatefulWidget {
   /// 테스트가 명시적으로 켜고 끈다.
   final bool? showAppleSignIn;
 
-  const LoginScreen({super.key, this.showAppleSignIn});
+  /// 왜 이 화면에 왔는지 한 줄. 게스트가 막힌 자리에서 보낼 때 그 자리가 넘긴다(#517).
+  ///
+  /// 예전에는 부르는 쪽이 **스낵바**로 말하고 곧바로 이 화면을 밀어 올렸다. 스낵바는
+  /// 1.6초 뒤 사라지고 전환 애니메이션이 그중 0.3초를 먹는다 — 걸으러 온 사람은 로그인
+  /// 화면을 보면서 "내가 뭘 눌렀더라" 를 다시 떠올려야 했다. 이유는 화면이 들고 있어야
+  /// 사용자가 읽을 때까지 남는다.
+  final String? reason;
+
+  const LoginScreen({super.key, this.showAppleSignIn, this.reason});
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -143,6 +151,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Text('반려동물과 함께 걷고,\n동네 반려인들과 연결되는 공간',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, height: 1.5, color: T.textSecondary)),
+                if (widget.reason != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    key: const Key('login-reason'),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: const Color(0x14E04A2B),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(widget.reason!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w700, color: T.warmText)),
+                  ),
+                ],
                 const Spacer(flex: 4),
                 // 카카오
                 _socialBtn(

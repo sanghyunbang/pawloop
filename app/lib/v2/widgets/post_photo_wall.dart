@@ -108,7 +108,8 @@ class _PhotoTile extends StatelessWidget {
               else
                 Image.network(
                   url,
-                  fit: BoxFit.cover,
+                  // 크기를 모르는 사진은 안 자른다 — 카드와 같은 이유다(#517).
+                  fit: media.hasSize ? BoxFit.cover : BoxFit.contain,
                   // 못 불러오면 회색 칸 — 깨진 그림 아이콘을 벽에 띄우지 않는다.
                   errorBuilder: (_, __, ___) => ColoredBox(color: T.surface),
                 ),
