@@ -5,7 +5,7 @@
 > 이 문서는 사람이 읽기 위한 요약이며, 값이 충돌하면 **언제나 `openapi.yaml` 이 우선한다.**
 > 계약을 바꿀 때는 `openapi.yaml` 을 먼저 고치고, 이 문서를 뒤따라 맞춘다.
 
-> 산책·동반장소·커뮤니티 앱 **Pawloop(포루프)**의 REST API 명세. 현재 구현된 부분과 **계획(Planned)** 을 함께 정리한다. 지금 앱은 장소 데이터를 관광공사 KTO API로 **직접 호출**하고 있으며, 백엔드는 이 문서의 프록시·저장 API로 점진 이전한다.
+> 산책·동반장소·커뮤니티 앱 **Pawloop(포루프)**의 REST API 명세. 현재 구현된 부분과 **계획(Planned)** 을 함께 정리한다. 장소는 **백엔드가 관광공사를 대신 부른다**(#40) — 앱에는 서비스키가 없다.
 
 관련 문서: [ERD](../03-database/erd.md) · [아키텍처](../02-architecture/)
 
@@ -262,7 +262,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ## 3. 강아지 프로필 (Dogs)
 
 프론트 도메인: `app/lib/v2/domain/pet.dart` → `DogProfile { name, breed, size(소형/중형/대형), ageMonths, neutered, avatarAsset }`.
-현재 앱은 전역 `ValueNotifier<DogProfile> kMyDog`로 로컬 보관(백엔드 미연동).
+앱은 `pet_sync.dart` 가 `GET /api/dogs` 로 읽어 `kMyPets` 를 채운다(#159). 아직 서버로 안 가는 것은 편집 화면의 글자 칸뿐이다 — `PATCH /api/dogs/{dogId}` 는 계약에만 있다.
 
 ### 3.1 내 강아지 목록 — ✅ 구현(#145)
 
@@ -885,7 +885,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `GET` | `/api/chat/rooms` | 내 방 목록. 방마다 `unread`(뺄셈)·`lastReadSeq`·`myRole`·`lastMessage`·`memberCount`·`tag`. **`roomId` 를 안 받으므로 403 이 없다** — 답의 범위 자체가 내 멤버십이다 | M2.6 ✅ |
 | `GET` | `/api/chat/rooms/{roomId}` | 방 상세(멤버 목록·내 `lastReadSeq`·역할) | M2.6 |
 | `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq\|beforeSeq&limit` | 폴링/스크롤 겸용. 응답은 `{ items, lastSeq, hasMore }` 이고 `items` 는 **어느 방향이든 `roomSeq` 오름차순**이다. `ETag: "{roomId}:{lastSeq}"` 를 직접 계산해 붙이고, `If-None-Match` 가 같으면 `304`(인가가 **먼저**다). 사진 메시지(#452)는 `items[].media`(글의 `PostMedia` 와 같은 모양) 가 있고 글자 메시지는 `null` | M2.6 ✅ |
-| `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq=&afterChangeSeq=` | **변경 피드**(ADR-0023 · #500): `afterChangeSeq` 를 주면 그 번호 뒤에 바뀐 말이 `changed` 에 실린다(지금은 지워진 말, 앞으로 반응). `items` 는 새 말, `changed` 는 옛 말의 새 모양이라 앱은 **같은 id 자리에 덮어쓴다**. 응답의 `lastChangeSeq` 가 다음 커서이고 `ETag` 는 `"{roomId}:{lastSeq}:{lastChangeSeq}"` 다 — 말이 바뀌면 304 가 아니다. 창은 최근 200개 `roomSeq` | M2.6 ✅ |
+| `GET` | `/api/chat/rooms/{roomId}/messages?afterSeq=&afterChangeSeq=` | **변경 피드**(ADR-0023 · #500): `afterChangeSeq` 를 주면 그 번호 뒤에 바뀐 말이 `changed` 에 실린다(지워진 말과 반응). `items` 는 새 말, `changed` 는 옛 말의 새 모양이라 앱은 **같은 id 자리에 덮어쓴다**. 응답의 `lastChangeSeq` 가 다음 커서이고 `ETag` 는 `"{roomId}:{lastSeq}:{lastChangeSeq}"` 다 — 말이 바뀌면 304 가 아니다. 창은 최근 200개 `roomSeq` | M2.6 ✅ |
 | `POST` | `/api/chat/rooms/{roomId}/messages` | 전송 `{ "body": "...", "clientMsgId": "..." }`. 처음이면 `201`, 같은 키의 재전송이면 **`200`**(409 가 아니다) 이고 두 응답의 `roomSeq` 가 같다. 보낸 사람의 읽음 위치(`lastReadSeq`)가 그 메시지까지 올라간다 — 내 메시지는 내 미읽음에 들지 않는다(#330). **사진 메시지(#452)**: `POST /media`(`CHAT_IMAGE`) 로 올린 id 를 `mediaId` 로 — `contentType` 은 `image`, `body` 는 캡션이라 비어도 된다. 사진 하나에 메시지 하나. 남의 사진 · 안 붙는 사진이면 400 이고 **메시지도 안 생긴다**(INSERT 와 붙이기가 한 트랜잭션). **답장(#452)**: 원문 메시지의 id 를 `replyToId` 로 — 같은 방의 메시지만(아니면 400), 원문이 지워졌어도 된다. 응답과 목록의 메시지에 `replyTo{ id, senderName, preview, deleted }` 가 실린다 — 원문 내용은 저장하지 않고 응답 때마다 읽으므로 원문이 지워지면 `deleted` 가 된다 | M2.6 ✅ |
 | `POST` | `/api/chat/rooms/{roomId}/read` | `lastReadSeq` 올리기. `GREATEST` 로 **뒤로 안 가고** `LEAST(:seq, room.last_seq)` 로 방의 끝을 넘지 않는다. 응답은 서버가 실제로 쓴 값 | M2.6 ✅ |
 | `PUT` | `/api/chat/rooms/{roomId}/mute` | 방별 음소거 `{ "muted": true }`. 살아 있는 멤버만(아니면 403). 방 목록의 `muted` 에 실린다. `{}` 는 400. 버킷 `group-write` | M2.8 ✅ |
@@ -893,13 +893,14 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 | `DELETE` | `/api/chat/rooms/{roomId}/invites/{code}` | 초대코드 폐기. **행을 지우지 않는다**(회수된 코드와 없던 코드를 구별해야 한다). 기존 멤버는 남는다 | M2.5 ✅ |
 | `POST` | `/api/chat/invites/{code}/join` | 코드로 입장. 없음 `404` → 만료 `410` → 회수 `410` → **이미 멤버면 `200`** → 소진 `409` → 정원 `409`. 재입장 금지 대상이면 `403` | M2.5 ✅ |
 | `DELETE` | `/api/chat/rooms/{roomId}/members/me` | 나가기 | M2.6 |
-| `DELETE` | `/api/chat/rooms/{roomId}/members/{userId}` | 강퇴(방장). `removed_at` + `rejoin_blocked` | M2.7 |
-| `DELETE` | `/api/chat/messages/{messageId}` | 삭제 — **소프트**(`deleted_at`). 빈틈이 나면 델타가 깨진다. 사진 메시지면 사진 파일도 같은 트랜잭션에서 지운다(#452) | M2.6 |
-| `POST` | `/api/chat/rooms/{roomId}/reports` | 신고(사유 코드 + 메모 + `room_seq` 구간). 서버가 본문 스냅샷을 남긴다 | M2.7 |
-| `DELETE` | `/api/chat/rooms/{roomId}/bans/{userId}` | 재입장 금지 해제 | M2.7 |
+| `DELETE` | `/api/chat/rooms/{roomId}/members/{userId}` | 강퇴(방장). `removed_at` + `rejoin_blocked` | M2.7 ✅ |
+| `DELETE` | `/api/chat/messages/{messageId}` | 삭제 — **소프트**(`deleted_at`). 빈틈이 나면 델타가 깨진다. 사진 메시지면 사진 파일도, 반응도 같은 트랜잭션에서 지운다(#452) | M2.6 ✅ |
+| `POST` | `/api/chat/rooms/{roomId}/reports` | 신고(사유 코드 + 메모 + `room_seq` 구간). 서버가 본문 스냅샷을 남긴다 | M2.7 ✅ |
+| `POST`·`DELETE` | `/api/chat/messages/{messageId}/reactions/{kind}` | 말풍선 반응 — 멱등 둘. 누르면 방의 변경 번호가 올라 `changed` 로 퍼진다(#452 · ADR-0023) | M2.6 ✅ |
+| `DELETE` | `/api/chat/rooms/{roomId}/bans/{userId}` | 재입장 금지 해제 | M2.7 ✅ |
 | `POST`·`DELETE` | `/api/blocks` · `/api/blocks/{userId}` | 차단·해제. 차단은 **가리기**이지 삭제가 아니다. **2026-09-03 에 `/api/chat/blocks` 에서 옮겼습니다** — 처음부터 사람 단위였는데(경로에 방 id 가 없습니다) 커뮤니티가 같은 것을 쓰게 되면서 이름이 거짓이 됐습니다(#166) | M2.7 |
 
-- **✅ 표시는 구현됐다는 뜻이다**(이슈 #75 · #79). 나머지는 아직 계획이다.
+- **✅ 표시는 구현됐다는 뜻이다**(이슈 #75 · #79). 아직 계획인 것은 **방 상세 조회와 나가기 둘뿐**이고, 계약에 `x-status: planned` 로 적혀 있다.
 - 방 멤버가 아닌 사용자의 접근 → `403 FORBIDDEN`. 확인은 서비스 경계 한 곳이다 — 발급·회수는 `ChatRoomService.requireOwner(roomId, userId)`, 나머지는 `requireLiveMembership(roomId, userId)` 다. **`removed_at` 이 찍힌 사람도 403**이다(행을 지우지 않으므로 '행이 있는가' 로 묻는 검사는 강퇴된 사람을 통과시킨다). **404 가 아니라 403 인 것은 의도다**: 404 로 답하면 남의 방 id 를 훑어 있는 방과 없는 방을 가려낼 수 있다.
 - **참여 경로와 #79 의 네 경로에 rate limit 이 아직 없다.** `ApiRateLimitFilter.resolveRule` 의 표에 없는 경로는 한도가 0 이 아니라 **무한**이다(`resolveRule` 이 `null` 을 돌려주면 필터가 그대로 통과시킨다). 참여 경로는 이슈 #75 의 NOTE 가, 채팅 네 경로는 #79 가 **#80** 으로 넘겼다 — 폴링 주기와 함께 정해야 숫자에 근거가 생긴다. 미룬 것이지 안전한 것이 아니다.
 - 한도·상태 위반은 봉투를 새로 만들지 않고 공통 `Error` 의 `error.code` 로 갈린다 — `ROOM_MEMBER_LIMIT`(409) · `INVITE_EXPIRED`(410) · `INVITE_REVOKED`(410) · `INVITE_USES_EXHAUSTED`(409).
@@ -927,7 +928,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 반려는 혼자가 아니라 **가족이 함께** 돌본다. 가족 그룹으로 오늘의 케어(물/밥/산책)를 공유해 이중 급여(밥 두 번)·산책 누락을 막는다. **채팅은 여기 없다** — 방은 가족 그룹에 종속되지 않는 범용 리소스라 7장으로 나갔다([ADR-0011](../99-decisions/decision-log.md#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다)).
 
-프론트: 홈의 "오늘의 케어" 카드(`app/lib/v2/widgets/today_care_card.dart`)와 `family_screen` 의 멤버·케어·주의사항이 **서버 응답으로 그려진다**(이슈 #76). 아직 더미인 것은 초대코드(`kFamilyInviteCode` — 발급은 7장의 방 경로다)와 거리 공유(`FamilyMember.todayKm`)뿐이다.
+프론트: 홈의 "오늘의 케어" 카드(`app/lib/v2/widgets/today_care_card.dart`)와 `family_screen` 의 멤버·케어·주의사항이 **서버 응답으로 그려진다**(이슈 #76). 아직 더미인 것은 거리 공유(`FamilyMember.todayKm`) 하나다 — 초대코드는 방장이 서버에서 발급한다(만료·사용 횟수·회수를 가진다).
 데이터 모델: `family_group(id,name,created_at)` — **초대코드도 멤버십도 여기 없다.** 초대는 `chat_room_invite`, 멤버십은 `chat_room_member` 가 가지고(7장), 방이 `origin_kind`/`origin_ref` 로 이 그룹을 불투명하게 가리킨다. 나머지는 `walk_note(id,group_id,body,updated_by,updated_at)` — **그룹당 한 장**이고 `UNIQUE(group_id)` 가 그것을 지킨다 — 과 `care_log(id,dog_id,group_id,type,done_by,occurred_at,memo,created_at)` 이다. `type` 은 `water|meal|walk|med|vet|poop|pee` **소문자**이고 계약·DB CHECK·앱 enum 이 같은 문자열을 쓴다. 뒤의 둘은 산책 중 한 탭으로 들어오는 배변·마킹이고(#340) **위치는 안 올라온다**(A안 #235). **`dog_id` 에는 FK 가 없다** — `dog` 표가 정본 스키마에 아직 없어서다([schema.md §17](../03-database/schema.md)).
 
 | 메서드 | 경로 | 설명 |
@@ -1080,15 +1081,15 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 | 화면(lib/v2) | 현재 데이터 소스 | 목표 API |
 |---|---|---|
-| 홈 (강아지 히어로/오늘 산책) | `kMyDog`(로컬) + **산책은 서버**(#145) | `GET /auth/me`, `GET /api/dogs`, `GET /api/walks`, `GET /api/walks/stats/weekly` |
+| 홈 (아이 히어로/오늘 산책) | **서버**(#145·#159) | `GET /auth/me`, `GET /api/dogs`, `GET /api/walks`, `GET /api/walks/stats/weekly` |
 | 지도 (KTO 전국 + 병원/펫샵/산책로 실데이터 #291) | **백엔드 프록시 경유**(#40 · #273) | `GET /api/places/nearby`, `GET /api/places/catalog`, `GET /api/places/{contentId}`, `GET /api/places/trails/{courseId}/route` |
 | 실시간 산책 (실 GPS) | **서버 연동 완료**(#145) | `POST /api/walks` |
 | 산책 통계 (fl_chart) | **서버 연동 완료**(#145) | `GET /api/walks/stats/weekly` |
-| 커뮤니티 (앱은 아직 더미 — #171) | `kPetPosts`(로컬) | **서버는 붙었다**(#170): `GET/POST /api/community/posts`, `.../comments`, `.../reactions/{type}` |
-| 강아지 프로필/편집 | `kMyDog`(로컬) | `GET/POST/PATCH /api/dogs` |
+| 커뮤니티 | **서버 연동 완료**(#170·#171) | `GET/POST /api/community/posts`, `.../comments`, `.../reactions/{type}`, `.../bookmark`, `GET /api/community/bookmarks` |
+| 아이 프로필/편집 | **서버**(목록·등록·삭제·사진) + 글자 편집만 기기 | `GET/POST /api/dogs`, `PUT/DELETE /api/dogs/{id}/avatar`, (계획) `PATCH /api/dogs/{id}` |
 | 홈 오늘의 케어 카드 · family_screen (멤버·케어·주의사항) | ~~`kCareToday`, `kFamilyMembers`, `kWalkNotes`~~ → **서버 연동 완료**(#76). 남은 더미는 `kFamilyInviteCode`·`FamilyMember.todayKm` | `GET /api/groups/me`, `GET/POST /api/groups/{id}/care-logs`, `GET/PUT /api/groups/{id}/walk-notes` |
-| chat_list_screen (방 목록·미읽음) | `kChatRooms`(로컬) | `GET /api/chat/rooms` |
-| family_chat_screen (방 안 대화) | `kChatMessages`(로컬) | `GET/POST /api/chat/rooms/{id}/messages`, `POST /api/chat/rooms/{id}/read` |
+| chat_list_screen (방 목록·미읽음) | **서버 연동 완료**(#78~#81) | `GET /api/chat/rooms` |
+| family_chat_screen (방 안 대화) | **서버 연동 완료**(#78~#81 · #452) | `GET/POST /api/chat/rooms/{id}/messages`, `POST /api/chat/rooms/{id}/read`, `POST/DELETE /api/chat/messages/{id}/reactions/{kind}` |
 | 일정 탭 (`schedule_screen.dart`) | **서버 연동 완료**(#419) | `GET/POST /api/schedules`, `PATCH /api/schedules/{id}?version=N`, `DELETE /api/schedules/{id}` |
 
 ---
@@ -1098,9 +1099,9 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 1. ~~**Phase 1 — 장소 프록시**~~ **완료(#40).** `GET /api/places/nearby|{contentId}` 로 KTO 호출을 백엔드로 옮겼다. 캐시는 공간 인덱스가 아니라 **0.02° 격자 스냅샷**이고, 1000콜/일은 `kto_call_budget` 표의 조건부 UPDATE 한 문장이 지킨다([ADR-0013](../99-decisions/decision-log.md#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다)).
 2. ~~**Phase 2 — 계정·프로필**~~ **완료(#12·#145).** 카카오/구글 OAuth + `/auth/me` + `/api/dogs`.
 3. ~~**Phase 3 — 산책 저장**~~ **완료(#145·#155).** `POST /api/walks` + `stats/weekly`. 경로는 `walk.path LINESTRING SRID 4326`, 점별 시각은 `walk.path_t`.
-4. **Phase 4 — 커뮤니티 실연동:** `/api/community/posts` 계열로 `kPetPosts` 대체 — **M3.1**(#169~#172). 착수 전 결정은 [ADR-0016](../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) 에서 끝났다.
+4. ~~**Phase 4 — 커뮤니티 실연동**~~ **완료**(#170~#172 · #451) — 글·댓글·반응·저장·사진까지. 착수 전 결정은 [ADR-0016](../99-decisions/decision-log.md#adr-0016--커뮤니티-착수-전-결정-셋--신고는-미루고-반응은-복수로-열고-게스트-읽기는-메서드-축으로-연다) 에서 끝났다.
 5. ~~**Phase 5 — 공공데이터 레이어**~~ → **완료**(#291). 행정안전부 인허가(동물병원·동물판매업, 전국, EPSG:5174→WGS84) · 두루누비 산책로(코스 시작점 + 선). §4.4 · §4.5.
-6. **post-MVP:** 북마크, 케어 로그, 매칭/산책 크루.
+6. **post-MVP:** 장소 북마크(`/api/bookmarks`, 계약에서 계획), 확장 케어 로그. 크루는 #417 로 끝났다.
 
 > **2·3 이 1 보다 먼저 끝났다.** 이 목록의 번호는 순서가 아니라 이름이다.
 
