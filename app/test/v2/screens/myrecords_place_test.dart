@@ -35,7 +35,8 @@ class _Repo implements WalkRepository {
         avgKm: 0,
         allTimeKm: 0.7,
         allTimeCount: items.length,
-        allTimeMinutes: 12,
+        // 카드의 값과 겹치지 않는 수 — 겹치면 find.text 가 둘을 찾는다.
+        allTimeMinutes: 99,
       );
 
   @override
@@ -46,14 +47,14 @@ class _Repo implements WalkRepository {
       throw UnimplementedError('${i.memberName} 은 이 테스트가 안 쓴다');
 }
 
-ServerWalk _walk({WalkPlaceRef? place}) => ServerWalk(
+ServerWalk _walk({WalkPlaceRef? place, int durationS = 720}) => ServerWalk(
       id: 14,
       dogId: 1,
       dogIds: const [1],
       clientWalkId: 'ck-14',
       startedAt: DateTime(2026, 9, 15, 8, 38),
       distanceM: 704,
-      durationS: 720,
+      durationS: durationS,
       place: place,
     );
 
@@ -109,6 +110,33 @@ void main() {
     expect(find.byType(WalkDetailScreen), findsOneWidget);
     expect(find.byKey(const Key('detail-place')), findsOneWidget);
     expect(find.text('서울숲'), findsOneWidget);
+  });
+
+  testWidgets('1분이 안 되는 산책도 시간과 페이스가 보인다 (#537)', (t) async {
+    await _pump(t, _walk(durationS: 44));
+
+    expect(find.text('44초'), findsOneWidget,
+        reason: '예전에는 0분이었다 — 거리는 0.7km 인데 시간이 0분이면 기록이 잘못된 것으로 읽힌다');
+    expect(find.text('-'), findsNothing,
+        reason: "페이스를 분으로 나누느라 분이 0 이면 못 쟀다 — 초로 나누면 1'03\" 다");
+    expect(find.text("1'03\""), findsOneWidget);
+  });
+
+  testWidgets('상세에도 초로 보인다 — 화면이 그 장치를 쓰는가 (#537)', (t) async {
+    await _pump(t, _walk(durationS: 44));
+
+    await t.tap(find.text('아침 산책'));
+    await t.pumpAndSettle();
+
+    expect(find.byType(WalkDetailScreen), findsOneWidget);
+    expect(find.text('44초'), findsOneWidget,
+        reason: '장치만 재면 화면이 예전처럼 분을 그려도 초록이다');
+  });
+
+  testWidgets('1분이 넘으면 지금처럼 분이다', (t) async {
+    await _pump(t, _walk(durationS: 720));
+
+    expect(find.text('12분'), findsOneWidget);
   });
 
   testWidgets('긴 이름은 말줄임으로 줄어든다 — 날짜를 밀어내지 않는다', (t) async {

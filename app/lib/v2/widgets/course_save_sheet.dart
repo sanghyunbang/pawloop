@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import '../data/course_repository.dart';
 import '../data/walk_repository.dart';
 import '../domain/course_path.dart';
+import '../domain/walk_labels.dart';
 import '../theme/app_tokens.dart';
 import '../walk/route_image.dart';
 
@@ -31,7 +32,7 @@ class CourseSaveSheet {
     BuildContext context, {
     required int walkId,
     required double km,
-    required int minutes,
+    required int durationS,
     WalkRepository? walks,
     CourseRepository? courses,
   }) =>
@@ -42,7 +43,7 @@ class CourseSaveSheet {
         builder: (sheetCtx) => _Body(
           walkId: walkId,
           km: km,
-          minutes: minutes,
+          durationS: durationS,
           walks: walks ?? WalkRepository(),
           courses: courses ?? CourseRepository(),
         ),
@@ -53,14 +54,15 @@ class _Body extends StatefulWidget {
   const _Body({
     required this.walkId,
     required this.km,
-    required this.minutes,
+    required this.durationS,
     required this.walks,
     required this.courses,
   });
 
   final int walkId;
   final double km;
-  final int minutes;
+  /// 걸린 시간 — 초다(#537). 분으로 받으면 1분이 안 되는 산책이 `0분` 이 된다.
+  final int durationS;
   final WalkRepository walks;
   final CourseRepository courses;
 
@@ -237,7 +239,7 @@ class _BodyState extends State<_Body> {
             RouteArt(
               lngLat: preview,
               distanceLabel: '${(meters / 1000).toStringAsFixed(2)}km',
-              timeLabel: '${widget.minutes}분',
+              timeLabel: walkTimeLabel(widget.durationS),
               dateLabel: '코스로 남길 구간',
             ),
             withCaption: false,

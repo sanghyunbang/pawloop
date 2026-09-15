@@ -52,7 +52,7 @@ Future<_Repo> _pump(WidgetTester t, {String memo = '처음 쓴 글', WalkFailure
       walkId: 7,
       startedAt: DateTime(2026, 9, 1, 9),
       km: 2.4,
-      minutes: 30,
+      durationS: 30 * 60,
       initialMemo: memo,
       repository: repo,
     ),

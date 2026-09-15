@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_tokens.dart';
 import '../domain/pet.dart';
+import '../domain/walk_labels.dart';
 import '../widgets/aurora.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/today_care_card.dart';
@@ -24,7 +25,14 @@ import '../widgets/neighbor_photo_strip.dart';
 
 /// 홈 — 우리 아이 · 오늘 산책 · 근처 동반 장소. (감정 도메인 제거, 강아지 산책 중심)
 class TodayScreen extends StatelessWidget {
-  const TodayScreen({super.key});
+  const TodayScreen({super.key, this.feed});
+
+  /// 산책 자료를 어디서 읽는가. **테스트만 넘긴다.**
+  ///
+  /// 이 자리가 없던 동안 홈의 요약 카드는 위젯 테스트가 불가능했다 — 안에서
+  /// `WalkFeed()` 를 직접 만들어 진짜 네트워크를 탔다. `WalkFeedBuilder` 는 이미
+  /// 같은 자리를 열어 두고 있었고(#161), 홈만 안 넘기고 있었다.
+  final WalkFeed? feed;
 
   static const _warm = LinearGradient(
     begin: Alignment(-0.8, -1), end: Alignment(0.8, 1),
@@ -122,6 +130,7 @@ class TodayScreen extends StatelessWidget {
                   // 산책 자료는 한 번만 받는다 — 요약과 "오늘의 코스"(#485)가 같은 자료를 쓴다.
                   // 그 사이의 케어 · 일정 · CTA 는 자료가 필요 없지만 순서 때문에 같은 열에 둔다.
                   WalkFeedBuilder(
+                    feed: feed,
                     builder: (_, data, __) => Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -276,7 +285,7 @@ class TodayScreen extends StatelessWidget {
           div(),
           cell('${today.km.toStringAsFixed(1)}km', '거리'),
           div(),
-          cell('${today.minutes}분', '시간'),
+          cell(walkTimeLabel(today.durationS), '시간'),
         ]),
         // 로그인한 적 없는 사람에게는 "불러오지 못했다" 가 아니라 "로그인하면" 이다(#324).
         if (data.guest) ...[

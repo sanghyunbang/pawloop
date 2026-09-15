@@ -24,6 +24,7 @@ import '../data/walk_outbox.dart';
 import '../data/walk_repository.dart';
 import '../walk/route_image.dart';
 import '../walk/route_photo_saver.dart';
+import '../domain/walk_labels.dart';
 import '../widgets/snack.dart';
 import '../widgets/walk_finish_sheet.dart';
 import '../widgets/walk_moment_bar.dart';
@@ -770,12 +771,10 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
     return '$m:$s';
   }
 
-  String get _pace {
-    if (_km < 0.01 || _seconds == 0) return "-'--\"";
-    final secPerKm = _seconds / _km;
-    final m = (secPerKm ~/ 60), s = (secPerKm % 60).round();
-    return "$m'${s.toString().padLeft(2, '0')}\"";
-  }
+  /// 셈은 `walkPaceLabel` 하나다(#537) — 두 벌이면 한쪽만 낡는다. 여기서만 다른 것은
+  /// **못 잴 때의 모습**이다: 달리는 동안에는 자리를 지켜야 숫자가 튀지 않는다.
+  String get _pace =>
+      walkPaceLabel(durationS: _seconds, km: _km) ?? "-'--\"";
 
   // 뒤로가기/이탈 — 실수로 산책 날리지 않게 확인.
   Future<void> _confirmExit() async {

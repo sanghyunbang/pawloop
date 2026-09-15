@@ -9,9 +9,9 @@ import 'package:heat_trip_flutter/v2/widgets/walk_resume_prompt.dart';
 
 const _store = WalkInProgressStore();
 
-WalkInProgress _walk() => WalkInProgress(
+WalkInProgress _walk({int seconds = 720}) => WalkInProgress(
       startedAt: DateTime(2026, 9, 7, 15, 41),
-      seconds: 720,
+      seconds: seconds,
       distanceM: 320,
       path: const [
         [127.0410, 37.5445],
@@ -47,6 +47,11 @@ void main() {
 
   test('summary — 거리·분·시작 시각', () {
     expect(WalkResumePrompt.summary(_walk()), '지난 산책이 저장되지 않은 채 끝났어요.\n0.32km · 12분 · 15:41 시작');
+  });
+
+  test('1분이 안 되면 초로 적는다 — "0분" 이면 안 걸은 것으로 읽힌다 (#537)', () {
+    expect(WalkResumePrompt.summary(_walk(seconds: 44)),
+        '지난 산책이 저장되지 않은 채 끝났어요.\n0.32km · 44초 · 15:41 시작');
   });
 
   testWidgets('스냅숏이 없으면 아무것도 묻지 않는다', (t) async {

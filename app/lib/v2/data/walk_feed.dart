@@ -106,7 +106,7 @@ class WalkFeedData {
   /// 통계 응답의 `weekKm` 으로 오늘 거리는 알 수 있지만 **건수와 시간은 알 수 없다.**
   /// 그래서 목록에서 오늘 것을 골라 접는다. 하루에 20번 넘게 걷는 사람은 없으므로
   /// 첫 장이면 충분하다.
-  ({int count, double km, int minutes}) get today {
+  ({int count, double km, int durationS}) get today {
     final now = DateTime.now();
     bool isToday(DateTime t) =>
         t.year == now.year && t.month == now.month && t.day == now.day;
@@ -128,7 +128,9 @@ class WalkFeedData {
       seconds += draft.durationS;
     }
 
-    return (count: count, km: meters / 1000.0, minutes: seconds ~/ 60);
+    // 초를 그대로 준다 — 분으로 내리는 것은 그리는 자리의 몫이다(#537). 여기서 내리면
+    // 44초짜리 하루가 `0분` 이 되어 오늘 걸은 사실이 화면에서 사라진다.
+    return (count: count, km: meters / 1000.0, durationS: seconds);
   }
 
   /// 이번 주 요일별 **분**(월요일부터, 길이 7). 대기 중인 것을 얹는다 (#341).
@@ -139,12 +141,21 @@ class WalkFeedData {
     }
     final monday = _mondayOf(DateTime.now());
 
+    // **하루치를 초로 모은 뒤 한 번만 내린다**(#537). 초안마다 `~/ 60` 하면 30초짜리
+    // 셋이 0분이 된다 — 서버가 같은 이유로 초로 더한 뒤 나눈다(#341, `WalkService`).
+    //
+    // 서버가 준 `weekMinutes` 는 이미 분이라 그 나머지 초는 여기서 되살릴 수 없다.
+    // 초안만이라도 제대로 더하는 것이 지금 할 수 있는 전부다.
+    final pendingSeconds = List<int>.filled(7, 0);
     for (final draft in pending) {
       final day = DateTime(draft.startedAt.year, draft.startedAt.month, draft.startedAt.day);
       final index = day.difference(monday).inDays;
       if (index >= 0 && index < 7) {
-        week[index] += draft.durationS ~/ 60;
+        pendingSeconds[index] += draft.durationS;
       }
+    }
+    for (var i = 0; i < 7; i++) {
+      week[i] += pendingSeconds[i] ~/ 60;
     }
     return week;
   }

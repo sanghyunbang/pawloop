@@ -74,7 +74,7 @@ void main() {
       walkId: 7,
       startedAt: DateTime(2026, 9, 14, 7),
       km: 1.2,
-      minutes: 30,
+      durationS: 30 * 60,
       initialMemo: '',
       photoUrls: const ['https://cdn.test/a.jpg', 'https://cdn.test/b.jpg'],
       repository: _Walks(),
@@ -88,7 +88,7 @@ void main() {
       walkId: 7,
       startedAt: DateTime(2026, 9, 14, 7),
       km: 1.2,
-      minutes: 30,
+      durationS: 30 * 60,
       initialMemo: '',
       repository: _Walks(),
     ));
