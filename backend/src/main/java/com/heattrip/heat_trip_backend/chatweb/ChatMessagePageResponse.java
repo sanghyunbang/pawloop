@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.chatweb;
 
 import com.heattrip.heat_trip_backend.chat.ChatMessagePageView;
 import com.heattrip.heat_trip_backend.chat.ChatMessageView;
+import com.heattrip.heat_trip_backend.chat.ChatReactionView;
 
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import java.util.Set;
  * @param blockedIds  읽는 사람이 가린 발신자들 — {@code hiddenByBlock} 의 근거(#82)
  * @param photos      사진 메시지의 사진, 메시지 id 별(#452). 없는 메시지는 {@code null} 로 실린다
  * @param replies     답장들의 원문 미리보기, <b>원문</b> 메시지 id 별(#452). 답장이 아닌 메시지는 {@code null}
+ * @param reactions   반응 집계, 메시지 id 별(#452). 없는 메시지는 빈 배열로 실린다
  *
  * <h2>{@code changed} 는 "이미 받은 말이 바뀌었다" 다 (ADR-0023, #500)</h2>
  * <p>{@code items} 는 <b>새 말</b>이고 {@code changed} 는 <b>옛 말의 새 모양</b>이다. 둘을 한 목록에 섞으면
@@ -33,26 +35,29 @@ public record ChatMessagePageResponse(
 
     static ChatMessagePageResponse of(ChatMessagePageView page, Map<Long, String> senderNames,
                                       Set<Long> blockedIds, Map<Long, ChatMessageResponse.Media> photos,
-                                      Map<Long, ChatMessageResponse.ReplyTo> replies) {
+                                      Map<Long, ChatMessageResponse.ReplyTo> replies,
+                                      Map<Long, List<ChatReactionView>> reactions) {
         return new ChatMessagePageResponse(
-                shape(page.items(), senderNames, blockedIds, photos, replies),
+                shape(page.items(), senderNames, blockedIds, photos, replies, reactions),
                 page.lastSeq(),
                 page.hasMore(),
-                shape(page.changed(), senderNames, blockedIds, photos, replies),
+                shape(page.changed(), senderNames, blockedIds, photos, replies, reactions),
                 page.lastChangeSeq());
     }
 
     /** 같은 규칙으로 옮긴다 — 새 말이든 바뀐 말이든 계약의 모양은 하나다. */
     private static List<ChatMessageResponse> shape(List<ChatMessageView> messages, Map<Long, String> senderNames,
                                                    Set<Long> blockedIds, Map<Long, ChatMessageResponse.Media> photos,
-                                                   Map<Long, ChatMessageResponse.ReplyTo> replies) {
+                                                   Map<Long, ChatMessageResponse.ReplyTo> replies,
+                                                   Map<Long, List<ChatReactionView>> reactions) {
         return messages.stream()
                 .map(message -> ChatMessageResponse.of(
                         message,
                         senderNames.get(message.senderUserId()),
                         blockedIds.contains(message.senderUserId()),
                         photos.get(message.id()),
-                        ChatMessages.replyOf(replies, message)))
+                        ChatMessages.replyOf(replies, message),
+                        ChatMessageResponse.Reaction.allOf(reactions.get(message.id()))))
                 .toList();
     }
 }

@@ -75,13 +75,13 @@ class ChatContractSpecTest {
     // ─────────────────── A. 코드 ↔ 계약 ───────────────────
 
     @Test
-    @DisplayName("컨트롤러의 여섯 매핑(#79 넷 + #197 삭제 + #83 음소거)이 계약에 그대로 등재돼 있다 — 경로 목록은 컨트롤러에서 읽는다")
+    @DisplayName("컨트롤러의 여덟 매핑(#79 넷 + #197 삭제 + #83 음소거 + #452 반응 둘)이 계약에 그대로 등재돼 있다 — 경로 목록은 컨트롤러에서 읽는다")
     void everyEndpointThisIssueOpened_isDeclaredInTheContract() {
         List<String> implemented = operationsOf(ChatRoomController.class);
 
         assertThat(implemented)
                 .as("컨트롤러에서 매핑을 하나도 못 읽었다면 이 검사는 아무것도 지키지 않는다")
-                .hasSize(6);
+                .hasSize(8);
         assertThat(declaredOperations())
                 .as("""
                         계약에 없는 경로는 앱이 존재를 모른다 — design-first 라 앱은 이 파일을 보고 만든다.
@@ -199,7 +199,7 @@ class ChatContractSpecTest {
     // ─────────────────── D. 한도 표 (📌 #86 원칙 4) ───────────────────
 
     @Test
-    @DisplayName("표 밖의 다섯 경로는 429 를 선언하지 않는다 — 음소거(#83)만 group-write 라 예외다")
+    @DisplayName("표 밖의 일곱 경로는 429 를 선언하지 않는다 — 음소거(#83)만 group-write 라 예외다")
     void noneOfTheFourDeclaresRateLimiting() {
         for (String operation : operationsOf(ChatRoomController.class)) {
             if (operation.endsWith("/mute")) {

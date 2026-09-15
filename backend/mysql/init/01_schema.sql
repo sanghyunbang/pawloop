@@ -78,6 +78,17 @@ CREATE TABLE `chat_message` (
   CONSTRAINT `fk_chat_room` FOREIGN KEY (`room_id`) REFERENCES `chat_room` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `chat_message_reaction` (
+  `created_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `message_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  `kind` varchar(20) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_chat_reaction` (`message_id`,`user_id`,`kind`),
+  CONSTRAINT `fk_chat_reaction_message` FOREIGN KEY (`message_id`) REFERENCES `chat_message` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `chat_room` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `id` bigint NOT NULL AUTO_INCREMENT,

@@ -342,8 +342,10 @@ class ChatBoundaryArchitectureTest {
                             파일 텍스트가 아니라 **적용한 결과**를 읽는 이유는 정규식이 \
                             ALTER TABLE ... ADD CONSTRAINT 를 못 봤기 때문이다 — 손으로 고치는 사람이 \
                             가장 자연스럽게 쓰는 문법이 그것이다.
-                            넷보다 적으면 경계 안쪽 FK 까지 끊어진 것이고, 다른 이름이 끼면 \
+                            다섯보다 적으면 경계 안쪽 FK 까지 끊어진 것이고, 다른 이름이 끼면 \
                             users·family_group·dog 로 나간 것이다 (ADR-0011 결정 4).
+                            chat_message_reaction → chat_message 는 반응(#452)이다 — 그 표의 user_id 에는 \
+                            FK 가 없어야 한다. 걸면 탈퇴 한 번에 남의 대화에 남은 반응이 사라진다.
                             chat_message → chat_message 는 답장의 원문(#452, reply_to_id, SET NULL)이다 — \
                             같은 표 안의 자기 참조라 경계 안쪽이다.
                             chat_message → users 가 여기 끼는 것이 #78 완료 조건 6 이 막는 것이다 — \
@@ -353,6 +355,7 @@ class ChatBoundaryArchitectureTest {
                     .containsExactlyInAnyOrder(
                             "chat_message → chat_message",
                             "chat_message → chat_room",
+                            "chat_message_reaction → chat_message",
                             "chat_room_invite → chat_room",
                             "chat_room_member → chat_room");
         }
@@ -389,6 +392,13 @@ class ChatBoundaryArchitectureTest {
                             200 과 함께 남의 메시지를 돌려주므로 앱은 성공으로 읽고 재시도조차 \
                             하지 않는다 (#79).""")
                     .contains("room_id,room_seq", "room_id,sender_user_id,client_msg_id");
+            assertThat(uniqueColumnSets(db, "chat_message_reaction"))
+                    .as("""
+                            (message_id, user_id, kind) 셋이 반응의 멱등을 딛는다(#452). 없으면 \
+                            ON DUPLICATE KEY UPDATE 가 아무것도 막지 못해 재시도 한 번에 집계가 늘고, \
+                            둘(message, user)로 줄이면 라디오가 되어 종류를 하나만 누를 수 있다 \
+                            — 넓혔다 좁히는 것은 행을 지우는 마이그레이션이다(ADR-0016 결정 2).""")
+                    .contains("message_id,user_id,kind");
         }
     }
 

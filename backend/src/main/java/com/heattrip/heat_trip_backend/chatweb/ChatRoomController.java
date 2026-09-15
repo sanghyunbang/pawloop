@@ -49,7 +49,8 @@ import java.util.List;
  *       함께 정해야 숫자에 근거가 생긴다. <b>미룬 것이지 안전한 것이 아니다</b> —
  *       {@code ApiRateLimitFilter.resolveRule} 이 {@code null} 을 돌려주면 필터가 그대로
  *       통과시키므로, <b>표에 없는 경로는 한도가 0 이 아니라 무한이다.</b> 지금 이 넷은
- *       한 계정으로 몇 번을 불러도 429 가 나오지 않는다.</li>
+ *       한 계정으로 몇 번을 불러도 429 가 나오지 않는다. <b>반응 둘(#452)도 같은 표 밖이다</b> —
+     *       그 둘은 쓰기지만 만드는 것이 방마다 사람마다 종류마다 한 행뿐이라 반복이 쌓이지 않는다.</li>
  * </ul>
  *
  * <h2>ETag 를 직접 계산한다 — {@code ShallowEtagHeaderFilter} 를 쓰지 않는다</h2>
@@ -229,6 +230,41 @@ public class ChatRoomController {
     public ResponseEntity<Void> deleteMessage(@CurrentUser User user, @PathVariable long messageId) {
         chatMessages.delete(messageId, user.getId());
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 반응 누르기 — #452, ADR-0023(#500) 셋째 줄. <b>멱등이다</b>: 이미 눌러 뒀어도 200 이고 집계가 안 는다.
+     *
+     * <h2>켜기와 끄기가 따로인 이유 — 토글은 재시도에 약하다</h2>
+     * <p>{@code POST .../reactions} 하나를 토글로 두면 요청에 의도가 없어서 <b>네트워크 재시도 한 번이
+     * 사용자의 반응을 조용히 되돌린다.</b> 커뮤니티가 2026-09 에 그 이유로 갈랐고(ADR-0016 결정 2 주변),
+     * 여기는 그 결론에서 시작한다. 모양은 {@code POST /api/blocks} + {@code DELETE /api/blocks/{userId}} 와 같다.
+     *
+     * <p>경로가 방이 아니라 메시지 id 인 것은 삭제(#197)와 같은 판단이다 — 메시지 id 는 전역 유일이고,
+     * 인가는 그 메시지가 속한 방의 멤버십으로 한다(없는 방도 남의 방도 같은 403).
+     *
+     * <p><b>지워진 메시지에는 못 누른다(409).</b> 삭제가 그 말의 반응을 이미 거둬 갔고, 톰스톤 아래에
+     * 새 반응이 붙으면 지운 사람에게는 지워지지 않은 것처럼 보인다.
+     */
+    @PostMapping("/messages/{messageId}/reactions/{kind}")
+    public ChatReactionsResponse react(@CurrentUser User user,
+                                       @PathVariable long messageId,
+                                       @PathVariable String kind) {
+        return ChatReactionsResponse.of(messageId, chatRooms.react(messageId, user.getId(), kind));
+    }
+
+    /**
+     * 반응 취소. <b>멱등이다</b> — 안 눌렀던 것을 취소해도 200 이다. 없던 것과 있던 것을 상태 코드로
+     * 나누면 앱이 두 갈래를 다뤄야 하는데 <b>사용자에게는 결과가 같다.</b>
+     *
+     * <p>지워진 메시지에도 통한다 — 지울 반응이 없을 뿐이다. 여기서 409 를 내면 "취소했는데 실패" 라는
+     * 없는 상태를 앱이 그려야 한다.
+     */
+    @DeleteMapping("/messages/{messageId}/reactions/{kind}")
+    public ChatReactionsResponse unreact(@CurrentUser User user,
+                                         @PathVariable long messageId,
+                                         @PathVariable String kind) {
+        return ChatReactionsResponse.of(messageId, chatRooms.unreact(messageId, user.getId(), kind));
     }
 
     /**

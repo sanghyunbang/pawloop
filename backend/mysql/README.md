@@ -72,6 +72,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\45_chat_reply.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\46_weekly_insight_feedback.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\47_chat_change_feed.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\48_chat_reaction.sql
 ```
 
 | 파일 | 무엇을 |
@@ -123,6 +124,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `45_chat_reply.sql` | **채팅 답장(인용)** — #452. `chat_message` 에 `reply_to_id`(NULL 허용) · `idx_chat_reply_to` · `fk_chat_reply_to`(**같은 표**를 가리키고 **SET NULL**)를 더합니다. 원문의 내용은 저장하지 않고 응답 때마다 읽습니다 — 원문이 지워지면 "삭제된 메시지" 로 보이고, 운영 정리로 아예 지우면 답장만 남습니다. 같은 방의 메시지만 가리킬 수 있습니다(서버가 400). `chat_message` 가 먼저여야 합니다. |
 | `46_weekly_insight_feedback.sql` | **AI 요약 👍/👎** — #486 후속. `weekly_insight` 에 `feedback`(`up`·`down`·NULL, CHECK `ck_weekly_insight_feedback`) · `feedback_at` 을 더합니다. 요약 하나에 평가 하나라 표를 더 만들지 않습니다. 문장이 다시 만들어지면 앱 서버가 평가를 비웁니다. `weekly_insight` 가 먼저여야 합니다. |
 | `47_chat_change_feed.sql` | **채팅 변경 피드** — ADR-0023(#500). `chat_room.last_change_seq`(NOT NULL 기본 0)와 `chat_message.change_seq`(NULL 허용) · `idx_chat_change(room_id, change_seq)` 를 더합니다. 델타 폴링이 **이미 보낸 말의 변화**(지금은 삭제, 앞으로 반응)를 따라잡는 축입니다 — `room_seq` 는 손대지 않습니다. 쌓인 방은 0, 쌓인 메시지는 NULL 로 시작합니다. `chat_room` · `chat_message` 가 먼저여야 합니다. |
+| `48_chat_reaction.sql` | **채팅 반응(공감)** — #452. `chat_message_reaction` 표를 만듭니다 — `uq_chat_reaction (message_id, user_id, kind)` 라 한 사람이 한 말에 여러 종류를 누를 수 있고(커뮤니티 반응과 같은 판단), `fk_chat_reaction_message` 는 **CASCADE** 입니다. `user_id` 에는 **FK 가 없습니다** — chat 은 사람을 id 로만 압니다(ADR-0011 결정 4). 종류에 `CHECK` 를 걸지 않습니다(계약의 `ChatReactionKind` 가 단일 출처). 반응은 방의 변경 번호를 올려 다른 사람에게 흐르므로 `47` 이 먼저여야 하고, `chat_message` 도 먼저여야 합니다. |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 
