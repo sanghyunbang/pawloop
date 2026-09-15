@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -116,7 +118,54 @@ class WeeklyInsightAsyncIntegrationTest extends AbstractMySqlIntegrationTest {
         awaitCalls(calls, 2);
     }
 
+    @Test
+    @DisplayName("숫자가 바뀌면 다시 만드는 동안 옛 문장을 안 싣는다 — pending 인데 문장이 옛것이면 카드가 거짓말을 한다 (#538)")
+    void pendingDoesNotCarryTheOldSentence() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        when(model.available()).thenReturn(true);
+        when(model.name()).thenReturn("fake-model");
+        when(model.complete(anyString(), anyString())).thenAnswer(invocation -> {
+            // 둘째 호출만 붙든다 — "다시 만드는 중" 인 창을 실제로 연다.
+            if (calls.incrementAndGet() >= 2) {
+                release.await(10, TimeUnit.SECONDS);
+            }
+            return Optional.of(SENTENCE);
+        });
+        Account me = account("낡음");
+
+        stats(me);
+        awaitRow(me);
+        assertThat(stats(me).path("aiSummary").path("text").asText())
+                .as("첫 문장은 그때의 숫자로 쓴 것이다").isEqualTo(SENTENCE);
+
+        // 아이를 등록하면 모델에 주는 글이 바뀐다(크기 · 나이대 한 줄이 붙는다) — 산책이 하나 는 것과 같다.
+        dog(me, "보리");
+        JsonNode changed = stats(me);
+
+        assertThat(changed.path("aiSummaryPending").asBoolean())
+                .as("다시 만드는 중이라고 말한다").isTrue();
+        assertThat(changed.path("aiSummary").isNull())
+                .as("""
+                        옛 문장은 다른 입력으로 쓴 것이다. 만드는 동안 그것을 함께 실으면 카드가 \
+                        바로 위 "이번 주 요약" 과 다른 말을 한다 (#538).""")
+                .isTrue();
+
+        release.countDown();
+        awaitCalls(calls, 2);
+    }
+
     // ── 도우미 ─────────────────────────────────────────────
+
+    private void dog(Account me, String name) throws Exception {
+        mockMvc.perform(post("/api/dogs")
+                        .header("Authorization", "Bearer " + me.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"%s","breed":"푸들","size":"small","birth":"2024-09-01","neutered":false}
+                                """.formatted(name)))
+                .andExpect(status().isCreated());
+    }
 
     private WeeklyInsight awaitRow(Account me) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
