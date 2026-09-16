@@ -444,13 +444,18 @@ class FamilyRepository {
   /// [dogId] 는 **어느 아이에게 한 일인가**다(#563). 이 앱의 목적이 업무 분담이라 "해당
   /// 동물을 누르면 누가 무엇을 했는지" 가 보여야 하고, 그러려면 기록에 아이가 붙어야 한다.
   /// 아이를 한 마리도 등록하지 않은 집도 기록하므로 **선택**이다.
-  Future<CareLogEntry> recordCare(int groupId, ServerCareType type,
-      {String? memo, int? dogId}) async {
+  /// **[type] 과 [careItemId] 는 정확히 하나다**(#560). 기본 일곱은 종류로, 직접 만든
+  /// 항목은 번호로 보낸다 — 둘 다 없거나 둘 다 있으면 서버가 400 이다. 기본 항목을 종류로
+  /// 보내면 서버가 항목까지 붙여 주므로, 옛 집계와 산책 화면의 `type='walk'` 조회가
+  /// 그대로 돈다.
+  Future<CareLogEntry> recordCare(int groupId, ServerCareType? type,
+      {String? memo, int? dogId, int? careItemId}) async {
     final json = await _send(
       () => _authed.postJson(
         Uri.parse('$baseUrl/api/groups/$groupId/care-logs'),
         body: {
-          'type': type.wire,
+          if (type != null) 'type': type.wire,
+          if (careItemId != null) 'careItemId': careItemId,
           if (memo != null && memo.isNotEmpty) 'memo': memo,
           if (dogId != null) 'dogId': dogId,
         },
