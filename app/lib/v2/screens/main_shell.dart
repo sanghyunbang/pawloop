@@ -26,6 +26,24 @@ class RootTab {
   /// 'grid' 로 두고 탭을 바꾼다. 피드가 읽은 뒤 'card' 로 되돌린다 — 한 번짜리 부탁이다(#451).
   static final ValueNotifier<String> communityView = ValueNotifier('card');
 
+  /// 지도 탭이 다음에 열릴 때 **먼저 걸어 둘 갈래**(`vet` · `shop` · `trail` …). 오늘의 케어
+  /// 카드의 "주변" 줄이 여기에 놓고 탭을 바꾼다(#560). 지도가 읽은 뒤 `null` 로 되돌린다 —
+  /// [communityView] 와 같은 **한 번짜리 부탁**이다.
+  ///
+  /// 갈래를 전역으로 두는 이유는 탭이 `Navigator` 로 이어져 있지 않아서다. 화면을 직접
+  /// 부르면 탭 바가 사라진 지도가 열리고, 사용자는 돌아올 길을 잃는다.
+  static final ValueNotifier<String?> exploreCategory = ValueNotifier<String?>(null);
+
+  /// 부탁을 **한 번만** 쓴다 — 읽으면서 비운다.
+  ///
+  /// 되돌리는 일을 부르는 쪽에 맡기면 한 곳이 빠뜨리고, 그때부터 지도가 **영영 그 갈래로만**
+  /// 열린다. 읽기와 비우기를 한 줄에 묶어 두면 빠뜨릴 자리가 없다.
+  static String? takeExploreCategory() {
+    final asked = exploreCategory.value;
+    exploreCategory.value = null;
+    return asked;
+  }
+
   /// 모든 푸시 라우트를 닫고 해당 탭으로 이동. (result의 "더 둘러보기" 등)
   static void go(BuildContext context, int i, {String? exView}) {
     Navigator.of(context).popUntil((r) => r.isFirst);

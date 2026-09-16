@@ -26,6 +26,7 @@ import '../data/location_service.dart';
 import '../data/neighborhood_store.dart';
 import '../domain/neighborhood.dart';
 import '../widgets/aurora.dart';
+import 'main_shell.dart' show RootTab;
 import '../widgets/profile_avatar.dart';
 
 /// 지도 — 관광공사 반려동물 동반여행(KTO) 기반 "우리 아이랑 갈 수 있는 곳".
@@ -89,7 +90,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   PetPlace? _pendingTrail;
   /// 클러스터 핀 그림 — 한 번 그려 두고 `_clusterMarker` 가 쓴다. 빌더는 동기라 여기서 못 그린다.
   NOverlayImage? _clusterIcon;
-  String? _catFilter; // null = 전체, 아니면 contenttypeid
+  /// null = 전체, 아니면 contenttypeid 또는 레이어 열쇠말(`vet`·`shop`·`trail`…).
+  ///
+  /// 처음 값은 오늘의 케어 카드가 부탁한 갈래다(#560) — [RootTab.exploreCategory].
+  /// 읽고 바로 되돌리므로 다음에 지도를 그냥 열면 전체다.
+  String? _catFilter = RootTab.takeExploreCategory();
 
   @override
   void initState() {
