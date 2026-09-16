@@ -128,7 +128,7 @@ class CareContractSpecTest {
     }
 
     @Test
-    @DisplayName("CareLogInput 에 occurredAt·doneBy·위치가 없고 type 만 필수다 — dogId 는 선택이다")
+    @DisplayName("CareLogInput 에 occurredAt·doneBy·위치가 없다 — type 과 careItemId 는 정확히 하나다")
     void careLogInput_letsTheServerDecideWhoAndWhen() {
         Map<String, Object> input = schema("CareLogInput");
 
@@ -141,7 +141,7 @@ class CareContractSpecTest {
                         dogId 는 2026-09-15 부터 받는다(#563) — 이 기능의 목적이 업무 분담이라 \
                         '해당 동물을 누르면 누가 무엇을 했나' 가 보여야 하고, 그러려면 기록에 \
                         아이가 붙어야 한다.""")
-                .containsExactly("type", "memo", "dogId");
+                .containsExactly("type", "careItemId", "memo", "dogId");
         assertThat(propertyNames("CareLogInput"))
                 .as("""
                         여기까지는 계약 안에서만 도는 검사다 — 자바 레코드가 계약과 갈려도 \
@@ -150,10 +150,15 @@ class CareContractSpecTest {
                 .containsExactlyInAnyOrderElementsOf(componentNames(CareLogRequest.class));
         assertThat((List<String>) input.get("required"))
                 .as("""
-                        dogId 가 필수가 아닌 이유는 둘이다 — 아이를 한 마리도 등록 안 한 집도 \
+                        type 이 필수에서 빠진 것은 선택이 된 것이 아니라 **둘 중 하나**가 된 것이다 \
+                        (#560) — 직접 만든 항목을 누르면 종류가 없고 careItemId 만 온다.
+                        JSON Schema 의 required 로는 '정확히 하나' 를 못 적는다. **그래서 그 규칙을 \
+                        재는 자리는 여기가 아니라 CareLogByItemIntegrationTest 다** — 이 단언은 \
+                        '아무것도 필수가 아니다' 라는 계약의 모양만 잠근다.
+                        dogId 가 필수가 아닌 이유는 따로다 — 아이를 한 마리도 등록 안 한 집도 \
                         케어를 기록하고, 이미 나가 있는 앱은 이 필드를 모른다. 하위 호환은 \
                         서버가 지는 짐이다.""")
-                .containsExactly("type");
+                .isEmpty();
     }
 
     // ─────────────────── C. walk-notes 는 목록이 아니다 ───────────────────

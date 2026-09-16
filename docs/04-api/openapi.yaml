@@ -6065,9 +6065,23 @@ components:
       description: "케어 기록(care_log): 누가·언제 어떤 케어를 했는지 가족과 공유."
       # dogId·memo 는 선택 입력이라 비어 있을 수 있다.
       # groupId 는 group-scoped 경로에서만 채워진다.
-      required: [id, type, doneBy, occurredAt]
+      required: [id, doneBy, occurredAt]
       properties:
         id: { type: integer, format: int64 }
+        careItemId:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            **어느 칸의 기록인가**([#560](https://github.com/sanghyunbang/heattrip/issues/560)).
+            앱은 이 값으로 묶어서 셉니다.
+
+            **행에 적힌 값을 그대로 주는 것이 아닙니다.** 기본 일곱의 기록은 `type` 으로 세므로
+            행의 `care_item_id` 가 비어 있는데, 그때는 서버가 그 집에서 같은 `systemType` 을 든
+            항목을 찾아 넣습니다. **세는 규칙을 서버에만 두려는 것입니다** — 앱이 그 갈래를 다시
+            적으면 규칙이 두 곳에 생기고, 그때부터 한쪽만 고쳐지는 날을 기다리게 됩니다.
+
+            그 집에 짝이 되는 항목이 없으면 `null` 입니다. 마이그레이션 50 이 모든 그룹에 기본
+            일곱을 심었으므로 정상 경로에서는 안 납니다.
         dogId:
           type: [integer, "null"]
           format: int64
@@ -6087,7 +6101,20 @@ components:
             그 `groupId` 입니다** — 그 그룹의 행만 돌려줍니다. `null` 은 가족을 해산한 뒤 개인
             기록으로 남은 행(`ON DELETE SET NULL`)이고, 그 행을 돌려주는 경로는 아직 없습니다.
             스키마를 둘로 가르지 않는 이유입니다(#209 `Groups-medium-2`).
-        type: { $ref: '#/components/schemas/CareType' }
+        type:
+          oneOf:
+            - $ref: '#/components/schemas/CareType'
+            - type: "null"
+          description: |
+            **기본 일곱이면 그 종류, 직접 만든 항목이면 `null`**
+            ([#560](https://github.com/sanghyunbang/heattrip/issues/560)).
+
+            2026-09-16 전에는 항상 값이 있었습니다. 사용자가 만든 "양치" 를 누르면 넣을 값이
+            없어서 종류를 **기본 일곱일 때만 있는 것**으로 정했습니다. 일곱 중 아무거나 넣으면
+            그 칸이 양치 기록을 함께 세고, `custom` 같은 값을 더하면 종류가 아닌 것이 종류
+            목록에 들어앉습니다.
+
+            **옛 행은 한 줄도 안 바뀌었습니다** — 넓히는 변경입니다.
         doneBy: { $ref: '#/components/schemas/CareDoer' }
         occurredAt:
           type: string
@@ -6107,9 +6134,33 @@ components:
         `occurredAt`·`doneBy` 는 서버가 정합니다 — 그 둘이 곧 "오늘 누가 했는지" 를 가르는
         기준이라 클라이언트가 정하면 화면의 문구를 믿을 수 없게 됩니다. 지난 일을 나중에 적는
         화면은 M4 입니다.
-      required: [type]
+      required: []
       properties:
-        type: { $ref: '#/components/schemas/CareType' }
+        type:
+          oneOf:
+            - $ref: '#/components/schemas/CareType'
+            - type: "null"
+          description: |
+            기본 일곱의 기록을 남길 때 보냅니다. `careItemId` 와 **정확히 하나**만 보냅니다
+            (아래 참조).
+        careItemId:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            **어느 항목을 눌렀는가**([#560](https://github.com/sanghyunbang/heattrip/issues/560)).
+            그 집 항목이 아니면 404 입니다 — 없는 항목과 옆집 항목이 같은 답입니다.
+
+            기본 일곱을 가리키면 서버가 그 항목의 종류를 `type` 에 **함께 적습니다.** 그래야 옛
+            기록과 같은 축으로 세어지고, 산책 화면의 `type='walk'` 조회도 그대로 돕니다.
+
+            **`type` 과 이 값은 정확히 하나입니다.** 둘 다 없으면 400 입니다 — 어느 칸의 기록도
+            아닌 행은 화면에 안 뜨고, 안 뜨니 지울 수도 없습니다. 둘 다 보내도 400 입니다:
+            서로 다른 것을 가리킬 때 어느 쪽을 믿을지 정하는 규칙은, 적는 순간 둘 중 하나가
+            조용히 버려지는 자리가 됩니다.
+
+            **`type` 만 보내는 길은 그대로 남습니다** — 산책 트래킹과 일정 완료가 그 경로이고,
+            이미 나가 있는 앱도 이 필드를 모른 채 계속 기록합니다. 하위 호환은 서버가 지는
+            짐입니다.
         memo: { type: string, maxLength: 500 }
         dogId:
           type: [integer, "null"]

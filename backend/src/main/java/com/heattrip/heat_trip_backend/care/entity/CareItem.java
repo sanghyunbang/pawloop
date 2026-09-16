@@ -173,6 +173,16 @@ public class CareItem {
      *
      * <p>목표를 <b>안 채워도 아무 말도 안 한다.</b> 이 카드는 누락을 보이게 하려는 것이지
      * 혼내려는 것이 아니다({@code WalkGoalRow} 가 "0일" 을 안 적는 것과 같은 판단).
+     *
+     * <h2>그리고 <b>주기 칸이 없는 것은 결정이다</b>(사장님, 2026-09-16)</h2>
+     *
+     * <p>이 카드는 <b>매일 반복되는 돌봄</b>이다. 한 번 하고 끝나는 일(중성화)과 달마다 하는
+     * 일(심장사상충)은 <b>일정 탭</b>이 맡는다 — {@code Schedule} 이 이미 반복 규칙을,
+     * {@code ScheduleException} 이 하루짜리 예외를 들고 있고, 일정을 완료하면 케어 기록이
+     * 남는 경로도 이미 있다({@code CareService.recordLinked}). 여기에 주기를 또 두면
+     * "반복" 의 정의가 두 곳에 생긴다.
+     *
+     * <p>하루에 여러 번을 맡는 것이 이 칸이다.
      */
     @Column(name = "daily_target")
     private Integer dailyTarget;

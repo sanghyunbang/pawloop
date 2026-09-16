@@ -94,6 +94,25 @@ import java.time.LocalDateTime;
 // **이 문자열을 늘리는 것만으로는 운영 DB 가 안 바뀐다.** ddl-auto=validate 는 CHECK 를
 // 보지 않아 부팅은 그대로 뜨고, 첫 기록이 실패한다 — poop·pee 를 더할 때
 // mysql/post-start/29_care_type_poop.sql 을 함께 돌리는 이유다(#340).
+// ── "종류도 항목도 없는 행" 은 DB 가 못 막는다 (#560, 실측) ──────────────────
+//
+// 그런 행은 어느 칸의 기록도 아니라서 화면에 안 뜨고, 안 뜨니 지울 수도 없다. 그래서
+// CHECK (type IS NOT NULL OR care_item_id IS NOT NULL) 을 걸려고 했는데 **MySQL 8 이
+// 거절한다**:
+//
+//   Column 'care_item_id' cannot be used in a check constraint 'ck_carelog_source':
+//   needed in a foreign key constraint 'fk_carelog_item' referential action.
+//
+// SET NULL 로 값을 쓰는 FK 가 걸린 컬럼은 CHECK 에서 못 읽는다. fk_carelog_item 의
+// SET NULL 은 "항목을 지워도 기록은 남는다" 라서 포기할 수 없는 쪽이다.
+//
+// **더 나쁜 것은 조용히 실패했다는 점이다.** CREATE TABLE 안에 함께 적으면 MySQL 이 받아
+// 주는데(ALTER 로 더할 때만 거절한다), 그러면 Hibernate 가 나중에 ALTER 로 거는
+// fk_carelog_item 이 실패하고 **정본에서 FK 가 통째로 사라진다.** 01_schema.sql 을 재생성해
+// 보고 알았다 — 커밋 전에 되돌렸고, 그 자리를 막는 게이트를 DeclaredForeignKeysExistTest 로
+// 만들었다.
+//
+// 그래서 이 불변식은 CareService.record 가 지킨다(type 과 careItemId 는 정확히 하나).
 @Check(name = "ck_carelog_type",
         constraints = "type in ('water','meal','walk','med','vet','poop','pee')")
 @Getter
@@ -107,12 +126,11 @@ public class CareLog {
     private Long id;
 
     /**
-     * 대상 반려동물. FK 는 있고({@code fk_carelog_dog}, {@code ON DELETE SET NULL}) 값은 아직
-     * <b>항상 {@code null}</b> 이다 — 클래스 javadoc 의 {@code dog_id} 절.
+     * 대상 반려동물. FK 는 {@code fk_carelog_dog}({@code ON DELETE SET NULL}) 다.
      *
-     * <p>{@code CareService.record} 가 요청 본문의 {@code dogId} 를 <b>읽지 않는다.</b>
-     * 이 경로가 <b>그룹 단위 기록</b>이라 대상 개체를 아직 받지 않기 때문이고, 받는 날의
-     * 전제(가족 공유 가시성)는 #209 {@code Dogs-high-3} 이 정한다.
+     * <p><b>2026-09-15(#563)부터 값이 들어간다.</b> {@code CareService.record} 가 요청의
+     * {@code dogId} 를 {@code DogOwnership.requireInFamilyEntity} 로 확인해 넣는다. 그 전에
+     * 쌓인 행은 여전히 {@code null} 이고, 조회가 그걸 안다 — 클래스 javadoc 의 {@code dog_id} 절.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dog_id",
@@ -165,9 +183,24 @@ public class CareLog {
     @OnDelete(action = OnDeleteAction.SET_NULL)
     private FamilyGroup group;
 
-    /** 물·밥·산책·투약·병원. 저장되는 문자열은 {@link CareType#wire()} 다. */
+    /**
+     * 기본 일곱이면 그 종류, <b>직접 만든 항목이면 {@code null}</b> — 이슈 #560.
+     *
+     * <h2>왜 NULL 을 열었나</h2>
+     *
+     * <p>2026-09-16 전에는 {@code NOT NULL} 이었다. 그런데 사용자가 만든 "양치" 를 누르면
+     * <b>넣을 값이 없다</b> — 일곱 중 아무거나 넣으면 그 칸이 양치 기록을 함께 세고,
+     * {@code 'custom'} 같은 값을 더하면 종류가 아닌 것이 종류 목록에 들어앉는다.
+     *
+     * <p>그래서 "종류" 를 <b>기본 일곱일 때만 있는 것</b>으로 정했다. 대신 행마다 {@code type}
+     * 과 {@code careItem} 중 <b>적어도 하나</b>는 있어야 하는데, <b>그것을 DB 가 못 막는다</b> —
+     * 클래스 위 주석에 그 실측을 적어 뒀다. {@code CareService.record} 가 그 불변식을 진다.
+     *
+     * <p><b>옛 행은 한 줄도 안 바뀐다.</b> 컬럼을 넓히는 쪽이라 이미 쌓인 값은 그대로이고,
+     * 산책 트래킹이 {@code type='walk'} 로 남기는 경로도 그대로다.
+     */
     @Convert(converter = CareType.Codec.class)
-    @Column(name = "type", nullable = false, length = 10)
+    @Column(name = "type", length = 10)
     private CareType type;
 
     /**
@@ -232,8 +265,23 @@ public class CareLog {
         return group == null ? null : group.getId();
     }
 
-    /** 대상 반려동물 id. {@link #groupId()} 와 같은 좁은 창이다 — 아직은 항상 {@code null}. */
+    /**
+     * 대상 반려동물 id. {@link #groupId()} 와 같은 좁은 창이다.
+     *
+     * <p>2026-09-15(#563) 전에 쌓인 행은 {@code null} 이다 — {@link #dog} 의 javadoc.
+     */
     public Long dogId() {
         return dog == null ? null : dog.getId();
+    }
+
+    /**
+     * 이 행에 <b>적혀 있는</b> 항목 id — 직접 만든 항목의 기록일 때만 있다(#560).
+     *
+     * <p><b>"어느 칸에 세어지는가" 와 다르다.</b> 그 답은 {@code CareService.itemIdOf} 가
+     * 내놓는다 — 기본 일곱의 기록은 여기가 비어 있고 {@link #type} 으로 세어지기 때문이다.
+     * 응답에 실리는 값은 그쪽이다.
+     */
+    public Long careItemId() {
+        return careItem == null ? null : careItem.getId();
     }
 }

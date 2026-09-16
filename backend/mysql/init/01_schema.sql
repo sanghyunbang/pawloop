@@ -63,7 +63,7 @@ CREATE TABLE `care_log` (
   `group_id` bigint DEFAULT NULL,
   `id` bigint NOT NULL AUTO_INCREMENT,
   `occurred_at` datetime(6) NOT NULL,
-  `type` varchar(10) NOT NULL,
+  `type` varchar(10) DEFAULT NULL,
   `memo` varchar(500) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_carelog_group` (`group_id`,`occurred_at`),
