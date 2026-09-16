@@ -90,6 +90,12 @@ class ServerPet {
   /// 프로필 사진의 공개 URL — 계약의 `avatarUrl` (#448). 없으면 `null`.
   final String? avatarUrl;
 
+  /// **고른 얼굴** — 계약의 `character` (#585). 안 골랐으면 `null`.
+  ///
+  /// 옛 서버(필드 없음)에서도 `null` 이고, 그건 "안 골랐다" 와 같은 자리라 화면이 종류 기본
+  /// 그림을 그린다 — 여기서만은 못 읽은 것과 안 고른 것을 가를 필요가 없다.
+  final String? characterKey;
+
   /// **내가 등록한 아이인가** — 계약의 `mine` (#563).
   ///
   /// 집 아이 목록(`GET /api/groups/{id}/dogs`)에는 **남이 등록한 아이가 섞여** 온다.
@@ -108,6 +114,7 @@ class ServerPet {
     this.breed,
     this.ageMonths,
     this.avatarUrl,
+    this.characterKey,
     this.mine = true,
   });
 
@@ -125,6 +132,9 @@ class ServerPet {
       ageMonths: json['ageMonths'] as int?,
       neutered: json['neutered'] == true,
       avatarUrl: json['avatarUrl'] as String?,
+      // 모르는 열쇠말이 와도 여기서 안 막는다 — 그림을 고르는 곳에서 떨어뜨린다
+      // (`petCharacterAsset`). 여기서 막으면 아이 한 줄이 통째로 사라진다.
+      characterKey: json['character'] as String?,
       // 옛 서버는 이 필드를 안 보낸다. 그때는 `GET /api/dogs` 뿐이라 전부 내 아이다.
       mine: json['mine'] is bool ? json['mine'] as bool : true,
     );
@@ -529,6 +539,7 @@ class WalkRepository {
     required ServerPetSpecies species,
     required ServerPetSize size,
     String? breed,
+    String? character,
   }) async {
     final json = await _send(
       () => _authed.postJson(
@@ -538,6 +549,7 @@ class WalkRepository {
           'species': species.wire,
           'size': size.wire,
           if (breed != null && breed.isNotEmpty) 'breed': breed,
+          if (character != null) 'character': character,
         },
       ),
     );
@@ -548,8 +560,9 @@ class WalkRepository {
 
   /// 아이 하나를 **부분 수정**한다 — 계약의 `PATCH /api/dogs/{dogId}`(#516).
   ///
-  /// **보낸 것만 바뀐다.** 안 보낸 필드는 서버가 그대로 둔다. `birth` 는 `null` 을 명시적으로
-  /// 보내면 지운다 — 그래서 이 함수는 "안 보냄" 과 "지움" 을 [clearBirth] 로 가른다.
+  /// **보낸 것만 바뀐다.** 안 보낸 필드는 서버가 그대로 둔다. `birth` 와 `character` 는
+  /// `null` 을 명시적으로 보내면 지운다 — 그래서 이 함수는 "안 보냄" 과 "지움" 을
+  /// [clearBirth] · [clearCharacter] 로 가른다.
   ///
   /// 나이는 개월 수로 편집하지만 서버가 드는 것은 `birth` 다(`ageMonths` 는 거기서 나오는
   /// 파생값이라 저장할 자리가 없다). 부르는 쪽이 `오늘 − N개월` 로 바꿔 준다.
@@ -562,6 +575,8 @@ class WalkRepository {
     DateTime? birth,
     bool clearBirth = false,
     bool? neutered,
+    String? character,
+    bool clearCharacter = false,
   }) async {
     final body = <String, dynamic>{
       if (name != null) 'name': name,
@@ -571,6 +586,9 @@ class WalkRepository {
       if (clearBirth) 'birth': null
       else if (birth != null) 'birth': _yyyyMmDd(birth),
       if (neutered != null) 'neutered': neutered,
+      // 얼굴도 `birth` 와 같다 — `null` 을 **보내면** 지우고, 안 보내면 그대로다(#586).
+      if (clearCharacter) 'character': null
+      else if (character != null) 'character': character,
     };
     if (body.isEmpty) {
       // 빈 본문은 서버가 400 이다. 여기서 먼저 막는 이유는 "바꾼 것이 없는데 저장을 눌렀다"

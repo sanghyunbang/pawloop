@@ -45,7 +45,7 @@ class OnboardingScreen extends StatelessWidget {
                     ),
                   ),
                   child: Image.asset(
-                    'assets/emoji/dog.png',
+                    'assets/emoji/dog_face.png',
                     width: 68,
                     height: 68,
                   ),

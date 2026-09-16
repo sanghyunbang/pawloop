@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'pet_characters.dart';
+
 /// 반려(강아지) 도메인 모델. 감정 도메인을 대체한다.
 ///
 /// 지도/커뮤니티/필터에서 공유하는 장소 카테고리 SSOT.
@@ -98,6 +100,12 @@ class DogProfile {
   /// 프로필 사진의 공개 URL (#448). 없으면 `null` — 화면은 [avatarAsset] 의 종 이모지로 돌아간다.
   final String? photoUrl;
 
+  /// **고른 얼굴** — 계약의 `character` (#585). 안 골랐으면 `null`.
+  ///
+  /// 사진과 **함께 산다.** 사진을 지우면 "고르기 전" 이 아니라 고른 얼굴로 돌아간다 —
+  /// 그래서 두 값이 한 칸을 나눠 쓰지 않는다.
+  final String? characterKey;
+
   /// **내가 등록한 아이인가** (#563). 아니면 보고 돌볼 수는 있어도 **고치고 지울 수 없다.**
   ///
   /// 가족이 아이를 함께 돌보기 시작하면서 생긴 구분이다. 엄마가 등록한 보리를 아빠도
@@ -113,6 +121,7 @@ class DogProfile {
     required this.ageMonths,
     this.neutered = false,
     this.photoUrl,
+    this.characterKey,
     this.mine = true,
   });
 
@@ -133,12 +142,11 @@ class DogProfile {
         size.label,
       ].join(' · ');
 
-  /// 종류별 아바타(Fluent Emoji).
-  String get avatarAsset => switch (species) {
-    PetSpecies.dog => 'assets/emoji/dog.png',
-    PetSpecies.cat => 'assets/emoji/cat.png',
-    PetSpecies.other => 'assets/emoji/paw.png',
-  };
+  /// 사진이 없을 때 그리는 그림 — **고른 얼굴이 먼저, 없으면 종류 기본**(#585).
+  ///
+  /// 사진은 여기 안 낀다. 순서의 맨 앞이지만 그건 [DogAvatar] 가 가른다 — 사진은 URL 이라
+  /// 그리는 방법(`Image.network` · 원형 자르기)이 아예 다르다.
+  String get avatarAsset => petCharacterAsset(characterKey) ?? petSpeciesAsset(species);
 
   DogProfile copyWith({
     int? serverId,
@@ -150,6 +158,8 @@ class DogProfile {
     bool? neutered,
     String? photoUrl,
     bool clearPhoto = false,
+    String? characterKey,
+    bool clearCharacter = false,
     bool? mine,
   }) => DogProfile(
     serverId: serverId ?? this.serverId,
@@ -160,11 +170,25 @@ class DogProfile {
     ageMonths: ageMonths ?? this.ageMonths,
     neutered: neutered ?? this.neutered,
     photoUrl: clearPhoto ? null : (photoUrl ?? this.photoUrl),
+    // 사진과 같은 규약이다 — `null` 은 "안 바꿈" 이고 지우기는 깃발로 말한다. 서버의
+    // 부분 수정이 그 둘을 가르므로(#586) 화면 모델도 같은 자리에서 갈라야 한다.
+    characterKey: clearCharacter ? null : (characterKey ?? this.characterKey),
     // 여기서 빠뜨리면 편집 한 번에 남의 아이가 내 아이로 둔갑한다 — 필드를 손으로
     // 나열하는 사본 메서드의 실패 모드다.
     mine: mine ?? this.mine,
   );
 }
+
+/// 종류별 기본 그림(Fluent 3D 이모지).
+///
+/// **세 곳에 같은 표가 있었다** — 여기와 등록 시트와 편집 화면. #585 가 파일 이름을 바꾸면서
+/// 셋 다 고쳐야 했고, 그게 한 벌이어야 할 이유다. 아바타 위젯은 이걸 직접 안 쓴다:
+/// [DogProfile.avatarAsset] 이 고른 얼굴을 먼저 본다.
+String petSpeciesAsset(PetSpecies species) => switch (species) {
+      PetSpecies.dog => 'assets/emoji/dog_face.png',
+      PetSpecies.cat => 'assets/emoji/cat_face.png',
+      PetSpecies.other => 'assets/emoji/paw.png',
+    };
 
 /// 우리 아이들(전역, 여러 마리). 서버의 `GET /api/dogs` 가 채운다 — `data/pet_sync.dart`.
 ///

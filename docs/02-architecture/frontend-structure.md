@@ -101,7 +101,9 @@ lib/
 
 `petCatByType(contentTypeId)`로 KTO 응답의 `contenttypeid` → 카테고리를 매핑한다.
 
-같은 폴더의 순수 함수들 — 화면은 결과를 그리기만 한다: `course_recommender.dart`(오늘의 코스 점수, #485) · `chat_thread.dart`(채팅방 말풍선 묶기 · 날짜 구분선 `layoutThread`, #452).
+같은 폴더의 순수 함수들 — 화면은 결과를 그리기만 한다: `course_recommender.dart`(오늘의 코스 점수, #485) · `chat_thread.dart`(채팅방 말풍선 묶기 · 날짜 구분선 `layoutThread`, #452) · `pet_characters.dart`(사진이 없을 때의 얼굴 열셋, #585).
+
+`pet_characters.dart` 의 규칙은 하나다 — **열쇠말이 곧 파일 이름**(`assets/emoji/<열쇠말>.png`)이라 예외표가 없다. 그래서 `petCharacterAsset` 은 **모르는 열쇠말에 `null`** 을 준다: 서버가 이 값에 DB 제약을 안 걸어서(#586) 새 앱이 고른 얼굴이 옛 앱에 오는데, 그대로 그리면 홈 한가운데가 깨진 그림 상자가 된다. `DogProfile.avatarAsset` 이 그때 종류 기본 그림(`petSpeciesAsset`)으로 떨어뜨린다.
 
 ### 2.3 `data/` — 레포지토리 (데이터 소스)
 
@@ -128,7 +130,8 @@ lib/
 - `profile_avatar.dart` — 강아지 프로필 아바타(테두리색 선택 반영).
 - `dog_gallery_screen.dart` — 아이 사진첩(#451 5번): 내 정보의 아이 머리 아래 "○○의 사진첩" 으로 연다. `feed(dogId:)` 로 그 아이가 찍힌 글만 — 사진 글은 `PostPhotoWall`, 글만 있는 글은 한 줄. 재료는 글쓰기의 "어떤 아이?" 칩(`_dogChips`, 새 글은 지금 고른 아이가 기본)이고 카드에는 아이 꼬리표(`_dogTag`)가 붙는다.
 - `saved_posts_screen.dart` — 내 정보 > 저장한 글(#451 4번): `CommunityRepository.bookmarks()` 를 저장한 순으로 읽어 사진 글은 `PostPhotoWall`(하트 알약 없음), 글만 있는 글은 한 줄로. 게스트는 서버를 안 부르고 로그인 안내. 상세에서 저장을 빼고 돌아오면 다시 읽는다.
-- `dog_avatar.dart` — 아이 아바타(#448): 사진(`DogProfile.photoUrl`)이 있으면 `ClipOval` 사진, 없으면 종 이모지. 홈 히어로·내 정보·아이 고르기·편집 화면이 전부 이것을 쓴다. 못 불러오면 이모지로 돌아간다.
+- `dog_avatar.dart` — 아이 아바타(#448 · #585): **사진 → 고른 얼굴 → 종류 기본 그림** 순서다. 사진(`DogProfile.photoUrl`)만 여기서 가르고(URL 이라 `ClipOval` + `Image.network` 로 그리는 방법이 다르다) 뒤의 둘은 `DogProfile.avatarAsset` 이 이미 가른 뒤다. 홈 히어로·내 정보·아이 고르기·편집 화면이 전부 이것을 쓴다. 못 불러오면 그림으로 돌아간다.
+- `pet_character_picker.dart` — 얼굴 고르기 줄(#585): 맨 앞이 **"기본"**(그 아이의 종류 그림)이고 뒤로 열셋. 고른 얼굴을 도로 물릴 길이 그 칸뿐이라 지우기 버튼을 따로 안 둔다. 열넷은 390dp 에 다 안 들어가서 **안 보일 때만** 고른 칸으로 굴린다 — 이미 보이는데 굴리면 맨 앞의 "기본" 이 왼쪽 밖으로 밀려난다. 등록 시트와 편집 화면이 같은 줄을 쓴다.
 - `like_burst.dart` — 두 번 탭 하트(#451 4번): `trigger` 가 바뀔 때마다 사진 위에서 한 번 튄다. 응답을 안 기다린다 — 손가락에 대한 대답이지 집계가 아니다.
 - `post_photo_wall.dart` — 커뮤니티의 **사진 벽**(#451): 사진·영상이 있는 글만 두 열 벽돌(masonry)로. 열 나누기는 순수 함수 `split`(순서대로 더 짧은 열에, 높이는 폭 1 기준 `1/비율 + 글 두 줄`), 타일은 첫 장 하나에 4:5…1.91:1 로 잘린 비율. 피드의 카드/목록/격자 전환 중 격자가 이것이다.
 - `neighbor_photo_strip.dart` — 홈의 **이웃의 사진** 한 줄(#451): 커뮤니티 목록 한 장에서 사진·영상 있는 글의 첫 장을 열두 개까지. 게스트에게는 없고, 없거나 못 불러오면 줄 자체가 없다. 타일은 글 상세로, "더 보기" 는 `RootTab.communityView = 'grid'` 로 커뮤니티 탭을 사진 벽으로 연다(피드가 읽고 되돌리는 한 번짜리 부탁).
