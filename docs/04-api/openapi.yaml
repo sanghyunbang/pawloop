@@ -2324,6 +2324,169 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/groups/{groupId}/care-items:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    get:
+      tags: [Groups]
+      summary: 그 집이 챙기는 일의 목록
+      description: |
+        홈 카드의 칸이 이 목록입니다. **접힌 항목까지 함께** 돌려줍니다 — 고치기 화면이
+        "다시 켜기" 를 그리려면 접힌 것을 봐야 하고, 카드는 `archivedAt` 이 `null` 인 것만
+        그립니다. 두 화면이 서로 다른 조회를 쓰지 않는 이유는, 나누면 "접힘" 의 정의가 두 곳에
+        생기기 때문입니다.
+
+        `sortOrder` 오름차순입니다. 같은 값이면 `id` 오름차순이라 순서가 흔들리지 않습니다.
+
+        **요청자가 그 그룹의 방 멤버가 아니면 403 입니다.** 없는 `groupId` 도 404 가 아니라
+        403 입니다 — `care-logs` 와 같은 규칙입니다.
+
+        **가족을 만들면 기본 일곱(물·밥·산책·투약·병원·배변·마킹)이 이미 들어 있습니다.**
+        그 뒤로는 기본이든 직접 만든 것이든 똑같이 고치고 접고 옮길 수 있습니다.
+      responses:
+        '200':
+          description: 항목 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CareItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Groups]
+      summary: 항목 만들기
+      description: |
+        목록 **맨 뒤**에 놓입니다. 앞에 끼우지 않는 이유는, 방금 만든 것이 물·밥 앞에 오면
+        매일 보는 순서가 만들 때마다 흔들리기 때문입니다. 자리는 끌어서 옮깁니다
+        (`PUT /care-items/order`).
+
+        `systemType` 은 받지 않습니다 — 직접 만든 항목은 **언제나** 비어 있고, 기본 일곱은
+        가족을 만들 때만 심깁니다. 받으면 이미 있는 기본 항목과 같은 종류가 생겨 옛 기록이
+        두 칸에서 세어집니다.
+
+        `group-write` 버킷(rate limit)에 등록된 경로입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CareItemInput' }
+      responses:
+        '201':
+          description: 만들어짐
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CareItem' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/groups/{groupId}/care-items/order:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    put:
+      tags: [Groups]
+      summary: 목록 순서 바꾸기
+      description: |
+        **그 집 항목의 `id` 전부를** 화면에 보이는 순서대로 보냅니다. 한 건만 보내는 방식이
+        아닌 이유는, 나머지가 어떻게 밀리는지를 서버가 지어내야 하고 그 규칙이 앱의 끌어 놓기와
+        한 칸이라도 다르면 손을 뗀 자리와 다시 그려진 자리가 어긋나기 때문입니다.
+
+        **빠지거나 겹치거나 모르는 `id` 가 있으면 400 입니다.** 조용히 뒤에 붙이면 두 사람이
+        동시에 순서를 바꿨을 때 나중 요청이 먼저 요청의 새 항목을 맨 뒤로 보냅니다. 거절하면
+        앱이 목록을 다시 읽습니다.
+
+        **접힌 항목도 포함합니다** — 접힌 동안에도 자리가 있어야 다시 켰을 때 맨 뒤로 튀지
+        않습니다.
+
+        이 경로는 `/care-items/{itemId}` 보다 **먼저** 맞습니다(리터럴이 경로 변수보다 앞).
+        `order` 가 `itemId` 로 읽히지 않습니다.
+
+        `group-write` 버킷(rate limit)에 등록된 경로입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CareItemOrderInput' }
+      responses:
+        '204': { description: 순서가 바뀜 }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/groups/{groupId}/care-items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+      - name: itemId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      tags: [Groups]
+      summary: 항목 고치기(전량 교체)
+      description: |
+        이름·아이콘·아이·목표·접힘을 **한 번에** 바꿉니다. 부분 수정(`PATCH`)이 아닌 이유는,
+        JSON 에서 "안 보낸 필드" 와 "비우려고 보낸 필드" 가 둘 다 `null` 이라 구분이 안 되는데
+        이 화면에는 비워야 하는 필드가 둘이기 때문입니다(`dogId` 를 비우면 모든 아이,
+        `dailyTarget` 을 비우면 횟수만 세기). `walk-notes` 가 같은 이유로 `PUT` 입니다.
+
+        **기본 일곱도 똑같이 고쳐집니다.** "기본은 못 건드림" 을 두지 않는 이유는, 그 순간
+        투두리스트가 아니라 설정 화면이 되기 때문입니다. `systemType` 만 그대로 남아 옛 기록을
+        계속 셉니다 — `밥` 을 `아침밥` 으로 고쳐도 어제 기록이 새 이름으로 보이는 것이 그
+        덕입니다.
+
+        `archived: false` 로 보내면 접힌 항목이 **다시 켜집니다.** 이미 접혀 있는 항목을
+        `archived: true` 로 다시 보내도 접은 시각은 처음 것을 지킵니다 — 이름만 고쳤는데 "접은
+        날" 이 오늘로 바뀌면 언제부터 안 하고 있었는지가 사라집니다.
+
+        **그 그룹에 없는 항목 id 는 404 입니다** — 다른 가족의 항목도, 없는 항목도 같은
+        404 입니다.
+
+        `group-write` 버킷(rate limit)에 등록된 경로입니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CareItemInput' }
+      responses:
+        '200':
+          description: 고쳐짐
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CareItem' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    delete:
+      tags: [Groups]
+      summary: 항목 접기(지우는 것이 아닙니다)
+      description: |
+        **행이 남습니다.** `care_log.care_item_id` 가 이 행을 가리키므로, 지우면 지난 기록이
+        이름을 잃습니다. 카드에서는 사라지고 고치기 화면에는 "다시 켜기" 로 남습니다 —
+        `GET /care-items` 가 접힌 항목도 함께 돌려주는 이유입니다.
+
+        **접어도 기록은 계속 쌓입니다.** 산책처럼 다른 화면이 자동으로 쓰는 항목은 카드에 안
+        보일 뿐이라, 나중에 다시 켜면 그동안의 기록이 그대로 있습니다.
+
+        `DELETE` 인데 행이 남는 것이 이상해 보일 수 있습니다. 그래도 `DELETE` 인 이유는
+        **사용자에게는 지우는 동작**이고(카드에서 사라집니다) 화면이 미는 제스처로 부르기
+        때문입니다. 되살리기는 `PUT` 에 `archived: false` 입니다.
+
+        **이미 접힌 항목을 또 접어도 204 입니다** — 같은 요청이 두 번 와도 결과가 같아야 화면이
+        재시도를 걱정하지 않습니다.
+
+        `group-write` 버킷(rate limit)에 등록된 경로입니다.
+      responses:
+        '204': { description: 접힘 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /api/groups/{groupId}/care-logs:
     parameters:
       - $ref: '#/components/parameters/GroupId'
@@ -5780,6 +5943,122 @@ components:
           type: string
           description: 현재 닉네임. 없으면 이름, 그것도 없으면 `알 수 없음`(탈퇴한 계정 포함)
           example: "보리엄마"
+
+    CareIcon:
+      type: string
+      enum: [water, meal, walk, med, vet, poop, pee, snack, tooth, bath, brush, nail, heart, play, weight, etc]
+      description: |
+        칸에 그려지는 그림의 열쇠말입니다. **고르는 목록이고 이모지 자유 입력이 아닙니다** —
+        이모지는 기기마다 다르게 그려지고, 흰 바탕에 코랄 하나로 맞춰 둔 화면에 색이 섞입니다.
+
+        앞의 일곱은 `CareType` 과 같은 표기입니다(기본 일곱이 제 종류를 아이콘으로 씁니다).
+
+        **쓰기는 닫고 읽기는 엽니다.** `CareItemInput.icon` 이 이 목록 밖이면 400 이지만,
+        `CareItem.icon` 은 목록 밖 값이 올 수 있습니다(마이그레이션이 심은 값, 나중에 이
+        목록에서 뺀 값). 앱은 모르는 열쇠말이면 기본 그림으로 떨어뜨립니다 — 그래서 서버가
+        목록을 넓혀도 옛 앱이 깨지지 않습니다.
+
+    CareItem:
+      type: object
+      description: |
+        그 집이 챙기는 일 하나(`care_item`) — 홈 카드의 칸 하나입니다(#560).
+      required: [id, name, icon, sortOrder]
+      properties:
+        id: { type: integer, format: int64 }
+        dogId:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            그 아이에게만 하는 일이면 그 아이(`dog.id`), **비어 있으면 모든 아이**입니다.
+            물·밥·산책은 비어 있고, `심장사상충 약` 은 한 아이를 고릅니다.
+
+            목록을 아이마다 한 벌씩 두지 않는 이유는, 두 마리 집이 물·밥·산책을 두 번 적어야
+            하기 때문입니다(#563 이 "아이는 집 것" 을 정한 위에서).
+        name: { type: string, minLength: 1, maxLength: 20, example: "양치" }
+        icon: { $ref: '#/components/schemas/CareIcon' }
+        systemType:
+          oneOf:
+            - $ref: '#/components/schemas/CareType'
+            - type: "null"
+          description: |
+            기본 일곱이면 그 종류, 직접 만든 것이면 **비어 있습니다.**
+
+            **이 값 하나가 옛 기록을 살립니다.** 있으면 그 항목의 오늘 횟수를 `care_log.type`
+            으로 세고, 없으면 `care_log.careItemId` 로 셉니다 — 그래서 이미 쌓인 기록을 한
+            행도 건드리지 않습니다.
+
+            한 집에 같은 종류는 하나뿐입니다(`uq_careitem_system`). 직접 만든 항목은 이 값이
+            비어 있어 몇 개든 됩니다.
+        dailyTarget:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 20
+          description: |
+            하루 몇 번. 비어 있으면 횟수만 세고, 있으면 화면이 `1/2` 로 그립니다.
+            **못 채워도 화면은 아무 말도 안 합니다** — 이 카드는 누락을 보이게 하려는 것이지
+            혼내려는 것이 아닙니다.
+        sortOrder:
+          type: integer
+          description: 카드에 놓이는 자리. 같은 집 안에서만 뜻이 있습니다.
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+          example: "2026-09-16T03:00:00Z"
+          description: |
+            접은 시각. **비어 있으면 카드에 뜹니다.** 접힌 항목도 이 목록에 오는 이유는 고치기
+            화면이 "다시 켜기" 를 그려야 하기 때문입니다.
+
+    CareItemInput:
+      type: object
+      description: |
+        만들 때(`POST`)와 고칠 때(`PUT`)가 같은 모양입니다. `sortOrder` 와 `systemType` 은
+        여기 없습니다 — 순서는 목록 전체를 한 번에 정해야 뜻이 있고(`PUT /care-items/order`),
+        종류는 "이 항목이 옛 기록을 어떻게 세는가" 라서 바꾸면 지난 기록이 통째로 다른 칸으로
+        옮겨 갑니다.
+      required: [name, icon]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: |
+            앞뒤 공백은 잘라서 봅니다. 비거나 20자를 넘으면 400 입니다 — 잘라서 저장하지 않는
+            이유는, 사용자가 적은 것과 화면에 뜨는 것이 다르면 아무도 그 차이를 설명해 주지
+            않기 때문입니다. 칸 폭이 390dp 에서 73dp 라 그보다 길면 어차피 잘립니다.
+        icon: { $ref: '#/components/schemas/CareIcon' }
+        dogId:
+          type: [integer, "null"]
+          format: int64
+          description: |
+            선택. **그 집 아이가 아니면 400** 입니다(`DogOwnership.requireInFamilyEntity`) —
+            누구 것인지는 안 따집니다. 엄마가 등록한 보리에게 아빠가 물을 주는 것이 정상입니다.
+            비우면 모든 아이입니다.
+        dailyTarget:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 20
+          description: |
+            선택. 1~20 밖이면 400 입니다. 0 을 막는 이유는 "하루 0번 하는 일" 이 목록에 있을
+            이유가 없어서입니다 — 그건 접기입니다. 위를 막는 이유는 칸에 `1/999` 를 놓을 자리가
+            없어서입니다(#561 이 칸 크기를 잠갔습니다).
+        archived:
+          type: boolean
+          default: false
+          description: |
+            `PUT` 에서만 뜻이 있습니다. `true` 면 접히고 `false` 면 다시 켜집니다.
+            **`POST` 에서는 무시합니다** — 만들자마자 접는 것은 화면에 없는 동작이고, 받아 두면
+            "안 보이는 항목이 왜 생겼나" 를 설명할 자리가 없습니다.
+
+    CareItemOrderInput:
+      type: object
+      required: [itemIds]
+      properties:
+        itemIds:
+          type: array
+          items: { type: integer, format: int64 }
+          description: |
+            그 집 항목의 `id` **전부**를, 화면에 보이는 순서대로. 접힌 것도 포함합니다.
+            빠지거나 겹치거나 모르는 `id` 가 있으면 400 입니다.
 
     CareLog:
       type: object

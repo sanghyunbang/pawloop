@@ -154,6 +154,20 @@ tasks.named('test') {
     // 전제: Docker 가 있어야 한다(GitHub Actions ubuntu-latest 는 기본 탑재).
     useJUnitPlatform()
 
+    // ── 테스트 JVM 힙 (이슈 #560) ───────────────────────────────────
+    //
+    // 정하지 않으면 Gradle 기본값(512MB)이다. 2026-09-16 에 그 값에서 OutOfMemoryError 가
+    // 났다 — 스프링 컨텍스트 여러 벌이 캐시에 살아 있는 채로 테스트가 늘어난 결과다.
+    //
+    // **증상이 OOM 으로 안 보인다는 것이 이 줄을 적는 이유다.** 겉으로는 관계도 없는
+    // WalkSafetyEndpointIntegrationTest 다섯 개가 "Failed to load ApplicationContext" 로
+    // 죽었고, 사슬을 끝까지 따라가야 Java heap space 가 나온다. 게다가 어느 테스트가
+    // 죽는지는 실행 순서에 따라 바뀐다 — 고치는 사람이 자기 코드를 의심하며 하루를 쓴다.
+    //
+    // 2g 인 이유: 실측에서 죽던 조합이 여유 있게 지나가는 가장 작은 값이다. 올리기 전에
+    // 컨텍스트를 줄일 수 있는지부터 보라 — 힙을 키우는 것은 원인이 아니라 여유를 주는 것뿐이다.
+    maxHeapSize = '2g'
+
     // SchemaDdlDriftTest 가 Hibernate 로 DDL 을 뽑아 쓰는 파일. (이슈 #58)
     // Hibernate 의 schema-generation.scripts.create-target 은 **덮어쓰지 않고 append 한다** —
     // 지우지 않으면 실행마다 문장이 누적되고, 이어붙는 경계에서 두 문장이 붙어

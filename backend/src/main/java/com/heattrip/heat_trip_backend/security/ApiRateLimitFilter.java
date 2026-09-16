@@ -230,6 +230,28 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("DELETE".equals(method) && path.matches("^/api/groups/\\d+/care-logs/\\d+$")) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
+        // ── 케어 항목 쓰기 넷 (이슈 #560 조각 2) ─────────────────────────
+        //
+        // 넷 다 **가족 모두가 보는 목록**을 바꾼다 — 카드의 칸이 생기고 사라지고 자리를
+        // 옮긴다. care-logs 쓰기와 성격이 같아 버킷을 새로 만들지 않고 group-write 를 함께
+        // 쓴다. 순서 바꾸기(PUT /order)가 끌어 놓기 한 번에 한 요청이라 제일 자주 불릴
+        // 자리인데, 그래도 따로 떼지 않는 이유는 한 사람이 그 화면에 머무는 동안의 일이라
+        // 케어 기록보다 많이 부를 이유가 없어서다.
+        //
+        // **읽기(GET care-items)는 넣지 않았다** — GET care-logs 와 같은 판단이고, 표에 없는
+        // 경로는 한도가 0 이 아니라 무한이라는 것을 알고 미룬 것이다.
+        if ("POST".equals(method) && path.matches("^/api/groups/\\d+/care-items$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        if ("PUT".equals(method) && path.matches("^/api/groups/\\d+/care-items/order$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        if ("PUT".equals(method) && path.matches("^/api/groups/\\d+/care-items/\\d+$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
+        if ("DELETE".equals(method) && path.matches("^/api/groups/\\d+/care-items/\\d+$")) {
+            return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
+        }
         // ── 반려동물 등록 (이슈 #145) ─────────────────────────
         //
         // 요청 한 건이 행을 만든다. `POST /api/groups` 와 성격이 같아 버킷을 새로 만들지

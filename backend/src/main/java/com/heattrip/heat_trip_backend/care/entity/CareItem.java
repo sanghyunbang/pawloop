@@ -105,6 +105,12 @@ public class CareItem {
     /** 아이콘 키 길이 상한. 고르는 목록의 값이라 짧다. */
     public static final int MAX_ICON_LENGTH = 20;
 
+    /**
+     * 하루 목표 횟수의 상한. DB 제약이 아니라 <b>화면이 그릴 수 있는 폭</b>에서 나온 수다 —
+     * 칸에 {@code 1/999} 를 놓을 자리가 없다(#561 이 칸 크기를 잠갔다).
+     */
+    public static final int MAX_DAILY_TARGET = 20;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -200,6 +206,37 @@ public class CareItem {
     /** 접혔나. 접힌 항목은 카드에 안 그려지고 기록은 그대로 쌓인다. */
     public boolean isArchived() {
         return archivedAt != null;
+    }
+
+    /**
+     * 고칠 수 있는 것 <b>전부</b>를 한 번에 바꾼다 — 계약의 {@code PUT} 이 여기로 온다.
+     *
+     * <h2>왜 필드별 메서드가 아니라 하나인가</h2>
+     *
+     * <p>{@code rename} · {@code changeIcon} 처럼 쪼개면 <b>필드를 하나 더할 때 적어야 할
+     * 자리가 늘고</b>, 그중 하나를 빠뜨린 날 화면에는 있는데 저장은 안 되는 값이 생긴다 —
+     * {@code WalkSummary.withDistance} 가 정확히 그렇게 새 필드를 떨어뜨렸다. 여기 하나면
+     * 필드를 더할 때 컴파일러가 이 자리를 가리킨다.
+     *
+     * <p><b>{@code systemType} · {@code sortOrder} 는 안 바뀐다.</b> 종류는 "이 항목이 옛
+     * 기록을 어떻게 세는가" 라서 바뀌면 지난 기록이 통째로 다른 칸으로 옮겨 간다. 순서는
+     * 목록 전체를 한 번에 정하는 것이라 {@link #moveTo} 가 따로 맡는다.
+     *
+     * @param archivedAt 접은 시각, 다시 켜면 {@code null}. 시각을 <b>받는</b> 이유는 엔티티가
+     *                   시계를 들면 테스트가 그 시계를 못 바꾸기 때문이다
+     */
+    public void edit(String name, String icon, Integer dailyTarget, Dog dog,
+                     LocalDateTime archivedAt) {
+        this.name = name;
+        this.icon = icon;
+        this.dailyTarget = dailyTarget;
+        this.dog = dog;
+        this.archivedAt = archivedAt;
+    }
+
+    /** 카드에서의 자리. 목록 전체를 한 번에 정하는 {@code PUT /care-items/order} 만 부른다. */
+    public void moveTo(int sortOrder) {
+        this.sortOrder = sortOrder;
     }
 
     /**

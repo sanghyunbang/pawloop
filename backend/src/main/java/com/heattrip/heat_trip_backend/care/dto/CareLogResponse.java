@@ -10,11 +10,13 @@ import java.time.Instant;
 /**
  * 케어 기록 하나 — 계약({@code openapi.yaml})의 {@code CareLog} 다. 이슈 #76.
  *
- * @param dogId 오늘은 <b>항상 {@code null}</b> 이다. 컬럼은 #154 에서 {@code dog} 에 FK 로
- *              이어졌지만 쓰기 경로가 아직 {@code dogId} 를 받지 않는다 — 받는 날의 전제는
- *              #209 {@code Dogs-high-3}(가족 공유 가시성)이고, 이유는 {@link CareLog} 의
- *              javadoc 이다. 필드를 계약에 미리 둔 것은 그날 앱이 스키마를 바꾸지 않아도
- *              되게 하려는 것이다
+ * @param dogId <b>2026-09-15(#563)부터 실제로 채워진다.</b> 쓰기 경로가 {@code dogId} 를 받고
+ *              {@code DogOwnership.requireInFamilyEntity} 로 그 집 아이인지 확인해 넣는다.
+ *
+ *              <p><b>그 전에 쌓인 행은 여전히 {@code null} 이다</b> — 어느 아이였는지 아무도
+ *              모르는 값이라 지어내 채우지 않았다. 그래서 {@code ?dogId=} 로 걸러도 {@code null}
+ *              인 행은 함께 나온다({@code CareService.matchesDog}): 빼면 어제 준 밥이 화면에서
+ *              사라지고, 사라지면 "아직" 으로 읽혀 한 번 더 주게 된다
  * @param type  {@code water|meal|walk|med|vet|poop|pee}. {@link CareType} 가 소문자 그대로 직렬화한다
  * @param occurredAt <b>{@code Instant} 다 — {@code LocalDateTime} 이 아니다.</b> 이슈 #209.
  *

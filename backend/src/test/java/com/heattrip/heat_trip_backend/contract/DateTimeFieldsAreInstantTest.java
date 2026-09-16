@@ -51,6 +51,7 @@ class DateTimeFieldsAreInstantTest {
     /** 계약의 스키마 → 그 모양을 실제로 내보내는 타입. */
     private static final Map<String, Class<?>> PRODUCERS = Map.ofEntries(
             Map.entry("CareLog", com.heattrip.heat_trip_backend.care.dto.CareLogResponse.class),
+            Map.entry("CareItem", com.heattrip.heat_trip_backend.care.dto.CareItemResponse.class),
             Map.entry("AiSummary", com.heattrip.heat_trip_backend.walk.dto.WalkStatsResponse.AiSummary.class),
             Map.entry("WalkNote", com.heattrip.heat_trip_backend.care.dto.WalkNoteResponse.class),
             Map.entry("ChatInvite", com.heattrip.heat_trip_backend.chat.ChatInviteView.class),
