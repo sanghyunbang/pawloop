@@ -153,6 +153,13 @@ class TodayScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // **히어로와 아래 카드 사이의 숨**. 히어로가 Expanded 라 남은 공간을 다 먹고,
+                  // 그 안의 마지막 줄(아이 고르기 칩)이 카드 테두리에 그대로 붙었다 — 칩이
+                  // 카드에 딸린 것처럼 읽힌다(사장님이 실기기에서 보고 알려 주셨다).
+                  //
+                  // Expanded 위에 두므로 화면이 좁아도 이 간격이 먼저 줄지 않는다 — 줄어드는
+                  // 것은 히어로 쪽이고, 그쪽은 FittedBox 가 알아서 줄인다.
+                  const SizedBox(height: 14),
                   // 산책 자료는 한 번만 받는다 — 요약과 "오늘의 코스"(#485)가 같은 자료를 쓴다.
                   // 그 사이의 케어 · 일정 · CTA 는 자료가 필요 없지만 순서 때문에 같은 열에 둔다.
                   WalkFeedBuilder(
@@ -253,7 +260,8 @@ class TodayScreen extends StatelessWidget {
   Widget _petSwitcher() {
     final pets = kMyPets.value;
     final sel = kSelectedPetIdx.value;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
+    return Row(
+        key: const Key('pet-switcher'), mainAxisSize: MainAxisSize.min, children: [
       for (int i = 0; i < pets.length; i++) ...[
         if (i > 0) const SizedBox(width: 8),
         GestureDetector(
@@ -318,6 +326,7 @@ class TodayScreen extends StatelessWidget {
         );
     Widget div() => Container(width: 1, height: 30, color: T.line);
     return GlassCard(
+      key: const Key('walk-summary'),
       padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
       child: Column(children: [
         Row(children: [
