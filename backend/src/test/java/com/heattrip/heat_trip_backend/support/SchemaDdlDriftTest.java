@@ -24,7 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 커밋된 운영 스키마가 JPA 엔티티와 어긋나지 않는지 잠근다 — 이슈 #58.
+ * <b>마이그레이션을 다 돌린 결과</b>가 JPA 엔티티와 어긋나지 않는지 잠근다 — 이슈 #58 · #592.
  *
  * <h2>왜 이 파일이 필요했나</h2>
  * <p>{@code backend/mysql/init/} 이 <b>비어 있었다.</b> 저장소 전체에 {@code CREATE TABLE} 이
@@ -38,8 +38,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <ol>
  *   <li><b>A</b> — Hibernate 가 지금 엔티티로 만든 스키마(이 테스트가 붙어 있는 DB)</li>
- *   <li><b>B</b> — 저장소의 {@code mysql/init/01_schema.sql} 을 빈 DB 에 적용한 결과</li>
+ *   <li><b>B</b> — {@code db/migration/V*.sql} 을 <b>빈 DB 에 순서대로 다 돌린</b> 결과</li>
  * </ol>
+ *
+ * <h2>B 가 왜 마이그레이션인가 (#592)</h2>
+ *
+ * <p>예전 B 는 {@code mysql/init/01_schema.sql} 이었다. 그 파일은 <b>엔티티에서 뽑아 복사한
+ * 것</b>이라, 엔티티가 틀리면 파일도 같이 틀렸다 — 답안지를 제가 만들어 제가 채점한 셈이다.
+ * 그래서 이 검사가 실제로 잡던 것은 "파일을 다시 안 뽑았다" 하나뿐이었다.
+ *
+ * <p>정작 위험한 것은 그 옆칸이다. <b>파일은 다시 뽑았는데 마이그레이션을 안 쓴</b> 경우 —
+ * 새 서버는 잘 뜨고 <b>돌고 있던 서버만</b> {@code validate} 로 부팅에 실패한다. 규약이
+ * "파일을 다시 뽑아라" 라고 적혀 있으니, 성실한 사람일수록 정확히 여기에 떨어졌다.
+ *
+ * <p>{@code V} 파일은 변경마다 손으로 쓰고 한 번 쓰면 안 고친다. 엔티티가 어떻게 바뀌든
+ * 안 움직이므로, 이제 이 비교는 <b>"마이그레이션을 썼는가" 를 묻는다.</b>
  *
  * <p>둘의 {@code information_schema} 를 대조한다. 텍스트 비교를 안 하는 이유는 Hibernate 가
  * 실행마다 문장 순서·공백을 바꿔서, 엔티티가 그대로인데도 빨간불이 나는 테스트가 되기
@@ -55,10 +68,13 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
     private static final String COMMITTED = ScratchDatabase.COMMITTED_SCHEMA;
 
     private static final String REGENERATE = """
-            재생성:
-              cd backend
-              ./gradlew test --tests '*SchemaDdlDriftTest*'
-              cp build/generated-schema.sql mysql/init/01_schema.sql""";
+            고치는 법 — 엔티티를 고쳤으면 마이그레이션을 쓴다:
+              1. backend/src/main/resources/db/migration/V{다음번호}__{이름}.sql 에
+                 ALTER TABLE ... 을 적는다 (이미 돌고 있는 DB 를 옮기는 문장이다)
+              2. 읽기용 사본도 맞춘다:
+                   ./gradlew test --tests '*SchemaDdlDriftTest*'
+                   cp build/generated-schema.sql mysql/init/01_schema.sql
+            V1 은 고치지 않는다 — 체크섬이 DB 에 박혀 있어 다음 부팅이 막힌다.""";
 
     @Autowired
     private DataSource dataSource;
@@ -71,7 +87,7 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
             fromEntities = describe(live);
         }
 
-        try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
+        try (ScratchDatabase db = ScratchDatabase.withMigrations()) {
             Map<String, List<String>> fromSql = describe(db.connection());
 
             assertThat(fromSql.keySet())
@@ -94,7 +110,7 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
             fromEntities = describe(live);
         }
 
-        try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
+        try (ScratchDatabase db = ScratchDatabase.withMigrations()) {
             Map<String, List<String>> fromSql = describe(db.connection());
 
             List<String> mismatched = new ArrayList<>();
@@ -126,7 +142,7 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
             fromEntities = deleteRules(live);
         }
 
-        try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
+        try (ScratchDatabase db = ScratchDatabase.withMigrations()) {
             Map<String, List<String>> fromSql = deleteRules(db.connection());
 
             List<String> mismatched = new ArrayList<>();
@@ -303,6 +319,8 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
                      SELECT table_name, column_name, column_type, is_nullable
                      FROM information_schema.columns
                      WHERE table_schema = DATABASE()
+                       -- Flyway 가 스스로 만드는 이력 표. 엔티티 쪽에는 없는 것이 맞다.
+                       AND table_name <> 'flyway_schema_history'
                      ORDER BY table_name, column_name
                      """)) {
             while (rs.next()) {

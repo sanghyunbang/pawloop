@@ -15,7 +15,9 @@
 | 항목 | 값 | 근거 |
 | --- | --- | --- |
 | 스키마 관리 | **Flyway** (`db/migration/V*.sql`) | #592 |
-| 기준점 | `V1__baseline.sql` = `mysql/init/01_schema.sql` 사본 | 쉰두 개를 전부 적용한 결과와 같다 |
+| 기준점 | `V1__baseline.sql` | 쉰두 개를 전부 적용한 결과와 같다 |
+| 엔티티와 대조 | `SchemaDdlDriftTest` 가 엔티티 ↔ **`V*.sql` 을 다 돌린 결과** | 엔티티만 고치고 마이그레이션을 안 쓰면 **CI 가 빨간불**(#592 조각 2) |
+| `mysql/init/01_schema.sql` | **읽기용 사본** — 문서와 스물여덟 개 검사가 바닥으로 쓴다 | `CanonicalSchemaMatchesMigrationsTest` 가 마이그레이션과 같은지 잠근다 |
 | dev 프로필 | `spring.jpa.hibernate.ddl-auto=validate` · `flyway.enabled=true` | `application-dev.properties` |
 | prod 프로필 | `spring.jpa.hibernate.ddl-auto=validate` · `flyway.enabled=true` | `application-prod.properties` |
 | test | `flyway.enabled=false` — 엔티티에서 `create-drop` | 전용 검사 `FlywayBuildsTheSchemaTest` 가 따로 잰다 |

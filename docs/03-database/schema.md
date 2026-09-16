@@ -27,7 +27,7 @@
 
 > **각주 — `app_user` 는 어디로 갔나.** 피벗 당시 이 문서와 [ERD](./erd.md)는 새 사용자 테이블을 `app_user` 라는 이름으로 계획했다. 실제로는 새로 만들지 않고 기존 `users` 를 확장하는 쪽으로 갔다(마이그레이션 비용 회피 — ADR-0002 가 `applicationId` 를 그대로 둔 것과 같은 이유). 그래서 이 문서의 `app_user` 는 **한 번도 존재한 적 없는 이름**이었다. 지금은 `users` 로 통일한다.
 >
-> **정본은 이 문서가 아니다.** 운영 스키마의 정본은 `backend/mysql/init/01_schema.sql` 이고, 그 파일은 JPA 엔티티에서 뽑은 것이다. `SchemaDdlDriftTest` 가 엔티티와 정본이 어긋나면 빨간불을 낸다(#58). 아래 DDL 은 **읽기용 요약**이며, 값이 다르면 정본을 따른다.
+> **정본은 이 문서가 아니다.** 스키마를 실제로 만드는 것은 `backend/src/main/resources/db/migration/V*.sql` 이다(#592) — 새 서버는 그것을 순서대로 돌려 세워진다. `backend/mysql/init/01_schema.sql` 은 그 결과를 한 파일로 적어 둔 **읽기용 사본**이고, 문서와 마이그레이션 실행 검사들이 바닥으로 쓴다. `SchemaDdlDriftTest` 가 **엔티티 ↔ 마이그레이션 적용 결과**를, `CanonicalSchemaMatchesMigrationsTest` 가 **사본 ↔ 마이그레이션 적용 결과**를 잠근다. 아래 DDL 은 **읽기용 요약**이며, 값이 다르면 그 둘을 따른다.
 
 소셜 계정의 식별 키는 `(provider, social_id)` 쌍이다 — **이메일이 아니다**(#7). 카카오의 `account_email` 은 선택 동의라서 사용자가 거부하면 이메일이 오지 않고, 시간에 따라 나타났다 사라지는 값은 식별 키가 될 수 없다. 공급자 집합(`kakao`·`google`)은 [ADR-0010](../99-decisions/decision-log.md#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) 이 정한다.
 

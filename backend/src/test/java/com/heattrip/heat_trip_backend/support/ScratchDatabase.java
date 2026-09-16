@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.flywaydb.core.Flyway;
 import org.testcontainers.containers.MySQLContainer;
 
 /**
@@ -38,7 +39,34 @@ public final class ScratchDatabase implements AutoCloseable {
     private static int counter = 0;
 
     private final String name;
+    private final String url;
     private final Connection connection;
+
+    /** 마이그레이션이 든 곳 — Flyway 가 읽는 자리와 같다. */
+    public static final String MIGRATIONS = "classpath:db/migration";
+
+    /**
+     * <b>마이그레이션을 순서대로 다 돌린</b> 일회용 데이터베이스 — 이슈 #592 조각 2.
+     *
+     * <p>빈 DB 에서 시작하므로 {@code V1} 의 {@code CREATE TABLE} 부터 돌고, 그 뒤 {@code V2…}
+     * 의 {@code ALTER TABLE} 이 차례로 얹힌다. <b>새 서버를 세웠을 때 실제로 나오는 스키마</b>가
+     * 이것이다.
+     *
+     * <p>{@code 01_schema.sql} 을 적용하는 것과 다른 점: 저 파일은 <b>엔티티에서 뽑아 복사한
+     * 것</b>이라 엔티티가 틀리면 같이 틀린다. {@code V} 파일은 변경마다 손으로 쓰고 한 번 쓰면
+     * 안 고치므로, 엔티티가 어떻게 바뀌든 <b>여기는 안 움직인다.</b> 움직이지 않는 것과 비교해야
+     * 비교가 뜻을 갖는다.
+     */
+    public static ScratchDatabase withMigrations() throws Exception {
+        ScratchDatabase db = new ScratchDatabase();
+        Flyway.configure()
+                // 앱 계정에는 이 일회용 DB 의 권한이 없다 — 만든 사람(root)으로 붙는다.
+                .dataSource(db.url, "root", MySqlTestContainer.instance().getPassword())
+                .locations(MIGRATIONS)
+                .load()
+                .migrate();
+        return db;
+    }
 
     /** 커밋된 운영 스키마만 적용한 일회용 데이터베이스. */
     public static ScratchDatabase withCommittedSchema() throws Exception {
@@ -66,9 +94,8 @@ public final class ScratchDatabase implements AutoCloseable {
             st.execute("DROP DATABASE IF EXISTS " + name);
             st.execute("CREATE DATABASE " + name + " CHARACTER SET utf8mb4");
         }
-        connection = DriverManager.getConnection(
-                serverUrl.replaceFirst("/(\\?|$)", "/" + name + "$1"),
-                "root", mysql.getPassword());
+        url = serverUrl.replaceFirst("/(\\?|$)", "/" + name + "$1");
+        connection = DriverManager.getConnection(url, "root", mysql.getPassword());
     }
 
     /**
