@@ -155,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       // Image(image: AssetImage('assets/Logo4.png'), height: 64),
                       // SizedBox(height: 10),
                       Text(
-                        'Log In',
+                        '로그인',
                         style: TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.w800,
@@ -164,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       SizedBox(height: 6),
                       Text(
-                        'Please log in to continue',
+                        '이메일로 이어서 들어와요',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.black54,

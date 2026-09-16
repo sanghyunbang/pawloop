@@ -210,9 +210,12 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     // 홈과 **같은 위젯**이다. 두 화면이 같은 데이터를 그리는데 코드가 둘이면
                     // 확인 문구가 한쪽에만 생기는 날이 온다.
                     TodayCareCard(repository: widget.repository),
-                    const SizedBox(height: 10),
+                    // 위 4 · 아래 20 이다. 둘을 10 · 16 으로 뒀더니 링크가 위아래 카드
+                    // **한가운데** 떠서 어느 카드에 딸린 줄인지 안 보였다(에뮬레이터 실측).
+                    // 가까이 있는 것끼리 한 덩이로 읽힌다 — 그 차이를 벌린다.
+                    const SizedBox(height: 4),
                     if (_group case final group?) _careItemsLink(group.id),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     _walkNotesCard(),
                     const SizedBox(height: 16),
                   ],

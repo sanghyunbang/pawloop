@@ -29,9 +29,9 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/family_repository.dart';
-import '../domain/care_icons.dart';
 import '../domain/pet.dart' show kMyDog;
 import '../theme/app_tokens.dart';
+import 'care_glyph.dart';
 import 'aurora.dart';
 
 /// 한 화면에서 기록하면 다른 화면의 카드도 다시 읽게 하는 신호.
@@ -266,6 +266,19 @@ class _TodayCareCardState extends State<TodayCareCard> {
     return names.length == 2 && joined.characters.length <= 5
         ? joined
         : '${names.first} 외 ${names.length - 1}';
+  }
+
+  /// 이 기록이 **어느 칸의 것인지** 그 칸의 이름으로 적는다 — 이슈 #560.
+  ///
+  /// 종류에서 뽑으면 직접 만든 항목에 쓸 말이 없다. 에뮬레이터에서 "Bathtime" 을 누르고
+  /// "오늘 한 일" 을 봤더니 **`케어`** 라고 적혀 있었다 — 무엇을 했는지가 그 줄의 전부인데
+  /// 그것만 빠진 셈이다.
+  String _nameOf(CareLogEntry log) {
+    for (final item in _items) {
+      if (_belongsTo(log, item)) return item.name;
+    }
+    // 목록에 짝이 없는 기록(접힌 뒤 지운 항목 등). 종류라도 있으면 그 이름을 쓴다.
+    return _labelOf(log.type);
   }
 
   /// 오늘 이 칸을 누른 사람들. **중복 없이, 최근 순으로.**
@@ -723,7 +736,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
                   fontSize: 11, fontWeight: FontWeight.w700, color: T.textSecondary)),
         ),
         Expanded(
-          child: Text(_labelOf(log.type),
+          child: Text(_nameOf(log),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11, color: T.textSecondary)),
@@ -784,11 +797,9 @@ class _TodayCareCardState extends State<TodayCareCard> {
         // 칸들이 서로 다른 높이로 앉았다. 실측 [89, 75, 103, 89, 75, 89, 89] — 글자 2.0배에서는
         // 58px 이 벌어졌다.
         child: Column(children: [
-          Icon(
-            done != null ? Icons.check_circle_rounded : careItemIcon(item.icon),
-            size: 19,
-            color: done != null ? T.accent : T.textMuted,
-          ),
+          done != null
+              ? const Icon(Icons.check_circle_rounded, size: 19, color: T.accent)
+              : CareGlyph(iconKey: item.icon, size: 19, color: T.textMuted),
           const SizedBox(height: 4),
           // 이름은 그 집이 적은 것이다 — 스무 자까지 받으므로 좁은 칸에서는 접는다.
           Text(item.name,
@@ -918,9 +929,8 @@ String subjectParticle(String name) {
 
 /// 칸의 이름 — 문구와 로그 줄이 같은 말을 쓰게 한다.
 ///
-/// 직접 만든 항목의 기록에는 종류가 없다(#560). 지금 카드는 기본 일곱만 그리므로 그런
-/// 기록이 여기 오지 않지만, 오면 빈 칸 대신 "케어" 라고 말한다 — 조각 4 에서 카드가 항목
-/// 이름을 직접 넘기면 이 함수는 마지막 대비책만 남는다.
+/// 직접 만든 항목의 기록에는 종류가 없다(#560). 카드는 이제 `_nameOf` 로 **항목 이름**을
+/// 쓰므로 여기는 <b>마지막 대비책</b>만 남았다 — 목록에 짝이 없는 기록에만 걸린다.
 String _labelOf(ServerCareType? type) => type?.label ?? '케어';
 
 /// 내 기록이 있는 칸을 다시 눌렀을 때의 선택(#329).

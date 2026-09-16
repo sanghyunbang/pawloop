@@ -9,14 +9,17 @@ import 'package:flutter/material.dart';
 
 import '../data/family_repository.dart';
 import '../domain/care_icons.dart';
-import '../domain/pet.dart' show kCareRev;
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import '../widgets/care_glyph.dart';
+import '../widgets/today_care_card.dart' show kServerCareRev;
 
-/// 카드가 바뀌었음을 알리는 축 — 홈 카드가 이 값을 보고 다시 읽는다(조각 4).
+/// 할 일 고치기 화면.
 ///
-/// `kCareRev` 를 그대로 쓰는 이유는, 항목이 바뀌면 카드도 바뀌어야 하는데 그 둘이 서로
-/// 다른 축을 보면 목록을 고친 뒤 홈으로 돌아가도 칸이 그대로 남기 때문이다.
+/// 목록을 바꾼 뒤에는 **[kServerCareRev] 을 올린다** — 홈과 우리 가족의 카드가 그 값을
+/// 듣는다. 처음에 `kCareRev`(`pet.dart`)를 올렸는데 그건 **기기 안에서만 사는 옛 목록**의
+/// 축이라 카드가 안 듣는다. 에뮬레이터에서 병원을 접고 돌아왔더니 카드에 그대로 남아
+/// 있어서 찾았다 — 초록불은 "내가 물어본 것에만" 옳다.
 class CareItemsScreen extends StatefulWidget {
   final int groupId;
 
@@ -87,7 +90,7 @@ class _CareItemsScreenState extends State<CareItemsScreen> {
     });
     try {
       await _repo.reorderCareItems(widget.groupId, moved.map((i) => i.id).toList());
-      kCareRev.value++;
+      kServerCareRev.value++;
     } on FamilyFailure catch (e) {
       if (!mounted) return;
       _message(e.message);
@@ -112,7 +115,7 @@ class _CareItemsScreenState extends State<CareItemsScreen> {
       } else {
         await _repo.archiveCareItem(widget.groupId, item.id);
       }
-      kCareRev.value++;
+      kServerCareRev.value++;
       await _load();
     } on FamilyFailure catch (e) {
       if (!mounted) return;
@@ -148,7 +151,7 @@ class _CareItemsScreenState extends State<CareItemsScreen> {
           archived: item.archived,
         );
       }
-      kCareRev.value++;
+      kServerCareRev.value++;
       await _load();
     } on FamilyFailure catch (e) {
       if (!mounted) return;
@@ -294,17 +297,26 @@ class _CareItemsScreenState extends State<CareItemsScreen> {
         ),
         child: ListTile(
           contentPadding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
-          leading: Icon(careItemIcon(item.icon), color: dim ? T.textFaint : T.accent, size: 22),
+          leading: CareGlyph(
+            iconKey: item.icon,
+            size: 22,
+            color: dim ? T.textFaint : T.accent,
+          ),
+          // **취소선을 안 쓴다.** 한글에서 `lineThrough` 는 글자 가운데가 아니라 위쪽을
+          // 지나 밑줄을 잘못 그은 것처럼 보인다(에뮬레이터 실측). 접힌 것은 흐린 글자와
+          // 아래 한 줄("접힘 · 카드에 안 보여요")로 이미 충분히 말한다.
           title: Text(
             item.name,
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: dim ? T.textMuted : T.textPrimary,
-              decoration: dim ? TextDecoration.lineThrough : null,
             ),
           ),
-          subtitle: Text(_subtitle(item), style: const TextStyle(fontSize: 12, color: T.textMuted)),
+          subtitle: _subtitle(item) == null
+              ? null
+              : Text(_subtitle(item)!,
+                  style: const TextStyle(fontSize: 12, color: T.textMuted)),
           onTap: () => _openEditor(item: item),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -334,16 +346,20 @@ class _CareItemsScreenState extends State<CareItemsScreen> {
     );
   }
 
-  /// 한 줄 설명 — 접힘 · 하루 목표 · 기본 항목 표시를 한 자리에서 만든다.
-  static String _subtitle(CareItemEntry item) {
+  /// 한 줄 설명 — **할 말이 있을 때만** 만든다.
+  ///
+  /// 처음에는 기본 항목마다 "기본 항목" 을 적었다. 그랬더니 일곱 줄이 **똑같은 말을 일곱
+  /// 번** 하고, 알려 주는 것 없이 목록만 두 배로 길어졌다(에뮬레이터에서 보고 고쳤다).
+  /// 지금은 접혔거나 목표가 있을 때만 적는다 — 줄마다 다른 말이라야 읽을 값이 있다.
+  ///
+  /// 기본 항목인지는 굳이 안 적는다. 사용자가 할 수 있는 일이 다르지 않고(이름·그림·목표
+  /// 전부 똑같이 고친다), 다르지 않은 것을 표시하면 "이건 못 고치나" 를 묻게 된다.
+  static String? _subtitle(CareItemEntry item) {
     final parts = <String>[
       if (item.archived) '접힘 · 카드에 안 보여요',
       if (item.dailyTarget != null) '하루 ${item.dailyTarget}번',
-      // 기본 항목이라고 못 고치는 것은 아니다 — 종류만 안 바뀐다. 그 사실을 적어 두면
-      // "왜 이것만 다르지" 를 묻지 않아도 된다.
-      if (item.isSystem) '기본 항목',
     ];
-    return parts.isEmpty ? '눌러서 이름과 그림을 고쳐요' : parts.join(' · ');
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 }
 
@@ -371,6 +387,27 @@ class _ItemEditorSheetState extends State<_ItemEditorSheet> {
   late String _icon = widget.item?.icon ?? 'etc';
   late int? _target = widget.item?.dailyTarget;
 
+  final ScrollController _icons = ScrollController();
+
+  /// 칩 하나의 폭 + 사이 간격. 자리를 셈으로 찾는 데 쓴다.
+  static const double _chipStride = 56 + 8;
+
+  @override
+  void initState() {
+    super.initState();
+    // **고른 칩이 화면 밖이면 아무것도 안 고른 것처럼 보인다.** 기본값 `기타` 는 목록 맨
+    // 끝이고, 고치기로 열면 `양치`(아홉째)처럼 뒤쪽 값이 오는 것이 예사다 — 에뮬레이터에서
+    // 열자마자 여섯 칸이 전부 흐리게 보여서 찾았다. 첫 그림 뒤에 그 자리로 굴린다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_icons.hasClients) return;
+      final index = kCareIconKeys.indexOf(_icon);
+      if (index < 0) return;
+      // 왼쪽 끝에 딱 붙이지 않고 한 칸을 남긴다 — 앞에도 더 있다는 것이 보여야 한다.
+      final target = (index - 1) * _chipStride;
+      _icons.jumpTo(target.clamp(0, _icons.position.maxScrollExtent));
+    });
+  }
+
   /// 이름 길이 상한. 서버도 같은 수로 거절한다 — 여기서 먼저 막는 이유는 왕복 한 번을
   /// 아끼려는 것이지 서버 검증을 대신하려는 것이 아니다.
   static const int _maxName = 20;
@@ -378,6 +415,7 @@ class _ItemEditorSheetState extends State<_ItemEditorSheet> {
   @override
   void dispose() {
     _name.dispose();
+    _icons.dispose();
     super.dispose();
   }
 
@@ -436,6 +474,8 @@ class _ItemEditorSheetState extends State<_ItemEditorSheet> {
             SizedBox(
               height: 64,
               child: ListView.separated(
+                key: const Key('care-icon-row'),
+                controller: _icons,
                 scrollDirection: Axis.horizontal,
                 itemCount: kCareIconKeys.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
@@ -507,7 +547,11 @@ class _ItemEditorSheetState extends State<_ItemEditorSheet> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(careItemIcon(key), size: 20, color: chosen ? T.accent : T.textSecondary),
+            CareGlyph(
+              iconKey: key,
+              size: 20,
+              color: chosen ? T.accent : T.textSecondary,
+            ),
             const SizedBox(height: 2),
             Text(
               careIconLabel(key),

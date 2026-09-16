@@ -300,4 +300,24 @@ void main() {
         t.getSize(find.byKey(const Key('care-cell-water'))).width,
         reason: '마지막 줄의 빈 자리를 비워 둬야 줄마다 칸 폭이 같다');
   });
+  testWidgets('"오늘 한 일" 이 칸 이름을 적는다 — 직접 만든 항목이 "케어" 로 뭉개지면 안 된다',
+      (t) async {
+    // **에뮬레이터에서 찾은 것이다.** 종류에서 이름을 뽑고 있어서, 직접 만든 항목의 줄이
+    // `케어` 로 적혔다 — 그 줄에서 알려 주는 것이 "무엇을 했나" 하나인데 그것만 빠졌다.
+    final f = fixture(items: _eight(), logs: [
+      _log(id: 1, careItemId: 9),
+      _log(id: 2, type: 'meal', careItemId: 2, who: '아빠'),
+    ]);
+    await _pump(t, f.repo);
+
+    expect(find.descendant(
+      of: find.byKey(const Key('care-log-1')),
+      matching: find.text('양치'),
+    ), findsOneWidget);
+    expect(find.descendant(
+      of: find.byKey(const Key('care-log-2')),
+      matching: find.text('밥'),
+    ), findsOneWidget, reason: '기본 항목도 이름은 그 집이 적은 것이다');
+    expect(find.text('케어'), findsNothing);
+  });
 }
