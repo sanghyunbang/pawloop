@@ -30,8 +30,10 @@ import '../data/pet_sync.dart';
 import '../data/post_media_repository.dart';
 import '../data/walk_repository.dart';
 import '../domain/pet.dart';
+import '../domain/pet_characters.dart';
 import '../theme/app_tokens.dart';
 import 'form_kit.dart';
+import 'pet_character_picker.dart';
 
 /// 등록 시트를 띄운다.
 ///
@@ -82,6 +84,9 @@ class _PetRegistrationSheetState extends State<PetRegistrationSheet> {
 
   PetSpecies _species = PetSpecies.dog;
   DogSize _size = DogSize.small;
+
+  /// 고른 얼굴 — 안 고르면 `null` 이고, 그러면 종류 기본 그림이다(#585).
+  String? _character;
 
   bool _saving = false;
   String? _error;
@@ -161,6 +166,7 @@ class _PetRegistrationSheetState extends State<PetRegistrationSheet> {
         species: _species,
         size: _size,
         breed: _breed.text.trim(),
+        character: _character,
       );
       // 사진은 등록된 뒤에 붙는다 — 아이의 id 가 있어야 하니까. 붙이기가 실패해도 등록은 됐다:
       // 아이는 남고 사진만 없다(편집 화면에서 다시 고를 수 있다).
@@ -201,6 +207,16 @@ class _PetRegistrationSheetState extends State<PetRegistrationSheet> {
       children: [
             // 사진이 먼저다(#448) — 홈 한가운데가 이 사진이 된다. 안 골라도 등록은 된다.
             Center(child: _photoPicker()),
+            const SizedBox(height: 14),
+
+            // 사진을 안 올리는 사람이 있다(사장님, 2026-09-16). 그 사람의 아이도 이름을 읽기
+            // 전에 갈려야 한다 — 종류당 한 얼굴이면 홈의 고르기 칩이 같은 얼굴 둘로 선다.
+            _label('얼굴 (사진이 없을 때)'),
+            PetCharacterPicker(
+              selected: _character,
+              species: _species,
+              onPick: (key) => setState(() => _character = key),
+            ),
             const SizedBox(height: 14),
 
             _label('이름'),
@@ -278,12 +294,9 @@ class _PetRegistrationSheetState extends State<PetRegistrationSheet> {
               border: Border.all(color: T.accentLine, width: 1.5),
             ),
             child: bytes == null
+                // 사진을 안 골랐으면 **고른 얼굴**이 뜬다 — 등록하고 나서 볼 화면 그대로다.
                 ? Image.asset(
-                    switch (_species) {
-                      PetSpecies.dog => 'assets/emoji/dog.png',
-                      PetSpecies.cat => 'assets/emoji/cat.png',
-                      PetSpecies.other => 'assets/emoji/paw.png',
-                    },
+                    petCharacterAsset(_character) ?? petSpeciesAsset(_species),
                     width: 52,
                     height: 52)
                 : ClipOval(

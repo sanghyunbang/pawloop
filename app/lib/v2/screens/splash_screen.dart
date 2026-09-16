@@ -30,7 +30,7 @@ class SplashScreen extends StatelessWidget {
                     colors: [T.glowStart, T.glowEnd],
                   ),
                 ),
-                child: Image.asset('assets/emoji/dog.png', width: 60, height: 60),
+                child: Image.asset('assets/emoji/dog_face.png', width: 60, height: 60),
               ),
               const SizedBox(height: 22),
               const Text(

@@ -106,12 +106,14 @@ class PetSync {
     required PetSpecies species,
     required DogSize size,
     String? breed,
+    String? character,
   }) async {
     final saved = await _repo.registerPet(
       name: name,
       species: _toServerSpecies(species),
       size: _toServerSize(size),
       breed: breed,
+      character: character,
     );
     final profile = _toProfile(saved);
     replacePets([...kMyPets.value, profile]);
@@ -141,6 +143,8 @@ class PetSync {
     DateTime? birth,
     bool clearBirth = false,
     bool? neutered,
+    String? character,
+    bool clearCharacter = false,
   }) async {
     final saved = await _repo.patchDog(
       dogId,
@@ -151,6 +155,8 @@ class PetSync {
       birth: birth,
       clearBirth: clearBirth,
       neutered: neutered,
+      character: character,
+      clearCharacter: clearCharacter,
     );
     final profile = _toProfile(saved);
     replacePets([
@@ -233,6 +239,9 @@ class PetSync {
         ageMonths: pet.ageMonths ?? 0,
         neutered: pet.neutered,
         photoUrl: pet.avatarUrl,
+        // 고른 얼굴(#585). 여기서 빠뜨리면 저장은 되는데 화면이 계속 옛 얼굴을 그린다 —
+        // 서버의 답으로 갈아끼우는 이 자리가 그 값을 떨어뜨리는 곳이다.
+        characterKey: pet.characterKey,
         // 남이 등록한 아이는 false 다(#563). 화면이 이 값으로 "고칠 수 있나" 를 가른다.
         mine: pet.mine,
       );

@@ -275,25 +275,32 @@
 
 ### 구성요소 (위→아래)
 1. **헤더**: 뒤로가기 + `프로필 편집` + 우측 `저장` 버튼(sig 그라데이션).
-2. **아바타**(`_avatar`): 원형 peach + 강아지 이미지 + 우하단 pets 배지. 테두리색은 `AppThemeCtl.avatarBorder` 반영.
-3. **프로필 테두리 색 피커**(`_borderPicker`): `kAvatarBorders` 색상 원형 스와치, 선택 시 진한 테두리.
-4. **입력 필드**: `이름`(텍스트) / `견종`(텍스트, 힌트 "예: 믹스견, 포메라니안").
-5. **크기 세그먼트**(`_sizeSegment`): 소형견/중형견/대형견 3분할, 선택 시 sig 채움.
-6. **나이 필드**(`_ageField`): 숫자 입력(digitsOnly) + `개월` 접미.
-7. **중성화 토글**(`_neuterToggle`): 커스텀 스위치.
-8. **저장하기 버튼**(하단, sig).
+2. **아바타**(`_avatar`): 원형 + 사진 또는 그림 + 우하단 카메라 배지(누르면 사진 고르기, #448). 테두리색은 `AppThemeCtl.avatarBorder` 반영.
+3. **사진 줄**: 사진이 있으면 `사진 지우기`, 없으면 "사진을 누르면 바꿀 수 있어요".
+4. **얼굴 고르기**(`_characterPicker` → `PetCharacterPicker`, #585): 사진이 없을 때의 얼굴. 맨 앞 `기본`(종류 그림) + 열셋.
+5. **프로필 테두리 색 피커**(`_borderPicker`): `kAvatarBorders` 색상 원형 스와치, 선택 시 진한 테두리.
+6. **입력 필드**: `이름`(텍스트) / `품종`(텍스트, 힌트 "예: 믹스견, 포메라니안, 코리안숏헤어").
+7. **종류 세그먼트**(`_speciesSegment`): 강아지/고양이/기타 3분할(다견·다묘).
+8. **크기 세그먼트**(`_sizeSegment`): 소형견/중형견/대형견 3분할, 선택 시 sig 채움.
+9. **나이 필드**(`_ageField`): 숫자 입력(digitsOnly) + `개월` 접미.
+10. **중성화 토글**(`_neuterToggle`): 커스텀 스위치.
+11. **저장하기 버튼** + **프로필 지우기**(하단, 소프트 삭제 #156).
 
 ### 상호작용
 | 요소 | 동작 |
 | --- | --- |
 | 테두리 색 스와치 | `AppThemeCtl.avatarBorder.value` 갱신(전역 아바타 테두리) |
+| 얼굴 칸 | `_character` 선택. `기본` 은 `null` — 되돌릴 길이 이것뿐이다(#585) |
 | 크기 세그먼트 | `_size` 선택 |
 | 중성화 토글 | `_neutered` 토글 |
 | 저장 / 저장하기 | `_save()` |
 
 ### 저장 로직 (`_save`)
-- 이름/견종은 공백이면 기존값 유지, 나이는 파싱 실패/음수면 기존값 유지.
-- `kMyDog.value = copyWith(...)` → 홈/프로필 즉시 반영. 스낵바 "우리 아이 프로필이 저장됐어요" + pop.
+- **서버에 간다**(#516) — `PATCH /api/dogs/{id}` 로 **바뀐 것만** 보낸다. 스낵바 "저장했어요" + pop.
+- 나이는 개월로 편집하지만 서버가 드는 것은 `birth` 라 `오늘 − N개월` 로 바꿔 보낸다. 칸이 비었거나 0 이면 안 보낸다.
+- 얼굴은 "안 바꿈"(안 보냄)과 "기본으로 되돌림"(`null` 을 보냄)이 다르다 — `birth` 와 같은 규약(#585).
+- 바뀐 것이 없으면 서버를 안 부른다. 빈 본문은 400 이고, 그건 오류가 아니라 할 일이 없는 것이다.
+- 서버에 없는 아이(등록 전)는 화면 안에서만 바꾸고 그 사실을 말한다.
 
 ### 데이터
 - 초기값: `kMyDog.value`(이름/견종/나이(개월)/크기/중성화).
@@ -355,7 +362,7 @@
 | 글 상세 | `post_detail_screen.dart` | 커뮤니티 카드 탭 | `GET /api/community/posts/{id}/comments` · 멱등 반응 둘(#171) |
 | 커뮤니티 글쓰기 | `post_write_screen.dart` | 피드 글쓰기 버튼 · 빈 목록 · 지도 장소 시트 | `POST /api/community/posts`(#172). 지도에서 오면 `loc`·`contentId` 를 물고 온다 |
 | 프로필 | `me_screen.dart` | (push, 프로필 진입) | `kMyDog`, `GET /api/walks/stats/weekly` |
-| 프로필 편집 | `edit_screen.dart` | 프로필 → 편집 | `PUT /api/dogs/{id}`(미구현 — 이 기기에만) · 사진은 바로 서버: `POST /media`(PROFILE_IMAGE) → `PUT /api/dogs/{id}/avatar`, 지우기 `DELETE …/avatar`(#448) |
+| 프로필 편집 | `edit_screen.dart` | 프로필 → 편집 | `PATCH /api/dogs/{id}` — 바뀐 것만(#516). 사진은 바로 서버: `POST /media`(PROFILE_IMAGE) → `PUT /api/dogs/{id}/avatar`, 지우기 `DELETE …/avatar`(#448). 사진이 없을 때의 얼굴은 같은 PATCH 의 `character`(#585) |
 | 설정 | `settings_screen.dart` | 프로필 → 설정 | 약관 넷 · 내 동네(#342) · 저녁 산책 알림(#341) · 일요일 저녁 주간 정리 알림(#486 후속, 기기 안 예약 · 기본 꺼짐) · 일정 알림(#420) · 탈퇴 · 연락처(#165) |
 | 내 동네 고르기 | `neighborhood_picker_screen.dart` | 설정 → 내 동네 | 시도→시군구→동 세 단계와 검색을 함께. "현재 위치로 찾기" 는 **기기 안에서** 후보만 고른다 — 좌표가 안 나간다(#342, A안 #235). 목록은 앱에 든 행정동 3,516개이고 출처 한 줄(CC BY 4.0)이 화면 아래에 있다 |
 | 약관 전문 | `settings/legal_document_screen.dart` | 설정·동의 → push | `assets/terms/*.md` |

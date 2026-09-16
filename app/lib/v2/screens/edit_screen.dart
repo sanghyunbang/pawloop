@@ -11,6 +11,7 @@ import '../widgets/dog_avatar.dart';
 import '../data/walk_repository.dart' show WalkFailure, WalkFailureKind, WalkFailureKindX;
 import '../domain/pet.dart';
 import '../widgets/aurora.dart';
+import '../widgets/pet_character_picker.dart';
 
 /// 프로필 수정 (edit). 우리 아이(강아지) 프로필 편집.
 class EditScreen extends StatefulWidget {
@@ -51,6 +52,9 @@ class _EditScreenState extends State<EditScreen> {
   late final TextEditingController _age;
   late PetSpecies _species;
   late DogSize _size;
+
+  /// 고른 얼굴 — `null` 은 "안 골랐다"(#585). 저장할 때 처음 값과 비교해 보낼지 정한다.
+  String? _character;
   late bool _neutered;
 
   static const _sig = LinearGradient(
@@ -128,6 +132,7 @@ class _EditScreenState extends State<EditScreen> {
     _age = TextEditingController(text: dog.ageMonths.toString());
     _species = dog.species;
     _size = dog.size;
+    _character = dog.characterKey;
     _neutered = dog.neutered;
   }
 
@@ -173,6 +178,13 @@ class _EditScreenState extends State<EditScreen> {
     final changedSpecies = _species == base.species ? null : _species;
     final changedSize = _size == base.size ? null : _size;
     final changedNeutered = _neutered == base.neutered ? null : _neutered;
+    // 얼굴은 "안 바꿈" 과 "기본으로 되돌림" 이 다르다 — 되돌림은 서버에 `null` 을 **보내야**
+    // 지워진다(#586). `null` 하나로는 그 둘을 못 가르므로 깃발을 따로 든다.
+    final characterChanged = _character != base.characterKey;
+    final clearCharacter = characterChanged && _character == null;
+    // 안 건드렸으면 **안 보낸다.** 같은 값이라도 실어 보내면, 그 사이 다른 기기에서 바꾼
+    // 얼굴을 이 저장이 덮는다 — 부분 수정을 쓰는 이유가 그것이다.
+    final changedCharacter = characterChanged && !clearCharacter ? _character : null;
     // 나이는 개월 수로 편집하지만 서버가 드는 것은 birth 다 — ageMonths 는 거기서 나오는
     // 파생값이라 저장할 자리가 없다. 칸이 비었거나 0 이면 안 보낸다: 0 을 보내면 생일이
     // 오늘이 되어 "갓 태어났다" 가 된다.
@@ -186,7 +198,8 @@ class _EditScreenState extends State<EditScreen> {
         changedSpecies == null &&
         changedSize == null &&
         changedNeutered == null &&
-        changedBirth == null) {
+        changedBirth == null &&
+        !characterChanged) {
       // 바뀐 것이 없다. 빈 본문은 서버가 400 이고, 그건 오류가 아니라 할 일이 없는 것이다.
       Navigator.of(context).maybePop();
       return;
@@ -202,6 +215,8 @@ class _EditScreenState extends State<EditScreen> {
         breed: changedBreed,
         birth: changedBirth,
         neutered: changedNeutered,
+        character: changedCharacter,
+        clearCharacter: clearCharacter,
       );
       if (!mounted) return;
       _tell('저장했어요');
@@ -229,6 +244,8 @@ class _EditScreenState extends State<EditScreen> {
       size: _size,
       ageMonths: (months == null || months < 0) ? base.ageMonths : months,
       neutered: _neutered,
+      characterKey: _character,
+      clearCharacter: _character == null,
     ));
   }
 
@@ -329,6 +346,8 @@ class _EditScreenState extends State<EditScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
+                    _characterPicker(),
+                    const SizedBox(height: 18),
                     _borderPicker(),
                     const SizedBox(height: 22),
                     _field('이름', _name, hint: '우리 아이 이름'),
@@ -475,6 +494,30 @@ class _EditScreenState extends State<EditScreen> {
     ),
   );
 
+  /// 사진이 없을 때의 얼굴(#585).
+  ///
+  /// 사진 바로 아래다 — 둘이 같은 것을 정하고, **사진이 이긴다.** 사진을 지운 사람이 다음에
+  /// 볼 화면이 여기서 고른 얼굴이라, 사진 지우기 줄과 붙어 있는 편이 읽기 쉽다.
+  Widget _characterPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Center(
+          child: Text(
+            '사진이 없을 때의 얼굴',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: T.textSecondary),
+          ),
+        ),
+        const SizedBox(height: 11),
+        PetCharacterPicker(
+          selected: _character,
+          species: _species,
+          onPick: (key) => setState(() => _character = key),
+        ),
+      ],
+    );
+  }
+
   Widget _borderPicker() {
     return ValueListenableBuilder<Color>(
       valueListenable: AppThemeCtl.avatarBorder,
@@ -580,11 +623,7 @@ class _EditScreenState extends State<EditScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Image.asset(
-                switch (s) {
-                  PetSpecies.dog => 'assets/emoji/dog.png',
-                  PetSpecies.cat => 'assets/emoji/cat.png',
-                  PetSpecies.other => 'assets/emoji/paw.png',
-                },
+                petSpeciesAsset(s),
                 width: 20,
                 height: 20,
                 gaplessPlayback: true,

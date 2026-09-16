@@ -54,7 +54,7 @@ const List<IntroPage> kIntroPages = [
   IntroPage(
     title: '혼자 걷지 않아요',
     body: '가족과 오늘의 케어를 나누고,\n동네 반려인들과 이야기해요.',
-    asset: 'assets/emoji/dog.png',
+    asset: 'assets/emoji/dog_face.png',
     tint: T.auroraLilac,
   ),
 ];

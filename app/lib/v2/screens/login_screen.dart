@@ -152,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     gradient: RadialGradient(colors: [T.glowStart, T.glowEnd]),
                     boxShadow: [BoxShadow(color: T.sigGlow, blurRadius: 30, offset: Offset(0, 14))],
                   ),
-                  child: Image.asset('assets/emoji/dog.png', width: 76, height: 76),
+                  child: Image.asset('assets/emoji/dog_face.png', width: 76, height: 76),
                 ),
                 const SizedBox(height: 20),
                 const Text('Pawloop',

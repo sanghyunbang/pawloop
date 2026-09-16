@@ -121,6 +121,9 @@ flutter:
     - assets/icons/kakao.svg
     - assets/Logo4.png
     - assets/
+    # 아이 얼굴·장식에 쓰는 3D 이모지 열셋 — Microsoft Fluent Emoji (MIT).
+    # 파일 이름이 곧 얼굴 열쇠말이다(`lib/v2/domain/pet_characters.dart`) — 예외표가 없으니
+    # 여기 폴더 등록이 빠지면 디버그에서는 보이고 **릴리스에서만** 전부 빈 칸이 된다.
     - assets/emoji/
     # `.env` 는 여기에 두지 않는다 — 에셋은 APK 에 원본 그대로 들어간다. → 이슈 #29
     - assets/terms/terms_ko.md
