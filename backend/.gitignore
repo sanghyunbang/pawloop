@@ -44,10 +44,23 @@ application-private.properties
 ### VS Code ###
 .vscode/
 
-# === app data (do not commit) ===
-# 모든 모듈의 src/main/resources/data/ 및 src/test/resources/data/ 아래 파일 무시
+# === app data ===
+# 기본은 무시다 — 받아 온 원본이나 실험용 덤프를 실수로 커밋하지 않으려는 것이다.
 **/src/main/resources/data/**
 **/src/test/resources/data/**
+
+# 다만 **앱이 부팅에 쓰는 자산은 예외**다 (#591).
+#
+# 여기 있던 넷이 통째로 무시되고 있어서, 새로 클론한 곳에는 파일이 없었다. EC2 부트스트랩이
+# `git clone` + `docker compose up` 이라 그대로 띄우면 `sigungu.json` 이 없어
+# `NeighborhoodCatalog` 가 던지고 **스프링 컨텍스트가 통째로 죽는다.**
+#
+# 넷 다 공개데이터의 가공본이고 비밀이 아니다 — 파일 안에 `source` 표시가 들어 있다.
+# 만드는 법은 `backend/tools/build_*.py` 와 docs/02-architecture/external-data.md 에 있다.
+!src/main/resources/data/sigungu.json
+!src/main/resources/data/local_trails.json
+!src/main/resources/data/playgrounds.json
+!src/main/resources/data/place_traits.csv
 
 # local-only history rewrite artifacts
 replacements.txt
