@@ -20,6 +20,7 @@ import java.util.TimeZone;
 import java.util.stream.Stream;
 
 import com.heattrip.heat_trip_backend.care.CareTime;
+import com.heattrip.heat_trip_backend.care.entity.CareItem;
 import com.heattrip.heat_trip_backend.care.entity.CareLog;
 import com.heattrip.heat_trip_backend.chat.ChatTime;
 import com.heattrip.heat_trip_backend.community.CommunityTime;
@@ -90,7 +91,7 @@ class StoredTimestampsAreUtcTest {
             com.heattrip.heat_trip_backend.chat.entity.ChatMessageReaction.class,
             FamilyGroup.class, User.class,
             // #306 — 훑는 범위를 chat·group·user 에서 전체로 넓히면서 들어온 반려 축 엔티티.
-            Dog.class, CareLog.class, Walk.class,
+            Dog.class, CareLog.class, CareItem.class, Walk.class,
             Post.class, Comment.class, Reaction.class, Block.class,
             // #451 — 글 저장. created_at 이 목록의 정렬 축이라 UTC 로 눕힌다.
             com.heattrip.heat_trip_backend.community.entity.PostBookmark.class,

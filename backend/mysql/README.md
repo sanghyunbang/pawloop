@@ -74,6 +74,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\47_chat_change_feed.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\48_chat_reaction.sql
 docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\49_walk_walked_by.sql
+docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE" < mysql\post-start\50_care_item.sql
 ```
 
 | 파일 | 무엇을 |
@@ -127,6 +128,7 @@ docker exec -i heattrip-mysql sh -lc "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYS
 | `47_chat_change_feed.sql` | **채팅 변경 피드** — ADR-0023(#500). `chat_room.last_change_seq`(NOT NULL 기본 0)와 `chat_message.change_seq`(NULL 허용) · `idx_chat_change(room_id, change_seq)` 를 더합니다. 델타 폴링이 **이미 보낸 말의 변화**(지금은 삭제, 앞으로 반응)를 따라잡는 축입니다 — `room_seq` 는 손대지 않습니다. 쌓인 방은 0, 쌓인 메시지는 NULL 로 시작합니다. `chat_room` · `chat_message` 가 먼저여야 합니다. |
 | `48_chat_reaction.sql` | **채팅 반응(공감)** — #452. `chat_message_reaction` 표를 만듭니다 — `uq_chat_reaction (message_id, user_id, kind)` 라 한 사람이 한 말에 여러 종류를 누를 수 있고(커뮤니티 반응과 같은 판단), `fk_chat_reaction_message` 는 **CASCADE** 입니다. `user_id` 에는 **FK 가 없습니다** — chat 은 사람을 id 로만 압니다(ADR-0011 결정 4). 종류에 `CHECK` 를 걸지 않습니다(계약의 `ChatReactionKind` 가 단일 출처). 반응은 방의 변경 번호를 올려 다른 사람에게 흐르므로 `47` 이 먼저여야 하고, `chat_message` 도 먼저여야 합니다. |
 | `49_walk_walked_by.sql` | **산책에 걸은 사람** — #563. `walk.walked_by` 컬럼과 `fk_walk_walkedby`(**SET NULL**)를 더하고, 이미 쌓인 행을 `dog.user_id` 로 채웁니다. 그 전에는 산책의 주인이 **아이의 주인**이라, 아빠가 엄마 아이 보리를 산책시키면 저장 자체가 거절됐습니다 — 업무 분담이 목적인 앱에서 그건 기능이 없는 것과 같습니다. 옛 행을 채우는 것은 지어내기가 아닙니다: 그때는 남의 아이로 산책을 저장할 수 없어서 아이 주인이 곧 걸은 사람이었습니다. `SET NULL` 인 이유는 `care_log.done_by` 와 같습니다 — 걸은 사람이 탈퇴했다고 그 산책이 없던 일이 되면 안 됩니다. **`11_dog.sql`·`12_walk.sql` 이 먼저**이고 멱등입니다(재실행이 이미 채운 값을 덮지 않습니다). 되돌리려면 FK 를 떼고 컬럼을 지웁니다 — 그러면 마이그레이션 뒤에 남이 걸어 준 산책의 '누가' 는 다시 만들 수 없습니다. |
+| `50_care_item.sql` | **그 집이 챙기는 일의 목록** — #560. `care_item` 표와 `care_log.care_item_id`(+`fk_carelog_item`, **SET NULL**)를 만들고 **이미 있는 모든 가족 그룹**에 기본 일곱(물·밥·산책·투약·병원·배변·마킹)을 넣습니다. 그 전에는 케어 종류가 `ck_carelog_type` 의 일곱뿐이라 "양치" 를 만들면 **넣을 값이 없었습니다** — 배포 없이는 한 글자도 못 늘립니다. **기존 기록은 한 행도 안 건드립니다**: 기본 일곱은 `system_type` 을 들어 `care_log.type` 으로 세고, 직접 만든 것만 `care_item_id` 로 셉니다(그래서 산책 트래킹이 `type='walk'` 로 남기는 줄도 그대로입니다). `uq_careitem_system(group_id, system_type)` 이 "물이 두 칸" 을 막습니다 — MySQL 유니크는 NULL 을 서로 다른 값으로 보므로 직접 만든 항목은 몇 개든 됩니다. `fk_careitem_group` 이 CASCADE 인 것은 목록이 **앞으로 할 일**이라 집이 없어지면 남길 것이 없기 때문이고, `fk_carelog_item` 이 SET NULL 인 것은 기록이 **일어난 사실**이라 이름표를 잃어도 남아야 하기 때문입니다. **08·11 이 먼저**이고 멱등입니다. 되돌리려면 FK·컬럼을 떼고 표를 지웁니다 — 그러면 사용자가 만든 항목과 그 기록의 이름표가 사라집니다. |
 
 ### 04는 실패하면 멈춥니다 — 그게 정상입니다
 

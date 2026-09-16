@@ -114,6 +114,38 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("FK 의 삭제 규칙까지 같다 — 엔티티만 CASCADE 로 바뀌면 다음 재생성에서 조용히 넘어간다")
+    void committedSchema_producesTheSameDeleteRules() throws Exception {
+        // 위 두 테스트는 **컬럼**만 본다. FK 의 ON DELETE 는 컬럼 정의가 아니라
+        // referential_constraints 에 있어서 거기 안 걸리고, ddl-auto=validate 도 안 본다
+        // (50_care_item.sql 의 D 절이 같은 말을 한다). 그래서 @OnDelete 를 SET_NULL 에서
+        // CASCADE 로 바꿔도 아무 게이트가 안 울리고, 다음 재생성 때 정본에 실려 새 운영
+        // DB 부터 **지운 아이가 그 집의 할 일 목록을 데려간다.** 실측으로 확인했다(#560).
+        Map<String, List<String>> fromEntities;
+        try (Connection live = dataSource.getConnection()) {
+            fromEntities = deleteRules(live);
+        }
+
+        try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
+            Map<String, List<String>> fromSql = deleteRules(db.connection());
+
+            List<String> mismatched = new ArrayList<>();
+            for (var entry : fromEntities.entrySet()) {
+                List<String> other = fromSql.get(entry.getKey());
+                if (!entry.getValue().equals(other)) {
+                    mismatched.add(entry.getKey() + "\n    엔티티: " + entry.getValue()
+                            + "\n    스키마: " + other);
+                }
+            }
+
+            assertThat(mismatched)
+                    .as("엔티티와 정본의 ON DELETE 가 다르다. 컬럼은 같아서 위 테스트도 validate 도 "
+                            + "안 막지만, 지우는 순간의 결과가 다르다.%n%s", REGENERATE)
+                    .isEmpty();
+        }
+    }
+
+    @Test
     @DisplayName("커밋된 스키마가 CREATE TABLE 로 되어 있다 — post-start 는 전부 ALTER 라 이 파일이 전제를 만든다")
     void committedSchema_createsRatherThanAlters() throws Exception {
         String sql = Files.readString(
@@ -241,6 +273,29 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
      * <p><b>커넥션을 닫지 않는다.</b> 소유권은 호출부에 있다 — 처음에 여기서 닫았더니
      * 일회용 DB 를 정리할 때 {@code ConnectionIsClosedException} 이 났다(실측).
      */
+    /**
+     * 표마다 "FK 이름 → 삭제 규칙" 목록. {@link #describe} 가 안 보는 축이다.
+     *
+     * <p>{@code update_rule} 은 안 본다 — 우리는 PK 를 갱신하지 않아서 전부 {@code NO ACTION}
+     * 이고, 넣으면 재는 것 없이 목록만 길어진다.
+     */
+    private static Map<String, List<String>> deleteRules(Connection connection) throws SQLException {
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        try (Statement st = connection.createStatement();
+             ResultSet rs = st.executeQuery("""
+                     SELECT table_name, constraint_name, delete_rule
+                     FROM information_schema.referential_constraints
+                     WHERE constraint_schema = DATABASE()
+                     ORDER BY table_name, constraint_name
+                     """)) {
+            while (rs.next()) {
+                out.computeIfAbsent(rs.getString(1).toLowerCase(), k -> new ArrayList<>())
+                        .add(rs.getString(2).toLowerCase() + " " + rs.getString(3).toUpperCase());
+            }
+        }
+        return out;
+    }
+
     private static Map<String, List<String>> describe(Connection connection) throws SQLException {
         Map<String, List<String>> out = new LinkedHashMap<>();
         try (Statement st = connection.createStatement();

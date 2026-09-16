@@ -56,4 +56,30 @@ public interface FamilyMembership {
      * 그 사람에게 "우리 집" 은 자기 자신이다.
      */
     List<Long> householdUserIds(long actorUserId);
+
+    /**
+     * 그 가족의 행 — 이슈 #560. 없으면 비어 있다.
+     *
+     * <h2>왜 행을 돌려주나</h2>
+     *
+     * <p>{@code care_item} 이 {@code @ManyToOne FamilyGroup} 을 <b>들어야</b> Hibernate 가
+     * {@code fk_careitem_group} 을 만든다. 스칼라 {@code Long} 으로 두면
+     * {@code mysql/init/01_schema.sql} 재생성 때 그 FK 가 조용히 사라진다 —
+     * {@code CareLog.group} 의 javadoc 이 같은 이야기를 적어 뒀다.
+     *
+     * <h2>왜 저장소를 직접 안 부르나</h2>
+     *
+     * <p>{@code care} 가 {@code group.repository} 를 들면 <b>모듈 내부</b>를 부르는 것이다
+     * (공개 표면은 모듈 패키지 바로 아래뿐이다, #97 · #98). 같은 자리에서 한 번 겪었다 —
+     * {@code WalkService} 가 {@code UserRepository} 를 들어 기준선이 96 에서 100 으로 뛰었고,
+     * 사람을 컨트롤러에서 받아 넘기는 것으로 되돌렸다.
+     *
+     * <p>{@code DogOwnership.requireInHouseholdEntity} 가 {@code dog.entity.Dog} 에 대해 같은
+     * 일을 한다 — 행이 필요한 쪽은 표면을 지나고, 저장소는 그 모듈 안에 남는다.
+     *
+     * <p><b>인가를 하지 않는다.</b> 부르는 쪽이 이미 지났다는 전제다 — {@link #memberUserIds}
+     * 와 같은 규약이다.
+     */
+    java.util.Optional<com.heattrip.heat_trip_backend.group.entity.FamilyGroup> groupEntity(
+            long groupId);
 }

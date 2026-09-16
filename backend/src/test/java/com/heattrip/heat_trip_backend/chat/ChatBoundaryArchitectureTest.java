@@ -544,7 +544,7 @@ class ChatBoundaryArchitectureTest {
                             새 이름이 여기 늘어나면 그건 자동 통과가 아니라 이 목록을 고치는 판단이 \
                             있었다는 뜻이어야 한다. 특히 chat_* 가 여기 끼면 ADR-0011 결정 4 가 \
                             깨진 것이다 — containsExactly 라 그 순간 빨간불이다.""")
-                    .containsExactly("care_log → family_group", "walk_note → family_group");
+                    .containsExactly("care_item → family_group", "care_log → family_group", "walk_note → family_group");
 
             assertThat(db.queryStrings("""
                     SELECT CONCAT(table_name, ' → ', referenced_table_name)

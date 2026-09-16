@@ -36,7 +36,27 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 
+CREATE TABLE `care_item` (
+  `daily_target` int DEFAULT NULL,
+  `sort_order` int NOT NULL,
+  `archived_at` datetime(6) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `dog_id` bigint DEFAULT NULL,
+  `group_id` bigint NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `system_type` varchar(10) DEFAULT NULL,
+  `icon` varchar(20) NOT NULL,
+  `name` varchar(20) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_careitem_system` (`group_id`,`system_type`),
+  KEY `idx_careitem_group` (`group_id`,`sort_order`),
+  KEY `idx_careitem_dog` (`dog_id`),
+  CONSTRAINT `fk_careitem_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_careitem_group` FOREIGN KEY (`group_id`) REFERENCES `family_group` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `care_log` (
+  `care_item_id` bigint DEFAULT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `dog_id` bigint DEFAULT NULL,
   `done_by` bigint DEFAULT NULL,
@@ -49,9 +69,11 @@ CREATE TABLE `care_log` (
   KEY `idx_carelog_group` (`group_id`,`occurred_at`),
   KEY `idx_carelog_doneby` (`done_by`),
   KEY `idx_carelog_dog` (`dog_id`,`occurred_at`),
+  KEY `fk_carelog_item` (`care_item_id`),
   CONSTRAINT `fk_carelog_dog` FOREIGN KEY (`dog_id`) REFERENCES `dog` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_carelog_doneby` FOREIGN KEY (`done_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_carelog_group` FOREIGN KEY (`group_id`) REFERENCES `family_group` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_carelog_item` FOREIGN KEY (`care_item_id`) REFERENCES `care_item` (`id`) ON DELETE SET NULL,
   CONSTRAINT `ck_carelog_type` CHECK ((`type` in (_utf8mb4'water',_utf8mb4'meal',_utf8mb4'walk',_utf8mb4'med',_utf8mb4'vet',_utf8mb4'poop',_utf8mb4'pee')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

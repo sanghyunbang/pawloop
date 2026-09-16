@@ -4,6 +4,7 @@ import com.heattrip.heat_trip_backend.chat.ChatMemberView;
 import com.heattrip.heat_trip_backend.chat.ChatRoomService;
 import com.heattrip.heat_trip_backend.chat.ChatRoomView;
 import com.heattrip.heat_trip_backend.chat.ChatTime;
+import com.heattrip.heat_trip_backend.group.FamilyGroupCreated;
 import com.heattrip.heat_trip_backend.group.FamilyMembership;
 import com.heattrip.heat_trip_backend.group.dto.GroupMemberResponse;
 import com.heattrip.heat_trip_backend.group.dto.GroupResponse;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,6 +106,13 @@ public class FamilyGroupService implements FamilyMembership {
                 .toList();
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<FamilyGroup> groupEntity(long groupId) {
+        return familyGroups.findById(groupId);
+    }
+
     /** 방을 찾고 그 방의 살아 있는 멤버인지 본다. 아니면 403 — 없는 그룹도 같은 403 이다. */
     private ChatRoomView requireLiveRoom(long groupId, long actorUserId) {
         ChatRoomView room = chatRooms.findRoom(ORIGIN_KIND, String.valueOf(groupId))
@@ -137,6 +146,14 @@ public class FamilyGroupService implements FamilyMembership {
     private final FamilyGroupRepository familyGroups;
     private final ChatRoomService chatRooms;
     private final UserRepository users;
+
+    /**
+     * 가족이 생겼다고 알린다 — 이슈 #560. 지금 듣는 쪽은 케어 항목 기본 일곱을 넣는 자리다.
+     *
+     * <p>여기서 {@code care} 를 직접 부르지 않는 이유는 {@link FamilyGroupCreated} 에 적었다 —
+     * 가족은 케어를 몰라도 된다.
+     */
+    private final ApplicationEventPublisher events;
 
     /**
      * 가족 그룹을 만든다. <b>같은 트랜잭션에서 방과 {@code OWNER} 멤버십이 함께 생긴다.</b>
@@ -194,6 +211,10 @@ public class FamilyGroupService implements FamilyMembership {
 
         ChatRoomView room = chatRooms.openRoom(
                 ORIGIN_KIND, String.valueOf(group.getId()), name, ROOM_TAG, ownerUserId);
+
+        // 커밋 뒤에 듣는 쪽이 기본 항목 일곱을 넣는다(#560). 같은 스레드라 이 응답이
+        // 나갈 때는 이미 들어 있다 — 막 만든 사람의 첫 화면이 비어 보이면 안 된다.
+        events.publishEvent(new FamilyGroupCreated(group.getId()));
 
         return response(group, room);
     }
