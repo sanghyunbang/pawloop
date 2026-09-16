@@ -29,7 +29,8 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/family_repository.dart';
-import '../domain/pet.dart' show kMyDog;
+import '../domain/pet.dart' show kMyDog, kPetCategories;
+import '../screens/main_shell.dart' show RootTab;
 import '../theme/app_tokens.dart';
 import 'care_glyph.dart';
 import 'aurora.dart';
@@ -266,6 +267,93 @@ class _TodayCareCardState extends State<TodayCareCard> {
     return names.length == 2 && joined.characters.length <= 5
         ? joined
         : '${names.first} 외 ${names.length - 1}';
+  }
+
+  /// 기본 배지에서 가는 **주변 장소** 한 줄 — 이슈 #560, 사장님 말씀.
+  ///
+  /// <h2>왜 기본 배지에만 붙나</h2>
+  ///
+  /// "기본으로 주는 일에는 그거에 따라 주변 동물병원이든 애견샵이든 볼 수 있게 하고, 직접
+  /// 만든 건 **부가 기능 없이 단순 투두**로" — 사장님(2026-09-16). 그래서 갈래를 아는 것은
+  /// {@link CareItemEntry.systemType} 이 있는 칸뿐이다. 접은 칸은 여기에도 안 나온다.
+  ///
+  /// <h2>왜 칸 안이 아니라 카드 아래 한 줄인가</h2>
+  ///
+  /// 칸은 손가락을 이미 둘 쓴다 — 짧게 누르면 기록, 길게 누르면 지우기(#209·#329). 셋째를
+  /// 얹으면 무엇이 일어날지 손끝으로 못 가른다. 한 줄로 빼면 **눈에 보이고**, 그 집이 병원을
+  /// 접으면 그 자리도 같이 사라진다.
+  ///
+  /// <h2>홈의 "급할 때 · 가까운 동물병원" 과 겹치지 않나</h2>
+  ///
+  /// 뜻이 다르다. 그 줄은 <b>급할 때</b>(#337)라 빨갛고 전화까지 두 번이다. 이 줄은
+  /// <b>가는 김에</b>다 — 사료가 떨어졌거나 오늘 산책로를 고르는 자리.
+  List<Widget> _nearby() {
+    final chips = _nearbyChips();
+    if (chips.isEmpty) return const [];
+    return [
+      const SizedBox(height: 10),
+      Row(children: [
+        const Text('주변',
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w800, color: T.textMuted)),
+        const SizedBox(width: 8),
+        // Expanded 안의 가로 스크롤이다 — 칸이 늘어 칩이 셋을 넘겨도 줄이 안 넘친다
+        // (Flexible 로 나누면 보통 배율에서도 말줄임이 된다).
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final chip in chips) ...[
+                if (chip != chips.first) const SizedBox(width: 6),
+                chip,
+              ],
+            ]),
+          ),
+        ),
+      ]),
+    ];
+  }
+
+  /// 지금 목록이 가리키는 장소 갈래. **겹치면 하나만**, 카드 순서대로.
+  List<Widget> _nearbyChips() {
+    final seen = <String>{};
+    final chips = <Widget>[];
+    for (final item in _items) {
+      final key = nearbyCategoryOf(item.systemType);
+      if (key == null || !seen.add(key)) continue;
+      chips.add(_nearbyChip(key));
+    }
+    return chips;
+  }
+
+  Widget _nearbyChip(String categoryKey) {
+    final category =
+        kPetCategories.firstWhere((c) => c.key == categoryKey);
+    return GestureDetector(
+      key: Key('care-nearby-$categoryKey'),
+      behavior: HitTestBehavior.opaque,
+      // 탭을 바꾼다 — 화면을 직접 밀면 탭 바 없는 지도가 열려 돌아올 길이 없다.
+      onTap: () {
+        RootTab.exploreCategory.value = categoryKey;
+        RootTab.index.value = 1;
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: T.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: T.cardBorder),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          // 지도 범례와 같은 색·그림이다. 색 예외로 허용된 것이 지도 카테고리색이다.
+          Icon(category.icon, size: 12, color: category.color),
+          const SizedBox(width: 4),
+          Text(category.label,
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: T.textSecondary)),
+        ]),
+      ),
+    );
   }
 
   /// 이 기록이 **어느 칸의 것인지** 그 칸의 이름으로 적는다 — 이슈 #560.
@@ -651,6 +739,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
           ],
         ]),
       ],
+      ..._nearby(),
       ..._todayLog(),
     ]);
   }
@@ -843,6 +932,19 @@ class _TodayCareCardState extends State<TodayCareCard> {
       ? _items.length
       : kCareCardColumnsPerRow;
 }
+
+/// 기본 배지 → 지도의 장소 갈래. 짝이 없으면 {@code null}.
+///
+/// <b>투약도 동물병원이다.</b> 약은 대개 병원에서 받는다 — 동물약국만 따로 찾는 레이어가
+/// 없기도 하다. 병원과 투약이 함께 있는 집에서는 칩이 하나만 뜬다({@code _nearbyChips}).
+///
+/// 물 · 배변 · 마킹에는 짝이 없다. 갈 곳이 없는데 칩을 만들면 눌러 보고 실망한다.
+String? nearbyCategoryOf(ServerCareType? type) => switch (type) {
+      ServerCareType.vet || ServerCareType.med => 'vet',
+      ServerCareType.meal => 'shop',
+      ServerCareType.walk => 'trail',
+      _ => null,
+    };
 
 /// 칸을 가리키는 열쇠말 — 테스트와 화면이 같은 말을 쓰게 한다.
 ///

@@ -18,6 +18,7 @@ import 'package:http/testing.dart';
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
+import 'package:heat_trip_flutter/v2/screens/main_shell.dart' show RootTab;
 import 'package:heat_trip_flutter/v2/widgets/today_care_card.dart';
 
 const _base = 'https://api.example.test';
@@ -319,5 +320,71 @@ void main() {
       matching: find.text('밥'),
     ), findsOneWidget, reason: '기본 항목도 이름은 그 집이 적은 것이다');
     expect(find.text('케어'), findsNothing);
+  });
+  group('주변 찾기 — 기본 배지에만 붙는다 (사장님, 2026-09-16)', () {
+    testWidgets('병원·밥·산책이 있으면 세 갈래가 뜬다 — 물·배변·마킹은 갈 곳이 없다', (t) async {
+      final f = fixture(items: _eight());
+      await _pump(t, f.repo);
+
+      expect(find.byKey(const Key('care-nearby-vet')), findsOneWidget);
+      expect(find.byKey(const Key('care-nearby-shop')), findsOneWidget);
+      expect(find.byKey(const Key('care-nearby-trail')), findsOneWidget);
+      expect(find.text('동물병원'), findsOneWidget);
+    });
+
+    testWidgets('병원과 투약이 함께 있어도 칩은 하나다 — 같은 곳으로 간다', (t) async {
+      final f = fixture(items: [
+        _item(id: 4, name: '투약', icon: 'med', systemType: 'med', sortOrder: 0),
+        _item(id: 5, name: '병원', icon: 'vet', systemType: 'vet', sortOrder: 1),
+      ]);
+      await _pump(t, f.repo);
+
+      expect(find.byKey(const Key('care-nearby-vet')), findsOneWidget);
+    });
+
+    testWidgets('직접 만든 항목에는 안 붙는다 — 단순 투두다', (t) async {
+      final f = fixture(items: [
+        _item(id: 9, name: '양치', icon: 'tooth', sortOrder: 0),
+      ]);
+      await _pump(t, f.repo);
+
+      expect(find.text('주변'), findsNothing,
+          reason: '갈 곳이 없으면 줄 자체가 없어야 한다 — 눌러 보고 실망하게 두지 않는다');
+    });
+
+    testWidgets('접은 칸은 주변에서도 사라진다', (t) async {
+      final f = fixture(items: [
+        _item(id: 2, name: '밥', icon: 'meal', systemType: 'meal', sortOrder: 0),
+        _item(
+            id: 5,
+            name: '병원',
+            icon: 'vet',
+            systemType: 'vet',
+            sortOrder: 1,
+            archivedAt: '2026-09-16T03:00:00Z'),
+      ]);
+      await _pump(t, f.repo);
+
+      expect(find.byKey(const Key('care-nearby-shop')), findsOneWidget);
+      expect(find.byKey(const Key('care-nearby-vet')), findsNothing);
+    });
+
+    testWidgets('누르면 지도 탭을 그 갈래로 부탁한다 — 화면을 직접 밀지 않는다', (t) async {
+      RootTab.index.value = 0;
+      RootTab.exploreCategory.value = null;
+      addTearDown(() {
+        RootTab.index.value = 0;
+        RootTab.exploreCategory.value = null;
+      });
+      final f = fixture(items: _eight());
+      await _pump(t, f.repo);
+
+      await t.tap(find.byKey(const Key('care-nearby-trail')));
+      await t.pump();
+
+      expect(RootTab.exploreCategory.value, 'trail');
+      expect(RootTab.index.value, 1,
+          reason: '화면을 직접 밀면 탭 바 없는 지도가 열려 돌아올 길이 없다');
+    });
   });
 }
