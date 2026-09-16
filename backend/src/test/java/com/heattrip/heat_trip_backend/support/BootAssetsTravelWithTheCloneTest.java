@@ -28,14 +28,35 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <h2>왜 "파일이 있다" 만으로는 모자라나</h2>
  *
  * <p>내 기계에는 있다. 클래스패스에 있는지만 물으면 <b>이 검사도 같이 초록이 된다</b> — 정확히
- * 그 상태가 문제였다. 그래서 두 가지를 따로 잰다.
+ * 그 상태가 문제였다. 그래서 세 가지를 따로 잰다.
  *
  * <ol>
  *   <li>파일이 있고 비어 있지 않다 — 자산이 깨지면 지도가 빈다
  *   <li>{@code .gitignore} 가 그 경로를 <b>예외로 뚫어 두었다</b> — 그래야 클론을 따라간다
+ *   <li>{@code .dockerignore} 도 <b>같은 경로를 뚫어 두었다</b> — 그래야 이미지에 들어간다
  * </ol>
  *
- * <p>둘째가 이 파일의 요점이다. 무시 규칙이 다시 넓어지는 날, 여기가 빨간불이 된다.
+ * <h2>관문은 하나가 아니었다 — 이슈 #601</h2>
+ *
+ * <p>이 검사는 처음에 {@code .gitignore} 만 쟀다. 바로 위 문단에 "EC2 부트스트랩이 {@code git
+ * clone} + {@code docker compose up} 이라" 고 적어 두고도 그랬다. 자산이 앱까지 가려면 관문을
+ * <b>둘</b> 지나야 한다.
+ *
+ * <pre>
+ * 내 기계 ──.gitignore──&gt; 저장소 ──git clone──&gt; 서버 디스크 ──.dockerignore──&gt; 이미지 ──&gt; 앱
+ * </pre>
+ *
+ * <p>PR #593 이 첫 관문을 뚫었다. 둘째 관문인 {@code backend/.dockerignore} 에는
+ * {@code src/main/resources/data/} 가 그대로 남아 있었다 — 그 줄의 주석은 "이 파일들은
+ * {@code .gitignore} 로 저장소 밖이라 클론에는 없다" 를 이유로 들고 있었는데, <b>PR #593 이
+ * 바로 그 이유를 없앴다.</b> 이유는 사라지고 규칙만 남아, 저장소에 있는 파일을 이미지에서
+ * 빼는 줄이 되었다.
+ *
+ * <p>그래서 2026-09-16 첫 staging 배포에서 앱이 {@code sigungu.json} 을 클래스패스에서 찾지
+ * 못하고 컨텍스트째로 죽었다. {@code restart} 가 계속 되살려서 {@code docker compose ps} 에는
+ * {@code Up} 으로 보였다.
+ *
+ * <p>무시 규칙이 어느 쪽에서든 다시 넓어지는 날, 여기가 빨간불이 된다.
  */
 class BootAssetsTravelWithTheCloneTest {
 
@@ -108,6 +129,51 @@ class BootAssetsTravelWithTheCloneTest {
         assertThat(lines.stream().map(String::trim))
                 .as("무시 규칙이 사라졌다 — 예외만 두고 규칙을 지우면 덤프가 그대로 들어온다")
                 .contains("**/src/main/resources/data/**");
+    }
+
+    @Test
+    @DisplayName(".dockerignore 도 그 넷을 예외로 뚫어 둔다 — 안 그러면 이미지에 안 들어간다")
+    void dockerignoreLetsThemThrough() {
+        Path dockerignore = TestProjectPaths.backendDir().resolve(".dockerignore");
+        assertThat(dockerignore).as("backend/.dockerignore 가 없다").exists();
+
+        List<String> lines = readLines(dockerignore);
+
+        List<String> missing = new ArrayList<>();
+        for (String asset : ASSETS) {
+            boolean allowed = lines.stream()
+                    .map(String::trim)
+                    .anyMatch(line -> line.equals("!" + asset));
+            if (!allowed) {
+                missing.add(asset);
+            }
+        }
+
+        assertThat(missing)
+                .as("""
+                        `!<경로>` 예외 줄이 없다. 파일이 저장소에는 있어도 도커 빌드 컨텍스트에서 \
+                        빠져서 이미지에 안 들어간다. 앱은 클래스패스에서 못 찾고 컨텍스트째로 \
+                        죽는다 — restart 때문에 `docker compose ps` 에는 Up 으로 보인다 (#601).""")
+                .isEmpty();
+    }
+
+    /**
+     * {@code .gitignore} 쪽과 같은 이유로 무시 규칙 자체는 남아 있어야 한다.
+     *
+     * <p>여기서는 이유가 하나 더 있다. 받아 온 원본이 이미지에 섞이면 <b>같은 태그의 이미지가
+     * 빌드한 기계에 따라 다른 데이터를 담는다.</b> "내 로컬에선 되는데" 가 이미지 레벨에서
+     * 재현되는 자리다.
+     */
+    @Test
+    @DisplayName(".dockerignore 도 폴더를 통째로 여는 것이 아니다")
+    void theDockerBlanketRuleSurvives() {
+        List<String> lines = readLines(TestProjectPaths.backendDir().resolve(".dockerignore"));
+
+        assertThat(lines.stream().map(String::trim))
+                .as("""
+                        무시 규칙이 사라졌다 — 예외만 두고 규칙을 지우면 커밋하지 않은 덤프가 \
+                        빌드한 기계에서만 이미지에 섞여 들어간다""")
+                .contains("src/main/resources/data/");
     }
 
     private static long sizeOf(Path path) {

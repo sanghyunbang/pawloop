@@ -205,6 +205,22 @@ tasks.named('test') {
     inputs.file(file('docker-compose.yml'))
             .withPropertyName('dockerCompose')
             .withPathSensitivity(PathSensitivity.RELATIVE)
+    // BootAssetsTravelWithTheCloneTest 가 읽는 무시 규칙(#591·#601). 이 검사가 지키는 것은
+    // "부팅 자산이 클론과 이미지를 따라간다" 인데, 선언이 없으면 무시 규칙만 고쳤을 때
+    // test 가 UP-TO-DATE 로 건너뛴다 — 규칙을 다시 넓혀 놓고도 초록불이 난다.
+    //
+    // #593 때 .gitignore 쪽 검사를 만들면서 이 선언을 빠뜨렸다. 그래서 그 검사의
+    // 빨간불을 보려면 --rerun-tasks 가 필요했다. 빨간불을 보기 어려운 게이트는
+    // 있으나 마나다.
+    inputs.files(file('.gitignore'), file('.dockerignore'))
+            .withPropertyName('ignoreRules')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    // Ec2BootstrapInstallsWhatComposeNeedsTest 가 읽는 EC2 부팅 스크립트 템플릿(#601).
+    // 이 스크립트의 실패는 그 서버 안 로그에만 남는다 — 밖에서는 "안 뜬다" 로만 보인다.
+    // 그래서 여기서 막는 것이 특히 싸다.
+    inputs.files(fileTree(dir: file('infra/terraform'), include: '**/*.tftpl'))
+            .withPropertyName('bootstrapTemplates')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(fileTree(dir: file('../docs/04-api'), include: '**/*'))
             .withPropertyName('apiContract')
             .withPathSensitivity(PathSensitivity.RELATIVE)

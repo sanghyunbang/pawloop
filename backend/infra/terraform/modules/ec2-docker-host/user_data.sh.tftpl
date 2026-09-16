@@ -51,6 +51,40 @@ fi
 
 docker compose version
 
+# Buildx 플러그인 — 이것도 AL2023 기본 저장소에는 없다.
+#
+# 지금의 docker compose 는 이미지를 직접 만들지 않고 buildx 에 넘긴다. 없으면
+# `docker compose up --build` 가 이렇게 죽는다.
+#
+#   compose build requires buildx 0.17.0 or later
+#
+# compose 자체는 위에서 깔렸으니 이미지를 "받는" 데까지는 지나가고 "만드는" 자리에서만
+# 걸린다. 로그가 한참 진행되다 끝나서 성공처럼 보인다 — 2026-09-16 첫 staging 배포가
+# 여기서 막혔다 (#601).
+dnf install -y docker-buildx-plugin || true
+
+if ! docker buildx version >/dev/null 2>&1; then
+  # 버전과 sha256 은 https://github.com/docker/buildx/releases 의 릴리스 자산
+  # 다이제스트에서 가져온다. 바꿀 때 둘을 같이 바꾼다. AMI 가 x86_64 고정이라
+  # (main.tf 의 filter) 받는 파일도 linux-amd64 다.
+  BUILDX_VERSION=v0.37.1
+  BUILDX_SHA256=9447199cdb435f25880548343c128a4b6650e8891ee598905d8d29d39a8e359b
+  BUILDX_TMP="$(mktemp)"
+
+  curl -fsSL -o "$BUILDX_TMP" \
+    "https://github.com/docker/buildx/releases/download/$BUILDX_VERSION/buildx-$BUILDX_VERSION.linux-amd64"
+
+  # compose 와 같은 이유로 확인한다 — 받은 파일을 root 로 실행하기 때문이다.
+  # 어긋나면 여기서 부팅이 멈춘다. 조용히 넘어가지 않는다.
+  echo "$BUILDX_SHA256  $BUILDX_TMP" | sha256sum --check --status
+
+  install -d -m 755 /usr/local/lib/docker/cli-plugins
+  install -m 755 "$BUILDX_TMP" /usr/local/lib/docker/cli-plugins/docker-buildx
+  rm -f "$BUILDX_TMP"
+fi
+
+docker buildx version
+
 mkdir -p /opt/heattrip
 
 ${startup_commands}

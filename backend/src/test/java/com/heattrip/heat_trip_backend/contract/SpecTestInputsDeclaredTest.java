@@ -37,7 +37,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>저장소 파일을 새로 읽는 테스트를 추가했다면 {@code build.gradle} 의
  * {@code tasks.named('test')} 안에 그 경로도 {@code inputs.files(...)} 로 더해야 한다.
  * 이 테스트는 <b>이미 아는 경로</b>만 지킨다 — 새 경로까지 자동으로 알 수는 없다.
- * (지금 아는 것: {@code mysql/} · {@code docker-compose.yml} · {@code docs/04-api} ·
+ * (지금 아는 것: {@code mysql/} · {@code docker-compose.yml} · {@code .gitignore} ·
+ * {@code .dockerignore} · {@code infra/terraform/**}{@code /*.tftpl} · {@code docs/04-api} ·
  * {@code docs/02-architecture/backend} · {@code docs/99-decisions} · {@code docs/05-build} ·
  * {@code docs/03-database})
  *
@@ -112,6 +113,29 @@ class SpecTestInputsDeclaredTest {
         assertThat(buildGradle)
                 .contains("file('docker-compose.yml')")
                 .contains("withPropertyName('dockerCompose')");
+    }
+
+    @Test
+    @DisplayName("무시 규칙(.gitignore/.dockerignore)이 test 태스크의 입력으로 선언돼 있다")
+    void ignoreRules_areDeclaredAsTestInputs() {
+        // BootAssetsTravelWithTheCloneTest 가 둘 다 읽어 "부팅 자산이 클론과 이미지를
+        // 따라간다" 를 지킨다(#591·#601). 선언이 없으면 무시 규칙을 다시 넓혀 놓고도
+        // test 가 UP-TO-DATE 로 건너뛴다 — 지키는 것이 없어진다.
+        assertThat(buildGradle)
+                .as("선언이 없으면 무시 규칙만 고쳤을 때 자산 검사가 아예 돌지 않는다 (#601)")
+                .contains("file('.gitignore'), file('.dockerignore')")
+                .contains("withPropertyName('ignoreRules')");
+    }
+
+    @Test
+    @DisplayName("EC2 부팅 스크립트 템플릿이 test 태스크의 입력으로 선언돼 있다")
+    void bootstrapTemplates_areDeclaredAsTestInputs() {
+        // Ec2BootstrapInstallsWhatComposeNeedsTest 가 user_data.sh.tftpl 을 읽는다(#601).
+        // 부팅 스크립트의 실패는 그 서버 안 로그에만 남아서, 게이트가 조용히 꺼지면
+        // 다음에 또 서버 안에 들어가 로그를 파야 한다.
+        assertThat(buildGradle)
+                .contains("dir: file('infra/terraform'), include: '**/*.tftpl'")
+                .contains("withPropertyName('bootstrapTemplates')");
     }
 
     @Test
