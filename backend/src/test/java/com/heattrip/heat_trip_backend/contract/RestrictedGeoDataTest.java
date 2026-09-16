@@ -55,9 +55,24 @@ class RestrictedGeoDataTest {
     private static final String SELF =
             "backend/src/test/java/com/heattrip/heat_trip_backend/contract/RestrictedGeoDataTest.java";
 
-    /** 뒤지지 않는 곳 — 빌드 산출물과 의존성. 우리가 커밋한 것이 아니다. */
+    /**
+     * 뒤지지 않는 곳 — 빌드 산출물과 의존성. 우리가 커밋한 것이 아니다.
+     *
+     * <p>{@code .claude} 가 여기 낀 이유는 조금 다르다. 작업용 worktree 가 그 아래 만들어지는데,
+     * 그것은 <b>이 저장소의 사본</b>이다. 그래서 이 검사 파일과 설명 문서가 한 벌씩 더 생기고,
+     * 경로가 달라 예외 목록에 걸리지 않아 <b>위반으로 잡힌다.</b> 2026-09-16 에 실제로 이것으로
+     * 빨간불이 났다 — 받아 온 데이터가 아니라 우리 파일의 사본이었다.
+     *
+     * <pre>
+     * Expecting empty but was: [".claude/worktrees/…/RestrictedGeoDataTest.java",
+     *                           ".claude/worktrees/…/docs/02-architecture/external-data.md"]
+     * </pre>
+     *
+     * <p>{@code .gitignore:30} 의 {@code /.claude/worktrees/} 가 이미 무시하는 경로다. "저장소에
+     * 들어왔는가" 를 묻는 검사가 볼 곳이 아니다.
+     */
     private static final List<String> SKIPPED_DIRS =
-            List.of(".git", "build", "node_modules", ".gradle", ".dart_tool", "Pods");
+            List.of(".git", ".claude", "build", "node_modules", ".gradle", ".dart_tool", "Pods");
 
     @Test
     @DisplayName("제4유형 데이터가 저장소에 없다 — 설명 문서 한 곳만 예외다")

@@ -13,9 +13,25 @@ services:
     ports:
       - "${APP_PUBLISHED_HOST:-127.0.0.1}:${APP_PUBLISHED_PORT:-8080}:8080"
     depends_on:
-      - mysql
+      # 컨테이너가 "시작됐다" 가 아니라 "접속을 받을 준비가 됐다" 를 기다린다.
+      # 그냥 `- mysql` 이면 앱이 먼저 붙었다가 Flyway 가
+      #   Unable to obtain connection from database: Communications link failure
+      # 로 죽고, restart 로 회복한다. 첫 부팅 로그에 30초와 긴 스택 트레이스가 남아
+      # 진짜 실패를 찾기 어려워진다 (#601).
+      mysql:
+        condition: service_healthy
     volumes:
       - ./config:/config
+    healthcheck:
+      # 앱에 헬스체크가 없으면 `docker compose ps` 가 `Up` 만 찍는다. 죽었다 살아나기를
+      # 반복해도 `Up` 이라, CREATED 와 Up 시간의 차이로만 알 수 있다 (#601).
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      # 부팅에 30초 남짓 걸리고 레이어 워밍업이 뒤따른다. 이 시간 안의 실패는
+      # retries 로 세지 않는다.
+      start_period: 90s
     restart: unless-stopped
 
   mysql:
