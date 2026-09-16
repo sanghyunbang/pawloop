@@ -138,17 +138,30 @@ public class Dog {
     private boolean neutered = false;
 
     /**
-     * 아바타.
+     * 프로필 사진의 <b>S3 objectKey</b> — 완성된 URL 이 아니다. URL 을 박으면 버킷·CDN 을
+     * 못 바꾼다({@code docs/02-architecture/backend/dogs.md} §6.5).
      *
-     * <p><b>#145 는 업로드를 구현하지 않는다.</b> 컬럼만 두는 이유는 나중에 넣으면 운영
-     * 데이터 위의 {@code ALTER} 가 되기 때문이고, {@code care_log.dog_id} 를 미리 넣어 둔
-     * 것과 같은 판단이다. 값은 항상 {@code null} 이다.
-     *
-     * <p>넣는 날 저장할 것은 <b>S3 objectKey</b> 이지 완성된 URL 이 아니다 — URL 을 박으면
-     * 버킷·CDN 을 못 바꾼다({@code docs/02-architecture/backend/dogs.md} §6.5).
+     * <p>컬럼은 #145 가 미리 뒀고 <b>#448 이 업로드를 붙였다</b> — 지금은 값이 들어간다.
+     * 비어 있으면 사진이 없는 것이고, 그때 화면이 {@link #characterKey} 로 내려간다.
      */
     @Column(name = "avatar", length = 255)
     private String avatar;
+
+    /**
+     * 사진이 없을 때의 얼굴 — 이슈 #585. 안 골랐으면 {@code null} 이고, 그때는 앱이 종류
+     * 기본 그림을 쓴다.
+     *
+     * <h2>왜 {@code avatar} 옆에 따로 두나</h2>
+     *
+     * <p>둘은 <b>동시에 있을 수 있다.</b> 사진을 올린 뒤에도 고른 캐릭터는 남아 있어야
+     * 한다 — 사진을 지우면 <b>고르기 전</b>이 아니라 <b>고른 캐릭터</b>로 돌아가는 것이
+     * 사용자가 기대하는 바다. 한 칸에 담으면 그 둘 중 하나가 반드시 지워진다.
+     *
+     * <p>{@link PetCharacter} 가 아니라 {@code String} 인 이유는 그 enum 의 javadoc 에 있다 —
+     * 쓰기는 닫고 읽기는 연다.
+     */
+    @Column(name = "character_key", length = 20)
+    private String characterKey;
 
     /**
      * 생성 시각(<b>UTC</b>) — {@link DogTime}. #306 까지 {@code LocalDateTime.now()}(JVM 존)였다.
@@ -219,10 +232,19 @@ public class Dog {
     }
 
     /**
-     * 프로필 사진의 S3 objectKey (#448). {@code null} 이면 사진이 없다 — 화면은 종 이모지로 돌아간다.
-     * 완성된 URL 이 아니라 키다(클래스 javadoc의 {@code avatar}).
+     * 프로필 사진의 S3 objectKey (#448). {@code null} 이면 사진이 없다 — 화면은 고른 캐릭터,
+     * 그것도 없으면 종 기본 그림으로 내려간다. 완성된 URL 이 아니라 키다(클래스 javadoc).
      */
     public void changeAvatar(String objectKey) {
         this.avatar = objectKey;
+    }
+
+    /**
+     * 사진이 없을 때의 얼굴을 고른다 — 이슈 #585. {@code null} 이면 안 고른 것이다.
+     *
+     * <p><b>사진을 지우지 않는다.</b> 둘은 함께 살고, 무엇을 그릴지는 화면이 정한다.
+     */
+    public void changeCharacter(String characterKey) {
+        this.characterKey = characterKey;
     }
 }

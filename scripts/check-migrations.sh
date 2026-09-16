@@ -314,6 +314,10 @@ step "51_care_log_custom_type.sql"
 want 1 "$(is_nullable care_log type)" "care_log.type 널 허용 (없으면 직접 만든 항목을 누를 때 500 이고, 그 전에 부팅이 validate 에서 죽는다)"
 want 1 "$(check_has ck_carelog_type poop)" "ck_carelog_type 일곱 값 (51 이 넓히면서 흘리지 않았는지)"
 
+step "52_dog_character.sql"
+want 1 "$(has_column dog character_key)" "dog.character_key 컬럼 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(is_nullable dog character_key)" "character_key 널 허용 (안 고른 아이가 대부분이다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

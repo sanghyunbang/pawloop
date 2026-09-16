@@ -44,7 +44,15 @@ public record DogRequest(
 
         LocalDate birth,
 
-        Boolean neutered) {
+        Boolean neutered,
+
+        /**
+         * 사진이 없을 때의 얼굴 — 이슈 #585. <b>선택</b>이다.
+         *
+         * <p>안 보내면 {@code null} 이고 앱이 종류 기본 그림을 쓴다. 목록 밖이면 400 이다
+         * ({@link com.heattrip.heat_trip_backend.dog.entity.PetCharacter#of}).
+         */
+        String character) {
 
     /** 계약이 {@code default: dog} 로 선언했다. 값이 계약 밖이면 400 이다. */
     public PetSpecies speciesOrDefault() {
