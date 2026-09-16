@@ -19,71 +19,102 @@ if ! command -v aws >/dev/null 2>&1; then
   dnf install -y awscli-2
 fi
 
-# Docker Compose 플러그인 — AL2023 기본 저장소에는 없다.
+# ── 도커 CLI 플러그인 (compose · buildx) ─────────────────────────────
 #
-# amazonlinux/amazon-linux-2023#186 이 2022 년에 이걸 요청했고 2026-09-16 현재도
-# 열려 있다. 예전에는 `dnf install -y docker-compose-plugin || true` 였는데,
-# `|| true` 가 "그런 패키지 없음" 을 삼켜서 부팅은 조용히 지나가고 그 다음
-# `docker compose up` 이 "is not a docker command" 로 죽었다.
+# AL2023 기본 저장소에는 compose 플러그인이 없다 —
+# amazonlinux/amazon-linux-2023#186 이 2022 년에 요청했고 2026-09-17 현재도 열려 있다.
+# buildx 는 있는데 **0.12.1** 이다(2026-09-17 실측).
 #
-# 언젠가 저장소에 들어오면 그걸 쓰고, 없으면 공식 릴리스를 받아 깐다.
-dnf install -y docker-compose-plugin || true
-
-if ! docker compose version >/dev/null 2>&1; then
-  # 버전과 sha256 은 https://github.com/docker/compose/releases 의
-  # docker-compose-linux-x86_64.sha256 에서 가져온다. 바꿀 때 둘을 같이 바꾼다.
-  # AMI 가 x86_64 고정이라(main.tf 의 filter) 받는 파일도 x86_64 다.
-  COMPOSE_VERSION=v5.5.1
-  COMPOSE_SHA256=db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
-  COMPOSE_TMP="$(mktemp)"
-
-  curl -fsSL -o "$COMPOSE_TMP" \
-    "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-x86_64"
-
-  # 받은 파일이 진짜인지 먼저 본다. 확인 없이 받아서 실행하면 중간에 바뀐 파일을
-  # root 로 돌리는 셈이다. 어긋나면 여기서 부팅이 멈춘다 — 조용히 넘어가지 않는다.
-  echo "$COMPOSE_SHA256  $COMPOSE_TMP" | sha256sum --check --status
-
-  install -d -m 755 /usr/local/lib/docker/cli-plugins
-  install -m 755 "$COMPOSE_TMP" /usr/local/lib/docker/cli-plugins/docker-compose
-  rm -f "$COMPOSE_TMP"
-fi
-
-docker compose version
-
-# Buildx 플러그인 — 이것도 AL2023 기본 저장소에는 없다.
-#
-# 지금의 docker compose 는 이미지를 직접 만들지 않고 buildx 에 넘긴다. 없으면
-# `docker compose up --build` 가 이렇게 죽는다.
+# 그래서 물어야 할 것은 "깔려 있는가" 가 아니라 **"충분히 새로운가"** 다. 이 차이로
+# 2026-09-17 에 부팅이 한 번 더 죽었다(#603). `if ! docker buildx version` 으로
+# 존재만 확인했더니, dnf 가 깔아 둔 0.12.1 을 보고 "있네" 하며 최신판 설치를
+# 건너뛰었고, compose 는 그대로
 #
 #   compose build requires buildx 0.17.0 or later
 #
-# compose 자체는 위에서 깔렸으니 이미지를 "받는" 데까지는 지나가고 "만드는" 자리에서만
-# 걸린다. 로그가 한참 진행되다 끝나서 성공처럼 보인다 — 2026-09-16 첫 staging 배포가
-# 여기서 막혔다 (#601).
-dnf install -y docker-buildx-plugin || true
+# 로 죽었다. 에러 문구에 요구 버전이 적혀 있었는데 "없어서 나는 에러" 로만 읽은 것이다.
+# 없어도, 있는데 낡아도 문구가 같다.
 
-if ! docker buildx version >/dev/null 2>&1; then
-  # 버전과 sha256 은 https://github.com/docker/buildx/releases 의 릴리스 자산
-  # 다이제스트에서 가져온다. 바꿀 때 둘을 같이 바꾼다. AMI 가 x86_64 고정이라
-  # (main.tf 의 filter) 받는 파일도 linux-amd64 다.
-  BUILDX_VERSION=v0.37.1
-  BUILDX_SHA256=9447199cdb435f25880548343c128a4b6650e8891ee598905d8d29d39a8e359b
-  BUILDX_TMP="$(mktemp)"
+# 플러그인이 보고하는 버전 숫자. compose 는 "Docker Compose version v5.5.1",
+# buildx 는 "github.com/docker/buildx 0.12.1 <sha>" 라 형식이 달라서, 줄에서 처음
+# 나오는 x.y.z 를 집는다. sha 에는 점이 없어 걸리지 않는다.
+plugin_version() {
+  docker "$1" version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true
+}
 
-  curl -fsSL -o "$BUILDX_TMP" \
-    "https://github.com/docker/buildx/releases/download/$BUILDX_VERSION/buildx-$BUILDX_VERSION.linux-amd64"
+# $2 가 $1 이상인가. sort -V 로 둘을 정렬해 작은 쪽이 $1 이면 $2 >= $1 이다.
+at_least() {
+  [ -n "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ]
+}
 
-  # compose 와 같은 이유로 확인한다 — 받은 파일을 root 로 실행하기 때문이다.
-  # 어긋나면 여기서 부팅이 멈춘다. 조용히 넘어가지 않는다.
-  echo "$BUILDX_SHA256  $BUILDX_TMP" | sha256sum --check --status
+# ensure_docker_plugin <이름> <최소버전> <받을버전> <sha256> <받을주소>
+#
+# 이미 최소 버전 이상이면 손대지 않고, 아니면 공식 릴리스를 sha256 확인 후 깐다.
+# **깐 뒤에 다시 물어본다** — dnf 가 깐 낡은 것이 검색 순서에서 이길 수도 있어서다.
+# 그래도 낡으면 여기서 부팅을 세운다. 그 편이 30분 뒤 compose 에러로 만나는 것보다 낫다.
+ensure_docker_plugin() {
+  name=$1
+  minimum=$2
+  version=$3
+  sha256=$4
+  url=$5
+
+  have=$(plugin_version "$name")
+  if at_least "$minimum" "$have"; then
+    echo "docker $name $have — $minimum 이상이라 그대로 쓴다"
+    return 0
+  fi
+
+  if [ -z "$have" ]; then
+    echo "docker $name 이 없다 — $version 을 받는다 ($minimum 이상 필요)"
+  else
+    echo "docker $name 이 $have 로 낡았다 — $version 을 받는다 ($minimum 이상 필요)"
+  fi
+
+  tmp="$(mktemp)"
+  curl -fsSL -o "$tmp" "$url"
+
+  # 받은 파일이 진짜인지 먼저 본다. 확인 없이 받아서 실행하면 중간에 바뀐 파일을
+  # root 로 돌리는 셈이다. 어긋나면 여기서 부팅이 멈춘다 — 조용히 넘어가지 않는다.
+  echo "$sha256  $tmp" | sha256sum --check --status
 
   install -d -m 755 /usr/local/lib/docker/cli-plugins
-  install -m 755 "$BUILDX_TMP" /usr/local/lib/docker/cli-plugins/docker-buildx
-  rm -f "$BUILDX_TMP"
-fi
+  install -m 755 "$tmp" /usr/local/lib/docker/cli-plugins/docker-$name
+  rm -f "$tmp"
 
-docker buildx version
+  have=$(plugin_version "$name")
+  if ! at_least "$minimum" "$have"; then
+    echo "docker $name 이 아직 $minimum 미만이다 (지금: $have) — 낡은 플러그인이" >&2
+    echo "검색 순서에서 이기고 있다. /usr/libexec/docker/cli-plugins 를 확인하라." >&2
+    exit 1
+  fi
+  echo "docker $name $have"
+}
+
+# 있으면 쓴다 — 버전이 충분하면 배포판 것이 보안 업데이트를 받는다.
+# 부족하면 아래에서 덮어쓴다.
+dnf install -y docker-compose-plugin || true
+dnf install -y docker-buildx-plugin || true
+
+# 버전과 sha256 은 릴리스 페이지에서 가져온다. 바꿀 때 둘을 같이 바꾼다.
+# AMI 가 x86_64 고정이라(main.tf 의 filter) 받는 파일도 x86_64 / linux-amd64 다.
+#
+# 최소 버전의 근거
+#   compose — 우리가 고정한 버전보다 낮으면 덮어쓴다. 기준이 없으면 "낡음" 을 정의할 수 없다.
+#   buildx  — compose 가 요구하는 값. 그 에러 문구에 그대로 적혀 있다.
+COMPOSE_VERSION=v5.5.1
+COMPOSE_SHA256=db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
+COMPOSE_MINIMUM=5.5.1
+
+BUILDX_VERSION=v0.37.1
+BUILDX_SHA256=9447199cdb435f25880548343c128a4b6650e8891ee598905d8d29d39a8e359b
+BUILDX_MINIMUM=0.17.0
+
+ensure_docker_plugin compose "$COMPOSE_MINIMUM" "$COMPOSE_VERSION" "$COMPOSE_SHA256" \
+  "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-x86_64"
+
+ensure_docker_plugin buildx "$BUILDX_MINIMUM" "$BUILDX_VERSION" "$BUILDX_SHA256" \
+  "https://github.com/docker/buildx/releases/download/$BUILDX_VERSION/buildx-$BUILDX_VERSION.linux-amd64"
 
 mkdir -p /opt/heattrip
 
