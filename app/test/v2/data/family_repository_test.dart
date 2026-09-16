@@ -372,17 +372,25 @@ void main() {
     });
   });
 
-  test('모르는 케어 종류는 목록에서 조용히 빠진다 — 화면 전체가 죽지 않는다', () async {
+  test('모르는 케어 종류는 종류만 비우고 줄은 남는다 — 줄째로 버리면 기록이 사라진다', () async {
+    // **규칙이 #560 에서 바뀌었다.** 전에는 모르는 종류면 그 줄을 통째로 버렸다. 지금은
+    // 직접 만든 항목의 기록이 **원래 종류가 없어서**(서버가 null 로 준다) 그 규칙을 두면
+    // 사용자가 만든 "양치" 기록이 화면에서 통째로 사라진다.
+    //
+    // 지키려던 것은 그대로다 — "카드 한 칸이 안 그려지는 것과 화면 전체가 죽는 것은 다르다".
+    // 종류를 모르면 그 칸이 안 세는 것으로 끝나고, 목록은 살아 있다.
     final f = repositoryThatAnswers((_) => _json([
           {
             'id': 1,
             'type': 'grooming',
+            'careItemId': 9,
             'doneBy': {'userId': 1, 'nickname': '나'},
             'occurredAt': '2026-08-30T09:00:00',
           },
           {
             'id': 2,
             'type': 'water',
+            'careItemId': 1,
             'doneBy': {'userId': 1, 'nickname': '나'},
             'occurredAt': '2026-08-30T09:10:00',
           },
@@ -390,11 +398,9 @@ void main() {
 
     final logs = await f.repo.careLogs(3);
 
-    expect(
-      logs.map((l) => l.type),
-      [ServerCareType.water],
-      reason: '서버가 종류를 늘렸는데 앱이 낡았을 때 카드 한 칸이 안 그려지는 것과 '
-          '화면 전체가 죽는 것은 다르다',
-    );
+    expect(logs.map((l) => l.id), [1, 2], reason: '두 줄 다 살아 있어야 한다');
+    expect(logs.map((l) => l.type), [null, ServerCareType.water]);
+    expect(logs.map((l) => l.careItemId), [9, 1],
+        reason: '어느 칸의 기록인지는 서버가 풀어서 준다 — 앱이 종류로 다시 찾지 않는다');
   });
 }

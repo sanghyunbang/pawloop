@@ -346,16 +346,38 @@ void main() {
 
   group('문구 조립', () {
     test('종류마다 서술어가 다르다', () {
-      String warn(ServerCareType type) => duplicateWarning(CareLogEntry(
-            id: 1,
-            type: type,
-            doneByUserId: 1,
-            doneByName: '아빠',
-            occurredAt: DateTime(2026, 8, 30, 9, 5),
-          ));
+      String warn(ServerCareType? type, {String what = '밥'}) =>
+          duplicateWarning(
+              CareLogEntry(
+                id: 1,
+                type: type,
+                careItemId: 2,
+                doneByUserId: 1,
+                doneByName: '아빠',
+                occurredAt: DateTime(2026, 8, 30, 9, 5),
+              ),
+              what);
 
       expect(warn(ServerCareType.walk), '오늘 09:05 아빠가 산책을 다녀왔습니다. 그래도 기록할까요?');
       expect(warn(ServerCareType.vet), '오늘 09:05 아빠가 병원에 다녀왔습니다. 그래도 기록할까요?');
+    });
+
+    test('직접 만든 항목은 칸 이름을 쓴다 — 종류가 없어 서술어를 못 고른다(#560)', () {
+      String warn(ServerCareType? type, {String what = '밥'}) =>
+          duplicateWarning(
+              CareLogEntry(
+                id: 1,
+                type: type,
+                careItemId: 9,
+                doneByUserId: 1,
+                doneByName: '아빠',
+                occurredAt: DateTime(2026, 8, 30, 9, 5),
+              ),
+              what);
+
+      expect(warn(null, what: '양치'), contains('양치 기록을 남겼습니다'),
+          reason: '조사를 붙이면 "약을" 과 "양치를" 이 달라 이름마다 틀린다');
+      expect(warn(null, what: '양치'), contains('아빠'));
     });
 
     test('주격 조사는 받침으로 고른다 — "지훈가" 가 되면 안 된다', () {

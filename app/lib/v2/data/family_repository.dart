@@ -68,7 +68,20 @@ enum ServerCareType {
 /// 케어 기록 한 건 — 계약의 `CareLog`.
 class CareLogEntry {
   final int id;
-  final ServerCareType type;
+
+  /// 기본 일곱이면 그 종류, **직접 만든 항목이면 `null`**(#560).
+  ///
+  /// 예전에는 `null` 이면 이 줄을 통째로 버렸다. 그대로 뒀으면 사용자가 만든 "양치" 를
+  /// 눌러도 **카드에 아무 일도 안 일어난다** — 서버에는 쌓이는데 화면만 조용한, 이 저장소가
+  /// 여러 번 겪은 모양이다.
+  final ServerCareType? type;
+
+  /// **어느 칸의 기록인가**(#560). 서버가 풀어서 준다 — 앱이 다시 계산하지 않는다.
+  ///
+  /// 기본 일곱의 기록은 행에 항목이 안 적혀 있어도 서버가 그 집의 같은 종류 칸을 찾아
+  /// 넣는다. 그 갈래를 여기서 다시 적으면 규칙이 서버와 앱 두 곳에 생긴다.
+  final int? careItemId;
+
   final int doneByUserId;
   final String doneByName;
   final DateTime occurredAt;
@@ -77,6 +90,7 @@ class CareLogEntry {
   const CareLogEntry({
     required this.id,
     required this.type,
+    required this.careItemId,
     required this.doneByUserId,
     required this.doneByName,
     required this.occurredAt,
@@ -88,25 +102,97 @@ class CareLogEntry {
       '${occurredAt.hour.toString().padLeft(2, '0')}:'
       '${occurredAt.minute.toString().padLeft(2, '0')}';
 
-  /// 모르는 종류면 `null` — 호출부가 걸러 낸다.
+  /// 시각을 못 읽으면 `null` — 호출부가 걸러 낸다.
+  ///
+  /// **종류가 없다고 버리지 않는다.** 직접 만든 항목의 기록은 종류가 비어 있고
+  /// `careItemId` 만 든다(#560). 예전 규칙대로 버리면 그 기록이 화면에서 통째로 사라진다.
   static CareLogEntry? tryParse(Map<String, dynamic> json) {
     final type = ServerCareType.tryParse(json['type'] as String?);
     // **`.toLocal()` 이 필요하다.** 서버가 오프셋을 붙여 보내면(#209) Dart 는 그것을
     // **UTC** DateTime 으로 돌려준다 — 그대로 `.hour` 를 읽으면 KST 00:30 이 15:30 으로
     // 뜬다. community_repository 가 같은 이유로 같은 자리에서 `.toLocal()` 을 부른다.
     final occurredAt = DateTime.tryParse('${json['occurredAt']}')?.toLocal();
-    if (type == null || occurredAt == null) return null;
+    if (occurredAt == null) return null;
 
     final doneBy = json['doneBy'];
     return CareLogEntry(
       id: (json['id'] as num?)?.toInt() ?? 0,
       type: type,
+      careItemId: (json['careItemId'] as num?)?.toInt(),
       doneByUserId: doneBy is Map
           ? ((doneBy['userId'] as num?)?.toInt() ?? 0)
           : 0,
       doneByName: doneBy is Map ? '${doneBy['nickname'] ?? ''}' : '',
       occurredAt: occurredAt,
       memo: json['memo'] as String?,
+    );
+  }
+}
+
+/// 그 집이 챙기는 일 하나 — 계약의 `CareItem`. 이슈 #560.
+///
+/// 홈 카드의 **칸 하나**가 이 객체다. 고치기 화면은 접힌 것까지 같은 목록으로 본다.
+class CareItemEntry {
+  final int id;
+
+  /// 그 아이에게만 하는 일이면 그 아이, **비어 있으면 모든 아이**.
+  final int? dogId;
+
+  final String name;
+
+  /// 그림을 고르는 열쇠말. **모르는 값이면 기본 그림으로 떨어진다** — 서버가 목록을 넓혀도
+  /// 옛 앱이 안 깨지게 하려는 것이다.
+  final String icon;
+
+  /// 기본 일곱이면 그 종류, 직접 만든 것이면 `null`. **고칠 수 없는 값이다.**
+  final ServerCareType? systemType;
+
+  /// 하루 몇 번. 비어 있으면 횟수만 세고, 있으면 `1/2` 로 그린다.
+  final int? dailyTarget;
+
+  final int sortOrder;
+
+  /// 접은 시각. **비어 있으면 카드에 뜬다.**
+  final DateTime? archivedAt;
+
+  const CareItemEntry({
+    required this.id,
+    required this.dogId,
+    required this.name,
+    required this.icon,
+    required this.systemType,
+    required this.dailyTarget,
+    required this.sortOrder,
+    required this.archivedAt,
+  });
+
+  bool get archived => archivedAt != null;
+
+  /// 기본 일곱인가. **"주변 찾기" 같은 부가 기능이 붙는 자리**이고, 직접 만든 항목은
+  /// 단순 투두다(사장님, 2026-09-16).
+  bool get isSystem => systemType != null;
+
+  /// 이름이나 아이콘을 못 읽으면 `null` — 그 칸은 그릴 것이 없다.
+  static CareItemEntry? tryParse(Map<String, dynamic> json) {
+    final id = (json['id'] as num?)?.toInt();
+    final name = json['name'] as String?;
+    final icon = json['icon'] as String?;
+    if (id == null || name == null || name.isEmpty || icon == null) return null;
+
+    // `.toLocal()` 이 필요한 이유는 CareLogEntry.tryParse 와 같다.
+    final archivedAt = json['archivedAt'] == null
+        ? null
+        : DateTime.tryParse('${json['archivedAt']}')?.toLocal();
+
+    return CareItemEntry(
+      id: id,
+      dogId: (json['dogId'] as num?)?.toInt(),
+      name: name,
+      icon: icon,
+      systemType: ServerCareType.tryParse(json['systemType'] as String?),
+      dailyTarget: (json['dailyTarget'] as num?)?.toInt(),
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      archivedAt: archivedAt,
     );
   }
 }
@@ -377,6 +463,108 @@ class FamilyRepository {
     return parsed;
   }
 
+  /// 그 집이 챙기는 일의 목록 — **접힌 것까지**, 순서대로(#560).
+  ///
+  /// 접힌 것을 빼지 않는 이유는 고치기 화면이 "다시 켜기" 를 그려야 하기 때문이다. 카드는
+  /// [CareItemEntry.archived] 로 거른다 — 조회를 나누면 "접힘" 의 정의가 두 곳에 생긴다.
+  Future<List<CareItemEntry>> careItems(int groupId) async {
+    final json = await _send(
+      () => _authed.getJson(Uri.parse('$baseUrl/api/groups/$groupId/care-items')),
+    );
+    return (json as List)
+        .whereType<Map<String, dynamic>>()
+        .map(CareItemEntry.tryParse)
+        .whereType<CareItemEntry>()
+        .toList();
+  }
+
+  /// 항목 하나 만들기 — 목록 **맨 뒤**에 놓인다.
+  ///
+  /// 이름은 1~20자, 아이콘은 고르는 목록의 값, 목표는 1~20 이거나 없음. 규칙 밖이면 서버가
+  /// 400 이고 [FamilyFailureKind.invalid] 로 온다 — 화면이 "다시 시도" 를 그리면 안 되는
+  /// 실패다(눌러도 영원히 같은 결과다).
+  Future<CareItemEntry> createCareItem(int groupId,
+      {required String name,
+      required String icon,
+      int? dogId,
+      int? dailyTarget}) async {
+    final json = await _send(
+      () => _authed.postJson(
+        Uri.parse('$baseUrl/api/groups/$groupId/care-items'),
+        body: {
+          'name': name,
+          'icon': icon,
+          if (dogId != null) 'dogId': dogId,
+          if (dailyTarget != null) 'dailyTarget': dailyTarget,
+        },
+      ),
+    );
+    return _parsedItem(json);
+  }
+
+  /// 항목 하나 **전량 교체**.
+  ///
+  /// 부분 수정이 아니다 — 안 보낸 값은 **비워진다**. 그래야 "모든 아이" 로 되돌리거나 목표를
+  /// 지울 수 있다(JSON 에서는 "안 보냄" 과 "비우려고 보냄" 이 둘 다 null 이라 구분이 안 된다).
+  Future<CareItemEntry> replaceCareItem(int groupId, int itemId,
+      {required String name,
+      required String icon,
+      int? dogId,
+      int? dailyTarget,
+      bool archived = false}) async {
+    final json = await _send(
+      () => _authed.putJson(
+        Uri.parse('$baseUrl/api/groups/$groupId/care-items/$itemId'),
+        body: {
+          'name': name,
+          'icon': icon,
+          if (dogId != null) 'dogId': dogId,
+          if (dailyTarget != null) 'dailyTarget': dailyTarget,
+          'archived': archived,
+        },
+      ),
+      notFoundIs: FamilyFailureKind.gone,
+    );
+    return _parsedItem(json);
+  }
+
+  /// 항목 **접기** — 지우는 것이 아니다. 카드에서 사라지고 기록은 그대로 남는다.
+  ///
+  /// 되살리기는 [replaceCareItem] 에 `archived: false` 다. 이미 접힌 것을 또 접어도 204 라
+  /// 화면이 재시도를 걱정하지 않아도 된다.
+  Future<void> archiveCareItem(int groupId, int itemId) async {
+    await _send(
+      () => _authed.deleteJson(
+        Uri.parse('$baseUrl/api/groups/$groupId/care-items/$itemId'),
+      ),
+      notFoundIs: FamilyFailureKind.gone,
+    );
+  }
+
+  /// 목록 순서 — **그 집 항목 전부**를 화면에 보이는 순서대로.
+  ///
+  /// 빠지거나 겹치면 서버가 400 이다([FamilyFailureKind.invalid]). 조용히 뒤에 붙이지 않는
+  /// 이유는, 두 사람이 동시에 순서를 바꿨을 때 나중 요청이 먼저 요청의 새 항목을 맨 뒤로
+  /// 보내기 때문이다 — 거절하면 화면이 목록을 다시 읽는다.
+  Future<void> reorderCareItems(int groupId, List<int> itemIds) async {
+    await _send(
+      () => _authed.putJson(
+        Uri.parse('$baseUrl/api/groups/$groupId/care-items/order'),
+        body: {'itemIds': itemIds},
+      ),
+    );
+  }
+
+  CareItemEntry _parsedItem(Object? json) {
+    final parsed = json is Map<String, dynamic>
+        ? CareItemEntry.tryParse(json)
+        : null;
+    if (parsed == null) {
+      throw const FamilyFailure(FamilyFailureKind.network, '응답을 읽지 못했어요');
+    }
+    return parsed;
+  }
+
   /// 내가 남긴 케어 기록 하나를 지운다(#209). **본인 기록만** — 남의 것은 서버가 403 이라
   /// [FamilyFailureKind.forbidden] 이고, 벌써 지워졌거나 이 그룹에 없는 id 는 404 라
   /// [FamilyFailureKind.gone] 이다. 성공은 204 라 돌려줄 것이 없다.
@@ -484,7 +672,29 @@ class FamilyRepository {
       429 => FamilyFailureKind.rateLimited,
       _ => FamilyFailureKind.network,
     };
-    throw FamilyFailure(kind, FamilyFailure.messageFor(kind));
+    // 400 만 **서버가 적은 문구**를 쓴다. 여기 박아 둔 문구는 메모 길이 이야기라, 케어
+    // 항목을 고치다 거절당한 사람에게 "메모는 500자까지" 라고 말한다 — 화면과 원인이 서로
+    // 다른 말을 하는 자리다(#560 에서 실측으로 봤다).
+    //
+    // 다른 코드에는 안 쓴다. 401·403·404 의 서버 문구는 "왜 막혔는지" 를 알려 주는 쪽이라
+    // 그대로 보여 주면 id 를 훑어 남의 것을 세는 데 쓰인다(#209 가 404 를 합친 이유).
+    throw FamilyFailure(
+      kind,
+      kind == FamilyFailureKind.invalid
+          ? (_messageOf(res) ?? FamilyFailure.messageFor(kind))
+          : FamilyFailure.messageFor(kind),
+    );
+  }
+
+  /// 오류 본문의 {@code message}. 못 읽으면 {@code null} 이다 — 본문이 JSON 이 아닐 수도 있다.
+  static String? _messageOf(http.Response res) {
+    try {
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      final message = body is Map ? body['message'] : null;
+      return message is String && message.trim().isNotEmpty ? message : null;
+    } catch (_) {
+      return null;
+    }
   }
 }
 

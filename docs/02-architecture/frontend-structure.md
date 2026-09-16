@@ -66,7 +66,8 @@ lib/
 | `myrecords_screen.dart` | 내 산책 기록 목록 | me → push |
 | `pin_picker_screen.dart` | 지도에서 장소 핀 선택 | 보조 |
 | `walk_detail_screen.dart` | 산책 회고 — 글을 나중에 고친다 → `PUT /api/walks/{id}/memo` · 맨 위 사진 띠(`Walk.media`, #450) | 기록 카드 탭 (#187) |
-| `family_screen.dart` | 우리 가족 — 그룹·구성원·오늘의 케어 | me → push |
+| `family_screen.dart` | 우리 가족 — 그룹·구성원·오늘의 케어. 카드 아래 "할 일 고치기" 줄이 목록 화면을 연다(#560) | me → push |
+| `care_items_screen.dart` | 할 일 고치기 — 그 집이 챙기는 일의 목록(#560). 손잡이로 끌어 순서 바꾸기 · 눌러서 이름·그림·하루 목표 고치기 · 접기(지우는 것이 아니다). **접힌 것도 한 목록에** 있어야 다시 켤 수 있다 | 우리 가족 → push |
 | `family_chat_screen.dart` | 가족 채팅방 (폴링) · 사진 메시지(#452: 고르기 → `CHAT_IMAGE` 올리기 → `mediaId` 전송, 말풍선은 4:5 규칙) | family → push |
 | `chat_list_screen.dart` | 방 목록 · 미읽음 | 탭 4 |
 | `invite_join_screen.dart` | 초대 코드로 방 참여 | 링크·코드 입력 |
