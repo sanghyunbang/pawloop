@@ -29,7 +29,8 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/family_repository.dart';
-import '../domain/pet.dart' show careIcon, CareType, kMyDog;
+import '../domain/care_icons.dart';
+import '../domain/pet.dart' show kMyDog;
 import '../theme/app_tokens.dart';
 import 'aurora.dart';
 
@@ -73,14 +74,18 @@ class _TodayCareCardState extends State<TodayCareCard> {
 
   FamilyGroupSummary? _group;
   List<CareLogEntry> _logs = const [];
+
+  /// 그 집이 챙기는 일 — **카드의 칸이 이 목록이다**(#560). 접힌 것은 빼고 순서대로다.
+  List<CareItemEntry> _items = const [];
+
   FamilyFailureKind? _failure;
   bool _loading = true;
 
   /// 로그인한 적 없는 사람. 서버를 부르지 않는다(#324).
   bool _guest = false;
 
-  /// 기록을 보내는 중인 종류. 같은 칸을 두 번 눌러 두 번 보내는 것을 막는다.
-  ServerCareType? _sending;
+  /// 기록을 보내는 중인 **항목 id**. 같은 칸을 두 번 눌러 두 번 보내는 것을 막는다.
+  int? _sending;
 
   @override
   void initState() {
@@ -125,10 +130,12 @@ class _TodayCareCardState extends State<TodayCareCard> {
       // **고른 아이의 기록만 센다**(#563). 이게 없으면 아이가 둘인 집에서 보리 이름 아래
       // 카드가 누리 밥까지 세고, "밥 2회" 가 보리한테 두 번인지 둘이 한 번씩인지 모르게 된다.
       final logs = await _repo.careLogs(group.id, dogId: kMyDog.value?.serverId);
+      final items = await _itemsOf(group.id);
       if (!mounted) return;
       setState(() {
         _group = group;
         _logs = logs;
+        _items = items;
         _loading = false;
       });
     } on FamilyFailure catch (e) {
@@ -140,22 +147,77 @@ class _TodayCareCardState extends State<TodayCareCard> {
     }
   }
 
-  /// 그 종류의 **가장 최근** 기록. 없으면 null.
+  /// 목록을 못 읽었을 때 그리는 기본 일곱.
+  ///
+  /// 서버가 어느 집에나 심어 두는 것과 같은 일곱이다(마이그레이션 50). id 를 음수로 두는
+  /// 이유는 **진짜 항목과 절대 안 겹치게** 하려는 것이다 — 겹치면 `_belongsTo` 가 남의
+  /// 기록을 이 칸에 붙인다. 이 항목들은 종류를 들고 있어서 옛 기록이 제 칸으로 간다.
+  static final List<CareItemEntry> _fallbackItems = [
+    for (final (index, type) in [
+      (0, ServerCareType.water),
+      (1, ServerCareType.meal),
+      (2, ServerCareType.walk),
+      (3, ServerCareType.med),
+      (4, ServerCareType.vet),
+      (5, ServerCareType.poop),
+      (6, ServerCareType.pee),
+    ])
+      CareItemEntry(
+        id: -1 - index,
+        dogId: null,
+        name: const ['물', '밥', '산책', '투약', '병원', '배변', '마킹'][index],
+        icon: type.wire,
+        systemType: type,
+        dailyTarget: null,
+        sortOrder: index,
+        archivedAt: null,
+      ),
+  ];
+
+  /// 그 집의 항목 — **못 읽으면 기본 일곱으로 그린다.**
+  ///
+  /// 목록을 못 읽었다고 카드를 비우면, 서버가 잠깐 흔들린 날 사용자는 "오늘 아무것도 안
+  /// 했다" 가 아니라 **"케어라는 기능이 사라졌다"** 를 본다. 기본 일곱은 어느 집에나 있는
+  /// 목록이라(마이그레이션 50 이 심었다) 그것으로 그리는 쪽이 덜 틀린다.
+  ///
+  /// 접힌 항목은 뺀다 — 그게 "접기" 의 뜻이다. 고치기 화면만 접힌 것을 본다.
+  Future<List<CareItemEntry>> _itemsOf(int groupId) async {
+    try {
+      final items = await _repo.careItems(groupId);
+      final live = items.where((item) => !item.archived).toList();
+      return live.isEmpty ? _fallbackItems : live;
+    } on FamilyFailure {
+      return _fallbackItems;
+    }
+  }
+
+  /// 이 기록이 그 칸의 것인가 — **규칙은 서버가 이미 풀었다**(#560 조각 2).
+  ///
+  /// `careItemId` 가 있으면 그것 하나로 끝난다. 없는 경우는 둘뿐이다 — 조각 2 이전 서버와
+  /// 얘기하고 있거나, 목록을 못 읽어 기본 일곱으로 그리는 중이다. 그때만 종류로 붙인다.
+  /// <b>평상시에는 이 두 번째 갈래를 타지 않는다</b> — 타기 시작하면 세는 규칙이 서버와 앱
+  /// 두 곳에 사는 것이라, 그 사실을 여기 적어 둔다.
+  bool _belongsTo(CareLogEntry log, CareItemEntry item) {
+    if (log.careItemId != null) return log.careItemId == item.id;
+    return item.systemType != null && log.type == item.systemType;
+  }
+
+  /// 그 칸의 **가장 최근** 기록. 없으면 null.
   ///
   /// 목록은 이른 것부터라 마지막이 최근이다. "오늘 이미 했다" 를 물을 때도, 칸에
   /// "누가·언제" 를 그릴 때도 이 하나를 쓴다 — 둘이 다른 행을 보면 확인 문구와 화면이
   /// 서로 다른 말을 한다.
-  CareLogEntry? _latestOf(ServerCareType type) {
+  CareLogEntry? _latestOf(CareItemEntry item) {
     CareLogEntry? found;
     for (final log in _logs) {
-      if (log.type == type) found = log;
+      if (_belongsTo(log, item)) found = log;
     }
     return found;
   }
 
-  /// 오늘 그 종류가 몇 번인가.
-  int _countOf(ServerCareType type) =>
-      _logs.where((log) => log.type == type).length;
+  /// 오늘 그 칸이 몇 번인가.
+  int _countOf(CareItemEntry item) =>
+      _logs.where((log) => _belongsTo(log, item)).length;
 
   /// 칸의 둘째 줄 — **한 줄에 하나만** 적는다. 셋 중 무엇을 적을지는 순서가 있다.
   ///
@@ -168,11 +230,18 @@ class _TodayCareCardState extends State<TodayCareCard> {
   ///    한 줄이 "엄마가 아침에 1.2km 걸었어요" 로 이름을 말하고, 내가 걸었으면 이름이 나다.
   ///    거리는 이 칸 말고는 홈에 적을 자리가 없다.
   /// 4. 나머지는 **누가**. 물·밥은 두 번 주지 않으려고 보는 자리다.
-  String _firstLine(ServerCareType type, CareLogEntry? done) {
+  /// 5. **하루 목표가 있으면 `1/2`.** 목표를 적어 둔 집은 "몇 번 중 몇 번" 이 답이다 —
+  ///    횟수만 적으면 두 번 줘야 하는 집에서 `1회` 가 끝난 것처럼 보인다. 못 채워도 아무
+  ///    말도 안 한다: 이 카드는 누락을 보이게 하려는 것이지 혼내려는 것이 아니다.
+  String _firstLine(CareItemEntry item, CareLogEntry? done) {
+    final count = _countOf(item);
+    final target = item.dailyTarget;
+    if (target != null) return '$count/$target';
     if (done == null) return '아직';
-    final count = _countOf(type);
     if (count >= 2) return '$count회';
-    if (type == ServerCareType.walk && (done.memo ?? '').isNotEmpty) return done.memo!;
+    if (item.systemType == ServerCareType.walk && (done.memo ?? '').isNotEmpty) {
+      return done.memo!;
+    }
     return done.doneByName;
   }
 
@@ -183,13 +252,13 @@ class _TodayCareCardState extends State<TodayCareCard> {
   /// 이유는, 어느 시각을 적어도 나머지를 숨기기 때문이다 — 시각 전부는 "오늘 한 일" 이 적는다.
   ///
   /// 이름이 길면 `아빠 외 1` 로 접는다. 칸 폭이 좁아서(#326) 두 이름이 다 안 들어간다.
-  String _secondLine(ServerCareType type, CareLogEntry? done) {
+  String _secondLine(CareItemEntry item, CareLogEntry? done) {
     if (done == null) return '';
     // **횟수로 가른다, 사람 수가 아니라.** 한 사람이 두 번 한 날도 첫 줄은 `2회` 인데,
     // 그때 시각 하나를 적으면 "누가" 가 화면에서 통째로 사라진다. `2회 · 아빠` 와
     // `2회 · 아빠·엄마` 가 달라 보여야 분담이 보인다.
-    if (_countOf(type) < 2) return done.timeLabel;
-    final names = _doersOf(type);
+    if (_countOf(item) < 2) return done.timeLabel;
+    final names = _doersOf(item);
     if (names.length == 1) return names.first;
     // 둘을 다 적을 수 있으면 다 적는다. 칸이 좁아서(#326) 다섯 자가 한계다 —
     // `아빠·엄마` 는 들어가고 `아버지·할머니` 는 안 들어간다.
@@ -203,32 +272,32 @@ class _TodayCareCardState extends State<TodayCareCard> {
   ///
   /// 최근 순인 이유: 한 번일 때 첫 줄이 **마지막에 한 사람**을 적는다. 둘 이상일 때
   /// 앞에 오는 이름이 달라지면 같은 칸이 상황에 따라 다른 기준으로 읽힌다.
-  List<String> _doersOf(ServerCareType type) {
+  List<String> _doersOf(CareItemEntry item) {
     final seen = <int>{};
     final names = <String>[];
     for (final log in _logs.reversed) {
-      if (log.type != type) continue;
+      if (!_belongsTo(log, item)) continue;
       if (!seen.add(log.doneByUserId)) continue;
       names.add(log.doneByName.isEmpty ? '누군가' : log.doneByName);
     }
     return names;
   }
 
-  Future<void> _tap(ServerCareType type) async {
+  Future<void> _tap(CareItemEntry item) async {
     final group = _group;
     if (group == null || _sending != null) return;
 
-    final already = _latestOf(type);
+    final already = _latestOf(item);
     if (already != null) {
       final me = widget.myUserId ?? AuthState.user?.id;
       if (me != null && already.doneByUserId == me) {
         // 내 기록이 있는 칸을 다시 누른 것 — 대개 잘못 눌렀거나 무르고 싶은 것이다(#329).
         // 두 끼는 실제로 있으니 "한 번 더 기록" 도 같은 자리에서 고른다.
-        final choice = await _askRetap(already);
+        final choice = await _askRetap(already, item.name);
         if (!mounted) return;
         switch (choice) {
           case _Retap.undo:
-            await _delete(group, type, already);
+            await _delete(group, item, already);
             return;
           case _Retap.cancel:
             return;
@@ -236,16 +305,21 @@ class _TodayCareCardState extends State<TodayCareCard> {
             break;
         }
       } else {
-        final ok = await _confirmDuplicate(already);
+        final ok = await _confirmDuplicate(already, item.name);
         // await 뒤의 첫 문장에서 가른다 — 이 State 가 사라졌으면 아무것도 하지 않는다.
         if (!mounted) return;
         if (!ok) return;
       }
     }
 
-    setState(() => _sending = type);
+    setState(() => _sending = item.id);
     try {
-      await _repo.recordCare(group.id, type, dogId: kMyDog.value?.serverId);
+      // **기본 항목은 종류로, 직접 만든 것은 항목 번호로 보낸다**(계약: 정확히 하나).
+      // 기본 항목을 종류로 보내면 서버가 항목까지 붙여 주므로, 옛 집계와 산책 화면의
+      // `type='walk'` 조회가 그대로 돈다.
+      await _repo.recordCare(group.id, item.systemType,
+          careItemId: item.systemType == null ? item.id : null,
+          dogId: kMyDog.value?.serverId);
       if (!mounted) return;
       setState(() => _sending = null);
       // 다른 화면의 카드도 함께 다시 읽는다. 이 콜백이 자기 자신의 _load 도 부른다.
@@ -258,7 +332,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
   }
 
   /// "오늘 14:20 에 내가 남긴 밥 기록이에요" — 지우기 / 한 번 더 기록 / 취소.
-  Future<_Retap> _askRetap(CareLogEntry mine) async {
+  Future<_Retap> _askRetap(CareLogEntry mine, String what) async {
     final answer = await showDialog<_Retap>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -269,7 +343,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
         ),
         content: Text(
-          retapWarning(mine, _labelOf(mine.type)),
+          retapWarning(mine, what),
           style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
         ),
         actions: [
@@ -296,7 +370,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
   }
 
   /// "오늘 14:20 아빠가 밥을 줬습니다. 그래도 기록할까요?"
-  Future<bool> _confirmDuplicate(CareLogEntry already) async {
+  Future<bool> _confirmDuplicate(CareLogEntry already, String what) async {
     final answer = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -307,7 +381,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
         ),
         content: Text(
-          duplicateWarning(already, _labelOf(already.type)),
+          duplicateWarning(already, what),
           style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
         ),
         actions: [
@@ -334,10 +408,10 @@ class _TodayCareCardState extends State<TodayCareCard> {
   /// 되돌릴 길이 없으면 사용자는 이 카드를 안 믿는다. 남의 기록은 서버도 403 으로 거절하지만
   /// 여기서 먼저 안내한다 — 지울 수 있으면 엄마가 실제로 다녀온 산책을 아빠가 "실수겠지"
   /// 하고 지우는, 이 카드가 막으려던 산책 누락이 그 자리에서 생긴다.
-  Future<void> _deleteLatest(ServerCareType type) async {
+  Future<void> _deleteLatest(CareItemEntry item) async {
     final group = _group;
     if (group == null || _sending != null) return;
-    final latest = _latestOf(type);
+    final latest = _latestOf(item);
     if (latest == null) return;
 
     final me = widget.myUserId ?? AuthState.user?.id;
@@ -346,14 +420,15 @@ class _TodayCareCardState extends State<TodayCareCard> {
       return;
     }
 
-    final ok = await _confirmDelete(latest);
+    final ok = await _confirmDelete(latest, item.name);
     if (!mounted || !ok) return;
-    await _delete(group, type, latest);
+    await _delete(group, item, latest);
   }
 
   /// 확인은 끝난 뒤다 — 서버로 지우고 살아 있는 카드가 전부 다시 읽게 한다.
-  Future<void> _delete(FamilyGroupSummary group, ServerCareType type, CareLogEntry latest) async {
-    setState(() => _sending = type);
+  Future<void> _delete(
+      FamilyGroupSummary group, CareItemEntry item, CareLogEntry latest) async {
+    setState(() => _sending = item.id);
     try {
       await _repo.deleteCareLog(group.id, latest.id);
       if (!mounted) return;
@@ -369,7 +444,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
   }
 
   /// "14:20 에 남긴 밥 기록을 지웁니다. 가족 화면에서도 사라져요."
-  Future<bool> _confirmDelete(CareLogEntry entry) async {
+  Future<bool> _confirmDelete(CareLogEntry entry, String what) async {
     final answer = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -380,7 +455,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
         ),
         content: Text(
-          deleteWarning(entry, _labelOf(entry.type)),
+          deleteWarning(entry, what),
           style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
         ),
         actions: [
@@ -549,15 +624,15 @@ class _TodayCareCardState extends State<TodayCareCard> {
         ]),
         const SizedBox(height: 9),
       ],
-      for (int start = 0; start < kCareCardColumns.length; start += kCareCardColumnsPerRow) ...[
+      for (int start = 0; start < _items.length; start += _perRow) ...[
         if (start > 0) const SizedBox(height: 6),
         Row(children: [
-          for (int i = 0; i < kCareCardColumnsPerRow; i++) ...[
+          for (int i = 0; i < _perRow; i++) ...[
             if (i > 0) const SizedBox(width: 6),
             Expanded(
-              child: start + i < kCareCardColumns.length
-                  ? _cell(kCareCardColumns[start + i])
-                  // 마지막 줄의 빈 자리. 칸 폭을 두 줄에서 같게 두려고 자리만 잡는다.
+              child: start + i < _items.length
+                  ? _cell(_items[start + i])
+                  // 마지막 줄의 빈 자리. 칸 폭을 줄마다 같게 두려고 자리만 잡는다.
                   : const SizedBox.shrink(),
             ),
           ],
@@ -663,7 +738,8 @@ class _TodayCareCardState extends State<TodayCareCard> {
   /// 거리는 케어 로그의 메모에 실려 온다([WalkCareLink.kmLabel]). 없으면 거리 없이
   /// 적는다 — 옛 기록과 손으로 누른 산책 칸에는 메모가 없다.
   String? _familyWalkLine() {
-    final latest = _latestOf(ServerCareType.walk);
+    final walk = _items.where((item) => item.systemType == ServerCareType.walk).firstOrNull;
+    final latest = walk == null ? null : _latestOf(walk);
     if (latest == null) return null;
     final me = widget.myUserId ?? AuthState.user?.id;
     if (me != null && latest.doneByUserId == me) return null;
@@ -680,17 +756,18 @@ class _TodayCareCardState extends State<TodayCareCard> {
     return '저녁';
   }
 
-  Widget _cell(ServerCareType type) {
-    final done = _latestOf(type);
-    final busy = _sending == type;
+  Widget _cell(CareItemEntry item) {
+    final done = _latestOf(item);
+    final busy = _sending == item.id;
+    final slug = cellSlug(item);
 
     return GestureDetector(
-      onTap: busy ? null : () => _tap(type),
+      onTap: busy ? null : () => _tap(item),
       // 길게 누르면 내 기록을 지운다(#209). 짧게 누르는 기록과 같은 칸이라 화면이 안 늘어난다.
-      onLongPress: busy ? null : () => _deleteLatest(type),
+      onLongPress: busy ? null : () => _deleteLatest(item),
       behavior: HitTestBehavior.opaque,
       child: Container(
-        key: Key('care-cell-${type.wire}'),
+        key: Key('care-cell-$slug'),
         padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
         // 완료한 칸은 **코랄 하나**다(#546). 종류마다 다른 색을 쓰던 자리인데, 칸마다
         // 아이콘과 이름이 이미 있어 색으로 가를 필요가 없고 — 색이 말하는 것은 종류가
@@ -708,20 +785,23 @@ class _TodayCareCardState extends State<TodayCareCard> {
         // 58px 이 벌어졌다.
         child: Column(children: [
           Icon(
-            done != null ? Icons.check_circle_rounded : careIcon(_iconTypeOf(type)),
+            done != null ? Icons.check_circle_rounded : careItemIcon(item.icon),
             size: 19,
             color: done != null ? T.accent : T.textMuted,
           ),
           const SizedBox(height: 4),
-          Text(type.label,
+          // 이름은 그 집이 적은 것이다 — 스무 자까지 받으므로 좁은 칸에서는 접는다.
+          Text(item.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: 11, fontWeight: FontWeight.w700, color: T.textSecondary)),
           const SizedBox(height: 2),
           // 한 줄 "walker · 15:40" 은 다섯 칸 폭에서 "walker · 1…" 로 잘렸다(#326).
           // 둘째 줄과 셋째 줄로 나눈다 — 시각은 잘리지 않는다.
           Text(
-            _firstLine(type, done),
-            key: Key('care-line1-${type.wire}'),
+            _firstLine(item, done),
+            key: Key('care-line1-$slug'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 10, color: done == null ? T.textMuted : T.accent),
@@ -729,8 +809,8 @@ class _TodayCareCardState extends State<TodayCareCard> {
           // 아직 안 한 칸도 **빈 줄로 자리를 지킨다.** 이 줄을 없애면 누르는 순간 칸이
           // 한 줄만큼 자라고, 같은 줄의 이웃들이 통째로 밀린다.
           Text(
-            _secondLine(type, done),
-            key: Key('care-line2-${type.wire}'),
+            _secondLine(item, done),
+            key: Key('care-line2-$slug'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: T.accent),
@@ -740,23 +820,26 @@ class _TodayCareCardState extends State<TodayCareCard> {
     );
   }
 
-  /// 아이콘·색은 `pet.dart` 의 것을 그대로 쓴다 — 화면의 시각 언어가 갈리지 않게.
-  /// 서버의 `vet`(병원)은 그쪽에 없어서 `etc` 로 떨어진다.
+  /// 한 줄에 몇 칸인가 — **값에 따라 정해진다**(#560).
   ///
-  /// 배변·마킹(#340)도 지금은 `etc` 다. **이 카드에 칸을 더할지는 아직 안 정했다** —
-  /// 다섯 칸이 이미 좁아서(#326 의 라벨 잘림) 칸을 늘리면 두 줄로 바꾸는 문제가 함께 온다.
-  /// 그때까지 그 기록은 산책 화면과 가족 목록에서 보인다. 여기서 값을 빠뜨리면 화면이
-  /// 죽으므로 갈래는 지금 만들어 둔다.
-  static CareType _iconTypeOf(ServerCareType type) => switch (type) {
-        ServerCareType.water => CareType.water,
-        ServerCareType.meal => CareType.meal,
-        ServerCareType.walk => CareType.walk,
-        ServerCareType.med => CareType.med,
-        ServerCareType.vet => CareType.etc,
-        ServerCareType.poop => CareType.etc,
-        ServerCareType.pee => CareType.etc,
-      };
+  /// 상한은 넷이다. 390dp 에서 <b>다섯은 이미 라벨이 잘렸다</b>(#326 의 실측) — 목록이
+  /// 길어졌다고 한 줄을 늘리면 그 집만 글자가 안 보인다. 대신 **셋 이하면 그만큼만** 둔다:
+  /// 넷으로 고정하면 두 칸짜리 집의 카드에 빈 자리 둘이 남아 폭이 괜히 좁다.
+  ///
+  /// <b>칸 크기는 그래도 전부 같다</b>(#561). 한 줄이 언제나 [_perRow] 개의 자리로
+  /// 나뉘고 남는 자리는 빈 채로 두기 때문이다.
+  int get _perRow => _items.length < kCareCardColumnsPerRow
+      ? _items.length
+      : kCareCardColumnsPerRow;
 }
+
+/// 칸을 가리키는 열쇠말 — 테스트와 화면이 같은 말을 쓰게 한다.
+///
+/// 기본 항목은 <b>종류 그대로</b>다(`care-cell-meal`). 목록이 표로 내려오기 전부터 그
+/// 이름으로 잠가 둔 테스트가 여럿이고, 그 칸은 어느 집에서나 같은 칸이라 이름을 바꿀
+/// 이유가 없다. 직접 만든 항목만 번호로 가른다 — 이름은 집집마다 다르고 바뀐다.
+String cellSlug(CareItemEntry item) =>
+    item.systemType?.wire ?? 'item-${item.id}';
 
 /// 이 카드가 그리는 칸. **서버의 종류 전부가 아니다** — 목록을 여기 적는다(#340).
 ///

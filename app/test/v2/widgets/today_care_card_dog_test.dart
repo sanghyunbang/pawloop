@@ -65,6 +65,32 @@ Map<String, Object?> _log(int id, String type) => {
           posts.add(request.body);
           return _json(_log(99, 'water'), status: 201);
         }
+        // 카드가 #560 부터 항목 목록도 읽는다. **gets 에는 안 담는다** — 이 파일이 재는
+        // 것은 "아이를 물어보는 조회" 라, 섞으면 아래 hasLength 가 무엇을 세는지 흐려진다.
+        if (request.url.path.endsWith('/care-items')) {
+          return _json([
+            {
+              'id': 2,
+              'dogId': null,
+              'name': '밥',
+              'icon': 'meal',
+              'systemType': 'meal',
+              'dailyTarget': null,
+              'sortOrder': 1,
+              'archivedAt': null,
+            },
+            {
+              'id': 1,
+              'dogId': null,
+              'name': '물',
+              'icon': 'water',
+              'systemType': 'water',
+              'dailyTarget': null,
+              'sortOrder': 0,
+              'archivedAt': null,
+            },
+          ]);
+        }
         gets.add(request.url.toString());
         return _json([_log(1, 'water')]);
       }),
