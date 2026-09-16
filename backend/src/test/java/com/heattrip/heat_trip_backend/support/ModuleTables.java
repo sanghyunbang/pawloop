@@ -36,6 +36,7 @@ public final class ModuleTables {
      * 먼저 잰다.
      */
     public static final Map<String, String> BY_TABLE = Map.ofEntries(
+            Map.entry("care_item", "care"),
             Map.entry("care_log", "care"),
             Map.entry("walk_note", "care"),
             Map.entry("chat_message", "chat"),

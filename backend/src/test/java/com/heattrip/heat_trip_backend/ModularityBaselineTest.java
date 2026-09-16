@@ -152,7 +152,28 @@ class ModularityBaselineTest {
      * 남은 96건은 여전히 {@code OAuth.jwt} · {@code group.entity.FamilyGroup} 처럼 표면을 안 정한
      * 모듈로 가는 참조다 — 그건 #104 · #105 · #120 의 자리이지 이 삭제의 자리가 아니다.
      */
-    private static final int BASELINE_VIOLATIONS = 96;
+    /**
+     * <b>2026-09-16 에 96 → 105 로 올렸다</b>(#560 조각 1). 올린 이유를 적어 둔다 —
+     * 이 수는 <b>내리기만</b> 하는 것이 원칙이라 올릴 때는 근거가 있어야 한다.
+     *
+     * <p>{@code care_item} 표가 생기면서 {@code care -> group.entity} 가 18 → 27 이 됐다.
+     * {@code CareItem} 이 {@code @ManyToOne FamilyGroup} 을 <b>들어야</b> Hibernate 가
+     * {@code fk_careitem_group} 을 만든다. 스칼라 {@code Long} 으로 두면
+     * {@code mysql/init/01_schema.sql} 재생성 때 그 FK 가 조용히 사라진다 —
+     * {@code CareLog.group} 의 javadoc 이 같은 이야기를 적어 뒀고, 이미 18건이 그 debt 다.
+     * <b>같은 모양의 빚이 한 표만큼 늘어난 것</b>이지 새 종류가 아니다.
+     *
+     * <p><b>피할 수 있는 몫은 피했다.</b> 처음에는 {@code CareItemService} 가
+     * {@code FamilyGroupRepository} 를 직접 들어 {@code care -> group.repository} 도 4 → 8 로
+     * 늘었다(총계 109). 그건 <b>모듈 내부</b>를 부르는 것이라, {@code FamilyMembership} 에
+     * {@code groupEntity} 를 내고 그쪽을 지나게 해서 되돌렸다. 같은 실수를 #563 에서도 했다 —
+     * {@code WalkService} 가 {@code UserRepository} 를 들어 96 → 100 이 됐고, 사람을
+     * 컨트롤러에서 받아 넘기는 것으로 되돌렸다.
+     *
+     * <p>이 빚을 진짜로 갚는 자리는 {@code group} 이 표면을 내주는 것이다(#104 · #105 · #120).
+     * 그때 {@code CareLog}·{@code CareItem} 이 함께 내려온다.
+     */
+    private static final int BASELINE_VIOLATIONS = 105;
 
     /**
      * 같은 빚을 <b>(부르는 모듈 → 불리는 패키지) 쌍</b>으로 적은 것 — 이슈 #518.
@@ -179,7 +200,9 @@ class ModularityBaselineTest {
             Map.entry("OAuth -> user.entity", 13),
             Map.entry("OAuth -> user.repository", 20),
             Map.entry("OAuth -> user.service", 5),
-            Map.entry("care -> group.entity", 18),
+            // 18 → 27: care_item 이 FK 를 갖게 되면서(#560 조각 1). 위 javadoc 참조 —
+            // 같은 모양의 빚이 한 표만큼 는 것이지 새 종류가 아니다.
+            Map.entry("care -> group.entity", 27),
             Map.entry("care -> group.repository", 4),
             Map.entry("chatweb -> user.repository", 4),
             Map.entry("config -> OAuth.handler", 6),

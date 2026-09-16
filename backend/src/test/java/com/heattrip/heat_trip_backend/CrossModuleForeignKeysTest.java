@@ -57,6 +57,10 @@ class CrossModuleForeignKeysTest {
      * 0" 을 게이트로 지킨다(ADR-0011 결정 4) — 탈퇴 한 번에 남의 대화가 사라지지 않게.
      */
     private static final List<String> BASELINE = List.of(
+            // care_item → 그 집의 할 일 목록(#560). family_group 은 CASCADE 이고
+            // dog 는 SET NULL 이다 — 아이 한 마리를 보낸 것이 목록을 지우면 안 된다.
+            "care_item → dog",
+            "care_item → family_group",
             "care_log → dog",
             "care_log → family_group",
             "care_log → users",

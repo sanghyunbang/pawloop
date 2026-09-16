@@ -301,6 +301,12 @@ step "49_walk_walked_by.sql"
 want 1 "$(has_column walk walked_by)" "walk.walked_by 컬럼 (없으면 부팅이 validate 에서 죽는다)"
 want 1 "$(has_cons walk fk_walk_walkedby)" "fk_walk_walkedby (없으면 탈퇴한 사람의 id 가 산책에 남아 떠돈다)"
 
+step "50_care_item.sql"
+want 1 "$(has_table care_item)" "care_item 표 (없으면 부팅이 validate 에서 죽는다)"
+want 1 "$(has_column care_log care_item_id)" "care_log.care_item_id 컬럼 (없으면 직접 만든 항목의 기록이 갈 곳이 없다)"
+want 1 "$(has_index care_item uq_careitem_system)" "uq_careitem_system (없으면 '물' 이 두 칸 생긴다)"
+want 1 "$(has_cons care_log fk_carelog_item)" "fk_carelog_item (없으면 지운 항목의 id 가 기록에 남아 떠돈다)"
+
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo
 if [ "${#MISSING[@]}" -eq 0 ]; then

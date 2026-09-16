@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **35개** 있고 **전부 이 문서에 절이 있다**(목록은 [부록 A](#부록-a-정본의-표-35개--어디에-적혀-있나)). 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 감정 여행·관광 수집 시절의 표는 #94 로 정본에서 빠졌다 — 운영 DB 에는 남아 있고(§18 아래 목록) 새 DB 에는 안 만들어진다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **36개** 있고 **전부 이 문서에 절이 있다**(목록은 [부록 A](#부록-a-정본의-표-36개--어디에-적혀-있나)). 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 감정 여행·관광 수집 시절의 표는 #94 로 정본에서 빠졌다 — 운영 DB 에는 남아 있고(§18 아래 목록) 새 DB 에는 안 만들어진다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -1572,7 +1572,59 @@ CREATE TABLE chat_message_reaction (
 
 ---
 
-## 부록 A. 정본의 표 35개 — 어디에 적혀 있나
+## 41. `care_item` — 그 집이 챙기는 일의 목록 (**실재**)
+
+오늘의 케어 카드에 놓인 **칸 하나**가 이 표의 한 행이다(#560). 그전까지 칸은 코드에 박힌 일곱 개였고, 집집마다 다른 일 — 약 두 번, 심장사상충, 발톱 — 을 적을 자리가 없었다. 목록이 표로 내려오면서 카드가 설정 화면을 따라간다.
+
+```sql
+CREATE TABLE care_item (
+  id           BIGINT       NOT NULL AUTO_INCREMENT,
+  group_id     BIGINT       NOT NULL COMMENT '어느 집의 목록인가',
+  dog_id       BIGINT       NULL     COMMENT '한 아이에게만 하는 일이면 그 아이. 비우면 집 전체',
+  name         VARCHAR(20)  NOT NULL COMMENT '화면에 뜨는 이름',
+  icon         VARCHAR(20)  NOT NULL COMMENT '앱이 그림을 고르는 열쇠말',
+  system_type  VARCHAR(10)  NULL     COMMENT '기본 일곱이면 그 종류, 직접 만든 것이면 NULL',
+  daily_target INT          NULL     COMMENT '하루 몇 번(선택). 있으면 화면이 1/2 로 그린다',
+  sort_order   INT          NOT NULL COMMENT '카드에 놓이는 순서. 같은 집 안에서만 뜻이 있다',
+  archived_at  DATETIME(6)  NULL     COMMENT '접은 시각. 지우지 않는 이유는 아래',
+  created_at   DATETIME(6)  NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_careitem_system (group_id, system_type),
+  KEY idx_careitem_group (group_id, sort_order),
+  KEY idx_careitem_dog (dog_id),
+  CONSTRAINT fk_careitem_group FOREIGN KEY (group_id) REFERENCES family_group (id) ON DELETE CASCADE,
+  CONSTRAINT fk_careitem_dog   FOREIGN KEY (dog_id)   REFERENCES dog (id)          ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `group_id` | `BIGINT` | FK→`family_group.id` **CASCADE**, UNIQUE(group, system_type), idx(group, sort_order) | 목록의 주인은 사람이 아니라 **집**이다 — #563 과 같은 축 |
+| `dog_id` | `BIGINT` | NULL, FK→`dog.id` **SET NULL** | 그 아이에게만 하는 일. 아이를 보내도 항목은 남고 아이만 떨어진다 |
+| `name` | `VARCHAR(20)` | NOT NULL | 20자를 넘기면 칸이 두 줄이 된다 |
+| `icon` | `VARCHAR(20)` | NOT NULL | 그림 파일 경로가 아니라 열쇠말이다 — 앱이 모르는 값이면 기본 그림으로 떨어진다 |
+| `system_type` | `VARCHAR(10)` | NULL, UNIQUE(group, system_type) | 기본 일곱의 표식. 옛 기록을 세는 열쇠라 아래에 따로 적는다 |
+| `daily_target` | `INT` | NULL | 비우면 횟수만 세고, 적으면 `1/2` 로 그린다 |
+| `sort_order` | `INT` | NOT NULL | 카드 순서. 고치기 화면이 끌어 옮기면 이 값이 바뀐다 |
+| `archived_at` | `DATETIME(6)` | NULL | 접은 시각(UTC). `NULL` 이면 카드에 뜬다 |
+| `created_at` | `DATETIME(6)` | NOT NULL | 만든 순간(UTC) |
+
+> **`system_type` 이 이 표의 핵심이다 — 옛 기록을 한 행도 안 건드리려고 둔 칸이다.** `care_log` 에는 이미 수만 줄이 `type` 으로 쌓여 있다. 항목마다 오늘 몇 번인지를 셀 때, `system_type` 이 있으면 `care_log.type = system_type` 으로 세고 없으면 `care_log.care_item_id = id` 로 센다. 이 갈래가 없으면 옛 기록에 `care_item_id` 를 채워 넣는 마이그레이션이 필요하고, 그건 되돌릴 수 없는 일이다.
+
+> **유니크가 (group_id, system_type) 인 것은 "물이 두 칸" 을 막는다.** 마이그레이션과 `CareItemService.seedDefaults` 가 둘 다 기본 일곱을 넣을 수 있어서(이미 있던 집 · 새로 만든 집) 두 경로가 겹치는 날이 온다. MySQL 의 유니크는 `NULL` 을 여러 번 허용하므로 **직접 만든 항목은 이 제약에 안 걸린다** — 같은 이름을 두 번 적는 것은 사람의 자유다.
+
+> **아이를 보내도 항목은 남는다(`SET NULL`).** `CASCADE` 면 아이 하나를 지울 때 그 아이 앞으로 적어 둔 "심장사상충" 이 집의 목록에서 통째로 사라진다. 같은 이유로 `care_log.care_item_id` 도 `SET NULL` 이다(§17) — **항목을 지워도 일어난 사실은 남아야 한다.**
+
+> **접는 것이지 지우는 것이 아니다.** `archived_at` 을 두고 행을 남기는 이유는 `care_log.care_item_id` 가 이 행을 가리키기 때문이다. 지우면 지난 기록이 이름을 잃는다. 조회는 접힌 것까지 주고(`CareItemRepository.findOfGroup`) 카드가 `archived_at IS NULL` 로 거른다 — 고치기 화면이 "다시 켜기" 를 그리려면 접힌 것을 봐야 한다.
+
+> **목록이 생겨나는 자리는 둘이다.** 이미 있던 집은 마이그레이션이 채우고, 새로 만드는 집은 `FamilyGroupCreated` 를 듣는 `AFTER_COMMIT` 리스너가 채운다. 둘 중 하나만 있으면 한쪽 집단의 카드가 통째로 빈다 — `CareItemMigrationExecutionTest` 와 `CareItemSeedIntegrationTest` 가 각각을 잰다.
+
+마이그레이션 `50_care_item.sql`. 실제 컬럼 순서는 `01_schema.sql`(엔티티에서 뽑은 것) 그대로다.
+
+---
+
+## 부록 A. 정본의 표 36개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
@@ -1580,6 +1632,7 @@ CREATE TABLE chat_message_reaction (
 | --- | --- | --- | --- |
 | `course` | 실재 §31 | `walk` | 내가 걸은 길 중에 남긴 코스 — 양 끝 100m 를 자른 선(#339) |
 | `walk_dog` | 실재 §32 | `walk`·`dog` | 한 번의 산책에 함께 나간 아이들(#343). 아이별 통계·목록이 이 표를 본다 |
+| `care_item` | 실재 §41 | `care` | 그 집이 챙기는 일의 목록(#560) — 카드의 칸 하나. `system_type` 이 있으면 기본 일곱이라 `care_log.type` 으로 세고, 없으면 직접 만든 것이라 `care_log.care_item_id` 로 센다. 그래서 옛 기록을 한 행도 안 건드린다 |
 | `care_log` | 실재 §17 | `care` | 케어 로그 |
 | `chat_message` | 실재 §15 | `chat` | 채팅 메시지 |
 | `chat_message_reaction` | 실재 §40 | `chat` | 말풍선 아래 반응 줄(#452) — 말·사람·종류에 한 행. `user_id` 에 FK 가 없어 탈퇴해도 남고, 반응이 붙으면 방의 변경 번호가 올라 남의 폴링에 흐른다(ADR-0023) |

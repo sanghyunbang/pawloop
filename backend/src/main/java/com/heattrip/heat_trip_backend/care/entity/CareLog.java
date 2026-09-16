@@ -59,10 +59,14 @@ import java.time.LocalDateTime;
  * 케어는 가족의 기록이기 때문이다. 사용자 탈퇴({@code users} 하드 삭제)는 {@code dog} 을
  * CASCADE 로 지우고 그 삭제가 여기를 SET NULL 로 훑는다 — {@code idx_carelog_dog} 가 그 자리다.
  *
- * <p><b>값이 아직 {@code null} 인 이유는 쓰기 경로가 {@code dogId} 를 안 받아서다.</b>
- * 받으려면 "가족 구성원이 남의 반려동물 id 를 알 수 있는가" 가 먼저 정해져야 하고, 그것은
- * #209 의 {@code Dogs-high-3}(가족 공유 가시성)이 소유한다. 그날 {@code CareService.record} 가
- * 대상 개체를 검증해 여기에 넣는다. 그때까지 FK 는 "잘못된 id 는 못 들어간다" 만 지킨다.
+ * <p><b>2026-09-16(#563)부터 값이 실제로 들어간다.</b> {@code CareService.record} 가 요청의
+ * {@code dogId} 를 {@code DogOwnership.requireInFamilyEntity} 로 확인해 여기에 넣는다. 그
+ * 전에는 쓰기 경로가 {@code dogId} 를 안 받아 <b>항상 {@code null}</b> 이었고, 그래서 아이가
+ * 둘인 집의 카드가 두 아이 기록을 한 칸에서 섞어 셌다.
+ *
+ * <p><b>옛 행은 여전히 {@code null} 이다.</b> 조회가 그걸 안다 — {@code CareService.logsOf} 의
+ * {@code matchesDog} 가 "아이를 안 물었거나, 행에 아이가 없거나, 같으면" 으로 센다. 옛
+ * 기록을 지어낸 아이로 채우지 않는 이유는 그때 어느 아이였는지 아무도 모르기 때문이다.
  *
  * <p><b>#9 와 헷갈리지 말 것.</b> #9({@code refresh_token})는 탈퇴 경로가 DB 삭제 순서에
  * 묶이는 것을 피하려고 <b>일부러</b> 안 걸었고 지금도 안 건다. 여기는 걸었다.
@@ -115,6 +119,25 @@ public class CareLog {
             foreignKey = @ForeignKey(name = "fk_carelog_dog"))
     @OnDelete(action = OnDeleteAction.SET_NULL)
     private Dog dog;
+
+    /**
+     * 어느 항목의 기록인가 — 이슈 #560. <b>직접 만든 항목일 때만 채워진다.</b>
+     *
+     * <p>기본 일곱({@code water}…{@code pee})은 {@link #type} 으로 세므로 여기가 비어 있다.
+     * 그래서 이 컬럼이 생기기 전의 행도, 산책 트래킹이 {@code type='walk'} 로 남기는 행도
+     * <b>고칠 것이 없다.</b> {@code CareItem} 의 javadoc "기존 기록을 한 행도 안 건드린다" 절이
+     * 그 이야기다.
+     *
+     * <p>{@code ON DELETE SET NULL} 이다. 항목을 지우는 길은 화면에 없고(접기만 있다), 그래도
+     * 언젠가 정말 지우는 날이 오면 <b>그 기록까지 사라지면 안 된다</b> — "무엇을 했는지" 의
+     * 이름표를 잃을 뿐 "누가 언제 했다" 는 사실은 남는다. {@code dog}·{@code group}·
+     * {@code doneBy} 가 같은 질문에 같은 답을 했다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "care_item_id",
+            foreignKey = @ForeignKey(name = "fk_carelog_item"))
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private CareItem careItem;
 
     /**
      * 공유 대상 가족 그룹. <b>nullable</b> 이다 — 그룹에 속하지 않은 1인 사용자도 자기 기록을

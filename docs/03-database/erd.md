@@ -44,6 +44,9 @@ erDiagram
     users    ||--o{ schedule  : "적은 사람 / 맡은 사람"
     schedule ||--o{ schedule_exception : "하루짜리 예외 (#421)"
     dog      |o--o{ care_log  : "케어 기록 (nullable, ON DELETE SET NULL - #154)"
+    family_group ||--o{ care_item : "그 집이 챙기는 일의 목록 (#560)"
+    dog      |o--o{ care_item : "그 아이에게만 하는 일 (nullable, SET NULL - #560)"
+    care_item |o--o{ care_log : "직접 만든 항목의 기록 (nullable, SET NULL - #560)"
 
     place    ||--o{ post      : "태그 (계획 - place 표는 아직 없다)"
     place    ||--o{ bookmark  : "저장 대상 (계획)"
@@ -183,10 +186,24 @@ erDiagram
         DATETIME created_at
     }
 
+    care_item {
+        BIGINT   id PK
+        BIGINT   group_id FK "어느 집의 목록인가 - CASCADE"
+        BIGINT   dog_id FK   "nullable - 비우면 집 전체. SET NULL"
+        VARCHAR  name        "화면에 뜨는 이름"
+        VARCHAR  icon        "앱이 그림을 고르는 열쇠말"
+        VARCHAR  system_type "기본 일곱이면 그 종류, 직접 만든 것이면 NULL. (group, system_type) UNIQUE"
+        INT      daily_target "하루 몇 번(선택). 있으면 1/2 로 그린다"
+        INT      sort_order  "카드에 놓이는 순서"
+        DATETIME archived_at "nullable - 접은 시각. 지우지 않는다"
+        DATETIME created_at
+    }
+
     care_log {
         BIGINT   id PK
-        BIGINT   dog_id FK   "nullable - ON DELETE SET NULL. 값은 아직 항상 NULL (#154)"
+        BIGINT   dog_id FK   "nullable - ON DELETE SET NULL. #563 부터 값이 들어간다, 옛 행은 NULL"
         BIGINT   group_id FK "nullable - 가족 그룹 공유"
+        BIGINT   care_item_id FK "nullable - 직접 만든 항목의 기록만 든다. SET NULL (#560)"
         VARCHAR  type        "water|meal|walk|med|vet|poop|pee (#340)"
         BIGINT   done_by FK  "수행자(users.id)"
         DATETIME occurred_at
@@ -455,7 +472,8 @@ erDiagram
 | `schedule_exception` | 실재 | 반복의 **하루짜리 예외**(#421). `skip`(그날 안 함) · `override`(그날짜용 행이 대신함). 펼치기에서는 둘이 같다 — 그날은 규칙에서 빠진다. 규칙을 지우면 함께 사라진다 |
 | `schedule` | 실재 | **앞으로 할 일**(#418). 주인이 셋(아이 · 가족 그룹 · 크루)이라 `owner_kind`+`owner_ref` 를 **불투명하게** 든다 — `chat_room` 과 같은 방식이고 **그 두 컬럼에는 FK 가 없다**(ADR-0011). `dog_id` 는 `owner_ref` 와 **별개**이고 `SET NULL` 이다 — 아이를 보내도 계획은 남는다. |
 | `course` | 실재 | 산책 기록 중에 "여기 좋다" 고 남긴 코스(#339). `walk.path` 에서 **양 끝 100m 를 잘라 낸 선**을 들고, 산책을 지워도 남는다(`walk_id` 가 NULL 이 된다). 기본은 비공개이고 공개한 것만 지도의 "이웃 코스" 에 나온다. 가까운 것 고르기는 기기에서 한다(A안 #235). |
-| `care_log` | 실재 | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. `dog_id` 는 `dog.id` 로 가는 FK 다(**#154**, `ON DELETE SET NULL` — 반려동물이 지워져도 기록은 남는다). 값은 아직 항상 `NULL` — 쓰기 경로가 `dogId` 를 안 받는다([schema.md §17](./schema.md)). |
+| `care_item` | 실재 | 그 집이 챙기는 일의 **목록**(#560) — 카드의 칸 하나가 이 표의 한 행이다. `system_type` 이 있으면 기본 일곱이라 옛 `care_log.type` 으로 세고, 없으면 직접 만든 것이라 `care_log.care_item_id` 로 센다 — 그래서 옛 기록을 한 행도 안 건드린다. 접는 것이지 지우지 않는다(`archived_at`) — 지우면 지난 기록이 이름을 잃는다([schema.md §41](./schema.md)). |
+| `care_log` | 실재 | 반려 케어 로그(물/밥/산책/투약/병원). 누가(`done_by`)·언제 했는지 기록하고 가족 그룹(`group_id`, nullable)에 공유해 이중 급여·산책 누락을 방지. `dog_id` 는 `dog.id` 로 가는 FK 다(**#154**, `ON DELETE SET NULL` — 반려동물이 지워져도 기록은 남는다). **#563 부터 값이 실제로 들어간다** — 옛 행은 여전히 `NULL` 이고 조회가 그걸 안다([schema.md §17](./schema.md)). |
 | `crew_favor` | 실재 | **품앗이**(#417) — "12/24 오후, 보리 두 시간만 봐 주실 분". **금액도 평점도 후기도 없다** — 돈이 오가면 중개자가 된다. 맡으면 크루 소유 일정 한 줄이 생기고(`owner_kind='room'`) 그 줄의 완료 표시가 "했다" 를 말한다 — 그래서 이 표에는 "끝남" 상태가 없다. |
 | `crew` | 실재 | **동네 반려인 모임**(#417). 이름·소개·동네·공개 범위·정원 다섯만 든다. **`crew_member` 를 안 만든다** — 크루의 멤버는 그 크루 방의 멤버이고 그것은 `chat_room_member` 다(ADR-0011). 방장도 컬럼이 아니라 그 방의 `OWNER` 멤버다. `chat_room` 으로 나가는 FK 도 없다 — 방 쪽이 `(origin_kind='CREW', origin_ref)` 로 이미 들고 있다. |
 | `family_group` | 실재 | 가족 케어 그룹. **이름과 생성 시각만** 든다 — 초대코드도 멤버십도 여기 없다. 방은 `chat_room` 이 `origin_kind`/`origin_ref` 로 불투명하게 가리킨다. |
