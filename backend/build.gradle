@@ -64,6 +64,17 @@ dependencies {
 	
 	implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+	// 스키마 마이그레이션 (#592). 버전은 스프링 부트 BOM 이 정한다.
+	//
+	// 부팅할 때 db/migration 의 V 파일 중 **아직 안 돌린 것만** 돌리고, 하나라도 실패하면
+	// 부팅을 멈춘다. 어디까지 갔는지는 flyway_schema_history 가 DB 안에 기억한다 —
+	// 그전까지는 mysql/post-start/*.sql 쉰두 개를 손으로 돌렸고, 어디까지 돌았는지
+	// 아무도 몰라서 scripts/check-migrations.sh 가 컬럼 존재를 하나씩 확인했다.
+	//
+	// flyway-mysql 이 따로 필요하다 — flyway-core 는 10.x 부터 DB 별 지원을 분리했다.
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-mysql'
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
