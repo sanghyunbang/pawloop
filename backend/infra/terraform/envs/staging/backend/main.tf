@@ -1,8 +1,15 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  app_env_parameter_arn = var.app_env_ssm_parameter_name == "" ? "" : "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trimprefix(var.app_env_ssm_parameter_name, "/")}"
-  compose_files          = var.enable_observability ? "-f docker-compose.yml -f docker-compose.observability.yml" : "-f docker-compose.yml"
+  ssm_parameter_arn_prefix = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter"
+
+  app_env_parameter_arn    = var.app_env_ssm_parameter_name == "" ? "" : "${local.ssm_parameter_arn_prefix}/${trimprefix(var.app_env_ssm_parameter_name, "/")}"
+  deploy_key_parameter_arn = var.repo_deploy_key_ssm_parameter_name == "" ? "" : "${local.ssm_parameter_arn_prefix}/${trimprefix(var.repo_deploy_key_ssm_parameter_name, "/")}"
+
+  # EC2 가 읽을 수 있는 parameter 는 여기 적힌 것뿐이다. 안 쓰는 것은 compact 가 턴다.
+  ssm_parameter_arns = compact([local.app_env_parameter_arn, local.deploy_key_parameter_arn])
+
+  compose_files = var.enable_observability ? "-f docker-compose.yml -f docker-compose.observability.yml" : "-f docker-compose.yml"
 
   tags = merge(var.tags, {
     Project     = "heat-trip"
@@ -33,14 +40,14 @@ module "backend_host" {
     }
   ]
 
-  iam_ssm_parameter_arns = local.app_env_parameter_arn == "" ? [] : [local.app_env_parameter_arn]
+  iam_ssm_parameter_arns = local.ssm_parameter_arns
   kms_key_arns           = var.kms_key_arns
 
   startup_commands = templatefile("${path.module}/user_data_backend.sh.tftpl", {
-    repo_url                   = var.repo_url
-    repo_branch                = var.repo_branch
-    app_env_ssm_parameter_name = var.app_env_ssm_parameter_name
-    compose_files              = local.compose_files
+    repo_url                           = var.repo_url
+    repo_branch                        = var.repo_branch
+    repo_deploy_key_ssm_parameter_name = var.repo_deploy_key_ssm_parameter_name
+    app_env_ssm_parameter_name         = var.app_env_ssm_parameter_name
+    compose_files                      = local.compose_files
   })
 }
-

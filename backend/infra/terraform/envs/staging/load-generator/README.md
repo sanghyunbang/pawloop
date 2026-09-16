@@ -25,7 +25,7 @@ load-generator/
 | `vpc_id` | Loader EC2를 만들 VPC |
 | `subnet_id` | Loader EC2 subnet |
 | `key_name` | SSH key pair 이름 |
-| `repo_url` | public Git repo URL |
+| `repo_url` | Git repo URL. private 저장소는 deploy key 배선이 필요한데 이 env에는 아직 없다 |
 | `repo_branch` | k6 스크립트가 있는 branch |
 | `backend_base_url` | Backend EC2 private URL |
 | `k6_env_ssm_parameter_name` | k6 env를 담은 SSM SecureString 이름 |

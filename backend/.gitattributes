@@ -1,3 +1,9 @@
 /gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+
+# Terraform 템플릿은 EC2 의 리눅스 부팅 스크립트로 그대로 펼쳐진다. 윈도우에서
+# CRLF 로 체크아웃되면 terraform 이 CRLF 째로 user_data 에 실어 보내고, 커널이
+# `#!/bin/bash\r` 을 찾다가 실패한다 — 인스턴스는 뜨는데 아무것도 실행되지 않고,
+# 실패는 그 서버 안의 로그에만 남는다. 무엇을 하든 LF 로 체크아웃한다.
+*.tftpl text eol=lf

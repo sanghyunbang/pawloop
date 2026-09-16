@@ -44,7 +44,7 @@ variable "allowed_ssh_cidr_blocks" {
 }
 
 variable "repo_url" {
-  description = "public Git repository URL."
+  description = "배포할 Git repository URL. private 저장소라면 backend env처럼 deploy key 배선이 따로 필요하다 — 이 env에는 아직 없다."
   type        = string
 
   validation {

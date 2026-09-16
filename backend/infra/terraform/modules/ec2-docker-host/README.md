@@ -20,8 +20,9 @@ Backend EC2와 Loader EC2가 공통으로 사용한다.
 
 - Docker
 - Git
-- AWS CLI
-- Docker Compose plugin 가능 시 설치
+- AWS CLI — AL2023은 v2를 이미 깔고 나온다. 없을 때만 `awscli-2`를 깐다
+- Docker Compose plugin — AL2023 기본 저장소에 없다. dnf로 안 되면 공식 릴리스를
+  받아 깔고, sha256이 맞을 때만 자리에 놓는다. 둘 다 실패하면 부팅이 거기서 멈춘다
 
 그 후 env에서 넘긴 `startup_commands`를 실행한다.
 
