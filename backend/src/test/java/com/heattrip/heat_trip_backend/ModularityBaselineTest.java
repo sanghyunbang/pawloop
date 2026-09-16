@@ -173,7 +173,7 @@ class ModularityBaselineTest {
      * <p>이 빚을 진짜로 갚는 자리는 {@code group} 이 표면을 내주는 것이다(#104 · #105 · #120).
      * 그때 {@code CareLog}·{@code CareItem} 이 함께 내려온다.
      */
-    private static final int BASELINE_VIOLATIONS = 105;
+    private static final int BASELINE_VIOLATIONS = 106;
 
     /**
      * 같은 빚을 <b>(부르는 모듈 → 불리는 패키지) 쌍</b>으로 적은 것 — 이슈 #518.
@@ -202,7 +202,13 @@ class ModularityBaselineTest {
             Map.entry("OAuth -> user.service", 5),
             // 18 → 27: care_item 이 FK 를 갖게 되면서(#560 조각 1). 위 javadoc 참조 —
             // 같은 모양의 빚이 한 표만큼 는 것이지 새 종류가 아니다.
-            Map.entry("care -> group.entity", 27),
+            //
+            // 27 → 28: 항목을 만드는 경로가 생기면서(#560 조각 2). 행을 하나 만들려면
+            // FamilyGroup 을 물려야 하고, 그 참조가 하나 는다. **쓰기 경로가 늘 때마다 또
+            // 늘지 않도록** 그 자리를 CareItemService.newItemOf 하나로 모았다 — 다음 쓰기는
+            // 그 메서드를 부르므로 이 수가 안 움직인다. 실측으로 확인했다: 지역 변수를 없애도,
+            // 한 메서드로 모아도 28 이다. 참조 자체가 구조에서 나온다.
+            Map.entry("care -> group.entity", 28),
             Map.entry("care -> group.repository", 4),
             Map.entry("chatweb -> user.repository", 4),
             Map.entry("config -> OAuth.handler", 6),
