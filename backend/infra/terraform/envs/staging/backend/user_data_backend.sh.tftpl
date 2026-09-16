@@ -1,5 +1,50 @@
+# 이 스크립트는 modules/ec2-docker-host 의 user_data.sh.tftpl 안으로 통째로 들어간다.
+# 거기서 `set -euo pipefail` 과 docker · git · aws · docker compose 설치가 끝난
+# 상태로 시작한다.
+
+REPO_DIR=/opt/heattrip-backend/repo
+
 mkdir -p /opt/heattrip-backend
 cd /opt/heattrip-backend
+
+# 이 저장소는 private 이라 인증 없이는 clone 이 안 된다. 읽기 전용 배포 키를
+# SSM SecureString 에서 받아 root 의 열쇠로 깔고, git 이 그 열쇠만 쓰게 한다.
+#
+# 예전에는 이 파일이 인증 없이 clone 했다. 변수 설명에도 "public Git repository URL"
+# 이라고 적혀 있었는데 이 저장소는 private 이라, 그대로 띄우면 서버가 코드를
+# 받지 못한 채 부팅만 끝났다.
+if [ -n "${repo_deploy_key_ssm_parameter_name}" ]; then
+  install -d -m 700 /root/.ssh
+
+  aws ssm get-parameter \
+    --name "${repo_deploy_key_ssm_parameter_name}" \
+    --with-decryption \
+    --query "Parameter.Value" \
+    --output text > /root/.ssh/deploy_key
+  chmod 600 /root/.ssh/deploy_key
+
+  # 개인키는 마지막 줄이 줄바꿈으로 끝나야 ssh 가 읽는다. SSM 에 넣을 때 끝
+  # 줄바꿈이 잘려도 "invalid format" 으로 죽지 않게 한 줄 붙여 둔다. 키 뒤의
+  # 빈 줄은 ssh 가 무시한다.
+  printf '\n' >> /root/.ssh/deploy_key
+
+  # github.com 의 호스트 키를 미리 적어 둔다. 부팅할 때 ssh-keyscan 으로 받아오면
+  # 처음 만난 키를 그냥 믿는 것이라, 중간에 누가 끼어 있어도 알 길이 없다.
+  #
+  # 이 줄의 지문은 https://api.github.com/meta 의
+  # ssh_key_fingerprints.SHA256_ED25519 (+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU)
+  # 와 같다 — 2026-09-16 에 대조했다. 깃헙이 키를 바꾸면 여기서 부팅이 멈춘다.
+  # 그건 고장이 아니라 알아채라는 뜻이다.
+  printf '%s\n' \
+    'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+    > /root/.ssh/known_hosts
+  chmod 600 /root/.ssh/known_hosts
+
+  # 부팅이 끝난 뒤 사람이 들어와 git pull 을 할 때도 같은 열쇠를 쓰게 남겨 둔다.
+  # 키 파일이 root 전용이라 ec2-user 로는 안 된다 — sudo 로 한다.
+  git config --system core.sshCommand \
+    "ssh -i /root/.ssh/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/root/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+fi
 
 if [ ! -d repo/.git ]; then
   git clone --branch "${repo_branch}" "${repo_url}" repo
@@ -11,7 +56,11 @@ else
   cd ..
 fi
 
-cd /opt/heattrip-backend/repo
+# compose 와 Dockerfile 과 .env 는 저장소 루트가 아니라 backend/ 아래에 있다.
+# 이 스크립트는 앱과 백엔드가 한 저장소로 합쳐지기 전(2026-06-29, 87ec6f1)에
+# 쓰였고 그때는 backend/ 가 저장소 루트였다. 루트에서 그대로 부르면
+# "no configuration file provided" 로 멈춘다.
+cd "$REPO_DIR/backend"
 
 if [ -n "${app_env_ssm_parameter_name}" ]; then
   aws ssm get-parameter \
@@ -26,4 +75,3 @@ else
 fi
 
 docker compose ${compose_files} up -d --build
-

@@ -26,7 +26,7 @@ variable "key_name" {
 }
 
 variable "instance_type" {
-  description = "Backend EC2 instance type."
+  description = "Backend EC2 instance type. AMI가 x86_64 고정이라 t4g 같은 Graviton 타입은 쓸 수 없다."
   type        = string
   default     = "t3.medium"
 }
@@ -55,7 +55,7 @@ variable "backend_app_allowed_cidr_blocks" {
 }
 
 variable "repo_url" {
-  description = "public Git repository URL."
+  description = "배포할 Git repository URL. private 저장소는 SSH 형식(git@github.com:소유자/저장소.git)으로 적고 repo_deploy_key_ssm_parameter_name을 같이 준다."
   type        = string
 
   validation {
@@ -68,6 +68,21 @@ variable "repo_branch" {
   description = "배포할 Git branch."
   type        = string
   default     = "main"
+}
+
+variable "repo_deploy_key_ssm_parameter_name" {
+  description = "읽기 전용 GitHub deploy key(개인키) 전체를 담은 SSM SecureString parameter 이름. private 저장소를 clone하려면 필요하다. 비우면 인증 없이 clone한다."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = (
+      var.repo_deploy_key_ssm_parameter_name == "" ||
+      startswith(var.repo_url, "git@") ||
+      startswith(var.repo_url, "ssh://")
+    )
+    error_message = "deploy key를 쓰면 repo_url도 SSH 형식이어야 한다: git@github.com:소유자/저장소.git"
+  }
 }
 
 variable "app_env_ssm_parameter_name" {

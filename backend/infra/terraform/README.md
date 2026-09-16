@@ -43,9 +43,11 @@ cp backend.tf.example backend.tf
 
 `.gitignore`에서 `infra/terraform/**/backend.tf`, `*.tfvars`, `*.tfstate`를 무시한다.
 
-## public repo secret 정책
+## secret 정책
 
-이 Terraform 코드는 public repo 기준으로 작성했다.
+이 저장소는 private이지만, Terraform 코드는 **public repo에 둬도 안전한 기준**으로 쓴다.
+커밋한 것이 언젠가 공개돼도 그것만으로는 아무것도 열 수 없어야 한다. 실제 값은
+AWS SSM Parameter Store의 `SecureString`에 두고, 여기에는 그 **이름**만 적는다.
 
 커밋해도 되는 것:
 

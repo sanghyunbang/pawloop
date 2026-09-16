@@ -4,11 +4,52 @@ set -euo pipefail
 hostnamectl set-hostname "${hostname}"
 
 dnf update -y
-dnf install -y docker git awscli
-dnf install -y docker-compose-plugin || true
+dnf install -y docker git
 
 systemctl enable --now docker
 usermod -aG docker ec2-user || true
+
+# AWS CLI — Amazon Linux 2023 은 v2 를 이미 깔고 나온다. 없을 때만 깐다.
+#
+# 예전에는 이 줄이 `dnf install -y docker git awscli` 였다. AL2023 의 패키지 이름은
+# `awscli` 가 아니라 `awscli-2` 라서, dnf 가 "No match for argument" 로 죽고
+# 맨 위의 `set -e` 가 부팅 스크립트 전체를 거기서 끝냈다. 앱은 뜨지 않고, 실패는
+# 콘솔이 아니라 그 서버 안의 cloud-init 로그에만 남는다.
+if ! command -v aws >/dev/null 2>&1; then
+  dnf install -y awscli-2
+fi
+
+# Docker Compose 플러그인 — AL2023 기본 저장소에는 없다.
+#
+# amazonlinux/amazon-linux-2023#186 이 2022 년에 이걸 요청했고 2026-09-16 현재도
+# 열려 있다. 예전에는 `dnf install -y docker-compose-plugin || true` 였는데,
+# `|| true` 가 "그런 패키지 없음" 을 삼켜서 부팅은 조용히 지나가고 그 다음
+# `docker compose up` 이 "is not a docker command" 로 죽었다.
+#
+# 언젠가 저장소에 들어오면 그걸 쓰고, 없으면 공식 릴리스를 받아 깐다.
+dnf install -y docker-compose-plugin || true
+
+if ! docker compose version >/dev/null 2>&1; then
+  # 버전과 sha256 은 https://github.com/docker/compose/releases 의
+  # docker-compose-linux-x86_64.sha256 에서 가져온다. 바꿀 때 둘을 같이 바꾼다.
+  # AMI 가 x86_64 고정이라(main.tf 의 filter) 받는 파일도 x86_64 다.
+  COMPOSE_VERSION=v5.5.1
+  COMPOSE_SHA256=db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
+  COMPOSE_TMP="$(mktemp)"
+
+  curl -fsSL -o "$COMPOSE_TMP" \
+    "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-x86_64"
+
+  # 받은 파일이 진짜인지 먼저 본다. 확인 없이 받아서 실행하면 중간에 바뀐 파일을
+  # root 로 돌리는 셈이다. 어긋나면 여기서 부팅이 멈춘다 — 조용히 넘어가지 않는다.
+  echo "$COMPOSE_SHA256  $COMPOSE_TMP" | sha256sum --check --status
+
+  install -d -m 755 /usr/local/lib/docker/cli-plugins
+  install -m 755 "$COMPOSE_TMP" /usr/local/lib/docker/cli-plugins/docker-compose
+  rm -f "$COMPOSE_TMP"
+fi
+
+docker compose version
 
 mkdir -p /opt/heattrip
 

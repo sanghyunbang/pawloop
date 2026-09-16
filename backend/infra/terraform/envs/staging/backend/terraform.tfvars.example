@@ -5,6 +5,9 @@ vpc_id    = "vpc-xxxxxxxxxxxxxxxxx"
 subnet_id = "subnet-xxxxxxxxxxxxxxxxx"
 key_name  = "change-me-keypair"
 
+# t3.medium 은 부하 테스트 기준이다. "뜨는지 본다" 만 하려면 더 작아도 된다.
+# 단, 여기서 Gradle 빌드까지 돌리므로 메모리가 너무 작으면 빌드가 죽는다.
+# AMI 가 x86_64 고정이라 t4g 같은 Graviton 타입은 쓸 수 없다.
 instance_type       = "t3.medium"
 root_volume_size_gb = 40
 
@@ -13,12 +16,17 @@ allowed_ssh_cidr_blocks = [
 ]
 
 # VPC CIDR 또는 Loader private subnet CIDR를 권장한다. staging에서도 0.0.0.0/0은 쓰지 않는다.
+# 브라우저로 직접 열어 확인만 할 거라면 내 공인 IP 하나(`x.x.x.x/32`)만 열면 된다.
 backend_app_allowed_cidr_blocks = [
   "10.0.0.0/16"
 ]
 
-repo_url    = "https://github.com/<owner>/<repo>.git"
-repo_branch = "k6-load-tests"
+# private 저장소라 SSH 형식으로 적는다. https 로 적으면 EC2가 코드를 못 받는다.
+repo_url    = "git@github.com:sanghyunbang/heattrip.git"
+repo_branch = "main"
+
+# 읽기 전용 GitHub deploy key(개인키) 전체. 만드는 절차는 README를 본다.
+repo_deploy_key_ssm_parameter_name = "/heat-trip/staging/backend/deploy-key"
 
 # backend .env 전체 내용을 SSM Parameter Store SecureString으로 저장한다.
 # Loader 접근이 필요하면 해당 .env에 APP_PUBLISHED_HOST=0.0.0.0을 포함한다.
