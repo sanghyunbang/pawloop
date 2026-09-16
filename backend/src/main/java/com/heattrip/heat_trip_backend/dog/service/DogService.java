@@ -8,6 +8,7 @@ import com.heattrip.heat_trip_backend.dog.dto.DogPatchRequest;
 import com.heattrip.heat_trip_backend.dog.dto.DogResponse;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.dog.entity.DogSize;
+import com.heattrip.heat_trip_backend.dog.entity.PetCharacter;
 import com.heattrip.heat_trip_backend.dog.entity.PetSpecies;
 import com.heattrip.heat_trip_backend.group.FamilyMembership;
 import com.heattrip.heat_trip_backend.dog.repository.DogRepository;
@@ -196,6 +197,10 @@ public class DogService implements DogOwnership {
                 .size(size)
                 .birth(request.birth())
                 .neutered(request.neuteredOrDefault())
+                // 안 보내면 null 이다 — 그때 앱이 종류 기본 그림을 쓴다(#585).
+                .characterKey(request.character() == null
+                        ? null
+                        : PetCharacter.of(request.character()).wire())
                 .build();
 
         return toResponse(dogs.save(dog));
@@ -221,6 +226,8 @@ public class DogService implements DogOwnership {
         // 틀린 값을 보냈을 때 400 과 404 중 어느 쪽이 먼저인지가 흔들리면 안 된다.
         PetSpecies species = request.speciesOrNull();
         DogSize size = request.sizeOrNull();
+        // 목록 밖이면 여기서 400 이다(#585). null 을 보낸 것은 "지워 달라" 라 안 걸린다.
+        String character = request.characterOrNull();
         if (request.isBirthGiven() && request.getBirth() != null
                 && request.getBirth().isAfter(LocalDate.now(clock))) {
             throw new IllegalArgumentException("생일은 미래일 수 없습니다.");
@@ -241,6 +248,11 @@ public class DogService implements DogOwnership {
         }
         if (size != null) {
             dog.changeSize(size);
+        }
+        if (request.isCharacterGiven()) {
+            // null 이면 지운다 — 고른 캐릭터를 도로 물릴 방법이 없으면 종류 기본 그림으로
+            // 못 돌아간다. birth 와 같은 판단이다.
+            dog.changeCharacter(character);
         }
         if (request.isBirthGiven()) {
             dog.changeBirth(request.getBirth());

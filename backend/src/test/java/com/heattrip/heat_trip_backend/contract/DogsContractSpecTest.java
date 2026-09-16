@@ -261,16 +261,24 @@ class DogsContractSpecTest {
             throw new AssertionError(schema + "." + property + " 이 계약에 없다");
         }
 
-        Object anyOf = field.get("anyOf");
-        if (anyOf instanceof List<?> branches) {
-            List<String> types = new ArrayList<>();
-            for (Object branch : branches) {
-                Object type = ((Map<String, Object>) branch).get("type");
-                if (type != null) {
-                    types.add(String.valueOf(type));
+        // **oneOf 와 anyOf 를 둘 다 읽는다.**
+        //
+        // 원래 anyOf 만 읽었는데, 계약에는 anyOf 가 **한 번도 없었다** — 열넷이 전부 oneOf 다
+        // (2026-09-16 실측). 즉 이 분기는 만들어진 뒤로 한 줄도 안 맞아 봤고, 그러다 #585 가
+        // `character: oneOf [$ref, null]` 을 더하자 "널을 안 받는다" 고 잘못 잡았다.
+        //
+        // 읽는 쪽이 계약이 실제로 쓰는 모양을 모르면, 게이트는 **없는 규칙을 지키라고** 한다.
+        for (String composite : List.of("oneOf", "anyOf")) {
+            if (field.get(composite) instanceof List<?> branches) {
+                List<String> types = new ArrayList<>();
+                for (Object branch : branches) {
+                    Object type = ((Map<String, Object>) branch).get("type");
+                    if (type != null) {
+                        types.add(String.valueOf(type));
+                    }
                 }
+                return types;
             }
-            return types;
         }
 
         Object type = field.get("type");

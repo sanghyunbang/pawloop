@@ -28,6 +28,18 @@ public record DogResponse(
         String avatarUrl,
 
         /**
+         * 사진이 없을 때의 얼굴 — 이슈 #585. <b>안 골랐으면 {@code null}</b> 이고, 그때 앱이
+         * 종류 기본 그림을 쓴다.
+         *
+         * <p>{@code avatarUrl} 과 <b>함께 올 수 있다.</b> 사진이 있으면 사진이 먼저지만,
+         * 사진을 지우는 날 돌아갈 자리가 이 값이다.
+         *
+         * <p>이 목록({@code PetCharacter})에 없는 값이 올 수도 있다 — 서버가 목록에서 뺀
+         * 뒤의 옛 행이 그 자리다. 앱은 모르는 값이면 종류 기본 그림으로 떨어뜨린다.
+         */
+        String character,
+
+        /**
          * <b>요청자가 등록한 아이인가</b> — 이슈 #563.
          *
          * <p>{@code GET /api/groups/&#123;id&#125;/dogs} 가 <b>남이 등록한 아이를 섞어</b> 주기
@@ -68,6 +80,7 @@ public record DogResponse(
                 ageMonths(dog.getBirth()),
                 dog.isNeutered(),
                 avatarUrl,
+                dog.getCharacterKey(),
                 mine);
     }
 

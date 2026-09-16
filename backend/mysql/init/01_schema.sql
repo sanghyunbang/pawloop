@@ -253,6 +253,7 @@ CREATE TABLE `dog` (
   `user_id` bigint NOT NULL,
   `size` varchar(10) NOT NULL DEFAULT 'small',
   `species` varchar(10) NOT NULL DEFAULT 'dog',
+  `character_key` varchar(20) DEFAULT NULL,
   `breed` varchar(50) DEFAULT NULL,
   `name` varchar(50) NOT NULL,
   `avatar` varchar(255) DEFAULT NULL,

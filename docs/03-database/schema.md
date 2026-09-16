@@ -116,6 +116,8 @@ CREATE TABLE refresh_token (
 
 사용자의 반려동물 프로필. `users` 1:N `dog`. 앱 도메인(`DogProfile`)의 `size`(small/medium/large)·`neutered`·`avatar`와 매핑. 나이는 앱에서 개월 수로 표시하나 DB는 `birth`(생일)로 저장하는 것이 정규.
 
+> **얼굴을 정하는 순서는 셋이다**(#585). `avatar`(사진) → `character_key`(고른 캐릭터) → 종류 기본 그림. 두 칸을 따로 두는 이유는 **동시에 있어야** 하기 때문이다 — 사진을 지우면 고르기 전이 아니라 **고른 캐릭터**로 돌아가는 것이 사용자가 기대하는 바이고, 한 칸에 담으면 그 둘 중 하나가 반드시 지워진다.
+
 > **표 이름이 `dog` 인데 고양이도 들어온다.** `species` 열이 종을 구분한다(#24 · #145). 표와 경로 이름을 `pet` 으로 옮기지 않은 이유는 `walk.dog_id`·`care_log.dog_id`·`/api/dogs`·`WalkInput.dogId` 가 이미 여러 곳에 박혀 있어서, 이름을 바꾸면 그 전부를 같은 변경에서 함께 옮겨야 하기 때문이다.
 
 ```sql
@@ -128,7 +130,8 @@ CREATE TABLE dog (
   size     VARCHAR(10) NOT NULL DEFAULT 'small' COMMENT 'small|medium|large',
   birth    DATE        NULL,
   neutered BOOLEAN     NOT NULL DEFAULT FALSE,
-  avatar   VARCHAR(255) NULL COMMENT '아바타 에셋/이미지 경로',
+  avatar        VARCHAR(255) NULL COMMENT '프로필 사진의 S3 objectKey (#448). 완성된 URL 이 아니다',
+  character_key VARCHAR(20)  NULL COMMENT '사진이 없을 때의 얼굴. NULL 이면 종류 기본 그림 (#585)',
   created_at DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at DATETIME(6) NULL COMMENT '소프트 삭제 시각(UTC). NULL 이면 살아 있다 — #156',
   PRIMARY KEY (id),
@@ -150,7 +153,8 @@ CREATE TABLE dog (
 | `size` | `VARCHAR(10)` | NOT NULL, CHECK | 소/중/대형견 |
 | `birth` | `DATE` | NULL | 생일(나이 산출) |
 | `neutered` | `BOOLEAN` | NOT NULL 기본 FALSE | 중성화 여부 |
-| `avatar` | `VARCHAR(255)` | NULL | 아바타 경로 |
+| `avatar` | `VARCHAR(255)` | NULL | 프로필 사진의 **S3 objectKey**(#448). 완성된 URL 이 아니다 — URL 을 박으면 버킷·CDN 을 못 바꾼다. 응답의 `avatarUrl` 은 여기서 조립한 파생값이다 |
+| `character_key` | `VARCHAR(20)` | NULL | **사진이 없을 때의 얼굴**(#585, `52_dog_character.sql`). `NULL` 이면 안 고른 것이고 앱이 종류 기본 그림을 쓴다. `avatar` 와 **동시에 있을 수 있다** — 사진을 지웠을 때 "고르기 전" 이 아니라 "고른 캐릭터" 로 돌아가야 하기 때문이다. **CHECK 를 안 건다**: 목록이 화면의 그림 목록이라 코드 쪽에서 늘고 줄며, 제약을 걸면 캐릭터 하나에 마이그레이션이 하나씩 붙는다. 값 검증은 `PetCharacter.of`(400)가 하고, 모르는 값이 행에 남으면 앱이 종류 기본 그림으로 떨어뜨린다 |
 | `deleted_at` | `DATETIME(6)` | NULL | **소프트 삭제**(#156). `DELETE /api/dogs/{dogId}` 가 찍고 행은 남긴다. 모든 조회가 `deleted_at IS NULL` 을 건다 |
 
 > **`created_at`·`deleted_at` 은 UTC 다 (#306).** `Dog` 의 `@PrePersist` 가 `LocalDateTime.now()`(JVM 존)를 찍고 있었다 — 개발 기계(KST)와 배포 컨테이너(UTC)가 같은 표에 두 존을 섞는다. `DogTime.nowUtc()` 로 맞췄고, `StoredTimestampsAreUtcTest` 가 이제 모든 엔티티 패키지를 훑는다(그 검사가 `chat`·`group`·`user` 만 보고 있어서 못 잡았다). 응답에 안 나가는 값이라 이미 들어간 KST 행은 그대로 둔다.
