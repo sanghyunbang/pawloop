@@ -6,6 +6,7 @@ import '../data/family_repository.dart';
 import '../data/invite_share.dart';
 import '../widgets/aurora.dart';
 import '../widgets/today_care_card.dart';
+import 'care_items_screen.dart';
 import 'family_chat_screen.dart';
 
 /// 우리 가족 — 가족 구성원 · 오늘의 케어 공유 · 산책 주의사항 · 가족 채팅.
@@ -209,6 +210,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     // 홈과 **같은 위젯**이다. 두 화면이 같은 데이터를 그리는데 코드가 둘이면
                     // 확인 문구가 한쪽에만 생기는 날이 온다.
                     TodayCareCard(repository: widget.repository),
+                    const SizedBox(height: 10),
+                    if (_group case final group?) _careItemsLink(group.id),
                     const SizedBox(height: 16),
                     _walkNotesCard(),
                     const SizedBox(height: 16),
@@ -812,6 +815,38 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
             ),
           ),
+        ]),
+      ),
+    );
+  }
+
+  // ───────────── 할 일 고치기 ─────────────
+  /// 카드 아래 한 줄 — 목록을 고치러 간다(#560 조각 3).
+  ///
+  /// **카드 헤더에 안 붙였다.** 거기는 이미 "우리 가족 ›" 이 폭을 나눠 쓰고 있어서, 글자를
+  /// 키우면 제목 줄이 통째로 넘친다(#396 에서 실측으로 겪은 자리다). 카드 밖 한 줄이면 폭
+  /// 경쟁이 없고, 무엇을 고치는지도 카드 바로 아래라 분명하다.
+  Widget _careItemsLink(int groupId) {
+    return GestureDetector(
+      key: const Key('family-care-items-link'),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => CareItemsScreen(groupId: groupId)),
+      ),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(children: [
+          const Icon(Icons.tune_rounded, size: 16, color: T.textMuted),
+          const SizedBox(width: 6),
+          // Expanded 다 — Spacer 는 0 아래로 못 줄어들어 큰 글자에서 줄이 넘친다(#396).
+          const Expanded(
+            child: Text('할 일 고치기',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
+          ),
+          const Icon(Icons.chevron_right, size: 16, color: T.textMuted),
         ]),
       ),
     );

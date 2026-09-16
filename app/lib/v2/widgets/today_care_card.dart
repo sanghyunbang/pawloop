@@ -269,7 +269,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
         ),
         content: Text(
-          retapWarning(mine),
+          retapWarning(mine, _labelOf(mine.type)),
           style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
         ),
         actions: [
@@ -307,7 +307,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
         ),
         content: Text(
-          duplicateWarning(already),
+          duplicateWarning(already, _labelOf(already.type)),
           style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
         ),
         actions: [
@@ -380,7 +380,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
         ),
         content: Text(
-          deleteWarning(entry),
+          deleteWarning(entry, _labelOf(entry.type)),
           style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
         ),
         actions: [
@@ -648,7 +648,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
                   fontSize: 11, fontWeight: FontWeight.w700, color: T.textSecondary)),
         ),
         Expanded(
-          child: Text(log.type.label,
+          child: Text(_labelOf(log.type),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11, color: T.textSecondary)),
@@ -788,15 +788,22 @@ const int kCareCardColumnsPerRow = 4;
 ///
 /// 무엇을 지우는지(종류·시각)를 문구에 넣는다 — 칸에는 가장 최근 하나만 보이므로 사용자가
 /// 어느 기록인지 확인할 수 있어야 한다.
-String deleteWarning(CareLogEntry entry) =>
-    '${entry.timeLabel} 에 남긴 ${entry.type.label} 기록을 지웁니다. 가족 화면에서도 사라져요.';
+String deleteWarning(CareLogEntry entry, String what) =>
+    '${entry.timeLabel} 에 남긴 $what 기록을 지웁니다. 가족 화면에서도 사라져요.';
 
 /// "오늘 14:20 아빠가 밥을 줬습니다. 그래도 기록할까요?"
 ///
 /// 위젯 밖에 두는 이유: 이 문구가 완료 조건 2 그 자체라 **테스트가 직접 부를 수 있어야**
 /// 한다. 위젯 안에 있으면 문구를 확인하는 방법이 화면을 띄우는 것뿐이다.
-String duplicateWarning(CareLogEntry already) {
-  final phrase = switch (already.type) {
+String duplicateWarning(CareLogEntry already, String what) {
+  // 직접 만든 항목에는 종류가 없다(#560) — 그때는 칸 이름을 그대로 넣는다.
+  // "양치를 했습니다" 가 "양치 기록을 남겼습니다" 보다 읽히지만, 이름이 무엇일지 모르므로
+  // 조사를 붙이지 않는 쪽을 고른다 — '약' 과 '양치' 는 붙는 조사가 다르다.
+  if (already.type == null) {
+    return '오늘 ${already.timeLabel} 에 ${already.doneByName}님이 $what 기록을 남겼습니다.\n'
+        '그래도 기록할까요?';
+  }
+  final phrase = switch (already.type!) {
     ServerCareType.water => '물을 갈아줬습니다',
     ServerCareType.meal => '밥을 줬습니다',
     ServerCareType.walk => '산책을 다녀왔습니다',
@@ -826,8 +833,15 @@ String subjectParticle(String name) {
   return (code - 0xAC00) % 28 == 0 ? '가' : '이';
 }
 
+/// 칸의 이름 — 문구와 로그 줄이 같은 말을 쓰게 한다.
+///
+/// 직접 만든 항목의 기록에는 종류가 없다(#560). 지금 카드는 기본 일곱만 그리므로 그런
+/// 기록이 여기 오지 않지만, 오면 빈 칸 대신 "케어" 라고 말한다 — 조각 4 에서 카드가 항목
+/// 이름을 직접 넘기면 이 함수는 마지막 대비책만 남는다.
+String _labelOf(ServerCareType? type) => type?.label ?? '케어';
+
 /// 내 기록이 있는 칸을 다시 눌렀을 때의 선택(#329).
 enum _Retap { undo, again, cancel }
 
-String retapWarning(CareLogEntry mine) =>
-    '오늘 ${mine.timeLabel} 에 내가 남긴 ${mine.type.label} 기록이에요. 잘못 눌렀다면 지우고, 한 번 더 한 거면 다시 기록해요.';
+String retapWarning(CareLogEntry mine, String what) =>
+    '오늘 ${mine.timeLabel} 에 내가 남긴 $what 기록이에요. 잘못 눌렀다면 지우고, 한 번 더 한 거면 다시 기록해요.';
