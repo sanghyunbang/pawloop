@@ -34,6 +34,13 @@ const List<String> kCareIconKeys = [
 /// 던지지 않는 것이 요점이다. 서버가 목록을 넓히면 옛 앱에는 모르는 값이 내려오는데,
 /// 그때 예외를 던지면 그 칸 하나 때문에 카드가 통째로 안 그려진다 — 그림 하나가 밋밋한
 /// 것과 화면이 비는 것은 무게가 다르다.
+///
+/// <b>기본 그림으로 체크 표시를 쓰면 안 된다.</b> 카드는 완료한 칸을 체크로 그린다 —
+/// 모르는 열쇠말이 체크로 떨어지면 **아직 안 한 칸이 한 것처럼 보인다.** 처음에
+/// `check_circle_outline` 으로 뒀다가 에뮬레이터에서 `기타` 칸이 체크로 그려지는 것을 보고
+/// 고쳤다.
+///
+/// 배변·마킹은 여기 없다 — 머티리얼에 그 뜻의 아이콘이 없어 [CareGlyph] 가 직접 그린다.
 IconData careItemIcon(String key) => switch (key) {
       'water' => Icons.water_drop_rounded,
       'meal' => Icons.restaurant_rounded,
@@ -43,6 +50,7 @@ IconData careItemIcon(String key) => switch (key) {
       'poop' => Icons.eco_rounded,
       'pee' => Icons.opacity_rounded,
       'snack' => Icons.cookie_rounded,
+      // 칫솔이 머티리얼에 없다. 솔 모양 중 빗질(`brush`)과 제일 덜 닮은 것을 골랐다.
       'tooth' => Icons.cleaning_services_rounded,
       'bath' => Icons.shower_rounded,
       'brush' => Icons.brush_rounded,
@@ -50,7 +58,9 @@ IconData careItemIcon(String key) => switch (key) {
       'heart' => Icons.favorite_rounded,
       'play' => Icons.sports_baseball_rounded,
       'weight' => Icons.monitor_weight_rounded,
-      _ => Icons.check_circle_outline_rounded,
+      'etc' => Icons.more_horiz_rounded,
+      // 모르는 열쇠말. 체크가 아니어야 한다 — 위 머리말 참조.
+      _ => Icons.label_outline_rounded,
     };
 
 /// 고르는 목록에 붙는 짧은 이름 — 그림만으로는 무엇인지 모를 칸이 있다.

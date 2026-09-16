@@ -21,6 +21,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/walk_moment.dart';
+import 'care_glyph.dart';
 import '../theme/app_tokens.dart';
 
 class WalkMomentBar extends StatelessWidget {
@@ -159,63 +160,16 @@ class _MomentGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) => switch (kind) {
         WalkMomentKind.water => Icon(Icons.water_drop_rounded, size: 20, color: color),
+        // **케어 카드와 같은 그림이다**(`care_glyph.dart`). 예전에는 이 파일이 직접 그리고
+        // 카드는 머티리얼 아이콘을 써서, 같은 뜻에 그림이 둘이었다 — 이 파일 머리말이
+        // 하지 말라고 적어 둔 바로 그것이다.
         WalkMomentKind.poop => CustomPaint(
             size: const Size(21, 21),
-            painter: _PoopPainter(color),
+            painter: CarePoopPainter(color),
           ),
         WalkMomentKind.pee => CustomPaint(
             size: const Size(21, 21),
-            painter: _PeePainter(color),
+            painter: CarePeePainter(color),
           ),
       };
-}
-
-/// 세 덩이를 쌓은 모양. 이모지의 그 그림을 단순한 원 셋으로 옮긴 것이다.
-class _PoopPainter extends CustomPainter {
-  const _PoopPainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final w = size.width, h = size.height;
-    canvas.drawOval(Rect.fromLTWH(w * 0.08, h * 0.60, w * 0.84, h * 0.34), paint);
-    canvas.drawOval(Rect.fromLTWH(w * 0.20, h * 0.33, w * 0.60, h * 0.30), paint);
-    canvas.drawOval(Rect.fromLTWH(w * 0.33, h * 0.10, w * 0.34, h * 0.26), paint);
-  }
-
-  @override
-  bool shouldRepaint(_PoopPainter old) => old.color != color;
-}
-
-/// 물방울 하나와 그 아래 바닥선. 물(물방울만)과 눈으로 갈린다.
-class _PeePainter extends CustomPainter {
-  const _PeePainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final w = size.width, h = size.height;
-
-    final drop = Path()
-      ..moveTo(w * 0.5, h * 0.06)
-      ..cubicTo(w * 0.86, h * 0.42, w * 0.80, h * 0.68, w * 0.5, h * 0.68)
-      ..cubicTo(w * 0.20, h * 0.68, w * 0.14, h * 0.42, w * 0.5, h * 0.06)
-      ..close();
-    canvas.drawPath(drop, paint);
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.16, h * 0.82, w * 0.68, h * 0.10),
-        Radius.circular(h * 0.05),
-      ),
-      Paint()..color = color.withValues(alpha: 0.45),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_PeePainter old) => old.color != color;
 }

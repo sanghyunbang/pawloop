@@ -19,6 +19,8 @@ import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/care_items_screen.dart';
+import 'package:heat_trip_flutter/v2/widgets/today_care_card.dart'
+    show kServerCareRev;
 
 const _base = 'https://api.example.test';
 
@@ -103,6 +105,13 @@ final _three = [
 }
 
 Future<void> _open(WidgetTester tester, FamilyRepository repo) async {
+  // **진짜 기기 폭으로 잰다.** 기본 800dp 로 두면 그림 칩 열여섯이 거의 다 들어가서,
+  // "고른 칩이 화면 밖" 을 재려던 검사가 언제나 초록이 된다(되돌려 보고 알았다).
+  // 1170px ÷ 3 = 390dp 는 흔한 폭이고 `today_care_card_size_test` 가 같은 값을 쓴다.
+  tester.view.physicalSize = const Size(1170, 2532);
+  tester.view.devicePixelRatio = 3.0;
+  addTearDown(tester.view.reset);
+
   await tester.pumpWidget(MaterialApp(
     home: CareItemsScreen(groupId: 3, repository: repo),
   ));
@@ -223,6 +232,12 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const Key('care-item-name')), '양치');
+    // 390dp 에서 칩 열여섯은 한 화면에 안 들어간다 — 사람도 굴려서 고른다.
+    //
+    // **오른쪽으로 끈다.** 시트를 열면 기본값 `기타`(맨 끝)로 이미 굴러가 있어서, 왼쪽으로
+    // 끌면 더 갈 곳이 없다 — 처음에 부호를 반대로 썼다가 칩을 못 찾았다.
+    await tester.drag(find.byKey(const Key('care-icon-row')), const Offset(300, 0));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('care-icon-tooth')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('care-target-2')));
@@ -269,5 +284,41 @@ void main() {
     expect(body.containsKey('dailyTarget'), isFalse,
         reason: '안 보내면 서버가 비운다 — PUT 이라 그게 "지우기" 다');
     expect(body['name'], '밥');
+  });
+  testWidgets('목록을 고치면 카드가 듣는 축이 올라간다 — 안 그러면 홈으로 돌아가도 그대로다',
+      (tester) async {
+    // **에뮬레이터에서 찾은 것이다.** 처음엔 `kCareRev`(pet.dart — 기기 안에서만 사는 옛
+    // 목록의 축)를 올렸는데 카드는 `kServerCareRev` 를 듣는다. 병원을 접고 돌아왔더니
+    // 카드에 병원이 그대로 있었다. 위젯 테스트는 전부 초록이었다 — 아무도 이 축을 안 쟀다.
+    final f = fixture();
+    await _open(tester, f.repo);
+    final before = kServerCareRev.value;
+
+    await tester.tap(find.byKey(const Key('care-item-archive-2')));
+    await tester.pumpAndSettle();
+
+    expect(kServerCareRev.value, greaterThan(before),
+        reason: '이 축을 안 올리면 화면만 바뀌고 카드는 옛 목록을 그린다');
+  });
+
+  testWidgets('고치기로 열면 고른 그림이 화면 안에 있다 — 목록 뒤쪽 값이 예사다', (tester) async {
+    // 기본값 `기타` 는 열여섯 중 맨 끝이고, 직접 만든 항목은 `양치`(아홉째)처럼 뒤쪽 값을
+    // 든다. 굴려 두지 않으면 시트를 열자마자 **아무것도 안 고른 것처럼** 보인다.
+    final f = fixture(items: [
+      _item(id: 9, name: '양치', icon: 'tooth', sortOrder: 0),
+    ]);
+    await _open(tester, f.repo);
+
+    await tester.tap(find.byKey(const Key('care-item-9')));
+    await tester.pumpAndSettle();
+
+    final chip = find.byKey(const Key('care-icon-tooth'));
+    expect(chip, findsOneWidget);
+    final left = tester.getTopLeft(chip).dx;
+    final right = tester.getBottomRight(chip).dx;
+    final width = tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    expect(left, greaterThanOrEqualTo(0.0));
+    expect(right, lessThanOrEqualTo(width),
+        reason: '고른 칩이 화면 밖이면 무엇을 고른 건지 알 수 없다 (왼쪽 $left · 오른쪽 $right · 폭 $width)');
   });
 }
