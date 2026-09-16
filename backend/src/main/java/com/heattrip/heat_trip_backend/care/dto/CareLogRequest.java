@@ -40,6 +40,20 @@ import com.heattrip.heat_trip_backend.care.entity.CareType;
  *             역직렬화에서 던진다
  * @param memo 선택. 500자까지. 넘으면 400 이다
  * @param dogId 선택. 우리 집 아이가 아니면 400
+ *
+ * <h2>{@code type} 과 {@code careItemId} 는 <b>정확히 하나</b>다 (#560)</h2>
+ *
+ * <p>둘 다 없으면 400 이다 — 어느 칸의 기록도 아닌 행은 화면에 안 뜨고, 안 뜨니 지울 수도
+ * 없다. 둘 다 보내도 400 이다: 서로 다른 것을 가리키면 어느 쪽을 믿을지 정해야 하고, 그
+ * 규칙은 적는 순간 둘 중 하나가 조용히 버려지는 자리가 된다.
+ *
+ * <p><b>{@code type} 만 보내는 길은 그대로 남는다.</b> 산책 트래킹이 {@code type='walk'} 로,
+ * 일정 완료가 {@code CareService.recordLinked} 로 남기는 경로가 그렇다 — 이미 나가 있는 앱도
+ * 이 필드를 모른 채 계속 기록한다. <b>하위 호환은 서버가 지는 짐</b>이다.
+ *
+ * @param careItemId 선택. 그 집 항목이 아니면 404. 기본 일곱을 가리키면 서버가 그 항목의
+ *                   종류를 {@code type} 에 함께 적는다 — 그래야 옛 기록과 같은 축으로 세어지고
+ *                   산책 화면의 {@code type='walk'} 조회도 그대로 돈다
  */
-public record CareLogRequest(CareType type, String memo, Long dogId) {
+public record CareLogRequest(CareType type, String memo, Long dogId, Long careItemId) {
 }

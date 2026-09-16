@@ -766,9 +766,10 @@ CREATE TABLE walk_note (
 ```sql
 CREATE TABLE care_log (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
-  dog_id      BIGINT       NULL COMMENT '대상 반려동물(dog.id). FK 는 #154 에서 걸었다 — 값은 아직 항상 NULL 이다(쓰기 경로가 dogId 를 안 받는다, #209 Dogs-high-3)',
+  dog_id      BIGINT       NULL COMMENT '대상 반려동물(dog.id). FK 는 #154 에서 걸었고 #563 부터 값이 들어간다 — 그 전 행은 NULL',
   group_id    BIGINT       NULL COMMENT '가족 그룹 공유(nullable — 미소속 시 개인 기록)',
-  type        VARCHAR(10)  NOT NULL COMMENT 'water|meal|walk|med|vet|poop|pee',
+  care_item_id BIGINT      NULL COMMENT '직접 만든 항목의 기록일 때만 채워진다 (#560)',
+  type        VARCHAR(10)  NULL COMMENT '기본 일곱이면 그 종류, 직접 만든 항목이면 NULL (#560)',
   done_by     BIGINT       NULL COMMENT '수행자(users.id) — 토큰의 사용자다. 탈퇴하면 NULL 이다',
   occurred_at DATETIME(6)  NOT NULL,
   memo        VARCHAR(500) NULL,
@@ -783,6 +784,8 @@ CREATE TABLE care_log (
     REFERENCES users (id) ON DELETE SET NULL,
   CONSTRAINT fk_carelog_dog FOREIGN KEY (dog_id)
     REFERENCES dog (id) ON DELETE SET NULL,
+  CONSTRAINT fk_carelog_item FOREIGN KEY (care_item_id)
+    REFERENCES care_item (id) ON DELETE SET NULL,
   CONSTRAINT ck_carelog_type CHECK (type IN ('water','meal','walk','med','vet','poop','pee'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
@@ -790,13 +793,19 @@ CREATE TABLE care_log (
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `dog_id` | `BIGINT` | FK→`dog.id` nullable, **ON DELETE SET NULL**, INDEX(dog,occurred_at) | 대상 반려동물. FK 는 #154 에서 걸었다(`22_care_log_dog_fk.sql`). 값은 아직 항상 `NULL` — 아래 참조 |
+| `dog_id` | `BIGINT` | FK→`dog.id` nullable, **ON DELETE SET NULL**, INDEX(dog,occurred_at) | 대상 반려동물. FK 는 #154 에서 걸었고(`22_care_log_dog_fk.sql`) **#563 부터 값이 들어간다** — 그 전 행은 `NULL` 이고 조회가 그걸 안다 |
 | `group_id` | `BIGINT` | FK→`family_group.id` nullable, ON DELETE SET NULL, INDEX(group,occurred_at) | 공유 대상 가족 그룹 |
-| `type` | `VARCHAR(10)` | NOT NULL, CHECK | `water`(물)/`meal`(밥)/`walk`(산책)/`med`(투약)/`vet`(병원)/`poop`(배변)/`pee`(마킹). **소문자다**. 뒤의 둘은 #340 이 더했고 `29_care_type_poop.sql` 이 CHECK 를 넓힌다. **어디서 눴는지는 이 표에 없다** — 위치는 기기에만 남는다(A안 #235) |
+| `care_item_id` | `BIGINT` | FK→`care_item.id` nullable, **ON DELETE SET NULL** | **직접 만든 항목의 기록일 때만** 채워진다(#560). 기본 일곱은 `type` 으로 세므로 비어 있고, 그래서 이 컬럼이 생기기 전의 행과 산책 트래킹이 남기는 행을 한 줄도 안 고쳤다. `SET NULL` 인 이유는 §41 |
+| `type` | `VARCHAR(10)` | **NULL 허용**, CHECK | `water`(물)/`meal`(밥)/`walk`(산책)/`med`(투약)/`vet`(병원)/`poop`(배변)/`pee`(마킹), **또는 직접 만든 항목이면 `NULL`**(#560, `51_care_log_custom_type.sql`). **소문자다**. 뒤의 둘은 #340 이 더했고 `29_care_type_poop.sql` 이 CHECK 를 넓힌다. **어디서 눴는지는 이 표에 없다** — 위치는 기기에만 남는다(A안 #235) |
 | `done_by` | `BIGINT` | FK→`users.id` nullable, **ON DELETE SET NULL**, INDEX | 수행자. 토큰의 사용자이지 요청 본문의 값이 아니다. 그 사람이 탈퇴하면 `NULL` — §16 의 경고와 같은 판단이다 |
 | `occurred_at` | `DATETIME(6)` | NOT NULL | 발생 시각. 서버 시계다 |
 | `memo` | `VARCHAR(500)` | NULL | 메모 |
 | `created_at` | `DATETIME(6)` | NOT NULL, 기본 now | 행 생성 시각 |
+
+> **`type` 과 `care_item_id` 는 한 행에 적어도 하나가 있어야 한다 — 그런데 DB 가 못 막는다.**
+> 둘 다 빈 행은 어느 칸의 기록도 아니라 화면에 안 뜨고, 안 뜨니 지울 수도 없다. `CHECK (type IS NOT NULL OR care_item_id IS NOT NULL)` 을 걸려고 했더니 MySQL 8 이 거절한다 — `SET NULL` 로 값을 쓰는 FK 가 걸린 컬럼은 CHECK 에서 못 읽는다. `fk_carelog_item` 의 `SET NULL` 은 포기할 수 없는 쪽이라(위) 이 불변식은 **서버가 진다**(`CareService.record` — 종류와 항목은 정확히 하나). DB 가 마지막 방어선이라는 원칙(📌 #86 원칙 5)을 여기서는 못 지킨다는 뜻이고, 그게 사실이라 적어 둔다.
+
+> **더 조심할 것 — 그 CHECK 를 엔티티에 넣으면 FK 가 조용히 사라진다.** `CREATE TABLE` 안에 함께 적으면 MySQL 이 받아 주는데(거절은 `ALTER` 로 더할 때만이다), 그러면 Hibernate 가 나중에 `ALTER` 로 거는 `fk_carelog_item` 이 실패하고 `01_schema.sql` 재생성 때 **FK 가 통째로 빠진다.** 실측으로 겪었고, `DeclaredForeignKeysExistTest` 가 그 자리를 막는다.
 
 > ### `dog_id` 의 FK 는 #154 에서 걸었다 — `ON DELETE SET NULL`, 값은 아직 항상 `NULL`
 >
@@ -1617,6 +1626,8 @@ CREATE TABLE care_item (
 > **아이를 보내도 항목은 남는다(`SET NULL`).** `CASCADE` 면 아이 하나를 지울 때 그 아이 앞으로 적어 둔 "심장사상충" 이 집의 목록에서 통째로 사라진다. 같은 이유로 `care_log.care_item_id` 도 `SET NULL` 이다(§17) — **항목을 지워도 일어난 사실은 남아야 한다.**
 
 > **접는 것이지 지우는 것이 아니다.** `archived_at` 을 두고 행을 남기는 이유는 `care_log.care_item_id` 가 이 행을 가리키기 때문이다. 지우면 지난 기록이 이름을 잃는다. 조회는 접힌 것까지 주고(`CareItemRepository.findOfGroup`) 카드가 `archived_at IS NULL` 로 거른다 — 고치기 화면이 "다시 켜기" 를 그리려면 접힌 것을 봐야 한다.
+
+> **주기 칸이 없는 것은 결정이다**(사장님, 2026-09-16). 이 카드는 <b>매일 반복되는 돌봄</b>이고, 한 번 하고 끝나는 일(중성화)과 달마다 하는 일(심장사상충)은 <b>일정 탭</b>이 맡는다 — §33 `schedule` 이 이미 반복 규칙을, §34 `schedule_exception` 이 하루짜리 예외를 들고 있고, 일정을 완료하면 케어 기록이 남는 경로도 이미 있다(`CareService.recordLinked`). 여기에 주기를 또 두면 "반복" 의 정의가 두 곳에 생긴다. 하루에 여러 번은 `daily_target` 이 맡는다.
 
 > **목록이 생겨나는 자리는 둘이다.** 이미 있던 집은 마이그레이션이 채우고, 새로 만드는 집은 `FamilyGroupCreated` 를 듣는 `AFTER_COMMIT` 리스너가 채운다. 둘 중 하나만 있으면 한쪽 집단의 카드가 통째로 빈다 — `CareItemMigrationExecutionTest` 와 `CareItemSeedIntegrationTest` 가 각각을 잰다.
 

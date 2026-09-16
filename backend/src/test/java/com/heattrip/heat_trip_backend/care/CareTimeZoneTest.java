@@ -102,7 +102,7 @@ class CareTimeZoneTest {
                 .id(1L)
                 .type(CareType.MEAL)
                 .occurredAt(EARLY_MORNING_KST)
-                .build());
+                .build(), null);
 
         assertThat(response.occurredAt())
                 .isEqualTo(EARLY_MORNING_KST.atZone(ClockConfig.SERVICE_ZONE).toInstant());

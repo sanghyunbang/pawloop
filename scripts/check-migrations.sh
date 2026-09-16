@@ -98,6 +98,9 @@ has_cons()   { q "SELECT COUNT(*) FROM information_schema.table_constraints WHER
 # statistics 는 인덱스의 **컬럼마다** 한 행이다 — COUNT(*) 로 재면 두 컬럼짜리 인덱스가 2 로 나와 '없음' 이 된다(39·40·41 이 그렇게 빨갛게 보였다).
 has_index()  { q "SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='$1' AND index_name='$2';"; }
 check_has()  { q "SELECT COUNT(*) FROM information_schema.check_constraints WHERE constraint_schema=DATABASE() AND constraint_name='$1' AND check_clause LIKE '%$2%';"; }
+# validate 는 CHECK 는 안 보지만 **널 허용 여부는 본다** — 엔티티가 nullable 인데 컬럼이
+# NOT NULL 이면 부팅이 막힌다. 51 이 그 자리다.
+is_nullable() { q "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='$1' AND column_name='$2' AND is_nullable='YES';"; }
 
 MISSING=()
 CURRENT_FILE=""
@@ -306,6 +309,10 @@ want 1 "$(has_table care_item)" "care_item 표 (없으면 부팅이 validate 에
 want 1 "$(has_column care_log care_item_id)" "care_log.care_item_id 컬럼 (없으면 직접 만든 항목의 기록이 갈 곳이 없다)"
 want 1 "$(has_index care_item uq_careitem_system)" "uq_careitem_system (없으면 '물' 이 두 칸 생긴다)"
 want 1 "$(has_cons care_log fk_carelog_item)" "fk_carelog_item (없으면 지운 항목의 id 가 기록에 남아 떠돈다)"
+
+step "51_care_log_custom_type.sql"
+want 1 "$(is_nullable care_log type)" "care_log.type 널 허용 (없으면 직접 만든 항목을 누를 때 500 이고, 그 전에 부팅이 validate 에서 죽는다)"
+want 1 "$(check_has ck_carelog_type poop)" "ck_carelog_type 일곱 값 (51 이 넓히면서 흘리지 않았는지)"
 
 # ── 마무리 ───────────────────────────────────────────────────────────
 echo

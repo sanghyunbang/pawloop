@@ -3,6 +3,7 @@ package com.heattrip.heat_trip_backend.care.service;
 import com.heattrip.heat_trip_backend.care.dto.CareLogRequest;
 import com.heattrip.heat_trip_backend.care.dto.CareLogResponse;
 import com.heattrip.heat_trip_backend.care.dto.WalkNoteResponse;
+import com.heattrip.heat_trip_backend.care.entity.CareItem;
 import com.heattrip.heat_trip_backend.care.entity.CareLog;
 import com.heattrip.heat_trip_backend.care.entity.CareType;
 import com.heattrip.heat_trip_backend.dog.DogOwnership;
@@ -72,6 +73,15 @@ public class CareService {
 
     private final CareLogRepository careLogs;
 
+    /**
+     * 그 집의 항목 목록 — 응답의 {@code careItemId} 를 푸는 데 쓴다(#560).
+     *
+     * <p>같은 모듈이라 서비스를 직접 든다. {@code CareItemRepository} 를 또 들지 않는 이유는
+     * "접힌 것도 준다 · 순서대로 준다" 같은 규약이 그 서비스에 이미 적혀 있어서다 — 저장소를
+     * 두 곳에서 부르면 그 규약이 두 벌이 된다.
+     */
+    private final CareItemService careItems;
+
     /** "그 집 아이인가" — dog 모듈의 공개 표면(#563). 판정이 두 곳에 생기지 않게 한 자리에서만 묻는다. */
     private final DogOwnership dogs;
     private final WalkNoteRepository walkNotes;
@@ -99,11 +109,42 @@ public class CareService {
         List<CareLog> found = careLogs.findDayOfGroup(
                 groupId, day.atStartOfDay(), day.plusDays(1).atStartOfDay());
 
+        // 항목 목록을 한 번만 읽는다 — 행마다 읽으면 하루치 수십 행이 수십 왕복이 된다.
+        List<CareItem> items = careItems.listOf(groupId);
+
         return found.stream()
                 .filter(log -> type == null || log.getType() == type)
                 .filter(log -> matchesDog(log, dogId))
-                .map(CareLogResponse::of)
+                .map(log -> CareLogResponse.of(log, itemIdOf(log, items)))
                 .toList();
+    }
+
+    /**
+     * 이 기록이 <b>어느 칸에 세어지는가</b> — 규칙이 사는 자리는 여기 하나다. 이슈 #560.
+     *
+     * <ol>
+     *   <li>행이 항목을 들고 있으면 그것 — 직접 만든 항목의 기록이다.</li>
+     *   <li>아니면 그 집에서 같은 {@code systemType} 을 든 항목 — 기본 일곱의 기록이고,
+     *       <b>이 컬럼이 생기기 전의 행과 산책 트래킹이 남기는 행</b>이 여기로 온다.</li>
+     *   <li>짝이 없으면 {@code null}. 지어내지 않는다.</li>
+     * </ol>
+     *
+     * <p><b>앱이 이 갈래를 다시 적지 않게 하려고</b> 응답에 실어 보낸다. 앱이 세면 규칙이 두
+     * 곳에 생기고, 그때부터 한쪽만 고쳐지는 날을 기다리게 된다 — 이 저장소가 같은 자리에서
+     * 여러 번 겪은 일이다.
+     */
+    private static Long itemIdOf(CareLog log, List<CareItem> items) {
+        if (log.careItemId() != null) {
+            return log.careItemId();
+        }
+        if (log.getType() == null) {
+            return null;
+        }
+        return items.stream()
+                .filter(item -> item.getSystemType() == log.getType())
+                .map(CareItem::getId)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -152,10 +193,19 @@ public class CareService {
     public CareLogResponse record(long groupId, CareLogRequest request, User actor) {
         FamilyGroup group = requireMemberGroup(groupId, actor.getId());
 
-        if (request == null || request.type() == null) {
-            throw new IllegalArgumentException("케어 종류는 필수입니다.");
+        if (request == null || (request.type() == null) == (request.careItemId() == null)) {
+            // 둘 다 없으면 어느 칸의 기록도 아니고, 둘 다 있으면 어느 쪽을 믿을지 정해야 한다.
+            // 그 규칙을 적는 순간 둘 중 하나가 조용히 버려지는 자리가 생긴다.
+            throw new IllegalArgumentException("케어 종류나 항목 중 하나만 보내 주세요.");
         }
         String memo = trimmedToNull(request.memo(), "메모");
+
+        // 항목을 보냈으면 그 집 것이어야 한다. 기본 일곱을 가리키면 그 종류를 함께 적는다 —
+        // 그래야 옛 기록과 같은 축으로 세어지고 산책 화면의 type='walk' 조회도 그대로 돈다.
+        CareItem item = request.careItemId() == null
+                ? null
+                : requireItemOfGroup(groupId, request.careItemId());
+        CareType type = item == null ? request.type() : item.getSystemType();
 
         // 어느 아이인가 (#563). **선택이다** — 아이를 한 마리도 등록 안 한 집도 기록하고,
         // 이미 나가 있는 앱은 이 필드를 모른다. 보냈으면 그 집 아이여야 한다: 누구 것인지는
@@ -167,13 +217,29 @@ public class CareService {
         CareLog saved = careLogs.saveAndFlush(CareLog.builder()
                 .dog(dog)
                 .group(group)
-                .type(request.type())
+                .careItem(item)
+                .type(type)
                 .doneBy(actor)
                 .occurredAt(LocalDateTime.now(clock))
                 .memo(memo)
                 .build());
 
-        return CareLogResponse.of(saved);
+        return CareLogResponse.of(saved, itemIdOf(saved, careItems.listOf(groupId)));
+    }
+
+    /**
+     * 그 집 항목을 꺼낸다. 아니면 <b>404</b> — 없는 것과 옆집 것이 같은 답이다(#209).
+     *
+     * <p>{@code CareItemService.requireOfGroup} 과 같은 판정인데 그쪽이 {@code private} 이다.
+     * 여는 대신 여기 두 줄을 적은 이유는, 여는 순간 "인가 없이 항목을 꺼내는 공개 메서드" 가
+     * 생기고 그것을 부르는 다음 자리가 인가를 빠뜨리기 때문이다.
+     */
+    private CareItem requireItemOfGroup(long groupId, long itemId) {
+        return careItems.listOf(groupId).stream()
+                .filter(item -> item.getId() == itemId)
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "그 항목을 찾을 수 없습니다."));
     }
 
     /**
@@ -202,7 +268,7 @@ public class CareService {
                 .occurredAt(LocalDateTime.now(clock))
                 .build());
 
-        return CareLogResponse.of(saved);
+        return CareLogResponse.of(saved, itemIdOf(saved, careItems.listOf(groupId)));
     }
 
     /**
