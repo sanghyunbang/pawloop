@@ -8,11 +8,18 @@
 
 실제 백엔드 설정 기준(`backend/src/main/resources/application-*.properties`):
 
+> **2026-09-16 갱신(#592):** 아래 "as-is" 는 Flyway 도입 **전**의 기록입니다. 지금은 Flyway 가
+> 스키마를 만들고 `ddl-auto` 는 dev·prod 둘 다 `validate` 입니다. 1.1 의 한계 목록은 왜
+> 그렇게 했는지의 근거로 남깁니다.
+
 | 항목 | 값 | 근거 |
 | --- | --- | --- |
-| 스키마 관리 | Hibernate `ddl-auto` | 마이그레이션 툴 미도입 |
-| dev 프로필 | `spring.jpa.hibernate.ddl-auto=update` | `application-dev.properties` |
-| prod 프로필 | `spring.jpa.hibernate.ddl-auto=validate` | `application-prod.properties` |
+| 스키마 관리 | **Flyway** (`db/migration/V*.sql`) | #592 |
+| 기준점 | `V1__baseline.sql` = `mysql/init/01_schema.sql` 사본 | 쉰두 개를 전부 적용한 결과와 같다 |
+| dev 프로필 | `spring.jpa.hibernate.ddl-auto=validate` · `flyway.enabled=true` | `application-dev.properties` |
+| prod 프로필 | `spring.jpa.hibernate.ddl-auto=validate` · `flyway.enabled=true` | `application-prod.properties` |
+| test | `flyway.enabled=false` — 엔티티에서 `create-drop` | 전용 검사 `FlywayBuildsTheSchemaTest` 가 따로 잰다 |
+| 손으로 돌리던 것 | `mysql/post-start/*.sql` 쉰두 개 — **닫았다**(지우지는 않았다) | `backend/mysql/README.md` |
 | DB | MySQL (`jdbc:mysql://.../heat_trip_db`) | `spring.datasource.url` |
 | 런타임 | Java 21 / Spring Boot 3.5.4 | `backend/build.gradle` |
 | 시드 로딩 | 없음 — `place_traits.csv` 를 읽던 opencsv 로더(`tour`·`curation`)는 #94 로 지웠다 | 파일은 `resources/data/` 에 남아 있다 |

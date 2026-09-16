@@ -1,5 +1,13 @@
 # MySQL 로컬 스키마 보정
 
+> **`post-start/` 는 닫혔습니다 (#592).** 새 스키마 변경은 여기가 아니라
+> `backend/src/main/resources/db/migration/` 에 `V{번호}__{이름}.sql` 로 씁니다 — Flyway 가
+> 부팅할 때 돌리고, 실패하면 부팅을 멈추고, 어디까지 갔는지 DB 가 기억합니다.
+>
+> 아래 쉰두 개는 **지우지 않고 남깁니다.** 그건 "옛 DB 를 따라잡는" 이력이라, 2026-09-16
+> 이전 상태의 DB 를 만났을 때 쓸 일이 있습니다. 새 DB 에는 필요 없습니다 —
+> `V1__baseline.sql` 이 쉰두 개를 전부 적용한 결과와 같습니다.
+
 이 디렉터리는 Docker Compose로 띄운 로컬 MySQL에 필요한 SQL을 보관합니다.
 
 ## `init`와 `post-start` 차이
