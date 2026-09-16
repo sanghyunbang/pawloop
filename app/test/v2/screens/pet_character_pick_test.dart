@@ -17,6 +17,7 @@ import 'package:heat_trip_flutter/v2/data/pet_sync.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/screens/edit_screen.dart';
+import 'package:heat_trip_flutter/v2/widgets/dog_avatar.dart';
 import 'package:heat_trip_flutter/v2/widgets/pet_registration_sheet.dart';
 
 const String _base = 'https://api.test';
@@ -193,6 +194,28 @@ void main() {
       expect(sent.containsKey('character'), isTrue);
       expect(sent['character'], isNull,
           reason: '안 보내면 "안 바꿈" 이라 한 번 고른 사람이 기본으로 못 돌아간다');
+    });
+
+    testWidgets('고르는 즉시 위의 큰 그림이 바뀐다 — 저장을 기다리지 않는다', (t) async {
+      // 에뮬레이터에서 찾았다. 푸들을 골랐는데 위의 96px 아바타가 옛 얼굴 그대로여서,
+      // 무엇을 고른 것인지 확인할 길이 화면에서 제일 작은 칸밖에 없었다.
+      final f = fixture();
+      replacePets(const [_bori]);
+      selectPet(0);
+      await pumpEdit(t, EditScreen(pet: _bori, sync: f.sync));
+
+      await t.tap(find.byKey(const Key('pet-character-turtle')));
+      await t.pumpAndSettle();
+
+      final shown = t
+          .widgetList<Image>(find.descendant(
+            of: find.byType(DogAvatar),
+            matching: find.byType(Image),
+          ))
+          .map((i) => (i.image as AssetImage).assetName)
+          .toList();
+      expect(shown, contains('assets/emoji/turtle.png'),
+          reason: '저장 전에는 옛 얼굴을 그리고 있었다');
     });
 
     testWidgets('얼굴을 안 건드리면 그 키가 본문에 없다', (t) async {

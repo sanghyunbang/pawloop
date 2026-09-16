@@ -470,9 +470,17 @@ class _EditScreenState extends State<EditScreen> {
                 ),
               ],
             ),
+            // **고르는 즉시 여기에 보인다**(#585). 저장을 눌러야 바뀌면, 고르는 사람은 무엇을
+            // 고른 것인지 확인할 길이 화면에서 제일 작은 칸(60px)밖에 없다 — 에뮬레이터에서
+            // 푸들을 고르고도 위가 그대로라 찾았다. 등록 시트는 처음부터 이렇게 그린다.
             child: ValueListenableBuilder<DogProfile?>(
               valueListenable: kMyDog,
-              builder: (_, dog, __) => DogAvatar(dog: dog ?? widget.pet, size: 89, emojiSize: 60),
+              builder: (_, dog, __) => DogAvatar(
+                dog: (dog ?? widget.pet)
+                    .copyWith(characterKey: _character, clearCharacter: _character == null),
+                size: 89,
+                emojiSize: 60,
+              ),
             ),
           ),
         ),
