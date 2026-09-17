@@ -12,7 +12,8 @@
 //  6. 인터넷 계열이 고지 목록에 **없다**(2026-09-18). 시행령 제9조의2 제1항 각 호에
 //     없는 것을 필수 항목으로 올려 두니 화면이 "이 앱에 꼭 필요한 건 인터넷뿐" 이라고
 //     말하는 꼴이었다.
-//  7. 필수가 0개인 지금, 화면이 **그 사실을 말한다.** 절이 텅 빈 채 남으면 안 된다.
+//  7. 위치가 **필수**다 — 시행령 제9조의2 제3항의 세 기준으로 갈랐다. "거부해도 앱이
+//     열리니 선택" 은 법의 기준이 아니었다. 그러면서도 앱이 잠기지 않는다고 말한다.
 //  8. 위치 항목이 **약관 동의와 별개**라고 말한다 — 같은 "필수" 가 두 화면에서 다른
 //     뜻이라 모순으로 읽혔다. 짝이 되는 줄은 `consent_test.dart` 가 잰다.
 import 'dart:io';
@@ -57,16 +58,25 @@ void main() {
       expect(find.text('선택적'), findsNWidgets(PermissionNoticeScreen.optionals.length));
     });
 
-    testWidgets('필수가 0개면 비워 두지 않고 없다고 말한다', (tester) async {
+    testWidgets('필수는 위치 하나다 — 절이 비어 있지 않다', (tester) async {
       await _pump(tester, const PermissionNoticeScreen());
 
-      expect(PermissionNoticeScreen.essentials, isEmpty, reason: '''
-지금은 필수적 접근권한이 없다. 이 전제가 바뀌면 아래 문장 대신 항목이 서야 한다 —
-그때는 이 검사부터 고쳐라.''');
-      expect(find.text(PermissionNoticeScreen.essentialLabel), findsOneWidget,
-          reason: '절을 지우면 "필수는 왜 안 적었나" 로 읽힌다');
-      expect(find.text(PermissionNoticeScreen.noEssentialNotice), findsOneWidget,
-          reason: '빈 절을 그냥 두면 화면이 아무 말도 안 한 것이 된다');
+      expect(PermissionNoticeScreen.essentials.map((p) => p.title), ['위치'], reason: '''
+시행령 제9조의2 제3항의 세 기준(공개된 서비스의 범위와 실제 제공 여부·이용자의 합리적
+예상 가능성·기술적 관련성)이 전부 위치를 가리킨다. 나머지 넷은 그 서비스 없이도 성립한다.''');
+      expect(find.text(PermissionNoticeScreen.essentialLabel), findsOneWidget);
+      expect(find.text(PermissionNoticeScreen.essentialNotice), findsOneWidget,
+          reason: '절 제목만 있고 머리말이 없으면 필수가 무슨 뜻인지 말하지 않은 것이다');
+      expect(find.text(PermissionNoticeScreen.noEssentialNotice), findsNothing,
+          reason: '필수가 있는데 "없어요" 가 뜨면 화면이 거짓말을 한다');
+    });
+
+    test('필수 머리말이 "앱을 쓸 수 없다" 고 말하지 않는다 — 그것은 거짓이다', () {
+      expect(PermissionNoticeScreen.essentialNotice, isNot(contains('앱을 쓸 수 없')),
+          reason: '''
+위치를 거부해도 앱은 열린다 — 라우터가 위치를 보지 않고 커뮤니티·채팅·일정은 위치를
+부르지 않는다. 법이 가르는 기준은 "앱이 열리는가" 가 아니라 "그 서비스를 제공할 수
+있는가" 다(시행령 제9조의2 제3항). 머리말이 앱을 잠근다고 말하면 화면이 거짓말을 한다.''');
     });
 
     testWidgets('두 화면의 경계를 적는다 — 약관 동의와 별개다', (tester) async {
@@ -199,15 +209,22 @@ $name 은 단말에 저장된 정보도, 자동 저장된 정보도, 고유정�
       }
     });
 
-    test('위치는 선택이다 — 거부해도 앱이 돌아가는 것을 코드에서 확인했다', () {
+    test('위치는 필수다 — 시행령 제9조의2 제3항의 세 기준이 전부 위치를 가리킨다', () {
       final location = kAppPermissions.firstWhere((p) => p.title == '위치');
 
-      expect(location.essential, isFalse,
-          reason: '라우터가 위치 권한을 보지 않고, 홈 카드와 추적 화면이 거부를 받아 낸다 — '
-              '거부한 사람도 커뮤니티·채팅·일정을 쓴다');
+      expect(location.essential, isTrue, reason: '''
+한 번 틀렸다가 고친 자리다. "거부해도 앱이 열리니 선택" 은 법의 기준이 아니다 — 시행령
+제9조의2 제3항은 ①공개된 서비스의 범위와 실제 제공 여부 ②이용자의 합리적 예상 가능성
+③기술적 관련성을 보라고 한다. 우리가 내건 것이 산책 기록이고, 산책 앱이 위치를 쓰는 것은
+당연히 예상되며, GPS 없이 경로를 그릴 방법이 없다. 펫피·피리부는 강아지·포랜드도 전부
+"(필수) GPS 위치정보" 로 적는다(2026-09-18 플레이스토어 설명 확인).''');
       expect(location.ifDenied, isNotNull,
-          reason: '대신 무엇을 못 쓰게 되는지는 말해야 한다');
+          reason: '필수라도 무엇을 못 쓰게 되는지는 말해야 한다');
       expect(location.ifDenied, contains('산책'));
+      expect(location.ifDenied, contains('앱이 잠기지는'), reason: '''
+필수로 적는다고 앱이 잠기는 것이 아니다. 법 제22조의2 제2항이 막는 것은 *비필수* 권한
+미동의를 이유로 한 서비스 거부뿐이고, 우리 앱은 위치를 거부해도 열린다. 화면이 그 사실을
+말하지 않으면 사용자가 가진 자유를 실제보다 작게 알리는 것이 된다.''');
     });
 
     testWidgets('위치 항목이 약관 동의와 별개라고 말한다', (tester) async {
@@ -215,9 +232,9 @@ $name 은 단말에 저장된 정보도, 자동 저장된 정보도, 고유정�
 
       final location = kAppPermissions.firstWhere((p) => p.title == '위치');
       expect(location.ifDenied, contains(kLocationIsNotTheTerms), reason: '''
-여기서는 위치가 선택인데 동의 화면에서는 위치기반서비스 이용약관이 필수다. 설명이
-없으면 같은 "필수" 라는 말이 두 화면에서 다른 뜻이라 모순으로 읽힌다 — 사장님이 실기기에서
-그렇게 읽었다(#682).''');
+두 화면 다 위치를 필수라 부르지만 뜻이 다르다 — 여기서는 기기의 GPS 를 켜는 허용이고,
+동의 화면에서는 위치기반서비스 이용약관이라는 계약 문서다. 설명이 없으면 같은 "필수" 가
+두 화면에서 다른 뜻이라 읽는 사람이 헷갈린다 — 사장님이 실기기에서 그렇게 읽었다(#682).''');
       expect(find.textContaining(kLocationIsNotTheTerms), findsOneWidget,
           reason: '상수에만 있고 화면에 안 그려지면 아무 말도 안 한 것이다');
     });

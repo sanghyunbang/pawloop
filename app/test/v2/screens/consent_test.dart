@@ -300,22 +300,32 @@ void main() {
       }
     });
 
-    // 접근권한 안내에서는 위치가 **선택**이고 여기서는 위치기반서비스 약관이 **필수**다.
-    // 둘은 다른 것이지만(기기 권한 / 약관 동의), 화면이 말해 주지 않으면 읽는 사람에게는
-    // 모순이다 — 사장님이 실기기에서 그렇게 읽었다(#682).
+    // 두 화면 다 위치를 "필수" 라 부르는데 뜻이 다르다 — 접근권한 화면의 필수는 기기의
+    // GPS 를 켜는 허용이고, 여기의 필수는 위치기반서비스 이용약관이라는 계약 문서다.
+    // 화면이 말해 주지 않으면 읽는 사람에게는 같은 말이 두 번 나오는 것으로만 보인다
+    // — 사장님이 실기기에서 그렇게 읽었다(#682).
     testWidgets('위치기반서비스 줄이 권한과 약관이 다르다고 말한다', (t) async {
       await _pump(t, gate: _gate(_FakeServer()));
 
       expect(find.text(ConsentScreen.locationPermissionNote), findsOneWidget, reason: '''
-이 줄이 없으면 "아까는 위치가 선택이라더니 여기선 왜 또 필수냐" 가 답 없이 남는다.''');
+이 줄이 없으면 "약관에 동의하면 위치가 켜지는 건가" 가 답 없이 남는다.''');
       // 약속이다 — 약관에 동의해도 권한은 따로 묻고, 거부해도 앱이 돈다. 짝이 되는
       // 문장은 접근권한 화면에 있고 permission_notice_test.dart 가 잰다.
       expect(ConsentScreen.locationPermissionNote, contains('따로 물어봐요'));
       expect(ConsentScreen.locationPermissionNote, contains('거부해도 앱을 쓸 수 있'));
-      final location =
-          kAppPermissions.firstWhere((p) => p.title == '위치');
-      expect(location.essential, isFalse,
-          reason: '권한 화면이 위치를 필수로 바꾸면 이 줄이 거짓이 된다');
+
+      // 이 줄을 거짓으로 만드는 것은 위치가 **필수로 분류되는 것**이 아니라 앱이 위치
+      // 없이 안 도는 것이다. 처음에는 `essential` 이 false 인지를 쟀는데, 시행령
+      // 제9조의2 제3항으로 다시 가르면서 위치가 필수가 되자 멀쩡한 문장을 놓고 빨간불이
+      // 났다 — 잰 대상이 틀렸던 것이다. 법 제22조의2 제2항이 막는 것은 *비필수* 권한
+      // 미동의를 이유로 한 서비스 거부뿐이고, 우리 앱은 위치를 거부해도 열린다.
+      // 그러니 두 화면이 **그 사실을 같이 말하고 있는가**를 잰다.
+      final location = kAppPermissions.firstWhere((p) => p.title == '위치');
+      expect(location.ifDenied, contains('앱이 잠기지는'), reason: '''
+접근권한 화면이 "허용 안 하면 앱을 못 쓴다" 로 바뀌면 여기의 "거부해도 앱을 쓸 수 있고" 가
+거짓이 된다. 두 화면이 같은 말을 해야 한다.''');
+      expect(location.ifDenied, contains(kLocationIsNotTheTerms),
+          reason: '저쪽도 이 약관과 권한이 별개라고 말하고 있어야 짝이 맞는다');
     });
 
     // 꼬리표가 "[필수] " 에서 "동의 필수 " 로 두 글자 넓어졌다. 가장 긴 줄이 접히면
