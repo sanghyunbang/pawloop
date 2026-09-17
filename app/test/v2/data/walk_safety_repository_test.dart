@@ -80,28 +80,26 @@ void main() {
   group('WalkSafetyStore', () {
     const dog = DogProfile(serverId: 1, name: 'Bori', breed: '믹스', size: DogSize.medium, ageMonths: 30);
 
+    /// 고른 동네의 중심 — 성동구 왕십리2동. **단말이 잰 값이 아니다**(#682).
+    const center = (lat: 37.56146, lng: 127.02732);
+
     test('받아서 판정하고, 30분 안에는 다시 받지 않는다', () async {
       final f = fixture((_) async => _json(_now(temp: 31)));
-      var located = 0;
-      Future<({double lat, double lng})?> locate() async {
-        located++;
-        return (lat: 37.5445, lng: 127.0410);
-      }
 
-      await WalkSafetyStore.refresh(repository: f.repo, locate: locate, dog: dog, now: () => DateTime(2026, 9, 7, 14));
+      await WalkSafetyStore.refresh(repository: f.repo, center: center, dog: dog, now: () => DateTime(2026, 9, 7, 14));
       expect(WalkSafetyStore.latest.value!.level, WalkSafetyLevel.avoid);
       expect(WalkSafetyStore.isFresh(DateTime(2026, 9, 7, 14, 20)), isTrue);
 
-      await WalkSafetyStore.refresh(repository: f.repo, locate: locate, dog: dog, now: () => DateTime(2026, 9, 7, 14, 20));
-      expect(located, 1, reason: '캐시가 살아 있으면 위치도 다시 안 묻는다');
+      await WalkSafetyStore.refresh(repository: f.repo, center: center, dog: dog, now: () => DateTime(2026, 9, 7, 14, 20));
+      expect(f.calls, hasLength(1), reason: '캐시가 살아 있으면 서버도 다시 안 부른다');
 
-      await WalkSafetyStore.refresh(repository: f.repo, locate: locate, dog: dog, now: () => DateTime(2026, 9, 7, 14, 50));
-      expect(located, 2);
+      await WalkSafetyStore.refresh(repository: f.repo, center: center, dog: dog, now: () => DateTime(2026, 9, 7, 14, 50));
+      expect(f.calls, hasLength(2));
     });
 
-    test('위치가 없으면(게스트·권한 없음) 아무것도 부르지 않는다', () async {
+    test('동네를 안 고른 사람이면 아무것도 부르지 않는다', () async {
       final f = fixture((_) async => _json(_now()));
-      await WalkSafetyStore.refresh(repository: f.repo, locate: () async => null, now: () => DateTime(2026, 9, 7, 14));
+      await WalkSafetyStore.refresh(repository: f.repo, center: null, now: () => DateTime(2026, 9, 7, 14));
       expect(WalkSafetyStore.latest.value, isNull);
       expect(f.calls, isEmpty);
     });

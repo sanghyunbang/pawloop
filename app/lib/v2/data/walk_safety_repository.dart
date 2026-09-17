@@ -4,6 +4,12 @@
 // 이고, 요청에 인증도 없다 — 서버는 누구의 격자인지 모른다(A안 #235 와의 절충). 위경도는 어디에도
 // 보내지 않는다. 그 사실은 위치기반서비스 이용약관 제3조 4)에 적혀 있다.
 //
+// **그 격자를 무엇으로 만드는지가 2026-09-18 에 바뀌었다** (#682). 전에는 단말이 잰 좌표를 접어
+// 만들었다 — 위경도는 안 나가지만 나가는 값의 출처가 기기의 관측이라, 원스토어 '수집정보' 의
+// "대략적인 위치 정보(3㎢ 이상 영역)" 에 그대로 들어맞았다. 지금은 **사용자가 목록에서 고른
+// 행정동의 중심**에서 만든다([WalkSafetyStore.refresh] 의 `center`). 사람이 고른 텍스트가
+// 출처이므로 이 경로에는 단말이 잰 값이 없다.
+//
 // 서버가 503 을 주면(기상청 실황 없음·서버에 키 없음) 카드가 없다 — 가짜를 보여 주지 않는다.
 // 서버가 에어코리아를 못 부르면 PM 이 비어 오고, 판정은 기온으로만 한다("미세먼지는 못 받았어요").
 import 'dart:convert';
@@ -37,9 +43,10 @@ class WalkSafetyRepository {
   /// 자리가 따로 있다(오늘의 케어의 "다시 시도", 그리고 #517 이 더한 "위치를 켜면 …").
   /// 연결이 없는 날마다 홈에 "지수를 못 받았어요" 한 줄이 더 늘면 그건 안내가 아니라 소음이다.
   ///
-  /// <b>권한이 없어서 못 받은 것은 다르다</b> — 그건 사용자가 고칠 수 있으므로 카드가 말한다
-  /// (`WalkSafetyCard._permissionRow`, #517). "할 수 있는 일이 있으면 말하고, 없으면 비운다"
-  /// 가 이 카드의 규칙이다.
+  /// <b>동네를 안 골라서 못 받은 것은 다르다</b> — 그건 사용자가 지금 할 수 있는 일이므로
+  /// 카드가 말한다(`WalkSafetyCard._pickNeighborhoodRow`). "할 수 있는 일이 있으면 말하고,
+  /// 없으면 비운다" 가 이 카드의 규칙이다(#517 이 위치 권한 자리에 세운 규칙이고,
+  /// #682 로 그 자리가 동네 고르기로 바뀌었다).
   Future<WalkSafetyReading?> fetch(double lat, double lng) async {
     final grid = kmaGrid(lat, lng);
     // 인증 헤더를 붙이지 않는다 — AuthedClient 가 아니라 맨 http 다. 누구의 격자인지 서버가 모른다.
@@ -97,23 +104,31 @@ class WalkSafetyStore {
 
   static bool isFresh(DateTime now) => fetchedAt != null && now.difference(fetchedAt!) < ttl;
 
-  /// 위치가 있으면 받아서 판정한다. 이미 받는 중이면 그 결과를 기다린다.
+  /// 중심이 있으면 받아서 판정한다. 이미 받는 중이면 그 결과를 기다린다.
+  ///
+  /// [center] 는 **고른 동네의 중심 좌표**다. `null` 이면 — 동네를 안 고른 사람이면 —
+  /// 서버를 **한 번도 안 부른다.**
+  ///
+  /// 예전 이름은 `locate` 였고 타입은 위치를 잡아 오는 함수였다(#336). 이름을 바꾼 것은
+  /// 다음 사람이 그 자리에 다시 GPS 를 꽂지 않게 하려는 것이다 — 이 값의 출처는 단말의
+  /// 관측이 아니라 사용자가 목록에서 고른 행정동이어야 한다(#682). 게으르게 부르던 함수를
+  /// 값으로 바꿔도 아끼던 것을 잃지 않는다: 아끼려던 것은 GPS 를 켜는 일이었고, 지금 남은
+  /// 것은 이미 읽어 둔 값을 넘기는 일뿐이다.
   static Future<void> refresh({
     required WalkSafetyRepository repository,
-    required Future<({double lat, double lng})?> Function() locate,
+    required ({double lat, double lng})? center,
     DogProfile? dog,
     DateTime Function()? now,
     bool force = false,
   }) {
+    if (center == null) return Future.value();
     final at = (now ?? DateTime.now)();
     if (!force && isFresh(at)) return Future.value();
     final pending = _inFlight;
     if (pending != null) return pending;
     final run = () async {
       try {
-        final where = await locate();
-        if (where == null) return;
-        final r = await repository.fetch(where.lat, where.lng);
+        final r = await repository.fetch(center.lat, center.lng);
         if (r == null) return;
         reading = r;
         fetchedAt = at;
