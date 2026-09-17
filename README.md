@@ -203,7 +203,7 @@ bash scripts/local-ci.sh backend    # 하나만 (backend | app | docs)
 
 [ADR-0002](docs/99-decisions/decision-log.md)가 식별자 변경을 "스토어 등록 시점에 일괄 정리" 로 미뤄 뒀는데, 그 시점이 왔습니다. 식별자를 바꾸면 스토어 등록·재서명·OAuth 콘솔 재등록이 연쇄로 따라오므로, **첫 등록 전이 유일하게 싼 때**입니다.
 
-아직 옛 이름이 남은 곳이 있습니다 — 저장소 이름, 로그인 콜백 스킴(`heattrip://login-callback`), Gradle group, DB 이름, Dart 패키지명(`heat_trip_flutter`). 넷 다 사용자에게 안 보이고 스토어 등록과도 무관해서 미뤄 둔 것입니다. 감정 여행 시절의 서버 패키지와 앱 셸은 2026-09-06 에 지웠습니다. **문서와 UI 표기는 언제나 Pawloop(포루프)** 입니다.
+아직 옛 이름이 남은 곳이 있습니다 — 저장소 이름, Gradle group(`com.heattrip`), DB 이름(`heat_trip_db`), Dart 패키지명(`heat_trip_flutter`). 넷 다 사용자에게 안 보이고 스토어 등록과도 무관해서 미뤄 둔 것입니다. 로그인 콜백 스킴은 이 목록에서 빠졌습니다 — 2026-09 에 `pawloop://login-callback` 으로 옮겼습니다([#649](https://github.com/sanghyunbang/heattrip/issues/649)). 같은 스킴을 주장하는 예전 앱이 콜백을 가로채서, 미룰 수 있는 이름이 아니었습니다. 운영 API 주소도 `api.pawloop.app` 입니다([#682](https://github.com/sanghyunbang/heattrip/issues/682)). 감정 여행 시절의 서버 패키지와 앱 셸은 2026-09-06 에 지웠습니다. **문서와 UI 표기는 언제나 Pawloop(포루프)** 입니다.
 
 </details>
 

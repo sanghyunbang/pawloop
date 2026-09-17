@@ -91,13 +91,16 @@ info:
     - **201 에 `Location` 헤더를 붙이지 않습니다** (#209 `Dogs-low-1`). 만든 것의 id 는 응답 본문에
       있고 앱은 그것을 씁니다(`POST /api/dogs`·`/api/walks`·`/api/groups`·케어 기록·게시글 전부 같습니다).
       인증 리다이렉트의 `Location` 은 302 의 것이라 별개입니다.
-    - 리네임 진행 중: 제품명은 Pawloop, 도메인·딥링크 스킴은 당분간 heattrip 을 유지합니다
-      (`https://api.heattrip.link`, `pawloop://login-callback`).
+    - 리네임은 끝났습니다: 제품명·도메인·딥링크 스킴 모두 pawloop 입니다
+      (`https://api.pawloop.app`, `pawloop://login-callback`).
+      도메인은 2026-09-17 에 `api.heattrip.link` 에서 `api.pawloop.app` 으로 옮겼고,
+      스킴은 2026-09 에 `heattrip://` 에서 `pawloop://` 로 옮겼습니다(#649·#682).
+      옛 주소는 530 이라 그것으로 만든 클라이언트는 서버에 붙지 못합니다.
     - `미구현` 이라고 적힌 오퍼레이션은 계약만 있고 백엔드 핸들러가 없습니다(2026-08 기준).
       Prism 목 서버로는 통과하지만 실서버에서는 404 입니다.
 servers:
-  - url: https://api.heattrip.link
-    description: 운영(예정 — 패키지/도메인 리네임 전까지 기존 유지)
+  - url: https://api.pawloop.app
+    description: 운영
   - url: http://localhost:4010
     description: Prism 목 서버 (design-first mock)
   - url: http://10.0.2.2:8080
@@ -174,7 +177,7 @@ tags:
       그대로 올리면 좌표가 단말을 떠납니다(#235 A안). 앱은 긴 변 1600px 로 다시 인코딩해
       올리며 그때 EXIF 가 통째로 사라집니다 — `UPLOAD_LOCATION` 과 무관하게 무조건입니다.
 
-      **영상은 이 문으로 안 옵니다.** `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을
+      **영상은 이 문으로 안 옵니다.** `api.pawloop.app` 앞의 Cloudflare 가 요청 본문을
       100MB 까지만 받아서, 영상은 세 단계입니다 — `POST /media/videos` 로 자리를 잡고(서명 PUT),
       앱이 S3 에 직접 올리고, `POST /media/{mediaId}/complete` 로 서버가 확인합니다. 한 글에
       영상은 하나입니다.
@@ -3064,7 +3067,7 @@ paths:
       tags: [Media]
       summary: 영상 자리 잡기 — 서명 PUT 받기 (①)
       description: |
-        영상은 서버를 **안 지납니다** — `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을 100MB 에서
+        영상은 서버를 **안 지납니다** — `api.pawloop.app` 앞의 Cloudflare 가 요청 본문을 100MB 에서
         끊습니다. 그래서 세 단계입니다.
 
         1. **여기** — 형식·크기·길이·픽셀을 알리면 `pending` 행이 생기고 `uploadUrl`(서명 PUT, **15분**)이

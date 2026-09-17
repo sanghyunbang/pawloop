@@ -1454,7 +1454,7 @@ CREATE TABLE media_objects (
 
 > **각주 — `post` 로 나가는 FK 가 없는 이유.** `ref_type`·`ref_id` 는 `chat_room.origin_kind`·`origin_ref` 와 같은 **불투명한 쌍**이다(ADR-0011 의 방식). FK 를 걸려면 `S3` 의 엔티티가 `community.entity.Post` 를 들어야 하고 그건 모듈 경계를 넘는다 — 화살표는 `community → S3` 한 방향이어야 한다(`S3/MediaAttachment`). 글을 지울 때 사진을 함께 지우는 것은 **서비스**가 한다(`CommunityService.deletePost` → `MediaAttachment.detachAll`). DB 의 CASCADE 로는 어차피 안 된다 — 버킷의 파일은 DB 가 모른다.
 >
-> **각주 — `status` 가 왜 있나.** 사진은 서버가 받아 S3 에 놓지만 영상은 **앱이 S3 에 직접** 올린다. `api.heattrip.link` 앞의 Cloudflare 무료 요금제가 요청 본문을 100MB 까지만 받기 때문이다. 그러면 "자리는 잡았는데 아직 안 올라온" 상태가 생기고 그것이 `pending` 이다. "붙었다" 는 상태가 아니다 — `ref_type` 이 말한다. 여기에 또 두면 같은 사실이 두 곳에 산다(`crew_favor.status` 와 같은 판단).
+> **각주 — `status` 가 왜 있나.** 사진은 서버가 받아 S3 에 놓지만 영상은 **앱이 S3 에 직접** 올린다. `api.pawloop.app` 앞의 Cloudflare 무료 요금제가 요청 본문을 100MB 까지만 받기 때문이다. 그러면 "자리는 잡았는데 아직 안 올라온" 상태가 생기고 그것이 `pending` 이다. "붙었다" 는 상태가 아니다 — `ref_type` 이 말한다. 여기에 또 두면 같은 사실이 두 곳에 산다(`crew_favor.status` 와 같은 판단).
 >
 > **각주 — 붙지 않은 것은 하루 뒤 거둔다.** 업로드가 글보다 먼저라, 글을 안 쓰고 나간 사람의 파일이 `ref_type IS NULL` 로 남는다. `MediaOrphanSweeper` 가 새벽 4:10 에 `ref_type IS NULL AND created_at < 어제` 를 묻고 행과 S3 객체를 지운다 — `idx_media_orphan` 이 그 질문의 인덱스다. **`POST_*` 카테고리만** 본다. 벌크 삭제라 두 인스턴스가 동시에 돌아도 같다(📌 #86 원칙 2).
 >

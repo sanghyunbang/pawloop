@@ -17,7 +17,7 @@
 | `POST /auth/password/reset-request` | **있음(#635 ③)** | **본문 없는 202.** 그 주소로 계정이 있는지를 말하지 않는 것이 요점이라 돌려줄 것이 없어야 한다 — `mailSent` 를 주면 없는 주소에는 메일을 안 보내므로 그 값 자체가 답이 된다. 소셜 전용 계정에는 코드 대신 "소셜로 로그인하세요" 안내가 간다. |
 | `POST /auth/password/reset` | **있음(#635 ③)** | `200` + `AuthTokensResponse`(`isNew` 거짓). **바꾼 뒤 그 사람의 refresh 토큰을 전부 폐기한다** — 안 하면 침입자가 그대로 들어와 있다. `401` 은 코드가 틀린 것, `410` 은 만료·시도초과·진행 중인 재설정 없음이다(**없는 주소도 410**). |
 | `POST /auth/login` | **있음(#10 완료)** | `200` + `AuthTokensResponse`(계약의 `AuthTokens`). #9 가 발급·저장하던 refresh 토큰이 드디어 응답에 실린다. 자격증명 실패는 **본문 없는 401**(예전에는 500). |
-| (SuccessHandler → `heattrip://login-callback?code=&state=`) | **있음(#14 완료)** | `OAuth2SuccessHandler` 가 토큰 대신 60초짜리 1회용 코드를 내보낸다. 리다이렉트 대상은 `app.security.oauth.redirect-allowlist` 가 정한다. 예전에는 `?token=<AT>&refresh=<RT>` 였다. |
+| (SuccessHandler → `pawloop://login-callback?code=&state=`) | **있음(#14 완료)** | `OAuth2SuccessHandler` 가 토큰 대신 60초짜리 1회용 코드를 내보낸다. 리다이렉트 대상은 `app.security.oauth.redirect-allowlist` 가 정한다. 예전에는 `?token=<AT>&refresh=<RT>` 였고, 스킴은 `heattrip://` 였다(#649). |
 | `POST /auth/oauth/{provider}/callback` (code→token) | **있음(#14 완료)** | `AuthController.exchangeOAuthCode` → `OAuthCodeExchangeService`. 1회용 코드 → `AuthTokens`. **소셜 경로에서 토큰이 나가는 유일한 자리.** 공급자와의 인가코드 교환은 Spring Security 가 이미 끝냈으므로 여기서 다시 하지 않는다. |
 | `POST /auth/token/refresh` | **있음(#9 완료)** | `AuthController.refresh` → `RefreshTokenService.rotate`. 회전 + 재사용 감지 + 만료. 실패는 본문 없는 401, 형식 오류는 400·415·405. §5·§6 참조. |
 | `GET /auth/me` | **있음(#10 확인 완료)** | `AuthController.me` 가 `UserResponse` 를 반환하고, 그 필드 집합이 곧 계약의 `User` 다(11개: id·email·name·nickname·gender·age·travelType·imageUrl·provider·createdAt·updatedAt). 별도 `UserDto` 를 만들지 않았다 — 그러면 같은 스키마의 사본이 둘이 되고 한쪽만 낡는다. `isNew` 는 여기 없다(로그인 응답의 1회성 속성, #23). |
@@ -28,7 +28,7 @@
 - `OAuth/jwt/JWTProvider` — `createAccessToken(userId, role)`, `getUserIdFromToken`, `validateToken`, `getExpiresInSeconds`. **refresh 는 JWT 가 아니므로 여기서 만들지 않는다** — 폐기 가능해야 해서 `RefreshTokenService` 가 256bit 난수를 발급한다(#9).
 - `OAuth/jwt/JWTAuthenticationFilter` — `Authorization: Bearer` 파싱 후 SecurityContext 설정. **인증 추출의 표준 규약.**
 - `OAuth/service/CustomOAuth2UserService` — 소셜 응답 → `OAuth2UserInfo`(Google/Kakao/Naver) 변환 + `users` upsert.
-- `OAuth/handler/OAuth2SuccessHandler` — 1회용 코드 발급 후 `heattrip://login-callback?code=&state=` 딥링크 리다이렉트(#14). 예전에는 여기서 JWT 를 만들어 URL 에 실었다.
+- `OAuth/handler/OAuth2SuccessHandler` — 1회용 코드 발급 후 `pawloop://login-callback?code=&state=` 딥링크 리다이렉트(#14). 예전에는 여기서 JWT 를 만들어 URL 에 실었고, 스킴도 `heattrip://` 였다(#649).
 - `OAuth/code/AuthCodeStore` — 1회용 코드의 발급소이자 유일한 소비처(#14). 인메모리이며 **수평 확장 시 깨진다** — 근거와 대응은 그 클래스의 javadoc 에 적혀 있다.
 - `OAuth/state/OAuthAppStateFilter` — 앱이 만든 `state` 를 소셜 왕복 동안 세션에 붙든다(#14).
 - `OAuth/user/OAuth2UserInfo`(+ Google/Kakao/AppleOAuth2User) — 공급자별 provider/providerId/email/name 추출. Apple 은 id_token 클레임(`sub`·`email`)이고 이름이 없다(#301).
@@ -236,14 +236,18 @@
 1-3. **앱(#11·#12)에 반드시 전달해야 할 것 (#9·#10).** 백엔드 레인에서는 `app/**` 를 열 수 없으므로 여기 남긴다. **아래 세 번째·네 번째 줄은 지금 앱을 실제로 깨뜨린다** — `app/lib/features/auth/data/auth_repository_impl.dart` 가 로그인 응답 본문을 평문 토큰으로 읽고 있다.
 
    > **2026-08-30 (#14): 아래 첫 줄은 이력이다.** 딥링크에는 더 이상 토큰이 실리지 않는다 —
-   > `heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 이고, 토큰은
+   > `pawloop://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 이고, 토큰은
    > `POST /auth/oauth/{provider}/callback` 의 응답 본문으로만 온다. 앱은 그 교환을 이미
    > 구현했다(`auth_repository_impl.dart` 의 `exchangeOAuthCode`). 이 줄을 지우지 않는 이유는
    > "왜 그때 그렇게 넘겼는가" 가 다음 사람에게 필요한 맥락이기 때문이다.
+   >
+   > **2026-09 (#649): 스킴이 바뀌었다.** 위 주소는 그때 `heattrip://` 였고 지금은 `pawloop://` 다
+   > — 같은 이름표를 단 예전 앱이 콜백을 가로채서 옮겼다. 주소만 맞춰 고쳤고
+   > 위 문단의 뜻은 그대로다.
 
    | 무엇 | 왜 | 안 하면 |
    | --- | --- | --- |
-   | 딥링크는 `Uri.parse(url).queryParameters['token']` 로 파싱한다 (#14 로 대체됨 — 지금은 `['code']`·`['state']`) | 딥링크가 `heattrip://login-callback?token=<AT>&refresh=<RT>` 로 바뀌었다. 액세스 토큰이 더 이상 URL 의 꼬리가 아니다 | `token=` 뒤를 전부 잘라 쓰던 코드가 `<AT>&refresh=<RT>` 를 통째로 저장한다 → 모든 요청 401 |
+   | 딥링크는 `Uri.parse(url).queryParameters['token']` 로 파싱한다 (#14 로 대체됨 — 지금은 `pawloop://login-callback` 의 `['code']`·`['state']`) | 딥링크가 `heattrip://login-callback?token=<AT>&refresh=<RT>` 로 바뀌었다(스킴은 그 뒤 #649 가 `pawloop://` 로 옮겼다). 액세스 토큰이 더 이상 URL 의 꼬리가 아니다 | `token=` 뒤를 전부 잘라 쓰던 코드가 `<AT>&refresh=<RT>` 를 통째로 저장한다 → 모든 요청 401 |
    | 갱신 요청을 **single-flight** 로 직렬화하고 실패해도 재시도하지 않는다 | 서버는 유예 창을 두지 않는다. 같은 RT 로 동시에 두 번 보내면 진 쪽이 **재사용**으로 판정된다 | 만료된 AT 로 API 두 개가 동시에 401 → 각자 refresh → 한쪽이 재사용으로 판정되어 **전 기기 로그아웃**. 사용자에게는 서버 버그로 보인다 |
    | `POST /auth/login` 응답을 **JSON 으로 파싱**해 `accessToken` 을 꺼내고, `refreshToken` 을 함께 저장한다 | 응답이 JWT 평문 문자열에서 `AuthTokens` JSON 으로 바뀌었다(#10) | `response.body` 를 그대로 토큰으로 저장하면 JSON 전체가 `Authorization` 헤더에 실린다 → **모든 요청 401**. 그리고 refresh 토큰을 저장하지 않으면 1시간마다 재로그인이다 |
    | `POST /auth/signup` 의 성공을 **202** 로 받고, 계정의 `id` 는 `/auth/signup/verify` 응답의 `user.id` 에서 읽는다 | 가입이 두 걸음이 됐다(#635) — 이 응답에는 만들어진 것이 없다. 그전에는 201 + `User`(#10), 더 전에는 200 + 평문이었다 | 201 만 성공으로 보면 **정상 가입이 실패로 보인다**. 응답에서 `id` 를 읽으려 하면 빈 값이다 |
