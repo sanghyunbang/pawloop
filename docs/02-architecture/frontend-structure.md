@@ -72,6 +72,7 @@ lib/
 | `chat_list_screen.dart` | 방 목록 · 미읽음 | 탭 4 |
 | `invite_join_screen.dart` | 초대 코드로 방 참여 | 링크·코드 입력 |
 | `settings_screen.dart` | 설정 — 약관 넷 · 내 동네 · 저녁 알림 · 일요일 저녁 주간 정리 알림 · 일정 알림 · 회원 탈퇴 · 운영자 연락처 | me → push (#165) |
+| `permission_notice_screen.dart` | 접근권한 안내 — 필수/선택으로 나눠 무엇을 왜 쓰는지. 선택은 "동의하지 않아도 앱을 쓸 수 있어요" (정보통신망법 제22조의2) | 소개 끝 · 설정 → push (#682) |
 | `display_name_screen.dart` | 표시 이름 바꾸기 — `nickname` 하나만. 이미 쓴 글·채팅의 이름은 그때 값 그대로다 | `me_screen` → push (#665) |
 | `neighborhood_picker_screen.dart` | 내 동네 고르기 — 시도→시군구→동 세 단계 · 검색 · "현재 위치로 찾기"(기기 안) | 설정 → push (#342) |
 | `settings/legal_document_screen.dart` | 약관 전문 렌더 (`assets/terms/*.md`) | 설정·동의 화면 → push |
