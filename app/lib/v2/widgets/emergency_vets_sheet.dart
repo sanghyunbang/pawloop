@@ -13,6 +13,7 @@ import '../data/location_service.dart';
 import '../data/pet_places_repository.dart';
 import '../domain/vet_hours.dart';
 import '../theme/app_tokens.dart';
+import 'place_sheet.dart';
 import 'vet_badge.dart';
 
 /// 위치 하나로 가까운 병원을 받아 오는 함수. 테스트가 갈아 끼운다.
@@ -233,14 +234,26 @@ class EmergencyVetsSheet extends StatelessWidget {
                 style: const TextStyle(fontSize: 13, color: T.textMuted),
               )
             else
-              for (final p in picks) ...[_row(p, messenger), const SizedBox(height: 10)],
+              for (final p in picks) ...[_row(context, p, messenger), const SizedBox(height: 10)],
           ],
         ),
       ),
     );
   }
 
-  Widget _row(PetPlace p, ScaffoldMessengerState messenger) => Container(
+  /// 병원 한 곳.
+  ///
+  /// <b>카드 전체가 눌린다</b>(#664) — 누르면 지도 탭과 <b>같은</b> 상세 시트가 열린다
+  /// ({@link PlaceSheet}). 예전에는 오른쪽 전화 버튼만 눌렸고, 이름을 눌러도 아무 일도
+  /// 안 났다. 주소를 확인하거나 길을 찾을 방법이 여기서는 없었다.
+  ///
+  /// <b>전화 버튼은 상세를 거치지 않는다.</b> 이 시트의 요점이 "홈에서 두 번 만에 전화"(#337)
+  /// 라서, 그 사이에 한 단계를 끼우면 기능이 달라진다.
+  Widget _row(BuildContext context, PetPlace p, ScaffoldMessengerState messenger) => GestureDetector(
+    key: Key('emergency-vet-${p.contentId}'),
+    onTap: () => PlaceSheet.show(context, p),
+    behavior: HitTestBehavior.opaque,
+    child: Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
     child: Row(
@@ -296,6 +309,7 @@ class EmergencyVetsSheet extends StatelessWidget {
           ),
       ],
     ),
+  ),
   );
 }
 
