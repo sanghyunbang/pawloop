@@ -7,7 +7,6 @@
 #   2. actuator 차단   — /actuator/prometheus 는 밖에서 보이면 안 된다
 #
 # 이 파일은 docker-compose.prod.yml 이 읽기 전용으로 물려 준다.
-
 {
 	# 인증서 만료 경고가 여기로 온다. 비워 두면 익명 발급이라 경고를 못 받고,
 	# 자동 갱신이 조용히 실패하면 어느 날 갑자기 로그인이 전부 죽는다.
@@ -28,6 +27,9 @@
 	# 누구에게나, 횟수 제한 없이 나간다.
 	#
 	# 앱 설정이 아니라 여기서 막는 이유: 서버 안에서는 계속 쓸 수 있어야 한다.
+	# `handle` 은 matcher 를 **하나만** 받는다. 경로를 여럿 쓰려면 이름 붙인 matcher 로
+	# 묶어야 한다 — `handle /actuator /actuator/*` 라고 쓰면 Caddy 가 설정을 못 읽고
+	# 컨테이너가 시작하자마자 죽는다. 실제로 그렇게 죽었다(2026-09-17, 첫 prod 부팅).
 	@actuator_public path /actuator/health /actuator/health/*
 	handle @actuator_public {
 		reverse_proxy app:8080 {
@@ -35,7 +37,8 @@
 		}
 	}
 
-	handle /actuator /actuator/* {
+	@actuator_all path /actuator /actuator/*
+	handle @actuator_all {
 		respond 404
 	}
 

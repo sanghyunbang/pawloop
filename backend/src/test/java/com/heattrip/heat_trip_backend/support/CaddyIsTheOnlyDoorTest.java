@@ -84,16 +84,21 @@ class CaddyIsTheOnlyDoorTest {
                 .as("health 를 통과시키는 matcher 가 없다 — 우리 확인 스크립트가 이 경로를 쓴다")
                 .contains("@actuator_public path /actuator/health /actuator/health/*");
 
+        // `handle` 은 matcher 를 하나만 받는다. 경로를 여럿 쓰려면 이름 붙인 matcher 로
+        // 묶어야 한다 — 그걸 몰라 `handle /actuator /actuator/*` 로 썼다가 첫 prod 부팅에서
+        // Caddy 가 시작하자마자 죽었다. 문법이 맞는지는 CaddyfileActuallyParsesTest 가
+        // 실제로 caddy 에게 물어본다. 여기서는 "막는 자리가 있는가" 만 본다.
         assertThat(joined)
                 .as("""
-                        나머지 actuator 를 막는 handle 이 없다. /actuator/prometheus 는 \
+                        나머지 actuator 를 막는 matcher 가 없다. /actuator/prometheus 는 \
                         공개이면서 한도까지 면제라 그대로 열리면 안 된다 (#613).""")
-                .contains("handle /actuator /actuator/*");
+                .contains("@actuator_all path /actuator /actuator/*")
+                .contains("handle @actuator_all");
 
         // 순서가 뒤집히면 차단이 먼저 걸려 health 까지 404 가 된다.
-        assertThat(joined.indexOf("@actuator_public"))
+        assertThat(joined.indexOf("handle @actuator_public"))
                 .as("health 를 통과시키는 자리가 차단보다 뒤에 있다 — 그러면 health 도 막힌다")
-                .isLessThan(joined.indexOf("handle /actuator /actuator/*"));
+                .isLessThan(joined.indexOf("handle @actuator_all"));
 
         assertThat(joined)
                 .as("막는 자리가 404 를 돌려주지 않는다")
