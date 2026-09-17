@@ -62,7 +62,7 @@ import java.util.stream.Collectors;
  * 하위 패키지라 Modulith 가 막는다.
  *
  * <h2>영상은 세 단계다 (#429)</h2>
- * <p>서버를 안 지난다 — {@code api.heattrip.link} 앞의 Cloudflare 가 본문을 100MB 에서 끊는다.
+ * <p>서버를 안 지난다 — {@code api.pawloop.app} 앞의 Cloudflare 가 본문을 100MB 에서 끊는다.
  * ① {@link #reserveVideo} 가 형식·크기·길이를 받아 {@code pending} 행과 서명 PUT 을 만들고
  * ② 앱이 그 URL 로 S3 에 직접 올리고 ③ {@link #completeVideo} 가 S3 에 HEAD 로 <b>실제로
  * 올라왔는지와 크기</b>를 묻고 포스터를 받아 {@code ready} 로 바꾼다. 서명 PUT 은 크기 조건을

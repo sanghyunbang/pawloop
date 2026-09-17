@@ -83,7 +83,7 @@ public class MediaController {
         @RequestParam(name = "height", required = false) @Min(1) Integer height,
         @CurrentUser User me // [H] 인증 주체. 해석은 CurrentUserArgumentResolver 한 곳뿐이다 (이슈 #5)
     ) {
-        // 영상은 이 문으로 안 들어온다 — api.heattrip.link 앞의 Cloudflare 가 100MB 에서 끊는다.
+        // 영상은 이 문으로 안 들어온다 — api.pawloop.app 앞의 Cloudflare 가 100MB 에서 끊는다.
         // 서명 URL 로 S3 에 직접 올리는 경로가 따로 있다(#429). 여기서 막지 않으면 100MB 짜리
         // 본문이 서버 메모리를 지나다 터널에서 죽고, 사용자는 "네트워크 오류" 만 본다.
         if (category.isVideo()) {

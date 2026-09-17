@@ -380,7 +380,7 @@ dart run flutter_launcher_icons
 | `backend/.env` | 비밀(gitignore) | 기본값 없는 환경변수가 비어 **부팅 중 죽는다** |
 | `backend/src/main/resources/data/` 의 `sigungu.json` · `local_trails.json` · `playgrounds.json` · `place_traits.csv` | 자산(gitignore) | `sigungu.json` 이 없으면 `NeighborhoodCatalog` 생성이 실패해 **스프링 컨텍스트가 통째로** 죽는다. 나머지는 지도의 산책로·놀이터·장소 특성이 빈다 |
 | `app/dart-define.json` | 키(gitignore) | 앱은 뜨지만 지도 탭이 "지도를 불러올 수 없어요" 다 |
-| `app/android/key.properties` + 업로드 키스토어 `heattrip-upload.jks` | 저장소 **밖** | **release 빌드만** 안 된다 — debug·`flutter run` 은 이 둘을 안 본다 |
+| `app/android/key.properties` + 업로드 키스토어 `pawloop-upload.jks` | 저장소 **밖** | **release 빌드만** 안 된다 — debug·`flutter run` 은 이 둘을 안 본다 |
 
 Firebase 서비스 계정 JSON 과 Apple `.p8` 은 어느 기기에도 아직 없다(#83 · #316) — 옮길 것이 아니다.
 
@@ -406,7 +406,7 @@ ls -la backend/.env backend/src/main/resources/data app/dart-define.json
 - **파인더에서 폴더를 끌어다 놓으면 합치는 것이 아니라 통째로 바꾼다.** zip 의 `backend/` 를 클론한 `heattrip/` 에 끌어 놓으면 클론한 `backend/` 전체가 zip 의 다섯 파일로 대체된다. 터미널의 `unzip`(또는 `rsync -a`)만 쓴다.
 - 키스토어는 저장소 밖으로 옮기고 `app/android/key.properties` 의 `storeFile` 을 새 자리로 고친다(지금 값은 원래 기기의 절대경로다).
   ```bash
-  mkdir -p ~/keystores && mv keystores/heattrip-upload.jks ~/keystores/
+  mkdir -p ~/keystores && mv keystores/pawloop-upload.jks ~/keystores/
   ```
 - `app/dart-define.json` 의 `API_BASE_URL` 은 로컬 백엔드에 붙일 거면 `http://10.0.2.2:8080` 으로, 백엔드의 `APP_SECURITY_ALLOWED_ORIGINS` 와 함께 본다(3.2 절).
 
@@ -416,7 +416,22 @@ ls -la backend/.env backend/src/main/resources/data app/dart-define.json
 
 ### 8.4 키스토어가 무엇인가 — 정확히
 
-`heattrip-upload.jks` 는 Play 에 올리는 AAB 에 서명하는 **업로드 키**다. 앱은 아직 Play 에 올라간 적이 없으므로(2026-09-13 기준) 지금 이 파일을 잃어도 새로 만들면 된다. 올린 뒤에도 Play App Signing 을 쓰면 앱 서명 키는 구글이 보관하고, 업로드 키를 잃었을 때는 Play Console 에서 새 업로드 키 등록을 요청할 수 있다 — 예전 안내문의 "잃으면 영영 업데이트할 수 없다" 는 App Signing 을 안 쓰던 시절의 말이라 과장이다. 다만 **비밀번호 셋**(`storePassword`·`keyPassword`·`keyAlias`, `key.properties` 안)과 파일은 함께 있어야 뜻이 있고, 유출되면 남이 우리 이름으로 올릴 수 있으니 공유 링크로 보내지 않는다.
+`pawloop-upload.jks` 는 안드로이드 APK·AAB 에 서명하는 **업로드 키**다. **iOS 와는 아무 상관이 없다** — 애플은 개발자 계정의 인증서와 프로비저닝 프로파일을 Xcode 가 쓴다.
+
+지금 인증서는 이렇다.
+
+```
+소유자: CN=Pawloop, OU=Dev, O=Cetacea Lab, L=Seoul, ST=Seoul, C=KR
+별칭: upload · RSA 4096 · SHA-256 지문 9B:D5:28:B0:…:48:87
+```
+
+**2026-09-18 에 키를 새로 만들었다.** 전에 쓰던 `heattrip-upload.jks` 의 인증서에 `CN=Heattrip` 이 박혀 있었고, 그 이름은 앱을 옆로드할 때 설치 화면에 그대로 뜬다. 인증서의 이름은 **파일 이름을 바꿔도 안 바뀐다** — 키 안에 구워져 있어서 새로 만드는 수밖에 없다. 그리고 **스토어에 한 번 올린 뒤에는 그것도 못 한다.** 아직 어느 스토어에도 올린 적이 없어서 지금이 공짜였다(#648).
+
+`O` 를 `Cetacea Lab` 으로 띄어 쓴 것도 이때 정했다 — 옛 키는 `CetaceaLab`, 카카오 콘솔에는 `Cetcea Lab` 이라는 오타가 있었다(#412).
+
+**잃으면 어떻게 되나.** 아직 어디에도 안 올렸으므로 지금은 새로 만들면 된다. 올린 뒤에는 스토어마다 다르다 — Play 는 App Signing 을 쓰면 업로드 키 재등록을 요청할 수 있고, 원스토어는 그런 장치가 있는지 따로 확인해야 한다(#412). 어느 쪽이든 **비밀번호 셋**(`storePassword`·`keyPassword`·`keyAlias`, `key.properties` 안)과 파일이 함께 있어야 뜻이 있고, 유출되면 남이 우리 이름으로 올릴 수 있으니 공유 링크로 보내지 않는다.
+
+**키를 바꾸면 이미 깔린 앱 위에 못 덮어쓴다.** 안드로이드가 서명이 다른 APK 의 덮어쓰기를 막는다 — 기기에서 지우고 다시 깔아야 하고, 그때 앱 안의 로그인 상태도 함께 사라진다.
 
 ### 8.5 (선택) 작업 메모
 
