@@ -1684,7 +1684,50 @@ CREATE TABLE pending_signup (
 
 ---
 
-## 부록 A. 정본의 표 37개 — 어디에 적혀 있나
+## 43. `password_reset` — 진행 중인 비밀번호 재설정 (**실재**)
+
+비밀번호를 잊은 사람이 메일로 여섯 자리를 받아 새 비밀번호를 정한다(#635 조각 ③). §42 와 같은 모양이고, 다른 점은 **이미 있는 계정에만 생긴다**는 것이다.
+
+```sql
+CREATE TABLE password_reset (
+  id         BIGINT       NOT NULL AUTO_INCREMENT,
+  user_id    BIGINT       NOT NULL COMMENT '한 사람에 살아 있는 재설정 하나',
+  code_hash  VARCHAR(255) NOT NULL COMMENT '여섯 자리도 해시로 둔다',
+  expires_at DATETIME(6)  NOT NULL,
+  attempts   INT          NOT NULL DEFAULT 0,
+  created_at DATETIME(6)  NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_password_reset_user (user_id),
+  KEY idx_password_reset_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `user_id` | `BIGINT` | NOT NULL, UNIQUE | 한 사람에 하나. 다시 요청하면 옛 행을 **덮어쓴다**. **FK 가 없다** — 아래 |
+| `code_hash` | `VARCHAR(255)` | NOT NULL | 여섯 자리의 해시 |
+| `expires_at` | `DATETIME(6)` | NOT NULL, idx | 발급 시각 + `app.mail.code-ttl-minutes`(기본 10분), UTC |
+| `attempts` | `INT` | NOT NULL, 기본 0 | 틀린 시도. 기본 상한은 다섯 번이다 |
+| `created_at` | `DATETIME(6)` | NOT NULL | 처음 시작한 순간(UTC) |
+
+> **이메일이 아니라 `user_id` 로 건다.** 이메일은 바뀔 수 있고, 바뀌는 순간 살아 있는 재설정이 주인을 잃는다. 그리고 **없는 주소로 요청이 와도 행을 안 만든다** — 행이 생기면 이 표를 읽을 수 있는 사람이 "누가 이 앱을 쓰는가" 를 셀 수 있다.
+
+> **`users` 로 FK 를 안 건다** — §2 `refresh_token` 과 같은 판단이다. 탈퇴 정리 경로를 FK 에 맡기면 그 경로가 표마다 달라진다. 주인 없는 행은 만료되어 사라지고, 그 사이에 코드를 맞혀도 사용자 조회에서 막힌다. 그래서 `CrossModuleForeignKeysTest` 의 BASELINE 에도 이 표의 줄이 없다.
+
+> **행이 있다고 해서 아무것도 안 바뀌었다.** 코드가 맞을 때 비로소 `users.password` 가 바뀐다. 남이 내 주소로 재설정을 걸어 놓아도 내 계정은 그대로고, 나는 메일 한 통을 받을 뿐이다.
+
+> **끝나면 그 사람의 refresh 토큰을 전부 폐기한다.** 재설정을 하는 흔한 이유가 "누가 내 계정에 들어온 것 같다" 인데, 비밀번호만 바꾸고 살아 있는 토큰을 두면 **그 사람은 그대로 들어와 있다**(§2 의 `revokeAllByUserId`).
+
+> **없는 주소도 410 이다.** 확인 경로가 404 를 주면 그것이 가입 여부 조회 수단이 된다. 코드를 모르는 사람에게는 "그런 주소 없음" 과 "코드 만료" 가 구별되지 않아야 한다.
+
+> **시간이 지운다.** `VerificationPurgeScheduler` 가 §42 와 함께 매일 04:40(KST) 에 `expires_at` 이 지난 행을 지운다.
+
+마이그레이션 `db/migration/V3__password_reset.sql`.
+
+---
+
+## 부록 A. 정본의 표 38개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
@@ -1715,6 +1758,7 @@ CREATE TABLE pending_signup (
 | `post_bookmark` | 실재 §38 | `community` | 글 저장(#451 4번) — "내 사진첩". 저장한 순이 정렬 축, 탈퇴하면 행이 사라진다. §10 `bookmark`(장소, 계획)와 다른 표 |
 | `push_preference` | 실재 §30 | `push` | 알림 전체 끄기 — 행이 없으면 켜짐(#83) |
 | `reaction` | 실재 §9 | `community` | 게시글 반응 |
+| `password_reset` | 실재 §43 | `user` | 진행 중인 비밀번호 재설정(#635) — 코드가 맞으면 `users.password` 가 바뀌고 그 사람의 refresh 토큰이 전부 폐기된다 |
 | `pending_signup` | 실재 §42 | `user` | 인증을 안 마친 가입 요청(#635) — 코드가 맞으면 `users` 행이 되고 이 행은 사라진다 |
 | `refresh_token` | 실재 §2 | `user` | refresh 토큰 원장 |
 | `report` | 실재 §25 | `moderation` | 신고 |

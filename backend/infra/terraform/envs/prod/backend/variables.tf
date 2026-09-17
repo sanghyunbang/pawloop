@@ -196,3 +196,42 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "mail_domain_name" {
+  description = <<-EOT
+    가입 인증·비밀번호 재설정 메일을 보낼 도메인. 예: pawloop.app — 이슈 #635.
+
+    이 구성이 하는 것은 **도메인 인증과 DKIM 레코드 셋**뿐이다. SMTP 자격증명은 만들지
+    않는다 — 그것을 terraform 이 만들면 비밀번호가 **state 파일에 평문으로 남는다.**
+    SES 콘솔이 한 번만 보여 주는 값을 사장님이 직접 `.env` 에 넣는다.
+
+    비워 두면 아무것도 안 만든다. 도메인 인증은 보내기의 **전제**라, 이것 없이는 SES 가
+    무엇을 보내든 거절한다.
+
+    `site_domain_name` 과 같은 이름이어도 된다(둘 다 apex). 다른 변수인 이유는 생애가
+    다르기 때문이다 — 사이트는 A 레코드 하나이고 메일은 CNAME 셋이다.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition = var.mail_domain_name == "" || can(regex(
+      "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.mail_domain_name))
+    error_message = "mail_domain_name 은 호스트 이름이다. 스킴(https://)이나 경로를 붙이지 않는다."
+  }
+}
+
+variable "manage_mail_spf_record" {
+  description = <<-EOT
+    apex 의 SPF TXT 레코드를 이 구성이 만들 것인가 — 이슈 #635.
+
+    **기본은 거짓이다.** SPF 는 도메인당 TXT **한 줄**이어야 하는데, 그 이름에 이미 다른
+    TXT(도메인 소유 확인 등)가 있으면 terraform 이 그것을 덮어쓴다. 덮어쓴 것은 조용하고,
+    무엇이 깨졌는지는 메일이 스팸함에 들어가고 나서야 보인다.
+
+    apex 에 TXT 가 하나도 없는 것을 확인했을 때만 참으로 둔다. 이미 있으면 그 값에
+    `include:amazonses.com` 을 손으로 더한다.
+  EOT
+  type        = bool
+  default     = false
+}

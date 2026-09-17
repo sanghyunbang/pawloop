@@ -135,6 +135,10 @@ class PublicPathsAreRateLimitedTest {
             // 대기 행의 attempts 는 코드 하나를 막고, 이 한도가 주소를 갈아 가며 하는 시도를 막는다.
             case "/auth/signup/verify" -> new Sample("POST", "/auth/signup/verify");
             case "/auth/signup/resend" -> new Sample("POST", "/auth/signup/resend");
+            // 비밀번호 재설정 (#635 조각 ③). 시작 쪽은 **남의 메일함에 메일을 꽂는 수단**이라
+            // 한도가 없으면 그 자체가 괴롭힘 도구가 된다.
+            case "/auth/password/reset-request" -> new Sample("POST", "/auth/password/reset-request");
+            case "/auth/password/reset" -> new Sample("POST", "/auth/password/reset");
             case "/auth/login" -> new Sample("POST", "/auth/login");
             case "/auth/oauth/**" -> new Sample("POST", "/auth/oauth/kakao/callback");
             case "/auth/token/refresh" -> new Sample("POST", "/auth/token/refresh");

@@ -157,3 +157,88 @@ module "backend_host" {
   # 두 이름 다 먼저 있어야 한다 — Caddy 가 부팅하자마자 둘 모두의 인증서를 받으러 간다.
   depends_on = [aws_route53_record.api, aws_route53_record.site]
 }
+
+# ── 메일을 보낼 수 있게 한다 (SES) ──────────────────────────────────
+#
+# 이슈 #635. 가입 인증 코드와 비밀번호 재설정 코드가 이 도메인에서 나간다.
+#
+# **여기서 만드는 것은 도메인 인증과 DKIM 레코드 셋뿐이다.** SMTP 자격증명(IAM 사용자 +
+# 액세스 키)은 만들지 않는다 — terraform 이 만들면 그 비밀번호가 **state 파일에 평문으로
+# 남는다.** SES 콘솔이 한 번만 보여 주는 값을 사장님이 직접 .env 에 넣는다.
+#
+# 인증이 없으면 SES 는 무엇을 보내든 거절한다. 그래서 이것이 보내기의 전제다.
+resource "aws_ses_domain_identity" "mail" {
+  count = var.mail_domain_name == "" ? 0 : 1
+
+  domain = var.mail_domain_name
+}
+
+# 도메인 소유 확인용 TXT. SES 가 준 토큰을 `_amazonses.<도메인>` 에 심는다.
+#
+# **apex 가 아니라 `_amazonses` 아래**라서 SPF TXT 와 이름이 안 겹친다 — 같은 이름에
+# TXT 를 둘 두면 한쪽이 조용히 묻힌다.
+resource "aws_route53_record" "mail_verification" {
+  count = var.mail_domain_name == "" ? 0 : 1
+
+  zone_id = var.route53_zone_id
+  name    = "_amazonses.${var.mail_domain_name}"
+  type    = "TXT"
+  ttl     = 600
+  records = [aws_ses_domain_identity.mail[0].verification_token]
+}
+
+# DKIM 서명. 받는 쪽(지메일·네이버)이 "정말 이 도메인이 보냈는가" 를 검증하는 수단이고,
+# **없으면 인증 코드 메일이 스팸함으로 간다.** 사용자는 그것을 "메일이 안 왔다" 로 겪는다.
+resource "aws_ses_domain_dkim" "mail" {
+  count = var.mail_domain_name == "" ? 0 : 1
+
+  domain = aws_ses_domain_identity.mail[0].domain
+}
+
+# SES 가 주는 토큰 셋을 CNAME 으로 심는다. 손으로 넣으면 셋 중 하나를 빠뜨려도
+# 콘솔은 "Pending" 만 보여 주고 무엇이 빠졌는지는 말해 주지 않는다.
+resource "aws_route53_record" "mail_dkim" {
+  count = var.mail_domain_name == "" ? 0 : 3
+
+  zone_id = var.route53_zone_id
+  name    = "${aws_ses_domain_dkim.mail[0].dkim_tokens[count.index]}._domainkey.${var.mail_domain_name}"
+  type    = "CNAME"
+  ttl     = 600
+  records = ["${aws_ses_domain_dkim.mail[0].dkim_tokens[count.index]}.dkim.amazonses.com"]
+}
+
+# 위 레코드가 퍼진 뒤에 SES 가 스스로 확인한다 — 이 리소스는 그때까지 기다린다.
+#
+# **여기서 멈추면 코드가 아니라 DNS 다.** 기다림을 10분으로 줄여 둔 이유는, 기본값(45분)
+# 이면 DNS 를 잘못 넣은 apply 하나가 45분을 잡아먹기 때문이다. 시간이 넘으면 apply 가
+# 실패하지만 레코드는 이미 만들어져 있으므로, 원인을 고친 뒤 다시 apply 하면 그 자리부터
+# 이어진다.
+resource "aws_ses_domain_identity_verification" "mail" {
+  count = var.mail_domain_name == "" ? 0 : 1
+
+  domain = aws_ses_domain_identity.mail[0].id
+
+  timeouts {
+    create = "10m"
+  }
+
+  depends_on = [
+    aws_route53_record.mail_verification,
+    aws_route53_record.mail_dkim,
+  ]
+}
+
+# SPF. "이 도메인의 메일은 SES 가 보낸다" 를 적어 두는 TXT 다.
+#
+# **apex 의 TXT 는 하나로 합쳐야 한다.** 같은 이름에 TXT 를 두 개 두면 받는 쪽이 둘 다
+# 보고 혼란스러워하거나 한쪽만 읽는다. 그래서 이 레코드는 도메인에 다른 TXT 가 없을 때만
+# 만든다 — 이미 있으면 그 값에 `include:amazonses.com` 을 **손으로 더한다.**
+resource "aws_route53_record" "mail_spf" {
+  count = var.mail_domain_name == "" || !var.manage_mail_spf_record ? 0 : 1
+
+  zone_id = var.route53_zone_id
+  name    = var.mail_domain_name
+  type    = "TXT"
+  ttl     = 600
+  records = ["v=spf1 include:amazonses.com ~all"]
+}

@@ -111,7 +111,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 > JWT 의 `sub` 는 서버가 발급한 **불투명 사용자 키**다. 이메일이라고 가정하거나 파싱하지 말 것. 사용자 정보는 `GET /auth/me` 로 조회한다.
 
-**인가 경계** — 비인증 허용은 `/auth/signup`, `/auth/signup/verify`, `/auth/signup/resend`, `/auth/login`, `/auth/oauth/**`, `/auth/token/refresh`, `/oauth2/**`, `/login/oauth2/**` 뿐이다. 가입 인증의 둘은 **낱개로** 연다 — `/auth/signup/**` 로 열면 그 아래 경로를 하나 더 만드는 날 그것까지 인증 없이 딸려 들어간다(#635). `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 반드시 토큰 검증을 거친다.
+**인가 경계** — 비인증 허용은 `/auth/signup`, `/auth/signup/verify`, `/auth/signup/resend`, `/auth/password/reset-request`, `/auth/password/reset`, `/auth/login`, `/auth/oauth/**`, `/auth/token/refresh`, `/oauth2/**`, `/login/oauth2/**` 뿐이다. 가입 인증과 재설정의 넷은 **낱개로** 연다 — `/auth/signup/**` 같은 와일드카드로 열면 그 아래 경로를 하나 더 만드는 날 그것까지 인증 없이 딸려 들어간다(#635). 비밀번호를 잊은 사람은 토큰이 없으므로 재설정 둘도 비인증이어야 한다. `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 반드시 토큰 검증을 거친다.
 
 ### 2.1 소셜 로그인 시작 — ✅ 구현
 
@@ -240,6 +240,25 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 #### 2.5.2 코드 다시 보내기
 
 `POST /auth/signup/resend` — 비인증. 본문은 `{ "email": … }`. 대기 행이 없어도 **같은 202** 다(메일은 안 나간다) — "그런 대기 없음" 을 말하면 이 경로도 가입 여부 조회 수단이 된다.
+
+#### 2.5.3 비밀번호 재설정 — ✅ 구현(#635 조각 ③)
+
+`POST /auth/password/reset-request` — 비인증. 본문은 `{ "email": … }`. **응답에 본문이 없는 202** 다.
+
+그 주소로 계정이 있는지를 말하지 않는 것이 이 경로의 요점이라, 돌려줄 것이 하나도 없어야 한다. §2.5 가 `mailSent` 를 주는 것과 다른데, 거기는 두 갈래가 **모두** 메일을 보내므로 그 값이 아무것도 가리지 않는다. 여기서는 없는 주소에 메일을 안 보내므로 참이든 거짓이든 **그 값 자체가 답이 된다.**
+
+소셜로만 가입한 사람에게도 **메일은 간다** — 안 보내면 그 침묵이 "이 사람은 소셜 가입자다" 를 알려 준다. 대신 그 메일은 코드가 아니라 "카카오·구글·Apple 로 로그인하세요" 라고 말한다.
+
+`POST /auth/password/reset` — 비인증. 본문은 `{ "email": …, "code": "012345", "newPassword": … }`. `200 OK` + `AuthTokens`(`isNew` 는 거짓)이라 **바로 로그인된 상태**다.
+
+**다른 기기의 세션을 전부 끊는다.** 재설정을 하는 흔한 이유가 "누가 내 계정에 들어온 것 같다" 인데, 비밀번호만 바꾸고 살아 있는 refresh 토큰을 두면 그 사람은 그대로 들어와 있다. 이 응답의 토큰만 살아남는다.
+
+| 상태 | 뜻 | 앱이 할 일 |
+|:---|:---|:---|
+| **401** | 코드가 틀렸다 | 다시 입력하게 한다 |
+| **410** | 만료 · 시도 초과 · **진행 중인 재설정 없음** | 처음부터 다시 받게 한다 |
+
+**없는 주소도 410 이다.** 404 를 주면 이 경로가 가입 여부 조회 수단이 된다.
 
 ### 2.6 이메일 로그인 — ✅ 구현(#10)
 

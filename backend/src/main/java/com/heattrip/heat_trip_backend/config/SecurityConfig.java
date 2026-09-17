@@ -64,6 +64,10 @@ public class SecurityConfig {
             // 하나 더 만들면 그것까지 **인증 없음 + 한도 무한**으로 딸려 들어간다(#232 의 자리).
             "/auth/signup/verify",
             "/auth/signup/resend",
+            // 비밀번호 재설정 (#635 조각 ③). 비밀번호를 잊은 사람은 토큰이 없다 —
+            // 인증 뒤에 두면 아무도 못 쓴다. 여기도 와일드카드가 아니라 낱개다.
+            "/auth/password/reset-request",
+            "/auth/password/reset",
             "/auth/login",
             "/auth/oauth/**",
             "/auth/token/refresh",

@@ -111,10 +111,12 @@ tags:
       지원 공급자의 단일 출처는 `components.parameters.Provider` 의 enum 입니다.
 
       **인가 경계** — 비인증 허용은 `/auth/signup`, `/auth/signup/verify`, `/auth/signup/resend`,
+      `/auth/password/reset-request`, `/auth/password/reset`,
       `/auth/login`, `/auth/oauth/**`, `/auth/token/refresh`, 그리고 Spring Security 가 처리하는
       `/oauth2/**`·`/login/oauth2/**` 뿐입니다.
-      (가입 인증의 둘은 **낱개로** 엽니다 — `/auth/signup/**` 로 열면 그 아래 경로를 하나 더
-      만드는 날 그것까지 인증 없이 딸려 들어갑니다. #635)
+      (가입 인증과 재설정의 넷은 **낱개로** 엽니다 — `/auth/signup/**` 같은 와일드카드로 열면
+      그 아래 경로를 하나 더 만드는 날 그것까지 인증 없이 딸려 들어갑니다. #635)
+      비밀번호를 잊은 사람은 토큰이 없으므로 재설정 둘도 비인증이어야 합니다.
       (그 밖의 비인증 GET — 장소 `/api/places/*`, 커뮤니티 읽기, 산책 안전 지수 `/api/walk-safety/now` — 는
       각 태그 설명에 이유가 있습니다.)
       `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 **반드시 bearerAuth 검증을 거쳐야 합니다.**
@@ -372,6 +374,83 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/SignupStarted' }
         '400': { $ref: '#/components/responses/ValidationError' }
+
+  /auth/password/reset-request:
+    post:
+      tags: [Auth]
+      summary: 비밀번호 재설정 코드 보내기
+      description: |
+        그 주소의 주인에게 여섯 자리를 보냅니다. 비밀번호는 **아직 그대로**입니다 —
+        실제로 바뀌는 곳은 `POST /auth/password/reset` 입니다.
+
+        **응답에 본문이 없습니다.** 그 주소로 계정이 있는지를 말하지 않는 것이 이 경로의
+        요점이라, 돌려줄 것이 하나도 없어야 합니다. `/auth/signup` 이 `mailSent` 를 주는 것과
+        다른데, 거기는 두 갈래가 **모두** 메일을 보내므로 그 값이 아무것도 가리지 않습니다.
+        여기서는 없는 주소에 메일을 안 보내므로 참이든 거짓이든 **그 값 자체가 답이 됩니다.**
+
+        앱은 "가입된 주소라면 메일을 보냈어요" 라고 말하면 됩니다.
+
+        **소셜로만 가입한 사람에게도 메일은 갑니다.** 안 보내면 그 침묵이 "이 사람은 소셜
+        가입자다" 를 알려 줍니다. 대신 그 메일은 코드가 아니라 "카카오·구글·Apple 로
+        로그인하세요" 라고 말합니다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordResetRequestInput' }
+      responses:
+        '202':
+          description: 받아들였습니다. 본문은 없습니다 — 가입 여부를 말하지 않습니다.
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /auth/password/reset:
+    post:
+      tags: [Auth]
+      summary: 코드 확인 — 여기서 비밀번호가 바뀝니다
+      description: |
+        메일로 받은 **여섯 자리**를 확인하고 새 비밀번호로 바꿉니다. 성공하면 `AuthTokens` 를
+        주므로 **바로 로그인된 상태**입니다 — 방금 정한 비밀번호를 다시 치게 하지 않습니다.
+        `isNew` 는 **거짓**입니다(이미 있는 계정입니다).
+
+        **다른 기기의 세션을 전부 끊습니다.** 재설정을 하는 흔한 이유가 "누가 내 계정에 들어온
+        것 같다" 인데, 비밀번호만 바꾸고 살아 있는 refresh 토큰을 두면 그 사람은 그대로 들어와
+        있습니다. 이 응답의 토큰만 살아남습니다.
+
+        실패는 둘로 갈립니다. **뭉개지 마세요.**
+
+        | 상태 | 뜻 | 앱이 할 일 |
+        |:---|:---|:---|
+        | **401** | 코드가 틀렸습니다 | 다시 입력하게 합니다 |
+        | **410** | 만료 · 시도 초과 · **진행 중인 재설정 없음** | 처음부터 다시 받게 합니다 |
+
+        **없는 주소도 410 입니다.** 404 를 주면 이 경로가 가입 여부를 묻는 조회 수단이 됩니다 —
+        코드를 모르는 사람에게는 "그런 주소 없음" 과 "코드 만료" 가 구별되지 않아야 합니다.
+
+        코드 하나에 허용하는 틀린 시도는 다섯 번이고, 넘으면 그 코드가 죽습니다.
+
+        **새 비밀번호에 가입보다 센 규칙을 걸지 않습니다.** 가입에 길이 규칙이 없어서, 여기에만
+        하한을 두면 그 규칙이 없던 시절에 가입한 사람이 **자기 계정을 되찾지 못합니다.** 상한
+        72바이트는 취향이 아니라 bcrypt 의 한계입니다 — 그보다 긴 부분은 조용히 무시됩니다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordResetInput' }
+      responses:
+        '200':
+          description: 비밀번호가 바뀌었고 로그인됐습니다. 다른 기기는 끊겼습니다.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '410':
+          description: 코드가 만료됐거나 여러 번 틀렸거나, 진행 중인 재설정이 없습니다.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
 
   /auth/login:
@@ -4664,6 +4743,36 @@ components:
       required: [email]
       properties:
         email: { type: string, format: email, example: "walker@example.com" }
+
+    PasswordResetRequestInput:
+      type: object
+      description: >
+        주소 하나뿐입니다. **응답에는 본문이 없습니다** — 그 주소로 계정이 있는지를
+        말하지 않는 것이 그 경로의 요점이라, 돌려줄 것이 하나도 없어야 합니다.
+      required: [email]
+      properties:
+        email: { type: string, format: email, example: "walker@example.com" }
+
+    PasswordResetInput:
+      type: object
+      required: [email, code, newPassword]
+      properties:
+        email: { type: string, format: email, example: "walker@example.com" }
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          example: "012345"
+          description: >
+            메일로 받은 여섯 자리. 모양을 서버가 먼저 막는 것은 편의가 아니라 보호입니다 —
+            형식이 틀린 값까지 들여보내면 시도 횟수가 오타로 소모되고, 진짜 코드를 넣기 전에
+            재설정이 죽습니다.
+        newPassword:
+          type: string
+          maxLength: 72
+          description: >
+            새 비밀번호. **가입보다 센 규칙을 걸지 않습니다** — 가입에 길이 규칙이 없어서,
+            여기에만 하한을 두면 그 규칙이 없던 시절에 가입한 사람이 자기 계정을 되찾지
+            못합니다. 상한 72바이트는 bcrypt 의 한계이고, 그보다 긴 부분은 조용히 무시됩니다.
 
     SignupInput:
       type: object

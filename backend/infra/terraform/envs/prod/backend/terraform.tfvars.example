@@ -38,6 +38,20 @@ domain_name = "api.pawloop.app"
 # 같은 서버·같은 Caddy 가 api 와 함께 받는다. 비워 두면 그 사이트를 안 띄우고 api 만 산다.
 site_domain_name = "pawloop.app"
 
+# 가입 인증·비밀번호 재설정 메일을 보낼 도메인 — 이슈 #635.
+#
+# 여기서 만드는 것은 **도메인 인증과 DKIM CNAME 셋**뿐이다. SMTP 자격증명은 안 만든다 —
+# terraform 이 만들면 비밀번호가 state 파일에 평문으로 남는다. SES 콘솔이 한 번만 보여 주는
+# 값을 .env 에 직접 넣는다.
+#
+# 비워 두면 메일이 안 나간다(서버는 그대로 뜬다).
+mail_domain_name = "pawloop.app"
+
+# apex 의 SPF TXT 를 이 구성이 만들 것인가. **apex 에 TXT 가 하나도 없을 때만** 참으로 둔다 —
+# 이미 있으면 terraform 이 그것을 덮어쓰고, 덮어쓴 것은 메일이 스팸함에 들어가고 나서야 보인다.
+#   aws route53 list-resource-record-sets --hosted-zone-id <영역ID> #     --query "ResourceRecordSets[?Type=='TXT' && Name=='pawloop.app.']"
+manage_mail_spf_record = false
+
 # 도메인을 Route 53 에서 등록하면 호스팅 영역이 자동으로 생긴다.
 #   aws route53 list-hosted-zones-by-name --dns-name pawloop.app \
 #     --query 'HostedZones[0].Id' --output text

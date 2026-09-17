@@ -5,8 +5,10 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -18,6 +20,7 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 import com.heattrip.heat_trip_backend.user.UserTime;
+import com.heattrip.heat_trip_backend.user.verification.AttemptCounting;
 
 /**
  * 인증을 기다리는 가입 한 건 — 이슈 #635.
@@ -29,14 +32,27 @@ import com.heattrip.heat_trip_backend.user.UserTime;
  * <p>비밀번호와 코드는 <b>둘 다 해시</b>다. 이 표를 읽을 수 있는 사람이 남의 메일함 없이
  * 가입을 마칠 수 있으면 인증이라고 할 수 없다.
  */
+/*
+ * 유니크·인덱스를 **엔티티에 적는다.** mysql/init/01_schema.sql 은 이 엔티티들에서 뽑는
+ * 파일이라, 여기 없으면 재생성할 때마다 그 줄이 사라진다 — 그리고 SchemaDdlDriftTest 는
+ * 컬럼과 FK 만 보고 인덱스는 안 봐서, 사라진 것을 아무도 못 본다.
+ */
 @Entity
-@Table(name = "pending_signup")
+@Table(
+        name = "pending_signup",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uq_pending_signup_email", columnNames = {"email"})
+        },
+        indexes = {
+                @Index(name = "idx_pending_signup_expires", columnList = "expires_at")
+        }
+)
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
-public class PendingSignup {
+public class PendingSignup implements AttemptCounting {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -71,9 +87,5 @@ public class PendingSignup {
         if (createdAt == null) {
             createdAt = UserTime.nowUtc();
         }
-    }
-
-    public boolean isExpired(LocalDateTime now) {
-        return expiresAt.isBefore(now);
     }
 }
