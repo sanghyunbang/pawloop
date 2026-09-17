@@ -91,6 +91,28 @@ variable "domain_name" {
   }
 }
 
+variable "site_domain_name" {
+  description = <<-EOT
+    소개·약관 페이지가 응답할 호스트 이름. 예: pawloop.app — 이슈 #611.
+
+    **스토어가 공개 개인정보처리방침 URL 을 요구한다.** 앱 심사에 적을 주소가 여기서 나온다.
+
+    `domain_name`(api.…)과 **다른 이름**이다. 같은 서버·같은 Caddy 가 둘 다 받고, 이름으로
+    갈라 하나는 백엔드로 넘기고 하나는 정적 문서를 그린다. 인증서도 이름마다 따로 받으므로
+    이 레코드도 있어야 발급이 된다.
+
+    비워 두면 그 사이트를 안 띄운다 — 도메인이 아직 없을 때 전체가 막히지 않게.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition = var.site_domain_name == "" || can(regex(
+      "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.site_domain_name))
+    error_message = "site_domain_name 은 호스트 이름이다. 스킴(https://)이나 경로를 붙이지 않는다."
+  }
+}
+
 variable "route53_zone_id" {
   description = <<-EOT
     domain_name 이 속한 Route 53 호스팅 영역 ID.

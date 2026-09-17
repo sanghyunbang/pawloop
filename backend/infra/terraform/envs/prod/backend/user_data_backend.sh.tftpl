@@ -137,6 +137,8 @@ set_env_value APP_PUBLISHED_HOST 127.0.0.1
 
 # Caddyfile 이 읽는 값 둘. 도메인과 인증서 알림 주소는 terraform 이 정본이다.
 set_env_value PAWLOOP_DOMAIN "${domain_name}"
+# 소개·약관 페이지의 이름 (#611). 비어 있으면 Caddy 가 그 사이트 블록을 안 세운다.
+set_env_value PAWLOOP_SITE_DOMAIN "${site_domain_name}"
 set_env_value ACME_EMAIL "${acme_email}"
 
 # ── 4. 띄운다 ───────────────────────────────────────────────────────

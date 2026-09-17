@@ -1,0 +1,10 @@
+<header class="site">
+  <a href="/"><span class="mark">🐾</span><span class="name">Pawloop</span></a>
+</header>
+<nav class="site">
+  <a href="/"{{if eq .OriginalReq.URL.Path "/"}} aria-current="page"{{end}}>소개</a>
+  <a href="/terms"{{if eq .OriginalReq.URL.Path "/terms"}} aria-current="page"{{end}}>이용약관</a>
+  <a href="/privacy"{{if eq .OriginalReq.URL.Path "/privacy"}} aria-current="page"{{end}}>개인정보처리방침</a>
+  <a href="/location"{{if eq .OriginalReq.URL.Path "/location"}} aria-current="page"{{end}}>위치기반서비스</a>
+  <a href="/support"{{if eq .OriginalReq.URL.Path "/support"}} aria-current="page"{{end}}>문의</a>
+</nav>

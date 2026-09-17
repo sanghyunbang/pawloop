@@ -58,17 +58,41 @@ class CaddyfileActuallyParsesTest {
     /** 검사에 쓸 값. 실제 값은 terraform 이 정하고 부팅 스크립트가 {@code .env} 에 써 넣는다. */
     private static final Map<String, String> ENV = Map.of(
             "PAWLOOP_DOMAIN", "api.pawloop.app",
+            "PAWLOOP_SITE_DOMAIN", "pawloop.app",
             "ACME_EMAIL", "you@example.com");
+
+    /**
+     * 소개·약관 페이지의 이름이 <b>아직 없을 때</b> — 이슈 #611.
+     *
+     * <p>terraform 이 {@code site_domain_name} 을 주기 전에 코드가 먼저 배포되는 순간이 있다.
+     * 그때 {@code .env} 에 그 키가 없어 빈 값이 들어가는데, <b>주소 없는 블록은 문법 오류다.</b>
+     * Caddy 가 통째로 안 뜨고 api 까지 같이 죽는다.
+     *
+     * <p>그래서 Caddyfile 에 기본값을 뒀고, 그 기본값이 실제로 통하는지를 여기서 잰다.
+     */
+    private static final Map<String, String> ENV_WITHOUT_SITE = Map.of(
+            "PAWLOOP_DOMAIN", "api.pawloop.app",
+            "ACME_EMAIL", "you@example.com");
+
+    @Test
+    @DisplayName("소개·약관 도메인이 아직 없어도 통과한다 — 없다고 api 까지 죽으면 안 된다")
+    void theConfigParsesBeforeTheSiteDomainExists() {
+        validate(ENV_WITHOUT_SITE);
+    }
 
     @Test
     @DisplayName("운영에서 쓰는 그 이미지로 caddy validate 가 통과한다")
     void theConfigActuallyParses() {
+        validate(ENV);
+    }
+
+    private void validate(Map<String, String> env) {
         Path caddyfile = TestProjectPaths.requireFile("Caddyfile");
         StringBuilder output = new StringBuilder();
 
         try (GenericContainer<?> caddy = new GenericContainer<>(caddyImage())
                 .withCopyFileToContainer(MountableFile.forHostPath(caddyfile), "/etc/caddy/Caddyfile")
-                .withEnv(ENV)
+                .withEnv(env)
                 .withCommand("caddy", "validate", "--config", "/etc/caddy/Caddyfile")
                 .withStartupCheckStrategy(new OneShotStartupCheckStrategy()
                         .withTimeout(Duration.ofMinutes(2)))
@@ -96,7 +120,9 @@ class CaddyfileActuallyParsesTest {
      * <p>여기에 태그를 따로 적으면 compose 를 올릴 때 이 검사만 옛 버전으로 남는다 — 그러면
      * "검사는 통과했는데 서버에서 죽는" 자리가 다시 생긴다.
      */
-    private static String caddyImage() {
+    // LegalSiteActuallyRendersTest 도 같은 이미지를 써야 한다 — 검사마다 다른 버전을
+    // 쓰면 "어느 쪽이 운영인가" 가 흐려진다.
+    static String caddyImage() {
         Path compose = TestProjectPaths.requireFile("docker-compose.prod.yml");
         try (Reader reader = Files.newBufferedReader(compose, StandardCharsets.UTF_8)) {
             Object loaded = new org.yaml.snakeyaml.Yaml().load(reader);
