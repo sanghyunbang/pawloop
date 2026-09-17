@@ -12,6 +12,7 @@
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/screens/explore_screen.dart';
 
 void main() {
@@ -37,6 +38,26 @@ void main() {
 
     test('제자리면 안 띄운다', () {
       expect(ExploreMap.researchTarget(here, here), isNull);
+    });
+  });
+
+  group('드래그하면 바로 거를 것인가', () {
+    tearDown(LocationUploadPolicy.resetForTest);
+
+    test('기기 안에서 거르는 빌드는 바로 한다 — 부를 서버가 없다', () {
+      LocationUploadPolicy.setForTest(false);
+      expect(ExploreMap.refiltersOnDrag, isTrue,
+          reason: '전국 한 벌이 기기에 있는데 버튼을 눌러 달라고 할 이유가 없다');
+    });
+
+    test('서버를 부르는 빌드는 버튼으로 묻는다 — 끄는 동안 계속 부르면 안 된다', () {
+      LocationUploadPolicy.setForTest(true);
+      expect(ExploreMap.refiltersOnDrag, isFalse);
+    });
+
+    test('기본값은 기기 안 — UPLOAD_LOCATION 을 안 켠 빌드다', () {
+      LocationUploadPolicy.resetForTest();
+      expect(ExploreMap.refiltersOnDrag, isTrue);
     });
   });
 
