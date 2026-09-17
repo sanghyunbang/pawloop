@@ -225,6 +225,16 @@ class PetPlacesRepository {
   /// 내 주변 반려동반 가능 장소(거리순).
   ///
   /// [radius] 의 상한은 계약이 18,000m 로 정한다 — 서버가 셀 중심에서 20km 를 받아 두고
+  /// 이름으로 찾는다 — **기기 안에서** (#620).
+  ///
+  /// [PlaceCatalogRepository.search] 를 그대로 부른다. 화면이 카탈로그 저장소를 직접
+  /// 잡지 않게 하려고 여기를 지난다 — 테스트가 이 저장소 하나만 갈아 끼우면 된다.
+  ///
+  /// **검색어는 서버로 안 간다.** 좌표를 안 보내면서(A안 #235) "서울숲" 을 보내면 앞문을
+  /// 잠그고 뒷문을 여는 셈이다. 어디를 찾는지는 어디에 있는지만큼이나 사생활이다.
+  Future<List<PetPlace>> searchByName(String query, {int limit = 8}) =>
+      _catalog.search(query, limit: limit);
+
   /// 셀 반지름(약 1.4km)을 뺀 값이다. 넘겨도 서버가 거절하지 않고 자른다.
   Future<List<PetPlace>> fetchNearby({
     required double lat,

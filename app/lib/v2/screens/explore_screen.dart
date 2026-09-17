@@ -90,6 +90,25 @@ class _ExploreScreenState extends State<ExploreScreen> {
   // 기본 중심: 서울 시청. (추후 현재 위치)
   NLatLng _center = const NLatLng(37.5665, 126.9816);
   List<PetPlace> _places = const [];
+
+  // ─────────────────── 검색 (#620) ───────────────────
+  //
+  // **서버를 안 부른다.** 카탈로그 한 벌(18,870곳)이 이미 기기에 있고 찾는 일도 거기서
+  // 한다(`PlaceCatalogRepository.search`, #338). 검색어를 서버로 보내면 A안(#235)이
+  // 깨진다 — 좌표를 안 보내면서 "서울숲" 을 보내면 앞문을 잠그고 뒷문을 여는 셈이다.
+  //
+  // 그 함수는 글쓰기·동네 고르기 화면이 이미 쓰고 있었다. **지도만 안 붙어 있었고**,
+  // 그 자리에 `TextField` 가 아니라 `Text` 가 있었다 — 눌러도 아무 일이 없는 그림이었다.
+  final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  String _query = '';
+  List<PetPlace> _hits = const [];
+  bool _searching = false;
+
+  /// 글자마다 18,870곳을 훑지 않는다. 손이 멈추면 한 번 훑는다.
+  Timer? _searchDebounce;
+
+  bool get _isSearching => _query.trim().isNotEmpty;
   bool _loading = true;
   /// 내가 고른 동네 (#342). 현위치를 못 받았을 때 서울시청 대신 여기를 쓴다.
   Neighborhood? _myNeighborhood;
@@ -235,7 +254,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
   List<PetPlace> get _filtered {
+    // 검색 중에는 **칩을 안 본다** (#620). 켜 둔 칩이 결과를 조용히 지우면 사용자는
+    // "그 이름이 없다" 고 읽는다 — 실제로는 칩이 가린 것이다. 대신 칩 줄을 검색어
+    // 하나로 바꿔서 지금 무엇을 보고 있는지 화면이 말한다.
+    if (_isSearching) return _hits;
+
     final byCat = _catFilter == null
         ? _places
         : _places.where((p) => p.categoryKey == _catFilter).toList();
@@ -436,7 +468,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
         const SizedBox(height: 12),
         _searchRow(),
         const SizedBox(height: 10),
-        _catChips(),
+        // 검색 중에는 칩 대신 검색어 하나. 두 개를 같이 두면 켜 둔 칩이 결과를 조용히
+        // 지우고, 사용자는 "그 이름이 없다" 고 읽는다.
+        _isSearching ? _searchChip() : _catChips(),
         const SizedBox(height: 14),
         if (_neighbourCourses) ...[
           if (_coursesLoading)
@@ -550,6 +584,30 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Widget _emptyBox() {
+    // 찾는 중이면 "없다" 가 아직 아니다 (#620).
+    if (_isSearching) {
+      return GlassCard(
+        key: const Key('explore-search-empty'),
+        padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 18),
+        child: Column(children: [
+          Icon(_searching ? Icons.hourglass_empty_rounded : Icons.search_off_rounded,
+              size: 36, color: T.textMuted),
+          const SizedBox(height: 10),
+          Text(_searching ? '찾는 중이에요' : '"${_query.trim()}" 은 아직 없어요',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textPrimary)),
+          if (!_searching) ...[
+            const SizedBox(height: 4),
+            // 왜 없는지를 말한다. "다시 시도" 를 권하면 몇 번을 눌러도 같은 답이 온다 —
+            // 이 목록은 반려동반이 확인된 곳만 모은 것이라 그 밖은 원래 없다.
+            const Text('반려동반이 되는 곳만 모아 둔 목록이라 없을 수 있어요',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12.5, color: T.textMuted)),
+          ],
+        ]),
+      );
+    }
+
     // 못 받은 것을 "없다" 고 말하면 안 된다. "지도를 움직여 보세요" 는 그 사람이 시킨
     // 대로 해도 소용이 없는 안내고, 5분 백오프 때문에 움직여도 다시 안 받는다.
     final failure = _placesFailure;
@@ -611,7 +669,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   /// 목록 머리 라벨 — 산책로를 "반려동반 가능" 이라고 부르지 않는다(#328).
-  String _headerLabel() => switch (_catFilter) {
+  String _headerLabel() => _isSearching
+      ? '"${_query.trim()}" 검색'
+      : switch (_catFilter) {
         'trail' => '가까운 산책로',
         'vet' => '동물병원',
         'shop' => '펫샵',
@@ -963,6 +1023,39 @@ class _ExploreScreenState extends State<ExploreScreen> {
   bool _moreChips = false;
 
   // 카테고리 필터 칩 (가로 스크롤).
+  /// 검색 중일 때 칩 줄 자리에 서는 것 — 지금 무엇을 보고 있는지 한 칸으로 말한다.
+  Widget _searchChip() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: GestureDetector(
+        key: const Key('explore-search-chip'),
+        onTap: _clearSearch,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: T.accentSoft,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: T.accentLine),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.search, size: 14, color: T.accent),
+            const SizedBox(width: 6),
+            // 검색어가 길면 칩이 화면을 넘는다 — 칩 안에서 자른다.
+            Flexible(
+              child: Text(_query.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.accent)),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.close_rounded, size: 14, color: T.accent),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _catChips() {
     Widget chip(String label, String? key, Color color) {
       final on = _catFilter == key;
@@ -1093,34 +1186,112 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
+  /// 이름으로 찾는다 — **기기 안에서** (#620).
+  ///
+  /// 여기 있던 것은 `Container` 안의 `Text` 였다. 검색창처럼 생겼지만 `TextField` 도
+  /// `onTap` 도 없어서 눌러도 키보드가 안 올라왔다 — 2026-09-17 에 사장님이
+  /// "아예 무용지물" 이라고 신고했다.
   Widget _searchRow() {
     return Row(children: [
       Expanded(
         child: Container(
           height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.only(left: 14, right: 6),
           decoration: BoxDecoration(
             color: T.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: T.cardBorder),
+            border: Border.all(color: _searchFocus.hasFocus ? T.accent : T.cardBorder),
           ),
-          child: const Row(children: [
-            Icon(Icons.search, size: 20, color: T.textMuted),
-            SizedBox(width: 8),
-            // 자리표시가 좁은 폭에서 줄을 넘겼다(393dp · 테스트 폰트에서 8.5px).
-            // 자리표시는 잘려도 뜻이 남는다 — 뒤의 "..." 가 이미 말줄임이다.
-            Flexible(
-              child: Text('카페, 공원, 산책로...',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, color: T.textMuted)),
+          child: Row(children: [
+            const Icon(Icons.search, size: 20, color: T.textMuted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                key: const Key('explore-search-field'),
+                controller: _searchCtrl,
+                focusNode: _searchFocus,
+                onChanged: _onSearchChanged,
+                textInputAction: TextInputAction.search,
+                // 엔터는 기다리지 않고 바로 찾는다 — 입력 중에도 이미 찾고 있다.
+                onSubmitted: (_) => _runSearch(_searchCtrl.text, now: true),
+                style: const TextStyle(fontSize: 14, color: T.textPrimary),
+                cursorColor: T.accent,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  // 자리표시가 좁은 폭에서 줄을 넘겼다(393dp · 테스트 폰트에서 8.5px).
+                  // 자리표시는 잘려도 뜻이 남는다 — 뒤의 "..." 가 이미 말줄임이다.
+                  hintText: '카페, 공원, 산책로...',
+                  hintMaxLines: 1,
+                  hintStyle: TextStyle(fontSize: 14, color: T.textMuted),
+                ),
+              ),
             ),
+            if (_isSearching)
+              GestureDetector(
+                key: const Key('explore-search-clear'),
+                onTap: _clearSearch,
+                behavior: HitTestBehavior.opaque,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  child: Icon(Icons.close_rounded, size: 18, color: T.textMuted),
+                ),
+              )
+            else
+              const SizedBox(width: 8),
           ]),
         ),
       ),
       const SizedBox(width: 10),
       _viewToggle(),
     ]);
+  }
+
+  /// 손이 멈추면 한 번 찾는다. 글자마다 18,870곳을 훑지 않는다.
+  ///
+  /// **기다리는 220ms 동안 "찾는 중" 이라고 말한다.** 안 그러면 아직 찾지도 않고
+  /// "아직 없어요" 를 먼저 보여 주게 된다 — 글자를 칠 때마다 "없다" 가 깜빡인다.
+  void _onSearchChanged(String text) {
+    _searchDebounce?.cancel();
+    setState(() {
+      _query = text;
+      _searching = text.trim().isNotEmpty;
+      // 옛 결과를 들고 있으면 새 검색어 밑에 지난 답이 깔린다.
+      if (_searching) _hits = const [];
+    });
+    _searchDebounce = Timer(const Duration(milliseconds: 220), () => _runSearch(text));
+  }
+
+  Future<void> _runSearch(String text, {bool now = false}) async {
+    if (now) _searchDebounce?.cancel();
+    final q = text.trim();
+    if (q.isEmpty) {
+      if (mounted) setState(() { _hits = const []; _searching = false; });
+      return;
+    }
+    setState(() => _searching = true);
+    final found = await _repo.searchByName(q, limit: _searchLimit);
+    // 타이핑이 이어졌으면 지난 답이다 — 늦게 온 것이 새 답을 덮으면 화면이 뒤로 간다.
+    if (!mounted || _searchCtrl.text.trim() != q) return;
+    setState(() {
+      // 거리는 카탈로그에 없다 — 지금 보고 있는 중심에서 재서 붙인다(#539 의 그 자리).
+      _hits = [for (final p in found) p.withDistance(haversineMeters(_center.latitude, _center.longitude, p.lat, p.lng))];
+      _searching = false;
+    });
+  }
+
+  /// 한 화면에 보여 줄 검색 결과 수. 목록이 끝없이 길면 고르는 일이 더 어려워진다.
+  static const int _searchLimit = 30;
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchCtrl.clear();
+    _searchFocus.unfocus();
+    setState(() {
+      _query = '';
+      _hits = const [];
+      _searching = false;
+    });
   }
 
   Widget _viewToggle() {
@@ -1158,16 +1329,48 @@ class _ExploreScreenState extends State<ExploreScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(
+              // 목록 뷰와 **같은 칸**이다 — 같은 컨트롤러·같은 포커스를 쓴다(#620). 뷰를
+              // 바꿔도 검색어가 안 사라지고, 결과도 그대로다(`_filtered` 하나를 본다).
               child: Container(
-                height: 42, padding: const EdgeInsets.symmetric(horizontal: 14),
+                height: 42, padding: const EdgeInsets.only(left: 14, right: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xF2FFFFFF), borderRadius: BorderRadius.circular(13),
                   boxShadow: const [BoxShadow(color: Color(0x1F5A4690), blurRadius: 14, offset: Offset(0, 5))],
                 ),
-                child: const Row(children: [
-                  Icon(Icons.search, size: 18, color: T.textMuted),
-                  SizedBox(width: 8),
-                  Text('이 지역에서 찾기...', style: TextStyle(fontSize: 13.5, color: T.textMuted)),
+                child: Row(children: [
+                  const Icon(Icons.search, size: 18, color: T.textMuted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      key: const Key('explore-map-search-field'),
+                      controller: _searchCtrl,
+                      focusNode: _searchFocus,
+                      onChanged: _onSearchChanged,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => _runSearch(_searchCtrl.text, now: true),
+                      style: const TextStyle(fontSize: 13.5, color: T.textPrimary),
+                      cursorColor: T.accent,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        hintText: '이 지역에서 찾기...',
+                        hintMaxLines: 1,
+                        hintStyle: TextStyle(fontSize: 13.5, color: T.textMuted),
+                      ),
+                    ),
+                  ),
+                  if (_isSearching)
+                    GestureDetector(
+                      key: const Key('explore-map-search-clear'),
+                      onTap: _clearSearch,
+                      behavior: HitTestBehavior.opaque,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+                        child: Icon(Icons.close_rounded, size: 17, color: T.textMuted),
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 10),
                 ]),
               ),
             ),
@@ -1177,7 +1380,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             const ProfileAvatar(size: 40),
           ]),
           const SizedBox(height: 8),
-          SizedBox(height: 40, child: _catChips()),
+          SizedBox(height: 40, child: _isSearching ? _searchChip() : _catChips()),
         ]),
       ),
       Positioned(left: 16, bottom: 128, child: _legend()),
