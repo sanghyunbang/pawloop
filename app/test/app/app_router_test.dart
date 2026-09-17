@@ -126,12 +126,47 @@ void main() {
     });
 
     test('보호 라우트도 공개 라우트도 그대로 연다', () {
-      for (final location in ['/home', onboardingRoute]) {
+      for (final location in ['/home', '/community', '/me']) {
         expect(
           authRedirect(status: AuthStatus.authenticated, location: location),
           isNull,
         );
       }
+    });
+
+    // 이 목록에 onboardingRoute 가 들어 있었다. 즉 이 검사가 **버그를 못 박고
+    // 있었다** — "온보딩 화면에 그대로 두어라" 라고.
+    //
+    // 온보딩 화면의 버튼들은 AuthState.completeOnboarding() 으로 상태만 바꾸고
+    // (onboarding → authenticated) 화면 옮기기는 이 리다이렉트에 맡긴다. 여기서
+    // null 을 돌려주면 상태만 바뀌고 화면은 그대로다 — **버튼이 죽은 것처럼 보이고
+    // 사용자는 앱에 갇힌다.**
+    //
+    // 신규 가입자만 겪는다. 기존 계정으로 하는 시험은 이 경로를 밟지 않는다.
+    test('온보딩을 마쳤으면 그 화면에서 내보낸다 — 안 그러면 갇힌다', () {
+      expect(
+        authRedirect(
+          status: AuthStatus.authenticated,
+          location: onboardingRoute,
+        ),
+        homeRoute,
+      );
+      // 하위 경로도 같다.
+      expect(
+        authRedirect(
+          status: AuthStatus.authenticated,
+          location: '$onboardingRoute/step-2',
+        ),
+        homeRoute,
+      );
+      // 이름만 비슷한 경로는 잡지 않는다.
+      expect(
+        authRedirect(
+          status: AuthStatus.authenticated,
+          location: '$onboardingRoute-guide',
+        ),
+        isNull,
+      );
     });
   });
 
