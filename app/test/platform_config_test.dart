@@ -156,6 +156,27 @@ void main() {
       expect(plist, contains('<string>app.pawloop</string>'));
     });
 
+    test('런치 이미지가 플레이스홀더가 아니다 — 1x1 짜리로 내면 흰 화면이 뜬다', () {
+      // 플러터가 만들어 준 기본값은 **1×1 픽셀 68바이트**였다. 스토리보드가 그것을 화면
+      // 가운데 그리니 앱을 켤 때 아무것도 없는 흰 화면이 뜬다. `flutter build ipa` 도
+      // "Launch image is set to the default placeholder icon" 이라고 경고했다.
+      //
+      // 디자이너가 준 마크(120·240·360)를 끼웠다. 배경은 스토리보드가 흰색이고
+      // 디자이너 스플래시도 흰 배경이라 맞는다.
+      const expected = {'LaunchImage.png': 120, 'LaunchImage@2x.png': 240, 'LaunchImage@3x.png': 360};
+      expected.forEach((name, side) {
+        final file = File('ios/Runner/Assets.xcassets/LaunchImage.imageset/$name');
+        expect(file.existsSync(), isTrue, reason: '$name 이 없다');
+        final bytes = file.readAsBytesSync();
+        expect(bytes.length, greaterThan(1000),
+            reason: '$name 이 ${bytes.length}바이트다 — 플러터 기본 플레이스홀더는 68바이트였다');
+        // PNG 의 IHDR 은 고정 자리다 — 8바이트 시그니처 + 4 길이 + 4 "IHDR" 다음이 폭·높이.
+        final w = bytes.buffer.asByteData().getUint32(16);
+        final h = bytes.buffer.asByteData().getUint32(20);
+        expect([w, h], [side, side], reason: '$name 이 ${w}x$h 다 — ${side}x$side 를 기대했다');
+      });
+    });
+
     test('아이폰 전용이다 — 아이패드 레이아웃이 없는데 지원한다고 말하지 않는다', () {
       // `TARGETED_DEVICE_FAMILY` 가 "1,2"(아이폰+아이패드)였다. 아이패드 폭에 맞춘
       // 레이아웃은 한 줄도 없는데 지원한다고 선언한 것이라, 앱스토어에 내면 13인치
