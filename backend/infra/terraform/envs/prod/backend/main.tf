@@ -56,6 +56,23 @@ resource "aws_route53_record" "api" {
   records = [aws_eip.backend.public_ip]
 }
 
+# 소개·약관 페이지의 이름 — 이슈 #611.
+#
+# `api.…` 와 같은 서버를 가리킨다. Caddy 가 이름으로 갈라 하나는 백엔드로 넘기고 하나는
+# 정적 문서를 그린다. **이 레코드가 없으면 인증서가 안 나오고**, 인증서가 없으면 스토어에
+# 적을 https 주소가 없다.
+#
+# `count` 인 것은 도메인이 아직 없을 때 전체가 막히지 않게 하려는 것이다.
+resource "aws_route53_record" "site" {
+  count = var.site_domain_name == "" ? 0 : 1
+
+  zone_id = var.route53_zone_id
+  name    = var.site_domain_name
+  type    = "A"
+  ttl     = 60
+  records = [aws_eip.backend.public_ip]
+}
+
 # ── DB 를 서버에서 떼어낸다 ─────────────────────────────────────────
 #
 # 부팅 스크립트를 고치면 인스턴스가 교체된다(user_data_replace_on_change). root 볼륨은
@@ -132,9 +149,11 @@ module "backend_host" {
     app_env_ssm_parameter_name         = var.app_env_ssm_parameter_name
     data_volume_id                     = aws_ebs_volume.data.id
     domain_name                        = var.domain_name
+    site_domain_name                   = var.site_domain_name
     acme_email                         = var.acme_email
   })
 
   # 인증서를 받으려면 부팅 시점에 이름이 이미 이 서버를 가리키고 있어야 한다.
-  depends_on = [aws_route53_record.api]
+  # 두 이름 다 먼저 있어야 한다 — Caddy 가 부팅하자마자 둘 모두의 인증서를 받으러 간다.
+  depends_on = [aws_route53_record.api, aws_route53_record.site]
 }

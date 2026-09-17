@@ -214,6 +214,18 @@ tasks.named('test') {
     inputs.files(file('Caddyfile'), file('docker-compose.prod.yml'))
             .withPropertyName('prodEdge')
             .withPathSensitivity(PathSensitivity.RELATIVE)
+    // 소개·약관 페이지의 템플릿과 **약관 원문**(#611). LegalSiteActuallyRendersTest 가
+    // Caddy 를 띄워 이 파일들을 그려 본다.
+    //
+    // 선언이 없으면 `site/privacy.html` 의 마크다운 경로를 틀리게 고쳐도 test 가
+    // UP-TO-DATE 로 건너뛴다 — 되돌려서 빨간불을 보려다 그 초록을 실제로 만났다
+    // (2026-09-17). 스토어에 적어 낸 주소가 비는 것을 아무도 못 보게 된다.
+    inputs.files(fileTree(dir: file('site'), include: '**/*'))
+            .withPropertyName('legalSiteTemplates')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(fileTree(dir: file('../app/assets/terms'), include: '**/*.md'))
+            .withPropertyName('legalDocuments')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
     // BootAssetsTravelWithTheCloneTest 가 읽는 무시 규칙(#591·#601). 이 검사가 지키는 것은
     // "부팅 자산이 클론과 이미지를 따라간다" 인데, 선언이 없으면 무시 규칙만 고쳤을 때
     // test 가 UP-TO-DATE 로 건너뛴다 — 규칙을 다시 넓혀 놓고도 초록불이 난다.

@@ -27,9 +27,16 @@ data_volume_size_gb = 20
 #   curl -s https://checkip.amazonaws.com
 allowed_ssh_cidr_blocks = ["x.x.x.x/32"]
 
-# 백엔드가 응답할 이름. pawloop.app 은 비워 둔다 — 스토어가 요구하는
-# 개인정보처리방침 페이지 자리다 (#611).
+# 백엔드가 응답할 이름.
 domain_name = "api.pawloop.app"
+
+# 소개·약관 페이지가 응답할 이름 — 이슈 #611.
+#
+# **스토어가 공개 개인정보처리방침 URL 을 요구한다.** 여기가 그 주소가 나오는 자리다:
+# https://pawloop.app/privacy
+#
+# 같은 서버·같은 Caddy 가 api 와 함께 받는다. 비워 두면 그 사이트를 안 띄우고 api 만 산다.
+site_domain_name = "pawloop.app"
 
 # 도메인을 Route 53 에서 등록하면 호스팅 영역이 자동으로 생긴다.
 #   aws route53 list-hosted-zones-by-name --dns-name pawloop.app \

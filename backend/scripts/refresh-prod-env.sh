@@ -8,6 +8,7 @@
 #
 #     APP_PUBLISHED_HOST=127.0.0.1     앱 포트를 루프백에만 (#613)
 #     PAWLOOP_DOMAIN=…                 Caddyfile 이 {$PAWLOOP_DOMAIN} 로 읽는다
+#     PAWLOOP_SITE_DOMAIN=…            소개·약관 페이지의 이름 (#611)
 #     ACME_EMAIL=…                     Caddyfile 이 {$ACME_EMAIL} 로 읽는다
 #
 # **SSM 에는 이 셋이 없다.** 그래서 손으로
@@ -47,6 +48,7 @@ keep_value() {
 }
 
 DOMAIN="$(keep_value PAWLOOP_DOMAIN)"
+SITE="$(keep_value PAWLOOP_SITE_DOMAIN)"
 EMAIL="$(keep_value ACME_EMAIL)"
 
 if [ -z "$DOMAIN" ] || [ -z "$EMAIL" ]; then
@@ -85,6 +87,8 @@ set_env_value() {
 
 set_env_value APP_PUBLISHED_HOST 127.0.0.1
 set_env_value PAWLOOP_DOMAIN "$DOMAIN"
+# 비어 있어도 그대로 쓴다 — Caddy 가 빈 이름이면 그 사이트를 안 세운다(#611).
+set_env_value PAWLOOP_SITE_DOMAIN "$SITE"
 set_env_value ACME_EMAIL "$EMAIL"
 
 AFTER_KEYS=$(grep -cE '^[A-Z_]+=' "$TMP" || true)

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐾</text></svg>">
+<style>
+  /* 앱과 같은 토큰 — app/lib/v2/theme/app_tokens.dart (#447).
+     흰 바탕에 코랄 하나. 파스텔·라일락으로 돌아가지 않는다. */
+  :root{
+    --ink:#2B2825; --ink-2:#5A544E; --ink-3:#8B837B;
+    --accent:#E04A2B; --accent-soft:#FDF1ED; --line:#EDE9E5; --bg:#FFFFFF;
+    --measure:44rem;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.75 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",
+         "Malgun Gothic",system-ui,sans-serif;
+    padding:0 20px env(safe-area-inset-bottom,0px);
+  }
+  .wrap{max-width:var(--measure); margin:0 auto; padding:28px 0 72px}
+  header.site{display:flex; align-items:center; gap:10px; padding:22px 0 6px}
+  header.site a{display:flex; align-items:center; gap:10px; text-decoration:none; color:inherit}
+  .mark{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#FF8F4D,#E04A2B);
+        display:grid;place-items:center;font-size:17px}
+  .name{font-size:19px; font-weight:800; letter-spacing:-.2px}
+  nav.site{display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 0}
+  nav.site a{
+    font-size:13.5px; font-weight:700; text-decoration:none; color:var(--ink-2);
+    border:1px solid var(--line); border-radius:11px; padding:8px 13px; background:#fff;
+  }
+  nav.site a[aria-current]{color:#fff; background:var(--accent); border-color:var(--accent)}
+  h1{font-size:27px; line-height:1.3; letter-spacing:-.4px; margin:26px 0 6px; text-wrap:balance}
+  .lede{color:var(--ink-2); margin:0 0 8px}
+  .doc{margin-top:22px}
+  .doc p{margin:0 0 15px}
+  .doc ul,.doc ol{margin:0 0 15px; padding-left:22px}
+  .doc li{margin:0 0 6px}
+  .doc strong{font-weight:800}
+  .doc code{background:var(--accent-soft); padding:1px 5px; border-radius:5px; font-size:.92em}
+  .doc table{border-collapse:collapse; width:100%; margin:0 0 15px; font-size:14.5px}
+  .doc th,.doc td{border:1px solid var(--line); padding:8px 10px; text-align:left}
+  .doc hr{border:0; border-top:1px solid var(--line); margin:26px 0}
+  .scroll{overflow-x:auto}
+  footer.site{margin-top:56px; padding-top:20px; border-top:1px solid var(--line);
+              color:var(--ink-3); font-size:13px; line-height:1.9}
+  footer.site a{color:var(--ink-2)}
+  a{color:var(--accent)}
+</style>
