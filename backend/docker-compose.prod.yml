@@ -27,6 +27,15 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # 소개·약관 페이지 (#611). `doc` 은 **앱이 읽는 그 파일들**이다 — 사본이 아니다.
+      #
+      # 아래 둘은 **겹쳐 있다** — `/srv/site/doc` 이 `/srv/site` 안이다. 그래서
+      # `backend/site/doc/` 이 저장소에 **미리 있어야 한다**(#639). 도커는 겹친 자리에
+      # 얹으려면 마운트포인트를 먼저 만들어야 하는데, `/srv/site` 가 이미 읽기 전용이라
+      # 못 만들고 **컨테이너가 시작조차 못 한다.** 겹치지 않는 mount 는 도커가 알아서
+      # 만들어 주므로, 이 규칙은 겹친 자리에만 해당한다.
+      #
+      # 2026-09-17 배포가 여기서 죽었고, Caddy 가 api 의 앞문이라 API 까지 같이 죽었다.
+      # `NestedBindMountsHaveTheirMountpointTest` 가 이 자리를 지킨다.
       - ./site:/srv/site:ro
       - ../app/assets/terms:/srv/site/doc:ro
       # 발급받은 인증서는 EBS 볼륨에 둔다. 인스턴스를 교체할 때마다 다시 받으면
