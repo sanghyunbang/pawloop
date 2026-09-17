@@ -90,7 +90,7 @@
 | targetSdk | `flutter.targetSdkVersion` | Flutter 기본값 상속 |
 | NDK | 27.0.12077973 | `app/build.gradle.kts` |
 | Java / JVM 타깃 | 17 | `sourceCompatibility`/`targetCompatibility`/`jvmTarget` |
-| applicationId / namespace | `com.cetacealab.heattrip` | (레거시 패키지명 유지) |
+| applicationId / namespace | `app.pawloop` | 도메인 `pawloop.app` 을 뒤집은 것 (#597) |
 
 ### 4.1 서명·빌드 정책
 

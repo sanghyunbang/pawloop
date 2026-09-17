@@ -50,7 +50,7 @@ class AppleClientSecretTest {
     @DisplayName("ES256 으로 서명되고 kid·iss·sub·aud·10분 수명이 Apple 규격대로다")
     void signsAppleShapedJwt() throws Exception {
         KeyPair pair = keyPair();
-        String secret = new AppleClientSecret(configured(pair, true), CLOCK).current("com.cetacealab.heattrip.signin");
+        String secret = new AppleClientSecret(configured(pair, true), CLOCK).current("app.pawloop.signin");
 
         SignedJWT jwt = SignedJWT.parse(secret);
         assertThat(jwt.verify(new ECDSAVerifier((ECPublicKey) pair.getPublic())))
@@ -59,7 +59,7 @@ class AppleClientSecretTest {
         assertThat(jwt.getHeader().getAlgorithm()).isEqualTo(JWSAlgorithm.ES256);
         assertThat(jwt.getHeader().getKeyID()).isEqualTo("KEY1234567");
         assertThat(jwt.getJWTClaimsSet().getIssuer()).isEqualTo("TEAM123456");
-        assertThat(jwt.getJWTClaimsSet().getSubject()).isEqualTo("com.cetacealab.heattrip.signin");
+        assertThat(jwt.getJWTClaimsSet().getSubject()).isEqualTo("app.pawloop.signin");
         assertThat(jwt.getJWTClaimsSet().getAudience()).containsExactly("https://appleid.apple.com");
         assertThat(jwt.getJWTClaimsSet().getIssueTime().toInstant()).isEqualTo(NOW);
         assertThat(jwt.getJWTClaimsSet().getExpirationTime().toInstant()).isEqualTo(NOW.plus(AppleClientSecret.LIFETIME));

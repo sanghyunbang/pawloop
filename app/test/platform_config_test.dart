@@ -9,7 +9,131 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+/// 앱 식별자 — 사기로 한 도메인 `pawloop.app` 을 뒤집은 것 (#597).
+///
+/// 이 값은 안드로이드 · iOS · 소스 폴더 경로 · 문서에 각각 따로 적힌다. 한 곳만 바꾸고
+/// 나머지를 잊는 것이 이 계열의 전형적인 사고인데, 그러면 **빌드는 통과하고** 스토어
+/// 등록이나 OAuth 콘솔에서야 어긋난 것이 드러난다.
+const String kAppId = 'app.pawloop';
+
 void main() {
+  // 식별자가 박히는 자리가 여섯이다. 하나씩 따로 재면 "한 곳만 고쳤다" 를 못 잡는다 —
+  // 그래서 전부 같은 상수와 대조한다.
+  group('앱 식별자가 모든 자리에서 같다 (#597)', () {
+    String read(String path) {
+      final file = File(path);
+      expect(file.existsSync(), isTrue, reason: '$path 가 없다');
+      return file.readAsStringSync();
+    }
+
+    test('안드로이드 namespace 와 applicationId', () {
+      final gradle = read('android/app/build.gradle.kts');
+      expect(gradle, contains('namespace = "$kAppId"'));
+      expect(gradle, contains('applicationId = "$kAppId"'));
+    });
+
+    test('안드로이드 매니페스트 둘 (main · debug)', () {
+      expect(read('android/app/src/main/AndroidManifest.xml'),
+          contains('package="$kAppId"'));
+      expect(read('android/app/src/debug/AndroidManifest.xml'),
+          contains('package="$kAppId"'));
+    });
+
+    test('MainActivity 의 package 선언과 폴더 경로가 식별자를 따른다', () {
+      // 폴더가 package 와 다르면 코틀린은 경고만 내고 넘어가는 경우가 있다.
+      // 그래서 경로를 식별자에서 **만들어** 확인한다 — 손으로 적은 경로를 믿지 않는다.
+      final dir = 'android/app/src/main/kotlin/${kAppId.replaceAll('.', '/')}';
+      final src = read('$dir/MainActivity.kt');
+
+      // `contains('package $kAppId')` 로 물으면 `package app.pawloopX` 도 통과한다.
+      // 선언을 뽑아서 통째로 견준다.
+      final declared =
+          RegExp(r'^package\s+([\w.]+)', multiLine: true).firstMatch(src)?.group(1);
+      expect(declared, kAppId, reason: 'MainActivity 의 package 선언이 식별자와 다르다');
+    });
+
+    test('iOS 번들 ID — pbxproj 의 모든 타깃', () {
+      final pbx = read('ios/Runner.xcodeproj/project.pbxproj');
+      final ids = RegExp(r'PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);')
+          .allMatches(pbx)
+          .map((m) => m.group(1)!.trim())
+          .toSet();
+
+      expect(ids, isNotEmpty, reason: 'pbxproj 에 번들 ID 가 하나도 없다 — 이 검사가 볼 곳이 사라졌다');
+      // 앱 타깃은 식별자 그대로, 테스트 타깃은 `<식별자>.RunnerTests` 다.
+      //
+      // `startsWith` 로 물으면 안 된다 — `app.pawloopX` 도 통과한다. 이 저장소에서
+      // 부분 문자열로 물었다가 검사가 아무것도 안 보던 일이 이미 세 번 있었다 (#601·#603).
+      expect(ids, {kAppId, '$kAppId.RunnerTests'},
+          reason: 'pbxproj 의 번들 ID 가 식별자와 어긋난다');
+    });
+
+    test('iOS CFBundleURLName 이 번들 ID 와 같다', () {
+      expect(read('ios/Runner/Info.plist'), contains('<string>$kAppId</string>'));
+    });
+
+    test('네이버 지도로 넘길 때 쓰는 appname 도 같은 식별자다', () {
+      // 네이버 SDK 는 이 값을 패키지명과 대조한다. 어긋나면 지도 앱이 안 열린다.
+      expect(read('lib/v2/data/external_maps.dart'), contains('appname=$kAppId'));
+    });
+
+    test('옛 식별자가 앱 안에 남아 있지 않다', () {
+      for (final path in [
+        'android/app/build.gradle.kts',
+        'android/app/src/main/AndroidManifest.xml',
+        'android/app/src/debug/AndroidManifest.xml',
+        'ios/Runner/Info.plist',
+        'ios/Runner.xcodeproj/project.pbxproj',
+        'lib/v2/data/external_maps.dart',
+      ]) {
+        expect(read(path), isNot(contains('cetacealab')),
+            reason: '$path 에 옛 식별자가 남아 있다');
+      }
+    });
+
+    // 저장소 전체를 훑는다 — 문서에 옛 식별자가 남으면 다음 사람이 그걸 보고
+    // 콘솔에 등록한다. 빌드는 멀쩡한 채로 로그인만 안 되는 종류의 사고다.
+    //
+    // 역사 기록 둘은 일부러 남긴다. 그때의 결정을 적은 글이라 고치면 기록이 아니라
+    // 위조가 된다 — decision-log 의 그 줄들에는 "실행됨" 표시를 덧붙여 뒀다.
+    test('저장소 문서에도 옛 식별자가 남아 있지 않다 — 역사 기록 둘만 예외', () {
+      const history = {
+        '../docs/99-decisions/decision-log.md',
+        'docs/legacy/07-implementation-plan.md',
+      };
+
+      final offenders = <String>[];
+      for (final root in ['.', '../docs', '../backend/src', '../README.md']) {
+        final entity = FileSystemEntity.typeSync(root) == FileSystemEntityType.file
+            ? [File(root)]
+            : Directory(root)
+                .listSync(recursive: true)
+                .whereType<File>()
+                .where((f) => !f.path.contains('${Platform.pathSeparator}build${Platform.pathSeparator}'))
+                .where((f) => !f.path.contains('.dart_tool'))
+                .where((f) => !f.path.contains('${Platform.pathSeparator}Pods${Platform.pathSeparator}'))
+                .where((f) => !f.path.contains('${Platform.pathSeparator}bin${Platform.pathSeparator}'))
+                .toList();
+
+        for (final file in entity) {
+          final normalized = file.path.replaceAll(r'\', '/');
+          if (history.any((h) => normalized.endsWith(h.replaceAll('../', '')))) continue;
+          if (normalized.endsWith('platform_config_test.dart')) continue;
+          String text;
+          try {
+            text = file.readAsStringSync();
+          } catch (_) {
+            continue; // 텍스트가 아니면 지나간다
+          }
+          if (text.contains('cetacealab')) offenders.add(normalized);
+        }
+      }
+
+      expect(offenders, isEmpty,
+          reason: '옛 식별자가 남은 파일이 있다. 역사 기록이라면 위 history 목록에 더한다.');
+    });
+  });
+
   group('ios/Runner/Info.plist', () {
     late String plist;
 
@@ -27,7 +151,7 @@ void main() {
     test('등록된 스킴이 heattrip 이고 URL 이름이 번들 ID 와 같다', () {
       expect(plist, contains('<string>heattrip</string>'));
       expect(plist, contains('CFBundleURLName'));
-      expect(plist, contains('<string>com.cetacealab.heattrip</string>'));
+      expect(plist, contains('<string>app.pawloop</string>'));
     });
 
     test('사진 고르기 문구가 있다 — 커뮤니티 글에 사진을 붙인다 (#429)', () {

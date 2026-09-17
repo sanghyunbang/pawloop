@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.cetacealab.heattrip">
+    package="app.pawloop">
 
     <!-- 네트워크/위치 권한  -->
     <uses-permission android:name="android.permission.INTERNET"/>

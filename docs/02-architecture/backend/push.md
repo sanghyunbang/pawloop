@@ -87,7 +87,7 @@ PushDispatcher.onMessagePosted  @TransactionalEventListener(AFTER_COMMIT) @Async
 
 ## 7. 남은 것 (앱 · 사장님)
 
-- Firebase 프로젝트 → Android(`com.cetacealab.heattrip`) · iOS 앱 등록 → `google-services.json` · `GoogleService-Info.plist` · 서비스 계정 JSON · APNs `.p8`(Apple Developer 계정 — #301 과 같은 계정).
+- Firebase 프로젝트 → Android(`app.pawloop`) · iOS 앱 등록 → `google-services.json` · `GoogleService-Info.plist` · 서비스 계정 JSON · APNs `.p8`(Apple Developer 계정 — #301 과 같은 계정).
 - 앱: `firebase_core` · `firebase_messaging` · `flutter_local_notifications`(Android 포그라운드) · 시작·로그인 때 `PUT /api/push/tokens` · 알림 설정 화면(전체 끄기 · 방별 음소거 — 방 목록의 `muted`).
 - `privacy_ko.md` 에 기기 토큰 항목(완료 조건 4) — 수집이 시작되는 앱 PR 에서 버전과 함께 올린다.
 - 완료 조건 1(실기기 도착)은 사람이 본다 — Android 실기기 + iOS 실기기 + APNs 키.

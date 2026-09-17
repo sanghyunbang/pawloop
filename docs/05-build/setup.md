@@ -129,7 +129,7 @@ flutter build apk --release --dart-define=API_BASE_URL=https://api.heattrip.link
 ### 네이버 지도 콘솔 등록 (지도 인증 실패 방지)
 
 - 네이버 클라우드 플랫폼 콘솔에서 Mobile Dynamic Map 애플리케이션을 만들고 **Client ID**를 발급.
-- Android 패키지명 **`com.cetacealab.heattrip`** 을 허용목록에 등록해야 인증이 통과한다(`onAuthFailed` 로그로 확인 가능).
+- Android 패키지명 **`app.pawloop`** 을 허용목록에 등록해야 인증이 통과한다(`onAuthFailed` 로그로 확인 가능).
 
 ---
 
@@ -261,7 +261,7 @@ flutter run --dart-define-from-file=dart-define.json \
 
 | 플랫폼 | 파일 | 내용 |
 | --- | --- | --- |
-| iOS | `app/ios/Runner/Info.plist` | `CFBundleURLTypes` → `CFBundleURLName=com.cetacealab.heattrip`, `CFBundleURLSchemes=[heattrip]` |
+| iOS | `app/ios/Runner/Info.plist` | `CFBundleURLTypes` → `CFBundleURLName=app.pawloop`, `CFBundleURLSchemes=[heattrip]` |
 | Android | `app/android/app/src/main/AndroidManifest.xml` | `com.linusu.flutter_web_auth_2.CallbackActivity` + `scheme=heattrip`, `host=login-callback` |
 
 > [!WARNING]
@@ -355,7 +355,7 @@ dart run flutter_launcher_icons
 - [ ] `flutter --version` → 3.44.4 / Dart 3.12.2
 - [ ] `flutter pub get` 성공 (`.env` 없이 그냥 된다)
 - [ ] `cp app/dart-define.example.json app/dart-define.json` 후 2개 키(`API_BASE_URL`, `NAVER_MAP_CLIENT_ID`) 채움 — 이 파일은 커밋되지 않는다. **관광공사 키는 여기 없다**(#40)
-- [ ] 네이버 콘솔에 패키지명 `com.cetacealab.heattrip` 등록
+- [ ] 네이버 콘솔에 패키지명 `app.pawloop` 등록
 - [ ] 에뮬레이터 부팅 후 `flutter run --dart-define-from-file=dart-define.json` — 지도 탭에 KTO 실데이터(서울) 표시되면 키 정상
 - [ ] (로컬 백엔드 쓸 때) MySQL `heat_trip_db` 생성 + `./gradlew bootRun` + 앱에 `--dart-define=API_BASE=http://10.0.2.2:8080` 추가
 - [ ] (구글 로그인 테스트할 때) `adb reverse tcp:8080 tcp:8080` + 백엔드 `APP_BASE_URL=http://localhost:8080` + 앱 `--dart-define=API_BASE=http://localhost:8080` → [5.4](#54-소셜-로그인구글-로컬-테스트)
