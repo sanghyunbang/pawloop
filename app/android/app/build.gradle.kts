@@ -70,9 +70,22 @@ android {
     val keystoreFile = rootProject.file("key.properties")
     val hasKeystore = keystoreFile.exists()
 
-    // ③ 필요 시에만 key.properties를 로드(없거나 디버그면 로드하지 않음)
+    // ③ 파일이 있으면 **태스크 종류와 무관하게** 읽는다 (#646)
+    //
+    //    예전에는 `hasKeystore && isReleaseTask` 였다. "디버그면 안 읽어도 된다" 는 뜻이었는데,
+    //    아래 `signingConfigs.create("release") { ... }` 의 블록이 **설정 단계에서 즉시 실행된다.**
+    //    지연 평가가 아니다. 그래서 디버그 태스크에서도 그 블록이 돌고, 안 읽어 둔 빈 Properties
+    //    에서 `req("storeFile")` 이 예외를 던졌다 — **서명 파일을 갖춘 기계에서만** 디버그 빌드가
+    //    막혔다. 그 기계가 곧 실기기 확인과 스토어 제출을 하는 기계다(2026-09-17 실측, #646).
+    //
+    //    `create("release")` 를 `isReleaseTask` 로 막는 방법은 못 쓴다. 아래 buildTypes 의 릴리스
+    //    블록이 `hasKeystore` 만 보고 `signingConfigs.getByName("release")` 를 부르는데, 그 블록도
+    //    설정 단계에 돌기 때문이다 — 없는 이름을 찾다 다른 예외가 난다.
+    //
+    //    불완전한 key.properties 면 디버그도 실패한다. 그건 의도다 — 서명 설정이 깨진 채로 조용히
+    //    가는 것보다 낫고, 릴리스의 엄격함(#634)도 그대로다.
     val keystoreProps = Properties().also { props ->
-        if (hasKeystore && isReleaseTask) {
+        if (hasKeystore) {
             FileInputStream(keystoreFile).use(props::load)
         }
     }
@@ -94,8 +107,8 @@ android {
         // 릴리스: 키파일이 실제 존재할 때만 구성 생성
         if (hasKeystore) {
             create("release") {
-                // 릴리스 태스크일 때만 로드했으므로 isReleaseTask가 false인 경우
-                // 아래 req() 호출은 실행되지 않음(Gradle은 지연평가 형태로 동작)
+                // 이 블록은 **설정 단계에서 즉시** 실행된다(지연 평가가 아니다). 그래서 위 ③ 이
+                // 태스크 종류와 무관하게 읽어 둬야 한다 — #646.
                 storeFile = file(keystoreProps.req("storeFile"))
                 storePassword = keystoreProps.req("storePassword")
                 keyAlias = keystoreProps.req("keyAlias")
