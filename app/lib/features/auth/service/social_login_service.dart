@@ -33,6 +33,10 @@ typedef WebAuthenticator =
     Future<String> Function({
       required String url,
       required String callbackUrlScheme,
+
+      /// 브라우저를 어떤 깃발로 여는지 (#655). 테스트가 이 값을 재서 "일회용으로
+      /// 여는가" 를 잠근다 — 실기기에서만 드러나는 종류라 값으로 막는다.
+      required FlutterWebAuth2Options options,
     });
 
 /// 1회용 코드를 토큰으로 바꾸는 왕복. 테스트에서 갈아끼운다.
@@ -69,9 +73,11 @@ class SocialLoginService {
   static Future<String> _webAuthenticate({
     required String url,
     required String callbackUrlScheme,
+    required FlutterWebAuth2Options options,
   }) => FlutterWebAuth2.authenticate(
     url: url,
     callbackUrlScheme: callbackUrlScheme,
+    options: options,
   );
 
   /// 실제 인증 왕복. `flutter_web_auth_2` 는 플랫폼 채널이라 `flutter_test` 안에서는
@@ -135,7 +141,16 @@ class SocialLoginService {
       // ※ callbackUrl 을 로그로 찍지 마라 — URL 에 1회용 코드가 들어 있다.
       callbackUrl = await authenticator(
         url: '$baseUrl/oauth2/authorization/$provider?state=$state',
+        // 브라우저를 **일회용**으로 연다 (#655). 기본 깃발은 NEW_TASK 라 브라우저가 앱과
+        // 별개 태스크로 뜨는데, 콜백을 받는 CallbackActivity 는 자기 태스크만 정리하고
+        // (finishAndRemoveTask) 앱을 앞으로 끌어내지 않는다. 그래서 브라우저가 스스로 닫지
+        // 않으면 로그인이 끝나고도 그 창이 앞에 남는다 — 카카오에서 실제로 그랬다. 로그인은
+        // 됐는데 사용자에게는 멈춘 것으로 보이고, 시도할 때마다 브라우저 태스크가 쌓인다.
+        //
+        // NO_HISTORY 가 붙으면 그 액티비티는 화면을 벗어나는 순간 스택에서 사라진다.
+        // 구글이 되는 것처럼 보였던 것은 그 브라우저가 우연히 자기 탭을 닫아 준 것뿐이다.
         callbackUrlScheme: 'pawloop',
+        options: const FlutterWebAuth2Options(intentFlags: ephemeralIntentFlags),
       );
     } catch (e) {
       // 예외 메시지에 콜백 URL(=코드)이 섞여 들어올 수 있어 타입만 남긴다.

@@ -10,6 +10,7 @@
 // (완료 조건 7 은 수동 체크리스트로 남는다).
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
@@ -61,6 +62,7 @@ void main() {
     SocialLoginService.authenticator = ({
       required url,
       required callbackUrlScheme,
+      required options,
     }) async {
       final state = forceState ?? _stateFrom(url);
       return 'pawloop://login-callback?code=$code&state=$state';
@@ -73,6 +75,7 @@ void main() {
       SocialLoginService.authenticator = ({
         required url,
         required callbackUrlScheme,
+        required options,
       }) async {
         seenUrl = url;
         return 'pawloop://login-callback?error=access_denied';
@@ -94,6 +97,7 @@ void main() {
       SocialLoginService.authenticator = ({
         required url,
         required callbackUrlScheme,
+        required options,
       }) async {
         seen.add(_stateFrom(url));
         return 'pawloop://login-callback?error=access_denied';
@@ -105,6 +109,28 @@ void main() {
       expect(seen.toSet().length, 2);
     });
   });
+
+    // 브라우저를 **일회용**으로 여는가 (#655). 이 값이 기본값으로 돌아가면 로그인이 끝나도
+    // 브라우저 창이 앞에 남는다 — 로그인은 됐는데 사용자에게는 멈춘 것으로 보이고, 시도할
+    // 때마다 브라우저 태스크가 쌓인다(2026-09-17 카카오에서 실제로 그랬다). 실기기에서만
+    // 드러나는 종류라 값으로 막는다.
+    test('브라우저를 일회용 깃발로 연다 — 끝나면 그 창이 남지 않는다', () async {
+      FlutterWebAuth2Options? seen;
+      SocialLoginService.authenticator = ({
+        required url,
+        required callbackUrlScheme,
+        required options,
+      }) async {
+        seen = options;
+        return 'pawloop://login-callback?error=access_denied';
+      };
+
+      await SocialLoginService.signIn('kakao');
+
+      expect(seen, isNotNull, reason: '인증자가 아예 안 불렸다');
+      expect(seen!.intentFlags, ephemeralIntentFlags,
+          reason: '기본값으로 돌아가면 NO_HISTORY 가 빠져 브라우저가 앞에 남는다');
+    });
 
   group('성공 경로', () {
     test('state 가 맞으면 코드를 교환해 토큰을 저장하고 성공을 돌려준다', () async {
@@ -145,6 +171,7 @@ void main() {
       SocialLoginService.authenticator = ({
         required url,
         required callbackUrlScheme,
+        required options,
       }) async {
         sentState = _stateFrom(url);
         return 'pawloop://login-callback?code=C&state=$sentState';
@@ -194,6 +221,7 @@ void main() {
       SocialLoginService.authenticator = ({
         required url,
         required callbackUrlScheme,
+        required options,
       }) async => 'pawloop://login-callback?code=CODE-1';
 
       expect((await SocialLoginService.signIn('kakao')).ok, isFalse);
@@ -248,6 +276,7 @@ void main() {
       SocialLoginService.authenticator = ({
         required url,
         required callbackUrlScheme,
+        required options,
       }) async => 'pawloop://login-callback?error=access_denied';
       var exchangeCalled = false;
       SocialLoginService.exchanger = ({
@@ -269,6 +298,7 @@ void main() {
       SocialLoginService.authenticator = ({
         required url,
         required callbackUrlScheme,
+        required options,
       }) async => 'pawloop://login-callback?error=account_state_invalid';
 
       expect(

@@ -116,7 +116,7 @@ void main() {
       Future<String> Function() onAuthenticate,
     ) async {
       SocialLoginService.authenticator =
-          ({required url, required callbackUrlScheme}) => onAuthenticate();
+          ({required url, required callbackUrlScheme, required options}) => onAuthenticate();
 
       await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
       await tester.tap(find.text('카카오로 시작하기'));
