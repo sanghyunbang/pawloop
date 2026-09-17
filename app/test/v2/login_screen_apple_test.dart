@@ -87,7 +87,8 @@ void main() {
 
   testWidgets('누르면 카카오·구글과 같은 왕복을 apple 로 시작한다', (tester) async {
     String? seenUrl;
-    SocialLoginService.authenticator = ({required url, required callbackUrlScheme}) async {
+    SocialLoginService.authenticator =
+          ({required url, required callbackUrlScheme, required options}) async {
       seenUrl = url;
       return 'pawloop://login-callback?error=apple_not_configured';
     };
