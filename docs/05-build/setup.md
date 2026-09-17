@@ -83,17 +83,23 @@ flutter run --dart-define-from-file=dart-define.json
 ```jsonc
 // app/dart-define.json  (추적되지 않음 / 추적되는 건 값이 빈 dart-define.example.json)
 {
-  "API_BASE_URL": "https://api.heattrip.link",
+  "API_BASE_URL": "https://api.pawloop.app",
   "NAVER_MAP_CLIENT_ID": "<네이버 클라우드 Client ID>"
 }
 ```
+
+> [!IMPORTANT]
+> **운영 주소는 `https://api.pawloop.app` 이다.** 2026-09-17 에 `api.heattrip.link` 에서 옮겼고,
+> 옛 주소는 이제 Cloudflare 530 을 준다 — 살아 있지 않다. 그 주소로 빌드하면 앱이 서버에 못 붙는데,
+> 화면에는 "연결이 불안정해요" 로만 보여서 원인을 찾기 어렵다([#682](https://github.com/sanghyunbang/heattrip/issues/682)).
+> 옛 주소가 문서에 다시 기어들어오는 것은 `.github/scripts/check-docs-drift.sh` 가 막는다.
 
 ### 3.2 키별 설명
 
 | 키 | 읽는 위치 | 기본값 | 의미 / 주의 |
 | --- | --- | --- | --- |
 | `API_BASE` | `Env.apiBase` | (없음) | 로컬/스테이징 전환용 override. `API_BASE_URL`보다 **우선**한다. |
-| `API_BASE_URL` | `Env.apiBase` | (없음) | 백엔드 베이스 URL. 운영은 `https://api.heattrip.link`. |
+| `API_BASE_URL` | `Env.apiBase` | (없음) | 백엔드 베이스 URL. 운영은 `https://api.pawloop.app`. |
 | `NAVER_MAP_CLIENT_ID` | `Env.naverMapClientId` | `''` | 네이버 지도 SDK 초기화(`FlutterNaverMap().init`). 비어 있으면 지도 탭이 비활성(안내문)만 표시된다. |
 | `UPLOAD_LOCATION` | `LocationUploadPolicy` | `false` | **좌표를 서버로 보낼지.** 기본이 안전한 쪽이다 — 켜려면 명시해야 한다. 위치기반서비스사업 신고 전에는 켜면 안 된다([#235](https://github.com/sanghyunbang/heattrip/issues/235)). |
 
@@ -112,7 +118,7 @@ flutter run --dart-define-from-file=dart-define.json
 
 ```bash
 # 좌표를 안 보내는 빌드. UPLOAD_LOCATION 과 NAVER_MAP_CLIENT_ID 를 **주지 않는다.**
-flutter build apk --release --dart-define=API_BASE_URL=https://api.heattrip.link
+flutter build apk --release --dart-define=API_BASE_URL=https://api.pawloop.app
 ```
 
 | 무엇이 | 왜 |
@@ -165,7 +171,7 @@ flutter run --dart-define-from-file=dart-define.json \
 
 ## 5. 로컬 백엔드 실행 (선택)
 
-백엔드 루트: `heattrip/backend` (Spring Boot 3.5.4, **Java 21**, MySQL). 앱을 로컬 백엔드에 붙이지 않고 운영 원격(`api.heattrip.link`)만 쓸 거면 이 절은 건너뛰어도 된다.
+백엔드 루트: `heattrip/backend` (Spring Boot 3.5.4, **Java 21**, MySQL). 앱을 로컬 백엔드에 붙이지 않고 운영 원격(`api.pawloop.app`)만 쓸 거면 이 절은 건너뛰어도 된다.
 
 ### 5.1 사전 조건
 
@@ -230,7 +236,7 @@ OAuth 클라이언트는 이미 만들어져 있다(`backend/.env` 에 `GOOGLE_C
 
 | 환경 | 등록할 redirect URI |
 | --- | --- |
-| 운영/스테이징 | `https://api.heattrip.link/login/oauth2/code/google` |
+| 운영/스테이징 | `https://api.pawloop.app/login/oauth2/code/google` |
 | 로컬 개발 | `http://localhost:8080/login/oauth2/code/google` |
 
 #### 로컬 왕복 절차 (안드로이드 에뮬레이터)
@@ -257,12 +263,14 @@ flutter run --dart-define-from-file=dart-define.json \
 
 #### 딥링크 복귀 설정 (이게 없으면 로그인이 끝나도 앱으로 못 돌아온다)
 
-`flutter_web_auth_2` 는 로그인 후 `heattrip://login-callback?code=...&state=...` 로 앱에 돌아온다(#14 이전에는 `?token=...` 이었다). 양 플랫폼 모두 OS 에 스킴이 등록돼 있어야 한다.
+`flutter_web_auth_2` 는 로그인 후 `pawloop://login-callback?code=...&state=...` 로 앱에 돌아온다(#14 이전에는 `?token=...` 이었다). 양 플랫폼 모두 OS 에 스킴이 등록돼 있어야 한다.
 
 | 플랫폼 | 파일 | 내용 |
 | --- | --- | --- |
-| iOS | `app/ios/Runner/Info.plist` | `CFBundleURLTypes` → `CFBundleURLName=app.pawloop`, `CFBundleURLSchemes=[heattrip]` |
-| Android | `app/android/app/src/main/AndroidManifest.xml` | `com.linusu.flutter_web_auth_2.CallbackActivity` + `scheme=heattrip`, `host=login-callback` |
+| iOS | `app/ios/Runner/Info.plist` | `CFBundleURLTypes` → `CFBundleURLName=app.pawloop`, `CFBundleURLSchemes=[pawloop]` |
+| Android | `app/android/app/src/main/AndroidManifest.xml` | `com.linusu.flutter_web_auth_2.CallbackActivity` + `scheme=pawloop`, `host=login-callback` |
+
+> 스킴은 2026-09 에 `heattrip` 에서 `pawloop` 으로 옮겼다([#649](https://github.com/sanghyunbang/heattrip/issues/649)) — 같은 이름표를 단 예전 앱이 콜백을 가로챌 수 있었기 때문이다. 서버가 허용하는 복귀 주소는 `app.security.oauth.redirect-allowlist` 가 정하고 기본값이 `pawloop://login-callback` 이다.
 
 > [!WARNING]
 > 안드로이드 intent-filter 는 **`MainActivity` 가 아니라 플러그인의 `CallbackActivity`** 에 달아야 한다. 플러그인은 `CallbackActivity.onCreate` 에서만 대기 중인 결과를 완료시키기 때문에, `MainActivity` 로 받으면 앱은 앞으로 나오지만 `authenticate()` 의 Future 가 영원히 끝나지 않는다.

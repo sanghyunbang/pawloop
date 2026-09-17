@@ -16,7 +16,7 @@
 | 항목 | 값 |
 |---|---|
 | 백엔드 | Spring Boot (Java/Kotlin 혼용) + MySQL(공간형 POINT/LINESTRING) |
-| Base URL(운영) | `https://api.heattrip.link` (도메인 유지, 서비스명만 Pawloop로 피벗) |
+| Base URL(운영) | `https://api.pawloop.app` (2026-09-17 에 `api.heattrip.link` 에서 옮겼다 — 옛 주소는 530 이다) |
 | Base URL(로컬) | `http://10.0.2.2:8080` (안드로이드 에뮬레이터 → 호스트 localhost) |
 | 프론트 진입점 | `app/lib/core/config/env.dart` → `Env.apiBase` (`--dart-define=API_BASE` > `--dart-define=API_BASE_URL` > `Env.localEmulator`) |
 | 인증 | JWT Bearer 토큰 (`Authorization: Bearer <token>`) |
@@ -1098,7 +1098,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 **2026-09-13 이전에는 이 경로가 폰 사진을 못 받았습니다.** `spring.servlet.multipart` 상한이 Spring 기본값(파일당 1MB)이었는데 폰 사진은 3~8MB 입니다 — 실제 사진으로 쓰인 적이 없어서 아무도 못 봤습니다.
 
-**영상은 이 문으로 안 옵니다 — 세 단계입니다.** `api.heattrip.link` 앞의 Cloudflare 가 요청 본문을 100MB 까지만 받습니다.
+**영상은 이 문으로 안 옵니다 — 세 단계입니다.** `api.pawloop.app` 앞의 Cloudflare 가 요청 본문을 100MB 까지만 받습니다.
 
 ```json
 // ① POST /media/videos   { "contentType": "video/mp4", "size": 31457280, "width": 1280, "height": 720, "durationMs": 42000 }

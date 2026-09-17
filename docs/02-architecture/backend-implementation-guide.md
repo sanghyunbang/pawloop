@@ -136,7 +136,7 @@ package com.heattrip.heat_trip_backend.care.api;
 ## 3. 공통 building blocks (리소스마다 반복되는 것)
 
 ### 3.1 인증 — 이미 있는 것 재사용
-- OAuth2 로그인 + JWT 발급/검증은 **`OAuth/` 패키지에 이미 구현**돼 있습니다(카카오/네이버/구글, `JWTProvider`, `JWTAuthenticationFilter`, 성공 시 `heattrip://login-callback?code=&state=` — #14 이전에는 `?token=` 이었다).
+- OAuth2 로그인 + JWT 발급/검증은 **`OAuth/` 패키지에 이미 구현**돼 있습니다(카카오/네이버/구글, `JWTProvider`, `JWTAuthenticationFilter`, 성공 시 `pawloop://login-callback?code=&state=` — #14 이전에는 `?token=` 이었고, 스킴은 #649 이전에는 `heattrip://` 였다).
 - 컨트롤러에서 현재 사용자: `HttpServletRequest`에서 필터가 넣어준 인증 정보로 userId(=email subject) 추출. (기존 `SocialController`가 이 방식)
 - 인증 필요 엔드포인트: 쓰기(산책 저장, 글 작성, 북마크, 강아지 CRUD). 읽기(장소/글 목록)는 비인증 허용.
 

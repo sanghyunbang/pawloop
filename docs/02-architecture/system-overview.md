@@ -44,7 +44,7 @@ flowchart TB
         DURU["두루누비<br/>걷기여행길 (더미)"]
     end
 
-    subgraph backend["☁️ Spring Boot 백엔드 (api.heattrip.link : 8080)"]
+    subgraph backend["☁️ Spring Boot 백엔드 (api.pawloop.app : 8080)"]
         AUTH["auth / OAuth2 + JWT<br/>카카오·구글"]
         TOUR["tour · explore<br/>장소 조회/캐시/필터"]
         SOCIAL["social · bookmark<br/>커뮤니티·북마크 (예정)"]
@@ -238,7 +238,7 @@ sequenceDiagram
 
 | 항목 | 값 | 근거 |
 | --- | --- | --- |
-| 운영 백엔드 | `api.heattrip.link` (원격, 8080) | `--dart-define=API_BASE_URL` |
+| 운영 백엔드 | `api.pawloop.app` (원격, 8080) | `--dart-define=API_BASE_URL` |
 | 로컬 개발 | `http://10.0.2.2:8080` (에뮬레이터→호스트) | `env.dart` 폴백 |
 | 지도 인증 | 네이버 Client ID + 패키지명 허용목록 | `main.dart` init |
 | 이미지 | AWS S3 | 백엔드 `S3` 모듈 |
