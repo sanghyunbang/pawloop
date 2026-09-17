@@ -3,6 +3,7 @@ package com.heattrip.heat_trip_backend.chatweb;
 import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.S3.MediaAttachment.AttachedMedia;
 import com.heattrip.heat_trip_backend.moderation.Blocks;
+import com.heattrip.heat_trip_backend.moderation.ContentFilter;
 import com.heattrip.heat_trip_backend.chat.ChatMessagePageView;
 import com.heattrip.heat_trip_backend.chat.ChatMessageSendResult;
 import com.heattrip.heat_trip_backend.chat.ChatMessageSender;
@@ -75,16 +76,27 @@ public class ChatMessages {
     private final Blocks blocks;
     private final MediaAttachment media;
 
+    /**
+     * 말풍선을 보내기 전에 거른다 — 이슈 #681. {@code moderation} 모듈의 공개 표면이다.
+     *
+     * <p><b>왜 {@code chat} 이 아니라 여기인가.</b> {@code chat} 은 경계 밖의 우리 패키지를
+     * 하나도 못 본다({@code allowedDependencies = {}} · {@code ChatBoundaryArchitectureTest}).
+     * 이름·가리기·사진이 이미 이 자리에서 붙는 것과 같은 이유로, 거르기도 여기다.
+     */
+    private final ContentFilter contentFilter;
+
     /** 삭제 — 메시지의 톰스톤과 사진 제거를 한 경계에 묶는다. */
     private final TransactionTemplate sameTransaction;
 
     public ChatMessages(ChatRoomService chatRooms, ChatMessageSender sender, ChatSenderNames senderNames,
-                        Blocks blocks, MediaAttachment media, PlatformTransactionManager transactions) {
+                        Blocks blocks, MediaAttachment media, ContentFilter contentFilter,
+                        PlatformTransactionManager transactions) {
         this.chatRooms = chatRooms;
         this.sender = sender;
         this.senderNames = senderNames;
         this.blocks = blocks;
         this.media = media;
+        this.contentFilter = contentFilter;
         this.sameTransaction = new TransactionTemplate(transactions);
     }
 
@@ -109,6 +121,10 @@ public class ChatMessages {
      * 자기 자신에 대해서는 둘이 같으므로 {@code users} 를 다시 읽지 않는다. 가리기도 자기 말에는 없다.
      */
     public Sent send(long roomId, User user, ChatSendRequest request) {
+        // 거르기가 전송 앞에 선다 (#681, 애플 App Review Guideline 1.2). 번호도 안 태우고
+        // 사진도 안 붙는다 — INSERT 자체가 일어나지 않기 때문이다. 캡션이 없는 사진
+        // 메시지는 검사할 글이 없는 자리라 그대로 지나간다.
+        contentFilter.requireClean(request.body());
         String type = contentTypeOf(request);
         Long mediaId = request.mediaId();
         List<AttachedMedia> attached = new ArrayList<>(1);

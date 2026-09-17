@@ -17,6 +17,16 @@
  * 애노테이션으로 옮겨 적은 것</b>이다. 다음 사람이 {@code moderation → community} 를 한 줄
  * 넣으면 순환이 생기는데, 그때 잡히는 것이 설계 문장이 아니라 이 검사여야 한다.
  *
+ * <h2>거르기도 여기 있다 — 이슈 #681</h2>
+ * <p>애플 App Review Guideline <b>1.2 (User-Generated Content)</b> 는 넷을 한 묶음으로
+ * 요구한다 — <b>거르기</b> · 신고 · 차단 · 연락처. 셋은 이 모듈과 앱이 이미 들고 있었고
+ * 넷째가 없었다. {@link com.heattrip.heat_trip_backend.moderation.ContentFilter} 가 그 하나다.
+ *
+ * <p>커뮤니티 글·댓글과 채팅 말풍선이 같은 판정을 쓴다. 판정을 각 도메인에 복사하면
+ * 한쪽만 낡고, 그때 어느 쪽이 정본인지 아무도 모른다. 이 모듈에 두어도 나가는 참조는
+ * 여전히 0이다 — 검사하는 것은 <b>문자열</b>뿐이고, 그것이 글의 제목인지 말풍선인지는
+ * 부르는 쪽만 안다.
+ *
  * <h2>공개 표면은 이 패키지 <b>바로 아래</b> 타입뿐이다</h2>
  * <p>{@link com.heattrip.heat_trip_backend.moderation.Reports} 가 주고받는 것은
  * {@code ReportSnapshotInput}·{@code ReportReceipt}·{@code ReportReason}·{@code ReportTarget}
