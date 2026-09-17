@@ -1326,6 +1326,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
       // 옛 결과를 들고 있으면 새 검색어 밑에 지난 답이 깔린다.
       if (_searching) _hits = const [];
     });
+    // 치는 동안 지도에 옛 결과가 남으면 화면이 거짓말을 한다 — 목록과 같은 순간에 비운다.
+    if (_searching) unawaited(_refreshMarkers());
     _searchDebounce = Timer(const Duration(milliseconds: 220), () => _runSearch(text));
   }
 
@@ -1345,12 +1347,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
       _hits = [for (final p in found) p.withDistance(haversineMeters(_center.latitude, _center.longitude, p.lat, p.lng))];
       _searching = false;
     });
+    // **지도도 같이 바뀌어야 한다.** `_filtered` 는 검색 중이면 `_hits` 를 주는데,
+    // 마커를 다시 그리는 곳이 `_load()` 와 `onMapReady` 뿐이었다 — 에뮬레이터에서
+    // 검색어를 넣었더니 목록만 비고 마커 80개가 그대로 떠 있었다(2026-09-17).
+    await _refreshMarkers();
   }
 
   /// 한 화면에 보여 줄 검색 결과 수. 목록이 끝없이 길면 고르는 일이 더 어려워진다.
   static const int _searchLimit = 30;
 
-  void _clearSearch() {
+  Future<void> _clearSearch() async {
     _searchDebounce?.cancel();
     _searchCtrl.clear();
     _searchFocus.unfocus();
@@ -1359,6 +1365,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
       _hits = const [];
       _searching = false;
     });
+    // 지우면 주변 목록이 돌아온다 — 지도도 같이 돌아와야 한다.
+    await _refreshMarkers();
   }
 
   Widget _viewToggle() {
