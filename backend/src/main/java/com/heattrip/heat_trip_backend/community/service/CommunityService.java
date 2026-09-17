@@ -22,6 +22,7 @@ import com.heattrip.heat_trip_backend.community.repository.CommentRepository;
 import com.heattrip.heat_trip_backend.community.repository.PostBookmarkRepository;
 import com.heattrip.heat_trip_backend.community.repository.PostRepository;
 import com.heattrip.heat_trip_backend.moderation.Blocks;
+import com.heattrip.heat_trip_backend.moderation.ContentFilter;
 import com.heattrip.heat_trip_backend.moderation.ReportReason;
 import com.heattrip.heat_trip_backend.moderation.ReportReceipt;
 import com.heattrip.heat_trip_backend.moderation.ReportSnapshotInput;
@@ -117,6 +118,16 @@ public class CommunityService {
     private final Blocks blocks;
 
     /**
+     * 게시 전 거르기 — {@code moderation} 모듈의 공개 표면이다(#681).
+     *
+     * <p>애플 App Review Guideline <b>1.2</b> 가 UGC 앱에 요구하는 넷 중 넷째다. 나머지 셋은
+     * 이미 바로 위 {@link #reports}·{@link #blocks} 와 연락처가 들고 있었다.
+     *
+     * <p>화살표는 여전히 {@code community → moderation} 한 방향이다.
+     */
+    private final ContentFilter contentFilter;
+
+    /**
      * 글쓴이의 동네 코드에 이름을 붙이는 표 (#342). 사용자 모듈의 공개 면이다 —
      * 이 서비스는 이미 {@code Post.user} 로 그 모듈에 닿아 있다.
      */
@@ -138,7 +149,9 @@ public class CommunityService {
                             ReactionRepository reactions, Reports reports, Blocks blocks,
                             CourseAttachment courses, NeighborhoodCatalog neighborhoods,
                             ViewerNeighborhood viewerNeighborhood, MediaAttachment media,
-                            PostBookmarkRepository bookmarks, DogOwnership dogs) {
+                            PostBookmarkRepository bookmarks, DogOwnership dogs,
+                            ContentFilter contentFilter) {
+        this.contentFilter = contentFilter;
         this.media = media;
         this.bookmarks = bookmarks;
         this.dogs = dogs;
@@ -281,9 +294,22 @@ public class CommunityService {
         return items;
     }
 
+    /**
+     * 글을 쓴다.
+     *
+     * <h2>거르기가 저장 앞에 선다 — 이슈 #681</h2>
+     * <p>애플 App Review Guideline <b>1.2</b> 가 요구하는 "불쾌한 내용을 거르는 방법" 이다.
+     * 제목과 본문을 함께 넘긴다 — 제목만 검사하면 본문에 쓰면 되고, 그 반대도 같다.
+     * {@code loc}·{@code contentId} 는 사용자가 쓴 <b>말</b>이 아니라 장소를 가리키는 값이라
+     * 검사하지 않는다.
+     *
+     * <p>걸리면 400 이고 저장은 아예 일어나지 않는다. <b>무엇이 걸렸는지는 안 돌려준다</b> —
+     * 이유는 {@link ContentFilter} javadoc 에 있다.
+     */
     @Transactional
     public PostResponse create(User me, PostRequest request) {
         requireBoard(request.board());
+        contentFilter.requireClean(request.title(), request.body());
         Post saved = posts.save(Post.builder()
                 .user(me)
                 .board(request.board())
@@ -355,9 +381,16 @@ public class CommunityService {
                 hasMore);
     }
 
+    /**
+     * 댓글을 단다.
+     *
+     * <p>글과 같은 자리에서 거른다(#681) — 댓글은 막고 글은 안 막으면 1.2 가 요구하는 것이
+     * 반만 있는 것이고, 실제로 험한 말은 댓글에서 더 많이 나온다.
+     */
     @Transactional
     public CommentResponse addComment(User me, long postId, CommentRequest request) {
         Post post = requirePost(postId);
+        contentFilter.requireClean(request.body());
         Comment saved = comments.save(Comment.builder()
                 .post(post)
                 .user(me)
@@ -524,6 +557,9 @@ public class CommunityService {
         if (request.board() != null) {
             requireBoard(request.board());
         }
+        // 수정도 게시다 (#681). 여기를 안 막으면 빈 글을 올린 뒤 고쳐 넣는 것으로
+        // 필터가 통째로 우회된다. null 인 필드는 안 보낸 것이라 검사할 것이 없다.
+        contentFilter.requireClean(request.title(), request.body());
 
         Post post = requirePost(postId);
         requireMine(post.getUser(), me.getId(), "글");
