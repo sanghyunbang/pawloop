@@ -129,18 +129,28 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// "그냥 둘러보기" — 로그인 없이 앱을 계속 쓴다.
+  /// "그냥 둘러보기" — **언제나 홈으로** 간다.
   ///
-  /// 이 화면은 두 경로로 뜬다: 프로필 메뉴에서 `push` 로 얹히거나, 라우터가
-  /// `/auth/login` 으로 보내거나(세션 만료·보호 라우트 진입). pop 할 게 없는
-  /// 두 번째 경우까지 생각하지 않으면 버튼이 아무것도 안 하는 화면이 된다.
+  /// 예전에는 `canPop()` 이면 `pop()` 했다. 프로필에서 이 화면을 열었으면 프로필로
+  /// 돌아간다는 뜻인데, **게스트 프로필은 "로그인하세요" 말고 할 것이 없는 화면**이다.
+  /// 둘러보라고 적어 놓고 로그인하라는 화면으로 되돌리니 고리가 됐다(사장님 신고).
+  ///
+  /// 라벨이 약속한 것을 한다. 취소가 필요하면 뒤로가기가 이미 있다 — 이 버튼은
+  /// "로그인 안 하고 앱을 쓰겠다" 는 뜻이고, 그 자리는 홈이다.
+  ///
+  /// 뒤에 쌓인 화면은 함께 정리한다. 안 그러면 홈에서 뒤로가기를 눌렀을 때 방금
+  /// 떠난 로그인 화면이 다시 나온다.
   void _dismiss() {
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.pop();
+    final router = GoRouter.maybeOf(context);
+    if (router != null) {
+      // 라우터가 있으면 그것이 정본이다 — 얹힌 화면을 걷어내고 홈 페이지로.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      router.go(homeRoute);
       return;
     }
-    GoRouter.maybeOf(context)?.go(homeRoute);
+    // 라우터 밖에서 띄운 경우(위젯 테스트 등)는 닫는 것까지만 한다.
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) navigator.pop();
   }
 
   @override
