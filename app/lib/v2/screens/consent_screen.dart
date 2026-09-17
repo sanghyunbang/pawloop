@@ -116,9 +116,17 @@ class _ConsentScreenState extends State<ConsentScreen> {
                             fontWeight: FontWeight.w800,
                             color: T.textPrimary)),
                     const SizedBox(height: 10),
+                    // 좌표가 **기기 밖으로 안 나간다**는 것을 여기서 말한다. 예전에는 "위치 수집" 이라고만
+                    // 적어서 서버로 보낸다는 뜻으로 읽혔다 — 실제로는 LocationUploadPolicy 가 막고 있어
+                    // 산책을 저장해도 `path` 키가 요청에서 빠진다(#235 · UPLOAD_LOCATION 기본 false).
+                    // 위치기반서비스사업 신고를 마치고 그 값을 켜는 날 이 문장도 함께 고친다.
+                    //
+                    // "멈출 수 있어요" 는 사실이다 — me_screen 의 '위치 정보 수집 일시 중단' 토글이
+                    // LocationService.setPaused 로 디스크에 남긴다.
                     const Text(
                       '포루프는 산책 경로를 기록하기 위해 위치를 사용해요.\n'
-                      '위치 수집은 프로필에서 언제든 멈출 수 있어요.',
+                      '경로는 기기 안에만 남고 서버로 보내지 않아요.\n'
+                      '위치 이용은 프로필에서 언제든 멈출 수 있어요.',
                       style: TextStyle(fontSize: 13.5, height: 1.6, color: T.textSecondary),
                     ),
                     const SizedBox(height: 22),

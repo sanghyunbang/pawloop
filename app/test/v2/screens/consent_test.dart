@@ -16,6 +16,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/v2/data/consent_gate.dart';
+import 'package:heat_trip_flutter/v2/data/location_service.dart';
+import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/data/consent_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/consent_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/settings/legal_document_screen.dart';
@@ -213,6 +215,27 @@ void main() {
   });
 
   group('화면', () {
+    // 이 화면의 안내문은 **약속**이다. 코드가 그 약속을 지키는지 함께 잰다 — 문구만
+    // 고치거나 코드만 고치면 조용히 거짓이 된다. 2026-09-17 에 실제로 어긋나 있었다:
+    // "위치 수집은 프로필에서 언제든 멈출 수 있어요" 라고만 적혀 있어서 좌표를 서버로
+    // 보낸다는 뜻으로 읽혔는데, LocationUploadPolicy 가 기본으로 막고 있었다.
+    testWidgets('안내문이 실제 동작과 같다 — 경로는 기기 안에만 남는다', (t) async {
+      await _pump(t, gate: _gate(_FakeServer()));
+
+      expect(LocationUploadPolicy.uploadsLocation, isFalse,
+          reason: '이 전제가 깨지면 아래 문장이 거짓이 된다 — 문구부터 고쳐야 한다');
+      expect(find.textContaining('서버로 보내지 않아요'), findsOneWidget);
+    });
+
+    testWidgets('멈출 수 있다고 적었으면 멈추는 길이 실제로 있다', (t) async {
+      await _pump(t, gate: _gate(_FakeServer()));
+
+      expect(find.textContaining('언제든 멈출 수 있어요'), findsOneWidget);
+      // me_screen 의 '위치 정보 수집 일시 중단' 토글이 이걸 부른다. 함수가 사라지면
+      // 안내문이 없는 기능을 가리키게 되므로 여기서 막는다.
+      expect(LocationService.setPaused, isA<Function>());
+    });
+
     testWidgets('미체크는 빈 원이다 — 회색 체크는 "이미 체크된 비활성" 처럼 읽힌다(#325)', (t) async {
       await _pump(t, gate: _gate(_FakeServer()));
 
