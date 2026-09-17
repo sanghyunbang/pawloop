@@ -119,7 +119,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 > **Apple** 은 같은 흐름이되 서버 안이 다르다: Apple 에는 사용자 정보 엔드포인트가 없어 `openid` scope 로 받은 `id_token` 의 `sub`·`email` 로 계정을 만든다(`AppleOidcUserService`). `client_secret` 은 고정값이 아니라 개발자 키(.p8)로 서명한 10분짜리 JWT 다(`AppleClientSecret`). Apple 은 `email` 을 요청하면 콜백을 **POST**(`response_mode=form_post`)로 보내므로 운영 세션 쿠키가 `SameSite=None; Secure` 다. 키 셋(`APPLE_TEAM_ID`·`APPLE_KEY_ID`·`APPLE_PRIVATE_KEY`)이 비면 딥링크가 `error=apple_not_configured` 로 돌아온다 — 카카오·구글은 그대로다. Return URL 이 https 여야 해서 로컬 http 로는 시험할 수 없다.
 
-앱(`flutter_web_auth_2`)이 실제로 여는 URL. 소셜 인증 화면으로 302 리다이렉트되고, 성공 시 백엔드가 앱 딥링크 `heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 로 되돌린다(#14).
+앱(`flutter_web_auth_2`)이 실제로 여는 URL. 소셜 인증 화면으로 302 리다이렉트되고, 성공 시 백엔드가 앱 딥링크 `pawloop://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 로 되돌린다(#14).
 
 **딥링크에는 토큰이 없다.** 쿼리 파라미터는 정확히 `code` 와 `state` 둘뿐이고, 토큰은 §2.2 의 교환 응답 본문으로만 온다.
 
@@ -131,7 +131,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 > 앱은 그걸 쓸 필요가 없다 — 위 경로를 직접 열면 리다이렉트 한 번을 아낀다.
 > 예전에는 계약이 "미구현" 이라고 적었는데 실제로는 핸들러가 있었고 **빈 200** 을 줬다.
 > `state` 는 그 래퍼를 통과해 전달된다(#14): `GET /auth/oauth/kakao?state=S` → `Location: /oauth2/authorization/kakao?state=S`. 화이트리스트(`[A-Za-z0-9_-]{1,128}`)를 통과하지 못한 값은 붙지 않는다 — 이 값은 `Location` 헤더에 그대로 들어가므로 검증 없이 이어 붙이면 헤더 주입이 된다. **2026-08 초에는 래퍼가 쿼리를 옮기지 않아** 이 경로로 시작한 로그인이 빈 `state` 를 받아 대조에서 항상 실패했다.
-> 딥링크 스킴은 `heattrip://` 다 — 코드(`social_login_service.dart`, `OAuth2SuccessHandler.java`)가 그렇게 동작한다. 이 문서가 예전에 예시로 들던 `pawloop` 스킴은 오기였고, 그대로 구현하면 콜백을 받지 못한다.
+> 딥링크 스킴은 `pawloop://` 다 — 코드(`social_login_service.dart`, `OAuth2SuccessHandler.java`)가 그렇게 동작한다. **2026-09-17 까지는 옛 스킴이었다**(#649). 예전 패키지로 배포된 앱이 같은 스킴을 주장해서, 그 앱이 깔린 폰에서는 안드로이드가 어느 앱으로 보낼지 정하지 못해 로그인이 브라우저에 멈췄다. 커스텀 스킴은 아무 앱이나 등록할 수 있고 우선권이 없다 — 근본 해법인 App Links 는 따로 다룬다.
 
 ### 2.2 소셜 로그인 콜백 → 토큰 교환 — ✅ 구현(#14)
 

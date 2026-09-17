@@ -56,15 +56,15 @@ void main() {
 
   group('codeFromCallback', () {
     test('정상 콜백 URL에서 code 파라미터를 그대로 뽑는다', () {
-      const url = 'heattrip://login-callback?code=abcDEF123&state=$_state';
+      const url = 'pawloop://login-callback?code=abcDEF123&state=$_state';
 
       expect(codeFromCallback(url), 'abcDEF123');
     });
 
     test('code 가 없거나 공백뿐이면 null 이다', () {
-      expect(codeFromCallback('heattrip://login-callback?state=$_state'), isNull);
-      expect(codeFromCallback('heattrip://login-callback?code='), isNull);
-      expect(codeFromCallback('heattrip://login-callback?code=%20'), isNull);
+      expect(codeFromCallback('pawloop://login-callback?state=$_state'), isNull);
+      expect(codeFromCallback('pawloop://login-callback?code='), isNull);
+      expect(codeFromCallback('pawloop://login-callback?code=%20'), isNull);
     });
 
     test('URL 형식이 깨져도 예외를 던지지 않고 null 을 돌려준다', () {
@@ -78,7 +78,7 @@ void main() {
       //   FormatException: Missing extension byte (at offset 2)
       expect(
         codeFromCallback(
-            'heattrip://login-callback?code=C&state=$_state&x=%E0%A4%A'),
+            'pawloop://login-callback?code=C&state=$_state&x=%E0%A4%A'),
         isNull,
       );
     });
@@ -87,7 +87,7 @@ void main() {
   group('resolveOAuthCallback — 정상', () {
     test('state 가 일치하고 code 가 있으면 성공이고 code 를 돌려준다', () {
       final result = resolveOAuthCallback(
-        'heattrip://login-callback?code=abcDEF123&state=$_state',
+        'pawloop://login-callback?code=abcDEF123&state=$_state',
         _state,
       );
 
@@ -98,7 +98,7 @@ void main() {
 
     test('파라미터 순서가 바뀌어도 판정은 같다', () {
       final result = resolveOAuthCallback(
-        'heattrip://login-callback?state=$_state&code=abcDEF123',
+        'pawloop://login-callback?state=$_state&code=abcDEF123',
         _state,
       );
 
@@ -109,7 +109,7 @@ void main() {
   group('resolveOAuthCallback — state 대조 (완료 조건 4)', () {
     test('state 가 다르면 실패다 — 응답 바꿔치기를 막는 장치가 이것뿐이다', () {
       final result = resolveOAuthCallback(
-        'heattrip://login-callback?code=abcDEF123&state=someone-elses-state',
+        'pawloop://login-callback?code=abcDEF123&state=someone-elses-state',
         _state,
       );
 
@@ -124,7 +124,7 @@ void main() {
 
     test('state 가 아예 없으면 실패다 — 없는 것은 일치가 아니다', () {
       final result = resolveOAuthCallback(
-        'heattrip://login-callback?code=abcDEF123',
+        'pawloop://login-callback?code=abcDEF123',
         _state,
       );
 
@@ -133,7 +133,7 @@ void main() {
 
     test('state 가 비어 있으면 실패다', () {
       final result = resolveOAuthCallback(
-        'heattrip://login-callback?code=abcDEF123&state=',
+        'pawloop://login-callback?code=abcDEF123&state=',
         _state,
       );
 
@@ -142,7 +142,7 @@ void main() {
 
     test('대소문자가 다르면 실패다 — 느슨한 비교는 비교가 아니다', () {
       final result = resolveOAuthCallback(
-        'heattrip://login-callback?code=abcDEF123&state=${_state.toUpperCase()}',
+        'pawloop://login-callback?code=abcDEF123&state=${_state.toUpperCase()}',
         _state,
       );
 
@@ -152,7 +152,7 @@ void main() {
     test('기대하는 state 자체가 비어 있으면 성공시키지 않는다', () {
       // 앱이 state 생성을 건너뛴 상태를 조용히 통과시키면 검사가 있다고 말할 수 없다.
       final result = resolveOAuthCallback(
-        'heattrip://login-callback?code=abcDEF123&state=',
+        'pawloop://login-callback?code=abcDEF123&state=',
         '',
       );
 
@@ -163,7 +163,7 @@ void main() {
   group('resolveOAuthCallback — code 없음', () {
     test('code 가 없으면 실패다 — 계약 위반이지 사용자 탓이 아니다', () {
       final result = resolveOAuthCallback(
-        'heattrip://login-callback?state=$_state',
+        'pawloop://login-callback?state=$_state',
         _state,
       );
 
@@ -185,7 +185,7 @@ void main() {
       // SocialLoginResult 로 분류되지 못하고 **처리되지 않은 비동기 오류**가 됐다 —
       // 사용자에게는 아무 반응 없는 버튼으로 보인다.
       const broken =
-          'heattrip://login-callback?code=C&state=$_state&x=%E0%A4%A';
+          'pawloop://login-callback?code=C&state=$_state&x=%E0%A4%A';
 
       expect(
         () => resolveOAuthCallback(broken, _state),
@@ -209,7 +209,7 @@ void main() {
         'canceled',
       ]) {
         expect(
-          resolveOAuthCallback('heattrip://login-callback?error=$code', _state)
+          resolveOAuthCallback('pawloop://login-callback?error=$code', _state)
               .outcome,
           SocialLoginOutcome.canceled,
           reason: '$code 는 취소로 분류돼야 한다',
@@ -220,14 +220,14 @@ void main() {
     test('그 밖의 error 는 serverError 다', () {
       expect(
         resolveOAuthCallback(
-          'heattrip://login-callback?error=account_state_invalid',
+          'pawloop://login-callback?error=account_state_invalid',
           _state,
         ).outcome,
         SocialLoginOutcome.serverError,
       );
       expect(
         resolveOAuthCallback(
-          'heattrip://login-callback?error=email_already_registered',
+          'pawloop://login-callback?error=email_already_registered',
           _state,
         ).outcome,
         SocialLoginOutcome.serverError,
@@ -236,7 +236,7 @@ void main() {
 
     test('error 와 code 가 함께 와도 실패로 본다', () {
       final result = resolveOAuthCallback(
-        'heattrip://login-callback?error=access_denied&code=abc&state=$_state',
+        'pawloop://login-callback?error=access_denied&code=abc&state=$_state',
         _state,
       );
 

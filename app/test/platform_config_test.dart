@@ -1,6 +1,6 @@
 // 딥링크 복귀에 필요한 플랫폼 설정 파일을 문자열로 검증한다.
 //
-// 브라우저에서 heattrip://login-callback 으로 앱에 돌아오는 구간 자체는 OS 레벨
+// 브라우저에서 pawloop://login-callback 으로 앱에 돌아오는 구간 자체는 OS 레벨
 // URL 핸들러를 타므로 flutter test 로 자동화할 수 없다(이슈 #21 "테스트하지 않는 것").
 // 자동 테스트가 막을 수 있는 것은 "설정 파일이 올바른 값을 갖는가"까지다.
 //
@@ -148,8 +148,10 @@ void main() {
       expect(plist, contains('CFBundleURLSchemes'));
     });
 
-    test('등록된 스킴이 heattrip 이고 URL 이름이 번들 ID 와 같다', () {
-      expect(plist, contains('<string>heattrip</string>'));
+    test('등록된 스킴이 pawloop 이고 URL 이름이 번들 ID 와 같다', () {
+      // 2026-09-17 까지는 다른 스킴이었다(#649). 예전 패키지로 배포된 앱이 같은 스킴을
+      // 주장해서, 그 앱이 깔린 폰에서는 OS 가 어느 앱에 줄지 못 정해 로그인이 멈췄다.
+      expect(plist, contains('<string>pawloop</string>'));
       expect(plist, contains('CFBundleURLName'));
       expect(plist, contains('<string>app.pawloop</string>'));
     });
@@ -172,8 +174,8 @@ void main() {
       manifest = file.readAsStringSync();
     });
 
-    test('heattrip://login-callback 을 받는 intent-filter 가 있다', () {
-      expect(manifest, contains('android:scheme="heattrip"'));
+    test('pawloop://login-callback 을 받는 intent-filter 가 있다', () {
+      expect(manifest, contains('android:scheme="pawloop"'));
       expect(manifest, contains('android:host="login-callback"'));
     });
 

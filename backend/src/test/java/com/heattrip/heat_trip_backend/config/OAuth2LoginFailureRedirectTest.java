@@ -48,7 +48,7 @@ class OAuth2LoginFailureRedirectTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
-    @DisplayName("소셜 로그인 실패는 Spring 기본 /login?error 가 아니라 heattrip:// 딥링크로 끝난다")
+    @DisplayName("소셜 로그인 실패는 Spring 기본 /login?error 가 아니라 pawloop:// 딥링크로 끝난다")
     void oauth2LoginFailure_redirectsToAppDeepLink() throws Exception {
         AuthenticationFailureHandler handler = registeredFailureHandler();
 
@@ -62,7 +62,7 @@ class OAuth2LoginFailureRedirectTest extends AbstractMySqlIntegrationTest {
                         "이 이메일로 만들어진 계정이 이미 있습니다. provider=google"));
 
         assertThat(response.getRedirectedUrl())
-                .isEqualTo("heattrip://login-callback?error=email_already_registered");
+                .isEqualTo("pawloop://login-callback?error=email_already_registered");
     }
 
     @Test
@@ -74,7 +74,7 @@ class OAuth2LoginFailureRedirectTest extends AbstractMySqlIntegrationTest {
                         "bori@example.com 저장 실패 token=eyJhbGciOiJIUzI1NiJ9"));
 
         String redirect = response.getRedirectedUrl();
-        assertThat(redirect).startsWith("heattrip://login-callback?error=");
+        assertThat(redirect).startsWith("pawloop://login-callback?error=");
         assertThat(redirect).doesNotContain("bori@example.com");
         assertThat(redirect).doesNotContain("eyJ");
     }

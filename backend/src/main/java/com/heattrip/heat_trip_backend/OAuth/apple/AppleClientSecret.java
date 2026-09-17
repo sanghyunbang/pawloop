@@ -31,7 +31,7 @@ import java.util.Date;
  * <h2>키가 없으면 로그인 실패이지 서버 실패가 아니다</h2>
  * <p>{@link OAuth2AuthorizationException}({@code apple_not_configured})을 던진다. Spring 의
  * 로그인 필터가 그것을 인증 실패로 받아 {@code OAuth2FailureHandler} 로 보내고, 앱은
- * {@code heattrip://login-callback?error=apple_not_configured} 를 받는다. 500 이 아니다.
+ * {@code pawloop://login-callback?error=apple_not_configured} 를 받는다. 500 이 아니다.
  *
  * <p>키 값은 로그에 남기지 않는다. 남기는 것은 "설정됐는가" 뿐이다.
  */

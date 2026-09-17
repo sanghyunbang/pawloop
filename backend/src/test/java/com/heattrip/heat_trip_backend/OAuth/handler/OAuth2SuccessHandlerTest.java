@@ -45,7 +45,7 @@ class OAuth2SuccessHandlerTest {
 
     private static final long USER_ID = 42L;
 
-    private static final String ALLOWED = "heattrip://login-callback";
+    private static final String ALLOWED = "pawloop://login-callback";
 
     private static final Instant BASE = Instant.parse("2026-08-30T12:00:00Z");
 
@@ -143,7 +143,7 @@ class OAuth2SuccessHandlerTest {
         MockHttpServletResponse response = redirect(principal(null), store, request -> {});
 
         assertThat(response.getRedirectedUrl())
-                .isEqualTo("heattrip://login-callback?error=account_state_invalid");
+                .isEqualTo("pawloop://login-callback?error=account_state_invalid");
         assertThat(store.size())
                 .as("주체 없는 코드를 발급하면 교환 시점에 sub=\"null\" 토큰이 되어 그 계정은 영구 401 이다")
                 .isZero();

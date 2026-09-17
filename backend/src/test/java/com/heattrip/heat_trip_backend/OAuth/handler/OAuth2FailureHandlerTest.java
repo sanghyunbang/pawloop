@@ -41,18 +41,18 @@ class OAuth2FailureHandlerTest {
         String redirect = redirectFor(oauthError("email_already_registered",
                 "이 이메일로 만들어진 계정이 이미 있습니다. 처음 가입한 방식으로 로그인해 주세요. provider=google"));
 
-        assertThat(redirect).isEqualTo("heattrip://login-callback?error=email_already_registered");
+        assertThat(redirect).isEqualTo("pawloop://login-callback?error=email_already_registered");
     }
 
     @Test
     @DisplayName("CustomOAuth2UserService 가 쓰는 나머지 실패 코드도 그대로 전달된다")
     void otherServiceErrorCodes_arePassedThrough() throws IOException {
         assertThat(redirectFor(oauthError("account_conflict", "계정 생성에 실패했습니다.")))
-                .isEqualTo("heattrip://login-callback?error=account_conflict");
+                .isEqualTo("pawloop://login-callback?error=account_conflict");
         assertThat(redirectFor(oauthError("missing_social_id", "소셜 공급자가 사용자 고유 ID 를 주지 않았습니다.")))
-                .isEqualTo("heattrip://login-callback?error=missing_social_id");
+                .isEqualTo("pawloop://login-callback?error=missing_social_id");
         assertThat(redirectFor(oauthError("unsupported_provider", "지원하지 않는 소셜 공급자입니다: apple")))
-                .isEqualTo("heattrip://login-callback?error=unsupported_provider");
+                .isEqualTo("pawloop://login-callback?error=unsupported_provider");
     }
 
     @Test
@@ -65,7 +65,7 @@ class OAuth2FailureHandlerTest {
         assertThat(redirect).doesNotContain("bori@example.com");
         assertThat(redirect).doesNotContain("eyJ");
         assertThat(redirect).doesNotContain("token=");
-        assertThat(redirect).isEqualTo("heattrip://login-callback?error=email_already_registered");
+        assertThat(redirect).isEqualTo("pawloop://login-callback?error=email_already_registered");
     }
 
     @Test
@@ -73,18 +73,18 @@ class OAuth2FailureHandlerTest {
     void unsafeErrorCode_isReplacedWithDefault() throws IOException {
         // OAuth2Error 코드는 공급자 리다이렉트의 error 파라미터에서 올 수도 있다 — 신뢰 대상이 아니다.
         assertThat(redirectFor(oauthError("bad code&token=stolen", "…")))
-                .isEqualTo("heattrip://login-callback?error=authentication_failed");
+                .isEqualTo("pawloop://login-callback?error=authentication_failed");
         assertThat(redirectFor(oauthError("../../other-scheme", "…")))
-                .isEqualTo("heattrip://login-callback?error=authentication_failed");
+                .isEqualTo("pawloop://login-callback?error=authentication_failed");
         // 정상 코드는 대소문자·공백만 정규화해서 통과시킨다.
         assertThat(redirectFor(oauthError("  ACCESS_DENIED  ", "…")))
-                .isEqualTo("heattrip://login-callback?error=access_denied");
+                .isEqualTo("pawloop://login-callback?error=access_denied");
     }
 
     @Test
     @DisplayName("OAuth2 예외가 아닌 인증 실패는 예외 클래스 이름조차 노출하지 않는다")
     void nonOAuthFailure_usesDefaultCode() throws IOException {
         assertThat(redirectFor(new BadCredentialsException("bori@example.com 자격 증명 오류")))
-                .isEqualTo("heattrip://login-callback?error=authentication_failed");
+                .isEqualTo("pawloop://login-callback?error=authentication_failed");
     }
 }

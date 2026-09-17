@@ -89,7 +89,7 @@ void main() {
     String? seenUrl;
     SocialLoginService.authenticator = ({required url, required callbackUrlScheme}) async {
       seenUrl = url;
-      return 'heattrip://login-callback?error=apple_not_configured';
+      return 'pawloop://login-callback?error=apple_not_configured';
     };
 
     await tester.pumpWidget(const MaterialApp(home: LoginScreen(showAppleSignIn: true)));
