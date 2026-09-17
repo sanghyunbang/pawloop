@@ -196,7 +196,8 @@ class TodayScreen extends StatelessWidget {
                         TodayCourseCard(
                           dog: dog,
                           data: data,
-                          onStart: (context, place) => startWalk(context, place: place),
+                          onStart: (context, place, destination) =>
+                              startWalk(context, place: place, destination: destination),
                         ),
                       ],
                     ),

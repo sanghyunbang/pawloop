@@ -188,6 +188,9 @@ flowchart TD
     C -->|isNew| E[onboarding_screen.dart<br/>반려동물 등록 권유 — 등록하기 / 나중에 할래요]
     C -->|기존 계정| H
     E --> H
+    H -->|코스를 고르고 산책 시작| WS[walk_start_point_sheet.dart<br/>OO까지 450m 예요 — 길 안내 받기 / 지금 여기서 시작]
+    WS -->|길 안내| MAP[지도 앱<br/>nmap://route/walk — 도착해서 다시 시작]
+    WS -->|지금 여기서| LP
     H -->|첫 산책 시작| LP[location_priming_sheet.dart<br/>왜 · 기기에만 남음 · 프로필에서 끔 — 허용하기 / 나중에]
     LP -->|허용하기| F[OS 위치 권한 대화상자<br/>geolocator]
     LP -->|나중에| H

@@ -10,6 +10,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import 'package:geolocator/geolocator.dart';
+
+import 'package:heat_trip_flutter/v2/data/auth_state.dart';
+import 'package:heat_trip_flutter/v2/domain/walk_destination.dart';
+import 'package:heat_trip_flutter/v2/screens/location_priming_sheet.dart';
+import 'package:heat_trip_flutter/v2/screens/walk_start_point_sheet.dart';
 import 'package:heat_trip_flutter/v2/data/external_maps.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
 import 'package:heat_trip_flutter/v2/data/trail_route_repository.dart';
@@ -271,6 +277,42 @@ void main() {
         reason: '"시작 지점만 표시돼요" 는 거리·시간 바로 밑이어야 한다 — 오해가 거기서 생긴다');
     expect(button, lessThan(stops),
         reason: '누를 것이 먼저, 읽을 것이 나중이다 — 조각 수가 코스마다 1~51 로 다르다');
+  });
+
+  testWidgets('지도 시트의 "여기서 산책 시작" 도 어디서 시작할지 묻는다 — 홈 카드와 같게 (#623)', (tester) async {
+    // 되돌리기에서 이 자리가 비어 있는 것이 드러났다: 지도 시트만 안 묻게 고쳐도 검사가
+    // 전부 초록이었다. 같은 이름의 버튼이 두 곳에서 다른 일을 하는 것을 아무도 안 보고 있었다.
+    AuthState.signInForTest(const AuthUser(id: 1, nickname: 'walker'));
+    LocationPriming.checkPermission = () async => LocationPermission.whileInUse;
+    addTearDown(() {
+      AuthState.resetForTest();
+      LocationPriming.resetForTest();
+      WalkStartPointSheet.resetForTest();
+    });
+
+    WalkDestination? asked;
+    String? askedTitle;
+    WalkStartPointSheet.ask = (_, title, dest) async {
+      askedTitle = title;
+      asked = dest;
+      return null; // 닫은 것으로 둔다 — 여기서 재는 것은 "묻는가" 하나다.
+    };
+
+    await _pumpWide(tester,
+        ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrails()));
+    await tester.tap(_chip('산책로'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3.1운동길B'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('여기서 산책 시작'));
+    await tester.pumpAndSettle();
+
+    expect(asked, isNotNull,
+        reason: '홈 카드는 묻는데 여기가 안 물으면 같은 버튼이 다른 일을 한다');
+    expect(askedTitle, '3.1운동길B');
+    expect(asked!.lat, 37.5445);
+    expect(asked!.lng, 127.0374);
+    expect(asked!.distanceM, 407, reason: '목록에 뜬 거리를 그대로 들고 가야 한다');
   });
 
   testWidgets('두루누비 시트에는 그대로 "지도에서 보기" 가 있고, 경유지 칸은 안 쓴다', (tester) async {

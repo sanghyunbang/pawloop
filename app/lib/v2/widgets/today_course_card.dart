@@ -17,12 +17,18 @@ import '../data/walk_repository.dart' show WalkPlaceRef;
 import '../data/walk_safety.dart';
 import '../data/walk_safety_repository.dart';
 import '../domain/course_recommender.dart';
+import '../domain/walk_destination.dart';
 import '../domain/pet.dart';
 import '../domain/walk_goal.dart';
 import '../theme/app_tokens.dart';
 import 'aurora.dart';
 
-typedef StartCourseWalk = Future<void> Function(BuildContext context, WalkPlaceRef place);
+/// "여기서 산책 시작" 을 홈이 받는 모양.
+///
+/// [destination] 은 그 코스가 **어디인가** (#623) — 있으면 `startWalk` 이 어디서
+/// 시작할지 한 번 묻는다. 내 코스의 시작 지점을 모르는 경우처럼 없을 수도 있다.
+typedef StartCourseWalk = Future<void> Function(
+    BuildContext context, WalkPlaceRef place, WalkDestination? destination);
 
 class TodayCourseCard extends StatefulWidget {
   const TodayCourseCard({
@@ -172,7 +178,17 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
 
   Future<void> _start(CourseCandidate c) async {
     final place = WalkPlaceRef(title: c.title, source: c.source, contentId: c.contentId);
-    await widget.onStart(context, place);
+    // 좌표를 함께 넘긴다 (#623). 이 카드는 `450m 거리` 를 직접 보여 주면서 그 거리를
+    // 없는 것처럼 다뤘다 — 이제 어디서 시작할지 묻는다.
+    final lat = c.lat;
+    final lng = c.lng;
+    await widget.onStart(
+      context,
+      place,
+      lat == null || lng == null
+          ? null
+          : WalkDestination(lat: lat, lng: lng, distanceM: c.distanceM),
+    );
   }
 
   @override
