@@ -24,8 +24,9 @@
 #   bash scripts/check-external-keys.sh public     # 공공데이터포털만
 #   bash scripts/check-external-keys.sh env        # .env 이름 점검만
 #
-# 나가는 값: 지금 앱이 기대는 API 중 하나라도 죽어 있으면 1. 에어코리아처럼 **아직 신청을
-# 안 한 것**은 실패로 세지 않는다 — 기다리는 중인 것과 깨진 것은 다르다.
+# 나가는 값: 지금 앱이 기대는 API 중 하나라도 죽어 있으면 1. **아직 신청을 안 한 것**(pending)은
+# 실패로 세지 않는다 — 기다리는 중인 것과 깨진 것은 다르다. 2026-09-18 현재 pending 은 없다:
+# 에어코리아 둘도 2026-09-08 에 승인됐다(#668 에서 표시를 고쳤다).
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -137,14 +138,16 @@ check_public_data() {
     "$BASE/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=$KEY&dataType=JSON&numOfRows=10&pageNo=1&base_date=$bd&base_time=$bt&nx=61&ny=126" \
     required '"resultCode":"00"'
 
-  # 아래 둘은 아직 신청 전이다 — 승인되면 산책 안전 지수에 미세먼지가 붙는다(#336).
+  # 아래 둘은 2026-09-08 에 승인됐다 — 산책 안전 지수의 미세먼지가 여기서 온다(#336).
+  # 승인된 것을 pending 으로 적어 두면 값이 안 보이는 날 또 "키가 없나" 부터 의심하게 된다.
+  # 2026-09-17 의 "미세먼지 정보 없음" 이 그랬다 — 키는 멀쩡했고 호출이 한 번 실패한 것이었다(#668).
   ask "에어코리아 측정소정보" \
     "$BASE/B552584/MsrstnInfoInqireSvc/getMsrstnList?serviceKey=$KEY&returnType=json&numOfRows=1&pageNo=1" \
-    pending '"stationName"'
+    required '"stationName"'
 
   ask "에어코리아 대기오염정보" \
     "$BASE/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty?serviceKey=$KEY&returnType=json&numOfRows=1&pageNo=1&stationName=%EC%A4%91%EA%B5%AC&dataTerm=DAILY&ver=1.3" \
-    pending '"pm10Value"'
+    required '"pm10Value"'
 }
 
 # ── 이름과 채움 여부만 ───────────────────────────────────────────────

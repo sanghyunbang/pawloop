@@ -1,9 +1,11 @@
 package com.heattrip.heat_trip_backend.walksafety;
 
+import java.net.ConnectException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.walksafety.service.AirKoreaClient;
@@ -15,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 
 import reactor.core.publisher.Mono;
@@ -54,7 +57,15 @@ class AirKoreaClientTest {
     private record Spy(AirKoreaClient client, List<URI> sent) {
     }
 
-    private static Spy spy(String body, String serviceKey) {
+    /**
+     * 앞선 호출을 어떻게 실패시킬까 — 이 둘은 뜻이 다르다(#668).
+     *
+     * <p>{@link #UNREACHABLE} 는 연결 자체가 안 선 것이라 다시 걸면 대개 붙는다.
+     * {@link #TIMEOUT} 은 게이트웨이가 이미 시간을 다 쓴 것이라 다시 걸어도 같다.
+     */
+    private enum Fail { UNREACHABLE, TIMEOUT }
+
+    private static Spy spy(String body, String serviceKey, Fail... failFirstWith) {
         List<URI> sent = new ArrayList<>();
         DefaultUriBuilderFactory uriFactory =
                 new DefaultUriBuilderFactory("https://apis.data.go.kr/B552584");
@@ -64,7 +75,16 @@ class AirKoreaClientTest {
         WebClient webClient = WebClient.builder()
                 .uriBuilderFactory(uriFactory)
                 .exchangeFunction(request -> {
+                    int nth = sent.size();
                     sent.add(request.url());
+                    if (nth < failFirstWith.length) {
+                        return Mono.error(switch (failFirstWith[nth]) {
+                            case UNREACHABLE -> new WebClientRequestException(
+                                    new ConnectException("연결 안 됨"),
+                                    request.method(), request.url(), request.headers());
+                            case TIMEOUT -> new TimeoutException("읽기 제한");
+                        });
+                    }
                     return Mono.just(ClientResponse.create(HttpStatus.OK)
                             .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
                             .body(body)
@@ -142,6 +162,50 @@ class AirKoreaClientTest {
         assertThat(spy.client().stations()).isEmpty();
         assertThat(spy.client().realtime("성수")).isEmpty();
         assertThat(spy.sent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("연결이 안 서면 한 번 더 건다 — 한 번의 실패로 미세먼지를 비우지 않는다")
+    void realtime_retriesOnceWhenUnreachable() {
+        Spy spy = spy(AIR_JSON, "KEY", Fail.UNREACHABLE);
+
+        Optional<PublicDataJson.AirQuality> air = spy.client().realtime("성수");
+
+        assertThat(spy.sent()).as("한 번 더 걸었다").hasSize(2);
+        assertThat(air)
+                .as("""
+                        2026-09-17 00:01 KST 에 이 호출이 딱 한 번 WebClientRequestException 으로 \
+                        실패했고, 그 값 없는 응답이 서버 10분 + 앱 30분을 타고 40분을 갔다(#668).""")
+                .contains(new PublicDataJson.AirQuality(31, 18));
+    }
+
+    @Test
+    @DisplayName("두 번 다 안 되면 거기서 끝 — 게이트웨이를 계속 두드리지 않는다")
+    void realtime_givesUpAfterTheSecondTry() {
+        Spy spy = spy(AIR_JSON, "KEY", Fail.UNREACHABLE, Fail.UNREACHABLE);
+
+        assertThat(spy.client().realtime("성수")).isEmpty();
+        assertThat(spy.sent()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("연결이 아닌 실패는 다시 걸지 않는다 — 시간을 다 쓴 호출은 또 걸어도 같다")
+    void realtime_doesNotRetryWhatWillFailTheSameWay() {
+        Spy spy = spy(AIR_JSON, "KEY", Fail.TIMEOUT);
+
+        assertThat(spy.client().realtime("성수")).isEmpty();
+        assertThat(spy.sent())
+                .as("읽기 제한을 넘긴 호출을 곧바로 또 걸면 사람이 기다리는 시간만 두 배가 된다")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("측정소 목록은 다시 걸지 않는다 — 빈 목록을 5분만 기억하는 쪽이 이미 있다")
+    void stations_doNotRetry() {
+        Spy spy = spy(STATIONS_JSON, "KEY", Fail.UNREACHABLE);
+
+        assertThat(spy.client().stations()).isEmpty();
+        assertThat(spy.sent()).hasSize(1);
     }
 
     @Test

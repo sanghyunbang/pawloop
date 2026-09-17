@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 격자 하나의 지금 관측값 — 기상청 실황 + (있으면) 가장 가까운 측정소의 미세먼지.
  *
- * <p><b>저장하지 않는다.</b> 격자별 응답을 10분 메모리 캐시할 뿐이고, 어느 사용자가 어느 격자를
+ * <p><b>저장하지 않는다.</b> 격자별 응답을 10분(미세먼지가 빠졌으면 2분) 메모리 캐시할 뿐이고, 어느 사용자가 어느 격자를
  * 물었는지는 어디에도 남지 않는다(요청에 인증이 없다). 측정소 목록은 24시간 캐시 — 하루에
  * 한 번 받는 600행이다.
  */
@@ -30,6 +30,9 @@ public class WalkSafetyService {
 
     /** 측정소 목록을 못 받았을 때. 짧다 — 이유는 {@code stationList} 의 주석. */
     static final Duration EMPTY_STATIONS_TTL = Duration.ofMinutes(5);
+
+    /** 미세먼지가 빠진 응답을 기억하는 시간. 짧다 — 이유는 {@code now} 의 주석. */
+    static final Duration NOW_WITHOUT_DUST_TTL = Duration.ofMinutes(2);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH00");
@@ -83,7 +86,16 @@ public class WalkSafetyService {
                 dust.map(PublicDataJson.AirQuality::pm10).orElse(null),
                 dust.map(PublicDataJson.AirQuality::pm25).orElse(null),
                 stationName, at);
-        nowCache.put(key, new Cached(response, at.plus(NOW_TTL)));
+        // 미세먼지가 빠진 응답은 **성공한 응답과 같은 값이 아니다**. 측정소 목록에 이미 같은 판단이
+        // 들어가 있는데(EMPTY_STATIONS_TTL, 2026-09-08) 실시간 측정에는 그 짝이 없었다.
+        // 2026-09-17 00:01 KST 에 실시간 측정이 딱 한 번 실패했고(WebClientRequestException),
+        // 그 값 없는 응답을 여기서 10분, 앱이 다시 30분 들고 있어서 최대 40분 동안 화면에
+        // 미세먼지가 사라졌다(#668). 공기는 늘 있다 — 못 잰 것뿐이니 곧 다시 물어본다.
+        //
+        // 1분이 아니라 2분인 이유: 여기서 다시 계산하면 기상청 실황도 같이 다시 부른다.
+        // 실황은 매시 40분에 한 번 바뀌므로 분마다 부를 값이 아니다.
+        Duration ttl = dust.isPresent() ? NOW_TTL : NOW_WITHOUT_DUST_TTL;
+        nowCache.put(key, new Cached(response, at.plus(ttl)));
         return response;
     }
 

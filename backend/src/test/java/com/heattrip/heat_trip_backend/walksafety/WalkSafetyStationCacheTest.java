@@ -3,7 +3,6 @@ package com.heattrip.heat_trip_backend.walksafety;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,34 +43,6 @@ class WalkSafetyStationCacheTest {
             new PublicDataJson.Station("성수", 37.5449, 127.0436);
     private static final PublicDataJson.AirQuality AIR =
             new PublicDataJson.AirQuality(31, 18);
-
-    /** 손으로 미는 시계. */
-    private static final class MovableClock extends Clock {
-        private Instant now;
-
-        private MovableClock(Instant start) {
-            this.now = start;
-        }
-
-        void advance(Duration by) {
-            now = now.plus(by);
-        }
-
-        @Override
-        public ZoneOffset getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(java.time.ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-    }
 
     @Test
     @DisplayName("측정소 목록을 못 받아도 5분 뒤엔 다시 물어본다 — 한 번 놓쳤다고 한 시간을 비우지 않는다")
