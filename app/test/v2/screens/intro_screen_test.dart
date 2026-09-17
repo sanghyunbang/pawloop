@@ -4,6 +4,8 @@
 //
 //  1. 세 장이 순서대로 넘어가고, 마지막 장의 버튼만 "시작하기" 다.
 //  2. 건너뛰기와 시작하기가 **둘 다** onDone 을 한 번씩만 부른다 — 연타해도 한 번.
+//     둘 다 그 앞에 접근권한 안내 한 장을 지난다(#682) — 고지 자체는
+//     `permission_notice_test.dart` 가 잰다.
 //  3. 게이트: 처음엔 안 봤고, 적으면 봤고, 지우면 다시 안 봤다.
 //  4. 세 장 어디에도 시스템 이모지 글자가 없다 — 디자인 시스템은 Fluent 3D 자산이다.
 import 'package:flutter/material.dart';
@@ -14,6 +16,13 @@ import 'package:heat_trip_flutter/v2/data/intro_gate.dart';
 import 'package:heat_trip_flutter/v2/screens/intro_screen.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: child);
+
+/// 소개가 끝나면 접근권한 안내가 한 장 올라온다(#682). 그 장의 "확인했어요" 를 눌러야
+/// `onDone` 이 불린다 — 그것이 최초 실행 고지가 실제로 지나가게 하는 장치다.
+Future<void> _passPermissionNotice(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('permission-notice-ack')));
+  await tester.pumpAndSettle();
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -52,8 +61,13 @@ void main() {
         await tester.pumpAndSettle();
       }
       await tester.tap(find.text('시작하기'));
-      await tester.tap(find.text('시작하기'));
-      await tester.pump();
+      // 두 번째는 빗나가도 된다 — 첫 번째가 이미 접근권한 안내를 밀어 올려서 버튼이
+      // 덮여 있다. 재는 것은 "그래도 onDone 이 한 번" 이다.
+      await tester.tap(find.text('시작하기'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      // 소개와 로그인 사이에 접근권한 안내가 한 장 있다(#682). 자세한 것은
+      // `permission_notice_test.dart` 가 잰다.
+      await _passPermissionNotice(tester);
 
       expect(calls, 1, reason: '두 번 불리면 라우터의 go 가 두 번 돈다');
     });
@@ -65,7 +79,8 @@ void main() {
       await tester.tap(find.text('다음'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('건너뛰기'));
-      await tester.pump();
+      await tester.pumpAndSettle();
+      await _passPermissionNotice(tester);
 
       expect(calls, 1);
     });

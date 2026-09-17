@@ -41,6 +41,7 @@ import '../widgets/weekly_report_reminder_tile.dart';
 import 'intro_screen.dart';
 import 'settings/account_delete_screen.dart';
 import 'settings/legal_document_screen.dart';
+import 'settings/permission_notice_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -105,6 +106,14 @@ class SettingsScreen extends StatelessWidget {
                                     replay: true,
                                     onDone: () => Navigator.of(context).maybePop(),
                                   )))),
+                      _divider(),
+                      // 접근권한 안내 (#682). 첫 실행에 한 번 보여 주지만(소개 끝),
+                      // 그때 한 번뿐이면 나중에 "무슨 권한을 왜 줬더라" 를 확인할 길이
+                      // 없다. 정보통신망법 제22조의2 제1항이 알리라고 한 내용이라
+                      // 언제든 다시 열리는 자리가 있어야 한다.
+                      _row(context, Icons.lock_outline, PermissionNoticeScreen.menuLabel,
+                          () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => const PermissionNoticeScreen()))),
                     ]),
                     if (!guest) ...[
                       const SizedBox(height: 18),
