@@ -214,6 +214,15 @@ tasks.named('test') {
     inputs.files(file('Caddyfile'), file('docker-compose.prod.yml'))
             .withPropertyName('prodEdge')
             .withPathSensitivity(PathSensitivity.RELATIVE)
+    // NestedBindMountsHaveTheirMountpointTest 가 읽는 compose **전부** (#639). 위의
+    // dockerCompose · prodEdge 가 둘을 이미 걸어 뒀지만 그 검사는 덧붙임 파일도 함께
+    // 훑는다 — 어느 조합으로 띄우는지를 검사에 적어 두면 조합이 늘 때 낡기 때문이다.
+    //
+    // 선언이 없으면 덧붙임에 겹친 mount 를 새로 넣어도 test 가 UP-TO-DATE 로 건너뛴다.
+    // 그 실패는 서버에서 컨테이너가 **시작조차 못 하는** 모양으로만 보인다.
+    inputs.files(fileTree(dir: projectDir, include: 'docker-compose*.yml'))
+            .withPropertyName('composeOverlays')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
     // 소개·약관 페이지의 템플릿과 **약관 원문**(#611). LegalSiteActuallyRendersTest 가
     // Caddy 를 띄워 이 파일들을 그려 본다.
     //
