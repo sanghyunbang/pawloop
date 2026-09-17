@@ -30,7 +30,7 @@
 | 18 | 오늘의 코스 → 여기서 산책 시작 | 홈 · 산책 시작 버튼 아래 | `widgets/today_course_card.dart`(규칙 `domain/course_recommender.dart`) → `walk_tracking_screen.dart` |
 | 19 | 할 일 만들기 → 순서 바꾸기 → 접기 | 우리 가족 · 오늘의 케어 카드 아래 | `family_screen.dart`(할 일 고치기 줄) → `care_items_screen.dart`(추가 시트 · 끌기 손잡이 · 접기) |
 | 20 | 표시 이름 바꾸기 | 프로필 | `me_screen.dart` → `display_name_screen.dart` |
-| 21 | 접근권한 안내 | 첫 실행 · 설정 | `intro_screen.dart` → `permission_notice_screen.dart` · `settings_screen.dart` → `permission_notice_screen.dart` |
+| 21 | 기기 접근권한 안내 | 첫 실행 · 설정 | `intro_screen.dart` → `permission_notice_screen.dart` · `settings_screen.dart` → `permission_notice_screen.dart` |
 
 네비게이션 골격은 `main_shell.dart` 의 다섯 자리다: **홈 · 지도 · 일정 · 커뮤니티 · 채팅**(산책은 홈이 연다, #446). 일정은 #419 가 더했다 — 왼쪽 셋 · 오른쪽 둘로 나눈 것은 FAB 오른쪽에 셋을 두면 알약의 무게가 쏠리기 때문이다. 통계·기록·가족·설정은 탭이 아니라 프로필(`me_screen.dart`)에서 들어간다. `pin_picker_screen.dart` 는 파일은 있으나 지금 어디에서도 열리지 않는다(#322 에서 확인 — 지울지는 따로 정한다).
 
@@ -186,7 +186,7 @@ flowchart TD
     D -->|둘러보기| G
     D --> D1{인증}
     D1 -->|실패/취소| D
-    D1 -->|성공| C[consent_screen.dart<br/>필수 3 + 선택 1]
+    D1 -->|성공| C[consent_screen.dart<br/>동의 필수 4 + 동의 선택 1]
     C -->|isNew| E[onboarding_screen.dart<br/>반려동물 등록 권유 — 등록하기 / 나중에 할래요]
     C -->|기존 계정| H
     E --> H
