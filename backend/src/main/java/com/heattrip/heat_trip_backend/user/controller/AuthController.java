@@ -10,10 +10,13 @@ import org.springframework.web.bind.annotation.*;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.RefreshTokenRequest;
+import com.heattrip.heat_trip_backend.user.dto.PasswordResetInput;
+import com.heattrip.heat_trip_backend.user.dto.PasswordResetRequestInput;
 import com.heattrip.heat_trip_backend.user.dto.ResendSignupCodeRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupStartedResponse;
 import com.heattrip.heat_trip_backend.user.dto.VerifySignupRequest;
+import com.heattrip.heat_trip_backend.user.password.PasswordResetService;
 import com.heattrip.heat_trip_backend.user.signup.EmailVerificationService;
 import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
 import com.heattrip.heat_trip_backend.user.service.UserService;
@@ -37,6 +40,9 @@ public class AuthController implements AuthApiDoc{
 
     /** 이메일 가입의 인증 — 코드 발급·확인 (#635). */
     private final EmailVerificationService emailVerification;
+
+    /** 비밀번호 재설정 — 같은 메일 기반 (#635 조각 ③). */
+    private final PasswordResetService passwordReset;
 
     /** 동네 코드에 이름을 붙이는 표 (#342). */
     private final NeighborhoodCatalog neighborhoods;
@@ -103,6 +109,42 @@ public class AuthController implements AuthApiDoc{
             @Valid @RequestBody ResendSignupCodeRequest request) {
         return ResponseEntity.accepted()
                 .body(new SignupStartedResponse(emailVerification.resend(request.getEmail())));
+    }
+
+    /**
+     * 비밀번호를 잊었을 때 코드를 보낸다 — 이슈 #635 조각 ③.
+     *
+     * <p><b>응답에 본문이 없다.</b> 그 주소로 계정이 있는지를 말하지 않는 것이 이 경로의
+     * 요점이라, 돌려줄 것이 하나도 없어야 한다. 가입({@code /auth/signup})이
+     * {@code mailSent} 를 주는 것과 다른데, 거기는 두 갈래가 모두 메일을 보내므로 그 값이
+     * 아무것도 가리지 않는다. 여기서는 없는 주소에 메일을 안 보내므로 <b>그 값 자체가
+     * 답이 된다.</b>
+     *
+     * <p>앱은 "가입된 주소라면 메일을 보냈어요" 라고 말하면 된다.
+     */
+    @PostMapping("/password/reset-request")
+    public ResponseEntity<Void> requestPasswordReset(
+            @Valid @RequestBody PasswordResetRequestInput request) {
+        passwordReset.request(request.getEmail());
+        return ResponseEntity.accepted().build();
+    }
+
+    /**
+     * 코드를 확인하고 비밀번호를 바꾼다 — 이슈 #635 조각 ③.
+     *
+     * <p>성공하면 바로 로그인된 상태로 토큰을 준다. 그리고 <b>다른 기기의 세션을 전부
+     * 끊는다</b> — 재설정을 하는 흔한 이유가 "누가 내 계정에 들어온 것 같다" 인데,
+     * 살아 있는 refresh 토큰을 두면 그 사람은 그대로 들어와 있다.
+     *
+     * <p>410 은 "다시 받아야 한다"(만료·시도 초과·진행 중인 재설정 없음), 401 은
+     * "코드가 틀렸다" 다. <b>없는 주소도 410</b> 이다 — 404 를 주면 이 경로가 가입 여부를
+     * 묻는 조회 수단이 된다.
+     */
+    @PostMapping("/password/reset")
+    public ResponseEntity<AuthTokensResponse> resetPassword(
+            @Valid @RequestBody PasswordResetInput request) {
+        return ResponseEntity.ok(passwordReset.reset(
+                request.getEmail(), request.getCode(), request.getNewPassword()));
     }
 
     /**

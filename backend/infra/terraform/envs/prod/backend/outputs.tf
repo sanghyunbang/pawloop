@@ -33,3 +33,19 @@ output "oauth_redirect_uris" {
     apple  = "https://${var.domain_name}/login/oauth2/code/apple"
   }
 }
+
+output "mail_smtp_endpoint" {
+  description = <<-EOT
+    .env 의 SPRING_MAIL_HOST 에 넣을 값 (#635). 도메인을 안 걸었으면 비어 있다.
+
+    자격증명(SPRING_MAIL_USERNAME·PASSWORD)은 **여기서 안 나온다** — terraform 이 만들면
+    state 에 평문으로 남는다. SES 콘솔 → SMTP settings → Create SMTP credentials 가
+    한 번만 보여 주는 값을 직접 .env 에 넣는다.
+  EOT
+  value       = var.mail_domain_name == "" ? "" : "email-smtp.${var.aws_region}.amazonaws.com"
+}
+
+output "mail_domain_verified" {
+  description = "SES 도메인 인증이 끝났는가. 거짓이면 SES 가 무엇을 보내든 거절한다."
+  value       = var.mail_domain_name == "" ? false : length(aws_ses_domain_identity_verification.mail) > 0
+}

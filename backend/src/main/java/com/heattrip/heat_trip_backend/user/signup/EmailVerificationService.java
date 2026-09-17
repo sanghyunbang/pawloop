@@ -8,6 +8,8 @@ import com.heattrip.heat_trip_backend.user.mail.MailProperties;
 import com.heattrip.heat_trip_backend.user.mail.Mailer;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 import com.heattrip.heat_trip_backend.user.service.UserService;
+import com.heattrip.heat_trip_backend.user.verification.VerificationAttempts;
+import com.heattrip.heat_trip_backend.user.verification.VerificationCodes;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Locale;
 
@@ -46,11 +47,6 @@ public class EmailVerificationService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailVerificationService.class);
 
-    /** 여섯 자리. 무차별 한 번에 100만분의 1이고, 시도 횟수를 함께 막는다. */
-    private static final int CODE_DIGITS = 6;
-
-    private static final SecureRandom RANDOM = new SecureRandom();
-
     private final PendingSignupRepository pending;
     private final UserRepository users;
     private final UserService userService;
@@ -59,7 +55,7 @@ public class EmailVerificationService {
     private final MailProperties mailProperties;
 
     /** 틀린 시도를 따로 커밋한다 — 그 javadoc 에 이유가 있다. */
-    private final PendingSignupAttempts attempts;
+    private final VerificationAttempts attempts;
 
     public EmailVerificationService(PendingSignupRepository pending,
                                     UserRepository users,
@@ -67,7 +63,7 @@ public class EmailVerificationService {
                                     PasswordEncoder passwordEncoder,
                                     Mailer mailer,
                                     MailProperties mailProperties,
-                                    PendingSignupAttempts attempts) {
+                                    VerificationAttempts attempts) {
         this.pending = pending;
         this.users = users;
         this.userService = userService;
@@ -97,7 +93,7 @@ public class EmailVerificationService {
             return mailer.send(email, "Pawloop 가입 안내", alreadyMemberBody());
         }
 
-        String code = newCode();
+        String code = VerificationCodes.newCode();
         LocalDateTime now = UserTime.nowUtc();
 
         // 이메일 하나에 대기 행 하나. 다시 요청하면 옛 행을 덮어쓴다 — 코드를 여럿 살려 두면
@@ -136,18 +132,18 @@ public class EmailVerificationService {
         // **지우기도 세기도 따로 커밋한다.** 아래에서 던지면 이 트랜잭션은 통째로 롤백되고,
         // 같은 안에서 한 변경은 없던 일이 된다 — 시도 횟수가 영원히 0 이었다(#635 에서 잡혔다).
         if (row.isExpired(now)) {
-            attempts.discard(row.getId());
+            attempts.discard(pending, row.getId());
             throw gone("코드가 만료됐어요. 다시 받아 주세요.");
         }
 
         if (row.getAttempts() >= mailProperties.getMaxAttempts()) {
             // 죽은 코드를 살려 두면 무차별 시도가 계속된다.
-            attempts.discard(row.getId());
+            attempts.discard(pending, row.getId());
             throw gone("여러 번 틀렸어요. 코드를 다시 받아 주세요.");
         }
 
         if (rawCode == null || !passwordEncoder.matches(rawCode.strip(), row.getCodeHash())) {
-            attempts.recordFailure(row.getId());
+            attempts.recordFailure(pending, row.getId());
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "코드가 맞지 않아요.");
         }
 
@@ -172,7 +168,7 @@ public class EmailVerificationService {
         if (row == null) {
             return true;
         }
-        String code = newCode();
+        String code = VerificationCodes.newCode();
         row.setCodeHash(passwordEncoder.encode(code));
         row.setExpiresAt(UserTime.nowUtc().plusMinutes(mailProperties.getCodeTtlMinutes()));
         row.setAttempts(0);
@@ -183,12 +179,6 @@ public class EmailVerificationService {
     /** 대문자·공백 때문에 같은 주소가 둘로 갈리지 않게. */
     private static String normalize(String email) {
         return email == null ? "" : email.strip().toLowerCase(Locale.ROOT);
-    }
-
-    /** 앞자리가 0 이어도 여섯 글자를 유지한다. */
-    private static String newCode() {
-        return String.format(Locale.ROOT, "%0" + CODE_DIGITS + "d",
-                RANDOM.nextInt((int) Math.pow(10, CODE_DIGITS)));
     }
 
     private static ResponseStatusException gone(String message) {

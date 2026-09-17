@@ -14,6 +14,8 @@
 | `POST /auth/signup` | **있음(#10 · #635 완료)** | `202` + `SignupStarted(mailSent)`. **계정을 안 만든다** — 인증 코드를 메일로 보내고, 계정은 `/auth/signup/verify` 에서 생긴다(#635). 이미 가입된 이메일도 **같은 202** 다 — 409 를 주면 이 경로가 가입 여부를 묻는 조회 수단이 된다. 2026-09 이전에는 `201` + `User` · 중복 `409` 였고, 그 전에는 `200` + 평문 `"회원가입 성공"` 이었다. |
 | `POST /auth/signup/verify` | **있음(#635)** | `200` + `AuthTokensResponse`. **여기서 계정이 생기고** 바로 로그인된 상태가 된다(`isNew` 참). `401` 은 코드가 틀린 것, `410` 은 만료·시도초과·대기없음이다 — 뭉개면 앱이 "다시 보내기" 를 언제 권할지 모른다. |
 | `POST /auth/signup/resend` | **있음(#635)** | `202` + `SignupStarted`. 대기 행이 없어도 같은 202 이고 메일은 안 나간다. |
+| `POST /auth/password/reset-request` | **있음(#635 ③)** | **본문 없는 202.** 그 주소로 계정이 있는지를 말하지 않는 것이 요점이라 돌려줄 것이 없어야 한다 — `mailSent` 를 주면 없는 주소에는 메일을 안 보내므로 그 값 자체가 답이 된다. 소셜 전용 계정에는 코드 대신 "소셜로 로그인하세요" 안내가 간다. |
+| `POST /auth/password/reset` | **있음(#635 ③)** | `200` + `AuthTokensResponse`(`isNew` 거짓). **바꾼 뒤 그 사람의 refresh 토큰을 전부 폐기한다** — 안 하면 침입자가 그대로 들어와 있다. `401` 은 코드가 틀린 것, `410` 은 만료·시도초과·진행 중인 재설정 없음이다(**없는 주소도 410**). |
 | `POST /auth/login` | **있음(#10 완료)** | `200` + `AuthTokensResponse`(계약의 `AuthTokens`). #9 가 발급·저장하던 refresh 토큰이 드디어 응답에 실린다. 자격증명 실패는 **본문 없는 401**(예전에는 500). |
 | (SuccessHandler → `heattrip://login-callback?code=&state=`) | **있음(#14 완료)** | `OAuth2SuccessHandler` 가 토큰 대신 60초짜리 1회용 코드를 내보낸다. 리다이렉트 대상은 `app.security.oauth.redirect-allowlist` 가 정한다. 예전에는 `?token=<AT>&refresh=<RT>` 였다. |
 | `POST /auth/oauth/{provider}/callback` (code→token) | **있음(#14 완료)** | `AuthController.exchangeOAuthCode` → `OAuthCodeExchangeService`. 1회용 코드 → `AuthTokens`. **소셜 경로에서 토큰이 나가는 유일한 자리.** 공급자와의 인가코드 교환은 Spring Security 가 이미 끝냈으므로 여기서 다시 하지 않는다. |
@@ -33,7 +35,7 @@
 - `OAuth/AppleOidcUserService` + `OAuth/apple/*` — OIDC 경로(Apple). `AppleClientSecret` 이 .p8 로 `client_secret` JWT 를 서명하고, `AppleTokenResponseClient` 가 토큰 교환 직전에 끼우며, `AppleSignInConfig` 가 발급자 검사를 더한다(#301).
 - ~~`user/service/UserService` 의 `Bearer` 헤더 → subject 추출 헬퍼~~ — **#5 에서 삭제됐다.** 대체: `OAuth/principal/CurrentUserArgumentResolver` + `@CurrentUser`. 컨트롤러는 Authorization 헤더를 다시 읽지 않는다(§6-1).
 - `user/repository/UserRepository` — `findByEmail`, `findByUsername`, `findByNickname`.
-- `config/SecurityConfig` — **`/auth/**` 는 더 이상 permitAll 이 아니다(#23).** 공개는 `/auth/signup`·`/auth/signup/verify`·`/auth/signup/resend`·`/auth/login`·`/auth/oauth/**`·`/auth/token/refresh`·`/oauth2/**`·`/login/**` 등 열거된 경로뿐이고(가입 인증의 둘은 **낱개로** 연다 — `/auth/signup/**` 로 열면 그 아래 경로가 늘 때 인증 없이 딸려 들어간다, #635) 나머지는 `anyRequest().authenticated()` + `HttpStatusEntryPoint(401)`. STATELESS, `oauth2Login(userService, successHandler)`.
+- `config/SecurityConfig` — **`/auth/**` 는 더 이상 permitAll 이 아니다(#23).** 공개는 `/auth/signup`·`/auth/signup/verify`·`/auth/signup/resend`·`/auth/password/reset-request`·`/auth/password/reset`·`/auth/login`·`/auth/oauth/**`·`/auth/token/refresh`·`/oauth2/**`·`/login/**` 등 열거된 경로뿐이고(가입 인증과 재설정의 넷은 **낱개로** 연다 — 와일드카드로 열면 그 아래 경로가 늘 때 인증 없이 딸려 들어간다, #635) 나머지는 `anyRequest().authenticated()` + `HttpStatusEntryPoint(401)`. STATELESS, `oauth2Login(userService, successHandler)`.
 
 ---
 
@@ -56,6 +58,8 @@
 | `POST /auth/signup` | `signup(@Valid @RequestBody SignupRequest request)` | 202 + `SignupStartedResponse` | ✕ |
 | `POST /auth/signup/verify` | `verifySignup(@Valid @RequestBody VerifySignupRequest request)` | `AuthTokensResponse` | ✕ |
 | `POST /auth/signup/resend` | `resendSignupCode(@Valid @RequestBody ResendSignupCodeRequest request)` | 202 + `SignupStartedResponse` | ✕ |
+| `POST /auth/password/reset-request` | `requestPasswordReset(@Valid @RequestBody PasswordResetRequestInput request)` | 202 (본문 없음) | ✕ |
+| `POST /auth/password/reset` | `resetPassword(@Valid @RequestBody PasswordResetInput request)` | `AuthTokensResponse` | ✕ |
 | `POST /auth/login` | `login(@RequestBody LoginRequest request)` | `AuthTokensResponse` | ✕ |
 | `GET /auth/oauth/{provider}` | `startOAuth(@PathVariable String provider)` | 302 (본문 없음) | ✕ |
 | `POST /auth/oauth/{provider}/callback` | (미구현 — #14) | `AuthTokensResponse` | ✕ |

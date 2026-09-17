@@ -69,6 +69,9 @@ public final class ModuleTables {
             // V2__pending_signup.sql 의 머리말에 있다 — 요지는 "남이 내 주소로 시도만 해 놓고
             // 그 주소를 막아 두는 일" 이 없어야 한다는 것이다.
             Map.entry("pending_signup", "user"),
+            // 진행 중인 비밀번호 재설정(#635 조각 ③). users 로 FK 를 안 건다 —
+            // refresh_token 과 같은 판단이라 BASELINE 에도 이 표의 줄이 없다.
+            Map.entry("password_reset", "user"),
             Map.entry("users", "user"),
             Map.entry("user_consent", "consent"),
             Map.entry("report", "moderation"),

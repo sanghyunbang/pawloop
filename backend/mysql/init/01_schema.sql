@@ -11,10 +11,14 @@
 --
 -- **db/migration/V1__baseline.sql 이 이 파일의 사본이다 (#592).** compose 는 새 볼륨에
 -- 이것을 넣고, Flyway 는 빈 DB 에 그것을 넣는다 — 둘이 어긋나면 compose 로 띄운 곳과
--- 운영이 다른 스키마로 뜬다. BaselineMatchesCanonicalSchemaTest 가 그것을 잡는다.
+-- 운영이 다른 스키마로 뜬다. CanonicalSchemaMatchesMigrationsTest 가 그것을 잡는다.
 --
 -- 그래서 이 파일을 다시 뽑았으면 **V1 을 고치는 것이 아니라 새 V 파일을 쓴다.** V1 은
 -- 체크섬이 DB 에 박혀 있어서, 한 글자만 바뀌어도 다음 부팅이 막힌다.
+--
+-- **유니크·인덱스는 엔티티의 @Table 에 적는다.** 여기 뽑히는 것은 엔티티가 만든 DB 를
+-- 그대로 읽은 것이라, 엔티티에 없으면 재생성할 때 그 줄이 사라진다 — 그리고 이 검사는
+-- 컬럼과 FK 만 보고 인덱스는 안 봐서, 사라진 것을 아무도 못 본다.
 --
 -- ------------------------------------------------------------------------
 -- 왜 이 파일이 생겼나
@@ -311,6 +315,32 @@ CREATE TABLE `media_objects` (
   CONSTRAINT `ck_media_status` CHECK ((`status` in (_utf8mb4'pending',_utf8mb4'ready')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `password_reset` (
+  `attempts` int NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `expires_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `code_hash` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_password_reset_user` (`user_id`),
+  KEY `idx_password_reset_expires` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `pending_signup` (
+  `attempts` int NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `expires_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `nickname` varchar(100) NOT NULL,
+  `code_hash` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pending_signup_email` (`email`),
+  KEY `idx_pending_signup_expires` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `pet_place_detail` (
   `lat` double DEFAULT NULL,
   `lng` double DEFAULT NULL,
@@ -355,20 +385,6 @@ CREATE TABLE `place_cell` (
   `fetched_at` datetime(6) NOT NULL,
   `payload` longtext NOT NULL,
   PRIMARY KEY (`lat_idx`,`lng_idx`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `pending_signup` (
-  `attempts` int NOT NULL DEFAULT '0',
-  `created_at` datetime(6) NOT NULL,
-  `expires_at` datetime(6) NOT NULL,
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `code_hash` varchar(255) NOT NULL,
-  `email` varchar(255) NOT NULL,
-  `nickname` varchar(100) NOT NULL,
-  `password_hash` varchar(255) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_pending_signup_email` (`email`),
-  KEY `idx_pending_signup_expires` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `post` (

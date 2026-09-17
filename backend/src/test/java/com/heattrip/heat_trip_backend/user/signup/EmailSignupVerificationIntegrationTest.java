@@ -3,9 +3,12 @@ package com.heattrip.heat_trip_backend.user.signup;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import com.heattrip.heat_trip_backend.user.UserTime;
+import com.heattrip.heat_trip_backend.user.verification.VerificationPurgeScheduler;
 import com.heattrip.heat_trip_backend.user.mail.Mailer;
+import com.heattrip.heat_trip_backend.user.repository.RefreshTokenRepository;
 import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -81,13 +84,37 @@ class EmailSignupVerificationIntegrationTest extends AbstractMySqlIntegrationTes
     @Autowired
     private PendingSignupRepository pending;
     @Autowired
-    private PendingSignupPurgeScheduler purge;
+    private RefreshTokenRepository refreshTokens;
+    @Autowired
+    private VerificationPurgeScheduler purge;
+
+    /** 트랜잭션 롤백에 기대지 않으므로 만든 행을 직접 지운다 — {@link #cleanUpCreatedRows}. */
+    private final List<String> createdEmails = new ArrayList<>();
 
     @BeforeEach
     void reset() {
         RecordingMail.SENT.clear();
         RecordingMail.succeeds = true;
         pending.deleteAll();
+    }
+
+    /**
+     * 트랜잭션 롤백에 기대지 않으므로 <b>만든 행을 직접 지운다.</b>
+     *
+     * <p>이 검사는 커밋된 상태를 봐야 해서 {@code @Transactional} 이 없다. 그러면 여기서 만든
+     * 사용자와 refresh 토큰이 <b>남아서 다른 검사의 셈을 흐린다</b> — {@code UserRepositoryTest}
+     * 는 "세 명을 넣었으니 세 명" 을 재고, 남은 행이 있으면 열한 명이 된다. 실제로 그렇게
+     * 빨간불이 났다(2026-09-17). {@code AuthContractIntegrationTest} 와 같은 방식이다.
+     */
+    @AfterEach
+    void cleanUpCreatedRows() {
+        for (String email : createdEmails) {
+            users.findByEmail(email).ifPresent(user -> {
+                refreshTokens.deleteByUserId(user.getId());
+                users.delete(user);
+            });
+        }
+        createdEmails.clear();
     }
 
     // ─────────────────────── 가입 → 인증 ───────────────────────
@@ -257,7 +284,7 @@ class EmailSignupVerificationIntegrationTest extends AbstractMySqlIntegrationTes
         expired.setExpiresAt(UserTime.nowUtc().minusMinutes(1));
         pending.saveAndFlush(expired);
 
-        purge.purgeExpiredPendingSignups();
+        purge.purgeExpired();
 
         assertThat(pending.findByEmail(dead))
                 .as("만료된 행이 남으면 쓸 일 없는 비밀번호 해시가 계속 산다")
@@ -270,6 +297,9 @@ class EmailSignupVerificationIntegrationTest extends AbstractMySqlIntegrationTes
     // ─────────────────────── 도우미 ───────────────────────
 
     private ResultActions signup(String email) throws Exception {
+        // 인증을 마치면 users 행이 생긴다. 뒷정리 목록에 올려 두지 않으면 그 행이 남아
+        // 다른 검사의 셈을 흐린다.
+        createdEmails.add(email);
         String body = objectMapper.writeValueAsString(java.util.Map.of(
                 "email", email,
                 "password", "Passw0rd!23",

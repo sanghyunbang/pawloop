@@ -130,6 +130,39 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("유니크·인덱스까지 같다 — 엔티티에 없는 인덱스는 다시 뽑을 때 조용히 사라진다")
+    void committedSchema_producesTheSameIndexes() throws Exception {
+        // **이 검사가 없던 동안 실제로 사라질 뻔했다.** #635 가 pending_signup 의 UNIQUE·인덱스를
+        // 마이그레이션에만 적고 엔티티에는 안 적었다. 이 파일은 엔티티가 만든 DB 를 그대로 읽어
+        // 뽑는 것이라, 다음에 다시 뽑는 순간 그 두 줄이 사라진다 — 그리고 컬럼만 비교하면
+        // **없어진 것을 아무도 못 본다.** 이메일 UNIQUE 가 사라진 표는 같은 주소로 대기 행이
+        // 여러 개 생기고, 그러면 "몇 번째 메일의 코드인지" 를 아무도 모른다.
+        Map<String, List<String>> fromEntities;
+        try (Connection live = dataSource.getConnection()) {
+            fromEntities = indexes(live);
+        }
+
+        try (ScratchDatabase db = ScratchDatabase.withCommittedSchema()) {
+            Map<String, List<String>> fromCopy = indexes(db.connection());
+
+            List<String> mismatched = new ArrayList<>();
+            for (var entry : fromEntities.entrySet()) {
+                List<String> other = fromCopy.get(entry.getKey());
+                if (other != null && !other.equals(entry.getValue())) {
+                    mismatched.add("%s%n    엔티티: %s%n    사본: %s"
+                            .formatted(entry.getKey(), entry.getValue(), other));
+                }
+            }
+
+            assertThat(mismatched)
+                    .as("커밋된 사본의 인덱스가 엔티티와 다르다. 손으로 더한 인덱스라면 "
+                            + "엔티티의 @Table(uniqueConstraints=…, indexes=…) 로 옮겨라 — "
+                            + "안 그러면 다음 재생성에서 사라진다.%n%s", REGENERATE)
+                    .isEmpty();
+        }
+    }
+
+    @Test
     @DisplayName("FK 의 삭제 규칙까지 같다 — 엔티티만 CASCADE 로 바뀌면 다음 재생성에서 조용히 넘어간다")
     void committedSchema_producesTheSameDeleteRules() throws Exception {
         // 위 두 테스트는 **컬럼**만 본다. FK 의 ON DELETE 는 컬럼 정의가 아니라
@@ -252,6 +285,17 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
             --
             -- SchemaDdlDriftTest 가 이 파일과 엔티티가 어긋나면 CI 를 빨간불로 만든다.
             --
+            -- **db/migration/V1__baseline.sql 이 이 파일의 사본이다 (#592).** compose 는 새 볼륨에
+            -- 이것을 넣고, Flyway 는 빈 DB 에 그것을 넣는다 — 둘이 어긋나면 compose 로 띄운 곳과
+            -- 운영이 다른 스키마로 뜬다. CanonicalSchemaMatchesMigrationsTest 가 그것을 잡는다.
+            --
+            -- 그래서 이 파일을 다시 뽑았으면 **V1 을 고치는 것이 아니라 새 V 파일을 쓴다.** V1 은
+            -- 체크섬이 DB 에 박혀 있어서, 한 글자만 바뀌어도 다음 부팅이 막힌다.
+            --
+            -- **유니크·인덱스는 엔티티의 @Table 에 적는다.** 여기 뽑히는 것은 엔티티가 만든 DB 를
+            -- 그대로 읽은 것이라, 엔티티에 없으면 재생성할 때 그 줄이 사라진다 — 그리고 이 검사는
+            -- 컬럼과 FK 만 보고 인덱스는 안 봐서, 사라진 것을 아무도 못 본다.
+            --
             -- ------------------------------------------------------------------------
             -- 왜 이 파일이 생겼나
             --
@@ -307,6 +351,29 @@ class SchemaDdlDriftTest extends AbstractMySqlIntegrationTest {
             while (rs.next()) {
                 out.computeIfAbsent(rs.getString(1).toLowerCase(), k -> new ArrayList<>())
                         .add(rs.getString(2).toLowerCase() + " " + rs.getString(3).toUpperCase());
+            }
+        }
+        return out;
+    }
+
+    /** 표 → "인덱스이름 유니크여부 컬럼목록". FK 가 만드는 인덱스까지 포함한다. */
+    private static Map<String, List<String>> indexes(Connection connection) throws SQLException {
+        Map<String, List<String>> out = new java.util.TreeMap<>();
+        try (Statement st = connection.createStatement();
+             ResultSet rs = st.executeQuery("""
+                     SELECT table_name, index_name, MAX(non_unique) AS non_unique,
+                            GROUP_CONCAT(column_name ORDER BY seq_in_index) AS cols
+                     FROM information_schema.statistics
+                     WHERE table_schema = DATABASE()
+                       AND table_name <> 'flyway_schema_history'
+                     GROUP BY table_name, index_name
+                     ORDER BY table_name, index_name
+                     """)) {
+            while (rs.next()) {
+                out.computeIfAbsent(rs.getString(1).toLowerCase(), k -> new ArrayList<>())
+                        .add(rs.getString(2).toLowerCase() + " "
+                                + (rs.getInt(3) == 0 ? "UNIQUE" : "KEY") + " ("
+                                + rs.getString(4).toLowerCase() + ")");
             }
         }
         return out;

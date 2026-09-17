@@ -86,6 +86,15 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && "/auth/signup/resend".equals(path)) {
             return new Rule("login", rateLimitProperties.getLoginMaxRequests());
         }
+        // 비밀번호 재설정 (#635 조각 ③). 시작 쪽은 **남의 메일함에 메일을 꽂는 수단**이라
+        // 한도가 없으면 그 자체가 괴롭힘 도구가 되고, 확인 쪽은 가입 인증과 같은 무차별
+        // 시도의 자리다. 둘 다 login 버킷이다.
+        if ("POST".equals(method) && "/auth/password/reset-request".equals(path)) {
+            return new Rule("login", rateLimitProperties.getLoginMaxRequests());
+        }
+        if ("POST".equals(method) && "/auth/password/reset".equals(path)) {
+            return new Rule("login", rateLimitProperties.getLoginMaxRequests());
+        }
         // ── 인증 버킷 (이슈 #14) ────────────────────────────────────────────────
         // 세 분기를 하나의 || 로 합치지 않는다. 합치면 "어느 경로가 언제 목록에서
         // 빠졌는지" 가 한 줄 안에 묻히고, 한 경로만 지웠을 때 어느 테스트가 빨간불이
