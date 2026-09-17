@@ -8,9 +8,12 @@ import com.heattrip.heat_trip_backend.user.entity.User;
 
 import lombok.RequiredArgsConstructor;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -68,6 +71,20 @@ public class ChatInviteController {
     @ResponseStatus(HttpStatus.CREATED)
     public ChatInviteView issue(@CurrentUser User user, @PathVariable long roomId) {
         return chatRooms.issueInvite(roomId, user.getId());
+    }
+
+    /**
+     * 지금 쓸 수 있는 초대코드 목록. 방장만. 새것부터.
+     *
+     * <p><b>죽은 코드는 안 나온다</b> — 회수·만료·소진된 것은 빠진다. 여기 보이는 코드는
+     * 참여가 실제로 받아 주는 코드다.
+     *
+     * <p>이 경로가 없어서 시트를 닫으면 코드를 다시 볼 수 없었고, <b>쌓인 코드를 회수할
+     * 수도 없었다</b>(회수는 코드를 알아야 부른다). 이슈 #625.
+     */
+    @GetMapping("/rooms/{roomId}/invites")
+    public List<ChatInviteView> list(@CurrentUser User user, @PathVariable long roomId) {
+        return chatRooms.liveInvites(roomId, user.getId());
     }
 
     /**

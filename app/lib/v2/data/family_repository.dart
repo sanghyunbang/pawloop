@@ -599,6 +599,36 @@ class FamilyRepository {
     return FamilyInvite.fromJson(json as Map);
   }
 
+  /// 지금 쓸 수 있는 초대코드들 — 이슈 #625. **방장만** 부를 수 있고 아니면 403 이다.
+  ///
+  /// **죽은 코드는 안 온다** — 회수·만료·소진된 것은 서버가 뺀다. 여기 오는 코드는 참여가
+  /// 실제로 받아 주는 코드라, 화면에 띄운 것을 보낸 사람이 썼는데 "만료된 코드예요" 가
+  /// 나는 일이 없다.
+  ///
+  /// 이 경로가 없던 동안 시트를 닫으면 코드를 다시 볼 수 없었고, **쌓인 코드를 회수할
+  /// 수도 없었다** — 회수는 코드를 알아야 부른다.
+  Future<List<FamilyInvite>> invites(int roomId) async {
+    final json = await _send(
+      () => _authed.getJson(Uri.parse('$baseUrl/api/chat/rooms/$roomId/invites')),
+    );
+    if (json is! List) return const [];
+    return [
+      for (final item in json)
+        if (item is Map) FamilyInvite.fromJson(item),
+    ];
+  }
+
+  /// 초대코드를 회수한다 — 이슈 #625. **방장만.**
+  ///
+  /// 유출 대응 수단이다. **새로 발급하는 것으로는 이전 코드가 안 죽는다**(#75) — 막는 것은
+  /// 이것뿐이다. 이미 회수된 코드를 다시 회수해도 성공이다.
+  Future<void> revokeInvite(int roomId, String code) async {
+    await _send(
+      () => _authed.deleteJson(
+          Uri.parse('$baseUrl/api/chat/rooms/$roomId/invites/${Uri.encodeComponent(code)}')),
+    );
+  }
+
   /// 그 그룹의 산책 주의사항 한 장. 아직 없으면 본문이 빈 문자열이다(404 가 아니다).
   Future<WalkNoteSheet> walkNote(int groupId) async {
     final json = await _send(

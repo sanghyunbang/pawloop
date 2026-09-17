@@ -3715,6 +3715,37 @@ paths:
   /api/chat/rooms/{roomId}/invites:
     parameters:
       - $ref: '#/components/parameters/RoomId'
+    get:
+      tags: [Chat]
+      summary: 지금 쓸 수 있는 초대코드
+      description: |
+        방장(`OWNER`)만 봅니다. **새것부터** 옵니다.
+
+        **죽은 코드는 안 나옵니다** — 회수(`revokedAt`)·만료(`expiresAt`)·소진
+        (`usedCount >= maxUses`)된 것은 빠집니다. 여기 보이는 코드는 참여
+        (`POST /api/chat/invites/{code}/join`)가 **실제로 받아 주는** 코드입니다.
+        조건 셋이 참여 쪽 검사와 같은 것이라, 화면에 띄운 코드를 보낸 사람이 썼는데
+        410 이 나는 일이 없습니다.
+
+        **왜 방장만인가** — 발급이 방장만이기 때문입니다. 코드는 그 자체가 열쇠라
+        조회가 발급보다 느슨하면 멤버 아무나 읽어 남에게 넘길 수 있고, 방장이 회수해도
+        다시 읽어 가면 그만입니다.
+
+        2026-09 이전에는 **이 경로가 없었습니다.** 발급 시트를 닫으면 코드를 다시 볼
+        방법이 없었고, 회수(`DELETE`)는 코드를 알아야 부르므로 **쌓인 코드를 되돌릴
+        길도 없었습니다**(이슈 #625).
+
+        방장이 아니거나 이 방의 멤버가 아니면 **403** 입니다 — `POST` 와 같은 이유입니다.
+      responses:
+        '200':
+          description: 살아 있는 코드들. 하나도 없으면 빈 배열입니다.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ChatInvite' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
     post:
       tags: [Chat]
       summary: 초대코드 발급

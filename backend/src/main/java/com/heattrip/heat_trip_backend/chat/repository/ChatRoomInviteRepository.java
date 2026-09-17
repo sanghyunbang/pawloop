@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -84,4 +85,25 @@ public interface ChatRoomInviteRepository extends JpaRepository<ChatRoomInvite, 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update ChatRoomInvite i set i.revokedAt = :now where i.id = :id and i.revokedAt is null")
     int revokeIfLive(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+    /**
+     * 이 방에서 <b>지금 쓸 수 있는</b> 초대코드 — 이슈 #625. 새것부터.
+     *
+     * <p>조건 셋은 {@link #consumeOneUse} 가 쓰기 전에 보는 것과 <b>같다.</b> 여기서 보이는
+     * 코드는 참여가 실제로 받아 주는 코드라는 뜻이다 — 화면에 띄웠는데 보낸 사람이 쓰면
+     * 410 이 나는 일이 없어야 한다.
+     *
+     * <p><b>죽은 코드는 안 준다.</b> 회수·만료·소진된 것을 목록에 남기면 방장이 "이게 아직
+     * 되나" 를 매번 따져야 하고, 그 판단을 화면이 대신 할 방법도 없다. 회수는 행을 지우지
+     * 않으므로(#9 와 같은 이유) 기록은 그대로 남아 있다 — 안 보여 줄 뿐이다.
+     */
+    @Query("""
+            select i from ChatRoomInvite i
+             where i.room.id = :roomId
+               and i.revokedAt is null
+               and (i.expiresAt is null or i.expiresAt > :now)
+               and (i.maxUses is null or i.usedCount < i.maxUses)
+             order by i.createdAt desc, i.id desc
+            """)
+    List<ChatRoomInvite> findLiveByRoom(@Param("roomId") Long roomId, @Param("now") LocalDateTime now);
 }

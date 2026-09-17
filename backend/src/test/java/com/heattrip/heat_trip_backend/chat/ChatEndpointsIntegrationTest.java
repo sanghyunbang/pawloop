@@ -445,6 +445,85 @@ class ChatEndpointsIntegrationTest extends AbstractMySqlIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    // ─────────────────── 초대코드 조회 (이슈 #625) ───────────────────
+
+    @Test
+    @DisplayName("살아 있는 초대코드를 다시 볼 수 있다 — 새것부터")
+    void theOwnerCanSeeLiveInvites() throws Exception {
+        Account owner = account("방장");
+        Room room = roomWith(owner);
+
+        String first = issueInvite(owner, room.id());
+        String second = issueInvite(owner, room.id());
+
+        mockMvc.perform(get("/api/chat/rooms/{roomId}/invites", room.id())
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[*].code",
+                        org.hamcrest.Matchers.containsInAnyOrder(first, second)))
+                .andExpect(jsonPath("$[0].roomId").value(room.id()))
+                .andExpect(jsonPath("$[0].expiresAt").isNotEmpty())
+                .andExpect(jsonPath("$[0].usedCount").value(0));
+    }
+
+    @Test
+    @DisplayName("회수한 코드는 목록에서 빠진다 — 죽은 열쇠를 살아 있는 것처럼 보여 주지 않는다")
+    void revokedInvitesLeaveTheList() throws Exception {
+        Account owner = account("방장");
+        Room room = roomWith(owner);
+
+        String kept = issueInvite(owner, room.id());
+        String revoked = issueInvite(owner, room.id());
+
+        mockMvc.perform(delete("/api/chat/rooms/{roomId}/invites/{code}", room.id(), revoked)
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/chat/rooms/{roomId}/invites", room.id())
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].code").value(kept));
+    }
+
+    @Test
+    @DisplayName("멤버는 못 본다 — 코드는 그 자체가 열쇠라 조회가 발급보다 느슨하면 안 된다")
+    void plainMembersCannotReadInvites() throws Exception {
+        Account owner = account("방장");
+        Account mate = account("그냥 멤버");
+        Room room = roomWith(owner, mate);
+        issueInvite(owner, room.id());
+
+        mockMvc.perform(get("/api/chat/rooms/{roomId}/invites", room.id())
+                        .header("Authorization", "Bearer " + mate.token()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("남의 방은 403 — 404 면 방 id 를 훑어 있는 방을 가려낼 수 있다")
+    void outsidersGetForbiddenNotNotFound() throws Exception {
+        Account owner = account("방장");
+        Account stranger = account("남");
+        Room room = roomWith(owner);
+
+        mockMvc.perform(get("/api/chat/rooms/{roomId}/invites", room.id())
+                        .header("Authorization", "Bearer " + stranger.token()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("코드가 하나도 없으면 빈 배열 — 404 가 아니다")
+    void noInvitesIsAnEmptyList() throws Exception {
+        Account owner = account("방장");
+        Room room = roomWith(owner);
+
+        mockMvc.perform(get("/api/chat/rooms/{roomId}/invites", room.id())
+                        .header("Authorization", "Bearer " + owner.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
     @Test
     @DisplayName("방장이 아니면 못 내보낸다")
     void onlyTheOwnerCanKickOverHttp() throws Exception {

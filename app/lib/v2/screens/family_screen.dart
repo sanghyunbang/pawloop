@@ -48,6 +48,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
   late final FamilyRepository _repo = widget.repository ?? FamilyRepository();
 
   FamilyGroupSummary? _group;
+
+  /// 지금 쓸 수 있는 초대코드 — 이슈 #625. `null` 이면 **못 본다**(방장이 아니다).
+  ///
+  /// 방장인지를 여기서 미리 판정하지 않는다. 서버가 403 을 주면 그때 `null` 로 둔다 —
+  /// 발급이 그렇게 하고 있고([_openInviteSheet]), 두 곳이 판정하면 한쪽이 낡는다.
+  List<FamilyInvite>? _invites;
+  bool _invitesBusy = false;
   WalkNoteSheet _note = WalkNoteSheet.empty;
   FamilyFailureKind? _failure;
   bool _loading = true;
@@ -80,6 +87,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
         _note = note;
         _loading = false;
       });
+      await _loadInvites(group.roomId);
     } on FamilyFailure catch (e) {
       if (!mounted) return;
       setState(() {
@@ -207,6 +215,11 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   if (_group != null) ...[
                     _membersCard(),
                     const SizedBox(height: 16),
+                    // 방장이 아니면 아무것도 안 그린다 — `_invites` 가 null 이다.
+                    if (_invites != null && _group != null) ...[
+                      _inviteCodesCard(_group!.roomId),
+                      const SizedBox(height: 16),
+                    ],
                     // 홈과 **같은 위젯**이다. 두 화면이 같은 데이터를 그리는데 코드가 둘이면
                     // 확인 문구가 한쪽에만 생기는 날이 온다.
                     TodayCareCard(repository: widget.repository),
@@ -338,6 +351,148 @@ class _FamilyScreenState extends State<FamilyScreen> {
   Color _colorOf(int index) => _memberColors[index % _memberColors.length];
 
   // ───────────── 가족 구성원 ─────────────
+  // ───────────── 초대코드 (이슈 #625) ─────────────
+  //
+  // 예전에는 발급 시트를 닫으면 그 코드가 앱 어디에도 안 남았다. 다시 보려면 새로 발급하는
+  // 수밖에 없었는데, **누를 때마다 살아 있는 코드가 하나씩 늘었다**(기본 7일). 회수는 코드를
+  // 알아야 부를 수 있어서, 쌓인 것을 되돌릴 길도 없었다.
+
+  /// 살아 있는 코드를 받아 온다. **403 이면 방장이 아니다** — 그때는 카드를 안 그린다.
+  Future<void> _loadInvites(int roomId) async {
+    try {
+      final found = await _repo.invites(roomId);
+      if (!mounted) return;
+      setState(() => _invites = found);
+    } on FamilyFailure catch (e) {
+      if (!mounted) return;
+      // 못 받은 것과 볼 수 없는 것을 가르지 않는다 — 둘 다 "이 화면에 그릴 것이 없다" 다.
+      // 방장인데 잠깐 못 받았으면 화면을 다시 들어오면 뜬다.
+      setState(() => _invites = e.kind == FamilyFailureKind.forbidden ? null : null);
+    }
+  }
+
+  Widget _inviteCodesCard(int roomId) {
+    final invites = _invites ?? const <FamilyInvite>[];
+    return GlassCard(
+      key: const Key('family-invite-codes'),
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 15),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.vpn_key_outlined, size: 17, color: T.warmMid),
+          const SizedBox(width: 8),
+          const Text('초대코드',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const Spacer(),
+          if (invites.isNotEmpty)
+            Text('${invites.length}개',
+                style: const TextStyle(fontSize: 12, color: T.textMuted)),
+        ]),
+        const SizedBox(height: 10),
+        if (invites.isEmpty)
+          const Text('아직 만든 코드가 없어요 · 위의 "초대" 를 눌러 만드세요',
+              key: Key('family-invite-codes-empty'),
+              style: TextStyle(fontSize: 12.5, color: T.textMuted))
+        else ...[
+          for (var i = 0; i < invites.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            _inviteRow(roomId, invites[i]),
+          ],
+          const SizedBox(height: 11),
+          // 이 두 문장이 이 카드가 있는 이유다. 새로 발급하는 것으로는 유출이 안 막힌다.
+          const Text('여기 있는 코드는 지금 쓸 수 있어요 · 회수하면 그 코드만 즉시 막혀요',
+              style: TextStyle(fontSize: 11.5, height: 1.45, color: T.textMuted)),
+        ],
+      ]),
+    );
+  }
+
+  Widget _inviteRow(int roomId, FamilyInvite invite) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 11, 8, 11),
+      decoration: BoxDecoration(
+        color: T.surface,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: T.cardBorder),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(invite.code,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 1.5, color: T.warmText)),
+            const SizedBox(height: 3),
+            // 사실만 쓴다 — 만료·횟수는 서버가 준 값이다(#329).
+            Text(inviteFactLine(expiresAt: invite.expiresAt?.toLocal(), maxUses: invite.maxUses),
+                style: const TextStyle(fontSize: 11, color: T.textMuted)),
+          ]),
+        ),
+        _inviteAction(Icons.copy_rounded, '복사', () => _copyInvite(context, invite.code)),
+        _inviteAction(Icons.ios_share_rounded, '공유', () => _shareInvite(context, invite.code)),
+        _inviteAction(Icons.link_off_rounded, '회수', () => _confirmRevoke(roomId, invite.code),
+            danger: true),
+      ]),
+    );
+  }
+
+  Widget _inviteAction(IconData icon, String label, VoidCallback onTap, {bool danger = false}) {
+    return GestureDetector(
+      key: Key('invite-action-$label'),
+      onTap: _invitesBusy ? null : onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 17, color: danger ? T.accent : T.textSecondary),
+          const SizedBox(height: 3),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: danger ? T.accent : T.textSecondary)),
+        ]),
+      ),
+    );
+  }
+
+  /// 회수는 **되돌릴 수 없다.** 누르기 전에 그 말을 한다.
+  Future<void> _confirmRevoke(int roomId, String code) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        key: const Key('invite-revoke-confirm'),
+        backgroundColor: T.surfaceBright,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('이 코드를 막을까요?',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+        content: Text('$code 로는 더 이상 들어올 수 없어요.\n이미 들어온 가족은 그대로 있어요.',
+            style: const TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogCtx).pop(false), child: const Text('그대로 두기')),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('막기', style: TextStyle(color: T.accent, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _invitesBusy = true);
+    try {
+      await _repo.revokeInvite(roomId, code);
+      if (!mounted) return;
+      // 서버가 정본이다 — 목록에서 손으로 빼면 실패한 회수도 사라진 것처럼 보인다.
+      await _loadInvites(roomId);
+      messenger.showSnackBar(const SnackBar(content: Text('코드를 막았어요')));
+    } on FamilyFailure catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _invitesBusy = false);
+    }
+  }
+
   Widget _membersCard() {
     final members = _group?.members ?? const <FamilyMemberSummary>[];
 
@@ -459,6 +614,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
       return;
     }
     _showInviteSheet(invite);
+    // 방금 만든 것이 목록에도 서야 한다 (#625).
+    await _loadInvites(group.roomId);
   }
 
   void _showInviteSheet(FamilyInvite invite) {

@@ -572,6 +572,33 @@ public class ChatRoomService {
     }
 
     /**
+     * 이 방에서 <b>지금 쓸 수 있는</b> 초대코드들 — 이슈 #625. <b>{@code OWNER} 만.</b>
+     *
+     * <h2>왜 필요했나</h2>
+     * <p>발급·회수·참여만 있고 <b>조회가 없었다.</b> 그래서 시트를 닫으면 그 코드는 앱
+     * 어디에도 안 남고, 확인하려면 새로 발급하는 수밖에 없었다 — 2026-09-17 에 사장님이
+     * "처음에만 보고 나중에 다시 보고 싶으면 어떻게 보라는 거야" 라고 물었다.
+     *
+     * <p>더 나쁜 것은 <b>회수가 막혀 있었다</b>는 점이다. 누를 때마다 살아 있는 코드가 하나씩
+     * 늘고(기본 7일), 회수({@code DELETE …/invites/{code}})는 코드를 알아야 부를 수 있는데
+     * 그 코드를 볼 방법이 없었다. 쌓인 것을 되돌릴 길이 없는 상태였다.
+     *
+     * <h2>왜 방장만인가</h2>
+     * <p>발급이 방장만이라서다({@link #issueInvite}). 코드는 <b>그 자체가 열쇠</b>라
+     * 조회가 발급보다 느슨하면 멤버 아무나 코드를 읽어 남에게 넘길 수 있다 — 방장이 회수해도
+     * 다시 읽어 가면 그만이다.
+     *
+     * @throws ResponseStatusException 403 — 멤버가 아니거나 방장이 아니면
+     */
+    @Transactional(readOnly = true)
+    public List<ChatInviteView> liveInvites(long roomId, long actorUserId) {
+        requireOwner(roomId, actorUserId);
+        return invites.findLiveByRoom(roomId, ChatTime.nowUtc(clock)).stream()
+                .map(invite -> viewOf(invite, roomId))
+                .toList();
+    }
+
+    /**
      * 초대코드를 회수한다. <b>{@code OWNER} 만.</b> 행을 지우지 않고 {@code revoked_at} 을 찍는다.
      *
      * <p><b>지우면 "회수된 코드" 와 "없던 코드" 가 구별되지 않는다.</b> 앞의 것은 410
