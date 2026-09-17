@@ -54,6 +54,43 @@ const Set<String> kWalkStartCategories = {'12', '39', '28', 'trail'};
 /// 거기는 선 전체가 들어오게 맞춘다(`fitBounds`).
 const double _kTrailPointZoom = 15;
 
+/// 지도 뷰의 **판단** 둘 — 이슈 #628.
+///
+/// 지도 SDK 는 위젯 테스트에 없어서 화면으로는 못 잰다. 그래서 판단만 여기 떼어 둔다.
+/// 화면이 맞게 그리는지는 실기기에서 보고, 여기서 지키는 것은 **숫자가 조용히 바뀌지
+/// 않는 것**이다 — 문턱이 100m 나 10km 가 되면 화면은 멀쩡해 보이면서 버튼이 계속 뜨거나
+/// 영영 안 뜬다.
+class ExploreMap {
+  ExploreMap._();
+
+  /// 이만큼 멀어져야 "이 지역에서 다시 찾기" 를 띄운다.
+  ///
+  /// 조회 반경이 8km 다. 그 안에서 조금 움직인 것으로 버튼을 띄우면 같은 답을 다시 받게
+  /// 되고, 버튼이 깜빡여 지도를 가린다. 1km 는 **목록이 실제로 달라지기 시작하는** 거리다 —
+  /// 걸어서 15분쯤이고, 그만큼 옮겼으면 다른 동네를 보는 중이다.
+  static const double researchThresholdM = 1000;
+
+  /// 지도를 여기까지 옮겼다. 다시 찾을 만큼 멀면 그 지점, 아니면 `null`.
+  static NLatLng? researchTarget(NLatLng loadedAt, NLatLng cameraAt) =>
+      haversineMeters(loadedAt.latitude, loadedAt.longitude, cameraAt.latitude,
+                  cameraAt.longitude) >=
+              researchThresholdM
+          ? cameraAt
+          : null;
+
+  /// 뭉친 곳의 개수 딱지.
+  ///
+  /// **이게 없으면 80곳이 한 점으로 보인다.** 패키지 기본 빌더
+  /// (`NaverMapClusteringOptions.defaultClusterMarkerBuilder`)는 이걸 하는데, 우리가
+  /// 아이콘을 쓰려고 빌더를 덮으면서 같이 잃었다 — 2026-09-17 신고.
+  static NOverlayCaption clusterCaption(int size) => NOverlayCaption(
+        text: '$size',
+        textSize: 13,
+        color: Colors.white,
+        haloColor: Colors.transparent,
+      );
+}
+
 class ExploreScreen extends StatefulWidget {
   final String initialView; // 'list' | 'map'
 
@@ -109,6 +146,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Timer? _searchDebounce;
 
   bool get _isSearching => _query.trim().isNotEmpty;
+
+  // ─────────── 지도를 움직였을 때 (#628) ───────────
+  //
+  // 지도를 끌면 보고 있는 곳이 바뀌는데 목록은 처음 받은 자리 것 그대로였다. 다시 받는
+  // 코드가 **한 줄도 없었다** — `onCameraIdle` 을 아예 안 듣고 있었다.
+
+  /// 카메라가 여기서 멈췄다. `null` 이면 다시 찾을 거리만큼 안 움직였다는 뜻이다.
+  NLatLng? _movedTo;
+
+  /// 이만큼 멀어져야 "다시 찾기" 를 띄운다.
+  ///
+  /// 조회 반경이 8km 다. 그 안에서 조금 움직인 것으로 버튼을 띄우면 같은 답을 다시 받게
+  /// 되고, 버튼이 계속 깜빡여 지도를 가린다. 1km 는 **목록이 실제로 달라지기 시작하는**
+  /// 거리다 — 걸어서 15분쯤이고, 그만큼 옮겼으면 다른 동네를 보는 중이다.
+
   bool _loading = true;
   /// 내가 고른 동네 (#342). 현위치를 못 받았을 때 서울시청 대신 여기를 쓴다.
   Neighborhood? _myNeighborhood;
@@ -716,6 +768,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final icon = _clusterIcon;
     if (icon != null) marker.setIcon(icon);
     marker.setSize(const Size(44, 44));
+    // **개수를 적는다.** 패키지 기본 빌더는 이걸 하는데(`defaultClusterMarkerBuilder`),
+    // 우리가 아이콘을 쓰려고 빌더를 덮으면서 같이 잃었다. 그래서 80곳이 한 점으로 뭉쳐도
+    // 숫자가 없어 "장소가 하나뿐" 으로 보였다 — 2026-09-17 신고.
+    marker.setCaption(ExploreMap.clusterCaption(info.size));
+    // 글자를 원 **안**에 놓는다. 기본은 핀 아래라 원과 따로 떠 보인다.
+    marker.setCaptionAligns(const [NAlign.center]);
     // 숫자는 흰 글자 + 보라 후광 — 기본 핀 위에 흰 글자만 얹으면 안 보였다(에뮬레이터 확인).
     marker.setCaption(NOverlayCaption(
       text: '${info.size}',
@@ -1403,6 +1461,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
             maxZoom: 18,
           ),
           clusterOptions: NaverMapClusteringOptions(clusterMarkerBuilder: _clusterMarker),
+          // 지도를 움직이면 그 지역을 다시 찾을 수 있게 한다 (#628).
+          //
+          // **자동으로 다시 받지 않는다.** 손이 미끄러진 것과 "여기를 보고 싶다" 를 앱이
+          // 못 가른다 — 네이버·카카오 지도가 버튼을 두는 이유다. 대신 버튼이 뜨는 것까지는
+          // 자동이라, 움직였는데 아무 말이 없는 일은 없다.
+          //
+          // 드래그한 중심은 **사용자의 현재 위치가 아니다.** A안(#235)이 막는 것은 기기가
+          // 아는 내 위치를 서버로 보내는 것이지, 사용자가 손으로 고른 지점이 아니다.
+          onCameraIdle: _onCameraIdle,
           onMapReady: (c) async {
             _mapCtrl = c;
             await _prepareClusterIcon();
@@ -1417,7 +1484,40 @@ class _ExploreScreenState extends State<ExploreScreen> {
           },
         ),
       ),
-      if (!_loading && _farNotice != null)
+      // "이 지역에서 다시 찾기" — 지도를 1km 넘게 옮겼을 때만 뜬다 (#628).
+      if (_movedTo != null && !_loading)
+        Positioned(
+          top: 106, left: 0, right: 0,
+          child: Center(
+            child: GestureDetector(
+              key: const Key('explore-research-here'),
+              onTap: _researchHere,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [T.warmStart, T.warmEnd],
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x33E04A2B), blurRadius: 14, offset: Offset(0, 5)),
+                  ],
+                ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.refresh_rounded, size: 17, color: Colors.white),
+                  SizedBox(width: 7),
+                  Text('이 지역에서 다시 찾기',
+                      style: TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w800, color: Colors.white)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      if (!_loading && _farNotice != null && _movedTo == null)
         Positioned(
           top: 112, left: 16, right: 16,
           child: Center(
@@ -1449,6 +1549,38 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ),
         ),
     ]);
+  }
+
+  /// 지도가 멈췄다. 멀리 왔으면 "이 지역에서 다시 찾기" 를 띄운다.
+  ///
+  /// 여기서 **바로 받지 않는다.** 손이 미끄러진 것과 "여기를 보고 싶다" 를 앱이 못 가르고,
+  /// 끄는 동안 계속 받으면 조회가 폭발한다.
+  Future<void> _onCameraIdle() async {
+    final c = _mapCtrl;
+    if (c == null || !mounted) return;
+    final pos = await c.getCameraPosition();
+    if (!mounted) return;
+    final next = ExploreMap.researchTarget(_center, pos.target);
+    // 같은 답이면 다시 그리지 않는다 — 끄는 동안 이 콜백이 여러 번 온다.
+    if ((next == null) == (_movedTo == null) &&
+        (next == null || haversineMeters(next.latitude, next.longitude,
+                _movedTo!.latitude, _movedTo!.longitude) < 50)) {
+      return;
+    }
+    setState(() => _movedTo = next);
+  }
+
+  /// 지금 보고 있는 곳으로 다시 받는다.
+  Future<void> _researchHere() async {
+    final target = _movedTo;
+    if (target == null) return;
+    setState(() {
+      _center = target;
+      _movedTo = null;
+      // 여기는 내가 고른 동네도, 현위치도 아니다 — "서울시청 기준" 안내를 지운다.
+      _fallbackCenter = false;
+    });
+    await _load();
   }
 
   Future<void> _refreshMarkers() async {
