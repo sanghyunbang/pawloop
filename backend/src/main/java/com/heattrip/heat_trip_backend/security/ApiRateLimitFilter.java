@@ -196,6 +196,10 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("PUT".equals(method) && path.matches("^/api/chat/rooms/\\d+/mute$")) {
             return new Rule("group-write", rateLimitProperties.getGroupWriteMaxRequests());
         }
+        // 조회(GET .../invites, #625)도 안 넣는다. 자기 방의 살아 있는 코드를 읽는 것뿐이라
+        // 반복해도 새로 생기는 것이 없다 — GET /api/push/settings 와 같이 다른 인증 읽기의
+        // 무리에 둔다. **발급(POST)만 한도가 있는 것이 맞다** — 그쪽이 행을 만든다.
+        //
         // 회수(DELETE .../invites/{code})는 넣지 않는다. 자기 방의 코드를 죽이는 것뿐이라
         // 반복해도 새로 생기는 것이 없고, 유출 대응을 한도로 막으면 그게 더 나쁘다.
         // 메시지 삭제(DELETE /api/chat/messages/{id}, #197)도 같은 판단이다 — 내 메시지의 본문을

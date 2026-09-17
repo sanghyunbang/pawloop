@@ -67,16 +67,20 @@ class FamilyGroupContractSpecTest {
     // ─────────────────── A. 코드 ↔ 계약 ───────────────────
 
     @Test
-    @DisplayName("이 이슈가 연 다섯 경로가 계약에 그대로 등재돼 있다 — 경로 목록은 컨트롤러에서 읽는다")
+    @DisplayName("이 이슈가 연 경로가 계약에 그대로 등재돼 있다 — 경로 목록은 컨트롤러에서 읽는다")
     void everyEndpointThisIssueOpened_isDeclaredInTheContract() {
         Set<String> declared = declaredOperations();
         List<String> implemented = new ArrayList<>();
         implemented.addAll(operationsOf(GroupController.class));
         implemented.addAll(operationsOf(ChatInviteController.class));
 
+        // 이 숫자는 **리플렉션이 실제로 읽었는가**를 재는 것이지 경로 개수를 얼리는 것이
+        // 아니다. 0 이면 아래 `containsAll` 이 빈 목록을 통과시켜 이 검사가 아무것도 안 지킨다.
+        // 경로가 늘면 여기도 같이 는다 — 2026-09 에 초대코드 조회(GET …/invites)가 들어와
+        // 다섯에서 여섯이 됐다(#625).
         assertThat(implemented)
                 .as("컨트롤러에서 매핑을 하나도 못 읽었다면 이 검사는 아무것도 지키지 않는다")
-                .hasSize(5);
+                .hasSize(6);
         assertThat(declared)
                 .as("""
                         계약에 없는 경로는 앱이 존재를 모른다 — design-first 라 앱은 이 파일을 보고 만든다.
