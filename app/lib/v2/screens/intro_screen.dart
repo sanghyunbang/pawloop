@@ -12,12 +12,17 @@
 // "건너뛰기" 와 "시작하기" 는 **같은 곳(로그인 화면)** 으로 간다. 로그인 화면에
 // "그냥 둘러보기" 가 있으므로 여기서 갈림길을 하나 더 만들 이유가 없다.
 //
+// 다만 둘 다 그 앞에 **접근권한 안내 한 장**을 지난다(#682). 정보통신망법 제22조의2
+// 제1항이 최초 실행 시에 알리라고 한 것이고, 앱이 그 "최초 실행" 을 가질 수 있는 자리가
+// 여기뿐이다. 자세한 것은 [_IntroScreenState._finish] 에 적었다.
+//
 // `onboarding_screen.dart`(소셜 첫 로그인 뒤 반려동물 등록 권유)와 다른 화면이다.
 // 그쪽은 계정이 생긴 뒤, 이쪽은 계정이 생기기 전이다.
 import 'package:flutter/material.dart';
 
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+import 'settings/permission_notice_screen.dart';
 
 /// 한 장의 내용. 그림은 이모지 자산(`assets/emoji/*.png`) 아니면 아이콘 하나다 —
 /// 디자인 시스템이 Fluent 3D 이모지를 쓰므로 시스템 이모지 글자는 넣지 않는다.
@@ -87,9 +92,33 @@ class _IntroScreenState extends State<IntroScreen> {
   bool get _last => _index == kIntroPages.length - 1;
 
   /// 두 번 불리지 않게 잠근다 — 버튼을 연타하면 `go` 가 두 번 돈다.
+  ///
+  /// ## 첫 실행이면 접근권한 안내를 한 장 더 보여 준다 (#682)
+  ///
+  /// **정보통신망법 제22조의2 제1항**이 앱 설치 시 또는 최초 실행 시에 접근권한을 필수와
+  /// 선택으로 나누어 알리라고 한다. 앱이 그 "최초 실행" 을 가질 수 있는 자리가 여기다 —
+  /// 소개는 로그인보다 앞이고 기기당 한 번뿐이라, 소개가 끝나는 지점이 사용자가 아무것도
+  /// 아직 안 한 마지막 순간이다.
+  ///
+  /// 건너뛰기와 시작하기가 **둘 다** 이리로 온다. 고지가 마지막 장을 끝까지 넘긴 사람에게만
+  /// 보이면, 건너뛴 사람은 안내를 못 받는다 — 그쪽이 오히려 다수다.
+  ///
+  /// 설정에서 다시 볼 때(`replay`)는 띄우지 않는다. 그때는 설정에 자기 줄이 따로 있다.
   void _finish() {
     if (_done) return;
     _done = true;
+    _leave();
+  }
+
+  Future<void> _leave() async {
+    if (!widget.replay) {
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => const PermissionNoticeScreen(firstRun: true),
+      ));
+      // 안내를 보는 사이에 화면이 사라졌으면(딥링크·세션 변화) 라우터가 이미 다른 곳에
+      // 가 있다. 거기서 `onDone` 을 부르면 로그인 화면으로 끌어온다.
+      if (!mounted) return;
+    }
     widget.onDone();
   }
 
