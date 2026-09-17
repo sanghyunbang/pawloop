@@ -1,0 +1,77 @@
+# Pawloop prod 의 바깥문 — 이슈 #609 · #613
+#
+# 밖에서 오는 것은 전부 여기를 지난다. 앱의 8080 은 .env 의 APP_PUBLISHED_HOST=127.0.0.1
+# 로 루프백에만 묶이고 보안그룹도 8080 을 안 연다. 그래서 아래 두 가지를 우회할 수 없다.
+#
+#   1. X-Real-IP 주입  — 없으면 rate limit 이 통째로 무너진다 (아래 설명)
+#   2. actuator 차단   — /actuator/prometheus 는 밖에서 보이면 안 된다
+#
+# 이 파일은 docker-compose.prod.yml 이 읽기 전용으로 물려 준다.
+
+{
+	# 인증서 만료 경고가 여기로 온다. 비워 두면 익명 발급이라 경고를 못 받고,
+	# 자동 갱신이 조용히 실패하면 어느 날 갑자기 로그인이 전부 죽는다.
+	email {$ACME_EMAIL}
+}
+
+{$PAWLOOP_DOMAIN} {
+	encode gzip
+
+	# ── actuator ────────────────────────────────────────────────────
+	#
+	# health 만 통과시킨다. 우리 확인 스크립트가 쓰고, show-details=never 라
+	# {"status":"UP"} 뿐이다.
+	#
+	# 나머지는 막는다. 특히 /actuator/prometheus 는 **공개이면서 rate limit 까지
+	# 면제**다 — 지표 수집기가 주기적으로 부르라고 그렇게 둔 것이고, 그 판단의
+	# 전제가 "내부망" 이었다. 엔드포인트 이름·호출 수·에러율·JVM·DB 커넥션 상태가
+	# 누구에게나, 횟수 제한 없이 나간다.
+	#
+	# 앱 설정이 아니라 여기서 막는 이유: 서버 안에서는 계속 쓸 수 있어야 한다.
+	@actuator_public path /actuator/health /actuator/health/*
+	handle @actuator_public {
+		reverse_proxy app:8080 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle /actuator /actuator/* {
+		respond 404
+	}
+
+	# ── 나머지 전부 ─────────────────────────────────────────────────
+	handle {
+		reverse_proxy app:8080 {
+			# **이 줄이 없으면 rate limit 이 사라진다.**
+			#
+			# ClientIpResolver 는 두 벽을 세워 뒀다 (#14).
+			#   1) 연결 상대가 신뢰 프록시가 아니면 헤더를 아예 안 읽는다
+			#   2) 읽을 때는 목록의 마지막 원소를 쓴다
+			#
+			# Caddy 는 도커 네트워크 안(172.x)에 있어 trusted-proxies 의
+			# 172.16.0.0/12 에 들어간다 — 1번은 통과한다. 그런데 Caddy 는 기본으로
+			# X-Forwarded-For 와 X-Forwarded-Proto 만 붙이고 X-Real-IP 는 안 붙인다.
+			#
+			# 그러면 헤더가 비어 resolve() 가 연결 상대(= Caddy 의 IP)로 떨어지고,
+			# **전 세계가 카운터 하나를 공유한다.** 로그인 한도 10/분이 서비스 전체
+			# 합계가 된다 — 증상은 "가끔 로그인이 429" 로만 보인다.
+			#
+			# 이 줄을 지워도 아무 에러가 안 난다. 그래서 검사로 잠가 뒀다.
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# ── 나중에 들어올 자리 ──────────────────────────────────────────
+	#
+	# Apple Services ID 를 만들려면 도메인 소유 확인이 필요하고, 애플이 주는 파일을
+	# /.well-known/apple-developer-domain-association.txt 로 내보내야 한다 (#612).
+	# 그 파일을 받으면 여기에 handle 블록을 하나 더 둔다.
+}
+
+# 컨테이너 헬스체크가 두드리는 자리. 밖으로 안 열린다(compose 가 ports 에 안 적는다).
+#
+# 80 을 두드리면 https 로 되돌리는 308 이 와서 판정이 애매해진다. 그래서 200 만
+# 돌려주는 자리를 따로 둔다.
+:8081 {
+	respond "ok" 200
+}

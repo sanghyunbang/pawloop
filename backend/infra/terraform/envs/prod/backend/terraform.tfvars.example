@@ -1,0 +1,56 @@
+# terraform.tfvars 로 복사해 값을 채운다. **그 파일은 깃이 무시한다**
+# (backend/.gitignore:76) — 내 공인 IP 가 들어가므로 저장소에 올리지 않는다.
+#
+# 처음 만드는 절차는 이슈 #609, 만든 뒤 반복해서 쓰는 명령은 #607 에 있다.
+
+aws_region  = "ap-northeast-2"
+name_prefix = "pawloop-prod"
+
+# 기본 VPC 와 그 안의 퍼블릭 서브넷. 콘솔에서 확인하거나:
+#   aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId'
+#   aws ec2 describe-subnets --filters Name=vpc-id,Values=<위 값> \
+#     --query 'Subnets[?MapPublicIpOnLaunch==`true`].SubnetId'
+vpc_id    = "vpc-xxxxxxxxxxxxxxxxx"
+subnet_id = "subnet-xxxxxxxxxxxxxxxxx"
+
+# 콘솔에서 만들어 둔 EC2 키페어 이름. .pem 파일 내용이 아니라 **이름**이다.
+key_name = "pawloop-prod"
+
+instance_type       = "t3.medium"
+root_volume_size_gb = 40
+
+# DB 전용 볼륨. 인스턴스를 교체해도 남는다.
+# 늘리는 것은 나중에 되지만 줄이는 것은 안 된다 — 작게 시작한다.
+data_volume_size_gb = 20
+
+# SSH 는 **내 공인 IP 하나만**. 장소를 옮기면 바뀐다 — 고치는 절차는 #607 1절.
+#   curl -s https://checkip.amazonaws.com
+allowed_ssh_cidr_blocks = ["x.x.x.x/32"]
+
+# 백엔드가 응답할 이름. pawloop.app 은 비워 둔다 — 스토어가 요구하는
+# 개인정보처리방침 페이지 자리다 (#611).
+domain_name = "api.pawloop.app"
+
+# 도메인을 Route 53 에서 등록하면 호스팅 영역이 자동으로 생긴다.
+#   aws route53 list-hosted-zones-by-name --dns-name pawloop.app \
+#     --query 'HostedZones[0].Id' --output text
+# 앞의 /hostedzone/ 은 떼고 적는다.
+route53_zone_id = "ZXXXXXXXXXXXXXXXXXXXX"
+
+# 인증서 만료 경고를 받을 주소. 자동 갱신이 조용히 실패하면 이게 유일한 신호다.
+acme_email = "you@example.com"
+
+# private 저장소라 SSH 주소를 쓴다. https 를 적으면 terraform 이 apply 전에 막는다.
+repo_url    = "git@github.com:sanghyunbang/heattrip.git"
+repo_branch = "main"
+
+# SSM SecureString 이름. 값이 아니라 **이름**이다.
+repo_deploy_key_ssm_parameter_name = "/pawloop/prod/backend/deploy-key"
+app_env_ssm_parameter_name         = "/pawloop/prod/backend/env"
+
+# SecureString 을 기본 키로 만들었으면 비워 둔다.
+kms_key_arns = []
+
+tags = {
+  Owner = "sanghyun"
+}

@@ -52,6 +52,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ComposeWaitsAndReportsHealthTest {
 
+    /** prod 에서만 얹는 덧붙임. Caddy 와 DB 볼륨 분리가 여기 있다 (#609). */
+    private static final String PROD_COMPOSE_FILE = "docker-compose.prod.yml";
+
     @Test
     @DisplayName("앱은 DB 가 healthy 가 될 때까지 기다린다 — 시작만 기다리지 않는다")
     void appWaitsUntilTheDatabaseIsHealthy() {
@@ -95,9 +98,72 @@ class ComposeWaitsAndReportsHealthTest {
                 .isEmpty();
     }
 
+    /**
+     * prod 에서만 얹는 덧붙임 파일도 같은 규칙을 받는다 — 이슈 #609.
+     *
+     * <p>이 검사가 처음에는 {@code docker-compose.yml} 만 읽었다. 그 상태로 prod 덧붙임에
+     * Caddy 를 더하면 <b>그 서비스는 검사를 빠져나간다</b> — 바로 위 "서비스마다 재는 이유"
+     * 가 말한 그 구멍이, 파일이 늘어나는 축에서 그대로 다시 생긴다.
+     */
+    @Test
+    @DisplayName("prod 덧붙임의 서비스도 healthcheck 를 갖는다")
+    void everyProdServiceReportsItsOwnHealth() {
+        Map<String, Object> services = servicesOf(PROD_COMPOSE_FILE);
+
+        List<String> silent = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : services.entrySet()) {
+            Object definition = entry.getValue();
+            if (!(definition instanceof Map<?, ?> service)) {
+                continue;
+            }
+            // 덧붙임은 기존 서비스의 일부만 고칠 수 있다. base 에 이미 healthcheck 가 있는
+            // 서비스는 여기서 다시 적지 않는다 — 새로 등장한 서비스만 본다.
+            if (servicesOf(MySqlServerSpec.COMPOSE_FILE).containsKey(entry.getKey())) {
+                continue;
+            }
+            if (!(service.get("healthcheck") instanceof Map)) {
+                silent.add(entry.getKey());
+            }
+        }
+
+        assertThat(silent)
+                .as("""
+                        prod 에서만 뜨는 서비스에 healthcheck 가 없다. `docker compose ps` 가 \
+                        Up 만 찍어서, 죽었다 살아나기를 반복해도 사람이 알아채기 어렵다 (#601).""")
+                .isEmpty();
+    }
+
+    /**
+     * prod 는 DB 를 서버 디스크가 아니라 별도 EBS 볼륨에 둔다 — 이슈 #609.
+     *
+     * <p>부팅 스크립트를 고치면 인스턴스가 교체되고 root 볼륨은 사라진다. 이 덧붙임이
+     * 없으면 <b>배포할 때마다 DB 가 날아간다.</b> staging 에서 하루에 세 번 날렸다.
+     */
+    @Test
+    @DisplayName("prod 덧붙임이 DB 데이터를 별도 볼륨으로 보낸다")
+    void prodPutsTheDatabaseOnItsOwnDisk() {
+        Object volumes = load(TestProjectPaths.requireFile(PROD_COMPOSE_FILE)).get("volumes");
+        assertThat(volumes).as("prod 덧붙임에 volumes 블록이 없다").isInstanceOf(Map.class);
+
+        Object mysqlData = ((Map<?, ?>) volumes).get("mysql_data");
+        assertThat(mysqlData)
+                .as("mysql_data 를 다시 정의하지 않는다 — 그러면 DB 가 서버 디스크에 남는다")
+                .isInstanceOf(Map.class);
+
+        Object opts = ((Map<?, ?>) mysqlData).get("driver_opts");
+        assertThat(opts).as("driver_opts 가 없다 — 저장 위치가 안 바뀐다").isInstanceOf(Map.class);
+        assertThat(((Map<?, ?>) opts).get("device"))
+                .as("DB 를 별도로 마운트한 디스크(/mnt/data)로 보내지 않는다 (#609)")
+                .isEqualTo("/mnt/data/mysql");
+    }
+
     /** compose 의 {@code services} 블록. */
     private static Map<String, Object> services() {
-        Path composeFile = TestProjectPaths.requireFile(MySqlServerSpec.COMPOSE_FILE);
+        return servicesOf(MySqlServerSpec.COMPOSE_FILE);
+    }
+
+    private static Map<String, Object> servicesOf(String relativePath) {
+        Path composeFile = TestProjectPaths.requireFile(relativePath);
         Object servicesNode = load(composeFile).get("services");
         if (!(servicesNode instanceof Map<?, ?> services)) {
             throw new IllegalStateException(composeFile + " 에 services 블록이 없다.");
