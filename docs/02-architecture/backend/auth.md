@@ -11,7 +11,9 @@
 | 계약 엔드포인트 | 상태 | 비고 |
 | --- | --- | --- |
 | `GET /auth/oauth/{provider}` (로그인 시작 302) | **있음(#10 완료)** | `AuthController.startOAuth` 가 `Location: /oauth2/authorization/{provider}` 로 302 한다. 화이트리스트(`kakao`·`google`·`apple`(#301)) 밖은 400 + `Error`(`VALIDATION`). `naver` 는 ADR-0010 이 보류로 확정하면서 계약 enum 과 함께 빠졌다 — 이 래퍼로는 400 이다(#15). 예전에는 핸들러가 **빈 200** 을 주면서 계약은 "미구현" 이라고 적고 있었다. |
-| `POST /auth/signup` | **있음(#10 완료)** | `201` + 계약의 `User`. 중복 이메일은 **409**. 예전에는 `200` + 평문 `"회원가입 성공"` 이었고 중복이 400 이었다. 토큰은 발급하지 않는다 — 가입 직후 로그인은 `POST /auth/login` 이다. |
+| `POST /auth/signup` | **있음(#10 · #635 완료)** | `202` + `SignupStarted(mailSent)`. **계정을 안 만든다** — 인증 코드를 메일로 보내고, 계정은 `/auth/signup/verify` 에서 생긴다(#635). 이미 가입된 이메일도 **같은 202** 다 — 409 를 주면 이 경로가 가입 여부를 묻는 조회 수단이 된다. 2026-09 이전에는 `201` + `User` · 중복 `409` 였고, 그 전에는 `200` + 평문 `"회원가입 성공"` 이었다. |
+| `POST /auth/signup/verify` | **있음(#635)** | `200` + `AuthTokensResponse`. **여기서 계정이 생기고** 바로 로그인된 상태가 된다(`isNew` 참). `401` 은 코드가 틀린 것, `410` 은 만료·시도초과·대기없음이다 — 뭉개면 앱이 "다시 보내기" 를 언제 권할지 모른다. |
+| `POST /auth/signup/resend` | **있음(#635)** | `202` + `SignupStarted`. 대기 행이 없어도 같은 202 이고 메일은 안 나간다. |
 | `POST /auth/login` | **있음(#10 완료)** | `200` + `AuthTokensResponse`(계약의 `AuthTokens`). #9 가 발급·저장하던 refresh 토큰이 드디어 응답에 실린다. 자격증명 실패는 **본문 없는 401**(예전에는 500). |
 | (SuccessHandler → `heattrip://login-callback?code=&state=`) | **있음(#14 완료)** | `OAuth2SuccessHandler` 가 토큰 대신 60초짜리 1회용 코드를 내보낸다. 리다이렉트 대상은 `app.security.oauth.redirect-allowlist` 가 정한다. 예전에는 `?token=<AT>&refresh=<RT>` 였다. |
 | `POST /auth/oauth/{provider}/callback` (code→token) | **있음(#14 완료)** | `AuthController.exchangeOAuthCode` → `OAuthCodeExchangeService`. 1회용 코드 → `AuthTokens`. **소셜 경로에서 토큰이 나가는 유일한 자리.** 공급자와의 인가코드 교환은 Spring Security 가 이미 끝냈으므로 여기서 다시 하지 않는다. |
@@ -31,7 +33,7 @@
 - `OAuth/AppleOidcUserService` + `OAuth/apple/*` — OIDC 경로(Apple). `AppleClientSecret` 이 .p8 로 `client_secret` JWT 를 서명하고, `AppleTokenResponseClient` 가 토큰 교환 직전에 끼우며, `AppleSignInConfig` 가 발급자 검사를 더한다(#301).
 - ~~`user/service/UserService` 의 `Bearer` 헤더 → subject 추출 헬퍼~~ — **#5 에서 삭제됐다.** 대체: `OAuth/principal/CurrentUserArgumentResolver` + `@CurrentUser`. 컨트롤러는 Authorization 헤더를 다시 읽지 않는다(§6-1).
 - `user/repository/UserRepository` — `findByEmail`, `findByUsername`, `findByNickname`.
-- `config/SecurityConfig` — **`/auth/**` 는 더 이상 permitAll 이 아니다(#23).** 공개는 `/auth/signup`·`/auth/login`·`/auth/oauth/**`·`/auth/token/refresh`·`/oauth2/**`·`/login/**` 등 열거된 경로뿐이고 나머지는 `anyRequest().authenticated()` + `HttpStatusEntryPoint(401)`. STATELESS, `oauth2Login(userService, successHandler)`.
+- `config/SecurityConfig` — **`/auth/**` 는 더 이상 permitAll 이 아니다(#23).** 공개는 `/auth/signup`·`/auth/signup/verify`·`/auth/signup/resend`·`/auth/login`·`/auth/oauth/**`·`/auth/token/refresh`·`/oauth2/**`·`/login/**` 등 열거된 경로뿐이고(가입 인증의 둘은 **낱개로** 연다 — `/auth/signup/**` 로 열면 그 아래 경로가 늘 때 인증 없이 딸려 들어간다, #635) 나머지는 `anyRequest().authenticated()` + `HttpStatusEntryPoint(401)`. STATELESS, `oauth2Login(userService, successHandler)`.
 
 ---
 
@@ -51,7 +53,9 @@
 
 | HTTP · 경로 | 메서드 시그니처(파라미터 타입) | 반환 DTO | 인증 |
 | --- | --- | --- | --- |
-| `POST /auth/signup` | `signup(@RequestBody SignupRequest request)` | 201 + `UserResponse` | ✕ |
+| `POST /auth/signup` | `signup(@Valid @RequestBody SignupRequest request)` | 202 + `SignupStartedResponse` | ✕ |
+| `POST /auth/signup/verify` | `verifySignup(@Valid @RequestBody VerifySignupRequest request)` | `AuthTokensResponse` | ✕ |
+| `POST /auth/signup/resend` | `resendSignupCode(@Valid @RequestBody ResendSignupCodeRequest request)` | 202 + `SignupStartedResponse` | ✕ |
 | `POST /auth/login` | `login(@RequestBody LoginRequest request)` | `AuthTokensResponse` | ✕ |
 | `GET /auth/oauth/{provider}` | `startOAuth(@PathVariable String provider)` | 302 (본문 없음) | ✕ |
 | `POST /auth/oauth/{provider}/callback` | (미구현 — #14) | `AuthTokensResponse` | ✕ |
@@ -238,7 +242,8 @@
    | 딥링크는 `Uri.parse(url).queryParameters['token']` 로 파싱한다 (#14 로 대체됨 — 지금은 `['code']`·`['state']`) | 딥링크가 `heattrip://login-callback?token=<AT>&refresh=<RT>` 로 바뀌었다. 액세스 토큰이 더 이상 URL 의 꼬리가 아니다 | `token=` 뒤를 전부 잘라 쓰던 코드가 `<AT>&refresh=<RT>` 를 통째로 저장한다 → 모든 요청 401 |
    | 갱신 요청을 **single-flight** 로 직렬화하고 실패해도 재시도하지 않는다 | 서버는 유예 창을 두지 않는다. 같은 RT 로 동시에 두 번 보내면 진 쪽이 **재사용**으로 판정된다 | 만료된 AT 로 API 두 개가 동시에 401 → 각자 refresh → 한쪽이 재사용으로 판정되어 **전 기기 로그아웃**. 사용자에게는 서버 버그로 보인다 |
    | `POST /auth/login` 응답을 **JSON 으로 파싱**해 `accessToken` 을 꺼내고, `refreshToken` 을 함께 저장한다 | 응답이 JWT 평문 문자열에서 `AuthTokens` JSON 으로 바뀌었다(#10) | `response.body` 를 그대로 토큰으로 저장하면 JSON 전체가 `Authorization` 헤더에 실린다 → **모든 요청 401**. 그리고 refresh 토큰을 저장하지 않으면 1시간마다 재로그인이다 |
-   | `POST /auth/signup` 의 성공을 **201** 로 받고, 응답 본문을 `User` JSON 으로 읽는다 | 200 + 평문 `"회원가입 성공"` 에서 201 + `User` 로 바뀌었다(#10). 중복 이메일은 400 이 아니라 **409** 다 | 200 만 성공으로 보면 정상 가입이 실패로 보인다. 409 를 400 으로 묶어 다루면 "이미 가입된 이메일" 안내를 못 한다 |
+   | `POST /auth/signup` 의 성공을 **202** 로 받고, 계정의 `id` 는 `/auth/signup/verify` 응답의 `user.id` 에서 읽는다 | 가입이 두 걸음이 됐다(#635) — 이 응답에는 만들어진 것이 없다. 그전에는 201 + `User`(#10), 더 전에는 200 + 평문이었다 | 201 만 성공으로 보면 **정상 가입이 실패로 보인다**. 응답에서 `id` 를 읽으려 하면 빈 값이다 |
+   | 중복 이메일을 **따로 다루지 않는다** | 이미 가입된 주소도 같은 202 다(#635). 409 를 주면 이 경로가 가입 여부를 묻는 조회 수단이 된다 | 409 분기를 남겨 두면 죽은 코드이고, 그 분기를 살리려고 서버에 409 를 되살리면 아무나 가입 여부를 셀 수 있다 |
    | 로그인 실패를 **401** 로 다룬다 | 자격증명 실패가 500 에서 401 로 바뀌었다(#10). 본문은 없다 | 500 만 서버 오류로 보던 코드가 "서버가 죽었다" 대신 아무 안내도 못 한다 |
    | 4xx·5xx 본문은 `{"error":{"code","message","traceId"}}` 하나뿐이다. **단 401 은 본문이 없다** | 전역 오류 포맷을 계약의 `Error` 로 통일했다(#10) | `{status,message,...}` 나 `{"error":"문자열"}` 을 기대하는 파싱은 전부 빈 값을 읽는다. 401 에서 `error.code` 를 읽으려 하면 파싱 예외가 난다 |
 
@@ -265,4 +270,4 @@
    > ⚠️ **이슈 #10 본문은 401 에도 `{"error":{"code":"UNAUTHORIZED"}}` 본문을 요구했다. 따르지 않았다.** 그 요구는 #5 보다 먼저 쓰였고, #5 가 그 뒤에 '401 은 본문 없음' 으로 확정하면서 계약과 두 테스트(`AuthContractSpecTest.unauthorizedResponse_declaresNoBody`, `GeneratedOpenApiSpecTest.generatedSpec_401NeverDeclaresABody`)가 그것을 잠갔다. 본문을 되붙이면 그 둘이 빨간불이 된다. 계약이 코드보다 우선이라는 규약(#4)을 그대로 따른 결과다.
 8. **트랜잭션** — `exchangeCode`(사용자 upsert + refresh 저장), `deleteMe`(사용자 + refresh 삭제)는 `@Transactional` 경계로 묶기. 외부 공급자 HTTP 호출은 트랜잭션 밖에서 수행 후, DB 쓰기만 트랜잭션 내부로(장시간 커넥션 점유 방지).
 9. **좌표/공간 무관** — Auth 리소스는 EPSG:5174→WGS84·`ST_Distance_Sphere` 등 공간 처리와 무관(그쪽 함정은 Places/Walks 문서에서 다룸).
-10. **테이블명 정합 — #15 에서 해소됐다.** 스키마 문서는 `app_user`, 코드 실체는 `users` 였다. `users` 로 수렴시켰고 `schema.md` §1 이 그 이름이 어디서 왔는지를 각주로 남긴다. `DocDriftTest` 가 `app_user` 가 정의로 되살아나면 빨간불을 낸다.
+10. **테이블명 정합 — #15 에서 해소됐다.** 스키마 문서는 `app_user`, 코드 실체는 `users` 였다. `users` 로 수렴시켰고 `schema.md` §1 이 그 이름이 어디서 왔는지를 각주로 남긴다. `DocDriftTest` 가 `app_user` 가 정의로 되살아나면 빨간불을 낸다.

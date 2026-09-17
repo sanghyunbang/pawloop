@@ -1639,7 +1639,52 @@ CREATE TABLE care_item (
 
 ---
 
-## 부록 A. 정본의 표 36개 — 어디에 적혀 있나
+## 42. `pending_signup` — 인증을 안 마친 가입 요청 (**실재**)
+
+이메일 가입은 두 걸음이다(#635). 첫 걸음은 이 표에 한 행을 남기고 여섯 자리 코드를 메일로 보내고, 둘째 걸음(`POST /auth/signup/verify`)에서 코드가 맞을 때 비로소 `users` 행이 생긴다. **인증 전에는 사용자를 안 만든다.**
+
+```sql
+CREATE TABLE pending_signup (
+  id            BIGINT       NOT NULL AUTO_INCREMENT,
+  email         VARCHAR(255) NOT NULL COMMENT '소문자로 접어서 넣는다',
+  password_hash VARCHAR(255) NOT NULL COMMENT '이미 해시된 것. 평문은 어디에도 안 남는다',
+  nickname      VARCHAR(100) NOT NULL,
+  code_hash     VARCHAR(255) NOT NULL COMMENT '여섯 자리도 해시로 둔다',
+  expires_at    DATETIME(6)  NOT NULL,
+  attempts      INT          NOT NULL DEFAULT 0 COMMENT '틀린 횟수. 넘으면 그 코드가 죽는다',
+  created_at    DATETIME(6)  NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_pending_signup_email (email),
+  KEY idx_pending_signup_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `email` | `VARCHAR(255)` | NOT NULL, UNIQUE | 이메일 하나에 대기 행 하나. 다시 요청하면 옛 행을 **덮어쓴다** |
+| `password_hash` | `VARCHAR(255)` | NOT NULL | 가입 요청이 들고 온 비밀번호를 그 자리에서 해시한 것. 인증이 끝나면 `users` 로 옮겨 가고 이 행은 사라진다 |
+| `nickname` | `VARCHAR(100)` | NOT NULL | `users.nickname` 과 같은 한도 |
+| `code_hash` | `VARCHAR(255)` | NOT NULL | 여섯 자리의 해시 |
+| `expires_at` | `DATETIME(6)` | NOT NULL, idx | 발급 시각 + `app.mail.code-ttl-minutes`(기본 10분), UTC |
+| `attempts` | `INT` | NOT NULL, 기본 0 | 틀린 시도. 기본 상한은 다섯 번이다 |
+| `created_at` | `DATETIME(6)` | NOT NULL | 처음 시작한 순간(UTC). 다시 요청해도 안 바뀐다 |
+
+> **왜 `users.email_verified` 컬럼이 아닌가.** 미인증 행을 `users` 에 두면 그 행이 `users.email` 의 UNIQUE 를 잡는다 — 남이 내 주소로 가입을 **시도만** 해 놓아도 내가 그 주소로 가입을 못 한다. 그리고 로그인·프로필·탈퇴 등 `users` 를 읽는 모든 자리가 "인증됐나" 를 함께 봐야 하는데, 한 곳이라도 빠뜨리면 미인증 계정이 조용히 들어온다.
+
+> **코드도 해시다.** 이 표를 읽을 수 있는 사람이 남의 메일함 없이 가입을 마칠 수 있으면 그건 인증이 아니다.
+
+> **틀린 횟수는 따로 커밋한다.** `verify` 가 401 을 던지면 그 트랜잭션이 통째로 롤백돼서, 같은 트랜잭션에서 올린 `attempts` 가 없던 일이 된다 — 처음 구현이 실제로 그랬고 무차별 방어가 **가짜**였다. 지금은 `PendingSignupAttempts` 가 `REQUIRES_NEW` 로 따로 커밋한다(`EmailSignupVerificationIntegrationTest` 가 잰다).
+
+> **모듈 밖으로 나가는 FK 가 없다.** `users` 를 안 가리킨다 — 가리킬 사용자가 아직 없기 때문이다. 그래서 `CrossModuleForeignKeysTest` 의 BASELINE 에 이 표의 줄이 없다.
+
+> **만료된 행은 시간이 지운다.** `PendingSignupPurgeScheduler` 가 매일 04:40(KST) 에 `expires_at` 이 지난 행을 지운다. 인증 흐름은 만료된 행을 **덮어쓰기만** 해서, 다시 안 오는 사람의 이메일과 비밀번호 해시가 영영 남는다.
+
+마이그레이션 `db/migration/V2__pending_signup.sql` — Flyway 로 올리는 첫 변경이다(그전 것은 `V1__baseline.sql` 기준점 하나뿐이었다).
+
+---
+
+## 부록 A. 정본의 표 37개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
@@ -1670,6 +1715,7 @@ CREATE TABLE care_item (
 | `post_bookmark` | 실재 §38 | `community` | 글 저장(#451 4번) — "내 사진첩". 저장한 순이 정렬 축, 탈퇴하면 행이 사라진다. §10 `bookmark`(장소, 계획)와 다른 표 |
 | `push_preference` | 실재 §30 | `push` | 알림 전체 끄기 — 행이 없으면 켜짐(#83) |
 | `reaction` | 실재 §9 | `community` | 게시글 반응 |
+| `pending_signup` | 실재 §42 | `user` | 인증을 안 마친 가입 요청(#635) — 코드가 맞으면 `users` 행이 되고 이 행은 사라진다 |
 | `refresh_token` | 실재 §2 | `user` | refresh 토큰 원장 |
 | `report` | 실재 §25 | `moderation` | 신고 |
 | `report_snapshot` | 실재 §26 | `moderation` | 신고 대상 스냅샷 |

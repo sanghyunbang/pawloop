@@ -20,6 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -47,7 +49,28 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@org.springframework.test.context.ContextConfiguration(classes = AuthContractIntegrationTest.RecordingMail.class)
 class AuthContractIntegrationTest extends AbstractMySqlIntegrationTest {
+
+    /**
+     * 나간 메일 본문을 받아 적는다 — 이슈 #635.
+     *
+     * <p>가입이 인증을 거치게 되면서, 계정을 만들려면 <b>메일로 간 코드</b>가 필요하다.
+     * 코드는 해시로 저장되므로 DB 에서 못 읽는다.
+     */
+    @org.springframework.boot.test.context.TestConfiguration
+    static class RecordingMail {
+        static final List<String> SENT = new ArrayList<>();
+
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        com.heattrip.heat_trip_backend.user.mail.Mailer recordingMailer() {
+            return (to, subject, body) -> {
+                SENT.add(body);
+                return true;
+            };
+        }
+    }
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -155,40 +178,68 @@ class AuthContractIntegrationTest extends AbstractMySqlIntegrationTest {
                 .isEqualTo(401);
     }
 
-    // ─────────────────── 회원가입 (계약: 201 + User · 409) ───────────────────
+    // ─────────────────── 회원가입 (계약: 202 + 인증 → 200 + AuthTokens) ───────────────────
 
     @Test
-    @DisplayName("회원가입은 200 + 평문이 아니라 201 + 계약의 User 를 반환한다")
-    void 회원가입은_201과_User_를_반환한다() throws Exception {
+    @DisplayName("회원가입은 202 다 — 계정이 아직 없으므로 201 은 거짓말이다")
+    void 회원가입은_202로_인증을_시작한다() throws Exception {
+        // 2026-09 이전에는 여기가 201 + User 였다. 지금은 인증 코드를 보내고 계정은
+        // /auth/signup/verify 에서 생긴다 — **만들어진 것이 없다**(#635, ADR-0022 를 뒤집는다).
         String email = EMAIL_PREFIX + "created@example.com";
         createdEmails.add(email);
+        RecordingMail.SENT.clear();
 
         MockHttpServletResponse response = signupRequest(email);
 
-        assertThat(response.getStatus()).isEqualTo(201);
-        JsonNode body = json(response);
-        assertThat(body.path("id").asLong())
-                .as("예전 응답은 평문 \"회원가입 성공\" 이라 방금 만든 계정의 id 조차 알 수 없었다")
-                .isPositive();
-        assertThat(body.path("email").asText()).isEqualTo(email);
-        assertThat(body.path("provider").asText()).isEqualTo("local");
-        assertThat(body.has("password"))
+        assertThat(response.getStatus()).isEqualTo(202);
+        assertThat(json(response).path("mailSent").asBoolean())
+                .as("메일이 나갔는지를 안 실으면 앱이 '다시 보내기' 를 언제 권할지 모른다")
+                .isTrue();
+        assertThat(response.getContentAsString(StandardCharsets.UTF_8))
+                .as("아직 계정이 없다. id·provider 를 실으면 그것부터 거짓이다")
+                .doesNotContain("\"id\"")
+                .doesNotContain("\"provider\"");
+    }
+
+    @Test
+    @DisplayName("코드를 넣으면 200 + 계약의 AuthTokens 이고 계정이 생긴다")
+    void 인증하면_토큰과_함께_계정이_생긴다() throws Exception {
+        String email = signup("verified");
+
+        MockHttpServletResponse response = login(email, PASSWORD);
+
+        assertThat(response.getStatus())
+                .as("인증을 마쳤으면 그 비밀번호로 로그인이 돼야 한다")
+                .isEqualTo(200);
+        JsonNode user = json(response).path("user");
+        assertThat(user.path("email").asText()).isEqualTo(email);
+        assertThat(user.path("provider").asText()).isEqualTo("local");
+        assertThat(user.has("password"))
                 .as("계약의 User 에 password 는 없다. 있으면 그건 유출이다")
                 .isFalse();
     }
 
     @Test
-    @DisplayName("이미 가입된 이메일로 다시 가입하면 400 이 아니라 409 이고 본문은 계약의 Error 다")
-    void 중복_가입은_409_와_계약의_Error_다() throws Exception {
+    @DisplayName("이미 가입된 이메일로 다시 가입해도 같은 202 다 — 409 면 가입 여부를 묻는 수단이 된다")
+    void 중복_가입도_밖에서는_같아_보인다() throws Exception {
+        // 2026-09 이전에는 여기가 409 였다. 그런데 **409 자체가 답이다** — 아무나 이 경로로
+        // "이 사람이 가입했나" 를 물을 수 있었다. 로그인이 401 에서 이메일과 비밀번호를
+        // 구분하지 않는 것과 같은 이유로 지금은 두 경우가 같은 202 다 (#635 · #6).
         String email = signup("duplicate");
+        RecordingMail.SENT.clear();
 
         MockHttpServletResponse response = signupRequest(email);
 
-        assertThat(response.getStatus()).isEqualTo(409);
-        assertThat(errorBody(response).path("code").asText()).isEqualTo("CONFLICT");
+        assertThat(response.getStatus()).isEqualTo(202);
         assertThat(response.getContentAsString(StandardCharsets.UTF_8))
-                .as("사유 문구는 그대로 본문이 된다 — 이메일을 되싣으면 그게 유출이다 (#6)")
+                .as("이메일을 되싣으면 그게 유출이다 (#6)")
                 .doesNotContain(email);
+
+        // 밖에서 보는 답은 같지만 **그 주소의 주인에게는** 알린다. 코드는 안 보낸다 —
+        // 보내면 남이 남의 계정을 가져간다.
+        assertThat(RecordingMail.SENT).hasSize(1);
+        assertThat(RecordingMail.SENT.get(0)).contains("이미 계정이 있습니다");
+        assertThat(RecordingMail.SENT.get(0)).doesNotMatch("(?s).*\\b\\d{6}\\b.*");
     }
 
     // ─────────────────── /auth/oauth/{provider} (완료 조건 4·5·11) ───────────────────
@@ -300,15 +351,37 @@ class AuthContractIntegrationTest extends AbstractMySqlIntegrationTest {
 
     // ─────────────────────────── 지그 ───────────────────────────
 
-    /** 계정을 하나 만들고 그 이메일을 돌려준다. 정리 목록에 등록된다. */
+    /**
+     * 계정을 하나 만들고 그 이메일을 돌려준다. 정리 목록에 등록된다.
+     *
+     * <p><b>가입 요청만으로는 계정이 안 생긴다</b>(#635). 메일로 간 코드를 넣어야 한다 —
+     * 여기서는 받아 적는 {@link Mailer} 에서 그 코드를 읽는다. 사용자가 하는 일과 같다.
+     */
     private String signup(String slug) throws Exception {
         String email = EMAIL_PREFIX + slug + "@example.com";
         createdEmails.add(email);
 
+        RecordingMail.SENT.clear();
         assertThat(signupRequest(email).getStatus())
                 .as("사전 조건이 깨지면 아래 단언들이 무엇을 보는지 알 수 없다")
-                .isEqualTo(201);
+                .isEqualTo(202);
+
+        assertThat(mockMvc.perform(post("/auth/signup/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"code\":\"" + lastCode() + "\"}"))
+                .andReturn().getResponse().getStatus())
+                .as("인증이 안 끝나면 계정이 없다 — 아래 단언들이 무엇을 보는지 알 수 없다")
+                .isEqualTo(200);
         return email;
+    }
+
+    /** 마지막으로 나간 메일에서 여섯 자리를 뽑는다. */
+    private String lastCode() {
+        assertThat(RecordingMail.SENT).as("인증 메일이 안 나갔다").isNotEmpty();
+        Matcher matcher = Pattern.compile("\\b(\\d{6})\\b")
+                .matcher(RecordingMail.SENT.get(RecordingMail.SENT.size() - 1));
+        assertThat(matcher.find()).as("메일 본문에 여섯 자리가 없다").isTrue();
+        return matcher.group(1);
     }
 
     private MockHttpServletResponse signupRequest(String email) throws Exception {

@@ -69,10 +69,12 @@ class NicknameLimitIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
-    @DisplayName("상한 딱 맞는 닉네임은 가입된다 — 경계에서 한 칸 틀리면 20자 쓰던 사람이 막힌다")
+    @DisplayName("상한 딱 맞는 닉네임은 통과한다 — 경계에서 한 칸 틀리면 20자 쓰던 사람이 막힌다")
     void signupAcceptsExactlyTheLimit() throws Exception {
+        // 202 다. 가입 요청이 받아들여졌다는 뜻이고, 계정은 인증 뒤에 생긴다(#635).
+        // 여기서 재는 것은 **길이 검증을 통과하는가** 하나다 — 인증까지 갈 필요가 없다.
         signup("가".repeat(User.MAX_NICKNAME_LENGTH), "이름")
-                .andExpect(status().isCreated());
+                .andExpect(status().isAccepted());
     }
 
     @Test

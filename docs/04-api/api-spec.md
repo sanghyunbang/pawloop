@@ -111,7 +111,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 > JWT 의 `sub` 는 서버가 발급한 **불투명 사용자 키**다. 이메일이라고 가정하거나 파싱하지 말 것. 사용자 정보는 `GET /auth/me` 로 조회한다.
 
-**인가 경계** — 비인증 허용은 `/auth/signup`, `/auth/login`, `/auth/oauth/**`, `/auth/token/refresh`, `/oauth2/**`, `/login/oauth2/**` 뿐이다. `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 반드시 토큰 검증을 거친다.
+**인가 경계** — 비인증 허용은 `/auth/signup`, `/auth/signup/verify`, `/auth/signup/resend`, `/auth/login`, `/auth/oauth/**`, `/auth/token/refresh`, `/oauth2/**`, `/login/oauth2/**` 뿐이다. 가입 인증의 둘은 **낱개로** 연다 — `/auth/signup/**` 로 열면 그 아래 경로를 하나 더 만드는 날 그것까지 인증 없이 딸려 들어간다(#635). `/auth/me`(GET·PUT·DELETE)와 `/auth/logout` 은 반드시 토큰 검증을 거친다.
 
 ### 2.1 소셜 로그인 시작 — ✅ 구현
 
@@ -209,17 +209,37 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 > `provider` 는 내려온다 — `users.provider` 컬럼은 #7 에서 생겼고 `UserResponse` 가 매핑한다. 값은 `local`(이메일 가입)·`kakao`·`google` 중 하나다(`naver` 는 ADR-0010 에서 보류. 백필 전 옛 행은 `null` 일 수 있다). (이 문서는 오래도록 "컬럼이 없어 아직 내려오지 않는다"고 적고 있었다.) 필드명은 `profileImage` 가 아니라 **`imageUrl`** 이다.
 > `isNew` 는 여기에 없다 — 로그인 응답(`AuthTokens`)의 1회성 이벤트 속성이지 프로필의 영속 속성이 아니다(#23).
 
-### 2.5 이메일 회원가입 — ✅ 구현(#10)
+### 2.5 이메일 회원가입 — ✅ 구현(#10 · #635)
 
-`POST /auth/signup` — 비인증. `201 Created` + `User` JSON. 중복 이메일은 `409` + §1.3 의 `Error`(`code: CONFLICT`).
+**가입은 두 걸음이다.** `POST /auth/signup` 은 **계정을 안 만든다** — 인증 코드를 메일로 보내고 `202 Accepted` 를 준다. 계정은 `POST /auth/signup/verify` 에서 생긴다.
 
 ```json
-// 201 Created — 2.4 와 같은 User 형태
-{ "id": 42, "email": "bori@example.com", "nickname": "보리아빠", "provider": "local", "...": "..." }
+// 202 Accepted — SignupStarted
+{ "mailSent": true }
 ```
 
-> ⚠️ **예전에는 `200 OK` + 본문 `"회원가입 성공"`(평문)이었고 중복은 400 이었다.** 200 만 성공으로 보는 클라이언트는 201 도 성공으로 받아야 한다.
-> **이 응답에는 토큰이 없다.** 가입 직후 로그인 상태로 만들려면 `POST /auth/login` 을 한 번 더 부른다.
+`mailSent` 가 거짓이면 **대기 행은 이미 있고 메일만 못 나간 것**이다. 앱은 "메일이 안 갔어요 · 다시 보내기" 를 말하면 되고, 사용자는 처음부터 다시 할 필요가 없다.
+
+> ⚠️ **2026-09 이전에는 `201 Created` + `User` 였고 같은 이메일이면 `409` 였다**(#635). 그 전에는 `200 OK` + 평문 `"회원가입 성공"` 이었다. 201 을 기다리던 클라이언트는 202 를 성공으로 받아야 하고, 응답에서 `id` 를 읽던 코드는 verify 응답의 `user.id` 를 읽어야 한다.
+
+> **이미 가입된 이메일도 같은 202 다.** 409 를 주면 이 경로가 "이 사람이 가입했나" 를 묻는 조회 수단이 된다 — 로그인이 401 에서 이메일과 비밀번호를 구분하지 않는 것과 같은 이유다(#6). 대신 그 주소로 **"이미 계정이 있다"는 안내 메일**이 가고, 그 메일에는 코드가 들어가지 않는다.
+
+#### 2.5.1 인증 코드 확인 — 여기서 계정이 생긴다
+
+`POST /auth/signup/verify` — 비인증. 본문은 `{ "email": …, "code": "012345" }`. `200 OK` + `AuthTokens` 이라 **바로 로그인된 상태**다(`isNew` 는 참). 가입만 시키고 로그인 화면으로 되돌리면 방금 정한 비밀번호를 다시 치게 된다.
+
+실패는 둘로 갈린다. **뭉개지 마라** — 앱이 "다시 보내기" 를 언제 권할지 모른다.
+
+| 상태 | 뜻 | 앱이 할 일 |
+|:---|:---|:---|
+| **401** | 코드가 틀렸다 | 다시 입력하게 한다 |
+| **410** | 만료 · 시도 초과 · 대기 없음 | **다시 보내기**를 권한다 |
+
+코드 하나에 허용하는 틀린 시도는 다섯 번이고, 넘으면 그 코드가 죽는다.
+
+#### 2.5.2 코드 다시 보내기
+
+`POST /auth/signup/resend` — 비인증. 본문은 `{ "email": … }`. 대기 행이 없어도 **같은 202** 다(메일은 안 나간다) — "그런 대기 없음" 을 말하면 이 경로도 가입 여부 조회 수단이 된다.
 
 ### 2.6 이메일 로그인 — ✅ 구현(#10)
 

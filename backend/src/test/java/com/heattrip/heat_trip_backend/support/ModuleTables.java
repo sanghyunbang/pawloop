@@ -65,6 +65,10 @@ public final class ModuleTables {
             Map.entry("trail_route", "place"),
             Map.entry("media_objects", "S3"),
             Map.entry("refresh_token", "user"),
+            // 인증을 마치기 전의 가입 요청(#635). users 가 아니라 여기 있는 이유는
+            // V2__pending_signup.sql 의 머리말에 있다 — 요지는 "남이 내 주소로 시도만 해 놓고
+            // 그 주소를 막아 두는 일" 이 없어야 한다는 것이다.
+            Map.entry("pending_signup", "user"),
             Map.entry("users", "user"),
             Map.entry("user_consent", "consent"),
             Map.entry("report", "moderation"),

@@ -357,6 +357,20 @@ CREATE TABLE `place_cell` (
   PRIMARY KEY (`lat_idx`,`lng_idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `pending_signup` (
+  `attempts` int NOT NULL DEFAULT '0',
+  `created_at` datetime(6) NOT NULL,
+  `expires_at` datetime(6) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `code_hash` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `nickname` varchar(100) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pending_signup_email` (`email`),
+  KEY `idx_pending_signup_expires` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `post` (
   `course_id` bigint DEFAULT NULL,
   `created_at` datetime(6) NOT NULL,
