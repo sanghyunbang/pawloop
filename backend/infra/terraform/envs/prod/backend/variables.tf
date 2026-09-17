@@ -108,7 +108,7 @@ variable "site_domain_name" {
 
   validation {
     condition = var.site_domain_name == "" || can(regex(
-      "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.site_domain_name))
+      "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.site_domain_name))
     error_message = "site_domain_name 은 호스트 이름이다. 스킴(https://)이나 경로를 붙이지 않는다."
   }
 }
@@ -216,7 +216,7 @@ variable "mail_domain_name" {
 
   validation {
     condition = var.mail_domain_name == "" || can(regex(
-      "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.mail_domain_name))
+      "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.mail_domain_name))
     error_message = "mail_domain_name 은 호스트 이름이다. 스킴(https://)이나 경로를 붙이지 않는다."
   }
 }
