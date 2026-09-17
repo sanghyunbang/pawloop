@@ -709,16 +709,55 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
           ),
         ),
         const SizedBox(width: 14),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.title,
-              style: const TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
-          const SizedBox(height: 2),
-          Text(widget.subtitle,
-              style: const TextStyle(
-                  fontSize: 11.5, fontWeight: FontWeight.w600, color: T.textMuted)),
-        ]),
+        // 방 이름이 길면 안내 버튼을 밀어내지 않고 이름 쪽이 줄어든다 — 안내는 늘 같은 자리에.
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(widget.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+            const SizedBox(height: 2),
+            Text(widget.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.w600, color: T.textMuted)),
+          ]),
+        ),
+        const SizedBox(width: 10),
+        _safetyNoticeButton(context),
       ]),
+    );
+  }
+
+  /// 채팅 이용 안내를 **방 안에서** 다시 여는 버튼 (#682).
+  ///
+  /// 입구에서 한 번 뜨고 마는 주의 문구는 정작 돈이나 사진을 요구받는 순간에는 이미 사라진
+  /// 뒤다. 원스토어 검증 가이드라인이 채팅에 요구하는 피해 예방 안내를 **머리말에 상시로**
+  /// 걸어 두어, 이상한 말을 받은 사람이 신고 방법과 제재 안내를 그 자리에서 다시 읽게 한다.
+  ///
+  /// 동의를 다시 받는 자리가 아니다 — [ChatTermsDialog.showAgain] 은 읽고 닫기만 한다.
+  /// 뒤로 가기 버튼과 같은 상자 모양이라 머리말 양 끝이 같은 무게로 보인다.
+  Widget _safetyNoticeButton(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '채팅 이용 안내',
+      child: GestureDetector(
+        key: const ValueKey('chat_safety_notice_button'),
+        onTap: () => ChatTermsDialog.showAgain(context),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: T.surface,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: T.cardBorder),
+          ),
+          child: const Icon(Icons.shield_outlined, size: 20, color: T.textSecondary),
+        ),
+      ),
     );
   }
 
