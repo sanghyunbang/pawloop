@@ -39,6 +39,8 @@ import com.heattrip.heat_trip_backend.security.PublicPaths;
 import com.heattrip.heat_trip_backend.security.ChatBodySizeLimitFilter;
 import com.heattrip.heat_trip_backend.security.ChatRateLimitFilter;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import lombok.RequiredArgsConstructor;
 
 @Configuration
@@ -235,6 +237,34 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * 소셜 공급자가 돌려보내는 자리. <b>여기에는 CORS 를 걸지 않는다</b> — 이슈 #695.
+     *
+     * <p>CORS 는 <b>스크립트가 다른 출처의 응답을 읽는 것</b>을 막는 장치다. 이 경로로 오는
+     * 것은 스크립트가 아니라 <b>브라우저의 최상위 내비게이션</b>이고, 응답은 브라우저가
+     * 그대로 따라가는 리다이렉트다. 검사해서 얻는 보호가 없다.
+     *
+     * <p>그런데 걸어 두면 <b>애플 로그인만 깨진다.</b> 카카오·구글은
+     * {@code response_mode=query} 라 GET 으로 돌아오고 브라우저가 최상위 GET 에는
+     * {@code Origin} 을 안 붙인다. 애플만 {@code response_mode=form_post} 라 <b>POST</b> 로
+     * 돌아오는데, 크로스사이트 POST 내비게이션에는 브라우저가
+     * {@code Origin: https://appleid.apple.com} 을 붙인다. 허용 목록에 없는 출처라
+     * 스프링의 CORS 필터가 <b>OAuth 처리에 닿기도 전에</b> 403 {@code Invalid CORS request}
+     * 로 잘랐다.
+     */
+    static final String OAUTH_CALLBACK_PREFIX = "/login/oauth2/code/";
+
+    /**
+     * {@code null} 을 돌려주면 CORS 검사를 건너뛴다.
+     *
+     * <p>{@code DefaultCorsProcessor} 는 설정이 {@code null} 이고 프리플라이트가 아니면
+     * 그대로 체인을 통과시킨다. 프리플라이트는 여전히 거절되는데, 그래도 된다 —
+     * 폼 전송에는 프리플라이트가 없다.
+     *
+     * <p><b>허용 목록에 {@code appleid.apple.com} 을 더하는 것으로도 증상은 사라진다.</b>
+     * 그 길을 안 간 이유는 그러면 {@code /api/**} 를 포함한 <b>전 경로</b>에 그 출처가
+     * 열리기 때문이다. 필요한 것보다 넓다.
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
@@ -250,6 +280,19 @@ public class SecurityConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
-        return source;
+
+        return request -> isOAuthCallback(request) ? null : source.getCorsConfiguration(request);
+    }
+
+    /**
+     * 컨텍스트 경로를 뺀 경로로 본다 — {@code getRequestURI()} 로 보면 앱이 루트가 아닌
+     * 곳에 붙었을 때 어긋난다.
+     */
+    static boolean isOAuthCallback(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (path == null || path.isEmpty()) {
+            path = request.getPathInfo();
+        }
+        return path != null && path.startsWith(OAUTH_CALLBACK_PREFIX);
     }
 }
