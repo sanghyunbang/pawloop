@@ -73,8 +73,12 @@ class LocationPriming {
 
 /// 설명 시트를 먼저 보여 주고, "허용하기" 면 그때 OS 에 묻는다. 쓸 수 있게 됐으면 `true`.
 ///
-/// `startWalk` 이 흐름 중간에 직접 하던 순서와 같은 것이다. 홈 카드는 이 함수를 꽂아 쓴다 —
-/// 위젯이 화면을 import 하지 않기 때문이다(`TodayCourseCard.onStart` 와 같은 이유, #517).
+/// `startWalk` 이 흐름 중간에 직접 하던 순서와 같은 것이다.
+///
+/// **부르는 화면이 지금은 없다.** 홈의 안전 지수 카드가 이 함수를 꽂아 쓰던 자리였는데,
+/// 그 카드가 위치를 아예 안 쓰게 되면서(#682: 격자를 고른 동네의 중심에서 뽑는다) 손을
+/// 뺐다. 지우지 않고 두는 이유는 `startWalk` 이 같은 순서를 흐름 중간에 손으로 펴 놓고
+/// 있어서다 — 다음에 그것을 이 한 줄로 모을 때 여기가 그 자리다.
 Future<bool> askLocationPermission(BuildContext context) async {
   final state = await LocationPriming.stateFor();
   if (!context.mounted) return false;
