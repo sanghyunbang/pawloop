@@ -78,12 +78,14 @@ class FlywayBuildsTheSchemaTest {
 
         MigrateResult result = flywayFor(schema).migrate();
 
+        // 숫자를 손으로 적지 않는다. V 파일이 늘 때마다 이 검사를 고치게 되면, 고치는 김에
+        // "왜 늘었지" 를 안 보고 숫자만 올리게 된다 — 그게 게이트가 죽는 방식이다.
         assertThat(result.migrationsExecuted)
-                .as("빈 DB 인데 아무것도 안 돌았다 — 그러면 표가 없는 채로 앱이 뜬다")
-                .isEqualTo(1);
+                .as("빈 DB 인데 V 파일 수만큼 안 돌았다 — 그러면 표가 없는 채로 앱이 뜬다")
+                .isEqualTo(migrationFileCount());
         assertThat(tablesIn(schema))
-                .as("V1 이 만드는 표와 실제로 생긴 표가 다르다")
-                .containsExactlyInAnyOrderElementsOf(tablesDeclaredInBaseline());
+                .as("마이그레이션이 만드는 표와 실제로 생긴 표가 다르다")
+                .containsExactlyInAnyOrderElementsOf(tablesDeclaredInMigrations());
     }
 
     @Test
@@ -106,11 +108,14 @@ class FlywayBuildsTheSchemaTest {
 
         MigrateResult result = flywayFor(schema).migrate();
 
+        // **V1 은 안 돌고, 그 뒤 것은 돈다.** 그게 기준점의 뜻이다 — 이미 있는 표는 그대로
+        // 두고 새 변경만 얹는다. 0 으로 박아 두면 V2 가 생기는 날 이 검사가 빨간불이 되고,
+        // 그때 "안 돌아야 한다" 로 읽어 새 마이그레이션을 막을 수 있다.
         assertThat(result.migrationsExecuted)
                 .as("""
                         이미 쓰고 있는 DB 에 V1 을 다시 돌리면 CREATE TABLE 이 터지거나 \
                         남의 자료를 덮는다. 기준점만 찍고 지나가야 한다.""")
-                .isZero();
+                .isEqualTo(migrationFileCount() - 1);
         assertThat(tablesIn(schema))
                 .as("남의 표를 건드렸다")
                 .contains("something_already_here");
@@ -187,15 +192,43 @@ class FlywayBuildsTheSchemaTest {
         return rows;
     }
 
-    /** {@code V1__baseline.sql} 이 만드는 표 이름. 숫자를 손으로 적지 않으려고 파일에서 읽는다. */
-    private static Set<String> tablesDeclaredInBaseline() {
-        Pattern create = Pattern.compile("(?im)^\\s*CREATE TABLE\\s+`?([a-z_]+)`?");
-        Matcher matcher = create.matcher(read(BASELINE));
-        Set<String> names = new TreeSet<>();
-        while (matcher.find()) {
-            names.add(matcher.group(1));
+    /** {@code db/migration} 의 V 파일 수. 손으로 적으면 늘 때마다 낡는다. */
+    private static int migrationFileCount() {
+        try (var files = Files.list(BASELINE.getParent())) {
+            long count = files
+                    .filter(f -> f.getFileName().toString().matches("^V\\d+__.*\\.sql$"))
+                    .count();
+            assertThat(count).as("마이그레이션 파일을 하나도 못 찾았다 — 경로가 늙었다").isPositive();
+            return (int) count;
+        } catch (IOException e) {
+            throw new UncheckedIOException("마이그레이션 폴더를 못 읽었다", e);
         }
-        assertThat(names).as("기준점 파일에서 CREATE TABLE 을 하나도 못 읽었다 — 정규식이 늙었다").isNotEmpty();
+    }
+
+    /**
+     * <b>모든</b> V 파일이 만드는 표 이름. 숫자를 손으로 적지 않으려고 파일에서 읽는다.
+     *
+     * <p>예전에는 {@code V1__baseline.sql} 만 읽었다 — 그때는 V 파일이 그것뿐이었다. V2 가
+     * 생기는 순간 "V1 이 만드는 표" 와 "실제로 생긴 표" 가 달라지는데, 그 빨간불은 <b>고장이
+     * 아니라 새 표를 등록하라는 뜻</b>이다. 읽는 범위를 파일 전체로 넓혔다(#635).
+     */
+    private static Set<String> tablesDeclaredInMigrations() {
+        Pattern create = Pattern.compile("(?im)^\s*CREATE TABLE\s+`?([a-z_]+)`?");
+        Set<String> names = new TreeSet<>();
+        try (var files = Files.list(BASELINE.getParent())) {
+            for (Path file : files
+                    .filter(f -> f.getFileName().toString().matches("^V\\d+__.*\\.sql$"))
+                    .sorted()
+                    .toList()) {
+                Matcher matcher = create.matcher(read(file));
+                while (matcher.find()) {
+                    names.add(matcher.group(1));
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("마이그레이션 폴더를 못 읽었다", e);
+        }
+        assertThat(names).as("V 파일에서 CREATE TABLE 을 하나도 못 읽었다 — 정규식이 늙었다").isNotEmpty();
         return names;
     }
 

@@ -131,6 +131,19 @@ public class UserService implements ViewerNeighborhood {
             throw new UnauthenticatedException();
         }
 
+        return issueTokensFor(user, false);
+    }
+
+    /**
+     * 이 사용자에게 토큰 한 벌을 발급한다 — 이슈 #635 에서 떼어냈다.
+     *
+     * <p>이메일 인증을 마친 가입({@code POST /auth/signup/verify})도 여기로 끝난다.
+     * 그 경로는 비밀번호 <b>원문이 없다</b> — 대기 행에 해시만 있으므로 {@link #login} 을
+     * 부를 수 없다. 두 곳이 각자 토큰을 만들면 한쪽만 refresh 를 빠뜨리는 날이 온다.
+     *
+     * @param isNew 이번 인증으로 계정이 생겼는가. 앱의 라우터가 이 값으로 온보딩을 연다(#12)
+     */
+    public AuthTokensResponse issueTokensFor(User user, boolean isNew) {
         // refresh 토큰을 함께 발급·저장하고, 그 원문을 응답에 싣는다. (이슈 #9 발급 · #10 전달)
         // 이 줄을 지우면 앱이 갱신할 수단을 잃고 1시간마다 재로그인하게 된다.
         String refreshToken = refreshTokenService.issueFor(user.getId());
@@ -142,8 +155,34 @@ public class UserService implements ViewerNeighborhood {
                 accessTokenIssuer.createAccessToken(user.getId(), roleOf(user)),
                 refreshToken,
                 accessTokenIssuer.getExpiresInSeconds(),
-                false,
+                isNew,
                 UserResponse.from(user));
+    }
+
+    /**
+     * 이메일 인증을 마친 가입을 실제 계정으로 만든다 — 이슈 #635.
+     *
+     * <p>{@link #signup} 과 달리 비밀번호를 <b>이미 해시된 채로</b> 받는다. 대기 행
+     * ({@code pending_signup})에 원문이 없기 때문이다 — 있으면 그 표가 비밀번호 창고가 된다.
+     *
+     * @throws ResponseStatusException 409 — 인증을 기다리는 사이에 같은 이메일로 소셜 가입이
+     *         들어왔을 때. 드물지만 UNIQUE 위반으로 500 이 나가는 것보다 낫다
+     */
+    @Transactional
+    public User createVerified(String email, String passwordHash, String nickname) {
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.");
+        }
+        LocalDateTime now = UserTime.nowUtc();
+        return userRepository.save(User.builder()
+                .provider(User.PROVIDER_LOCAL)
+                .role(User.ROLE_USER)
+                .email(email)
+                .password(passwordHash)
+                .nickname(nickname)
+                .name(nickname)
+                .createdAt(now)
+                .build());
     }
 
     /** role 컬럼이 없던 시절에 만들어진 행은 값이 비어 있을 수 있다. */

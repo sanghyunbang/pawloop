@@ -10,7 +10,11 @@ import org.springframework.web.bind.annotation.*;
 import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.RefreshTokenRequest;
+import com.heattrip.heat_trip_backend.user.dto.ResendSignupCodeRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
+import com.heattrip.heat_trip_backend.user.dto.SignupStartedResponse;
+import com.heattrip.heat_trip_backend.user.dto.VerifySignupRequest;
+import com.heattrip.heat_trip_backend.user.signup.EmailVerificationService;
 import com.heattrip.heat_trip_backend.user.service.RefreshTokenService;
 import com.heattrip.heat_trip_backend.user.service.UserService;
 
@@ -30,6 +34,9 @@ public class AuthController implements AuthApiDoc{
 
     private final UserService userService;
     private final RefreshTokenService refreshTokenService;
+
+    /** 이메일 가입의 인증 — 코드 발급·확인 (#635). */
+    private final EmailVerificationService emailVerification;
 
     /** 동네 코드에 이름을 붙이는 표 (#342). */
     private final NeighborhoodCatalog neighborhoods;
@@ -52,10 +59,50 @@ public class AuthController implements AuthApiDoc{
      * 이었다 — 계약 어디에도 없는 모양이고, 클라이언트가 방금 만든 계정의 {@code id} 조차
      * 알 수 없었다. (이슈 #10)
      */
+    /**
+     * 이메일 가입을 <b>시작</b>한다 — 이슈 #635. 계정은 아직 안 생긴다.
+     *
+     * <h3>왜 201 이 아니라 202 인가</h3>
+     * <p>2026-09 이전에는 이 경로가 바로 계정을 만들고 201 을 줬다. 지금은 인증 코드를
+     * 메일로 보내고, 계정은 {@code /auth/signup/verify} 에서 생긴다 — <b>만들어진 것이
+     * 없으므로 201 은 거짓말이다.</b>
+     *
+     * <h3>이미 가입된 주소도 같은 202 다</h3>
+     * <p>409 를 주면 이 경로가 "이 사람이 가입했나" 를 묻는 조회 수단이 된다. 대신 그
+     * 주소로 "이미 계정이 있다" 는 안내 메일이 간다 — 진짜 주인만 알게 된다
+     * ({@code EmailVerificationService} 의 javadoc).
+     */
     @PostMapping("/signup")
-    public ResponseEntity<UserResponse> signup(@Valid @RequestBody SignupRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(UserResponse.from(userService.signup(request)));
+    public ResponseEntity<SignupStartedResponse> signup(@Valid @RequestBody SignupRequest request) {
+        return ResponseEntity.accepted()
+                .body(new SignupStartedResponse(emailVerification.start(request)));
+    }
+
+    /**
+     * 코드를 확인하고 <b>계정을 만든다</b>. 성공하면 바로 로그인된 상태로 토큰을 준다.
+     *
+     * <p>가입만 시키고 로그인 화면으로 되돌리면 방금 정한 비밀번호를 다시 치게 된다.
+     *
+     * <p>410 은 "다시 받아야 한다"(만료·시도 초과·대기 없음), 401 은 "코드가 틀렸다" 다.
+     * 둘을 뭉개면 앱이 "다시 보내기" 를 언제 권할지 모른다.
+     */
+    @PostMapping("/signup/verify")
+    public ResponseEntity<AuthTokensResponse> verifySignup(
+            @Valid @RequestBody VerifySignupRequest request) {
+        return ResponseEntity.ok(emailVerification.verify(request.getEmail(), request.getCode()));
+    }
+
+    /**
+     * 코드를 다시 보낸다.
+     *
+     * <p>대기 행이 없어도 <b>같은 202</b> 다 — "그런 대기 없음" 을 말하면 이 경로도 가입 여부
+     * 조회 수단이 된다.
+     */
+    @PostMapping("/signup/resend")
+    public ResponseEntity<SignupStartedResponse> resendSignupCode(
+            @Valid @RequestBody ResendSignupCodeRequest request) {
+        return ResponseEntity.accepted()
+                .body(new SignupStartedResponse(emailVerification.resend(request.getEmail())));
     }
 
     /**

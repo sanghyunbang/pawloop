@@ -59,6 +59,11 @@ public class SecurityConfig {
             "/oauth2/**",
             "/login/**",
             "/auth/signup",
+            // 가입 인증 (#635). 코드를 받은 사람은 아직 토큰이 없으므로 비인증이어야 한다.
+            // 와일드카드(`/auth/signup/**`)로 안 여는 것은 의도다 — 나중에 그 아래 경로를
+            // 하나 더 만들면 그것까지 **인증 없음 + 한도 무한**으로 딸려 들어간다(#232 의 자리).
+            "/auth/signup/verify",
+            "/auth/signup/resend",
             "/auth/login",
             "/auth/oauth/**",
             "/auth/token/refresh",

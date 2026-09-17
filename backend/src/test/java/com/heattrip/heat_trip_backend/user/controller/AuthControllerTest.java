@@ -4,6 +4,7 @@ import com.heattrip.heat_trip_backend.user.dto.AuthTokensResponse;
 import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.RefreshTokenRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
+import com.heattrip.heat_trip_backend.user.signup.EmailVerificationService;
 import com.heattrip.heat_trip_backend.user.dto.UpdateProfileRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.NeighborhoodCatalog;
@@ -22,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +42,10 @@ class AuthControllerTest {
 
     @Mock
     private RefreshTokenService refreshTokenService;
+
+    /** 이메일 가입의 인증 (#635). 가입 요청은 이제 여기로만 간다. */
+    @Mock
+    private EmailVerificationService emailVerification;
 
     /**
      * 동네 이름을 붙이는 표 (#342). 여기서는 빈 응답이면 충분하다 — 이 테스트가 보는 것은
@@ -82,19 +88,33 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("회원가입 API는 저장된 사용자를 계약의 User 로 바꿔 201 로 응답한다")
-    void signup_returns201WithCreatedUser() {
-        // 예전에는 200 + 평문 "회원가입 성공" 이었다. 계약 어디에도 없는 모양이라
-        // 클라이언트가 방금 만든 계정의 id 조차 알 수 없었다. (이슈 #10)
+    @DisplayName("회원가입 API는 계정을 안 만들고 202 로 응답한다 — 코드를 보냈다는 뜻이다")
+    void signup_returns202AndOnlyStartsVerification() {
+        // 2026-09 이전에는 여기서 바로 계정을 만들고 201 을 줬다. 지금은 인증 코드를 보내고
+        // 계정은 /auth/signup/verify 에서 생긴다 — **만들어진 것이 없으므로 201 은 거짓말이다**
+        // (#635, ADR-0022 를 뒤집는다).
         SignupRequest request = new SignupRequest();
         request.setEmail("test1234@test.com");
-        when(userService.signup(request)).thenReturn(ME);
+        when(emailVerification.start(request)).thenReturn(true);
 
         var response = authController.signup(request);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getId()).isEqualTo(7L);
+        assertThat(response.getBody().mailSent()).isTrue();
+        // 계정을 만드는 쪽은 아예 안 부른다.
+        verifyNoInteractions(userService);
+    }
+
+    @Test
+    @DisplayName("메일이 안 나갔으면 그 사실을 응답에 싣는다 — 조용히 성공한 척하지 않는다")
+    void signup_saysWhenTheMailDidNotGoOut() {
+        SignupRequest request = new SignupRequest();
+        request.setEmail("test1234@test.com");
+        when(emailVerification.start(request)).thenReturn(false);
+
+        // 대기 행은 이미 있고 메일만 못 나간 상태다 — 앱은 "다시 보내기" 를 권하면 된다.
+        assertThat(authController.signup(request).getBody().mailSent()).isFalse();
     }
 
     @Test

@@ -130,9 +130,16 @@ class AuthBlueprintDocSpecTest {
         assertThat(authBlueprint)
                 .as("무엇을 꺼내야 하는지가 없으면 '바뀌었다' 는 통보일 뿐이다")
                 .contains("`accessToken` 을 꺼내고");
+        // 2026-09 이전에는 여기가 **201** 이었다. #635 가 가입을 둘로 쪼개면서 이 경로는
+        // 코드를 메일로 보내기만 하고(202) 계정은 /auth/signup/verify 에서 생긴다 — 즉 앱이
+        // 또 한 번 깨진다. 숫자를 여기에 박아 두는 것은 의도다: 서버가 바뀌는 날 이 검사가
+        // 빨간불이 되어 **인수인계 문장을 함께 고치게** 만든다.
         assertThat(authBlueprint)
-                .as("200 만 성공으로 보던 코드는 정상 가입을 실패로 읽는다")
-                .contains("성공을 **201** 로 받고");
+                .as("201 만 성공으로 보던 코드는 정상 가입을 실패로 읽는다 (#635)")
+                .contains("성공을 **202** 로 받고");
+        assertThat(authBlueprint)
+                .as("계정이 어디서 생기는지 없으면 앱은 방금 만든 계정의 id 를 어디서 읽을지 모른다")
+                .contains("/auth/signup/verify");
     }
 
     @Test

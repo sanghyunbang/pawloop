@@ -131,6 +131,10 @@ class PublicPathsAreRateLimitedTest {
             // 소셜 공급자가 돌려보내는 자리. 여기가 무제한이면 코드 교환을 무한히 시도할 수 있다.
             case "/login/**" -> new Sample("GET", "/login/oauth2/code/kakao");
             case "/auth/signup" -> new Sample("POST", "/auth/signup");
+            // 가입 인증 (#635). 코드 확인은 **무차별 시도의 자리**라 한도가 특히 중요하다 —
+            // 대기 행의 attempts 는 코드 하나를 막고, 이 한도가 주소를 갈아 가며 하는 시도를 막는다.
+            case "/auth/signup/verify" -> new Sample("POST", "/auth/signup/verify");
+            case "/auth/signup/resend" -> new Sample("POST", "/auth/signup/resend");
             case "/auth/login" -> new Sample("POST", "/auth/login");
             case "/auth/oauth/**" -> new Sample("POST", "/auth/oauth/kakao/callback");
             case "/auth/token/refresh" -> new Sample("POST", "/auth/token/refresh");

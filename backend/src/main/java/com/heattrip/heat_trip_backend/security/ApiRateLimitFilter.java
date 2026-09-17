@@ -75,6 +75,17 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && "/auth/signup".equals(path)) {
             return new Rule("login", rateLimitProperties.getLoginMaxRequests());
         }
+        // 가입 인증 (#635). 코드 확인은 **무차별 시도의 자리**다 — 여섯 자리라 한 번에
+        // 100만분의 1이지만, 한도가 없으면 시간만 있으면 뚫린다. 대기 행의 `attempts` 가
+        // 코드 하나를 막고, 이 한도가 **주소를 갈아 가며 하는 시도**를 막는다.
+        //
+        // 다시 보내기도 같은 버킷이다. 한도가 없으면 남의 메일함에 코드를 계속 꽂을 수 있다.
+        if ("POST".equals(method) && "/auth/signup/verify".equals(path)) {
+            return new Rule("login", rateLimitProperties.getLoginMaxRequests());
+        }
+        if ("POST".equals(method) && "/auth/signup/resend".equals(path)) {
+            return new Rule("login", rateLimitProperties.getLoginMaxRequests());
+        }
         // ── 인증 버킷 (이슈 #14) ────────────────────────────────────────────────
         // 세 분기를 하나의 || 로 합치지 않는다. 합치면 "어느 경로가 언제 목록에서
         // 빠졌는지" 가 한 줄 안에 묻히고, 한 경로만 지웠을 때 어느 테스트가 빨간불이

@@ -128,7 +128,7 @@ controller  →  service  →  repository(JPA)  →  entity
 | 매처 | 정책 |
 | --- | --- |
 | `/`, `/oauth2/**`, `/login/**`, `/error` | `permitAll` |
-| `/auth/signup`, `/auth/login`, `/auth/oauth/**`, `/auth/token/refresh` | `permitAll` — **이 네 경로뿐이다.** `/auth/**` 통짜 permitAll 은 #23-D 에서 없앴다 |
+| `/auth/signup`, `/auth/signup/verify`, `/auth/signup/resend`, `/auth/login`, `/auth/oauth/**`, `/auth/token/refresh` | `permitAll` — **열거된 이것뿐이다.** `/auth/**` 통짜 permitAll 은 #23-D 에서 없앴고, 가입 인증의 둘도 `/auth/signup/**` 가 아니라 낱개다(#635) |
 | 그 밖의 `/auth/*` (`GET`·`PUT`·`DELETE /auth/me`, `POST /auth/logout`) | `authenticated` — `anyRequest()` 로 떨어진다 |
 | `/actuator/health/**`, `/actuator/info`, `/actuator/prometheus` | `permitAll` |
 | `/api/places/nearby`, `/api/places/*`, `/api/places/trails/*/route` | `permitAll` — 관광공사 프록시(#40) · 산책로의 선(#291). 지도는 로그인 전에도 보여야 한다. **`/api/places/**` 와일드카드는 쓰지 않는다** — 레이트리밋 표가 못 덮는 자리가 인증도 한도도 없는 경로가 된다 |

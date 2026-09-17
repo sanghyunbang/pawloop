@@ -356,9 +356,27 @@ class AuthContractSpecTest {
                 .as("200 만 성공으로 보던 코드가 201 을 실패로 읽는다")
                 .contains("회원가입 성공");
 
+        // 2026-09 이전에는 여기가 **201 + User** 였고, 같은 이메일이면 409 였다. #635 가 가입을
+        // 둘로 쪼갰다 — 이 경로는 코드를 메일로 보내기만 하고(202), 계정은 verify 에서 생긴다.
+        //
+        //   * 만들어진 것이 없는데 201 을 주면 **거짓말**이다. 앱이 응답에서 id 를 읽으려 든다
+        //   * 409 는 그 자체가 "이 사람이 가입했나" 를 묻는 조회 수단이 된다 — 로그인이 401 에서
+        //     이메일과 비밀번호를 구분하지 않는 것과 같은 이유다(#6)
+        //
+        // 그래서 여기는 202 와 400 **둘뿐**이다. contains 가 아니라 정확히 같은지를 재는 이유는,
+        // 201·409 가 다시 끼어드는 날 이 검사가 조용히 통과하면 안 되기 때문이다.
         assertThat(asMap(asMap(asMap(paths.get("/auth/signup")).get("post")).get("responses")).keySet())
-                .as("중복 가입은 400 이 아니라 409 다 — 앱이 '입력 오류' 와 구분할 수 있어야 한다")
-                .contains("201", "409");
+                .as("계정은 verify 에서 생긴다 — 여기서 201 을 주면 만들지도 않은 것을 만들었다고 말한다 (#635)")
+                .containsExactlyInAnyOrder("202", "400");
+        assertThat(signup)
+                .as("201 을 기다리던 앱이 왜 202 를 받는지 계약에 없으면 앱 레인은 자기가 왜 깨졌는지 모른다")
+                .contains("201");
+
+        // 인증 경로가 없으면 위의 202 는 "가입이 사라졌다" 는 뜻이 된다. 계약에 끝까지 적혀
+        // 있어야 계약만 보고 만든 클라이언트가 가입을 끝낼 수 있다.
+        assertThat(asMap(asMap(asMap(paths.get("/auth/signup/verify")).get("post")).get("responses")).keySet())
+                .as("401(코드가 틀렸다)과 410(다시 받아야 한다)을 뭉개면 앱이 '다시 보내기' 를 언제 권할지 모른다")
+                .contains("200", "401", "410");
     }
 
     // ─────────────────────────── D. 스키마 정합 ───────────────────────────
@@ -581,6 +599,68 @@ class AuthContractSpecTest {
         assertThat(authTagDescription)
                 .as("SecurityConfig 가 지켜야 할 인가 경계를 계약이 말해야 한다")
                 .contains("/auth/logout", "bearerAuth");
+
+        // **문장이 목록과 갈리는 것을 여기서 막는다.** 이 설명은 SecurityConfig 의 permitAll
+        // 목록에 대한 정본인데, 사람이 손으로 적는 문장이라 경로가 늘 때 같이 안 늘어난다 —
+        // #635 가 `/auth/signup/verify`·`/auth/signup/resend` 를 더했을 때 실제로 그랬다.
+        // "뿐입니다" 라고 단정해 놓고 둘을 빠뜨리면, 그 문장을 읽고 구현하는 사람이 두 경로를
+        // 인증 뒤로 넣는다 — 그러면 코드를 받은 사람이 토큰이 없어 가입을 못 끝낸다.
+        assertThat(unauthenticatedAuthPaths())
+                .as("계약이 security: [] 로 연 /auth 경로인데 인가 경계 문장에 이름이 없다")
+                .allSatisfy(path -> assertThat(authTagDescription)
+                        .as("%s (또는 그것을 덮는 와일드카드)", path)
+                        .containsAnyOf(path, wildcardOf(path)));
+
+        // 같은 문장이 api-spec.md 에도 있다. 두 문서가 **다른 목록**을 들면 어느 쪽을 보고
+        // 구현했느냐로 결과가 갈린다 — 그건 계약이 없는 것과 같다.
+        String mirrored = lineStartingWith(apiSpecRaw, "**인가 경계**");
+        assertThat(unauthenticatedAuthPaths())
+                .as("api-spec.md 의 인가 경계 줄이 계약과 다른 목록을 든다")
+                .allSatisfy(path -> assertThat(mirrored)
+                        .as("%s (또는 그것을 덮는 와일드카드)", path)
+                        .containsAnyOf(path, wildcardOf(path)));
+    }
+
+    /** 그 말머리로 시작하는 줄 하나. 없으면 그 자리에서 선다 — 조용히 빈 문자열을 비교하면 안 된다. */
+    private static String lineStartingWith(String document, String prefix) {
+        String found = document.lines().filter(line -> line.startsWith(prefix)).findFirst().orElse(null);
+        assertThat(found)
+                .as("api-spec.md 에서 '%s' 로 시작하는 줄을 못 찾았다 — 문서 구조가 바뀌었다", prefix)
+                .isNotNull();
+        return found;
+    }
+
+    /**
+     * {@code /auth/oauth/{provider}} 처럼 자리표시자가 있는 경로를 문장이 쓰는 모양으로.
+     *
+     * <p>문장은 {@code /auth/oauth/**} 라고 적는다 — 자리표시자 이름까지 본문에 옮겨 적게 하면
+     * 파라미터 이름을 바꾸는 날 이 검사가 엉뚱한 곳에서 빨개진다.
+     */
+    private static String wildcardOf(String path) {
+        int brace = path.indexOf('{');
+        return brace < 0 ? path : path.substring(0, brace) + "**";
+    }
+
+    /** 계약이 {@code security: []} 로 연 {@code /auth/...} 경로 전부. */
+    private static List<String> unauthenticatedAuthPaths() {
+        List<String> open = new ArrayList<>();
+        asMap(spec.get("paths")).forEach((path, node) -> {
+            if (!path.startsWith("/auth/")) {
+                return;
+            }
+            boolean anyOpen = asMap(node).values().stream()
+                    .filter(Map.class::isInstance)
+                    .map(AuthContractSpecTest::asMap)
+                    .anyMatch(operation -> operation.get("security") instanceof List<?> security
+                            && security.isEmpty());
+            if (anyOpen) {
+                open.add(path);
+            }
+        });
+        assertThat(open)
+                .as("security: [] 인 /auth 경로를 하나도 못 찾았다 — 파서가 늙었거나 계약이 통째로 바뀌었다")
+                .isNotEmpty();
+        return open;
     }
 
     // ─────────────────────────── F. 두 문서의 정합 ───────────────────────────
