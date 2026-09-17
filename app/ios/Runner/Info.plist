@@ -47,6 +47,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>산책 중 우리 아이 사진을 찍어 기록에 붙이기 위해 카메라를 써요. 사진의 위치 정보는 지우고 올려요.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>산책 경로와 이동 거리를 기록하기 위해 위치를 사용해요. 포루프는 ‘항상 허용’ 을 요구하지 않아요 — 산책하는 동안에만 받고, 산책을 끝내면 멈춰요.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>산책 경로와 이동 거리를 기록하고, 주변의 반려동물 동반 장소를 보여드리기 위해 위치를 사용해요. 산책하는 동안에는 화면을 꺼도 경로가 끊기지 않도록 백그라운드에서도 위치를 받아요 — 산책을 끝내면 멈춰요.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

@@ -239,11 +239,50 @@ $landscape 를 선언해 놓고 가로 레이아웃이 없으면 심사관이 �
           reason: '언제 멈추는지까지 말해야 "completely" 다');
     });
 
-    test('Always 위치 권한은 요구하지 않는다 — 쓰지 않는 것을 묻지 않는다', () {
-      expect(plist, isNot(contains('NSLocationAlwaysAndWhenInUseUsageDescription')),
+    test('Always 목적 문자열이 있다 — 안 써도 애플이 요구한다 (ITMS-90683)', () {
+      // **내가 한 번 틀린 자리다.** #698 에서 "안 쓰는 것을 묻지 않는다" 며 이 키를 일부러
+      // 빼고, 들어오면 잡는 검사까지 걸었다. 그런데 빌드를 올리자 애플이 메일을 보냈다:
+      //
+      //   ITMS-90683: Missing purpose string in Info.plist — … should contain a
+      //   NSLocationAlwaysAndWhenInUseUsageDescription key … If you're using external
+      //   libraries or SDKs, they may reference APIs that require a purpose string.
+      //   **While your app might not use these APIs, a purpose string is still required.**
+      //
+      // 실제로 `.ipa` 의 `Runner` 바이너리에서 `requestAlwaysAuthorization` 문자열이 나온다
+      // (geolocator 가 정적으로 링크된다). 애플의 검사는 **바이너리**를 본다.
+      //
+      // 키를 넣는다고 "항상 허용" 창이 뜨지는 않는다 — 그 창은 앱이 *요청*할 때만 뜨고,
+      // 우리 Dart 코드는 `LocationPermission.always` 를 **받는 갈래로만** 다루지
+      // 요청하지 않는다. 그래서 문구에도 요구하지 않는다고 적었다.
+      expect(plist, contains('<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>'),
           reason: '''
-문구를 넣으면 OS 가 "항상 허용" 을 물을 수 있는 앱이 된다. 우리는 산책 중 전경 서비스로만
-받으므로 요구할 이유가 없고, 심사에서 이유를 따로 대야 한다.''');
+빼면 업로드마다 ITMS-90683 경고가 온다. 우리가 안 쓰더라도 번들 안의 라이브러리가 그 API 를
+참조하면 애플은 문구를 요구한다.''');
+      final match = RegExp(
+              r'<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>\s*<string>([^<]*)</string>')
+          .firstMatch(plist);
+      expect(match, isNotNull, reason: 'Always 문구를 못 찾았다');
+      expect(match!.group(1), contains('요구하지 않아요'), reason: '''
+우리는 "항상 허용" 을 요청하지 않는다. 문구가 그 사실을 말해야 한다 — 요청하지도 않으면서
+"늘 위치를 받는다" 고 적으면 사용자에게 거짓말이 된다.''');
+    });
+
+    test('최소 iOS 가 15.0 이다 — 13.0 은 2027년 봄부터 안 받는다 (ITMS-90068)', () {
+      // 애플 메일: "Starting in Spring 2027, all iOS apps must have a MinimumOSVersion
+      // of 15.0 or later in order to be uploaded to App Store Connect or submitted for
+      // distribution."
+      //
+      // 기기가 빠지지 않는다 — iOS 13 이 도는 기기(iPhone 6s 이상)는 iOS 15 도 돈다.
+      // 빠지는 것은 OS 를 안 올린 사람뿐이다.
+      final pbx = File('ios/Runner.xcodeproj/project.pbxproj').readAsStringSync();
+      expect(pbx, isNot(contains('IPHONEOS_DEPLOYMENT_TARGET = 13.0')));
+      expect(RegExp(r'IPHONEOS_DEPLOYMENT_TARGET = 15\.0;').allMatches(pbx).length, 3,
+          reason: 'Runner 의 Debug·Release·Profile 세 자리에 다 있어야 한다');
+
+      // Podfile 이 어긋나면 팟만 옛 타깃으로 빌드된다.
+      final podfile = File('ios/Podfile').readAsStringSync();
+      expect(podfile, contains("platform :ios, '15.0'"), reason: '''
+Podfile 의 platform 이 pbxproj 와 어긋나면 의존 팟이 다른 최소 버전으로 빌드된다.''');
     });
 
     test('사진 고르기 문구가 있다 — 커뮤니티 글에 사진을 붙인다 (#429)', () {
