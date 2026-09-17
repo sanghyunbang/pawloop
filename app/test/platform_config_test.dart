@@ -156,6 +156,75 @@ void main() {
       expect(plist, contains('<string>app.pawloop</string>'));
     });
 
+    test('아이폰 전용이다 — 아이패드 레이아웃이 없는데 지원한다고 말하지 않는다', () {
+      // `TARGETED_DEVICE_FAMILY` 가 "1,2"(아이폰+아이패드)였다. 아이패드 폭에 맞춘
+      // 레이아웃은 한 줄도 없는데 지원한다고 선언한 것이라, 앱스토어에 내면 13인치
+      // 아이패드 스크린샷이 **필수**가 되고 심사관이 아이패드로 켜 본다.
+      //
+      // **방향이 한쪽이다** — 나중에 아이패드를 더하는 것은 되지만, 이미 낸 앱에서
+      // 아이패드 지원을 빼는 것은 애플이 막는다. 그래서 내기 전에 "1" 로 좁힌다.
+      final pbx = File('ios/Runner.xcodeproj/project.pbxproj').readAsStringSync();
+      expect(pbx, isNot(contains('TARGETED_DEVICE_FAMILY = "1,2"')), reason: '''
+아이패드를 지원한다고 선언하면 되돌릴 수 없다 — 애플이 이미 낸 앱에서 기기군을 줄이는 것을
+막는다. 진짜로 아이패드를 지원할 준비가 됐을 때만 이 검사를 고쳐라.''');
+      expect(RegExp(r'TARGETED_DEVICE_FAMILY = "1";').allMatches(pbx).length, 3,
+          reason: 'Runner 의 Debug·Release·Profile 세 자리에 다 있어야 한다');
+    });
+
+    test('세로만 쓴다 — 가로 레이아웃을 맞춘 적이 없다', () {
+      // 가로를 선언해 두면 심사관이 돌려 본다. 앱은 `SystemChrome` 으로 방향을
+      // 고정하지 않아서(코드에 한 줄도 없다) Info.plist 가 유일한 제어다.
+      expect(plist, contains('UIInterfaceOrientationPortrait'));
+      for (final landscape in const [
+        'UIInterfaceOrientationLandscapeLeft',
+        'UIInterfaceOrientationLandscapeRight',
+      ]) {
+        expect(plist, isNot(contains(landscape)), reason: '''
+$landscape 를 선언해 놓고 가로 레이아웃이 없으면 심사관이 돌렸을 때 깨진 화면을 본다.''');
+      }
+      expect(plist, isNot(contains('UISupportedInterfaceOrientations~ipad')),
+          reason: '아이폰 전용인데 아이패드 방향 키가 남아 있다');
+    });
+
+    test('수출규정 답을 미리 적어 둔다 — 업로드마다 묻지 않게', () {
+      // 없으면 빌드를 올릴 때마다 App Store Connect 가 암호화 수출규정을 묻고,
+      // 답하기 전까지 그 빌드를 심사에 못 건다. HTTPS 만 쓰므로 면제가 맞다.
+      expect(plist, contains('<key>ITSAppUsesNonExemptEncryption</key>'));
+      expect(plist, contains('<key>ITSAppUsesNonExemptEncryption</key>\n\t<false/>'),
+          reason: '면제라고 답해 두는 것이다 — true 면 추가 서류를 내야 한다');
+    });
+
+    test('한국어 앱이라고 선언한다 — 앱은 Locale(ko) 하나로 고정돼 있다', () {
+      // `lib/core/localization.dart` 가 `appSupportedLocales = [Locale('ko')]` 로
+      // 못 박아 두었는데 Info.plist 는 아무 말이 없었다. 그러면 앱스토어가 개발
+      // 지역(en)만 보고 영어 앱으로 올린다.
+      expect(plist, contains('<key>CFBundleLocalizations</key>'));
+      expect(plist, contains('<string>ko</string>'));
+    });
+
+    test('위치 문구가 백그라운드 기록을 말한다 — 선언만 해 놓고 숨기지 않는다', () {
+      // `UIBackgroundModes` 에 `location` 을 선언해 놓고 문구는 그 말을 안 했다.
+      // 심사 지침 5.1.1(ii) 가 "clearly and completely" 를 요구한다.
+      expect(plist, contains('<key>UIBackgroundModes</key>'));
+      expect(plist, contains('<string>location</string>'));
+      final match = RegExp(
+              r'<key>NSLocationWhenInUseUsageDescription</key>\s*<string>([^<]*)</string>')
+          .firstMatch(plist);
+      expect(match, isNotNull, reason: '위치 문구를 못 찾았다');
+      expect(match!.group(1), contains('백그라운드'), reason: '''
+화면을 꺼도 경로를 기록하면서 문구가 그 말을 안 하면, 선언(UIBackgroundModes=location)과
+사용자에게 한 말이 어긋난다. 심사 지침 5.1.1(ii) 가 그것을 막는다.''');
+      expect(match.group(1), contains('산책을 끝내면 멈춰요'),
+          reason: '언제 멈추는지까지 말해야 "completely" 다');
+    });
+
+    test('Always 위치 권한은 요구하지 않는다 — 쓰지 않는 것을 묻지 않는다', () {
+      expect(plist, isNot(contains('NSLocationAlwaysAndWhenInUseUsageDescription')),
+          reason: '''
+문구를 넣으면 OS 가 "항상 허용" 을 물을 수 있는 앱이 된다. 우리는 산책 중 전경 서비스로만
+받으므로 요구할 이유가 없고, 심사에서 이유를 따로 대야 한다.''');
+    });
+
     test('사진 고르기 문구가 있다 — 커뮤니티 글에 사진을 붙인다 (#429)', () {
       // iOS 14+ 의 image_picker 는 PHPicker 라 이 문구 없이도 창이 뜨지만, 플러그인 README 가
       // 요구하고 iOS 13 이하에서는 없으면 고르는 순간 앱이 죽는다. 문구에 "위치 정보는 지운다" 를
