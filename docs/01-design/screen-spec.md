@@ -364,7 +364,7 @@
 | 프로필 | `me_screen.dart` | (push, 프로필 진입) | `kMyDog`, `GET /api/walks/stats/weekly` |
 | 프로필 편집 | `edit_screen.dart` | 프로필 → 편집 | `PATCH /api/dogs/{id}` — 바뀐 것만(#516). 사진은 바로 서버: `POST /media`(PROFILE_IMAGE) → `PUT /api/dogs/{id}/avatar`, 지우기 `DELETE …/avatar`(#448). 사진이 없을 때의 얼굴은 같은 PATCH 의 `character`(#585) |
 | 설정 | `settings_screen.dart` | 프로필 → 설정 | 약관 넷 · 내 동네(#342) · 저녁 산책 알림(#341) · 일요일 저녁 주간 정리 알림(#486 후속, 기기 안 예약 · 기본 꺼짐) · 일정 알림(#420) · 탈퇴 · 연락처(#165) |
-| 접근권한 안내 | `permission_notice_screen.dart` | 첫 실행(소개 끝) · 설정 → 접근권한 안내 | 앱이 쓰는 권한을 **필수와 선택으로 나눠** 항목·이유와 함께 보여 준다. 선택 항목에는 **"동의하지 않아도 앱을 쓸 수 있어요"** 를 적는다 — 정보통신망법 제22조의2 제1항이 요구하는 문장이다. 목록은 지어내지 않고 `AndroidManifest.xml` 의 `uses-permission` 과 `Info.plist` 의 `NS...UsageDescription` 을 읽어 만들었고, 테스트가 두 파일과 **양방향으로** 대조한다 (#682) |
+| 기기 접근권한 안내 | `permission_notice_screen.dart` | 첫 실행(소개 끝) · 설정 → 기기 접근권한 안내 | 앱이 쓰는 권한을 **필수적/선택적 접근권한으로 나눠** 항목·이유와 함께 보여 준다. 선택 항목에는 **"동의하지 않아도 앱을 쓸 수 있어요"** 를 적는다 — 정보통신망법 제22조의2 제1항이 요구하는 문장이다. **지금 필수적 접근권한은 0개**이고 화면이 "없어요" 라고 적는다 — 인터넷·네트워크·WAKE_LOCK·FOREGROUND_SERVICE·RECEIVE_BOOT_COMPLETED 는 시행령 제9조의2 제1항 각 호 밖이라 뺐다(뺀 이유는 `kNotNoticedPermissions` 에 남아 있다). 목록은 지어내지 않고 `AndroidManifest.xml` 의 `uses-permission` 과 `Info.plist` 의 `NS...UsageDescription` 을 읽어 만들었고, 테스트가 두 파일과 **양방향으로**(고지 + 일부러 뺀 것 = 선언) 대조한다. 위치 항목은 **약관 동의와 별개**라고 말한다 (#682) |
 | 내 정보 수정 | `display_name_screen.dart` | 프로필 → 내 정보 수정 | 표시 이름(`nickname`) 하나만 바꾼다. 빈 이름은 저장하지 않고, 저장이 실패하면 화면을 안 닫는다 — 바뀐 줄 알고 나가면 안 된다. **이미 쓴 글과 보낸 채팅의 이름은 안 바뀐다**(`post.handle`·`chat_message.sender_name` 이 그때 값을 찍어 둔다)는 것을 화면이 말한다 (#665) |
 | 내 동네 고르기 | `neighborhood_picker_screen.dart` | 설정 → 내 동네 | 시도→시군구→동 세 단계와 검색을 함께. "현재 위치로 찾기" 는 **기기 안에서** 후보만 고른다 — 좌표가 안 나간다(#342, A안 #235). 목록은 앱에 든 행정동 3,516개이고 출처 한 줄(CC BY 4.0)이 화면 아래에 있다 |
 | 약관 전문 | `settings/legal_document_screen.dart` | 설정·동의 → push | `assets/terms/*.md` |
@@ -375,7 +375,7 @@
 | 초대 참여 | `invite_join_screen.dart` | 초대 코드 | `POST /api/chat/invites/{code}/join` |
 | 핀 선택 | `pin_picker_screen.dart` | 보조 | 지도 |
 | 로그인 | `login_screen.dart` | 미로그인 진입 | 카카오·구글 · 그냥 둘러보기 |
-| **약관 동의** | `consent_screen.dart` | **로그인 직후, 온보딩보다 앞** | 이용약관·개인정보·**위치기반서비스**(필수) + 마케팅(#180) |
+| **약관 동의** | `consent_screen.dart` | **로그인 직후, 온보딩보다 앞** | 만 14세 이상(#682)·이용약관·개인정보·**위치기반서비스**(동의 필수) + 마케팅(동의 선택)(#180). 꼬리표가 "[필수]" 가 아니라 **"동의 필수/동의 선택"** 인 것은 앞 화면(기기 접근권한 안내)의 필수/선택과 뜻이 달라서다. 위치기반서비스 줄 아래에 **권한은 따로 묻고 거부해도 앱을 쓸 수 있다**는 한 줄이 붙는다 (#682) |
 | 온보딩 | `onboarding_screen.dart` | 동의 후 (`isNew`) | 반려동물 등록 권유 |
 | 스플래시 | `splash_screen.dart` | 앱 시작 | 저장된 토큰 검증 |
 | **첫 실행 소개** | `intro_screen.dart` | **스플래시 뒤 · 로그인 앞 — 기기당 한 번**(#323) | 가치 3장 · 건너뛰기 · `IntroGate` · 설정 > 앱 소개 다시 보기 |

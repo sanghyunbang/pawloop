@@ -39,6 +39,26 @@
 // 자기 신고다 — 우리는 주민등록번호도 본인확인도 받지 않으므로 이 이상은 확인할 수
 // 없다. 그래도 "만 14세 미만은 쓸 수 없는 서비스" 라고 **말하고 받은 답**이 남는다는
 // 점이 아무것도 안 묻는 것과 다르다.
+//
+// ## 왜 "[필수]" 가 아니라 "동의 필수" 인가 (#682)
+//
+// 소개 끝에 나오는 접근권한 안내(`settings/permission_notice_screen.dart`)도 항목을
+// 필수와 선택으로 나눈다. 거기서는 **위치가 선택**이다 — 권한을 거부해도 앱이 돌기
+// 때문이다. 그런데 여기서는 위치기반서비스 이용약관이 필수다. 사장님이 실기기에서
+// 그 둘을 나란히 보고 "위치는 다 선택인 것처럼 하더니 여기선 왜 또 필수냐" 고 물었다.
+//
+// 둘은 다른 것이다. 앞은 **기기의 기능을 켜는 허용**이고 여기는 **서비스를 쓰기 위한
+// 동의**다. 방송통신위원회 안내서도 <주의> 상자로 "접근권한에 대한 동의는 해당 정보에
+// 대한 수집 동의는 아니" 라고 갈라 놨다. 다만 갈라 놓은 것을 화면이 말해 주지 않으면
+// 읽는 사람에게는 모순으로 남는다. 그래서 세 가지를 했다:
+//
+//  1. 꼬리표를 "동의 필수 / 동의 선택" 으로 바꿔 같은 두 글자가 두 화면에 따로 놀지
+//     않게 했다(접근권한 화면은 "필수적 / 선택적 접근권한" 을 쓴다).
+//  2. 첫머리에 [ConsentScreen.screenBoundaryNote] 로 앞 화면과 별개라고 적었다.
+//  3. 위치기반서비스 줄 아래에 [ConsentScreen.locationPermissionNote] 를 붙여, 약관에
+//     동의해도 권한은 따로 묻고 거부해도 앱을 쓸 수 있다고 적었다.
+//
+// **위치기반서비스 약관을 선택으로 내리지는 않았다.** 그건 따로 판단할 일이다.
 library;
 
 import 'package:flutter/material.dart';
@@ -48,6 +68,7 @@ import '../data/location_service.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
 import 'settings/legal_document_screen.dart';
+import 'settings/permission_notice_screen.dart';
 
 class ConsentScreen extends StatefulWidget {
   final int userId;
@@ -64,6 +85,27 @@ class ConsentScreen extends StatefulWidget {
     required this.onAgreed,
     this.gate,
   });
+
+  /// 이 화면이 앞 화면과 무엇이 다른지. (#682)
+  ///
+  /// 소개 끝에 나오는 [PermissionNoticeScreen] 도 항목을 필수와 선택으로 나눈다. 거기서
+  /// 말하는 필수/선택은 **기기 권한**이고 여기 것은 **약관 동의**다. 같은 두 글자가 뜻이
+  /// 달라서 "아까는 위치가 선택이라더니 여기선 왜 필수냐" 로 읽혔다. 그래서 이 화면은
+  /// 꼬리표를 "동의 필수 / 동의 선택" 으로 쓰고, 경계를 이 한 줄로 적는다.
+  static const String screenBoundaryNote =
+      '앞에서 본 ‘${PermissionNoticeScreen.menuLabel}’ 와는 별개예요. '
+      '여기는 서비스를 쓰기 위한 동의예요.';
+
+  /// 위치기반서비스 이용약관 줄에 붙는 한 줄. (#682)
+  ///
+  /// 짝이 되는 문장은 [kLocationIsNotTheTerms] 다 — 저쪽은 권한 화면에서 "약관과 별개" 라
+  /// 말하고, 이쪽은 동의 화면에서 "권한은 따로 묻는다" 고 말한다. 한쪽만 고치면 다시
+  /// 어긋나므로 두 문장 다 검사가 붙들고 있다.
+  ///
+  /// **이 줄은 약속이다.** 약관에 동의해도 위치 권한 대화상자는 따로 뜨고(권한을 여는
+  /// 것은 OS 다), 거부해도 앱은 돈다 — 라우터가 위치 권한을 보지 않는다.
+  static const String locationPermissionNote = '약관에 동의해도 기기의 위치 권한은 앱에서 '
+      '따로 물어봐요. 거부해도 앱을 쓸 수 있고, 산책 경로 기록과 주변 찾기만 못 해요.';
 
   @override
   State<ConsentScreen> createState() => _ConsentScreenState();
@@ -151,6 +193,11 @@ class _ConsentScreenState extends State<ConsentScreen> {
                       '위치 이용은 프로필에서 언제든 멈출 수 있어요.',
                       style: TextStyle(fontSize: 13.5, height: 1.6, color: T.textSecondary),
                     ),
+                    const SizedBox(height: 10),
+                    // 위 문단과 따로 둔다 — 위 문단은 #653 이 실제 동작과 견주는 약속이라
+                    // 문장을 섞지 않는다.
+                    const Text(ConsentScreen.screenBoundaryNote,
+                        style: TextStyle(fontSize: 12.5, height: 1.6, color: T.textMuted)),
                     const SizedBox(height: 22),
                     _allRow(),
                     const SizedBox(height: 10),
@@ -178,7 +225,10 @@ class _ConsentScreenState extends State<ConsentScreen> {
                           required_: true,
                           value: _location,
                           onChanged: (v) => setState(() => _location = v),
-                          doc: LegalDocument.location),
+                          doc: LegalDocument.location,
+                          // 사장님이 걸린 자리다 — 앞 화면에서 위치가 선택이었는데
+                          // 여기서 필수라 모순으로 읽혔다. 둘은 다른 것이다(#682).
+                          note: ConsentScreen.locationPermissionNote),
                       _divider(),
                       _row('마케팅 정보 수신',
                           required_: false,
@@ -267,48 +317,65 @@ class _ConsentScreenState extends State<ConsentScreen> {
     required bool value,
     required ValueChanged<bool> onChanged,
     LegalDocument? doc,
+    String? note,
   }) =>
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: Row(children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(!value),
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: Row(children: [
-                  _check(value),
-                  const SizedBox(width: 12),
-                  Text(required_ ? '[필수] ' : '[선택] ',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: required_ ? T.warmText : T.textMuted)),
-                  Flexible(
-                    child: Text(label,
-                        style: const TextStyle(fontSize: 14, color: T.textPrimary)),
-                  ),
-                ]),
+        child: Column(children: [
+          Row(children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => onChanged(!value),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: EdgeInsets.only(top: 14, bottom: note == null ? 14 : 8),
+                  child: Row(children: [
+                    _check(value),
+                    const SizedBox(width: 12),
+                    // "[필수]" 가 아니라 "동의 필수" 다 — 접근권한 화면이 같은 두 글자를
+                    // 기기 권한이라는 다른 뜻으로 쓴다(#682).
+                    Text(required_ ? '동의 필수 ' : '동의 선택 ',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: required_ ? T.warmText : T.textMuted)),
+                    Flexible(
+                      child: Text(label,
+                          style: const TextStyle(fontSize: 14, color: T.textPrimary)),
+                    ),
+                  ]),
+                ),
               ),
             ),
-          ),
-          // 전문 보기. 동의를 받으려면 읽을 길이 있어야 한다 — 읽을 수 없는 동의는
-          // 동의가 아니다.
-          if (doc != null)
-            GestureDetector(
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => LegalDocumentScreen(document: doc),
-              )),
-              behavior: HitTestBehavior.opaque,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 14),
-                child: Icon(Icons.chevron_right, size: 20, color: T.textMuted),
+            // 전문 보기. 동의를 받으려면 읽을 길이 있어야 한다 — 읽을 수 없는 동의는
+            // 동의가 아니다.
+            if (doc != null)
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => LegalDocumentScreen(document: doc),
+                )),
+                behavior: HitTestBehavior.opaque,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                  child: Icon(Icons.chevron_right, size: 20, color: T.textMuted),
+                ),
+              )
+            else
+              // 화살표(20) + 좌우 여백(4+4). 안 비워 두면 이 줄만 오른쪽으로 넓어진다.
+              const SizedBox(width: 28),
+          ]),
+          // 한 줄 더 할 말이 있는 항목. 체크 글자와 같은 선에서 시작하게 왼쪽을 34 만큼
+          // 민다(체크 22 + 사이 12).
+          if (note != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(34, 0, 4, 13),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(note,
+                    style: const TextStyle(
+                        fontSize: 12, height: 1.5, color: T.textMuted)),
               ),
-            )
-          else
-            // 화살표(20) + 좌우 여백(4+4). 안 비워 두면 이 줄만 오른쪽으로 넓어진다.
-            const SizedBox(width: 28),
+            ),
         ]),
       );
 

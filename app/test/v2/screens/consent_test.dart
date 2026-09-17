@@ -10,11 +10,16 @@
 //  4. 계정마다 따로 센다. 한 기기를 가족이 나눠 쓸 때 앞사람의 동의가 뒷사람에게 적용되면
 //     그 사람은 약관을 본 적이 없는데 동의한 것이 된다.
 //  5. 화면 — 필수를 다 안 채우면 못 넘어가는가. 위치기반서비스 동의가 필수인가.
+//  6-1. 이 화면의 필수/선택이 **접근권한 화면의 필수/선택과 다른 것**이라고 말하는가
+//     (#682). 앞 화면은 위치를 선택으로 적고 여기는 위치기반서비스 약관을 필수로 적는다.
+//     설명이 없으면 모순으로 읽힌다 — 꼬리표를 "동의 필수/동의 선택" 으로 갈라 두고,
+//     위치 줄 아래 한 줄로 권한은 따로 묻는다고 적는다.
 //  6. 만 14세 이상 확인이 필수인가(#682) — 개인정보 보호법 제22조의2 는 만 14세 미만의
 //     개인정보에 법정대리인 동의를 요구하는데 우리에겐 그 장치가 없다. 그래서 만 14세
 //     미만은 가입 자체를 막는 것이 답이고, 이 줄을 빼면 처리방침 10항이 다시 거짓이 된다.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,6 +29,7 @@ import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/data/consent_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/consent_screen.dart';
 import 'package:heat_trip_flutter/v2/screens/settings/legal_document_screen.dart';
+import 'package:heat_trip_flutter/v2/screens/settings/permission_notice_screen.dart';
 
 /// 서버 흉내. 무엇을 돌려줄지, 받았는지, 죽었는지를 테스트가 정한다.
 class _FakeServer implements ConsentRepository {
@@ -285,11 +291,70 @@ void main() {
     testWidgets('필수 넷이 다 보인다 — 만 14세 · 이용약관 · 개인정보 · 위치기반서비스', (t) async {
       await _pump(t, gate: _gate(_FakeServer()));
 
-      expect(find.text('[필수] '), findsNWidgets(4));
-      expect(find.text('[선택] '), findsOneWidget);
+      // "[필수]" 가 아니다 — 접근권한 화면이 같은 두 글자를 기기 권한이라는 다른 뜻으로
+      // 써서 모순으로 읽혔다(#682).
+      expect(find.text('동의 필수 '), findsNWidgets(4));
+      expect(find.text('동의 선택 '), findsOneWidget);
       for (final label in _requiredLabels) {
         expect(find.text(label), findsOneWidget, reason: '$label 줄이 사라졌다');
       }
+    });
+
+    // 접근권한 안내에서는 위치가 **선택**이고 여기서는 위치기반서비스 약관이 **필수**다.
+    // 둘은 다른 것이지만(기기 권한 / 약관 동의), 화면이 말해 주지 않으면 읽는 사람에게는
+    // 모순이다 — 사장님이 실기기에서 그렇게 읽었다(#682).
+    testWidgets('위치기반서비스 줄이 권한과 약관이 다르다고 말한다', (t) async {
+      await _pump(t, gate: _gate(_FakeServer()));
+
+      expect(find.text(ConsentScreen.locationPermissionNote), findsOneWidget, reason: '''
+이 줄이 없으면 "아까는 위치가 선택이라더니 여기선 왜 또 필수냐" 가 답 없이 남는다.''');
+      // 약속이다 — 약관에 동의해도 권한은 따로 묻고, 거부해도 앱이 돈다. 짝이 되는
+      // 문장은 접근권한 화면에 있고 permission_notice_test.dart 가 잰다.
+      expect(ConsentScreen.locationPermissionNote, contains('따로 물어봐요'));
+      expect(ConsentScreen.locationPermissionNote, contains('거부해도 앱을 쓸 수 있'));
+      final location =
+          kAppPermissions.firstWhere((p) => p.title == '위치');
+      expect(location.essential, isFalse,
+          reason: '권한 화면이 위치를 필수로 바꾸면 이 줄이 거짓이 된다');
+    });
+
+    // 꼬리표가 "[필수] " 에서 "동의 필수 " 로 두 글자 넓어졌다. 가장 긴 줄이 접히면
+    // 이 화면만 줄 높이가 들쭉날쭉해진다.
+    //
+    // 두 가지를 갖춰야 이 검사가 뜻을 가진다 — 기본 표면(800dp)에서는 무엇이든 한 줄이고,
+    // 테스트 폰트는 글자 하나가 폰트 크기만큼 넓어 실제보다 빨리 접힌다. 실제로 테스트
+    // 폰트로 재면 이 줄이 두 줄(40px)로 나오는데 진짜 Pretendard 로는 한 줄이다.
+    testWidgets('360dp 에서 가장 긴 약관 줄이 한 줄로 선다 — 진짜 폰트로 잰다', (t) async {
+      final loader = FontLoader('Pretendard');
+      for (final w in const ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold']) {
+        loader.addFont(rootBundle.load('assets/fonts/Pretendard-$w.otf'));
+      }
+      await loader.load();
+
+      t.view.physicalSize = const Size(360, 1200);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+
+      await t.pumpWidget(MaterialApp(
+        theme: ThemeData(fontFamily: 'Pretendard'),
+        home: ConsentScreen(
+            userId: 11, onAgreed: () {}, gate: _gate(_FakeServer())),
+      ));
+      await t.pumpAndSettle();
+
+      for (final label in _requiredLabels) {
+        expect(t.getSize(find.text(label)).height, lessThan(14 * 1.6),
+            reason: '$label 이 두 줄로 접힌다 — 꼬리표를 줄이거나 여백을 줄여야 한다');
+      }
+    });
+
+    testWidgets('앞 화면과 별개라고 첫머리에 적는다', (t) async {
+      await _pump(t, gate: _gate(_FakeServer()));
+
+      expect(find.text(ConsentScreen.screenBoundaryNote), findsOneWidget);
+      expect(ConsentScreen.screenBoundaryNote,
+          contains(PermissionNoticeScreen.menuLabel),
+          reason: '앞 화면 제목이 바뀌면 이 줄도 따라가야 한다 — 상수로 물려 둔다');
     });
 
     testWidgets('만 14세 줄에는 화살표가 없다 — 읽을 전문이 없다', (t) async {

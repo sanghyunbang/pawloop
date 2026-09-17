@@ -72,12 +72,12 @@ lib/
 | `chat_list_screen.dart` | 방 목록 · 미읽음 | 탭 4 |
 | `invite_join_screen.dart` | 초대 코드로 방 참여 | 링크·코드 입력 |
 | `settings_screen.dart` | 설정 — 약관 넷 · 내 동네 · 저녁 알림 · 일요일 저녁 주간 정리 알림 · 일정 알림 · 회원 탈퇴 · 운영자 연락처 | me → push (#165) |
-| `permission_notice_screen.dart` | 접근권한 안내 — 필수/선택으로 나눠 무엇을 왜 쓰는지. 선택은 "동의하지 않아도 앱을 쓸 수 있어요" (정보통신망법 제22조의2) | 소개 끝 · 설정 → push (#682) |
+| `permission_notice_screen.dart` | 기기 접근권한 안내 — 필수적/선택적으로 나눠 무엇을 왜 쓰는지. 선택은 "동의하지 않아도 앱을 쓸 수 있어요" (정보통신망법 제22조의2). 지금 필수적 접근권한은 0개이고 그 사실을 적는다 | 소개 끝 · 설정 → push (#682) |
 | `display_name_screen.dart` | 표시 이름 바꾸기 — `nickname` 하나만. 이미 쓴 글·채팅의 이름은 그때 값 그대로다 | `me_screen` → push (#665) |
 | `neighborhood_picker_screen.dart` | 내 동네 고르기 — 시도→시군구→동 세 단계 · 검색 · "현재 위치로 찾기"(기기 안) | 설정 → push (#342) |
 | `settings/legal_document_screen.dart` | 약관 전문 렌더 (`assets/terms/*.md`) | 설정·동의 화면 → push |
 | `settings/account_delete_screen.dart` | 회원 탈퇴 → `DELETE /auth/me` | 설정 → push |
-| `consent_screen.dart` | **약관 동의 게이트** — 이용약관·개인정보·위치기반서비스(필수) + 마케팅 | 로그인 직후, 온보딩보다 앞 (#180) |
+| `consent_screen.dart` | **약관 동의 게이트** — 만 14세 이상·이용약관·개인정보·위치기반서비스(동의 필수) + 마케팅(동의 선택). 기기 접근권한 안내와 말이 겹치지 않게 "동의 필수/동의 선택" 을 쓴다 | 로그인 직후, 온보딩보다 앞 (#180 · #682) |
 | `login_screen.dart` | 소셜 로그인(카카오·구글) · 그냥 둘러보기 | 미로그인 진입 |
 | `onboarding_screen.dart` | 신규 가입자 — 반려동물 등록 권유 | 동의 후 (`isNew`) |
 | `splash_screen.dart` | 저장된 토큰 검증 중 머무는 자리 | 앱 시작 |
