@@ -1,4 +1,4 @@
-# 로컬 개발 환경 (운영 api.heattrip.link 와 분리)
+# 로컬 개발 환경 (운영 api.pawloop.app 와 분리)
 
 운영 서버를 건드리지 않고, 로컬에서 **backend(Spring)** 를 띄워 Flutter 앱을 거기에 붙이는 방법.
 DB 는 호스트에서 이미 도는 MySQL(3306, `heat_trip_db`)을 그대로 쓴다.

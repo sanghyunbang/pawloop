@@ -20,7 +20,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * <h2>영상은 multipart 로 안 받는다</h2>
  * <p>{@code POST_VIDEO} 의 상한은 서버가 받는 크기가 아니라 <b>S3 에 직접 올린 뒤 서버가
- * 확인하는</b> 상한이다(#429). {@code api.heattrip.link} 앞의 Cloudflare 가 100MB 까지만
+ * 확인하는</b> 상한이다(#429). {@code api.pawloop.app} 앞의 Cloudflare 가 100MB 까지만
  * 받아서 영상은 서버를 안 지난다. {@code MediaController} 가 multipart 로 온 영상을 막는다.
  */
 @Schema(description = "Upload category; controls S3 prefix, allowed MIME types and size limits")

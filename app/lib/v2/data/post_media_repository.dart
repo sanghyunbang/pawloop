@@ -19,7 +19,7 @@
 //
 // ## 영상은 세 단계다 (서버 #435)
 //
-// 영상은 서버를 안 지난다 — `api.heattrip.link` 앞의 Cloudflare 가 본문을 100MB 에서 끊는다.
+// 영상은 서버를 안 지난다 — `api.pawloop.app` 앞의 Cloudflare 가 본문을 100MB 에서 끊는다.
 // ① `POST /media/videos` 로 자리를 잡고(서명 PUT, 15분) ② 그 URL 로 S3 에 **직접** 올리고
 // ③ `POST /media/{id}/complete` 에 포스터를 실어 끝낸다. ② 는 `AuthedClient` 를 **안 탄다** —
 // 서명 URL 에 `Authorization` 을 얹으면 S3 가 "인증이 둘" 이라고 거절한다. 그래서 토큰 없는

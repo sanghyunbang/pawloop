@@ -1,4 +1,4 @@
-# 로컬 스택 (운영 api.heattrip.link 와 무관) — backend(Spring) 하나.
+# 로컬 스택 (운영 api.pawloop.app 와 무관) — backend(Spring) 하나.
 # DB는 새로 만들지 않고, 이미 호스트(PC)에서 돌고 있는 MySQL(3306, heat_trip_db)을 그대로 사용한다.
 # 2026-09-06 까지 함께 뜨던 recsys(FastAPI 추천 서버)는 감정 추천과 함께 지웠다(#94).
 #
