@@ -72,10 +72,18 @@ void main() {
       expect(v.reasons, contains('비'));
     });
 
-    test('미세먼지 값이 없으면 기온만으로 판정하고 "정보 없음" 을 근거에 적는다 — 없는 값으로 좋다고 하지 않는다', () {
+    test('미세먼지를 못 받으면 기온만으로 판정하고 "못 받았어요" 라고 적는다 — 없는 값으로 좋다고 하지 않는다', () {
       final v = WalkSafety.judge(_r(temp: 20), hour: 14, dog: _mix);
       expect(v.level, WalkSafetyLevel.good);
-      expect(v.reasons, contains('미세먼지 정보 없음'));
+      expect(v.reasons, contains('미세먼지는 못 받았어요'));
+    });
+
+    test('"정보 없음" 이라고 말하지 않는다 — 공기는 늘 있고 우리가 못 잰 것이다 (#668)', () {
+      // 서버가 에어코리아를 한 번 못 부르면 PM 이 비어 온다. 그때 "정보 없음" 은 값이 0 이거나
+      // 공기가 깨끗하다는 뜻으로도 읽힌다 — 못 받은 것과 없는 것을 뭉개는 말이다(#515).
+      final v = WalkSafety.judge(_r(temp: 20), hour: 14, dog: _mix);
+      expect(v.reasons.join(' '), isNot(contains('정보 없음')));
+      expect(v.reasons.join(' '), contains('못 받'));
     });
   });
 
@@ -127,7 +135,8 @@ void main() {
       expect(WalkSafety.pmLabel(36, null), '나쁨');
       expect(WalkSafety.pmLabel(76, null), '매우나쁨');
       expect(WalkSafety.pmLabel(null, 81), '나쁨');
-      expect(WalkSafety.pmLabel(null, null), '정보 없음');
+      // 둘 다 없으면 등급이 아니라 "못 받음" 이다 — "정보 없음" 은 0 이나 좋음으로도 읽힌다(#668).
+      expect(WalkSafety.pmLabel(null, null), '못 받음');
     });
   });
 }

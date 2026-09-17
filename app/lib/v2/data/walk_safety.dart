@@ -36,7 +36,8 @@ class WalkSafetyVerdict {
   bool get shouldAskBeforeWalk => level == WalkSafetyLevel.avoid;
 }
 
-/// 기상·대기 관측값 한 묶음. 없는 값은 `null` — 미세먼지 API 가 안 붙어 있으면 PM 이 비어 온다.
+/// 기상·대기 관측값 한 묶음. 못 받은 값은 `null` — 서버가 에어코리아를 못 부르면 PM 이 비어 온다.
+/// 비었다는 것은 "미세먼지가 없다" 가 아니라 "이번엔 못 쟀다" 는 뜻이다(#668).
 class WalkSafetyReading {
   final double tempC;
   final int? humidity;
@@ -79,6 +80,9 @@ class WalkSafety {
   /// 노령견 기준(개월). 84개월 = 7살.
   static const int seniorMonths = 84;
 
+  /// 미세먼지를 **못 받았을 때** 근거에 적는 한 줄. 값이 없는 것이 아니라 못 잰 것이다(#668).
+  static const String pmUnavailable = '미세먼지는 못 받았어요';
+
   /// PM2.5 등급 경계(환경부). 35 초과면 나쁨.
   static const int pm25Moderate = 35;
   static const int pm25Bad = 75;
@@ -94,7 +98,10 @@ class WalkSafety {
     } else if (r.pm10 != null) {
       reasons.add('미세먼지 ${pmLabel(null, r.pm10)}${r.station == null ? '' : '(${r.station})'}');
     } else {
-      reasons.add('미세먼지 정보 없음');
+      // **못 받은 것과 없는 것은 다르다**(#515 가 급할 때 병원 목록에서 세운 구분).
+      // 게다가 미세먼지는 "없다" 가 아예 성립하지 않는다 — 공기는 늘 있고 우리가 못 잰 것뿐이다.
+      // 서버가 에어코리아를 한 번 못 부른 날 "정보 없음" 이 떴고, 그건 거짓말이었다(#668).
+      reasons.add(pmUnavailable);
     }
 
     // 더위·미세먼지에서 나온 단계(0 좋음 · 1 짧게 · 2 피하세요)
@@ -159,6 +166,9 @@ class WalkSafety {
   }
 
   /// "좋음 · 보통 · 나쁨 · 매우나쁨". PM2.5 가 있으면 그것으로, 없으면 PM10 으로.
+  ///
+  /// 둘 다 없으면 등급이 아니라 **못 받았다**고 말한다 — "정보 없음" 은 값이 0 이거나 공기가
+  /// 깨끗하다는 뜻으로도 읽힌다(#668).
   static String pmLabel(int? pm25, int? pm10) {
     if (pm25 != null) {
       if (pm25 <= 15) return '좋음';
@@ -172,7 +182,7 @@ class WalkSafety {
       if (pm10 <= pm10Bad) return '나쁨';
       return '매우나쁨';
     }
-    return '정보 없음';
+    return '못 받음';
   }
 }
 

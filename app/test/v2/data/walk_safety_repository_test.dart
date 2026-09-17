@@ -66,7 +66,7 @@ void main() {
     expect(r.pm25, isNull);
     expect(r.pm10, isNull);
     expect(r.station, isNull);
-    expect(WalkSafety.judge(r, hour: 14).reasons, contains('미세먼지 정보 없음'));
+    expect(WalkSafety.judge(r, hour: 14).reasons, contains('미세먼지는 못 받았어요'));
     expect(parseWalkSafetyNow({'humidity': 49}, fallbackAt: DateTime(2026, 9, 7)), isNull);
     expect(parseWalkSafetyNow({'error': {}}, fallbackAt: DateTime(2026, 9, 7)), isNull);
   });

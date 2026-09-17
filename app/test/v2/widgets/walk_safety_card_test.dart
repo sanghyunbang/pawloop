@@ -79,11 +79,11 @@ void main() {
     expect(find.textContaining('°C'), findsNothing);
   });
 
-  testWidgets('값이 오면 한 줄과 근거 — "지금 나가기 좋아요 · 22°C · 미세먼지 정보 없음"', (t) async {
+  testWidgets('값이 오면 한 줄과 근거 — "지금 나가기 좋아요 · 22°C · 미세먼지는 못 받았어요"', (t) async {
     await _pump(t, _repo());
 
     expect(find.text('지금 나가기 좋아요'), findsOneWidget);
-    expect(find.text('22°C · 미세먼지 정보 없음'), findsOneWidget);
+    expect(find.text('22°C · 미세먼지는 못 받았어요'), findsOneWidget);
     expect(find.textContaining('24°C'), findsNothing, reason: '하드코딩이 아니다');
   });
 

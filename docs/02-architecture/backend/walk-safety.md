@@ -37,7 +37,7 @@ walksafety/
 | --- | --- |
 | 격자 범위 밖 | 400 — 기상청을 부르지 않는다 |
 | 기상청 실황 없음(키 없음·게이트웨이 오류·기온 항목 없음·타임아웃) | 503 — 반쪽 값을 주지 않는다. 앱은 카드를 안 그린다 |
-| 에어코리아 실패 | 200 인데 `pm10`·`pm25`·`station` 이 null — 앱은 "미세먼지 정보 없음". 측정소 목록을 못 받은 경우는 **5분만** 그 상태를 기억한다(`EMPTY_STATIONS_TTL`) |
+| 에어코리아 실패 | 200 인데 `pm10`·`pm25`·`station` 이 null — 앱은 "미세먼지는 못 받았어요". 그 응답은 **2분만** 기억한다(`NOW_WITHOUT_DUST_TTL`, #668) — 성공한 응답의 10분과 다르다. 측정소 목록을 못 받은 경우도 **5분만**(`EMPTY_STATIONS_TTL`). 실시간 측정은 연결이 안 서면(`WebClientRequestException`) 한 번 더 건다(3초 × 2) |
 
 > 두 API 는 2026-09-08 에 활용신청이 승인됐다. 그런데도 PM 이 안 붙으면 **승인이 아니라 주소를 의심한다** — 오퍼레이션 이름이 틀리면 게이트웨이가 `NO_OPENAPI_SERVICE_ERROR` 를 주고, 그 응답은 승인 대기와 화면에서 구별되지 않는다. `AirKoreaClientTest` 가 나가는 URI 를 재고, `scripts/check-external-keys.sh` 가 실제로 불러 본다.
 
@@ -46,4 +46,7 @@ walksafety/
 - `WalkSafetyParserTest` — 실제 응답 모양(2026-09-07 서울)·게이트웨이 오류·XML·측정소·실시간.
 - `WalkSafetyServiceTest` — 기준 시각(40분 전 시 단위 내림, 자정 경계).
 - `WalkSafetyEndpointIntegrationTest` — 인증 없이 200 · 계약 키 집합 · 격자 캐시 · 에어코리아 없음 · 503 · 400.
+- `WalkSafetyStationCacheTest` — 못 받은 측정소 목록은 5분만 산다.
+- `WalkSafetyDustCacheTest` — 미세먼지가 빠진 응답은 10분을 못 산다(#668). 값이 붙은 응답은 그대로 10분.
+- `AirKoreaClientTest` — 나가는 URI · 연결이 안 서면 한 번 더 걸고, 읽기 제한을 넘긴 호출은 다시 안 건다(#668).
 - `ApiRateLimitFilterTest.walkSafety_hasItsOwnBucket` — permitAll 경로가 한도 표에 있다.
