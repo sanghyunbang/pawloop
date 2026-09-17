@@ -55,9 +55,19 @@ android {
         it.contains("Release", ignoreCase = true)
     }
 
-    // ② 서명 파일 표준 경로(프로젝트 루트 기준) → android/key.properties
+    // ② 서명 파일 표준 경로 → app/android/key.properties
     //    ※ 루트에 두지 않고 android/ 아래에 두는 이유: 안드 폴더와 결합, gitignore 관리 용이
-    val keystoreFile = rootProject.file("android/key.properties")
+    //
+    //    **rootProject 는 저장소 루트가 아니라 `app/android/` 다** — Flutter 가 안드로이드
+    //    빌드를 그 폴더를 루트로 삼아 돌린다(android/settings.gradle.kts 가 그 증거로,
+    //    local.properties 를 자기 폴더에서 읽는다).
+    //
+    //    그래서 여기가 "android/key.properties" 였을 때 실제로 찾은 경로는
+    //    `app/android/android/key.properties` 였고, 그런 폴더는 없다. 키스토어와
+    //    key.properties 가 **멀쩡히 있는데도** 아래 정책이 "Missing android/key.properties"
+    //    로 릴리스 빌드를 막았다(2026-09-17 실측, #634). 서명이 조용히 빠지는 대신 크게
+    //    막아 준 것은 그 정책이 옳았기 때문이고, 틀린 것은 이 한 줄이었다.
+    val keystoreFile = rootProject.file("key.properties")
     val hasKeystore = keystoreFile.exists()
 
     // ③ 필요 시에만 key.properties를 로드(없거나 디버그면 로드하지 않음)
