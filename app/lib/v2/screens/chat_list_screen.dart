@@ -307,8 +307,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget _actions(BuildContext context) {
     return Column(children: [
       GestureDetector(
-        onTap: () => Navigator.of(context)
-            .push(MaterialPageRoute(builder: (_) => const FamilyScreen())),
+        onTap: () async {
+          await Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const FamilyScreen()));
+          // 거기서 **가족을 만들 수 있다.** 만들고 돌아오면 이 목록에 방이 하나 생기는데,
+          // 다시 받지 않으면 "아직 참여한 방이 없어요" 가 그대로 남는다 — 2026-09-17 에
+          // 사장님이 "앱을 껐다 켜야만 보인다" 고 신고한 자리다.
+          //
+          // 탭을 오가면 이 화면의 State 가 새로 만들어져 `initState` 가 다시 받는다.
+          // 그래서 **탭 안에서 화면을 얹었다 내리는 이 길만** 구멍이었다. 바로 아래
+          // "초대코드로 참여" 는 처음부터 이렇게 하고 있었다.
+          if (!mounted) return;
+          await _load();
+        },
         behavior: HitTestBehavior.opaque,
         child: GlassCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
