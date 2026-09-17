@@ -364,6 +364,7 @@
 | 프로필 | `me_screen.dart` | (push, 프로필 진입) | `kMyDog`, `GET /api/walks/stats/weekly` |
 | 프로필 편집 | `edit_screen.dart` | 프로필 → 편집 | `PATCH /api/dogs/{id}` — 바뀐 것만(#516). 사진은 바로 서버: `POST /media`(PROFILE_IMAGE) → `PUT /api/dogs/{id}/avatar`, 지우기 `DELETE …/avatar`(#448). 사진이 없을 때의 얼굴은 같은 PATCH 의 `character`(#585) |
 | 설정 | `settings_screen.dart` | 프로필 → 설정 | 약관 넷 · 내 동네(#342) · 저녁 산책 알림(#341) · 일요일 저녁 주간 정리 알림(#486 후속, 기기 안 예약 · 기본 꺼짐) · 일정 알림(#420) · 탈퇴 · 연락처(#165) |
+| 내 정보 수정 | `display_name_screen.dart` | 프로필 → 내 정보 수정 | 표시 이름(`nickname`) 하나만 바꾼다. 빈 이름은 저장하지 않고, 저장이 실패하면 화면을 안 닫는다 — 바뀐 줄 알고 나가면 안 된다. **이미 쓴 글과 보낸 채팅의 이름은 안 바뀐다**(`post.handle`·`chat_message.sender_name` 이 그때 값을 찍어 둔다)는 것을 화면이 말한다 (#665) |
 | 내 동네 고르기 | `neighborhood_picker_screen.dart` | 설정 → 내 동네 | 시도→시군구→동 세 단계와 검색을 함께. "현재 위치로 찾기" 는 **기기 안에서** 후보만 고른다 — 좌표가 안 나간다(#342, A안 #235). 목록은 앱에 든 행정동 3,516개이고 출처 한 줄(CC BY 4.0)이 화면 아래에 있다 |
 | 약관 전문 | `settings/legal_document_screen.dart` | 설정·동의 → push | `assets/terms/*.md` |
 | 회원 탈퇴 | `settings/account_delete_screen.dart` | 설정 → push | `DELETE /auth/me` |
