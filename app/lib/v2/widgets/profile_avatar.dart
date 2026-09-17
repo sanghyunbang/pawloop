@@ -46,9 +46,11 @@ class ProfileAvatar extends StatelessWidget {
             ),
           ],
         ),
-        child: ValueListenableBuilder<AuthStatus>(
-          valueListenable: AuthState.status,
-          builder: (_, __, ___) => _mark(),
+        // 상태뿐 아니라 **내가 바뀐 것**도 듣는다 — 표시 이름을 고쳐도 상태는 그대로
+        // authenticated 라, status 만 들으면 홈의 이 글자가 옛 이름의 첫 글자에 멈춘다(#665).
+        child: ListenableBuilder(
+          listenable: Listenable.merge([AuthState.status, AuthState.userRev]),
+          builder: (_, __) => _mark(),
         ),
       ),
     );
