@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:heat_trip_flutter/v2/data/external_maps.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
 import 'package:heat_trip_flutter/v2/widgets/emergency_vets_sheet.dart';
+import 'package:heat_trip_flutter/v2/widgets/place_sheet.dart';
 import 'package:heat_trip_flutter/v2/widgets/vet_badge.dart';
 
 PetPlace _vet(String title, {double dist = 100, String tel = '02-1234-5678'}) => PetPlace(
@@ -217,5 +218,51 @@ void main() {
     unawaited(openOnce());
     await t.pumpAndSettle();
     expect(find.byType(EmergencyVetsSheet), findsOneWidget);
+  });
+
+  // ───────────── 병원 카드를 누르면 상세가 열린다 (#664) ─────────────
+
+  testWidgets('병원 카드를 누르면 상세가 열린다 — 예전에는 눌러도 아무 일도 안 났다', (t) async {
+    await _open(t, places: [_vet('서울숲동물병원')]);
+
+    await t.tap(find.text('서울숲동물병원'));
+    await t.pumpAndSettle();
+
+    expect(find.byType(PlaceSheet), findsOneWidget);
+    // 지도 탭과 같은 상세다 — 주소와 길찾기가 거기 있다.
+    expect(find.text('서울특별시 성동구 뚝섬로 273'), findsOneWidget);
+    expect(find.byKey(const Key('place-action-길찾기')), findsOneWidget);
+  });
+
+  testWidgets('길찾기가 지도 앱을 연다 — 급할 때 주소를 손으로 옮겨 적지 않는다', (t) async {
+    await _open(t, places: [_vet('서울숲동물병원')]);
+    await t.tap(find.text('서울숲동물병원'));
+    await t.pumpAndSettle();
+
+    await t.tap(find.byKey(const Key('place-action-길찾기')));
+    await t.pumpAndSettle();
+
+    expect(launched, isNotEmpty);
+    expect(launched.first.toString(), contains('37.5445'));
+  });
+
+  testWidgets('전화 버튼은 상세를 거치지 않는다 — 홈에서 두 번 만에 전화다 (#337)', (t) async {
+    await _open(t, places: [_vet('서울숲동물병원', tel: '02-123-4567')]);
+
+    await t.tap(find.byIcon(Icons.call_rounded));
+    await t.pumpAndSettle();
+
+    expect(find.byType(PlaceSheet), findsNothing,
+        reason: '전화가 한 단계 멀어지면 이 시트의 뜻이 달라진다');
+    expect(launched.single.scheme, 'tel');
+  });
+
+  testWidgets('영업시간을 지어내지 않는다 — 우리에게 그 데이터가 없다', (t) async {
+    await _open(t, places: [_vet('행복한 동물병원')]);
+    await t.tap(find.text('행복한 동물병원'));
+    await t.pumpAndSettle();
+
+    expect(find.textContaining('영업'), findsNothing);
+    expect(find.textContaining('진료시간'), findsNothing);
   });
 }
