@@ -50,9 +50,10 @@ class _DogGalleryScreenState extends State<DogGalleryScreen> {
   }
 
   Future<void> _load() async {
-    // 게스트는 서버를 부르지 않는다 — 내 정보에서만 여는 화면이라 올 일이 없지만, 실제 저장소로
+    // 토큰이 없으면 서버를 부르지 않는다 — 내 정보에서만 여는 화면이라 올 일이 없지만, 실제 저장소로
     // 여는 테스트(내 정보 메뉴)가 네트워크 타이머를 남기지 않게 저장한 글 화면과 같은 문을 둔다.
-    if (AuthState.isGuest) {
+    // 게스트가 아니라 토큰으로 재는 것은 #673 이후의 공통 규칙이다.
+    if (AuthState.hasNoToken) {
       setState(() {
         _loading = false;
         _failure = const CommunityFailure(CommunityFailureKind.unauthorized);

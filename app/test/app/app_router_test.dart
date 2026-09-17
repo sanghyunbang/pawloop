@@ -304,6 +304,78 @@ void main() {
     });
   });
 
+  // 라우터가 신호를 언제 끄는가 — 이슈 #673 ㄹ.
+  //
+  // 예전에는 `target == loginRoute` 일 때만 껐다. 그런데 이미 로그인 화면에 있으면
+  // `authRedirect` 는 옮길 곳이 없어 null 을 준다(바로 위 그룹의 "무한 루프 방지").
+  // 그래서 신호가 **켜진 채로 남고**, 다음에 상태가 unauthenticated 가 되는 순간
+  // 화면을 또 로그인으로 갈아 끼운다.
+  group('shouldConsumeSessionEnded — 꺼지지 않는 신호', () {
+    test('로그인 화면으로 보냈으면 끈다', () {
+      expect(
+        shouldConsumeSessionEnded(
+          sessionEnded: true,
+          target: loginRoute,
+          location: '/home',
+        ),
+        isTrue,
+      );
+    });
+
+    test('이미 로그인 화면이라 안 옮겨도 끈다 — 신호는 제 일을 다 했다', () {
+      expect(
+        shouldConsumeSessionEnded(
+          sessionEnded: true,
+          target: null,
+          location: loginRoute,
+        ),
+        isTrue,
+        reason: '여기서 안 끄면 다음 로그인 시도 때 화면이 또 갈아 끼워진다',
+      );
+    });
+
+    test('쿼리스트링이 붙어도 같은 곳이다', () {
+      expect(
+        shouldConsumeSessionEnded(
+          sessionEnded: true,
+          target: null,
+          location: '$loginRoute?reason=expired',
+        ),
+        isTrue,
+      );
+    });
+
+    test('로그인 화면이 아닌 곳에 머무를 때는 켜 둔다 — 아직 못 알렸다', () {
+      expect(
+        shouldConsumeSessionEnded(
+          sessionEnded: true,
+          target: null,
+          location: '/home',
+        ),
+        isFalse,
+      );
+      expect(
+        shouldConsumeSessionEnded(
+          sessionEnded: true,
+          target: splashRoute,
+          location: '/home',
+        ),
+        isFalse,
+      );
+    });
+
+    test('신호가 없으면 끌 것도 없다', () {
+      expect(
+        shouldConsumeSessionEnded(
+          sessionEnded: false,
+          target: loginRoute,
+          location: loginRoute,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('isProtectedRoute', () {
     test('목록에 적힌 것과 그 하위만 보호된다', () {
       expect(isProtectedRoute(onboardingRoute), isTrue);

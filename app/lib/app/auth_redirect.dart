@@ -168,6 +168,25 @@ String? authRedirect({
   }
 }
 
+/// `sessionEnded` 신호를 **지금** 소비해야 하는가 — 이슈 #673 ㄹ.
+///
+/// 신호는 1회성이다. 라우터가 로그인 화면을 띄운 뒤 끄지 않으면 켜진 채로 남아,
+/// 다음에 상태가 `unauthenticated` 가 되는 순간 또 화면을 로그인으로 갈아 끼운다.
+///
+/// 예전에는 `target == loginRoute` 일 때만 껐다. 그런데 **이미 로그인 화면에 있으면**
+/// [authRedirect] 는 옮길 곳이 없으니 `null` 을 준다(위 표의 "이미 로그인 화면이면
+/// 리다이렉트하지 않는다"). 그 경우에도 신호는 제 일을 다 한 것이다 — 사용자는 로그인
+/// 화면을 보고 있다. 그래서 **가는 곳이든 있는 곳이든 로그인 화면이면 끈다.**
+bool shouldConsumeSessionEnded({
+  required bool sessionEnded,
+  required String? target,
+  required String location,
+}) {
+  if (!sessionEnded) return false;
+  if (target != null) return target == loginRoute;
+  return _pathOf(location) == loginRoute;
+}
+
 /// 스플래시에서 빠져나갈 자리를 고른다.
 String _settle(
   AuthStatus status,

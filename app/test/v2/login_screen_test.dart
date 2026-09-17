@@ -8,12 +8,19 @@
 // 픽셀 위치는 보지 않는다(이슈 #21). 다만 구글 버튼의 색은 예외다 —
 // 브랜드 가이드가 "임의 색상 변경 금지"를 요구하므로 회귀로 잠근다.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
+import 'package:heat_trip_flutter/core/net/authed_client.dart';
+import 'package:heat_trip_flutter/features/auth/data/auth_repository_impl.dart';
+import 'package:heat_trip_flutter/features/auth/data/dto/auth_tokens.dart';
 import 'package:heat_trip_flutter/features/auth/service/oauth_callback.dart';
 import 'package:heat_trip_flutter/features/auth/service/social_login_service.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
@@ -183,4 +190,125 @@ void main() {
       expect(AuthState.status.value, isNot(AuthStatus.authenticating));
     });
   });
+
+  // ── 왕복의 결과는 이 화면의 생존에 걸려 있지 않다 (이슈 #673 ㄷ) ──────────────
+  //
+  // 이 화면은 `/home` 위에 `Navigator.push` 로 얹혀 열릴 때가 있다(나 탭 · 오늘의 케어
+  // 카드). 그 아래의 `/home` 페이지가 갈아 끼워지면 **얹힌 이 화면도 함께 제거된다**
+  // (Flutter `navigator.dart:1606`). 예전에는 왕복이 끝나고 돌아온 자리가
+  // `if (!mounted) return;` 이라, 그때 성공한 로그인이 `completeLogin` 에 닿지 못했다.
+  // 실패도 `cancelAuthenticating` 에 닿지 못해 상태가 `authenticating` 에 멈췄는데,
+  // 그 상태에서 `authRedirect` 는 어디로도 안 보내므로 앱이 그 자리에 굳는다.
+  //
+  // #673 의 ㄱ·ㄴ 을 고치면 화면이 안 사라지지만, **여기가 화면에 기대고 있다는 사실
+  // 자체**는 그대로다. 화면을 떼고 왕복을 끝내 본다.
+  group('화면이 사라져도 왕복은 제 결과를 남긴다 (#673)', () {
+    tearDown(() {
+      SocialLoginService.resetForTest();
+      AuthState.resetForTest();
+    });
+
+    /// 왕복을 붙잡아 둔다. [gate] 를 열어야 콜백이 돌아온다.
+    void gatedAuthenticator(Completer<void> gate, {required bool ok}) {
+      SocialLoginService.authenticator =
+          ({required url, required callbackUrlScheme, required options}) async {
+        final state = Uri.parse(url).queryParameters['state'] ?? '';
+        await gate.future;
+        if (!ok) throw PlatformException(code: 'CANCELED');
+        return 'pawloop://login-callback?code=CODE-673&state=$state';
+      };
+    }
+
+    /// 로그인 화면을 띄우고 카카오를 누른 뒤, **그 화면을 트리에서 뺀다.**
+    Future<void> tapThenRemoveScreen(WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+      await tester.tap(find.text('카카오로 시작하기'));
+      await tester.pump();
+      expect(AuthState.status.value, AuthStatus.authenticating);
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
+      );
+      await tester.pump();
+      expect(find.byType(LoginScreen), findsNothing);
+    }
+
+    testWidgets('성공은 화면 없이도 completeLogin 까지 간다', (tester) async {
+      SocialLoginService.tokenStore = _MemoryTokenStore();
+      SocialLoginService.exchanger =
+          ({required provider, required code, required state}) async =>
+              const AuthTokens(accessToken: 'AT-673', refreshToken: 'RT-673', expiresIn: 3600);
+      AuthState.configureForTest(
+        tokenStore: _MemoryTokenStore(access: 'AT-673'),
+        repository: AuthRepositoryImpl(
+          baseUrl: 'https://api.example.test',
+          plainClient: MockClient((_) async => _meResponse()),
+          authedClient: AuthedClient(
+            inner: MockClient((_) async => _meResponse()),
+            baseUrl: 'https://api.example.test',
+            store: _MemoryTokenStore(access: 'AT-673'),
+          ),
+        ),
+      );
+      final gate = Completer<void>();
+      gatedAuthenticator(gate, ok: true);
+
+      await tapThenRemoveScreen(tester);
+      gate.complete();
+      await tester.pumpAndSettle();
+
+      expect(
+        AuthState.status.value,
+        AuthStatus.authenticated,
+        reason: '토큰은 받았는데 상태가 안 올라가면 라우터가 화면을 옮길 이유가 없다',
+      );
+      expect(AuthState.user!.id, 7);
+    });
+
+    testWidgets('실패도 화면 없이 authenticating 을 되돌린다 — 안 그러면 앱이 굳는다', (tester) async {
+      SocialLoginService.tokenStore = _MemoryTokenStore();
+      final gate = Completer<void>();
+      gatedAuthenticator(gate, ok: false);
+
+      await tapThenRemoveScreen(tester);
+      gate.complete();
+      await tester.pumpAndSettle();
+
+      expect(
+        AuthState.status.value,
+        isNot(AuthStatus.authenticating),
+        reason: 'authenticating 에 멈추면 authRedirect 가 어디로도 안 보낸다',
+      );
+    });
+  });
 }
+
+/// 메모리 위의 토큰 저장소 — 실저장소는 플랫폼 채널이라 테스트에서 던진다(정책 #21).
+class _MemoryTokenStore implements AuthTokenStore {
+  String? access;
+  String? refresh;
+
+  _MemoryTokenStore({this.access});
+
+  @override
+  Future<String?> readAccessToken() async => access;
+  @override
+  Future<String?> readRefreshToken() async => refresh;
+  @override
+  Future<void> saveTokens({required String accessToken, String? refreshToken}) async {
+    access = accessToken;
+    if (refreshToken != null) refresh = refreshToken;
+  }
+  @override
+  Future<void> clear() async {
+    access = null;
+    refresh = null;
+  }
+}
+
+/// `GET /auth/me` 의 200 본문. 한글이 있으므로 charset 을 밝힌다.
+http.Response _meResponse() => http.Response(
+      jsonEncode({'id': 7, 'nickname': '보리아빠', 'provider': 'kakao'}),
+      200,
+      headers: const {'content-type': 'application/json; charset=utf-8'},
+    );

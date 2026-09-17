@@ -82,7 +82,11 @@ class _TodayCareCardState extends State<TodayCareCard> {
   FamilyFailureKind? _failure;
   bool _loading = true;
 
-  /// 로그인한 적 없는 사람. 서버를 부르지 않는다(#324).
+  /// 아직 토큰이 없는 사람. 서버를 부르지 않는다(#324·#673).
+  ///
+  /// 로그인한 적 없는 사람이 대부분이지만 **소셜 왕복 중**도 여기 들어온다. 그 사람은
+  /// 지금 이 카드가 아니라 로그인 화면을 보고 있으므로, 뒤에 게스트 문구가 그려져 있어도
+  /// 눈에 닿지 않는다. 왕복이 끝나면 상태 알림을 듣고 다시 읽는다.
   bool _guest = false;
 
   /// 기록을 보내는 중인 **항목 id**. 같은 칸을 두 번 눌러 두 번 보내는 것을 막는다.
@@ -116,9 +120,13 @@ class _TodayCareCardState extends State<TodayCareCard> {
       _loading = true;
       _failure = null;
     });
-    if (AuthState.isGuest) {
+    if (AuthState.hasNoToken) {
       // 게스트는 가족이 없는 게 아니라 아직 계정이 없다. 401 을 받아 "다시 로그인" 이라고
       // 말하는 대신 여기서 멈춘다(#324).
+      //
+      // **소셜 왕복 중에도 토큰은 없다**(#673). 이 카드는 상태 알림을 듣고 다시 읽으므로
+      // `isGuest` 로 재면 소셜 버튼을 누른 그 순간 토큰 없는 요청이 나갔다. 그 401 이
+      // 세션 만료로 번역되면서 로그인 화면이 통째로 사라졌다.
       setState(() {
         _guest = true;
         _loading = false;

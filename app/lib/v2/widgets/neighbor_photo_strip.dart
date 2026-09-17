@@ -59,7 +59,9 @@ class _NeighborPhotoStripState extends State<NeighborPhotoStrip> {
   }
 
   Future<void> _load() async {
-    if (AuthState.isGuest) {
+    // 토큰이 없으면 안 부른다. 이 줄도 상태 알림을 듣고 다시 읽으므로, 게스트로만 재면
+    // 소셜 버튼을 누른 순간(`authenticating`) 토큰 없는 요청이 나간다(#673).
+    if (AuthState.hasNoToken) {
       if (mounted && _posts.isNotEmpty) setState(() => _posts = const []);
       return;
     }

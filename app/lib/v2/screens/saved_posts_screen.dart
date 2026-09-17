@@ -49,9 +49,10 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
   }
 
   Future<void> _load() async {
-    // 게스트는 서버를 부르지 않는다 — 401 을 받아 오는 것과 화면은 같지만, 부르지 않아야
+    // 토큰이 없으면 서버를 부르지 않는다 — 401 을 받아 오는 것과 화면은 같지만, 부르지 않아야
     // 내 정보 화면의 테스트가 진짜 네트워크 타이머를 남기지 않는다(홈의 이웃 사진 줄과 같은 문).
-    if (AuthState.isGuest) {
+    // 게스트가 아니라 토큰으로 재는 것은 #673 이후의 공통 규칙이다.
+    if (AuthState.hasNoToken) {
       setState(() {
         _loading = false;
         _failure = const CommunityFailure(CommunityFailureKind.unauthorized);
