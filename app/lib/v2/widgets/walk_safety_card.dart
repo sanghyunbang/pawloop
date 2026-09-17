@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import '../data/location_service.dart';
+import '../data/walk_advice.dart';
 import '../data/walk_safety.dart';
 import '../data/walk_safety_repository.dart';
 import '../domain/pet.dart';
@@ -203,6 +204,11 @@ class _WalkSafetyCardState extends State<WalkSafetyCard> with WidgetsBindingObse
 
   void _showDetail(BuildContext context, WalkSafetyVerdict verdict) {
     final reading = WalkSafetyStore.reading;
+    // 조언은 **오늘 이 값에서** 나온다 (#669). 판정과 같은 재료·같은 시각·같은 아이다 —
+    // 예전에는 여기 세 줄이 `const` 라 22°C 가을에도 아스팔트가 뜨겁다고 했다.
+    final advice = reading == null
+        ? const <WalkAdviceLine>[]
+        : WalkAdvice.pick(reading, hour: (widget.now ?? DateTime.now)().hour, dog: kMyDog.value);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -230,13 +236,31 @@ class _WalkSafetyCardState extends State<WalkSafetyCard> with WidgetsBindingObse
             Text('습도 ${reading!.humidity}%', style: const TextStyle(fontSize: 13, color: T.textSecondary)),
           ],
           const SizedBox(height: 16),
-          const _Line(Icons.back_hand_outlined, '손등을 바닥에 7초 못 대면 발바닥도 못 견뎌요. 아스팔트는 기온보다 최대 33°C 뜨거워요'),
-          const _Line(Icons.schedule_rounded, '더운 날은 오전 10시 전 · 오후 7시 뒤가 안전해요'),
-          const _Line(Icons.pets_rounded, '단두종·노령견·대형견은 더위에 더 약해요 — 한 단계 보수적으로 봐요'),
-          const SizedBox(height: 10),
+          // 해당하는 조언이 없으면 이 자리는 **빈다.** 채우려고 아무 말이나 넣지 않는다.
+          for (final a in advice) _Line(a.icon, a.text),
+          if (advice.isNotEmpty) const SizedBox(height: 6),
+          // 출처와 면책을 갈랐다 (#669). 한 문단에 붙어 있으면 "수의사 자문" 이 날씨 얘기처럼
+          // 읽힌다 — 앞은 이 숫자가 어디서 왔는지, 뒤는 이 앱의 판정이 의학적 조언이 아니라는
+          // 말이다. 면책은 지우지 않는다. 자리만 옮긴다.
           const Text(
-            '기상청 초단기실황 · 에어코리아 측정소 값으로 계산한 참고 기준이에요. 수의사 자문 전이니 아이 상태를 먼저 봐 주세요.',
+            '기상청 초단기실황 · 에어코리아 측정소 값으로 계산했어요.',
             style: TextStyle(fontSize: 11.5, height: 1.5, color: T.textMuted),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            key: const Key('walk-safety-disclaimer'),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(color: T.surface, borderRadius: BorderRadius.circular(14)),
+            child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.info_outline_rounded, size: 15, color: T.textFaint),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '수의사 자문을 거치지 않은 참고 기준이에요. 아이 상태를 먼저 봐 주세요.',
+                  style: TextStyle(fontSize: 11.5, height: 1.45, color: T.textMuted),
+                ),
+              ),
+            ]),
           ),
         ]),
       ),

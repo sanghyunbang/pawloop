@@ -100,6 +100,39 @@ void main() {
     expect(find.text('습도 49%'), findsOneWidget);
   });
 
+  testWidgets('22°C 가을 낮에는 아스팔트도 시간대도 안 나온다 — 조언 자리가 빈다 (#669)', (t) async {
+    await _pump(t, _repo());
+
+    await t.tap(find.text('지금 나가기 좋아요'));
+    await t.pumpAndSettle();
+
+    // 여기 세 줄이 `const` 이던 때는 22°C 에도 "아스팔트는 기온보다 최대 33°C" 가 떴다.
+    expect(find.textContaining('아스팔트'), findsNothing);
+    expect(find.textContaining('7초'), findsNothing);
+    expect(find.textContaining('오전 10시 전'), findsNothing);
+    expect(find.textContaining('단두종'), findsNothing);
+    // 그래도 출처와 면책은 남는다 — 조언이 없다고 시트가 빈 것은 아니다.
+    expect(find.textContaining('기상청 초단기실황'), findsOneWidget);
+    expect(find.byKey(const Key('walk-safety-disclaimer')), findsOneWidget);
+  });
+
+  testWidgets('출처와 면책이 갈라져 있다 — 수의사 얘기가 날씨 문단에 안 붙는다 (#669)', (t) async {
+    await _pump(t, _repo());
+
+    await t.tap(find.text('지금 나가기 좋아요'));
+    await t.pumpAndSettle();
+
+    final source = t.widget<Text>(find.textContaining('기상청 초단기실황')).data!;
+    expect(source, isNot(contains('수의사')));
+
+    final notice = find.descendant(
+      of: find.byKey(const Key('walk-safety-disclaimer')),
+      matching: find.textContaining('수의사'),
+    );
+    expect(notice, findsOneWidget);
+    expect(t.widget<Text>(notice).data, isNot(contains('기상청')));
+  });
+
   testWidgets('아이가 바뀌면 같은 값으로 다시 판정한다 — 퍼그면 27°C 낮에 피하세요', (t) async {
     await _pump(t, _repo(temp: 27));
     expect(find.text('짧게 다녀오세요 · 바닥 7초 룰 확인'), findsOneWidget);

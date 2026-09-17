@@ -89,6 +89,10 @@ class WalkSafety {
   static const int pm10Moderate = 80;
   static const int pm10Bad = 150;
 
+  /// 낮 — 아스팔트가 달아 있는 시간대. 조언(`walk_advice.dart`)도 같은 창을 본다 (#669).
+  /// 두 군데에 따로 적으면 한쪽만 고쳐져 카드와 조언이 다른 말을 한다.
+  static bool isDaytime(int hour) => hour >= 10 && hour < 19;
+
   /// 판정. [hour] 는 기기 시각(0~23)이다 — 같은 30°C 라도 낮과 저녁이 다르다.
   static WalkSafetyVerdict judge(WalkSafetyReading r, {required int hour, DogProfile? dog}) {
     final reasons = <String>['${r.tempC.round()}°C'];
@@ -106,7 +110,7 @@ class WalkSafety {
 
     // 더위·미세먼지에서 나온 단계(0 좋음 · 1 짧게 · 2 피하세요)
     var heat = 0;
-    final daytime = hour >= 10 && hour < 19;
+    final daytime = isDaytime(hour);
     if (r.tempC >= 30 && daytime) {
       heat = 2;
     } else if (r.tempC >= 30) {
