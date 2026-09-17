@@ -10,6 +10,9 @@
 //  4. 계정마다 따로 센다. 한 기기를 가족이 나눠 쓸 때 앞사람의 동의가 뒷사람에게 적용되면
 //     그 사람은 약관을 본 적이 없는데 동의한 것이 된다.
 //  5. 화면 — 필수를 다 안 채우면 못 넘어가는가. 위치기반서비스 동의가 필수인가.
+//  6. 만 14세 이상 확인이 필수인가(#682) — 개인정보 보호법 제22조의2 는 만 14세 미만의
+//     개인정보에 법정대리인 동의를 요구하는데 우리에겐 그 장치가 없다. 그래서 만 14세
+//     미만은 가입 자체를 막는 것이 답이고, 이 줄을 빼면 처리방침 10항이 다시 거짓이 된다.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -71,6 +74,22 @@ Future<ValueNotifier<int>> _pump(WidgetTester t,
   ));
   await t.pumpAndSettle();
   return agreed;
+}
+
+/// 필수 넷을 전부 켠다. **목록을 여기 한 곳에 둔다** — 필수가 늘었는데 검사마다 흩어진
+/// 탭 목록을 하나 빠뜨리면 "못 넘어간다" 가 엉뚱한 이유로 초록이 된다.
+const _requiredLabels = [
+  '만 14세 이상입니다',
+  '이용약관',
+  '개인정보처리방침',
+  '위치기반서비스 이용약관',
+];
+
+Future<void> _tapAllRequired(WidgetTester t) async {
+  for (final label in _requiredLabels) {
+    await t.tap(find.text(label));
+  }
+  await t.pump();
 }
 
 void main() {
@@ -243,17 +262,18 @@ void main() {
 
       await t.tap(find.text('전체 동의 (선택 항목 포함)'));
       await t.pump();
-      expect(find.byIcon(Icons.check), findsNWidgets(5), reason: '전체 + 필수 3 + 선택 1');
+      expect(find.byIcon(Icons.check), findsNWidgets(6), reason: '전체 + 필수 4 + 선택 1');
     });
 
-    testWidgets('필수 셋을 다 안 채우면 못 넘어간다', (t) async {
+    testWidgets('필수를 다 안 채우면 못 넘어간다', (t) async {
       final agreed = await _pump(t, gate: _gate(_FakeServer()));
 
       await t.tap(find.text('동의하고 시작하기'));
       await t.pumpAndSettle();
       expect(agreed.value, 0);
 
-      // 둘만 채워도 안 된다.
+      // 셋만 채워도 안 된다.
+      await t.tap(find.text('만 14세 이상입니다'));
       await t.tap(find.text('이용약관'));
       await t.tap(find.text('개인정보처리방침'));
       await t.pump();
@@ -262,14 +282,26 @@ void main() {
       expect(agreed.value, 0, reason: '위치기반서비스 동의가 빠졌다');
     });
 
-    testWidgets('위치기반서비스가 필수다 — 산책 기록이 이 앱의 본체다', (t) async {
+    testWidgets('필수 넷이 다 보인다 — 만 14세 · 이용약관 · 개인정보 · 위치기반서비스', (t) async {
       await _pump(t, gate: _gate(_FakeServer()));
-      expect(find.text('[필수] '), findsNWidgets(3));
+
+      expect(find.text('[필수] '), findsNWidgets(4));
       expect(find.text('[선택] '), findsOneWidget);
-      expect(find.text('위치기반서비스 이용약관'), findsOneWidget);
+      for (final label in _requiredLabels) {
+        expect(find.text(label), findsOneWidget, reason: '$label 줄이 사라졌다');
+      }
     });
 
-    testWidgets('필수 셋을 채우면 넘어간다 — 마케팅은 안 해도 된다', (t) async {
+    testWidgets('만 14세 줄에는 화살표가 없다 — 읽을 전문이 없다', (t) async {
+      await _pump(t, gate: _gate(_FakeServer()));
+
+      // 문서 넷(이용약관·개인정보·위치·마케팅)만 전문 보기를 가진다. 만 14세는 문서
+      // 동의가 아니라 가입 자격이라 [LegalDocument] 가 없고, 화살표를 그리면 눌러도
+      // 열 것이 없다.
+      expect(find.byIcon(Icons.chevron_right), findsNWidgets(4));
+    });
+
+    testWidgets('만 14세를 안 고르면 나머지를 다 채워도 못 넘어간다 — 법 제22조의2', (t) async {
       final server = _FakeServer();
       final agreed = await _pump(t, gate: _gate(server));
 
@@ -280,17 +312,43 @@ void main() {
       await t.tap(find.text('동의하고 시작하기'));
       await t.pumpAndSettle();
 
+      expect(agreed.value, 0, reason: '''
+개인정보 보호법 제22조의2 는 만 14세 미만의 개인정보에 법정대리인 동의를 요구한다.
+우리에겐 그 장치가 없으므로 만 14세 이상만 받는다 — 이 줄을 건너뛰고 지나가면
+처리방침 10항("가입 시 만 14세 미만 여부를 확인하며")이 다시 거짓이 된다.''');
+      expect(server.recorded, isEmpty, reason: '못 넘어갔으면 서버에도 안 적혔어야 한다');
+    });
+
+    testWidgets('필수 넷을 채우면 넘어간다 — 마케팅은 안 해도 된다', (t) async {
+      final server = _FakeServer();
+      final agreed = await _pump(t, gate: _gate(server));
+
+      await _tapAllRequired(t);
+      await t.tap(find.text('동의하고 시작하기'));
+      await t.pumpAndSettle();
+
       expect(agreed.value, 1);
       expect(server.recorded, hasLength(1), reason: '화면이 넘어갔으면 서버에 적혔어야 한다');
+      // 만 14세는 문서 동의가 아니라 가입 자격이라 서버 기록에 없다(#682 · leftOut).
+      // 서버가 받는 것은 여전히 문서 넷이다.
+      expect(server.recorded.single.map((e) => e.kind).toSet(), ConsentKind.values.toSet());
+    });
+
+    testWidgets('전체 동의를 누르면 만 14세까지 켜져서 바로 넘어간다', (t) async {
+      final agreed = await _pump(t, gate: _gate(_FakeServer()));
+
+      await t.tap(find.text('전체 동의 (선택 항목 포함)'));
+      await t.pump();
+      await t.tap(find.text('동의하고 시작하기'));
+      await t.pumpAndSettle();
+
+      expect(agreed.value, 1, reason: '전체 동의가 새 필수 항목을 빠뜨리면 눌러도 안 넘어간다');
     });
 
     testWidgets('서버가 안 받아 주면 넘어가지 않고 말한다', (t) async {
       final agreed = await _pump(t, gate: _gate(_FakeServer(dead: true)));
 
-      await t.tap(find.text('이용약관'));
-      await t.tap(find.text('개인정보처리방침'));
-      await t.tap(find.text('위치기반서비스 이용약관'));
-      await t.pump();
+      await _tapAllRequired(t);
       await t.tap(find.text('동의하고 시작하기'));
       await t.pumpAndSettle();
 

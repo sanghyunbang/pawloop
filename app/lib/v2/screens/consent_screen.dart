@@ -23,6 +23,22 @@
 // 소셜 로그인은 우리가 만드는 화면이 아니다. 카카오·구글 화면 중간에 우리 약관을 끼워
 // 넣을 수 없다. 그래서 **돌아온 직후, 앱을 쓰기 전**이 우리가 가질 수 있는 가장 이른
 // 자리다.
+//
+// ## 왜 만 14세를 여기서 묻는가 (#682)
+//
+// **개인정보 보호법 제22조의2 제1항** — 만 14세 미만 아동의 개인정보를 처리하려면
+// 법정대리인의 동의를 받아야 한다. 우리에게는 법정대리인 동의를 받을 장치가 없다.
+// 그러면 남는 답은 하나다. **만 14세 이상만 받는다.**
+//
+// 묻는 자리가 여기여야 하는 이유도 위와 같다. 나이를 묻는 회원가입 화면
+// (`features/auth/presentation/sign_up_screen.dart`)은 v2 에서 그리로 가는 길이 없어서
+// (#184) 모든 계정의 `age_group` 이 NULL 이다. 그래서 처리방침 10항이 "가입 시 만 14세
+// 미만 여부를 확인한다" 고 적고 있는데도 **아무도 확인받은 적이 없었다.** 처리방침이
+// 거짓말을 하지 않게 만드는 것이 이 줄이다.
+//
+// 자기 신고다 — 우리는 주민등록번호도 본인확인도 받지 않으므로 이 이상은 확인할 수
+// 없다. 그래도 "만 14세 미만은 쓸 수 없는 서비스" 라고 **말하고 받은 답**이 남는다는
+// 점이 아무것도 안 묻는 것과 다르다.
 library;
 
 import 'package:flutter/material.dart';
@@ -56,16 +72,22 @@ class ConsentScreen extends StatefulWidget {
 class _ConsentScreenState extends State<ConsentScreen> {
   late final ConsentGate _gate = widget.gate ?? const ConsentGate();
 
+  /// 만 14세 이상이라는 **자기 신고**다(#682). 개인정보 보호법 제22조의2 가 만 14세
+  /// 미만이면 법정대리인 동의를 요구하는데 우리에겐 그 장치가 없다 — 그래서 문서 동의가
+  /// 아니라 가입 자격이고, [LegalDocument] 가 없어 전문 보기도 없다.
+  bool _age = false;
+
   bool _terms = false;
   bool _privacy = false;
   bool _location = false;
   bool _marketing = false;
   bool _sending = false;
 
-  bool get _allRequired => _terms && _privacy && _location;
+  bool get _allRequired => _age && _terms && _privacy && _location;
   bool get _allChecked => _allRequired && _marketing;
 
   void _toggleAll(bool next) => setState(() {
+        _age = next;
         _terms = next;
         _privacy = next;
         _location = next;
@@ -133,6 +155,13 @@ class _ConsentScreenState extends State<ConsentScreen> {
                     _allRow(),
                     const SizedBox(height: 10),
                     _card([
+                      // 맨 위다 — 나머지 셋은 "이 서비스를 쓸 수 있는 사람" 에게 묻는
+                      // 것이고, 이 줄이 그 자격을 정한다(#682).
+                      _row('만 14세 이상입니다',
+                          required_: true,
+                          value: _age,
+                          onChanged: (v) => setState(() => _age = v)),
+                      _divider(),
                       _row('이용약관',
                           required_: true,
                           value: _terms,
@@ -158,7 +187,9 @@ class _ConsentScreenState extends State<ConsentScreen> {
                           doc: LegalDocument.marketing),
                     ]),
                     const SizedBox(height: 14),
-                    const Text('각 항목의 화살표를 눌러 전문을 읽을 수 있어요.',
+                    // "각 항목" 이 아니다 — 만 14세 줄에는 읽을 전문이 없어 화살표도
+                    // 없다(#682). 이 화면의 안내문은 약속이라 사실만 적는다.
+                    const Text('약관 항목의 화살표를 눌러 전문을 읽을 수 있어요.',
                         style: TextStyle(fontSize: 12, color: T.textMuted)),
                   ],
                 ),
@@ -227,12 +258,15 @@ class _ConsentScreenState extends State<ConsentScreen> {
 
   Widget _divider() => Container(height: 1, color: T.accentSoft);
 
+  /// 한 줄. [doc] 이 없으면 읽을 전문이 없는 항목이다(만 14세 자기 신고 — #682).
+  /// 그때도 **자리는 비워 둔다** — 화살표만 빼고 폭을 그대로 남겨서 체크·글자가 위아래
+  /// 줄과 같은 선에 선다.
   Widget _row(
     String label, {
     required bool required_,
     required bool value,
     required ValueChanged<bool> onChanged,
-    required LegalDocument doc,
+    LegalDocument? doc,
   }) =>
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -261,16 +295,20 @@ class _ConsentScreenState extends State<ConsentScreen> {
           ),
           // 전문 보기. 동의를 받으려면 읽을 길이 있어야 한다 — 읽을 수 없는 동의는
           // 동의가 아니다.
-          GestureDetector(
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => LegalDocumentScreen(document: doc),
-            )),
-            behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 14),
-              child: Icon(Icons.chevron_right, size: 20, color: T.textMuted),
-            ),
-          ),
+          if (doc != null)
+            GestureDetector(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => LegalDocumentScreen(document: doc),
+              )),
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                child: Icon(Icons.chevron_right, size: 20, color: T.textMuted),
+              ),
+            )
+          else
+            // 화살표(20) + 좌우 여백(4+4). 안 비워 두면 이 줄만 오른쪽으로 넓어진다.
+            const SizedBox(width: 28),
         ]),
       );
 
