@@ -60,6 +60,25 @@ class _FakeTrails extends TrailRouteRepository {
         );
 }
 
+/// 경유지가 **열한 곳**인 코스 — 2026-09-17 에 사장님 화면에 뜬 그 코스다.
+///
+/// 조각 수는 코스마다 1~51 로 크게 다르다. 많은 쪽으로 재지 않으면 "버튼이 밀린다" 를
+/// 영영 못 본다 — 세 곳짜리로는 밀리지 않는다.
+class _FakeTrailsMany extends TrailRouteRepository {
+  _FakeTrailsMany()
+      : super(
+          client: MockClient((req) async {
+            const stops = '["쌍문역","노해파출소 터","노해면사무소 자리","방학천교","모랫말터",'
+                '"천주교 도봉동성당","성황당 터","무수천교","서원내교","누원터","도봉산역"]';
+            final body = '{"courseId":"lt9766bc9af8","name":"3.1운동길B","lengthM":5500,'
+                '"pointCount":0,"points":[],"waypoints":$stops}';
+            return http.Response.bytes(utf8.encode(body), 200,
+                headers: {'content-type': 'application/json'});
+          }),
+          baseUrl: 'http://unused',
+        );
+}
+
 class _FakeRepo extends PetPlacesRepository {
   _FakeRepo()
       : super(
@@ -213,6 +232,45 @@ void main() {
     // 한 줄로 흘리면 말줄임에 걸려 반쪽 이름이 남는다 — 조각마다 칸을 준다.
     final wrap = tester.widget<Wrap>(find.byKey(const Key('trail-waypoints')));
     expect(wrap.children, hasLength(3));
+  });
+
+  testWidgets('경유지가 열한 곳이어도 "지도에서 보기" 가 화면 안에 있다 (#619)', (tester) async {
+    await _pumpWide(tester,
+        ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrailsMany()),
+        width: 393);
+    await tester.tap(_chip('산책로'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('3.1운동길B'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('거쳐 가는 곳 11곳'), findsOneWidget);
+
+    // 시트는 스크롤되니 버튼이 "없는" 것은 아니다. 그런데 찾아서 내려야 보이는 버튼은
+    // 없는 것과 비슷하다 — 사장님이 "지도로 넘어갈 수가 없다" 고 했다(2026-09-17).
+    final screen = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    final button = tester.getRect(find.byKey(const Key('place-action-지도에서 보기')));
+    expect(button.bottom, lessThanOrEqualTo(screen),
+        reason: '버튼이 화면 아래로 밀렸다 — 경유지 목록을 버튼 위에 두면 이렇게 된다');
+  });
+
+  testWidgets('시트 순서: 안내 한 줄 → 버튼 → 경유지 목록 (#619)', (tester) async {
+    await _pumpWide(tester,
+        ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrailsMany()));
+    await tester.tap(_chip('산책로'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('3.1운동길B'));
+    await tester.pumpAndSettle();
+
+    final note = tester.getRect(find.byKey(const Key('trail-no-line-note'))).top;
+    final button = tester.getRect(find.byKey(const Key('place-action-지도에서 보기'))).top;
+    final stops = tester.getRect(find.byKey(const Key('trail-waypoints'))).top;
+
+    expect(note, lessThan(button),
+        reason: '"시작 지점만 표시돼요" 는 거리·시간 바로 밑이어야 한다 — 오해가 거기서 생긴다');
+    expect(button, lessThan(stops),
+        reason: '누를 것이 먼저, 읽을 것이 나중이다 — 조각 수가 코스마다 1~51 로 다르다');
   });
 
   testWidgets('두루누비 시트에는 그대로 "지도에서 보기" 가 있고, 경유지 칸은 안 쓴다', (tester) async {

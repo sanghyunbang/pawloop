@@ -1343,28 +1343,61 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// <h3>왜 "시작 지점만" 을 굳이 적나</h3>
   /// 카드가 `4.2km · 약 1시간 30분` 이라고 말해 놓고 지도에 점 하나만 찍으면, 사용자는
   /// 앱이 고장 난 줄 안다. 선이 없다는 것은 **숨길 일이 아니라 말할 일**이다.
-  Widget _trailStops(Future<TrailRoute?> pending, PetCategory cat) {
+  /// 선이 없는 산책로일 때만 그린다. 아직 받는 중이거나 못 받았으면 빈 자리다 — 시트가
+  /// 열리면서 칸이 늘었다 줄었다 하면 누르던 손이 미끄러진다.
+  Widget _whenLineless(Future<TrailRoute?> pending, Widget Function(TrailRoute) build) {
     return FutureBuilder<TrailRoute?>(
       future: pending,
       builder: (context, snap) {
         final route = snap.data;
-        // 아직 받는 중이거나, 못 받았거나, 선이 있으면 자리를 안 쓴다. 로딩 자리를 비워
-        // 두는 것은 의도다 — 시트가 열리면서 칸이 늘었다 줄었다 하면 누르던 손이 미끄러진다.
         if (route == null || route.hasLine || route.waypoints.isEmpty) {
           return const SizedBox.shrink();
         }
+        return build(route);
+      },
+    );
+  }
+
+  /// 선이 없다는 한 줄 — 요약 바로 밑이다.
+  ///
+  /// <b>이 줄은 위에 있어야 합니다.</b> 카드가 `4.2km · 약 1시간 30분` 이라고 말해 놓고
+  /// 지도에 점 하나만 찍으면 사용자는 고장 난 줄 안다. 그 오해는 요약을 읽는 순간 생기므로
+  /// 답도 거기 있어야 한다.
+  Widget _trailNoLineNote(Future<TrailRoute?> pending) {
+    return _whenLineless(pending, (route) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.info_outline_rounded, size: 16, color: T.textMuted),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text('지도에는 시작 지점만 표시돼요 — 이 길은 공개된 경로 정보가 이름뿐이에요',
+                key: const Key('trail-no-line-note'),
+                style: const TextStyle(fontSize: 12, height: 1.45, color: T.textMuted)),
+          ),
+        ]),
+      );
+    });
+  }
+
+  /// 거쳐 가는 곳 목록 — <b>버튼들 아래</b>다.
+  ///
+  /// 처음에는 요약 바로 밑에 뒀는데, 경유지가 열한 곳인 코스에서 <b>주 동작 버튼이 화면
+  /// 밖으로 밀렸다</b>(2026-09-17 실기기). 시트는 스크롤되니 "없는" 것은 아니지만, 찾아서
+  /// 내려야 보이는 버튼은 없는 것과 비슷하다 — 사장님이 "지도로 넘어갈 수가 없다" 고 했다.
+  ///
+  /// 그래서 <b>누를 것을 먼저, 읽을 것을 나중에</b> 둔다. 조각 수가 코스마다 1~51 로 크게
+  /// 달라서, 이 목록 위에 무엇을 두든 그만큼 밀린다.
+  ///
+  /// <h3>한 줄로 흘리지 않는다</h3>
+  /// 예전에 카드 요약에 `보신각 → 보성사 터 →…` 꼴로 넣었다가 화면이 말줄임으로 잘라
+  /// <b>"화살표가 이어지다 끊긴 문장"</b> 이 됐다(사장님 신고로 뺐다). 조각마다 한 칸씩
+  /// 주면 이름이 길어도 그 칸만 줄바꿈되고 뜻이 안 깨진다.
+  Widget _trailStops(Future<TrailRoute?> pending, PetCategory cat) {
+    return _whenLineless(pending, (route) {
+      {
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SizedBox(height: 14),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Icon(Icons.info_outline_rounded, size: 16, color: T.textMuted),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Text('지도에는 시작 지점만 표시돼요 — 이 길은 공개된 경로 정보가 이름뿐이에요',
-                  key: const Key('trail-no-line-note'),
-                  style: const TextStyle(fontSize: 12, height: 1.45, color: T.textMuted)),
-            ),
-          ]),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           Text('거쳐 가는 곳 ${route.waypoints.length}곳',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: T.textPrimary)),
           const SizedBox(height: 9),
@@ -1396,8 +1429,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ],
           ),
         ]);
-      },
-    );
+      }
+    });
   }
 
   /// 산책로를 지도에서 보여 준다 (#291 · #619). 선은 카탈로그에 없어 시트를 열 때 따로 받는다.
@@ -1504,7 +1537,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               Expanded(child: Text(p.summary, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary))),
             ]),
           ],
-          if (stops != null) _trailStops(stops, cat),
+          if (stops != null) _trailNoLineNote(stops),
           if (p.addr.isNotEmpty) ...[
             const SizedBox(height: 14),
             Row(children: [
@@ -1531,6 +1564,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ]),
           const SizedBox(height: 14),
           _sheetActions(sheetCtx, p),
+          // 누를 것을 먼저, 읽을 것을 나중에 (#619). 경유지가 열한 곳이면 버튼이 밀린다.
+          if (stops != null) _trailStops(stops, cat),
           const SizedBox(height: 10),
           _writeAboutPlace(sheetCtx, p),
           ]),
