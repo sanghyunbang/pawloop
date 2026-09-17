@@ -1,4 +1,7 @@
 // 급할 때 — 가까운 병원 셋, 전화 버튼, 위치가 없을 때 (#337).
+// 그리고 **바로 열리는가 · 한 장만 뜨는가** (#663).
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -128,4 +131,91 @@ void main() {
     expect(find.textContaining('목록을 못 받았어요'), findsNothing);
   });
 
+  // ───────────── 바로 열리는가 · 한 장만 뜨는가 (#663) ─────────────
+
+  testWidgets('누르면 위치를 기다리지 않고 바로 열린다 — 찾는 중이라고 말한다', (t) async {
+    // 위치를 **영영 안 주는** 상황을 만든다. 예전 코드는 이 동안 시트를 아예 안 열었고,
+    // 그래서 화면에 아무 변화가 없었다. 실기기에서는 GPS 를 잡는 몇 초가 이 상태다.
+    final stuck = Completer<({double lat, double lng})?>();
+    late BuildContext ctx;
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: Builder(builder: (c) {
+        ctx = c;
+        return const SizedBox.expand();
+      })),
+    ));
+
+    unawaited(EmergencyVets.open(
+      ctx,
+      locate: () => stuck.future,
+      load: (lat, lng) async => [_vet('가까운 병원')],
+    ));
+    // 시트가 뜨는 데 필요한 만큼만 돌린다. pumpAndSettle 은 위치를 영영 안 주므로 못 쓴다.
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(EmergencyVetsSheet), findsOneWidget,
+        reason: '위치를 못 잡은 동안에도 시트는 이미 떠 있어야 한다 — 그게 이 이슈다');
+    expect(find.byKey(const Key('emergency-vets-searching')), findsOneWidget);
+    expect(find.textContaining('못 찾았어요'), findsNothing,
+        reason: '아직 안 찾아봤다. 찾는 중을 "없어요" 로 말하면 안 된다');
+
+    stuck.complete((lat: 37.5445, lng: 127.0410));
+    await t.pumpAndSettle();
+
+    expect(find.byKey(const Key('emergency-vets-searching')), findsNothing);
+    expect(find.text('가까운 병원'), findsOneWidget);
+  });
+
+  testWidgets('연타해도 시트는 한 장이다 — 예전에는 누른 만큼 겹쳐서 그만큼 닫아야 했다', (t) async {
+    late BuildContext ctx;
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: Builder(builder: (c) {
+        ctx = c;
+        return const SizedBox.expand();
+      })),
+    ));
+
+    // 세 번의 탭이 **한 프레임 안에** 들어온 상황. 시트가 그려지기 전이라 두 번째·세 번째
+    // 탭은 아직 막을 것이 화면에 없다 — 자물쇠가 없으면 셋 다 끝까지 달린다.
+    for (var i = 0; i < 3; i++) {
+      unawaited(EmergencyVets.open(
+        ctx,
+        locate: () async => (lat: 37.5445, lng: 127.0410),
+        load: (lat, lng) async => [_vet('가까운 병원')],
+      ));
+    }
+    await t.pumpAndSettle();
+
+    expect(find.byType(EmergencyVetsSheet), findsOneWidget,
+        reason: '세 번 눌렀으면 예전에는 세 장이 겹쳤다');
+  });
+
+  testWidgets('닫고 다시 누르면 또 열린다 — 자물쇠가 안 풀리면 영영 안 열린다', (t) async {
+    late BuildContext ctx;
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: Builder(builder: (c) {
+        ctx = c;
+        return const SizedBox.expand();
+      })),
+    ));
+
+    Future<void> openOnce() => EmergencyVets.open(
+          ctx,
+          locate: () async => (lat: 37.5445, lng: 127.0410),
+          load: (lat, lng) async => [_vet('가까운 병원')],
+        );
+
+    unawaited(openOnce());
+    await t.pumpAndSettle();
+    expect(find.byType(EmergencyVetsSheet), findsOneWidget);
+
+    Navigator.of(ctx).pop();
+    await t.pumpAndSettle();
+    expect(find.byType(EmergencyVetsSheet), findsNothing);
+
+    unawaited(openOnce());
+    await t.pumpAndSettle();
+    expect(find.byType(EmergencyVetsSheet), findsOneWidget);
+  });
 }
