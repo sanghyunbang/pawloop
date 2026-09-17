@@ -60,8 +60,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
       _loading = true;
       _failure = null;
     });
-    if (AuthState.isGuest) {
+    if (AuthState.hasNoToken) {
       // 게스트는 방이 없는 게 아니라 계정이 없다. 서버를 부르지 않는다(#324).
+      // 이 화면도 상태 알림을 듣고 다시 읽으므로 **소셜 왕복 중**(토큰 없음)까지
+      // 함께 막는다 — 그때 나간 401 이 로그인 왕복을 끊었다(#673).
       setState(() {
         _failure = ChatFailure(ChatFailureKind.unauthorized,
             ChatFailure.messageFor(ChatFailureKind.unauthorized));

@@ -221,9 +221,31 @@ class AuthState {
 
   /// 로그인한 적 없는 사람("그냥 둘러보기")인가. `unknown`(확인 중)·`authenticating` 은 아니다.
   ///
-  /// 게스트에게 서버를 부르면 401 이 돌아오고 화면은 그것을 "다시 로그인해 주세요" 로
-  /// 그린다 — 로그인한 적 없는 사람에게 할 말이 아니다(#324). 부르기 전에 이걸 본다.
+  /// **"누구인가" 를 묻는 값이다.** "서버를 불러도 되는가" 는 [hasNoToken] 이
+  /// 답한다 — 둘을 한 값으로 쓰다가 #673 이 났다. 화면에 게스트용 문구를 그릴지,
+  /// 계정이 있어야 하는 줄(회원 탈퇴 같은 것)을 감출지를 정할 때만 이걸 본다.
   static bool get isGuest => status.value == AuthStatus.unauthenticated;
+
+  /// 지금 서버를 부르면 **토큰 없이** 부르게 되는가. 서버 호출 앞의 가드는 이걸 본다.
+  ///
+  /// ## 왜 [isGuest] 와 따로 두는가 — 이슈 #673
+  ///
+  /// 게스트에게 서버를 부르면 401 이 돌아오고 화면은 그것을 "다시 로그인해 주세요" 로
+  /// 그린다 — 로그인한 적 없는 사람에게 할 말이 아니다(#324). 그래서 가드가 생겼는데,
+  /// 그 가드가 [isGuest] 하나뿐이라 **소셜 왕복 중([AuthStatus.authenticating])을 놓쳤다.**
+  /// 그때도 토큰은 없다. 왕복 중인 사람은 게스트가 아니므로 가드가 열렸고, 소셜 버튼을
+  /// 누른 그 순간 홈 위젯들이(상태 알림을 듣고 다시 읽는다) 토큰 없이 `/api/**` 를 불렀다.
+  /// 그 401 이 `AuthedClient` → [markSessionExpired] 로 이어져 라우터가 `/home` 을
+  /// `/auth/login` 페이지로 갈아 끼웠고, `/home` 위에 `Navigator.push` 로 얹혀 있던
+  /// **로그인 화면이 페이지와 함께 제거됐다.** 왕복이 끝나 돌아온 `_login` 은
+  /// `if (!mounted) return;` 에서 끝나 [completeLogin] 이 한 번도 안 불렸다.
+  ///
+  /// **[AuthStatus.unknown] 은 넣지 않는다.** 그 구간은 저장된 토큰이 **있을 수 있고**
+  /// ([init] 이 그것으로 `/auth/me` 를 부르는 중이다), 라우터가 스플래시에 붙잡아 두므로
+  /// 이 가드를 보는 홈 위젯이 애초에 트리에 없다.
+  static bool get hasNoToken =>
+      status.value == AuthStatus.unauthenticated ||
+      status.value == AuthStatus.authenticating;
 
   // ── 의존성 (테스트에서 교체) ─────────────────────────────────────────────
 
@@ -412,6 +434,14 @@ class AuthState {
   /// 만료로 끝난 세션의 동네·산책 초안·예약 알림이 남으면, 다음에 로그인한 사람이
   /// 그것을 본다(#513).
   static Future<void> markSessionExpired() async {
+    // 로그인 왕복 한가운데서 들어온 401 은 "세션이 끝났다" 가 아니라 **아직 시작을
+    // 안 한 것**이다(#673). 여기서 상태를 내리면 라우터가 `/home` 을 `/auth/login`
+    // 페이지로 갈아 끼우고, 그 위에 `Navigator.push` 로 얹혀 있던 로그인 화면이
+    // 페이지와 함께 제거된다 — 돌아온 왕복은 [completeLogin] 에 닿지 못한다.
+    //
+    // 지울 흔적도 없다. 왕복 중에는 아직 아무 세션도 시작되지 않았다.
+    if (status.value == AuthStatus.authenticating) return;
+
     await clearSessionTraces();
     _user = null;
     _sessionEnded = true;

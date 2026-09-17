@@ -89,17 +89,25 @@ class _LoginScreenState extends State<LoginScreen> {
       result = SocialLoginResult(outcomeFromError(e));
     }
 
-    // 스낵바를 띄울 messenger 는 await 전에 잡아 둔다 — 성공 시 이 화면은
-    // 곧 pop 되고, 그 뒤의 `ScaffoldMessenger.of(context)` 는 죽은 context 를 본다.
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
+    // ## 왕복의 결과는 이 화면의 생존에 걸려 있지 않다 — 이슈 #673 ㄷ
+    //
+    // 예전에는 여기가 `if (!mounted) return;` 이었다. 그래서 왕복 중에 이 화면이
+    // 사라지면(#673 은 그 길을 하나 보여 준다 — `/home` 페이지가 갈아 끼워지면 그 위에
+    // `push` 로 얹힌 이 화면도 함께 제거된다) **성공한 로그인이 `completeLogin` 에
+    // 닿지 못했다.** 실패도 마찬가지로 `cancelAuthenticating` 에 닿지 못해 상태가
+    // `authenticating` 에 멈췄고, 그 상태에서 `authRedirect` 는 어디로도 안 보내므로
+    // 앱이 그 자리에 굳는다.
+    //
+    // 그래서 **상태를 확정하는 일은 무조건 하고**, 화면에 말하는 일(스낵바·pop)만
+    // `mounted` 를 본다. 스낵바를 띄울 messenger 는 pop 전에 잡아 둔다 — 성공 시 이
+    // 화면은 곧 pop 되고, 그 뒤의 `ScaffoldMessenger.of(context)` 는 죽은 context 를 본다.
+    final messenger = mounted ? ScaffoldMessenger.of(context) : null;
 
     if (!result.ok) {
       AuthState.cancelAuthenticating();
       if (!mounted) return;
       setState(() => _busy = false);
-      messenger.showSnackBar(
+      messenger!.showSnackBar(
         SnackBar(content: Text(loginFailureMessage(result.outcome))),
       );
       return;
@@ -107,13 +115,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // 로그인 화면을 먼저 걷어낸다. 그래야 온보딩 리다이렉트가 이 화면 뒤에서
     // 일어나 사용자에게 보이지 않는 일이 없다.
-    if (navigator.canPop()) navigator.pop();
+    if (mounted) {
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) navigator.pop();
+    }
 
     // 서버에 "나는 누구인가" 를 물어 상태를 확정한다. isNew 면 라우터가 온보딩으로 보낸다.
     await AuthState.completeLogin(isNew: result.isNew);
 
     if (mounted) setState(() => _busy = false);
-    messenger.showSnackBar(
+    messenger?.showSnackBar(
       const SnackBar(content: Text('로그인됐어요')),
     );
   }

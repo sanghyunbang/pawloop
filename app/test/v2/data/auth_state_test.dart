@@ -367,6 +367,39 @@ void main() {
     });
   });
 
+  // `isGuest` 는 "누구인가", `hasNoToken` 은 "서버를 불러도 되는가" 다. 둘을 한 값으로
+  // 쓰다가 #673 이 났다 — 소셜 왕복 중인 사람은 게스트가 아니지만 토큰도 없다.
+  group('hasNoToken — 서버 호출 가드 (#673)', () {
+    test('토큰이 없는 두 상태를 모두 센다 — 왕복 중이 게스트와 같은 편이다', () {
+      for (final status in [AuthStatus.unauthenticated, AuthStatus.authenticating]) {
+        AuthState.status.value = status;
+        expect(AuthState.hasNoToken, isTrue, reason: '$status 에는 보낼 토큰이 없다');
+      }
+    });
+
+    test('토큰이 있는 상태는 세지 않는다', () {
+      for (final status in [AuthStatus.authenticated, AuthStatus.onboarding]) {
+        AuthState.status.value = status;
+        expect(AuthState.hasNoToken, isFalse, reason: '$status');
+      }
+    });
+
+    test('unknown 은 세지 않는다 — 저장된 토큰이 있을 수 있다', () {
+      // init() 이 그 토큰으로 /auth/me 를 부르는 중인 구간이다. 여기를 "토큰 없음" 으로
+      // 치면 앱을 켤 때마다 홈 위젯이 한 번씩 건너뛴다.
+      AuthState.status.value = AuthStatus.unknown;
+      expect(AuthState.hasNoToken, isFalse);
+    });
+
+    test('게스트 판정은 그대로 좁다 — 왕복 중인 사람을 게스트라 부르지 않는다', () {
+      AuthState.status.value = AuthStatus.authenticating;
+      expect(AuthState.isGuest, isFalse,
+          reason: '이 사람은 지금 로그인하는 중이지 둘러보는 중이 아니다');
+      AuthState.status.value = AuthStatus.unauthenticated;
+      expect(AuthState.isGuest, isTrue);
+    });
+  });
+
   group('AuthUser.fromJson', () {
     test('id 가 없으면 null — 계약이 required 로 못 박은 유일한 필드다', () {
       expect(AuthUser.fromJson({'nickname': '보리'}), isNull);
@@ -471,6 +504,28 @@ void main() {
 
       expect(AuthState.status.value, AuthStatus.unauthenticated);
       expect(AuthState.user, isNull);
+    });
+
+    // 왕복 중에 들어온 401 은 "세션이 끝났다" 가 아니라 **아직 시작을 안 한 것**이다.
+    // 여기서 상태를 내리면 라우터가 /home 을 /auth/login 페이지로 갈아 끼우고, 그 위에
+    // Navigator.push 로 얹혀 있던 로그인 화면이 페이지와 함께 제거된다 — 돌아온 왕복은
+    // completeLogin 에 닿지 못하고, 사용자는 한 번 더 눌러야 한다.
+    test('왕복 중(authenticating)에는 아무것도 하지 않는다 (#673)', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        for (final key in sessionScopedKeys) key: '왕복 중인 사람의 것',
+      });
+      _install((req) async => _json(_userJson()));
+      AuthState.beginAuthenticating();
+
+      await AuthState.markSessionExpired();
+
+      expect(AuthState.status.value, AuthStatus.authenticating,
+          reason: '여기서 상태가 내려가면 로그인 화면이 페이지와 함께 사라진다');
+      expect(AuthState.sessionEnded, isFalse,
+          reason: '끝난 세션이 아니라 아직 시작 안 한 세션이다');
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getKeys().where(sessionScopedKeys.contains), isNotEmpty,
+          reason: '지울 흔적도 없다 — 왕복 중에는 아직 아무 세션도 시작되지 않았다');
     });
 
     test('만료로 끝난 세션도 기기의 흔적을 지운다 — 세션이 끝나는 길이 로그아웃만은 아니다', () async {

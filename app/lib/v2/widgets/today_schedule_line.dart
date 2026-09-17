@@ -9,7 +9,9 @@
 // ## 게스트에게는 아예 안 묻는다
 //
 // 로그인 안 한 사람에게 일정은 없다 — 물으면 401 이 돌아오고, 그동안 12초짜리 타임아웃
-// 타이머가 떠 있다. 오늘의 케어 카드가 같은 자리에서 같은 답을 쓴다(`AuthState.isGuest`).
+// 타이머가 떠 있다. 오늘의 케어 카드가 같은 자리에서 같은 답을 쓴다(`AuthState.hasNoToken`).
+// **게스트가 아니라 "토큰이 없다"** 로 재는 이유는 #673 에 있다 — 소셜 왕복 중에도 토큰은
+// 없는데, 이 줄이 상태 알림을 듣고 다시 읽으므로 버튼을 누른 그 순간 요청이 나갔다.
 //
 // ## 실패해도 조용하다
 //
@@ -74,7 +76,8 @@ class _TodayScheduleLineState extends State<TodayScheduleLine> {
   }
 
   Future<void> _load() async {
-    if (AuthState.isGuest) {
+    // 토큰이 없으면 안 부른다 — 게스트뿐 아니라 **소셜 왕복 중**도 그렇다(#673).
+    if (AuthState.hasNoToken) {
       if (mounted && _items.isNotEmpty) setState(() => _items = const []);
       return;
     }
