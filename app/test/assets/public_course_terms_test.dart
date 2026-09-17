@@ -42,11 +42,14 @@ void main() {
   test('버전이 올랐다 — 내용이 바뀌면 다시 동의를 받는다', () {
     // v1.5 가 공개 코스(#339), v1.6 이 동네(#342), v1.7 이 지도 SDK 의 위치 처리(#483), v1.8 이 AI 주간
     // 요약의 국외 처리위탁(OpenAI, #486)이다. 수집 항목이나 처리 주체가 늘 때마다 올린다.
-    expect(privacy, contains('버전: v1.8'),
+    // v1.9 는 수집 항목이 아니라 **12항의 법정 기재사항**이다(#682) — 개인정보 보호책임자의
+    // 성명·직위·전화번호 자리를 만들었다. 이용자가 7항의 권리를 행사할 때 찾아가는 자리라
+    // 같은 규칙으로 올린다.
+    expect(privacy, contains('버전: v1.9'),
         reason: '수집 항목이 늘어난 것은 다시 알려야 하는 변경이다');
 
     final screen = _read(File('lib/v2/screens/settings/legal_document_screen.dart'));
-    expect(screen, contains("ConsentKind.privacy, 'v1.8'"),
+    expect(screen, contains("ConsentKind.privacy, 'v1.9'"),
         reason: '문서만 올리고 상수를 안 올리면 아무에게도 다시 안 묻는다');
   });
 
