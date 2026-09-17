@@ -121,8 +121,17 @@ class _WalkSafetyCardState extends State<WalkSafetyCard> with WidgetsBindingObse
           child: Row(children: [
             const Icon(Icons.near_me_outlined, size: 20, color: T.warmText),
             const SizedBox(width: 10),
+              // 짧게 고쳤다 (#658). 예전 문구는 360dp 폰에서 마지막 '요' 한 글자만 다음 줄로
+              // 떨어져 카드가 어색했다.
+              //
+              // 길이는 재서 정했다. 진짜 Pretendard 를 물리고, 홈 화면과 같은 좌우 여백(22)
+              // 안에서 360dp 로 그려 한 줄에 드는 것을 골랐다. 테스트 폰트로 재거나 여백 없이
+              // 재면 실제와 다른 답이 나온다 — 둘 다 한 번씩 틀렸다.
+              //
+              // '위치를 켜면' 을 뺀 자리는 옆의 '허용' 버튼이 메운다. 무엇을 허용하는지는
+              // 그 버튼을 누르면 뜨는 설명 시트가 말한다.
             const Expanded(
-              child: Text('위치를 켜면 오늘 산책하기 좋은지 알려드려요',
+              child: Text('지금 산책하기 좋은지 알려드려요',
                   style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
             ),
             TextButton(
