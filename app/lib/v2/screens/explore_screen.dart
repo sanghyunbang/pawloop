@@ -78,6 +78,15 @@ class ExploreMap {
           ? cameraAt
           : null;
 
+  /// 지도를 옮겼을 때 **바로** 다시 거를 것인가.
+  ///
+  /// 기기 안에서 거르는 빌드(지금)는 전국 한 벌이 이미 기기에 있어 **네트워크가 0** 이다 —
+  /// 부를 서버가 없는데 버튼을 눌러 달라고 할 이유가 없다.
+  ///
+  /// 신고를 마치고 `UPLOAD_LOCATION` 을 켜면 이 조회가 서버로 간다. 그때는 끄는 동안 계속
+  /// 부르게 되므로 버튼으로 묻는다. **이 한 줄이 그 갈래 전부다** — 화면에는 판단이 없다.
+  static bool get refiltersOnDrag => !LocationUploadPolicy.canQueryNearbyPlaces;
+
   /// 뭉친 곳의 개수 딱지.
   ///
   /// **이게 없으면 80곳이 한 점으로 보인다.** 패키지 기본 빌더
@@ -1551,16 +1560,30 @@ class _ExploreScreenState extends State<ExploreScreen> {
     ]);
   }
 
-  /// 지도가 멈췄다. 멀리 왔으면 "이 지역에서 다시 찾기" 를 띄운다.
+  /// 지도가 멈췄다. 멀리 왔으면 그 지역을 다시 거른다.
   ///
-  /// 여기서 **바로 받지 않는다.** 손이 미끄러진 것과 "여기를 보고 싶다" 를 앱이 못 가르고,
-  /// 끄는 동안 계속 받으면 조회가 폭발한다.
+  /// <h3>기기 안에서 거르는 빌드는 바로 한다</h3>
+  /// 이 빌드는 서버에 좌표를 안 보낸다(#235 · #200). 전국 한 벌을 통째로 받아 두고 거리
+  /// 계산을 기기에서 하므로({@code PlaceCatalogRepository}) **다시 거르는 데 네트워크가
+  /// 0 이다.** 부를 서버가 없는데 버튼을 눌러 달라고 할 이유가 없다.
+  ///
+  /// 이 자리를 한 번 버튼으로 뒀다가 바로 고쳤다 — "조회가 폭발한다" 고 썼는데 폭발할
+  /// 조회가 애초에 없었다. 사장님이 "어떤 구조로 하고 있길래" 라고 물어 다시 따라가 보고
+  /// 알았다(2026-09-17).
+  ///
+  /// <h3>서버를 부르는 빌드는 버튼으로 둔다</h3>
+  /// 신고를 마치고 `UPLOAD_LOCATION` 을 켜면 이 조회가 서버로 간다. 그때는 끄는 동안 계속
+  /// 부르게 되므로 버튼이 맞다 — 그 갈래를 `LocationUploadPolicy` 하나로 가른다.
   Future<void> _onCameraIdle() async {
     final c = _mapCtrl;
     if (c == null || !mounted) return;
     final pos = await c.getCameraPosition();
     if (!mounted) return;
     final next = ExploreMap.researchTarget(_center, pos.target);
+    if (next != null && ExploreMap.refiltersOnDrag) {
+      await _moveTo(next);
+      return;
+    }
     // 같은 답이면 다시 그리지 않는다 — 끄는 동안 이 콜백이 여러 번 온다.
     if ((next == null) == (_movedTo == null) &&
         (next == null || haversineMeters(next.latitude, next.longitude,
@@ -1570,10 +1593,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
     setState(() => _movedTo = next);
   }
 
-  /// 지금 보고 있는 곳으로 다시 받는다.
+  /// 지금 보고 있는 곳으로 다시 받는다 — 버튼을 눌렀을 때.
   Future<void> _researchHere() async {
     final target = _movedTo;
     if (target == null) return;
+    await _moveTo(target);
+  }
+
+  /// 기준점을 옮기고 다시 거른다. 자동(`_onCameraIdle`)과 버튼이 **같은 길**을 쓴다.
+  Future<void> _moveTo(NLatLng target) async {
     setState(() {
       _center = target;
       _movedTo = null;
