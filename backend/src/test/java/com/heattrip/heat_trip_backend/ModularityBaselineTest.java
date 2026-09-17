@@ -173,7 +173,17 @@ class ModularityBaselineTest {
      * <p>이 빚을 진짜로 갚는 자리는 {@code group} 이 표면을 내주는 것이다(#104 · #105 · #120).
      * 그때 {@code CareLog}·{@code CareItem} 이 함께 내려온다.
      */
-    private static final int BASELINE_VIOLATIONS = 106;
+    /**
+     * <b>2026-09-18 에 106 → 107 로 올렸다</b>(#660). 늘어난 한 건은
+     * {@code config -> OAuth.jwt} 가 5 → 6 이 된 것이다 — 아래 {@code BASELINE_PAIRS} 의 그 줄에
+     * 이유를 적어 뒀다. <b>피할 수 있는 몫은 피했다</b>: 같은 이슈에서 새로 만든 필터가 처음에는
+     * {@code config.SecurityConfig} 와 {@code consent.service.ConsentService} 를 직접 불러
+     * 106 → 114 였고 {@code config <-> security} 순환까지 생겼다. 공개 경로 목록을
+     * {@code security.PublicPaths} 로 내리고, 동의 조회를 {@code consent.ConsentStatus} 표면으로
+     * 내주고, principal 읽기를 {@code security.AuthenticatedUserIds} 로 뒤집어 여덟 중 일곱을
+     * 되돌렸다.
+     */
+    private static final int BASELINE_VIOLATIONS = 107;
 
     /**
      * 같은 빚을 <b>(부르는 모듈 → 불리는 패키지) 쌍</b>으로 적은 것 — 이슈 #518.
@@ -212,7 +222,11 @@ class ModularityBaselineTest {
             Map.entry("care -> group.repository", 4),
             Map.entry("chatweb -> user.repository", 4),
             Map.entry("config -> OAuth.handler", 6),
-            Map.entry("config -> OAuth.jwt", 5),
+            // 5 → 6: 동의 검사 필터를 JWT 인증 필터 **뒤**에 붙이면서(#660). 자리를 그 필터
+            // 기준으로 적는 것이 요점이라 클래스 참조를 피할 수 없다 — 앞에 두면 SecurityContext 가
+            // 비어 있어 아무도 안 막히는데 **예외도 안 나서 초록불**이다. ChatRateLimitFilter 가
+            // 같은 이유로 같은 참조를 쓴다(#80). 같은 모양의 빚이 한 자리 는 것이지 새 종류가 아니다.
+            Map.entry("config -> OAuth.jwt", 6),
             Map.entry("config -> OAuth.service", 3),
             Map.entry("config -> OAuth.state", 4),
             Map.entry("error -> observability.logging", 1),

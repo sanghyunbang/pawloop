@@ -4,12 +4,21 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
+import com.heattrip.heat_trip_backend.consent.ConsentKind;
+import com.heattrip.heat_trip_backend.consent.entity.UserConsent;
+import com.heattrip.heat_trip_backend.consent.repository.UserConsentRepository;
+import com.heattrip.heat_trip_backend.user.entity.User;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -28,6 +37,57 @@ import org.testcontainers.containers.MySQLContainer;
  * {@code @Tag("mysql")} 로 격리해 뒀다. 이슈 #26 이 그 격리를 걷어낸다.</p>
  */
 public abstract class AbstractMySqlIntegrationTest {
+
+    /**
+     * {@link #consented(User)} 가 쓰는 저장소. 스프링 컨텍스트가 없는 하위 클래스에서는
+     * 주입되지 않으므로 {@code required = false} 다 — 그런 테스트는 이 메서드를 부르지 않는다.
+     */
+    @Autowired(required = false)
+    private UserConsentRepository consentRowsForTests;
+
+    /**
+     * 시드한 사용자를 <b>필수 약관에 동의한 평범한 사용자</b>로 만든다 — 이슈 #660.
+     *
+     * <pre>
+     *   User user = consented(users.save(User.builder()... .build()));
+     * </pre>
+     *
+     * <h2>왜 이것이 필요해졌나</h2>
+     *
+     * <p>2026-09-18 부터 서버가 동의를 강제한다({@code security.ConsentRequiredFilter}). 동의하지
+     * 않은 토큰으로 {@code /api/**} 를 부르면 403 이다. 그런데 통합 테스트의 시드 사용자는
+     * {@code users} 행만 만들고 동의는 남기지 않았다 — 그래서 이 필터를 넣자 <b>455건이 빨간불</b>이
+     * 됐다.
+     *
+     * <p>그 빨간불은 <b>버그가 아니라 사실</b>이다: 지금까지 모든 인증 API 가 동의 없이 열려 있었다는
+     * 것을 테스트가 그대로 보여 준 것이다. 그러니 고칠 곳은 필터가 아니라 <b>시드</b>다 — 실제
+     * 사용자는 동의 화면을 지나야 여기까지 온다.
+     *
+     * <h2>전부에 자동으로 걸지 않는 이유</h2>
+     *
+     * <p>"모든 시드 사용자를 자동으로 동의시킨다" 로 만들면 편하지만, 그러면
+     * <b>동의하지 않은 사용자를 만들 방법이 사라진다</b> — {@code ConsentRequiredIntegrationTest} 가
+     * 재는 것이 바로 그 상태다. 자물쇠를 재는 테스트가 자물쇠를 못 만드는 셈이 된다. 그래서
+     * 손으로 부른다.
+     *
+     * @return 받은 사용자 그대로. 시드 한 줄을 감싸 쓸 수 있게 돌려준다
+     */
+    protected <T extends User> T consented(T user) {
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        List<UserConsent> rows = new ArrayList<>();
+        // MARKETING 은 선택이라 안 적는다 — 필수만 채워야 "필수만 봐야 한다" 가 함께 잠긴다.
+        for (ConsentKind kind : List.of(ConsentKind.TERMS, ConsentKind.PRIVACY, ConsentKind.LOCATION)) {
+            rows.add(UserConsent.builder()
+                    .userId(user.getId())
+                    .kind(kind.name())
+                    .version("v1.0")
+                    .agreed(true)
+                    .createdAt(now)
+                    .build());
+        }
+        consentRowsForTests.saveAll(rows);
+        return user;
+    }
 
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
