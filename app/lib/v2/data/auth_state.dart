@@ -149,6 +149,35 @@ class AuthState {
   /// 일 때만 채워져 있다.
   static AuthUser? get user => _user;
 
+  /// [user] 의 내용이 바뀐 횟수 — 이슈 #665.
+  ///
+  /// ## 왜 [status] 로는 안 되나
+  ///
+  /// 표시 이름을 바꿔도 **상태는 그대로 `authenticated`** 다. 화면들은 [status] 를
+  /// 듣고 있으므로 `_user` 만 갈아 끼우면 아무도 다시 그리지 않는다 — 저장은 됐는데
+  /// 프로필과 홈은 옛 이름을 계속 보여 준다.
+  ///
+  /// 상태 머신을 흔들어 알리는 방법(예: 잠깐 다른 값으로 바꿨다 되돌리기)은 라우터의
+  /// `refreshListenable` 이 그것을 로그인 전이로 읽는다. 그래서 **내용이 바뀌었다** 는
+  /// 신호만 따로 둔다. 듣는 쪽은 [status] 와 이것을 함께 듣는다.
+  static final ValueNotifier<int> userRev = ValueNotifier<int>(0);
+
+  /// `PUT /auth/me` 200 의 본문으로 나를 갈아 끼운다 — 이슈 #665.
+  ///
+  /// **서버 응답만 받는다.** 화면이 입력한 값을 그대로 넣으면, 서버가 다듬은 값
+  /// (`trim`·잘림)과 앱이 보여 주는 값이 갈린다. 계약과 다른 본문이면 아무것도 안 바꾸고
+  /// `false` 를 준다 — 반쯤 비운 `user` 로 만들면 로그인 자체가 풀린 것처럼 보인다.
+  ///
+  /// 상태 전이는 없다. 로그인해 있지 않을 때 부르면 아무 일도 안 일어난다.
+  static bool applyUpdatedUser(Map<String, dynamic> json) {
+    if (_user == null) return false;
+    final updated = AuthUser.fromJson(json);
+    if (updated == null || updated.id != _user!.id) return false;
+    _user = updated;
+    userRev.value++;
+    return true;
+  }
+
   /// 로그인 왕복이 <b>끝날 때까지</b> 기다린다.
   ///
   /// ## 왜 필요한가
@@ -236,6 +265,7 @@ class AuthState {
     _repository = null;
     _user = null;
     _sessionEnded = false;
+    userRev.value = 0;
     status.value = AuthStatus.unknown;
   }
 

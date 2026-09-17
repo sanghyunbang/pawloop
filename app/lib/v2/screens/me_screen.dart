@@ -12,6 +12,7 @@ import '../data/walk_feed.dart';
 import '../widgets/walk_feed_builder.dart';
 import '../data/auth_state.dart';
 import '../data/location_service.dart';
+import 'display_name_screen.dart';
 import 'edit_screen.dart';
 import 'myrecords_screen.dart';
 import 'login_screen.dart';
@@ -244,42 +245,46 @@ class MeScreen extends StatelessWidget {
   /// 예전에는 앱이 "토큰이 있다" 는 것만 알았지 그 토큰이 누구 것인지 몰랐다.
   /// 그래서 로그인해도 이 자리에 보여 줄 것이 없었다.
   Widget _accountLine() {
-    return ValueListenableBuilder<AuthStatus>(
-      valueListenable: AuthState.status,
-      builder: (_, status, __) {
-        final user = AuthState.user;
-        final String text;
-        if (status == AuthStatus.unknown) {
-          text = '계정 확인 중…';
-        } else if (user != null) {
-          // 'local' 같은 내부 제공자 이름이 그대로 보였다(#332). 사람 말로 바꾼다.
-          final provider = providerLabel(user.provider);
-          text = provider == null
-              ? user.displayName
-              : '${user.displayName} · $provider';
-        } else if (status == AuthStatus.authenticated) {
-          // 토큰은 있는데 프로필을 못 받은 상태(오프라인 시작).
-          text = '로그인됨 · 프로필을 불러오지 못했어요';
-        } else {
-          text = '로그인하지 않았어요';
-        }
+    // 이름을 바꿔도 **상태는 그대로 authenticated** 라 status 만 들으면 이 줄이 옛
+    // 이름에 멈춘다. 내용이 바뀌었다는 신호를 함께 듣는다(#665).
+    return ListenableBuilder(
+      listenable: Listenable.merge([AuthState.status, AuthState.userRev]),
+      builder: (_, __) => _accountText(AuthState.status.value),
+    );
+  }
 
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.account_circle_outlined,
-                size: 15, color: T.textMuted),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                text,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12.5, color: T.textMuted),
-              ),
-            ),
-          ],
-        );
-      },
+  Widget _accountText(AuthStatus status) {
+    final user = AuthState.user;
+    final String text;
+    if (status == AuthStatus.unknown) {
+      text = '계정 확인 중…';
+    } else if (user != null) {
+      // 'local' 같은 내부 제공자 이름이 그대로 보였다(#332). 사람 말로 바꾼다.
+      final provider = providerLabel(user.provider);
+      text = provider == null
+          ? user.displayName
+          : '${user.displayName} · $provider';
+    } else if (status == AuthStatus.authenticated) {
+      // 토큰은 있는데 프로필을 못 받은 상태(오프라인 시작).
+      text = '로그인됨 · 프로필을 불러오지 못했어요';
+    } else {
+      text = '로그인하지 않았어요';
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.account_circle_outlined,
+            size: 15, color: T.textMuted),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            text,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12.5, color: T.textMuted),
+          ),
+        ),
+      ],
     );
   }
 
@@ -493,6 +498,24 @@ class MeScreen extends StatelessWidget {
     );
   }
 
+  /// "내 정보 수정" 한 줄 — 이슈 #665.
+  ///
+  /// **로그인한 사람에게만 보인다.** 표시 이름은 계정에 붙은 값이라 게스트에게는 바꿀
+  /// 것이 없고, 눌러도 401 로 끝난다. 아이가 있든 없든 닿아야 해서 [_menuCard] 와
+  /// [_accountCard] 가 같은 줄을 쓴다.
+  ///
+  /// 바로 위의 배너(아이 프로필 편집)와 헷갈리지 않게 **사람 아이콘**을 쓴다 — 그 배너는
+  /// 우리 아이를, 이 줄은 나를 고친다.
+  Widget _editMeRow(BuildContext context) => ValueListenableBuilder<AuthStatus>(
+        valueListenable: AuthState.status,
+        builder: (_, status, __) => status == AuthStatus.authenticated ||
+                status == AuthStatus.onboarding
+            ? _row(Icons.badge_outlined, '내 정보 수정',
+                onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const DisplayNameScreen())))
+            : const SizedBox.shrink(),
+      );
+
   /// 게스트의 설정 한 줄 — 로그아웃이 없다(#404).
   ///
   /// 전에는 게스트 프로필에 "로그인 / 회원가입" 버튼뿐이라 **약관도 내 동네도 알림도
@@ -516,6 +539,7 @@ class MeScreen extends StatelessWidget {
         child: GlassCard(
           padding: EdgeInsets.zero,
           child: Column(children: [
+            _editMeRow(context),
             _row(Icons.settings_outlined, '설정',
                 onTap: () => Navigator.of(context)
                     .push(MaterialPageRoute(builder: (_) => const SettingsScreen()))),
@@ -554,6 +578,7 @@ class MeScreen extends StatelessWidget {
         child: Column(children: [
           // "프로필 편집" 행은 뺐다 — 바로 위 배너와 같은 화면으로 갔다(#332).
           _menuBanner(context, dog),
+          _editMeRow(context),
           row(Icons.article_outlined, '내 산책 기록',
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyRecordsScreen()))),
           row(Icons.diversity_1_rounded, '우리 가족',
