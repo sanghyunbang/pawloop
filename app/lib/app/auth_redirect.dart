@@ -135,6 +135,19 @@ String? authRedirect({
       if (path == splashRoute) {
         return _settle(status, pendingLocation, sessionEnded: sessionEnded);
       }
+      // 온보딩을 마쳤는데 그 화면에 남아 있으면 **앱에 갇힌다.**
+      //
+      // 온보딩 화면의 버튼들은 `AuthState.completeOnboarding()` 으로 **상태만** 바꾼다
+      // (`onboarding` → `authenticated`). 화면을 옮기는 것은 이 리다이렉트의 몫인데,
+      // 여기가 없으면 상태는 바뀌고 화면은 그대로다 — 버튼이 죽은 것처럼 보인다.
+      //
+      // 신규 가입자만 겪는다. 기존 계정으로 하는 시험은 이 경로를 아예 밟지 않아서
+      // 2026-09-17 에 구글로 처음 가입하고서야 드러났다.
+      //
+      // `/onboarding-guide` 같은 이름만 비슷한 경로를 잡지 않으려고 `/` 를 붙여 본다.
+      if (path == onboardingRoute || path.startsWith('$onboardingRoute/')) {
+        return homeRoute;
+      }
       // 이미 로그인했는데 로그인 화면이 뜨면 사용자는 로그인이 풀린 줄 안다.
       if (_authOnlyEntryRoutes.contains(path)) return homeRoute;
       return null;
