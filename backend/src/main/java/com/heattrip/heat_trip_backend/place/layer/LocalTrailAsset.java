@@ -4,12 +4,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
+import com.heattrip.heat_trip_backend.place.dto.TrailRouteDto;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,10 +40,15 @@ import org.springframework.stereotype.Component;
  * <p>{@code place_catalog} 에서는 행을 따로 둔다({@code localtrail}) — 갱신 주기가 다르고,
  * 두루누비가 아픈 날 동네 길까지 사라지면 안 된다.
  *
- * <h2>선이 없다</h2>
+ * <h2>선이 없다 — 그래도 입을 닫지는 않는다 (#619)</h2>
  * <p>원본의 {@code 경로정보} 는 {@code 산수교→월성마을→황점마을} 꼴의 <b>글</b>이라
  * {@code trail_route} 에 넣을 선이 없다. 그래서 이 출처의 코스는 지도에 <b>점</b>으로만
  * 뜬다 — 두루누비는 선을 그리고, 이쪽은 시작점과 경유지 이름을 준다.
+ *
+ * <p>예전에는 그 "경유지 이름" 을 아무 데서도 안 줬다. {@code /trails/{id}/route} 가
+ * <b>404</b> 였고 앱은 아예 묻지도 않아서, 사용자가 동네 길을 눌러도 <b>아무 일도 안 났다</b>
+ * (2026-09-17 에 사장님이 그렇게 신고했다). 지금은 {@link #route(String)} 가 그 이름들을
+ * 답한다 — 선 대신 거쳐 가는 곳이다.
  */
 @Component
 public class LocalTrailAsset {
@@ -49,8 +58,16 @@ public class LocalTrailAsset {
     /** 자산 경로. {@code build_local_trails.py} 의 출력과 같아야 한다. */
     static final String PATH = "data/local_trails.json";
 
+    /**
+     * 두루누비의 코스 번호({@code T_CRS_…})와 안 겹치게 하는 접두어.
+     *
+     * <p>앱은 {@code contentId} 에서 {@code trail:} 를 떼고 코스 번호로 쓰므로, 이 두 글자가
+     * 곧 "이건 동네 길이다" 라는 표시가 된다 — {@link #route(String)} 가 그걸로 가른다.
+     */
+    static final String COURSE_PREFIX = "lt";
+
     /** 두루누비와 안 겹치게 하는 접두어. */
-    static final String ID_PREFIX = PlaceDto.SOURCE_TRAIL + ":lt";
+    static final String ID_PREFIX = PlaceDto.SOURCE_TRAIL + ":" + COURSE_PREFIX;
 
     private final ObjectMapper objectMapper;
 
@@ -58,22 +75,94 @@ public class LocalTrailAsset {
         this.objectMapper = objectMapper;
     }
 
-    /** 자산 안의 길 전부. 파일이 없거나 깨졌으면 빈 목록 — 부팅을 막지 않는다. */
-    public List<PlaceDto> load() {
+    /**
+     * 코스 번호 하나의 <b>경유지</b> — 이슈 #619. 선이 없는 대신 거쳐 가는 곳의 이름이다.
+     *
+     * <p>{@code courseId} 는 앱이 {@code contentId} 에서 {@code trail:} 를 떼고 보내는 값이라
+     * {@code lt…} 로 시작한다. 두루누비({@code T_CRS_…})는 여기 것이 아니라 바로 빈 값이다 —
+     * <b>자산을 읽지도 않는다.</b> 그 판단이 없으면 두루누비 코스 하나를 물을 때마다 1,302개를
+     * 훑게 된다.
+     *
+     * <p>경유지 글이 비어 있으면 {@code Optional.empty()} 다. 조각이 0개인 답을 주는 것은
+     * "이 길은 아무 데도 안 간다" 는 뜻이 되어 404 보다 나쁘다.
+     */
+    public Optional<TrailRouteDto> route(String courseId) {
+        if (courseId == null || !courseId.startsWith(COURSE_PREFIX)) {
+            return Optional.empty();
+        }
+        JsonNode t = index().get(courseId.strip());
+        if (t == null) {
+            return Optional.empty();
+        }
+        List<String> stops = LocalTrailWaypoints.split(t.path("waypoints").asText(""));
+        if (stops.isEmpty()) {
+            return Optional.empty();
+        }
+        Integer lengthM = PlaceDto.metersOf(
+                t.hasNonNull("lengthKm") ? t.path("lengthKm").asDouble() : null);
+        return Optional.of(TrailRouteDto.ofStops(
+                courseId.strip(), t.path("name").asText(""), lengthM == null ? 0 : lengthM, stops));
+    }
+
+    /**
+     * 코스 번호 → 그 길. 처음 물을 때 한 번 만든다.
+     *
+     * <p>자산은 커밋된 파일이라 돌아가는 동안 안 바뀐다. {@code volatile} 한 번 쓰기로 충분하고,
+     * 둘이 동시에 들어와 두 번 만들어도 같은 것이 나온다 — 자물쇠를 걸 이유가 없다.
+     */
+    private Map<String, JsonNode> index() {
+        Map<String, JsonNode> built = byCourseId;
+        if (built != null) {
+            return built;
+        }
+        Map<String, JsonNode> fresh = new LinkedHashMap<>();
+        for (JsonNode t : trailsNode()) {
+            String id = t.path("id").asText("");
+            if (!id.isBlank()) {
+                fresh.put(courseIdOf(id), t);
+            }
+        }
+        byCourseId = fresh;
+        return fresh;
+    }
+
+    private volatile Map<String, JsonNode> byCourseId;
+
+    /**
+     * 자산의 {@code trails} 배열. 파일이 없거나 깨졌으면 <b>빈 배열</b>이다 — 부팅을 막지 않는다.
+     *
+     * <p>{@link #load()} 와 {@link #index()} 가 같은 읽기를 쓰게 모아 둔 것이다. 두 곳이 따로
+     * 읽으면 한쪽만 고쳐져 <b>목록에는 있는데 눌러도 없는 길</b>이 생긴다.
+     */
+    private JsonNode trailsNode() {
         JsonNode root;
         try (InputStream in = new ClassPathResource(PATH).getInputStream()) {
             root = objectMapper.readTree(new String(in.readAllBytes(), StandardCharsets.UTF_8));
         } catch (IOException e) {
             log.warn("동네 길 자산을 읽지 못했다 — {} ({})", PATH, e.getClass().getSimpleName());
-            return List.of();
+            return objectMapper.createArrayNode();
         }
-
         JsonNode trails = root.path("trails");
         if (!trails.isArray()) {
             log.warn("동네 길 자산에 trails 배열이 없다 — {}", PATH);
-            return List.of();
+            return objectMapper.createArrayNode();
         }
+        return trails;
+    }
 
+    /**
+     * 자산의 {@code localtrail:1a87…} 를 앱이 보내는 코스 번호 {@code lt1a87…} 로.
+     *
+     * <p>{@code contentId} 도 이 값으로 만든다({@link #toPlace}). <b>한 군데서 나와야</b>
+     * 목록의 항목과 그 항목을 눌렀을 때 묻는 번호가 갈리지 않는다.
+     */
+    private static String courseIdOf(String assetId) {
+        return COURSE_PREFIX + assetId.substring(assetId.lastIndexOf(':') + 1);
+    }
+
+    /** 자산 안의 길 전부. 파일이 없거나 깨졌으면 빈 목록 — 부팅을 막지 않는다. */
+    public List<PlaceDto> load() {
+        JsonNode trails = trailsNode();
         List<PlaceDto> places = new ArrayList<>(trails.size());
         int skipped = 0;
         for (JsonNode t : trails) {
@@ -84,8 +173,7 @@ public class LocalTrailAsset {
             }
             places.add(place);
         }
-        log.info("동네 길 자산 — 담은 곳 {} · 건너뜀 {} · 기준일 {}",
-                places.size(), skipped, root.path("version").asText("?"));
+        log.info("동네 길 자산 — 담은 곳 {} · 건너뜀 {}", places.size(), skipped);
         return places;
     }
 
@@ -99,7 +187,7 @@ public class LocalTrailAsset {
             return null;
         }
         return new PlaceDto(
-                ID_PREFIX + id.substring(id.lastIndexOf(':') + 1),
+                PlaceDto.SOURCE_TRAIL + ":" + courseIdOf(id),
                 name,
                 PlaceDto.SOURCE_TRAIL,
                 PlaceDto.SOURCE_TRAIL,

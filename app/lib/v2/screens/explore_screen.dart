@@ -46,6 +46,13 @@ import '../widgets/profile_avatar.dart';
 /// 시작한다는 말이 어색하고, 어색한 버튼은 화면의 신뢰를 깎는다.
 const Set<String> kWalkStartCategories = {'12', '39', '28', 'trail'};
 
+/// 선이 없는 산책로를 눌렀을 때의 지도 배율 (#619).
+///
+/// 목록의 기본값(12~13)보다 가깝다. 시작 지점 <b>하나</b>를 보여 주는 자리라, 그 점이
+/// 어느 동네인지 읽힐 만큼은 들어가야 한다. 선이 있는 코스는 이 값을 안 쓴다 —
+/// 거기는 선 전체가 들어오게 맞춘다(`fitBounds`).
+const double _kTrailPointZoom = 15;
+
 class ExploreScreen extends StatefulWidget {
   final String initialView; // 'list' | 'map'
 
@@ -57,12 +64,16 @@ class ExploreScreen extends StatefulWidget {
   /// 내 동네를 읽는 자리 (#342). **테스트만 넘긴다.**
   final NeighborhoodStore? neighborhoods;
 
+  /// 산책로 경로 저장소 — 선이든 경유지든 (#291 · #619). **테스트만 넘긴다.**
+  final TrailRouteRepository? trailRoutes;
+
   const ExploreScreen({
     super.key,
     this.initialView = 'list',
     this.repository,
     this.courses,
     this.neighborhoods,
+    this.trailRoutes,
   });
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
@@ -73,7 +84,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   NaverMapController? _mapCtrl;
   late final PetPlacesRepository _repo = widget.repository ?? PetPlacesRepository();
   late final CourseRepository _courses = widget.courses ?? CourseRepository();
-  final _trails = TrailRouteRepository();
+  late final TrailRouteRepository _trails = widget.trailRoutes ?? TrailRouteRepository();
 
   // 기본 중심: 서울 시청. (추후 현재 위치)
   NLatLng _center = const NLatLng(37.5665, 126.9816);
@@ -741,8 +752,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
             messenger.showSnackBar(const SnackBar(content: Text('전화 앱을 열 수 없어요')));
           }
         }, primary: true),
-      // 선이 있는 것만 — 동네 길은 원본에 경로가 글로만 있어 그릴 선이 없다(#346).
-      if (p.hasTrailRoute)
+      // 산책로면 전부 (#619). 예전에는 선이 있는 두루누비만 이 버튼을 달았는데, 그러면
+      // 동네 길은 **누를 것이 하나도 없는 시트**가 된다. 선이 없어도 할 일이 있다 —
+      // 지도를 시작 지점으로 옮기는 것이다.
+      if (p.isTrail)
         action(Icons.map_rounded, '지도에서 보기', () async {
           Navigator.pop(sheetCtx);
           if (view != 'map') {
@@ -759,27 +772,48 @@ class _ExploreScreenState extends State<ExploreScreen> {
         if (!await ExternalMaps.directions(lat: p.lat, lng: p.lng, name: p.title)) {
           messenger.showSnackBar(const SnackBar(content: Text('지도 앱을 열 수 없어요')));
         }
-      }, primary: p.tel.isEmpty && !p.hasTrailRoute),
+      }, primary: p.tel.isEmpty && !p.isTrail),
     ];
 
     const gap = 8.0;
     return LayoutBuilder(builder: (context, box) {
-      final room = box.maxWidth - gap * (actions.length - 1);
       final natural = actions.fold(0.0, (sum, a) => sum + a.width);
-      // 남는 자리를 똑같이 나눈다 — 그래야 칸마다 여백이 같다. 자연폭이 이미 줄보다 넓으면
-      // (버튼 넷) 같은 비율로 함께 줄인다. 그때 글자는 위의 FittedBox 가 줄여서 넣는다.
-      final slack = room - natural;
-      double widthOf(int i) => slack >= 0
-          ? actions[i].width + slack / actions.length
-          : actions[i].width * room / natural;
+      final oneRow = box.maxWidth - gap * (actions.length - 1);
 
-      return Row(children: [
-        for (var i = 0; i < actions.length; i++) ...[
-          if (i > 0) const SizedBox(width: gap),
-          SizedBox(width: widthOf(i), child: actions[i].child),
-        ],
-      ]);
+      // 한 줄에 다 못 서면 **두 줄로 나눈다** (#619 에서 동네 길에 버튼이 넷이 되며 생긴 자리).
+      //
+      // 예전에는 좁으면 같은 비율로 함께 줄였다. 그러면 393dp 에서 자연폭 합이 줄보다 넓어
+      // 여백이 0 이 되고, "여기서 산책 시작" 의 글자가 칸 모서리에 닿는다 — #535 가 고친
+      // 바로 그 현상이 넷째 버튼과 함께 돌아온 것이다. 줄을 하나 더 쓰는 쪽이 낫다.
+      if (actions.length >= 4 && natural > oneRow) {
+        final half = (actions.length / 2).ceil();
+        return Column(children: [
+          _actionRow(actions.sublist(0, half), box.maxWidth, gap),
+          const SizedBox(height: gap),
+          _actionRow(actions.sublist(half), box.maxWidth, gap),
+        ]);
+      }
+      return _actionRow(actions, box.maxWidth, gap);
     });
+  }
+
+  /// 칸들을 한 줄에 세운다. <b>남는 자리를 똑같이 나눈다</b> — 그래야 칸마다 여백이 같다(#535).
+  ///
+  /// 그래도 모자라면 같은 비율로 함께 줄이고, 글자는 `FittedBox` 가 줄여서 넣는다. 자르지
+  /// 않는다 — 무엇을 누르는지 알 수 없게 되는 것보다 작은 쪽이 낫다.
+  Widget _actionRow(List<({double width, Widget child})> row, double maxWidth, double gap) {
+    final room = maxWidth - gap * (row.length - 1);
+    final natural = row.fold(0.0, (sum, a) => sum + a.width);
+    final slack = room - natural;
+    double widthOf(int i) =>
+        slack >= 0 ? row[i].width + slack / row.length : row[i].width * room / natural;
+
+    return Row(children: [
+      for (var i = 0; i < row.length; i++) ...[
+        if (i > 0) SizedBox(width: gap),
+        SizedBox(width: widthOf(i), child: row[i].child),
+      ],
+    ]);
   }
 
   /// 버튼 이름이 [style] 로 그려질 때의 폭. 글자 수로 어림하면 "전화" 와 "산책" 이 같은 폭이
@@ -1296,16 +1330,95 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  /// 산책로의 선을 지도에 얹는다 (#291). 선은 카탈로그에 없어 시트를 열 때 따로 받는다.
+  /// 산책로가 **거쳐 가는 곳** — 이슈 #619.
+  ///
+  /// 선이 있으면 아무것도 안 그린다. 지도에 그려진 길이 이미 어디로 가는지 말하고, 그 아래
+  /// 같은 말을 이름으로 또 적으면 시트만 길어진다.
+  ///
+  /// <h3>한 줄로 흘리지 않는다</h3>
+  /// 예전에 카드 요약에 `보신각 → 보성사 터 →…` 꼴로 넣었다가 화면이 말줄임으로 잘라
+  /// **"화살표가 이어지다 끊긴 문장"** 이 됐다(사장님 신고로 뺐다). 여기서는 조각마다 한
+  /// 칸씩 준다 — 이름이 길면 그 칸만 줄바꿈되고, 뜻이 깨지지 않는다.
+  ///
+  /// <h3>왜 "시작 지점만" 을 굳이 적나</h3>
+  /// 카드가 `4.2km · 약 1시간 30분` 이라고 말해 놓고 지도에 점 하나만 찍으면, 사용자는
+  /// 앱이 고장 난 줄 안다. 선이 없다는 것은 **숨길 일이 아니라 말할 일**이다.
+  Widget _trailStops(Future<TrailRoute?> pending, PetCategory cat) {
+    return FutureBuilder<TrailRoute?>(
+      future: pending,
+      builder: (context, snap) {
+        final route = snap.data;
+        // 아직 받는 중이거나, 못 받았거나, 선이 있으면 자리를 안 쓴다. 로딩 자리를 비워
+        // 두는 것은 의도다 — 시트가 열리면서 칸이 늘었다 줄었다 하면 누르던 손이 미끄러진다.
+        if (route == null || route.hasLine || route.waypoints.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const SizedBox(height: 14),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.info_outline_rounded, size: 16, color: T.textMuted),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text('지도에는 시작 지점만 표시돼요 — 이 길은 공개된 경로 정보가 이름뿐이에요',
+                  key: const Key('trail-no-line-note'),
+                  style: const TextStyle(fontSize: 12, height: 1.45, color: T.textMuted)),
+            ),
+          ]),
+          const SizedBox(height: 14),
+          Text('거쳐 가는 곳 ${route.waypoints.length}곳',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 9),
+          Wrap(
+            key: const Key('trail-waypoints'),
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (var i = 0; i < route.waypoints.length; i++)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: T.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: T.cardBorder),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('${i + 1}',
+                        style: TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w800, color: cat.color)),
+                    const SizedBox(width: 6),
+                    // 이름 하나가 화면보다 길 수 있다 — 그 칸 안에서 줄을 바꾼다.
+                    Flexible(
+                      child: Text(route.waypoints[i],
+                          style: const TextStyle(fontSize: 12.5, color: T.textSecondary)),
+                    ),
+                  ]),
+                ),
+            ],
+          ),
+        ]);
+      },
+    );
+  }
+
+  /// 산책로를 지도에서 보여 준다 (#291 · #619). 선은 카탈로그에 없어 시트를 열 때 따로 받는다.
+  ///
+  /// **선이 없는 코스도 여기로 온다.** 동네 길은 원본에 좌표가 없어 그릴 선이 없는데,
+  /// 예전에는 그때 아무 일도 안 났다 — 사용자가 눌러도 화면이 그대로였다(2026-09-17 신고).
+  /// 지금은 카메라를 그 시작 지점으로 옮긴다. 거쳐 가는 곳 이름은 시트가 따로 보여 준다.
   ///
   /// 못 받으면 아무것도 안 그린다 — 산책로 항목은 이미 시작점 마커로 화면에 있고 선은
-  /// 덧그림이다. 카메라는 선이 보이게 옮긴다. 지도가 없는 빌드(`_mapCtrl == null`)는
-  /// 받지도 않는다.
+  /// 덧그림이다. 지도가 없는 빌드(`_mapCtrl == null`)는 받지도 않는다.
   Future<void> _drawTrail(PetPlace p) async {
     final c = _mapCtrl;
     if (c == null) return;
     final route = await _trails.fetch(p.trailCourseId);
-    if (route == null || !mounted || _mapCtrl == null) return;
+    if (!mounted || _mapCtrl == null) return;
+    if (route == null || !route.hasLine) {
+      // 그릴 선이 없다. 그래도 **어디인지**는 보여 준다 — 시작 지점으로 옮긴다.
+      await c.updateCamera(
+          NCameraUpdate.withParams(target: NLatLng(p.lat, p.lng), zoom: _kTrailPointZoom));
+      return;
+    }
     final coords = [for (final q in route.lngLat) NLatLng(q[1], q[0])];
     await c.addOverlay(NPolylineOverlay(
       id: 'trail-${p.trailCourseId}',
@@ -1329,6 +1442,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
   void _showPlaceSheet(PetPlace p) {
     final cat = p.petCategory;
     if (p.isTrail && view == 'map') _drawTrail(p);
+    // **빌더 안에서 만들면 안 된다.** 시트가 다시 그려질 때마다 새 Future 가 생겨
+    // FutureBuilder 가 로딩으로 돌아가고, 목록이 깜빡인다. 받아 둔 것은 저장소가
+    // 기억하므로(`_memory`) 여기서 한 번 부르는 값이 곧 캐시다.
+    final Future<TrailRoute?>? stops = p.isTrail ? _trails.fetch(p.trailCourseId) : null;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1387,6 +1504,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               Expanded(child: Text(p.summary, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary))),
             ]),
           ],
+          if (stops != null) _trailStops(stops, cat),
           if (p.addr.isNotEmpty) ...[
             const SizedBox(height: 14),
             Row(children: [

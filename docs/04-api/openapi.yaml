@@ -5003,25 +5003,47 @@ components:
 
     TrailRoute:
       type: object
-      description: 산책로 코스 하나의 선 (이슈 #291). `GET /api/places/trails/{courseId}/route` 의 본문.
-      required: [courseId, name, lengthM, pointCount, points]
+      description: |
+        산책로 코스 하나가 **어디로 가는지** (이슈 #291 · #619).
+        `GET /api/places/trails/{courseId}/route` 의 본문입니다.
+
+        출처에 따라 **답할 수 있는 것이 다릅니다.** 둘 중 하나는 늘 찹니다.
+
+        | 출처 | `points` | `waypoints` |
+        |:---|:---|:---|
+        | 두루누비 (`T_CRS_…`) | GPX 선 300점 | 빈 목록 |
+        | 동네 길 (`lt…`) | 빈 배열 | 거쳐 가는 곳 이름 |
+
+        동네 길은 원본(전국길관광정보표준데이터)에 **좌표가 없어** 그릴 선이 없습니다.
+        이름을 좌표로 바꿔 이으면 실제로 걷는 길이 아닌 직선이 되므로 **바꾸지 않습니다**.
+      required: [courseId, name, lengthM, pointCount, points, waypoints]
       properties:
-        courseId: { type: string, example: "T_ROUTE_1", description: 두루누비 코스 번호(`crsIdx`) }
+        courseId: { type: string, example: "T_ROUTE_1", description: 코스 번호 — 두루누비는 `crsIdx`, 동네 길은 `lt` 로 시작합니다 }
         name: { type: string, example: "서울숲 둘레길" }
         lengthM:
           type: integer
           example: 2600
-          description: 원본 GPX 의 길이(m). 점을 줄이기 **전**에 잰 값입니다.
-        pointCount: { type: integer, example: 180, description: "`points` 의 길이. 300 이하입니다." }
+          description: 길이(m). 두루누비는 원본 GPX 를 점 줄이기 **전**에 잰 값이고, 동네 길은 원본이 적어 둔 총길이입니다.
+        pointCount: { type: integer, example: 180, description: "`points` 의 길이. 300 이하이고, 선이 없으면 0 입니다." }
         points:
           type: array
-          description: "`[[경도, 위도], …]` — `Walk.path` 와 같은 순서입니다."
+          description: "`[[경도, 위도], …]` — `Walk.path` 와 같은 순서입니다. 선이 없으면 빈 배열입니다(`null` 이 아닙니다)."
           items:
             type: array
             items: { type: number, format: double }
             minItems: 2
             maxItems: 2
           example: [[127.0374, 37.5445], [127.0379, 37.5449]]
+        waypoints:
+          type: array
+          description: |
+            거쳐 가는 곳의 **이름** — 좌표가 아닙니다. 선이 있으면 빈 목록입니다.
+
+            원본은 `보신각 → 보성사 터 → 탑골공원` 꼴의 글 한 덩어리이고 구분자가 일곱 가지라,
+            서버가 잘라서 조각으로 줍니다. 화면은 한 줄로 흘리지 말고 **목록으로** 그려야 합니다 —
+            한 줄로 흘리면 말줄임에 걸려 반쪽짜리 이름이 남습니다.
+          items: { type: string }
+          example: ["보신각", "보성사 터", "탑골공원"]
 
     PlaceDetail:
       allOf:
