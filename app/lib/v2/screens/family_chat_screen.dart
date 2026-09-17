@@ -1307,9 +1307,18 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   }
 
   Widget _inputBar(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    // 키보드가 올라오면 Scaffold(resizeToAvoidBottomInset 기본값 true)가 몸체를 이미 그만큼 밀어
+    // 올린다. 여기서 viewInsets 를 아래 패딩으로 또 더하면 키보드 높이만큼 **두 번** 밀려 입력창이
+    // 키보드 위로 떠오른다 — 키보드 300 에 사이 316 이었다(#671).
+    // 이 context 는 Scaffold 의 조상(화면 자신의 build context)이라 Scaffold 가 몸체용 MediaQuery
+    // 에서 지운 아래 인셋이 여기서는 안 지워진 채 보인다. 그래서 **값이 아니라 여부만** 쓴다.
+    // 위 `build` 의 `SafeArea(bottom: false)` 와 이 줄은 한 짝이다 — 아래 안전영역을 SafeArea 에
+    // 안 맡기고 여기서 직접 주므로, 한쪽만 고치면 키보드를 내렸을 때 홈 인디케이터를 침범한다.
+    // 첫 커밋 1b2db15 의 모양이고 de64523(PR #131)이 지워 회귀했다. 다시 지우지 말 것.
+    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 6, 16, bottom + 14),
+      padding: EdgeInsets.fromLTRB(16, 6, 16, (keyboardOpen ? 0 : safeBottom) + 14),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         if (_replyingTo != null) _replyBar(_replyingTo!),
         Row(children: [
