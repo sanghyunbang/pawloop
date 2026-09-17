@@ -71,12 +71,10 @@ class PetPlace {
   /// 동네 길인가 — 전국길관광정보표준데이터에서 온 것(#346). `contentId` 가 `trail:lt…` 다.
   bool get isLocalTrail => contentId.startsWith('trail:lt');
 
-  /// **선을 받을 수 있는가.** 두루누비만 GPX 가 있다.
-  ///
-  /// 동네 길의 원본에는 좌표가 아예 없고 경로가 `보신각 → 보성사 터` 꼴의 **글**이라
-  /// 그릴 선이 없다. 이걸 안 가르면 "지도에서 보기" 를 눌렀을 때 서버가 404 를 준다 —
-  /// 2026-09-08 에뮬레이터에서 실제로 그랬다.
-  bool get hasTrailRoute => isTrail && !isLocalTrail;
+  // `hasTrailRoute` 는 없앴다 (#619). "두루누비만 선이 있다" 는 맞지만, 그걸로 **묻는 것
+  // 자체를** 막고 있었다. 동네 길은 404 라서 안 물었고, 그래서 사용자가 눌러도 아무 일도
+  // 안 났다 — 2026-09-17 신고. 지금은 산책로면 전부 묻고(`isTrail`), 선이 있는지는
+  // 받아 보고 안다(`TrailRoute.hasLine`). 선이 없으면 거쳐 가는 곳 이름으로 답이 온다.
 
   /// 산책로 선을 받을 때 쓰는 코스 번호 — `contentId` 의 `trail:` 뒤.
   String get trailCourseId =>

@@ -5,7 +5,14 @@ import 'package:http/http.dart' as http;
 import '../../core/config/env.dart';
 import '../../core/net/net_timeouts.dart';
 
-/// 산책로 코스 하나의 선 — 계약의 `TrailRoute` (이슈 #291).
+/// 산책로 코스 하나가 **어디로 가는지** — 계약의 `TrailRoute` (이슈 #291 · #619).
+///
+/// 출처에 따라 답이 둘 중 하나다. **둘 다 비는 일은 없다** — 서버가 줄 것이 없으면 404 다.
+///
+/// | 출처 | [lngLat] | [waypoints] |
+/// |:---|:---|:---|
+/// | 두루누비 | GPX 선 300점 | 빈 목록 |
+/// | 동네 길 | 빈 목록 | 거쳐 가는 곳 이름 |
 ///
 /// 좌표는 **`[경도, 위도]`** 다 — 계약의 `Walk.path` 와 같은 순서이고, 산책 경로 그림
 /// (`RouteArt.lngLat`)도 같은 순서를 쓴다. 지도에 그릴 때 `NLatLng(lat, lng)` 로 뒤집는다.
@@ -15,12 +22,26 @@ class TrailRoute {
   final int lengthM;
   final List<List<double>> lngLat;
 
+  /// 거쳐 가는 곳의 **이름** — 좌표가 아니다 (#619).
+  ///
+  /// 동네 길의 원본에는 선 좌표가 없다. 이 이름들을 좌표로 바꿔 이으면 실제로 걷는 길이
+  /// 아닌 직선이 되고, 사용자는 그 선을 믿고 걷는다 — 그래서 **바꾸지 않는다**.
+  /// 자르는 일은 서버가 한다(구분자가 일곱 가지다).
+  final List<String> waypoints;
+
   const TrailRoute({
     required this.courseId,
     required this.name,
     required this.lengthM,
     required this.lngLat,
+    this.waypoints = const [],
   });
+
+  /// 지도에 그릴 선이 있나. 두 점 미만은 선이 아니다.
+  bool get hasLine => lngLat.length >= 2;
+
+  /// 화면에 보여 줄 것이 하나라도 있나.
+  bool get isEmpty => !hasLine && waypoints.isEmpty;
 
   factory TrailRoute.fromJson(Map<String, dynamic> j) {
     final raw = j['points'];
@@ -34,11 +55,20 @@ class TrailRoute {
         }
       }
     }
+    final stops = <String>[];
+    final rawStops = j['waypoints'];
+    if (rawStops is List) {
+      for (final s in rawStops) {
+        final text = '${s ?? ''}'.trim();
+        if (text.isNotEmpty) stops.add(text);
+      }
+    }
     return TrailRoute(
       courseId: '${j['courseId'] ?? ''}',
       name: '${j['name'] ?? ''}',
       lengthM: (j['lengthM'] is num) ? (j['lengthM'] as num).round() : 0,
       lngLat: points,
+      waypoints: stops,
     );
   }
 
@@ -72,8 +102,9 @@ class TrailRouteRepository {
   /// 카드 위의 덧그림이다. 그 하나 때문에 실패 카드를 띄우면 카드의 나머지(이름·거리·시간)를
   /// 읽던 사람의 흐름이 끊긴다.
   ///
-  /// 다만 `null` 이 <b>세 가지를 뭉친다</b> — 없는 코스(404) · 서버가 못 줌(5xx) · 선이 두 점
-  /// 미만. 셋을 가를 필요가 생기면(예: "이 코스는 선이 없어요" 를 말해야 할 때) 그때
+  /// 다만 `null` 이 <b>세 가지를 뭉친다</b> — 없는 코스(404) · 서버가 못 줌(5xx) · 줄 것이
+  /// 아무것도 없음. **"선이 없다" 는 더 이상 여기 없다**(#619) — 그건 `null` 이 아니라
+  /// [TrailRoute.hasLine] 이 거짓인 답으로 온다. 남은 셋을 가를 필요가 생기면 그때
   /// `PlaceFailure` 와 같은 모양을 여기도 둔다.
   Future<TrailRoute?> fetch(String courseId) async {
     final cached = _memory[courseId];
@@ -87,7 +118,9 @@ class TrailRouteRepository {
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! Map) return null;
       final route = TrailRoute.fromJson(decoded.cast<String, dynamic>());
-      if (route.lngLat.length < 2) return null;
+      // 선이 없어도 경유지가 있으면 보여 줄 것이 있다(#619). 여기서 선만 보고 버리면
+      // 동네 길은 다시 "눌러도 아무 일도 안 나는" 상태로 돌아간다.
+      if (route.isEmpty) return null;
       _memory[courseId] = route;
       return route;
     } catch (_) {

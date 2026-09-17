@@ -65,7 +65,7 @@ void main() {
     expect(calls, 1);
   });
 
-  test('404 · 깨진 본문 · 점이 둘 미만이면 null 이다 — 선은 덧그림이라 화면이 죽지 않는다', () async {
+  test('404 · 깨진 본문 · 줄 것이 하나도 없으면 null 이다 — 화면이 죽지 않는다', () async {
     expect(await TrailRouteRepository(client: MockClient((_) async => http.Response('', 404)), baseUrl: base)
         .fetch('NOPE'), isNull);
     expect(await TrailRouteRepository(client: MockClient((_) async => ok('not json')), baseUrl: base)
@@ -73,6 +73,44 @@ void main() {
     expect(await TrailRouteRepository(
         client: MockClient((_) async => ok('{"courseId":"X","name":"n","lengthM":1,"pointCount":1,"points":[[127.0,37.0]]}')),
         baseUrl: base).fetch('X'), isNull);
+  });
+
+  // ─────────────────────── 선이 없는 코스 (#619) ───────────────────────
+
+  const stopsBody = '{"courseId":"lt9766bc9af8","name":"3.1운동길B","lengthM":4200,'
+      '"pointCount":0,"points":[],"waypoints":["보신각","보성사 터","탑골공원"]}';
+
+  test('선이 없어도 경유지가 있으면 답을 든다 — 예전에는 여기서 버려 아무 일도 안 났다', () async {
+    final repo = TrailRouteRepository(
+        client: MockClient((_) async => ok(stopsBody)), baseUrl: base);
+
+    final route = await repo.fetch('lt9766bc9af8');
+
+    expect(route, isNotNull, reason: '선만 보고 버리면 동네 길이 다시 벙어리가 된다');
+    expect(route!.hasLine, isFalse);
+    expect(route.lngLat, isEmpty);
+    expect(route.waypoints, ['보신각', '보성사 터', '탑골공원']);
+    expect(route.lengthM, 4200);
+  });
+
+  test('선이 있는 코스는 waypoints 가 비어도 그대로 든다', () async {
+    final repo = TrailRouteRepository(
+        client: MockClient((_) async => ok(contractBody)), baseUrl: base);
+
+    final route = await repo.fetch('T_ROUTE_1');
+
+    expect(route!.hasLine, isTrue);
+    expect(route.waypoints, isEmpty, reason: '옛 본문에 이 칸이 없어도 빈 목록이어야 한다');
+  });
+
+  test('경유지가 빈 문자열뿐이면 셈에 안 넣는다 — 빈 칸이 시트에 선다', () async {
+    final repo = TrailRouteRepository(
+        client: MockClient((_) async => ok(
+            '{"courseId":"ltX","name":"n","lengthM":1,"pointCount":0,"points":[],'
+            '"waypoints":["", "  ", null]}')),
+        baseUrl: base);
+
+    expect(await repo.fetch('ltX'), isNull, reason: '줄 것이 없으면 null 이다');
   });
 
   test('네트워크 예외도 null 이다', () async {

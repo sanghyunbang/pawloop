@@ -2,6 +2,8 @@
 //
 // 리스트 뷰만 세운다(지도 SDK 는 테스트에 없다). 전화·길찾기는 `ExternalMaps.launcher` 를
 // 갈아 끼워 어느 URI 를 열었는지 본다.
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +12,7 @@ import 'package:http/testing.dart';
 
 import 'package:heat_trip_flutter/v2/data/external_maps.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
+import 'package:heat_trip_flutter/v2/data/trail_route_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/explore_screen.dart';
 
 PetPlace _place(
@@ -34,6 +37,28 @@ PetPlace _place(
       lng: 127.0374,
       distM: distM,
     );
+
+/// 산책로 경로를 서버 대신 답한다 — 계약의 `TrailRoute` 모양 그대로다.
+///
+/// 목의 키를 앱이 읽는 키로 만들면 앱이 틀린 키를 읽고 있을 때 테스트가 그 버그에
+/// 동의한다(#82). 그래서 `points`·`waypoints` 를 계약에서 가져왔다.
+class _FakeTrails extends TrailRouteRepository {
+  _FakeTrails()
+      : super(
+          client: MockClient((req) async {
+            // 동네 길(lt…)은 선이 없고 경유지만, 두루누비는 선만 — 서버가 그렇게 답한다.
+            final body = req.url.path.contains('/trails/lt')
+                ? '{"courseId":"lt9766bc9af8","name":"3.1운동길B","lengthM":4200,"pointCount":0,'
+                    '"points":[],"waypoints":["보신각","보성사 터","탑골공원"]}'
+                : '{"courseId":"trail:41","name":"DMZ 평화의 길 4-1코스","lengthM":17553,'
+                    '"pointCount":3,"points":[[126.82,37.59],[126.83,37.60],[126.84,37.61]],'
+                    '"waypoints":[]}';
+            return http.Response.bytes(utf8.encode(body), 200,
+                headers: {'content-type': 'application/json'});
+          }),
+          baseUrl: 'http://unused',
+        );
+}
 
 class _FakeRepo extends PetPlacesRepository {
   _FakeRepo()
@@ -148,17 +173,20 @@ void main() {
     expect(find.textContaining('밖이에요'), findsNothing);
   });
 
-  testWidgets('동네 길 시트에는 "지도에서 보기" 가 없다 — 그릴 선이 없다', (tester) async {
-    await _pumpWide(tester, ExploreScreen(repository: _FakeRepo()));
+  // 이 자리에는 '동네 길 시트에는 "지도에서 보기" 가 없다' 는 검사가 있었다. 그 판단의
+  // 근거("그릴 선이 없다")는 맞았지만, 결과는 **누를 것이 하나도 없는 시트**였다 —
+  // 2026-09-17 에 사장님이 "저렇게 해놓으면 어쩌라는 거지" 라고 신고했다(#619).
+  // 선이 없어도 할 일이 있다: 지도를 시작 지점으로 옮기고, 거쳐 가는 곳 이름을 보여 준다.
+  testWidgets('동네 길 시트에도 "지도에서 보기" 가 있다 — 선이 없어도 어디인지는 보여 준다 (#619)', (tester) async {
+    await _pumpWide(tester,
+        ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrails()));
     await tester.tap(_chip('산책로'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('3.1운동길B'));
     await tester.pumpAndSettle();
 
-    // 원본(전국길관광정보표준데이터)에는 좌표가 없고 경로가 글이다. 눌러도 서버가
-    // 404 를 준다 — 2026-09-08 에뮬레이터에서 실제로 그랬다.
-    expect(find.text('지도에서 보기'), findsNothing);
+    expect(find.text('지도에서 보기'), findsOneWidget);
     expect(find.text('전화'), findsOneWidget, reason: '관리기관 전화번호는 있다');
     expect(find.text('여기서 산책 시작'), findsOneWidget);
     expect(find.text('길찾기'), findsOneWidget);
@@ -166,8 +194,30 @@ void main() {
         reason: '두루누비라고 적으면 출처가 거짓이다');
   });
 
-  testWidgets('두루누비 시트에는 그대로 "지도에서 보기" 가 있다', (tester) async {
-    await _pumpWide(tester, ExploreScreen(repository: _FakeRepo()));
+  testWidgets('동네 길 시트가 거쳐 가는 곳을 보여 주고, 선이 없다는 것을 말한다 (#619)', (tester) async {
+    await _pumpWide(tester,
+        ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrails()));
+    await tester.tap(_chip('산책로'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('3.1운동길B'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('trail-no-line-note')), findsOneWidget,
+        reason: '4.2km 라고 적어 놓고 점 하나만 찍으면 고장 난 줄 안다');
+    expect(find.text('거쳐 가는 곳 3곳'), findsOneWidget);
+    expect(find.text('보신각'), findsOneWidget);
+    expect(find.text('보성사 터'), findsOneWidget);
+    expect(find.text('탑골공원'), findsOneWidget);
+
+    // 한 줄로 흘리면 말줄임에 걸려 반쪽 이름이 남는다 — 조각마다 칸을 준다.
+    final wrap = tester.widget<Wrap>(find.byKey(const Key('trail-waypoints')));
+    expect(wrap.children, hasLength(3));
+  });
+
+  testWidgets('두루누비 시트에는 그대로 "지도에서 보기" 가 있고, 경유지 칸은 안 쓴다', (tester) async {
+    await _pumpWide(tester,
+        ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrails()));
     await tester.tap(_chip('산책로'));
     await tester.pumpAndSettle();
 
@@ -176,6 +226,9 @@ void main() {
 
     expect(find.text('지도에서 보기'), findsOneWidget);
     expect(find.text('걷기여행길 · 두루누비(한국관광공사)'), findsOneWidget);
+    // 지도에 그려진 선이 이미 어디로 가는지 말한다 — 같은 말을 이름으로 또 적지 않는다.
+    expect(find.byKey(const Key('trail-waypoints')), findsNothing);
+    expect(find.byKey(const Key('trail-no-line-note')), findsNothing);
   });
 
   testWidgets('버튼이 넷이어도 393dp 에서 안 넘친다 — 자르지 않고 줄여 넣는다', (tester) async {
@@ -222,7 +275,12 @@ void main() {
       return (left: icon.left - outer.left, right: outer.right - text.right);
     }
 
-    final pads = {for (final l in ['여기서 산책 시작', '전화', '길찾기']) l: padding(l)};
+    // 동네 길은 버튼이 넷이라 393dp 에서 **두 줄**이 된다(#619). 여백을 견주는 것은
+    // 같은 줄에 선 칸끼리다 — 줄이 다르면 남는 자리가 달라 값도 다른 게 맞다.
+    double rowOf(String label) => tester.getRect(find.byKey(Key('place-action-$label'))).top;
+
+    const labels = ['여기서 산책 시작', '전화', '길찾기', '지도에서 보기'];
+    final pads = {for (final l in labels) l: padding(l)};
 
     for (final e in pads.entries) {
       expect(e.value.left, greaterThan(4),
@@ -230,11 +288,20 @@ void main() {
       expect(e.value.left, closeTo(e.value.right, 1.0),
           reason: '${e.key} 의 좌우가 다르다');
     }
-    final first = pads['여기서 산책 시작']!.left;
-    for (final e in pads.entries) {
-      expect(e.value.left, closeTo(first, 1.0),
-          reason: '한 줄에 선 칸들의 여백이 서로 다르면 한 칸만 꽉 차 보인다 — '
-              '지금 ${pads.map((k, v) => MapEntry(k, v.left.toStringAsFixed(1)))}');
+
+    final rows = <double, List<String>>{};
+    for (final l in labels) {
+      rows.putIfAbsent(rowOf(l), () => []).add(l);
+    }
+    expect(rows, hasLength(2), reason: '넷을 한 줄에 욱여넣으면 글자가 모서리에 닿는다 (#535)');
+
+    for (final row in rows.values) {
+      final first = pads[row.first]!.left;
+      for (final l in row) {
+        expect(pads[l]!.left, closeTo(first, 1.0),
+            reason: '한 줄에 선 칸들의 여백이 서로 다르면 한 칸만 꽉 차 보인다 — '
+                '지금 ${{for (final k in row) k: pads[k]!.left.toStringAsFixed(1)}}');
+      }
     }
   });
 

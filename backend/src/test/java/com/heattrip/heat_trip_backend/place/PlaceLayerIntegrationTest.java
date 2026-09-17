@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.heattrip.heat_trip_backend.place.dto.PetInfoDto;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
+import com.heattrip.heat_trip_backend.place.dto.TrailRouteDto;
 import com.heattrip.heat_trip_backend.place.entity.PlaceCatalog;
 import com.heattrip.heat_trip_backend.place.layer.DurunubiApiClient;
 import com.heattrip.heat_trip_backend.place.layer.GpxFetcher;
@@ -18,6 +19,7 @@ import com.heattrip.heat_trip_backend.place.layer.LayerCatalogProperties;
 import com.heattrip.heat_trip_backend.place.layer.LayerCatalogService;
 import com.heattrip.heat_trip_backend.place.layer.LocalDataApiClient;
 import com.heattrip.heat_trip_backend.place.layer.LocalDataBiz;
+import com.heattrip.heat_trip_backend.place.layer.LocalTrailAsset;
 import com.heattrip.heat_trip_backend.place.repository.PlaceCatalogRepository;
 import com.heattrip.heat_trip_backend.place.service.KtoApiClient;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
@@ -274,7 +276,8 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
      * <p>이 클래스가 재는 것은 <b>API 로 오는 레이어</b>(인허가·두루누비)의 적재와 이어
      * 붙이기다. 저장소에 커밋된 실자산 1,302개가 함께 담기면 여기 숫자가 전부 바뀌고,
      * 자산을 새로 만드는 날마다 이 테스트가 깨진다 — 그건 이 테스트가 지키는 것이 아니다.
-     * 자산 자체는 {@code LocalTrailAssetTest} 가 따로 잰다.
+     * 자산 자체는 {@code LocalTrailAssetTest} 와
+     * {@code LocalTrailAssetRouteTest} 가 실파일로 따로 잰다.
      */
     @MockitoBean
     private LocalTrailAsset localTrails;
@@ -470,6 +473,43 @@ class PlaceLayerIntegrationTest extends AbstractMySqlIntegrationTest {
 
         mockMvc.perform(get("/api/places/trails/NOPE/route"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("선이 있는 코스도 waypoints 칸을 비워서 내보낸다 — 앱이 칸 없는 본문을 안 만나게")
+    void aLineRouteStillCarriesTheWaypointsField() throws Exception {
+        layers.refreshDurunubi();
+
+        mockMvc.perform(get("/api/places/trails/T_ROUTE_1/route"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.waypoints").isArray())
+                .andExpect(jsonPath("$.waypoints.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("동네 길을 누르면 거쳐 가는 곳으로 답한다 — 예전에는 404 라 아무 일도 안 났다 (#619)")
+    void aLocalTrailAnswersWithItsStops() throws Exception {
+        // 목록에 실제로 나가는 항목에서 코스 번호를 뽑는다. 여기서 번호를 손으로 적으면
+        // contentId 규칙이 바뀌어도 이 검사는 계속 초록이다 — 그게 이 버그의 모양이었다.
+        // 여기서 재는 것은 **배선**이다 — 표에 없을 때 자산까지 물어보는가, 그리고 그 답이
+        // 계약대로 나가는가. 자산 자체(1,302개를 실제로 자르는 일)는 위 javadoc 의 이유로
+        // 여기서 목이고, LocalTrailAssetRouteTest 가 실파일로 잰다.
+        when(localTrails.route("lt0f1e2d3c"))
+                .thenReturn(Optional.of(TrailRouteDto.ofStops(
+                        "lt0f1e2d3c", "도봉 역사문화 길", 4200,
+                        List.of("보신각", "보성사 터", "탑골공원"))));
+
+        mockMvc.perform(get("/api/places/trails/lt0f1e2d3c/route"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.courseId").value("lt0f1e2d3c"))
+                .andExpect(jsonPath("$.name").value("도봉 역사문화 길"))
+                .andExpect(jsonPath("$.lengthM").value(4200))
+                .andExpect(jsonPath("$.pointCount").value(0))
+                .andExpect(jsonPath("$.points").isArray())
+                .andExpect(jsonPath("$.points.length()").value(0))
+                .andExpect(jsonPath("$.waypoints.length()").value(3))
+                .andExpect(jsonPath("$.waypoints[0]").value("보신각"))
+                .andExpect(jsonPath("$.waypoints[2]").value("탑골공원"));
     }
 
     // ─────────────────────────── 실패 ───────────────────────────
