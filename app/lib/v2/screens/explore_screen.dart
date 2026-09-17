@@ -1,12 +1,11 @@
 import 'dart:async';
 
-import '../data/external_maps.dart';
 import '../data/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
 import '../widgets/marker_icons.dart';
-import '../widgets/vet_badge.dart';
+import '../widgets/place_sheet.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import '../data/community_repository.dart';
 import '../theme/app_tokens.dart';
@@ -811,153 +810,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  /// 시트의 주 동작 — 전화 · 지도에서 보기(산책로) · 길찾기. 글쓰기는 그 아래 두 번째다(#328).
-  ///
-  /// ## 폭은 **글자가 차지할 만큼** 나눈다
-  ///
-  /// 예전에는 셋이 `Expanded` 로 폭을 똑같이 나눴다. 그러면 `여기서 산책 시작` 은 좌우 여백이
-  /// 0 이 되어 글자가 모서리에 닿고, `전화` 는 양쪽이 텅 빈다 — 같은 줄인데 한 칸만 꽉 차
-  /// 보인다(#535). 그래서 **남는 자리만** 똑같이 나눠 준다. 여백이 세 칸 모두 같아진다.
-  Widget _sheetActions(BuildContext sheetCtx, PetPlace p) {
-    final labelStyle = DefaultTextStyle.of(context)
-        .style
-        .merge(const TextStyle(fontSize: 14, fontWeight: FontWeight.w800));
-
-    ({double width, Widget child}) action(
-            IconData icon, String label, Future<void> Function() onTap, {bool primary = false}) =>
-        (
-      // 아이콘(16) + 사이(6) + 글자. 여기에 여백을 더한 것이 이 칸의 폭이다.
-      width: 22 + _labelWidth(label, labelStyle),
-      child: GestureDetector(
-        key: Key('place-action-$label'),
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: primary
-                ? const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [T.warmStart, T.warmEnd],
-                  )
-                : null,
-            color: primary ? null : T.surface,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          // 넷이 설 때가 있다 — 동네 길은 관리기관 전화번호가 있어서 "여기서 산책 시작 ·
-          // 전화 · 길찾기" 셋에 하나가 더 붙는 화면이 나온다. 그때는 자연폭의 합이 이미
-          // 줄보다 넓어 여백이 없다. 말줄임으로 자르면 무엇을 누르는지 알 수 없어
-          // **줄여서 넣는다** — 버튼 이름은 짧고, 안 잘리는 쪽이 낫다.
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 16, color: primary ? Colors.white : T.textSecondary),
-              const SizedBox(width: 6),
-              Text(label,
-                  style: labelStyle.copyWith(color: primary ? Colors.white : T.textSecondary)),
-            ]),
-          ),
-        ),
-      )
-    );
-    final messenger = ScaffoldMessenger.of(context);
-    final actions = <({double width, Widget child})>[
-      // 발견에서 기록으로 잇는 자리 (#338). 걸을 만한 곳에만 둔다 — 병원·펫샵·숙박에
-      // "여기서 산책 시작" 은 뜻이 없다.
-      if (kWalkStartCategories.contains(p.categoryKey))
-        action(Icons.directions_walk_rounded, '여기서 산책 시작', () async {
-          Navigator.pop(sheetCtx);
-          await startWalk(
-            context,
-            place: WalkPlaceRef(title: p.title, source: p.source, contentId: p.contentId),
-            // 홈 카드와 **같게** 군다 (#623). 두 곳이 다르면 같은 이름의 버튼이 다른 일을
-            // 하게 되고, 그건 버튼 이름이 거짓이 되는 것과 같다.
-            destination: WalkDestination(lat: p.lat, lng: p.lng, distanceM: p.distM),
-          );
-        }, primary: true),
-      if (p.tel.isNotEmpty)
-        action(Icons.call_rounded, '전화', () async {
-          if (!await ExternalMaps.call(p.tel)) {
-            messenger.showSnackBar(const SnackBar(content: Text('전화 앱을 열 수 없어요')));
-          }
-        }, primary: true),
-      // 산책로면 전부 (#619). 예전에는 선이 있는 두루누비만 이 버튼을 달았는데, 그러면
-      // 동네 길은 **누를 것이 하나도 없는 시트**가 된다. 선이 없어도 할 일이 있다 —
-      // 지도를 시작 지점으로 옮기는 것이다.
-      if (p.isTrail)
-        action(Icons.map_rounded, '지도에서 보기', () async {
-          Navigator.pop(sheetCtx);
-          if (view != 'map') {
-            // 지도 뷰가 만들어지면 onMapReady 가 그린다.
-            setState(() {
-              view = 'map';
-              _pendingTrail = p;
-            });
-          } else {
-            await _drawTrail(p);
-          }
-        }, primary: true),
-      action(Icons.directions_walk_rounded, '길찾기', () async {
-        if (!await ExternalMaps.directions(lat: p.lat, lng: p.lng, name: p.title)) {
-          messenger.showSnackBar(const SnackBar(content: Text('지도 앱을 열 수 없어요')));
-        }
-      }, primary: p.tel.isEmpty && !p.isTrail),
-    ];
-
-    const gap = 8.0;
-    return LayoutBuilder(builder: (context, box) {
-      final natural = actions.fold(0.0, (sum, a) => sum + a.width);
-      final oneRow = box.maxWidth - gap * (actions.length - 1);
-
-      // 한 줄에 다 못 서면 **두 줄로 나눈다** (#619 에서 동네 길에 버튼이 넷이 되며 생긴 자리).
-      //
-      // 예전에는 좁으면 같은 비율로 함께 줄였다. 그러면 393dp 에서 자연폭 합이 줄보다 넓어
-      // 여백이 0 이 되고, "여기서 산책 시작" 의 글자가 칸 모서리에 닿는다 — #535 가 고친
-      // 바로 그 현상이 넷째 버튼과 함께 돌아온 것이다. 줄을 하나 더 쓰는 쪽이 낫다.
-      if (actions.length >= 4 && natural > oneRow) {
-        final half = (actions.length / 2).ceil();
-        return Column(children: [
-          _actionRow(actions.sublist(0, half), box.maxWidth, gap),
-          const SizedBox(height: gap),
-          _actionRow(actions.sublist(half), box.maxWidth, gap),
-        ]);
-      }
-      return _actionRow(actions, box.maxWidth, gap);
-    });
-  }
-
-  /// 칸들을 한 줄에 세운다. <b>남는 자리를 똑같이 나눈다</b> — 그래야 칸마다 여백이 같다(#535).
-  ///
-  /// 그래도 모자라면 같은 비율로 함께 줄이고, 글자는 `FittedBox` 가 줄여서 넣는다. 자르지
-  /// 않는다 — 무엇을 누르는지 알 수 없게 되는 것보다 작은 쪽이 낫다.
-  Widget _actionRow(List<({double width, Widget child})> row, double maxWidth, double gap) {
-    final room = maxWidth - gap * (row.length - 1);
-    final natural = row.fold(0.0, (sum, a) => sum + a.width);
-    final slack = room - natural;
-    double widthOf(int i) =>
-        slack >= 0 ? row[i].width + slack / row.length : row[i].width * room / natural;
-
-    return Row(children: [
-      for (var i = 0; i < row.length; i++) ...[
-        if (i > 0) SizedBox(width: gap),
-        SizedBox(width: widthOf(i), child: row[i].child),
-      ],
-    ]);
-  }
-
-  /// 버튼 이름이 [style] 로 그려질 때의 폭. 글자 수로 어림하면 "전화" 와 "산책" 이 같은 폭이
-  /// 되는데 실제로는 다르다 — 재서 나눈다.
-  double _labelWidth(String label, TextStyle style) {
-    final tp = TextPainter(
-      text: TextSpan(text: label, style: style),
-      textDirection: Directionality.of(context),
-      maxLines: 1,
-    )..layout();
-    return tp.width;
-  }
-
   /// 목록 머리의 출처 한 마디 — 칩에 따라 다르다 (#291).
   String _sourceCaption() => switch (_catFilter) {
         'vet' || 'shop' => '행정안전부 인허가 · 전국',
@@ -972,15 +824,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
         width: 64, height: 64, alignment: Alignment.center,
         decoration: BoxDecoration(color: cat.color.withValues(alpha: 0.14)),
         child: Icon(cat.icon, size: 26, color: cat.color),
-      );
-
-  /// 사진을 못 받았을 때 카드 폭의 자리 — 카테고리색 바탕 + 아이콘. 크기를 그대로 두어
-  /// 사진이 늦게 실패해도 목록이 흔들리지 않는다.
-  Widget _wideFallback(PetCategory cat, String id) => Container(
-        key: Key('place-photo-fallback-$id'),
-        color: cat.color.withValues(alpha: 0.14),
-        alignment: Alignment.center,
-        child: Icon(cat.icon, size: 34, color: cat.color),
       );
 
   /// 장소 카드 (#449). 관광공사 사진이 있는 곳은 **사진이 먼저, 카드 폭**이다 — 지도 탭도
@@ -1021,7 +864,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               key: Key('place-photo-${p.contentId}'),
               aspectRatio: 16 / 9,
               child: Image.network(p.image,
-                  fit: BoxFit.cover, errorBuilder: (_, __, ___) => _wideFallback(cat, p.contentId)),
+                  fit: BoxFit.cover, errorBuilder: (_, __, ___) => placePhotoFallback(cat, p.contentId)),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 11, 12, 13),
@@ -1044,7 +887,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         Row(children: [
           // 배지가 먼저 줄어든다 — 거리는 짧고, 카드에서 가장 자주 읽는 값이다.
           // 좁은 폭에서 배지가 안 줄어들어 줄이 통째로 넘쳤다(393dp 에서 8.5px).
-          Flexible(child: _catTag(cat)),
+          Flexible(child: placeCategoryTag(cat)),
           if (p.distLabel.isNotEmpty) ...[
             const SizedBox(width: 7),
             const Icon(Icons.near_me, size: 12, color: T.textMuted),
@@ -1063,20 +906,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
         ],
       ]);
 
-  Widget _catTag(PetCategory cat) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: cat.color.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(8)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(cat.icon, size: 12, color: cat.color),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(cat.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cat.color)),
-          ),
-        ]),
-      );
 
   /// 칩 줄에서 먼저 보이는 다섯 — 자주 쓰는 것(#449). 나머지는 "더보기" 뒤다.
   ///
@@ -1847,107 +1676,73 @@ class _ExploreScreenState extends State<ExploreScreen> {
     ));
   }
 
+  /// 장소 상세 — 시트 자체는 [PlaceSheet] 가 그린다(#664).
+  ///
+  /// 예전에는 이 메서드가 시트를 통째로 그렸다. 그래서 급할 때 시트(#337)의 병원 카드는
+  /// **누를 것이 전화 버튼 하나뿐**이었다 — 같은 상세를 보여 주고 싶어도 이 화면의 State
+  /// 안에 있어서 부를 수가 없었다. 위젯으로 꺼내 둘이 같은 것을 쓴다.
+  ///
+  /// 여기 남은 것은 <b>이 화면이라야 뜻이 있는 것들</b>이다 — 뷰를 지도로 바꾸고 선을 그리는
+  /// "지도에서 보기", 산책을 시작하는 버튼, 산책로의 경유지 목록.
   void _showPlaceSheet(PetPlace p) {
-    final cat = p.petCategory;
     if (p.isTrail && view == 'map') _drawTrail(p);
     // **빌더 안에서 만들면 안 된다.** 시트가 다시 그려질 때마다 새 Future 가 생겨
     // FutureBuilder 가 로딩으로 돌아가고, 목록이 깜빡인다. 받아 둔 것은 저장소가
     // 기억하므로(`_memory`) 여기서 한 번 부르는 값이 곧 캐시다.
     final Future<TrailRoute?>? stops = p.isTrail ? _trails.fetch(p.trailCourseId) : null;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => Container(
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
-        padding: EdgeInsets.fromLTRB(20, 16, 20, 18 + MediaQuery.of(sheetCtx).padding.bottom),
-        // 사진이 얹히면 작은 화면·큰 글자에서 시트가 화면보다 길 수 있다 — 넘치지 않고 스크롤한다.
-        child: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // 사진이 맨 위, 시트 폭 (#449) — Apple 지도의 장소 시트처럼 사진이 먼저다.
-          if (p.image.isNotEmpty) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: AspectRatio(
-                key: const Key('place-sheet-photo'),
-                aspectRatio: 16 / 9,
-                child: Image.network(p.image,
-                    fit: BoxFit.cover, errorBuilder: (_, __, ___) => _wideFallback(cat, 'sheet-${p.contentId}')),
-              ),
-            ),
-            const SizedBox(height: 14),
-          ],
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 56, height: 56, alignment: Alignment.center,
-              decoration: BoxDecoration(color: cat.color, borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: cat.color.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 5))]),
-              child: Icon(cat.icon, size: 28, color: Colors.white),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(p.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                const SizedBox(height: 4),
-                Row(children: [
-                  _catTag(cat),
-                  // 진료시간 데이터가 없어서 이름으로 짐작한다 — 배지가 그 사실을 함께 말한다(#337).
-                  if (p.categoryKey == 'vet' && isTwentyFourHourByName(p.title)) ...[
-                    const SizedBox(width: 7),
-                    const VetTwentyFourBadge(),
-                  ],
-                  if (p.distLabel.isNotEmpty) ...[
-                    const SizedBox(width: 7),
-                    Text(p.distLabel, style: const TextStyle(fontSize: 12, color: T.textMuted)),
-                  ],
-                ]),
-              ]),
-            ),
-            GestureDetector(onTap: () => Navigator.pop(sheetCtx), child: const Icon(Icons.close, size: 22, color: T.textFaint)),
-          ]),
-          if (p.summary.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Row(children: [
-              Icon(cat.icon, size: 16, color: cat.color),
-              const SizedBox(width: 7),
-              Expanded(child: Text(p.summary, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary))),
-            ]),
-          ],
-          if (stops != null) _trailNoLineNote(stops),
-          if (p.addr.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Row(children: [
-              const Icon(Icons.place_outlined, size: 16, color: T.textMuted),
-              const SizedBox(width: 7),
-              Expanded(child: Text(p.addr, style: const TextStyle(fontSize: 13, color: T.textSecondary))),
-            ]),
-          ],
-          if (p.tel.isNotEmpty) ...[
-            const SizedBox(height: 9),
-            Row(children: [
-              const Icon(Icons.call_outlined, size: 16, color: T.textMuted),
-              const SizedBox(width: 7),
-              Text(p.tel, style: const TextStyle(fontSize: 13, color: T.textSecondary)),
-            ]),
-          ],
-          const SizedBox(height: 8),
-          // 출처 배지 — 어디서 온 데이터인지 말한다 (#291). 가짜 레이어는 #282 로 사라졌다.
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.pets, size: 13, color: T.warmMid),
-            const SizedBox(width: 5),
-            Text(p.sourceLabel,
-                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: T.warmText)),
-          ]),
-          const SizedBox(height: 14),
-          _sheetActions(sheetCtx, p),
-          // 누를 것을 먼저, 읽을 것을 나중에 (#619). 경유지가 열한 곳이면 버튼이 밀린다.
-          if (stops != null) _trailStops(stops, cat),
-          const SizedBox(height: 10),
-          _writeAboutPlace(sheetCtx, p),
-          ]),
-        ),
-      ),
+    PlaceSheet.show(
+      context,
+      p,
+      beforeActions: stops == null ? null : _trailNoLineNote(stops),
+      afterActions: stops == null ? null : _trailStops(stops, p.petCategory),
+      footer: Builder(builder: (sheetCtx) => _writeAboutPlace(sheetCtx, p)),
+      // 순서가 예전과 같다 — 산책 시작 · 전화 · 지도에서 보기 · 길찾기.
+      actions: (sheetCtx, messenger) => [
+        // 발견에서 기록으로 잇는 자리 (#338). 걸을 만한 곳에만 둔다 — 병원·펫샵·숙박에
+        // "여기서 산책 시작" 은 뜻이 없다.
+        if (kWalkStartCategories.contains(p.categoryKey))
+          PlaceSheetAction(
+            icon: Icons.directions_walk_rounded,
+            label: '여기서 산책 시작',
+            primary: true,
+            onTap: () async {
+              Navigator.pop(sheetCtx);
+              await startWalk(
+                context,
+                place: WalkPlaceRef(title: p.title, source: p.source, contentId: p.contentId),
+                // 홈 카드와 **같게** 군다 (#623). 두 곳이 다르면 같은 이름의 버튼이 다른 일을
+                // 하게 되고, 그건 버튼 이름이 거짓이 되는 것과 같다.
+                destination: WalkDestination(lat: p.lat, lng: p.lng, distanceM: p.distM),
+              );
+            },
+          ),
+        if (p.tel.isNotEmpty) PlaceActions.call(p, messenger),
+        // 산책로면 전부 (#619). 예전에는 선이 있는 두루누비만 이 버튼을 달았는데, 그러면
+        // 동네 길은 **누를 것이 하나도 없는 시트**가 된다. 선이 없어도 할 일이 있다 —
+        // 지도를 시작 지점으로 옮기는 것이다.
+        if (p.isTrail)
+          PlaceSheetAction(
+            icon: Icons.map_rounded,
+            label: '지도에서 보기',
+            primary: true,
+            onTap: () async {
+              Navigator.pop(sheetCtx);
+              if (view != 'map') {
+                // 지도 뷰가 만들어지면 onMapReady 가 그린다.
+                setState(() {
+                  view = 'map';
+                  _pendingTrail = p;
+                });
+              } else {
+                await _drawTrail(p);
+              }
+            },
+          ),
+        PlaceActions.directions(p, messenger, primary: p.tel.isEmpty && !p.isTrail),
+      ],
     );
   }
+
 
   Widget _legend() {
     return Container(
