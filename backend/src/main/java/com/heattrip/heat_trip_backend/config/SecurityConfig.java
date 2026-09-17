@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -33,6 +34,8 @@ import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
 import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.security.ApiRateLimitFilter;
+import com.heattrip.heat_trip_backend.security.ConsentRequiredFilter;
+import com.heattrip.heat_trip_backend.security.PublicPaths;
 import com.heattrip.heat_trip_backend.security.ChatBodySizeLimitFilter;
 import com.heattrip.heat_trip_backend.security.ChatRateLimitFilter;
 
@@ -41,68 +44,6 @@ import lombok.RequiredArgsConstructor;
 @Configuration
 @RequiredArgsConstructor
 public class SecurityConfig {
-
-    /**
-     * 인증 없이 열리는 경로 — 이슈 #23-D. <b>정본은 계약의 Auth 태그 설명</b>이다.
-     *
-     * <h2>왜 상수로 꺼냈나</h2>
-     * <p>여기 있는 경로는 <b>인증이라는 방어선이 없는</b> 것들이라, 남은 방어선이 레이트리밋
-     * 하나뿐이다. 그런데 {@code ApiRateLimitFilter} 의 표에 <b>없으면 한도가 0 이 아니라
-     * 무한</b>이다 — 즉 여기 한 줄을 더하면서 그쪽을 안 고치면 <b>인증도 한도도 없는
-     * 경로</b>가 조용히 생긴다. 실제로 {@code /api/explore/**} 가 그 상태였다(#232).
-     *
-     * <p>메서드 지역 변수였을 때는 그것을 세는 검사를 쓸 수 없었다. 꺼내 두면
-     * {@code PublicPathsAreRateLimitedTest} 가 전체를 돈다.
-     */
-    static final List<String> PUBLIC_MATCHERS = List.of(
-            "/",
-            "/oauth2/**",
-            "/login/**",
-            "/auth/signup",
-            // 가입 인증 (#635). 코드를 받은 사람은 아직 토큰이 없으므로 비인증이어야 한다.
-            // 와일드카드(`/auth/signup/**`)로 안 여는 것은 의도다 — 나중에 그 아래 경로를
-            // 하나 더 만들면 그것까지 **인증 없음 + 한도 무한**으로 딸려 들어간다(#232 의 자리).
-            "/auth/signup/verify",
-            "/auth/signup/resend",
-            // 비밀번호 재설정 (#635 조각 ③). 비밀번호를 잊은 사람은 토큰이 없다 —
-            // 인증 뒤에 두면 아무도 못 쓴다. 여기도 와일드카드가 아니라 낱개다.
-            "/auth/password/reset-request",
-            "/auth/password/reset",
-            "/auth/login",
-            "/auth/oauth/**",
-            "/auth/token/refresh",
-            "/error",
-            "/actuator/health/**",
-            "/actuator/info",
-            "/actuator/prometheus",
-            // 관광공사 프록시(#40). 계약이 security: [] 로 선언했다 — 지도는 로그인
-            // 전에도 보여야 한다.
-            //
-            // "/api/places/**" 로 안 쓴 것은 의도다. 와일드카드로 열면 rate limit 의
-            // 경로 분기가 못 덮는 자리(/api/places/a/b 같은)가 **인증 없음 + 한도 무한**
-            // 이 된다. 여는 것은 실제로 있는 두 경로뿐이다.
-            "/api/places/nearby",
-            "/api/places/*",
-            // 산책로의 선(#291). 셋째 경로다 — 지도는 로그인 전에도 보여야 한다.
-            "/api/places/trails/*/route",
-            // 산책 안전 지수(#336). 5km 격자 번호만 받는 GET 하나. **인증을 안 받는 것이 의도다** —
-            // 누구의 격자인지 서버가 모르게 둔다(A안 #235). 한도는 rate limit 의 walk-safety 버킷(IP).
-            "/api/walk-safety/now"
-    );
-
-    /**
-     * {@code app.security.docs-public} 이 켜졌을 때만 열리는 경로 — 이슈 #232.
-     *
-     * <p><b>따로 둔 이유가 있다.</b> 조건부라 {@link #PUBLIC_MATCHERS} 에 못 넣는데, 그렇다고
-     * 메서드 안에 두면 "공개되는 경로" 를 세는 검사가 이 셋을 못 본다 —
-     * {@code PublicPathsAreRateLimitedTest} 가 둘을 함께 읽는다.
-     */
-    static final List<String> DOCS_MATCHERS = List.of(
-            "/v3/api-docs/**",
-            "/swagger-ui.html",
-            "/swagger-ui/**");
-
-
 
     private final JWTProvider jwtProvider;
     private final CustomOAuth2UserService customOAuth2UserService;
@@ -116,6 +57,7 @@ public class SecurityConfig {
     private final OAuth2FailureHandler oAuth2FailureHandler;
     private final PublicSecurityProperties publicSecurityProperties;
     private final ApiRateLimitFilter apiRateLimitFilter;
+    private final ConsentRequiredFilter consentRequiredFilter;
 
     /** 채팅 버킷. 사용자 단위로 세야 해서 인증 <b>뒤</b>에 붙는다 (#80). */
     private final ChatRateLimitFilter chatRateLimitFilter;
@@ -125,6 +67,34 @@ public class SecurityConfig {
 
     /** 앱이 만든 state 를 소셜 왕복 동안 세션에 붙들어 둔다. (이슈 #14) */
     private final OAuthAppStateFilter oAuthAppStateFilter;
+
+    /**
+     * {@code ConsentRequiredFilter} 의 <b>서블릿 자동 등록을 끈다</b> — 이슈 #660.
+     *
+     * <h2>왜 필요한가 (두 번 등록되면 초록불이 거짓말을 한다)</h2>
+     *
+     * <p>스프링 부트는 {@code Filter} 타입 빈을 <b>서블릿 컨테이너에 자동으로도</b> 등록한다.
+     * 그러면 아래 {@code addFilterAfter} 로 붙인 것과 합쳐 <b>등록이 둘</b>이 된다. 시큐리티 체인이
+     * 먼저라 평소에는 자동 등록분이 {@code OncePerRequestFilter} 의 중복 방지에 걸려 그냥 넘어가고,
+     * 동작은 똑같아 보인다.
+     *
+     * <p><b>문제는 그 줄을 지웠을 때다.</b> 자동 등록분이 대신 돌아서 <b>아무 테스트도 빨간불이
+     * 되지 않는다</b> — 실제로 2026-09-17 에 그랬다. 체인에서 떼어내고 전체를 돌렸는데 7개가 전부
+     * 초록이었다. 그러면 "이 줄이 막고 있다" 를 아무도 증명할 수 없고, 필터가 어느 자리에서 도는지도
+     * 사람마다 다르게 믿게 된다(자동 등록분은 <b>인가 필터 뒤</b>에서 돈다).
+     *
+     * <p>그래서 등록 자리를 하나로 줄인다. 여기서 끄면 시큐리티 체인의 그 한 줄만 남는다.
+     *
+     * <p>다른 필터들({@code ApiRateLimitFilter} 등)에는 이것이 없다. 같은 상태지만 그쪽을 함께
+     * 고치는 것은 이 이슈의 범위가 아니다 — 별도로 다룬다(#661).
+     */
+    @Bean
+    public FilterRegistrationBean<ConsentRequiredFilter> consentRequiredFilterNotAutoRegistered(
+            ConsentRequiredFilter filter) {
+        var registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -147,7 +117,7 @@ public class SecurityConfig {
         //
         // 그래서 비인증이어야 하는 경로만 열거한다. 나머지 /auth/* 는
         // anyRequest().authenticated() 로 떨어져 토큰 없이는 401 이 된다.
-        var publicMatchers = new ArrayList<>(PUBLIC_MATCHERS);
+        var publicMatchers = new ArrayList<>(PublicPaths.PUBLIC_MATCHERS);
 
         if (publicSecurityProperties.isDocsPublic()) {
             publicMatchers.add("/v3/api-docs/**");
@@ -179,10 +149,7 @@ public class SecurityConfig {
                 // JWTAuthenticationFilter 는 여기에도 걸린다 — 토큰이 있으면 principal 을
                 // 채우고 없으면 조용히 통과시킨다. 그래서 같은 경로가 게스트에게도, 로그인한
                 // 사람에게도 열리고 CommunityController.viewerId() 가 둘을 가른다.
-                .requestMatchers(HttpMethod.GET,
-                        "/api/community/posts",
-                        "/api/community/posts/*",
-                        "/api/community/posts/*/comments").permitAll()
+                .requestMatchers(HttpMethod.GET, PublicPaths.COMMUNITY_GUEST_GETS.toArray(String[]::new)).permitAll()
                 .requestMatchers("/public/**").authenticated()
                 .anyRequest().authenticated()
             )
@@ -207,6 +174,16 @@ public class SecurityConfig {
             );
 
         http.addFilterBefore(new JWTAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class);
+        // ⚠️ 동의 검사는 **JWT 인증 필터 뒤**여야 한다 (이슈 #660).
+        //
+        // 그 필터가 SecurityContext 를 채워야 누구인지 알 수 있다. 앞에 두면 인증 정보가 늘 비어
+        // 있어 이 필터가 아무도 안 막는다 — 그런데 예외도 안 나서 **초록불인 채로** 구멍이 남는다.
+        // addFilterAfter 로 붙이는 이유가 그것이다.
+        //
+        // 막는 자리가 서버인 이유: 토큰은 동의보다 먼저 발급된다. 소셜 로그인이 끝나는 순간 계정이
+        // 생기고 토큰이 나가므로, 앱의 화면 전환(auth_redirect.dart)만으로는 못 막는다 — 앱을
+        // 거치지 않고 그 토큰으로 부르면 그만이다.
+        http.addFilterAfter(consentRequiredFilter, JWTAuthenticationFilter.class);
         // state 캡처는 진입점의 302 보다 **먼저** 일어나야 한다. 이 필터를 시큐리티 체인 밖에
         // 두면(빈으로만 등록하면) 자동 등록 순서상 시큐리티 체인 뒤라, 진입 요청은 이미 302 로
         // 끝난 뒤라서 앱이 붙인 state 를 영영 못 본다. (이슈 #14)

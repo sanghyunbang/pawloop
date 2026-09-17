@@ -207,13 +207,13 @@ class DogCharacterIntegrationTest extends AbstractMySqlIntegrationTest {
 
     private String account() {
         long serial = SEQUENCE.incrementAndGet();
-        User user = users.save(User.builder()
+        User user = consented(users.save(User.builder()
                 .provider(User.PROVIDER_LOCAL)
                 .role(User.ROLE_USER)
                 .email("character-%d-%d@example.com".formatted(System.nanoTime(), serial))
                 .name("엄마")
                 .nickname("엄마")
-                .build());
+                .build()));
         return jwtProvider.createAccessToken(user.getId(), user.getRole());
     }
 

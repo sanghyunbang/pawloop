@@ -9,6 +9,7 @@ import java.util.Set;
 
 
 import com.heattrip.heat_trip_backend.security.ApiRateLimitFilter;
+import com.heattrip.heat_trip_backend.security.PublicPaths;
 import com.heattrip.heat_trip_backend.security.RateLimitProperties;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <b>인증이 없는 경로에는 한도라도 있어야 한다</b> — 이슈 #232.
  *
  * <h2>무엇이 문제였나</h2>
- * <p>{@code SecurityConfig.PUBLIC_MATCHERS} 에 있는 경로는 <b>인증이라는 방어선이 없다.</b>
+ * <p>{@code PublicPaths.PUBLIC_MATCHERS} 에 있는 경로는 <b>인증이라는 방어선이 없다.</b>
  * 남은 방어선이 레이트리밋 하나뿐인데, {@code ApiRateLimitFilter.resolveRule} 의 표에
  * <b>없으면 한도가 0 이 아니라 무한</b>이다({@code resolveRule} 이 {@code null} 을 주면
  * 필터가 그대로 통과시킨다).
@@ -111,8 +112,8 @@ class PublicPathsAreRateLimitedTest {
      * {@code app.security.docs-public} 이 켜진 환경에서는 그 셋도 인증이 없다.
      */
     private static List<String> allPublicPatterns() {
-        List<String> all = new ArrayList<>(SecurityConfig.PUBLIC_MATCHERS);
-        all.addAll(SecurityConfig.DOCS_MATCHERS);
+        List<String> all = new ArrayList<>(PublicPaths.PUBLIC_MATCHERS);
+        all.addAll(PublicPaths.DOCS_MATCHERS);
         return all;
     }
 

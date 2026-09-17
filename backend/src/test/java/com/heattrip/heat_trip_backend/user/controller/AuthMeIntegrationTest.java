@@ -108,7 +108,7 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
     void 구글계정_토큰으로_내정보조회가_200이다() throws Exception {
         // 완료 조건 2. 공급자에 따라 갈리는 코드가 남아 있지 않은지 확인하는 것이 목적이다 —
         // 예전 subject 는 "kakao_..."·"google_..." 로 공급자 이름을 품고 있었다.
-        User google = userRepository.save(User.builder()
+        User google = consented(userRepository.save(User.builder()
                 .provider("google")
                 .socialId(GOOGLE_SOCIAL_ID)
                 .username("google_" + GOOGLE_SOCIAL_ID)
@@ -116,7 +116,7 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
                 .email("bori-google@example.com")
                 .name("보리")
                 .nickname("보리")
-                .build());
+                .build()));
 
         Map<String, Object> attributes = Map.of("sub", GOOGLE_SOCIAL_ID, "name", "보리");
         String token = tokenIssuedByRealSocialLogin(
@@ -269,7 +269,7 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
 
     /** 카카오가 이메일 동의를 주지 않은 계정. 이 행은 email 로는 절대 찾을 수 없다. */
     private User seedKakaoUserWithoutEmail() {
-        return userRepository.save(User.builder()
+        return consented(userRepository.save(User.builder()
                 .provider("kakao")
                 .socialId(String.valueOf(KAKAO_SOCIAL_ID))
                 .username("kakao_" + KAKAO_SOCIAL_ID)
@@ -277,18 +277,18 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
                 .email(null)
                 .name("보리")
                 .nickname("보리")
-                .build());
+                .build()));
     }
 
     private User seedLocalUser(String email, String rawPassword) {
-        return userRepository.save(User.builder()
+        return consented(userRepository.save(User.builder()
                 .provider(User.PROVIDER_LOCAL)
                 .role(User.ROLE_USER)
                 .email(email)
                 .password(passwordEncoder.encode(rawPassword))
                 .name("보리아빠")
                 .nickname("보리아빠")
-                .build());
+                .build()));
     }
 
     /**

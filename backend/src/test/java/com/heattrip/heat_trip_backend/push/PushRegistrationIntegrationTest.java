@@ -198,13 +198,13 @@ class PushRegistrationIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     private User signUp(String nickname) {
-        return users.save(User.builder()
+        return consented(users.save(User.builder()
                 .provider(User.PROVIDER_LOCAL)
                 .role(User.ROLE_USER)
                 .email("push-reg-%d-%d@example.com".formatted(System.nanoTime(), SEQUENCE.incrementAndGet()))
                 .name(nickname)
                 .nickname(nickname)
-                .build());
+                .build()));
     }
 
     private static String token(String device) {

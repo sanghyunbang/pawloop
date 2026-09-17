@@ -909,13 +909,13 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
 
     private Account account(String nickname) {
         long serial = ACCOUNT_SEQUENCE.incrementAndGet();
-        User user = userRepository.save(User.builder()
+        User user = consented(userRepository.save(User.builder()
                 .provider(User.PROVIDER_LOCAL)
                 .role(User.ROLE_USER)
                 .email("schedule-%d-%d@example.com".formatted(System.nanoTime(), serial))
                 .name(nickname)
                 .nickname(nickname)
-                .build());
+                .build()));
         return new Account(user.getId(), jwtProvider.createAccessToken(user.getId(), user.getRole()));
     }
 

@@ -58,6 +58,17 @@ class ErrorBodyWriter {
         write(response, HttpStatus.BAD_REQUEST, code, message);
     }
 
+    /**
+     * 403 하나 — 이슈 #660.
+     *
+     * <p><b>401 이 아닌 이유</b>: 토큰은 멀쩡하다. 모자란 것은 동의다. 앱은 401 을 "세션이 끝났다" 로
+     * 읽고 로그인 화면으로 보내는데({@code AuthedClient}), 그러면 이미 로그인한 사람이 로그인을 다시
+     * 하게 되고 그래도 같은 401 이 돌아온다 — 빠져나올 수 없는 고리가 된다.
+     */
+    void forbidden(HttpServletResponse response, String code, String message) throws IOException {
+        write(response, HttpStatus.FORBIDDEN, code, message);
+    }
+
     private void write(HttpServletResponse response, HttpStatus status, String code, String message)
             throws IOException {
         response.setStatus(status.value());
