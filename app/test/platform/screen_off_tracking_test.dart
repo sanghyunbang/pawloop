@@ -45,10 +45,37 @@ void main() {
       expect(block, contains('<string>location</string>'));
     });
 
-    test('Always 는 여전히 요청하지 않는다 — WhenInUse 로 시작한 갱신을 백그라운드 모드가 이어 준다', () {
+    test('Always 는 여전히 요청하지 않는다 — 코드에서 잰다, plist 가 아니라', () {
+      // **재는 대상을 바꾼 자리다.** 전에는 `NSLocationAlwaysAndWhenInUseUsageDescription`
+      // 이 plist 에 **없는 것**으로 이 약속을 쟀다. 그런데 애플이 빌드를 받고
+      // ITMS-90683 으로 그 키를 **요구**했다 — 우리가 안 써도 번들 안의 geolocator 가
+      // `requestAlwaysAuthorization` 을 참조하기 때문이다(.ipa 의 `Runner` 바이너리에서
+      // 그 문자열이 나온다).
+      //
+      // 약속 자체는 그대로다 — **우리는 Always 를 요청하지 않는다.** 그러니 plist 대신
+      // 요청하는 쪽, 즉 코드를 잰다. 이쪽이 원래 재려던 것이기도 하다.
+      final dart = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'));
+      final offenders = <String>[];
+      for (final f in dart) {
+        final src = f.readAsStringSync();
+        // 주석을 걷어낸다 — 설명으로 적은 낱말이 걸리면 안 된다.
+        final code = src.split('\n').where((l) => !l.trimLeft().startsWith('//')).join('\n');
+        if (code.contains('requestAlwaysAuthorization') ||
+            RegExp(r'requestPermission\([^)]*always').hasMatch(code)) {
+          offenders.add(f.path);
+        }
+      }
+      expect(offenders, isEmpty, reason: '''
+Always 권한을 요청하면 "항상 허용" 창이 뜨고, 산책 중에만 쓰겠다는 약속과 어긋난다.
+WhenInUse 로 시작한 갱신을 UIBackgroundModes=location 이 이어 주므로 요청할 이유가 없다.''');
+
+      // `NSLocationAlwaysUsageDescription`(iOS 10 이하의 "항상만") 은 애플이 요구하지
+      // 않는다. 이건 여전히 없어야 한다.
       final p = _read(_plist);
       expect(p, contains('<key>NSLocationWhenInUseUsageDescription</key>'));
-      expect(p, isNot(contains('NSLocationAlwaysAndWhenInUseUsageDescription</key>')));
       expect(p, isNot(contains('<key>NSLocationAlwaysUsageDescription</key>')));
     });
   });

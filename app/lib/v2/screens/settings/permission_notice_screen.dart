@@ -246,7 +246,13 @@ const List<AppPermission> kAppPermissions = [
       'android.permission.ACCESS_COARSE_LOCATION',
       'android.permission.FOREGROUND_SERVICE_LOCATION',
     ],
-    ios: ['NSLocationWhenInUseUsageDescription'],
+    // 두 키가 다 있다. `AlwaysAndWhenInUse` 는 우리가 쓰려고 넣은 것이 아니라
+    // **애플이 요구해서** 넣었다 — geolocator 가 `requestAlwaysAuthorization` 을
+    // 참조해서 ITMS-90683 경고가 온다. 우리는 그 권한을 요청하지 않는다.
+    ios: [
+      'NSLocationWhenInUseUsageDescription',
+      'NSLocationAlwaysAndWhenInUseUsageDescription',
+    ],
   ),
   AppPermission(
     title: '알림',
