@@ -36,7 +36,7 @@ class ExternalMaps {
   }) async {
     final encoded = Uri.encodeComponent(name);
     final candidates = <Uri>[
-      Uri.parse('nmap://route/walk?dlat=$lat&dlng=$lng&dname=$encoded&appname=com.cetacealab.heattrip'),
+      Uri.parse('nmap://route/walk?dlat=$lat&dlng=$lng&dname=$encoded&appname=app.pawloop'),
       Uri.parse('geo:$lat,$lng?q=$lat,$lng($encoded)'),
       Uri.parse('https://map.naver.com/p/search/$encoded'),
     ];

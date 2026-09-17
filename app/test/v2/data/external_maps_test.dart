@@ -33,7 +33,7 @@ void main() {
     expect(opened.single.scheme, 'nmap');
     expect(opened.single.queryParameters['dlat'], '37.5445');
     expect(opened.single.queryParameters['dname'], '서울숲');
-    expect(opened.single.queryParameters['appname'], 'com.cetacealab.heattrip');
+    expect(opened.single.queryParameters['appname'], 'app.pawloop');
   });
 
   test('네이버 지도가 없으면 geo:, 그것도 없으면 웹 — 던져도 다음 후보로', () async {

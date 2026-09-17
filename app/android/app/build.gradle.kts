@@ -19,7 +19,7 @@ android {
     // ──────────────────────────────────────────────────────────────────────────
     // [앱 기본 메타]
     // ──────────────────────────────────────────────────────────────────────────
-    namespace = "com.cetacealab.heattrip"
+    namespace = "app.pawloop"
 
     compileSdk = 36
     ndkVersion = "27.0.12077973"
@@ -36,7 +36,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     defaultConfig {
-        applicationId = "com.cetacealab.heattrip"
+        applicationId = "app.pawloop"
         // flutter_naver_map(1.4.x)는 minSdk 23 이상 필요
         minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion

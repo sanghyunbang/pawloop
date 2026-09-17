@@ -199,9 +199,11 @@ bash scripts/local-ci.sh backend    # 하나만 (backend | app | docs)
 
 <br/>
 
-이 프로젝트는 2026-07 에 **감정 여행 앱 heattrip → 반려 앱 Pawloop(포루프)** 로 피벗했습니다. 제품·도메인·화면은 전부 교체됐지만 기술 식별자에는 옛 이름이 남아 있습니다 — 저장소 이름, Android `applicationId`(`com.cetacealab.heattrip`), 로그인 콜백 스킴, Gradle group 과 DB 이름.
+이 프로젝트는 2026-07 에 **감정 여행 앱 heattrip → 반려 앱 Pawloop(포루프)** 로 피벗했습니다. 제품·도메인·화면은 전부 교체됐고, 앱 식별자도 2026-09-17 에 `app.pawloop` 으로 옮겼습니다([#597](https://github.com/sanghyunbang/heattrip/issues/597)) — 사기로 한 도메인 `pawloop.app` 을 뒤집은 것입니다.
 
-방치가 아니라 **의도된 유지**입니다. 식별자 변경은 스토어 등록·재서명·OAuth 콘솔 재등록을 연쇄로 요구하므로 스토어 등록 시점에 일괄 정리하기로 했습니다([ADR-0002](docs/99-decisions/decision-log.md)). 감정 여행 시절의 서버 패키지와 앱 셸은 2026-09-06 에 지웠습니다. **문서와 UI 표기는 언제나 Pawloop(포루프)** 입니다.
+[ADR-0002](docs/99-decisions/decision-log.md)가 식별자 변경을 "스토어 등록 시점에 일괄 정리" 로 미뤄 뒀는데, 그 시점이 왔습니다. 식별자를 바꾸면 스토어 등록·재서명·OAuth 콘솔 재등록이 연쇄로 따라오므로, **첫 등록 전이 유일하게 싼 때**입니다.
+
+아직 옛 이름이 남은 곳이 있습니다 — 저장소 이름, 로그인 콜백 스킴(`heattrip://login-callback`), Gradle group, DB 이름, Dart 패키지명(`heat_trip_flutter`). 넷 다 사용자에게 안 보이고 스토어 등록과도 무관해서 미뤄 둔 것입니다. 감정 여행 시절의 서버 패키지와 앱 셸은 2026-09-06 에 지웠습니다. **문서와 UI 표기는 언제나 Pawloop(포루프)** 입니다.
 
 </details>
 

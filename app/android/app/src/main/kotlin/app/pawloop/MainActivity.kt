@@ -1,4 +1,4 @@
-package com.cetacealab.heattrip
+package app.pawloop
 
 import io.flutter.embedding.android.FlutterActivity
 

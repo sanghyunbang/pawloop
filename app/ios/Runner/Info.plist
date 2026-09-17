@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>heat_trip_flutter</string>
+	<string>Pawloop</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -81,7 +81,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.cetacealab.heattrip</string>
+			<string>app.pawloop</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>heattrip</string>
