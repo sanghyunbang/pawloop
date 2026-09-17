@@ -15,6 +15,7 @@ import '../domain/pet.dart';
 import '../domain/vet_hours.dart';
 import '../walk/route_image.dart';
 import '../domain/course_path.dart';
+import '../domain/walk_destination.dart';
 import '../data/course_repository.dart';
 import 'start_walk.dart';
 import '../data/walk_repository.dart';
@@ -744,6 +745,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
           await startWalk(
             context,
             place: WalkPlaceRef(title: p.title, source: p.source, contentId: p.contentId),
+            // 홈 카드와 **같게** 군다 (#623). 두 곳이 다르면 같은 이름의 버튼이 다른 일을
+            // 하게 되고, 그건 버튼 이름이 거짓이 되는 것과 같다.
+            destination: WalkDestination(lat: p.lat, lng: p.lng, distanceM: p.distM),
           );
         }, primary: true),
       if (p.tel.isNotEmpty)

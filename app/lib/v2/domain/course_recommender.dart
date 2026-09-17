@@ -50,6 +50,13 @@ class CourseCandidate {
   final String? source;
   final String? contentId;
 
+  /// 그 코스가 **어디인가** (#623). "어디서 시작할까요?" 가 지도 앱에 건넬 목적지다.
+  ///
+  /// 카탈로그 장소는 그 점이고, 내 코스는 시작 지점이다. 둘 다 있을 수 있는 값이라
+  /// 선택으로 뒀지만, 없으면 **묻지 못하고 예전처럼 그 자리에서 시작**한다.
+  final double? lat;
+  final double? lng;
+
   const CourseCandidate({
     required this.id,
     required this.title,
@@ -59,6 +66,8 @@ class CourseCandidate {
     this.image,
     this.source,
     this.contentId,
+    this.lat,
+    this.lng,
   });
 
   bool get isMine => kind == CourseKind.myCourse;

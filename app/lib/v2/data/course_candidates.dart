@@ -51,6 +51,8 @@ class CourseCandidates implements CourseCandidateSource {
         image: p.image.isEmpty ? null : p.image,
         source: p.source,
         contentId: p.contentId,
+        lat: p.lat,
+        lng: p.lng,
       ));
     }
     if (includeMine) {
@@ -67,6 +69,9 @@ class CourseCandidates implements CourseCandidateSource {
             kind: CourseKind.myCourse,
             distanceM: d,
             lengthM: c.distanceM.toDouble(),
+            // 경로는 `[경도, 위도]` 순이다 — 위에서 거리를 잴 때와 같게 뒤집어 읽는다.
+            lat: start[1],
+            lng: start[0],
           ));
         }
       } on CourseFailure {

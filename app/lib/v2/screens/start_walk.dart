@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../domain/pet.dart';
+import '../domain/walk_destination.dart';
 import '../widgets/walk_dog_picker.dart';
 import 'login_screen.dart';
 import '../data/walk_in_progress.dart';
@@ -28,7 +29,9 @@ import '../data/walk_repository.dart';
 import '../data/walk_safety_repository.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/walk_resume_prompt.dart';
+import '../data/external_maps.dart';
 import 'location_priming_sheet.dart';
+import 'walk_start_point_sheet.dart';
 import 'walk_tracking_screen.dart';
 
 /// 산책 트래킹을 연다. **미로그인이면 로그인부터 안내한다.**
@@ -50,6 +53,13 @@ Future<void> startWalk(
 
   /// 지도에서 "여기서 산책 시작" 으로 왔으면 그 장소 (#338). 초안에 실려 저장까지 간다.
   WalkPlaceRef? place,
+
+  /// 그 장소가 **어디인지** (#623). 있으면 "어디서 시작할까요?" 를 한 번 묻는다.
+  ///
+  /// [place] 와 나뉘어 있는 이유는 그 타입의 javadoc 에 있다 — 저쪽은 서버로 나가는
+  /// 꼬리표이고 이쪽은 지도 앱에 건넬 목적지다. 없으면 안 묻는다: 홈의 큰 "산책 시작"
+  /// 처럼 목적지가 아예 없는 자리가 있다.
+  WalkDestination? destination,
 
   /// "다시 걷기" 로 왔으면 따라 걸을 코스의 선 (#339). 지도에 연한 선으로 깔린다.
   List<List<double>>? courseLine,
@@ -80,6 +90,26 @@ Future<void> startWalk(
   }
 
   if (!context.mounted) return;
+
+  // 어디서 시작할지 (#623). **위치 권한·강아지 고르기보다 앞이다** — "길 안내" 를 고르면
+  // 걷지 않으므로 그 셋을 물을 이유가 없다.
+  //
+  // 끊긴 산책 이어가기보다도 앞이다. 이어 걷는 사람은 이미 어딘가를 걷고 있어서 "어디서
+  // 시작할까요" 가 뜻이 없고, 여기서 먼저 물으면 그 사람에게 한 장이 더 생긴다 — 그래서
+  // 이어가기 물음 **앞**에 두되, 목적지를 들고 온 경우에만 묻는다.
+  if (place != null && destination != null) {
+    final choice = await WalkStartPointSheet.ask(context, place.title, destination);
+    // 닫았으면 아무것도 시작하지 않는다. 실수로 눌렀을 때 30분짜리 기록이 시작되는 것보다
+    // 아무 일도 안 나는 쪽이 낫다.
+    if (choice == null) return;
+    if (choice == WalkStartChoice.directions) {
+      await ExternalMaps.directions(
+          lat: destination.lat, lng: destination.lng, name: place.title);
+      return;
+    }
+    if (!context.mounted) return;
+  }
+
   final leftover = await WalkResumePrompt.offer(context, store: resumeStore);
   if (!context.mounted) return;
   if (leftover != null) {

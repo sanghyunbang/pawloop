@@ -11,6 +11,7 @@ import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/data/walk_safety.dart';
 import 'package:heat_trip_flutter/v2/data/walk_safety_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/course_recommender.dart';
+import 'package:heat_trip_flutter/v2/domain/walk_destination.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/widgets/today_course_card.dart';
 
@@ -28,7 +29,8 @@ class _Source implements CourseCandidateSource {
 const _trail = CourseCandidate(
     id: 'trail:1', title: '서울숲 둘레길', kind: CourseKind.trail, distanceM: 500, lengthM: 3000, source: 'trail', contentId: 'trail:1');
 const _park = CourseCandidate(
-    id: '2733847', title: '서울숲 호수', kind: CourseKind.park, distanceM: 800, lengthM: 1200, source: 'kto', contentId: '2733847');
+    id: '2733847', title: '서울숲 호수', kind: CourseKind.park, distanceM: 800, lengthM: 1200, source: 'kto', contentId: '2733847',
+    lat: 37.5445, lng: 127.0374);
 const _mine = CourseCandidate(id: 'course:7', title: '아침 한 바퀴', kind: CourseKind.myCourse, distanceM: 1500, lengthM: 2000);
 
 const _dog = DogProfile(
@@ -83,7 +85,7 @@ TodayCourseCard _card({
       source: source,
       locate: () async => located ? (lat: 37.5445, lng: 127.0374) : null,
       now: () => _now,
-      onStart: onStart ?? (_, __) async {},
+      onStart: onStart ?? (_, __, ___) async {},
     );
 
 void main() {
@@ -152,9 +154,13 @@ void main() {
     expect(find.textContaining('최근에 간 곳'), findsOneWidget);
   });
 
-  testWidgets('"여기서 산책 시작" 은 그 장소를 들고 산책을 시작한다', (tester) async {
+  testWidgets('"여기서 산책 시작" 은 그 장소와 **좌표**를 들고 산책을 시작한다 (#623)', (tester) async {
     WalkPlaceRef? started;
-    await _pump(tester, _card(source: _Source(const [_park]), onStart: (_, place) async => started = place));
+    WalkDestination? startedTo;
+    await _pump(tester, _card(source: _Source(const [_park]), onStart: (_, place, dest) async {
+      started = place;
+      startedTo = dest;
+    }));
 
     await tester.tap(find.byKey(const Key('today-course-start')));
     await tester.pumpAndSettle();
@@ -162,6 +168,13 @@ void main() {
     expect(started?.title, '서울숲 호수');
     expect(started?.source, 'kto');
     expect(started?.contentId, '2733847');
+
+    // 좌표가 없으면 `startWalk` 이 "어디서 시작할까요?" 를 못 묻고, 카드가 `800m 거리` 를
+    // 보여 주면서 그 거리를 없는 것처럼 다루던 옛 화면으로 돌아간다.
+    expect(startedTo, isNotNull, reason: '카드가 좌표를 안 넘기면 물을 수가 없다');
+    expect(startedTo!.lat, 37.5445);
+    expect(startedTo!.lng, 127.0374);
+    expect(startedTo!.distanceM, 800);
   });
 
   // 셋을 한 테스트에서 pumpWidget 으로 이어 그리면 같은 자리의 State 가 재사용돼 initState 가 다시
@@ -184,7 +197,7 @@ void main() {
           source: source,
           locate: () async => located ? (lat: 37.5445, lng: 127.0374) : null,
           now: () => _now,
-          onStart: (_, __) async {},
+          onStart: (_, __, ___) async {},
         ),
       ),
     ));
