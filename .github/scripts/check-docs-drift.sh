@@ -67,9 +67,32 @@ is_known_stale() {
 echo "── 문서 드리프트 검사 ──"
 
 scan() {
-  local label="$1" root="$2" pattern="$3"
-  local raw hits=""
-  raw=$(grep -rnE "$pattern" "$root" --include='*.md' 2>/dev/null \
+  local label="$1" root="$2" pattern="$3" include="${4:-*.md}"
+  local raw hits="" scanned
+
+  # **몇 개를 봤는지 먼저 센다** — 0개면 빨간불이다 (#643).
+  #
+  # 아래 grep 은 대상이 없어도 조용하다: `2>/dev/null` 이 "그런 파일이 없다" 를 삼키고
+  # `|| true` 가 종료 코드를 지운다. 그러면 빈 결과가 나오고 이 함수는 `OK` 를 찍는다 —
+  # **"아무것도 안 봤다" 가 "깨끗하다" 로 둔갑한다.**
+  #
+  # 이게 이론이 아니라, 아래 세 번째 호출이 실제로 그 상태였다. 라벨은 "앱 코드" 인데
+  # include 가 `*.md` 로 박혀 있어서 `app/lib` 의 dart 185개 대신 md 1개를 보고 있었다.
+  # 그래서 include 를 인자로 받고, 본 개수를 세고, 0개면 죽는다. 다음에 경로를 옮기거나
+  # 이름을 바꾸는 사람은 조용한 초록 대신 빨간불을 본다.
+  scanned=$(find "$root" -type f -name "$include" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$scanned" -eq 0 ]; then
+    echo
+    echo "::error::검사 대상이 0개다: $label"
+    echo "    root=$root  include=$include"
+    echo
+    echo "    경로를 옮겼거나 이름을 바꿨으면 이 스크립트의 scan 호출도 같이 고쳐라."
+    echo "    0개를 보고 통과시키면 이 게이트는 있으나 마나다."
+    FAILED=1
+    return
+  fi
+
+  raw=$(grep -rnE "$pattern" "$root" --include="$include" 2>/dev/null \
         | grep -vE "$ALLOW" || true)
 
   # 소유 이슈가 붙은 알려진 항목은 통과시킨다.
@@ -93,7 +116,7 @@ scan() {
     echo "    이력 서술이라면 '예전에는' 같은 표현을 넣어 의도를 분명히 하라."
     FAILED=1
   else
-    echo "  OK  $label"
+    echo "  OK  $label (${scanned}개 훑음)"
   fi
 }
 
@@ -106,7 +129,7 @@ scan "README 가 .env 를 현재형으로 말한다" "README.md" '`\.env`|flutte
 
 # 코드에도 남아 있으면 안 된다 — #29 가 의존성을 지웠으므로 import 는 컴파일도 안 되지만,
 # 주석·문자열로 남아 사용자에게 보이는 안내가 되는 경우가 있었다(emotion_map_screen.dart).
-scan "앱 코드가 사용자에게 .env 를 안내한다" "app/lib" 'flutter_dotenv|\.env 확인|\.env를 확인|\.env 를 확인'
+scan "앱 코드가 사용자에게 .env 를 안내한다" "app/lib" 'flutter_dotenv|\.env 확인|\.env를 확인|\.env 를 확인' '*.dart'
 
 echo
 if [ "$FAILED" -ne 0 ]; then
