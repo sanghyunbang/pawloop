@@ -138,6 +138,20 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
   int _lastChangeSeq = 0;
   String? _etag;
   int _consecutiveEmptyPolls = 0;
+
+  /// 연속으로 **실패한** 폴링 횟수 — 빈손과 따로 센다(#672).
+  ///
+  /// 전에는 실패도 [_consecutiveEmptyPolls] 에 넣었다. 이름이 거짓말이었을 뿐 아니라, 요청
+  /// 상한이 9초라 지하철에서 네 번 끊기면 **대화가 한창인 방도 30초**로 내려앉았다. 빈손(사람이
+  /// 쉬고 있다)과 실패(망이 나쁘다)는 다른 사실이라 [ChatPollingPolicy] 가 따로 받는다.
+  int _consecutiveFailedPolls = 0;
+
+  /// 지금 걸려 있는 타이머를 얼마로 걸었나 — 다시 걸지 말지의 유일한 근거다(#672).
+  ///
+  /// 시계를 보지 않는다. 위젯 테스트에서 [DateTime.now] 는 가짜 시간을 안 따라가므로 "언제
+  /// 도는가" 로는 판단할 수 없다.
+  Duration? _scheduledDelay;
+
   bool _inForeground = true;
   bool _loading = true;
   ChatFailure? _failure;
@@ -242,16 +256,39 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
 
   void _scheduleNext({bool justResumed = false}) {
     _timer?.cancel();
+    _scheduledDelay = null;
     if (_awaitingTerms) {
       // 동의 전에는 폴링하지 않는다. 받아 두면 창을 닫는 순간 남의 말이 화면에 그려진다.
       return;
     }
-    final delay = ChatPollingPolicy.nextInterval(
-      inForeground: _inForeground,
-      consecutiveEmptyPolls: _consecutiveEmptyPolls,
-      justResumed: justResumed,
-    );
+    final delay = _pollDelay(justResumed: justResumed);
+    _scheduledDelay = delay;
     _timer = Timer(delay, _poll);
+  }
+
+  Duration _pollDelay({bool justResumed = false}) => ChatPollingPolicy.nextInterval(
+        inForeground: _inForeground,
+        consecutiveEmptyPolls: _consecutiveEmptyPolls,
+        consecutiveFailedPolls: _consecutiveFailedPolls,
+        justResumed: justResumed,
+      );
+
+  /// 내가 말을 건 직후 폴링을 깨운다 (#672).
+  ///
+  /// **내가 방금 말을 건 것은 대화가 재개됐다는 가장 확실한 신호다.** 카운터만 되돌리면 이미
+  /// 걸려 있는 30초 타이머는 그대로 흘러, 상대의 답장이 최대 30초 늦게 뜬다. 45초만 조용해도
+  /// 양쪽이 30초 간격이라 왕복이 1분까지 벌어졌다.
+  ///
+  /// **이미 더 짧게 걸려 있으면 다시 걸지 않는다.** 사진을 여러 장 고르면 [_pickPhotos] 가
+  /// 장마다 [_deliver] 를 부르는데, 그때마다 3초를 새로 걸면 타이머가 마지막 장이 끝날 때까지
+  /// 계속 뒤로 밀린다 — 열 장이면 깨우려던 것이 오히려 더 늦어진다.
+  void _wakePolling() {
+    final next = _pollDelay();
+    final pending = _scheduledDelay;
+    if (_timer?.isActive == true && pending != null && pending <= next) {
+      return;
+    }
+    _scheduleNext();
   }
 
   Future<void> _poll({bool initial = false}) async {
@@ -269,6 +306,8 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
       setState(() {
         _loading = false;
         _failure = null;
+        // 왕복이 돌아왔다 — 망은 멀쩡하다. 빈손이든 아니든 실패 백오프는 여기서 끝난다(#672).
+        _consecutiveFailedPolls = 0;
         _etag = page.etag;
         // 바뀐 말을 **같은 id 의 자리에 덮어쓴다**(ADR-0023). 목록 끝에 붙이면 남이 지운 말이 새 말처럼
         // 대화 맨 아래로 올라온다. 창 밖의 것(우리가 안 들고 있는 말)은 그냥 버린다 — 방을 다시 열면 온다.
@@ -308,7 +347,10 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
         _loading = false;
         // 폴링 실패는 화면을 비우지 않는다 — 이미 받은 메시지는 그대로 둔다.
         _failure = _messages.isEmpty ? e : null;
-        _consecutiveEmptyPolls++;
+        // **빈손이 아니다.** 여기서 빈손 카운터를 올리면 망이 흔들린 것을 "사람이 쉬고 있다" 로
+        // 읽어, 대화가 한창인 방이 30초로 내려앉는다(#672). 실패는 실패대로 물러난다 —
+        // 떼 버리면 서버가 죽은 동안 9초짜리 요청이 3초마다 쌓인다.
+        _consecutiveFailedPolls++;
       });
     } finally {
       if (mounted) {
@@ -427,7 +469,11 @@ class _FamilyChatScreenState extends State<FamilyChatScreen> with WidgetsBinding
           _lastSeq = sent.roomSeq;
         }
         _consecutiveEmptyPolls = 0;
+        // 보냈다는 것은 망이 살아 있다는 증거이기도 하다 — 남아 있던 실패 백오프도 끝난다(#672).
+        _consecutiveFailedPolls = 0;
       });
+      // 카운터만 되돌리면 이미 걸린 타이머는 안 바뀐다. 타이머까지 되돌려야 답장이 3초다(#672).
+      _wakePolling();
       _scrollToBottom();
     } on ChatFailure {
       if (!mounted) return;
