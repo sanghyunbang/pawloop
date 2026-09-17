@@ -38,7 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code tasks.named('test')} 안에 그 경로도 {@code inputs.files(...)} 로 더해야 한다.
  * 이 테스트는 <b>이미 아는 경로</b>만 지킨다 — 새 경로까지 자동으로 알 수는 없다.
  * (지금 아는 것: {@code mysql/} · {@code docker-compose.yml} · {@code .gitignore} ·
- * {@code .dockerignore} · {@code infra/terraform/**}{@code /*.tftpl} · {@code docs/04-api} ·
+ * {@code .dockerignore} · {@code infra/terraform/**}{@code /*.tftpl} · {@code Caddyfile} ·
+ * {@code docker-compose.prod.yml} · {@code docs/04-api} ·
  * {@code docs/02-architecture/backend} · {@code docs/99-decisions} · {@code docs/05-build} ·
  * {@code docs/03-database})
  *
@@ -136,6 +137,17 @@ class SpecTestInputsDeclaredTest {
         assertThat(buildGradle)
                 .contains("dir: file('infra/terraform'), include: '**/*.tftpl'")
                 .contains("withPropertyName('bootstrapTemplates')");
+    }
+
+    @Test
+    @DisplayName("prod 바깥문(Caddyfile · docker-compose.prod.yml)이 test 태스크의 입력으로 선언돼 있다")
+    void prodEdge_isDeclaredAsTestInput() {
+        // CaddyIsTheOnlyDoorTest 가 Caddyfile 을, ComposeWaitsAndReportsHealthTest 가
+        // 덧붙임을 읽는다(#609). 둘 다 지워도 에러가 안 나는 설정이라, 검사가 안 돌면
+        // 지키는 것이 없어진다 — Caddy 의 X-Real-IP 가 빠지면 rate limit 이 무너진다(#613).
+        assertThat(buildGradle)
+                .contains("file('Caddyfile'), file('docker-compose.prod.yml')")
+                .contains("withPropertyName('prodEdge')");
     }
 
     @Test

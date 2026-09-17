@@ -1,0 +1,143 @@
+# 이 스크립트는 modules/ec2-docker-host 의 user_data.sh.tftpl 안으로 통째로 들어간다.
+# 거기서 `set -euo pipefail` 과 docker · git · aws · compose · buildx 설치가 끝난
+# 상태로 시작한다.
+
+REPO_DIR=/opt/pawloop-backend/repo
+
+mkdir -p /opt/pawloop-backend
+cd /opt/pawloop-backend
+
+# ── 1. DB 볼륨을 찾아 붙인다 ────────────────────────────────────────
+#
+# 이 블록이 이 파일에서 제일 위험하다. 잘못 쓰면 **살아 있는 DB 를 포맷한다.**
+#
+# 장치 이름을 /dev/sdf 로 믿으면 안 된다 — Nitro 인스턴스에서는 /dev/nvme?n? 로
+# 나타나고 번호 순서도 보장되지 않는다. AWS 는 NVMe 시리얼에 볼륨 ID 를 대시 없이
+# 넣어 주므로, **그 값으로 찾는다.** 그러면 root 볼륨을 잡을 일이 없다.
+DATA_VOL_SERIAL=$(echo "${data_volume_id}" | tr -d '-')
+
+DATA_DEV=""
+for _ in $(seq 1 60); do
+  DATA_DEV=$(lsblk -ndo NAME,SERIAL | awk -v s="$DATA_VOL_SERIAL" '$2 == s { print "/dev/" $1 }' | head -n1)
+  if [ -n "$DATA_DEV" ]; then
+    break
+  fi
+  sleep 2
+done
+
+if [ -z "$DATA_DEV" ]; then
+  echo "DB 볼륨(${data_volume_id})이 2분 안에 안 붙었다. 마운트할 곳이 없으므로 여기서 선다." >&2
+  echo "확인: lsblk -o NAME,SERIAL,SIZE" >&2
+  exit 1
+fi
+echo "DB 볼륨을 찾았다: $DATA_DEV (${data_volume_id})"
+
+# **이미 파일시스템이 있으면 손대지 않는다.** 여기가 데이터 보존의 전부다.
+if blkid "$DATA_DEV" >/dev/null 2>&1; then
+  echo "파일시스템이 이미 있다 — 포맷하지 않는다: $DATA_DEV"
+else
+  echo "빈 볼륨이다 — xfs 로 만든다: $DATA_DEV"
+  mkfs -t xfs "$DATA_DEV"
+fi
+
+mkdir -p /mnt/data
+
+# nofail 을 붙이는 이유: 볼륨이 없을 때 OS 가 긴급 콘솔로 떨어지면 SSH 로도 못 들어간다.
+# 대신 바로 아래에서 실제로 마운트됐는지를 확인하고, 안 됐으면 여기서 선다 —
+# 조용히 DB 없이 뜨는 것보다 낫다.
+DATA_UUID=$(blkid -s UUID -o value "$DATA_DEV")
+if ! grep -q "$DATA_UUID" /etc/fstab; then
+  printf 'UUID=%s /mnt/data xfs defaults,nofail 0 2\n' "$DATA_UUID" >> /etc/fstab
+fi
+mount -a
+
+if ! mountpoint -q /mnt/data; then
+  echo "/mnt/data 가 마운트되지 않았다. DB 를 둘 곳이 없으므로 선다." >&2
+  exit 1
+fi
+
+# MySQL 은 이 디렉터리를 통째로 /var/lib/mysql 로 쓴다. Caddy 는 발급받은 인증서를
+# 여기 둔다 — 인스턴스를 교체해도 인증서를 다시 안 받게 하려는 것이다(Let's Encrypt
+# 발급 한도가 있다).
+mkdir -p /mnt/data/mysql /mnt/data/caddy/data /mnt/data/caddy/config
+echo "DB 볼륨 준비 끝: $(df -h /mnt/data | tail -n1)"
+
+# ── 2. 코드를 받는다 ────────────────────────────────────────────────
+#
+# 이 저장소는 private 이라 인증 없이는 clone 이 안 된다. 읽기 전용 배포 키를
+# SSM SecureString 에서 받아 root 의 열쇠로 깔고, git 이 그 열쇠만 쓰게 한다.
+install -d -m 700 /root/.ssh
+
+aws ssm get-parameter \
+  --name "${repo_deploy_key_ssm_parameter_name}" \
+  --with-decryption \
+  --query "Parameter.Value" \
+  --output text > /root/.ssh/deploy_key
+chmod 600 /root/.ssh/deploy_key
+
+# 개인키는 마지막 줄이 줄바꿈으로 끝나야 ssh 가 읽는다. SSM 에 넣을 때 끝 줄바꿈이
+# 잘려도 "invalid format" 으로 죽지 않게 한 줄 붙여 둔다.
+printf '\n' >> /root/.ssh/deploy_key
+
+# github.com 의 호스트 키를 미리 적어 둔다. 부팅할 때 ssh-keyscan 으로 받아오면
+# 처음 만난 키를 그냥 믿는 것이라, 중간에 누가 끼어 있어도 알 길이 없다.
+#
+# 이 지문은 https://api.github.com/meta 의 ssh_key_fingerprints.SHA256_ED25519
+# (+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU) 와 같다 — 2026-09-16 에 대조했다.
+# 깃헙이 키를 바꾸면 여기서 부팅이 멈춘다. 고장이 아니라 알아채라는 뜻이다.
+printf '%s\n' \
+  'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+  > /root/.ssh/known_hosts
+chmod 600 /root/.ssh/known_hosts
+
+# 부팅이 끝난 뒤 사람이 들어와 git pull 을 할 때도 같은 열쇠를 쓰게 남겨 둔다.
+git config --system core.sshCommand \
+  "ssh -i /root/.ssh/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/root/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+
+if [ ! -d repo/.git ]; then
+  git clone --branch "${repo_branch}" "${repo_url}" repo
+else
+  cd repo
+  git fetch origin "${repo_branch}"
+  git checkout "${repo_branch}"
+  git pull --ff-only origin "${repo_branch}"
+  cd ..
+fi
+
+# compose 와 Dockerfile 과 .env 는 저장소 루트가 아니라 backend/ 아래에 있다.
+cd "$REPO_DIR/backend"
+
+# ── 3. 설정을 받아 prod 값으로 맞춘다 ───────────────────────────────
+aws ssm get-parameter \
+  --name "${app_env_ssm_parameter_name}" \
+  --with-decryption \
+  --query "Parameter.Value" \
+  --output text > .env
+chmod 600 .env
+
+# .env 마지막 줄에 줄바꿈이 없으면 덧붙인 줄이 그 값에 달라붙는다. staging 에서
+# TOUR_API_SECRET=xxxAPP_PUBLISHED_HOST=0.0.0.0 이 되어 한 번 겪었다 (#600).
+if [ -n "$(tail -c1 .env)" ]; then
+  echo >> .env
+fi
+
+# 있으면 고치고 없으면 더한다. 값이 두 줄 생기면 어느 쪽이 이기는지가 compose 구현에
+# 달리게 되므로, 그 상태를 아예 만들지 않는다.
+set_env_value() {
+  if grep -q "^$1=" .env; then
+    sed -i "s|^$1=.*|$1=$2|" .env
+  else
+    printf '%s=%s\n' "$1" "$2" >> .env
+  fi
+}
+
+# 앱 포트를 루프백에만 묶는다. 밖에서 오는 것은 전부 Caddy(443)를 지나야 한다 —
+# 그래야 actuator 차단과 X-Real-IP 주입을 우회할 수 없다 (#613).
+set_env_value APP_PUBLISHED_HOST 127.0.0.1
+
+# Caddyfile 이 읽는 값 둘. 도메인과 인증서 알림 주소는 terraform 이 정본이다.
+set_env_value PAWLOOP_DOMAIN "${domain_name}"
+set_env_value ACME_EMAIL "${acme_email}"
+
+# ── 4. 띄운다 ───────────────────────────────────────────────────────
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
