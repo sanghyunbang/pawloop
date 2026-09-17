@@ -26,14 +26,14 @@ import jakarta.servlet.http.HttpServletResponse;
  * 즉 {@code CustomOAuth2UserService} 가 공들여 만든 {@code email_already_registered} 같은
  * 원인 코드가 사용자에게도 앱에게도 전혀 닿지 않았다.
  *
- * <p>게다가 앱은 {@code flutter_web_auth_2} 로 {@code heattrip://login-callback} 을 기다린다
+ * <p>게다가 앱은 {@code flutter_web_auth_2} 로 {@code pawloop://login-callback} 을 기다린다
  * ({@link OAuth2SuccessHandler} 참고). 실패가 그 커스텀 스킴으로 돌아오지 않으면 로그인 시트는
  * 사용자가 취소할 때까지 멈춰 있는다. 그래서 성공과 같은 딥링크로, 대신 토큰이 아니라
  * 에러 코드만 실어 돌려보낸다.
  *
  * <pre>
- *   성공: heattrip://login-callback?code=&lt;1회용 코드&gt;&amp;state=&lt;앱이 만든 난수&gt;
- *   실패: heattrip://login-callback?error=email_already_registered
+ *   성공: pawloop://login-callback?code=&lt;1회용 코드&gt;&amp;state=&lt;앱이 만든 난수&gt;
+ *   실패: pawloop://login-callback?error=email_already_registered
  * </pre>
  *
  * <p><b>토큰은 딥링크로 나가지 않는다.</b> {@code POST /auth/oauth/{provider}/callback} 의
@@ -55,7 +55,7 @@ public class OAuth2FailureHandler implements AuthenticationFailureHandler {
     /**
      * 성공 경로와 <b>같은</b> 리다이렉트 대상을 쓴다. 값은 설정의 허용 목록이 정한다 (이슈 #14).
      *
-     * <p>예전에는 여기에 {@code "heattrip://login-callback"} 이 박혀 있었다. 성공 경로만
+     * <p>예전에는 여기에 {@code "pawloop://login-callback"} 이 박혀 있었다. 성공 경로만
      * 설정으로 빼면 웹 콜백을 추가하는 날 실패만 옛 스킴으로 가고, 그 로그인 시트는
      * 사용자가 취소할 때까지 멈춰 있는다.
      */

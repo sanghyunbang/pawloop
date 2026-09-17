@@ -340,7 +340,7 @@ class AuthTokenRefreshIntegrationTest extends AbstractMySqlIntegrationTest {
         // 경로" 는 그대로 살아 있고, 채널만 URL 에서 응답 본문으로 옮겨졌다.
         assertThat(redirect)
                 .as("#14 완료 조건 1 — 딥링크에는 code 와 state 만 실린다")
-                .startsWith("heattrip://login-callback?code=");
+                .startsWith("pawloop://login-callback?code=");
         assertThat(redirect).doesNotContain("token=", "refresh=");
 
         String body = mockMvc.perform(post("/auth/oauth/kakao/callback")

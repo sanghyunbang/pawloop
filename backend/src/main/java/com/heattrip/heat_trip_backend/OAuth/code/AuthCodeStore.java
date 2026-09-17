@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 1회용 인가 코드의 발급소이자 유일한 소비처. (이슈 #14)
  *
  * <h2>왜 코드인가</h2>
- * 예전에는 성공 딥링크가 {@code heattrip://login-callback?token=<AT>&refresh=<RT>} 였다.
+ * 예전에는 성공 딥링크가 {@code pawloop://login-callback?token=<AT>&refresh=<RT>} 였다.
  * 커스텀 스킴은 <b>어느 앱이든 등록할 수 있고</b>, URL 은 302 의 {@code Location} 헤더와
  * 브라우저 히스토리에 남는다. 즉 14일짜리 자격증명이 가로채기 쉬운 채널로 나가고 있었다.
  * 대신 <b>60초 살고 한 번 쓰면 죽는 난수</b>를 내보내면, 가로채도 쓸 수 있는 창이 거의 없다.

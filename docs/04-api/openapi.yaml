@@ -92,7 +92,7 @@ info:
       있고 앱은 그것을 씁니다(`POST /api/dogs`·`/api/walks`·`/api/groups`·케어 기록·게시글 전부 같습니다).
       인증 리다이렉트의 `Location` 은 302 의 것이라 별개입니다.
     - 리네임 진행 중: 제품명은 Pawloop, 도메인·딥링크 스킴은 당분간 heattrip 을 유지합니다
-      (`https://api.heattrip.link`, `heattrip://login-callback`).
+      (`https://api.heattrip.link`, `pawloop://login-callback`).
     - `미구현` 이라고 적힌 오퍼레이션은 계약만 있고 백엔드 핸들러가 없습니다(2026-08 기준).
       Prism 목 서버로는 통과하지만 실서버에서는 404 입니다.
 servers:
@@ -500,14 +500,14 @@ paths:
       description: |
         앱(`flutter_web_auth_2`)이 실제로 여는 URL 입니다. 공급자 인증 화면으로 302 리다이렉트됩니다.
         인증 성공 시 백엔드가 앱 딥링크로 리다이렉트합니다:
-        `heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` (이슈 #14).
+        `pawloop://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` (이슈 #14).
 
         **딥링크에는 토큰이 없습니다.** 쿼리 파라미터는 정확히 `code` 와 `state` 둘뿐입니다.
         앱은 받은 `code` 를 `POST /auth/oauth/{provider}/callback` 으로 교환해 `AuthTokens` 를
         받습니다. 코드는 **60초 살고 한 번 쓰면 죽습니다** — 두 번째 교환은 401 입니다.
 
         > **2026-08 이전에는 이 딥링크가 `?token=<JWT>&refresh=<refreshToken>` 이었습니다(#9).**
-        > 커스텀 스킴(`heattrip://`)은 어느 앱이든 등록할 수 있고, URL 은 302 응답의 `Location`
+        > 커스텀 스킴(`pawloop://`)은 어느 앱이든 등록할 수 있고, URL 은 302 응답의 `Location`
         > 헤더(액세스·프록시 로그)와 브라우저 히스토리에 남습니다. 그 채널로 1시간짜리 액세스
         > 토큰과 14일짜리 refresh 토큰이 함께 나가고 있었습니다. 지금 나가는 것은 60초짜리
         > 1회용 난수뿐이라, 가로채도 쓸 수 있는 창이 사실상 없습니다. 서버는 이 리다이렉트에
@@ -524,7 +524,7 @@ paths:
         > 대조의 존재 여부를 왕복을 시작한 쪽이 정하게 되어, `state` 를 생략하기만 하면
         > 두 번째 줄이 사라집니다. **항상 `state` 를 보내세요.**
 
-        **실패도 같은 딥링크로 돌아옵니다**: `heattrip://login-callback?error=<code>`.
+        **실패도 같은 딥링크로 돌아옵니다**: `pawloop://login-callback?error=<code>`.
         앱은 `code` 와 `error` 중 어느 쪽이 실려 있는지로 성공/실패를 가릅니다.
         현재 서버가 보내는 `code` 는 다음이 전부입니다.
 
@@ -564,7 +564,7 @@ paths:
       summary: 공급자 리디렉션 수신(Spring Security 내부 콜백)
       description: |
         공급자 콘솔에 등록해야 하는 승인 리디렉션 URI 입니다. 값은 `{server.url}/login/oauth2/code/{provider}`.
-        성공 시 앱 딥링크 `heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 로
+        성공 시 앱 딥링크 `pawloop://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 로
         302 합니다(#14). 클라이언트가 직접 호출하는 경로가 아닙니다.
       security: []
       parameters:
@@ -677,7 +677,7 @@ paths:
                   description: 인증 시작 때 앱이 만들어 저장해 둔 난수
                 redirectUri:
                   type: string
-                  example: "heattrip://login-callback"
+                  example: "pawloop://login-callback"
                   description: |
                     **리다이렉트 대상으로 쓰이지 않습니다.** 이 시점에는 리다이렉트가 이미
                     끝났고, 대상은 서버 설정(`app.security.oauth.redirect-allowlist`)이 정합니다.

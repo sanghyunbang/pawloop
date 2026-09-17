@@ -330,7 +330,7 @@ class AuthMeIntegrationTest extends AbstractMySqlIntegrationTest {
         // 직접 부르면 "서비스는 고쳤는데 경로가 붙어 있지 않은" 상태를 잡지 못한다.
         assertThat(redirect)
                 .as("소셜 로그인 성공은 1회용 코드를 실은 딥링크로 끝나야 한다 (#14 완료 조건 1)")
-                .startsWith("heattrip://login-callback?code=");
+                .startsWith("pawloop://login-callback?code=");
         assertThat(redirect)
                 .as("딥링크에 토큰이 실리면 #14 가 되돌려진 것이다")
                 .doesNotContain("token=", "refresh=");

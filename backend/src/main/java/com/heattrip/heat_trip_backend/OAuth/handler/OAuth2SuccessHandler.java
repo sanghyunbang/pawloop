@@ -22,11 +22,11 @@ import jakarta.servlet.http.HttpServletResponse;
  *
  * <h2>무엇이 바뀌었나</h2>
  * <pre>
- *   예전: heattrip://login-callback?token=&lt;AT&gt;&amp;refresh=&lt;RT&gt;
- *   지금: heattrip://login-callback?code=&lt;1회용 코드&gt;&amp;state=&lt;앱이 만든 난수&gt;
+ *   예전: pawloop://login-callback?token=&lt;AT&gt;&amp;refresh=&lt;RT&gt;
+ *   지금: pawloop://login-callback?code=&lt;1회용 코드&gt;&amp;state=&lt;앱이 만든 난수&gt;
  * </pre>
  *
- * <p>커스텀 스킴({@code heattrip://})은 <b>어느 앱이든 등록할 수 있다.</b> 같은 스킴을
+ * <p>커스텀 스킴({@code pawloop://})은 <b>어느 앱이든 등록할 수 있다.</b> 같은 스킴을
  * 선언한 앱이 설치돼 있으면 선택 다이얼로그가 뜨거나 경우에 따라 가로채진다. 게다가 이
  * URL 은 302 의 {@code Location} 헤더(액세스·프록시 로그)와 브라우저 히스토리에 남는다.
  * 예전 형태에서는 그 채널로 <b>1시간짜리 AT 와 14일짜리 RT</b> 가 함께 나갔다.

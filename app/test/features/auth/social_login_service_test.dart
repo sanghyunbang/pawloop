@@ -5,7 +5,7 @@
 // 토큰 저장(`tokenStore`) 세 자리를 주입점으로 열어 둔다. 여기서 그 셋을 갈아끼워
 // 순수 함수 테스트가 닿지 못하는 **순서와 이음새**를 확인한다.
 //
-// 자동화할 수 없는 것: 시스템 브라우저가 `heattrip://` 스킴으로 앱에 복귀하는 구간.
+// 자동화할 수 없는 것: 시스템 브라우저가 `pawloop://` 스킴으로 앱에 복귀하는 구간.
 // 그건 플랫폼 채널 + AndroidManifest/Info.plist 설정이라 위젯 테스트의 사정권 밖이다
 // (완료 조건 7 은 수동 체크리스트로 남는다).
 
@@ -63,7 +63,7 @@ void main() {
       required callbackUrlScheme,
     }) async {
       final state = forceState ?? _stateFrom(url);
-      return 'heattrip://login-callback?code=$code&state=$state';
+      return 'pawloop://login-callback?code=$code&state=$state';
     };
   }
 
@@ -75,7 +75,7 @@ void main() {
         required callbackUrlScheme,
       }) async {
         seenUrl = url;
-        return 'heattrip://login-callback?error=access_denied';
+        return 'pawloop://login-callback?error=access_denied';
       };
 
       await SocialLoginService.signIn('kakao');
@@ -96,7 +96,7 @@ void main() {
         required callbackUrlScheme,
       }) async {
         seen.add(_stateFrom(url));
-        return 'heattrip://login-callback?error=access_denied';
+        return 'pawloop://login-callback?error=access_denied';
       };
 
       await SocialLoginService.signIn('kakao');
@@ -147,7 +147,7 @@ void main() {
         required callbackUrlScheme,
       }) async {
         sentState = _stateFrom(url);
-        return 'heattrip://login-callback?code=C&state=$sentState';
+        return 'pawloop://login-callback?code=C&state=$sentState';
       };
       String? exchangedState;
       SocialLoginService.exchanger = ({
@@ -194,7 +194,7 @@ void main() {
       SocialLoginService.authenticator = ({
         required url,
         required callbackUrlScheme,
-      }) async => 'heattrip://login-callback?code=CODE-1';
+      }) async => 'pawloop://login-callback?code=CODE-1';
 
       expect((await SocialLoginService.signIn('kakao')).ok, isFalse);
     });
@@ -248,7 +248,7 @@ void main() {
       SocialLoginService.authenticator = ({
         required url,
         required callbackUrlScheme,
-      }) async => 'heattrip://login-callback?error=access_denied';
+      }) async => 'pawloop://login-callback?error=access_denied';
       var exchangeCalled = false;
       SocialLoginService.exchanger = ({
         required provider,
@@ -269,7 +269,7 @@ void main() {
       SocialLoginService.authenticator = ({
         required url,
         required callbackUrlScheme,
-      }) async => 'heattrip://login-callback?error=account_state_invalid';
+      }) async => 'pawloop://login-callback?error=account_state_invalid';
 
       expect(
         (await SocialLoginService.signIn('kakao')).outcome,

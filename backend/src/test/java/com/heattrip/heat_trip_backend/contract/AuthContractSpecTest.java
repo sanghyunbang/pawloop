@@ -675,12 +675,12 @@ class AuthContractSpecTest {
     }
 
     @Test
-    @DisplayName("api-spec.md 의 딥링크 스킴이 코드와 같은 heattrip 이다")
+    @DisplayName("api-spec.md 의 딥링크 스킴이 코드와 같은 pawloop 이다")
     void apiSpec_usesTheDeepLinkSchemeTheCodeActuallyUses() {
         assertThat(apiSpecRaw)
                 .as("이 문서를 보고 구현하면 콜백을 못 받는 상태였다")
-                .doesNotContain("pawloop://");
-        assertThat(apiSpecRaw).contains("heattrip://login-callback");
+                .doesNotContain("heattrip://");
+        assertThat(apiSpecRaw).contains("pawloop://login-callback");
     }
 
     // ─────────────────────────── helpers ───────────────────────────

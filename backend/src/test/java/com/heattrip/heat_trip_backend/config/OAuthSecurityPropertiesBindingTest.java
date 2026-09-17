@@ -41,7 +41,7 @@ class OAuthSecurityPropertiesBindingTest {
     @DisplayName("app.security.oauth.* 가 OAuthSecurityProperties 에 실제로 바인딩된다")
     void oauthPrefix_isBoundToTheBean() {
         runner.withPropertyValues(
-                        "app.security.oauth.redirect-allowlist=probe://done,heattrip://login-callback",
+                        "app.security.oauth.redirect-allowlist=probe://done,pawloop://login-callback",
                         "app.security.oauth.code-ttl-seconds=17")
                 .run(context -> {
                     assertThat(context).hasSingleBean(OAuthSecurityProperties.class);
@@ -49,7 +49,7 @@ class OAuthSecurityPropertiesBindingTest {
                     OAuthSecurityProperties props = context.getBean(OAuthSecurityProperties.class);
                     assertThat(props.getRedirectAllowlist())
                             .as("프리픽스 오타나 등록 누락이면 여기서 클래스 기본값이 나온다")
-                            .containsExactly("probe://done", "heattrip://login-callback");
+                            .containsExactly("probe://done", "pawloop://login-callback");
                     assertThat(props.getCodeTtlSeconds()).isEqualTo(17);
                     assertThat(props.defaultRedirect())
                             .as("목록의 첫 항목이 기본 대상이다 — 그 규칙까지 설정을 따라야 한다")
@@ -80,7 +80,7 @@ class OAuthSecurityPropertiesBindingTest {
     void noProperties_fallsBackToTheClassDefaults() {
         runner.run(context -> {
             OAuthSecurityProperties oauth = context.getBean(OAuthSecurityProperties.class);
-            assertThat(oauth.getRedirectAllowlist()).containsExactly("heattrip://login-callback");
+            assertThat(oauth.getRedirectAllowlist()).containsExactly("pawloop://login-callback");
             assertThat(oauth.getCodeTtlSeconds()).isEqualTo(60);
         });
     }

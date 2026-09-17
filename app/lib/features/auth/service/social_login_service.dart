@@ -51,7 +51,7 @@ typedef OAuthCodeExchanger =
 /// ## 흐름 (이슈 #14)
 /// ```
 /// ① state 생성 → ② /oauth2/authorization/{provider}?state=... 를 브라우저로 열기
-/// ③ heattrip://login-callback?code=...&state=... 로 복귀
+/// ③ pawloop://login-callback?code=...&state=... 로 복귀
 /// ④ 돌아온 state 가 ① 과 같은지 대조 (다르면 로그인 실패)
 /// ⑤ POST /auth/oauth/{provider}/callback 으로 code → AuthTokens 교환
 /// ⑥ 토큰 저장
@@ -135,7 +135,7 @@ class SocialLoginService {
       // ※ callbackUrl 을 로그로 찍지 마라 — URL 에 1회용 코드가 들어 있다.
       callbackUrl = await authenticator(
         url: '$baseUrl/oauth2/authorization/$provider?state=$state',
-        callbackUrlScheme: 'heattrip',
+        callbackUrlScheme: 'pawloop',
       );
     } catch (e) {
       // 예외 메시지에 콜백 URL(=코드)이 섞여 들어올 수 있어 타입만 남긴다.

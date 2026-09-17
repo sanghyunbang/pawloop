@@ -11,7 +11,7 @@ import java.util.List;
  * 소셜 로그인 하드닝 설정. (이슈 #14)
  *
  * <h2>왜 설정으로 뺐나</h2>
- * 딥링크 대상({@code heattrip://login-callback})이 코드에 박혀 있었다. 그 자체는 당장
+ * 딥링크 대상({@code pawloop://login-callback})이 코드에 박혀 있었다. 그 자체는 당장
  * 위험하지 않지만, 웹 콜백이나 스테이징용 스킴을 하나 더 붙이는 날 "요청에서 받은
  * {@code redirect_uri} 로 리다이렉트한다" 는 흔한 실수를 하기 쉬운 구조였다. 허용 목록을
  * 밖으로 빼고, <b>목록에 없는 값은 절대 리다이렉트 대상이 되지 않게</b> 한다.
@@ -27,11 +27,11 @@ public class OAuthSecurityProperties {
     /**
      * 소셜 로그인 종료 후 리다이렉트해도 되는 대상. <b>정확히 일치</b>하는 값만 통과한다.
      *
-     * <p>접두사 비교를 쓰지 않는 이유: {@code heattrip://login-callback} 을 접두사로 허용하면
-     * {@code heattrip://login-callback.evil.example} 같은 값이 통과한다. 호스트 파싱으로
+     * <p>접두사 비교를 쓰지 않는 이유: {@code pawloop://login-callback} 을 접두사로 허용하면
+     * {@code pawloop://login-callback.evil.example} 같은 값이 통과한다. 호스트 파싱으로
      * 비교하지 않는 이유는 커스텀 스킴 URI 에 권위 있는 호스트 개념이 없어서다.
      */
-    private List<String> redirectAllowlist = new ArrayList<>(List.of("heattrip://login-callback"));
+    private List<String> redirectAllowlist = new ArrayList<>(List.of("pawloop://login-callback"));
 
     /**
      * 1회용 인가 코드의 수명(초). 이슈가 요구한 상한은 60초다.

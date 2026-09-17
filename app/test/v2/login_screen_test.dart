@@ -149,7 +149,7 @@ void main() {
       // 계약과 다른 콜백(토큰 없음) — 사용자 탓이 아니라 서버 탓이다.
       await tapKakao(
         tester,
-        () async => 'heattrip://login-callback?error=account_state_invalid',
+        () async => 'pawloop://login-callback?error=account_state_invalid',
       );
 
       expect(

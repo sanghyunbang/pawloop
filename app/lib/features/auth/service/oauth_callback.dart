@@ -1,7 +1,7 @@
 /// 소셜 로그인 콜백 딥링크 판정 — 순수 함수만 둔다.
 ///
 /// `flutter_web_auth_2` 는 로그인이 끝나면
-/// `heattrip://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 형태의 문자열을
+/// `pawloop://login-callback?code=<1회용 코드>&state=<앱이 만든 난수>` 형태의 문자열을
 /// 돌려준다. 이 문자열을 판정하는 일은 플러그인·저장소·네트워크와 아무 관계가 없으므로
 /// `SocialLoginService.signIn` 밖으로 꺼내 단위 테스트 대상으로 만든다.
 /// (`FlutterWebAuth2.authenticate` 는 static 이라 스텁이 불가능하다 — 분리가 전제 조건이다.)
@@ -9,7 +9,7 @@
 /// ## 2026-08: 딥링크에서 토큰이 사라졌다 (이슈 #14)
 ///
 /// 예전에는 `?token=<AT>&refresh=<RT>` 였고 이 파일에 `tokenFromCallback` ·
-/// `refreshFromCallback` · `isNewFromCallback` 이 있었다. 커스텀 스킴(`heattrip://`)은
+/// `refreshFromCallback` · `isNewFromCallback` 이 있었다. 커스텀 스킴(`pawloop://`)은
 /// 어느 앱이든 등록할 수 있고 URL 은 302 의 `Location` 헤더와 브라우저 히스토리에
 /// 남는다 — 1시간짜리 액세스 토큰과 14일짜리 refresh 토큰이 그 채널로 나가고 있었다.
 ///
@@ -84,7 +84,7 @@ String? codeFromCallback(String callbackUrl) {
 /// 그래서 `Uri.parse` 만 try/catch 로 감싸는 것으로는 부족하다. 실측:
 ///
 /// ```
-/// heattrip://login-callback?code=C&state=S&x=%E0%A4%A
+/// pawloop://login-callback?code=C&state=S&x=%E0%A4%A
 ///   -> FormatException: Missing extension byte (at offset 2)
 /// ```
 ///
