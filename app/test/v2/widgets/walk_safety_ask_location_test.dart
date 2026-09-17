@@ -10,6 +10,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -59,14 +60,21 @@ Future<void> _pump(
   WidgetTester t, {
   required Future<LocationFix> Function() locate,
   Future<bool> Function(BuildContext context)? onAskLocation,
+  String? fontFamily,
 }) async {
   await t.pumpWidget(MaterialApp(
+    theme: fontFamily == null ? null : ThemeData(fontFamily: fontFamily),
     home: Scaffold(
-      body: WalkSafetyCard(
-        repository: _repo(),
-        locate: locate,
-        now: () => DateTime(2026, 9, 7, 14, 10),
-        onAskLocation: onAskLocation,
+      // 홈 화면이 이 카드를 좌우 22 여백 안에 둔다(today_screen.dart:250). 그 여백이 없으면
+      // 글자가 쓸 폭이 실제보다 넓어져, 한 줄인지 재는 검사가 아무것도 못 잡는다.
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        child: WalkSafetyCard(
+          repository: _repo(),
+          locate: locate,
+          now: () => DateTime(2026, 9, 7, 14, 10),
+          onAskLocation: onAskLocation,
+        ),
       ),
     ),
   ));
@@ -89,8 +97,36 @@ void main() {
         onAskLocation: (_) async => false);
 
     expect(_ask, findsOneWidget);
-    expect(find.text('위치를 켜면 오늘 산책하기 좋은지 알려드려요'), findsOneWidget);
+    expect(find.text('지금 산책하기 좋은지 알려드려요'), findsOneWidget);
     expect(find.textContaining('°C'), findsNothing);
+  });
+
+  // 360dp 폰에서 **한 줄**에 들어야 한다 (#658). 예전 문구는 마지막 '요' 한 글자만
+  // 다음 줄로 떨어져 카드가 어색했다.
+  //
+  // 두 가지를 갖춰야 이 검사가 뜻을 가진다. 기본 표면(800dp)에서는 어떤 문구든 한 줄이라
+  // 재도 소용없고, 테스트 폰트는 글자 하나가 폰트 크기만큼 넓어 실제보다 빨리 접힌다.
+  // 그래서 폭을 360 으로 두고 **진짜 Pretendard** 를 물린다.
+  testWidgets('그 한 줄이 360dp 에서 정말 한 줄이다 — 진짜 폰트로 잰다', (t) async {
+    final loader = FontLoader('Pretendard');
+    for (final w in const ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold']) {
+      loader.addFont(rootBundle.load('assets/fonts/Pretendard-$w.otf'));
+    }
+    await loader.load();
+
+    t.view.physicalSize = const Size(360, 900);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+
+    await _pump(t,
+        locate: () async => const LocationFix.denied(LocationDenial.denied),
+        onAskLocation: (_) async => false,
+        fontFamily: 'Pretendard');
+
+    final label = find.text('지금 산책하기 좋은지 알려드려요');
+    expect(label, findsOneWidget);
+    expect(t.getSize(label).height, lessThan(13.5 * 1.6),
+        reason: '두 줄이 되면 마지막 글자만 떨어져 보인다 — 문구를 줄이거나 자리를 넓혀야 한다');
   });
 
   testWidgets('동의 전이면 안내를 안 띄운다 — 그건 동의 화면이 받는 자리다', (t) async {
