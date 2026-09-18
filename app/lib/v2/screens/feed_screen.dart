@@ -323,16 +323,21 @@ class _FeedScreenState extends State<FeedScreen> {
     final padding = EdgeInsets.fromLTRB(12, 4, 12, MediaQuery.of(context).padding.bottom + 100);
     // 사진 벽 — 사진·영상이 있는 글만 두 열로(#451). 한 화면에 여섯~여덟 장이 보인다.
     if (_view == 'grid') {
+      // **사진 벽에서는 가린 사람의 글을 아예 뺀다.** 카드·목록은 "가린 사람의 글입니다" 로
+      // 자리를 남기지만, 사진만 모아 거는 벽에서는 남길 자리가 없다 — 접힌 칸을 끼우면
+      // 벽이 구멍난 것처럼 보인다. 그리고 여기가 **가장 위험한 자리**다: 벽은 사진을 크게
+      // 걸고, 불쾌한 것은 대개 사진이다.
+      final visible = [for (final p in _posts) if (!p.hiddenByBlock) p];
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView(
           padding: padding,
           children: [
-            if (PostPhotoWall.withMedia(_posts).isEmpty)
+            if (PostPhotoWall.withMedia(visible).isEmpty)
               _photoEmptyView()
             else
               PostPhotoWall(
-                  posts: _posts,
+                  posts: visible,
                   onTap: _open,
                   onLike: (post) => _toggleReaction(post, CommunityReaction.cute)),
             if (_hasMore) _moreButton(),
@@ -860,7 +865,45 @@ class _FeedScreenState extends State<FeedScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// 가린 사람의 글 — 목록에서는 **글도 사진도 안 그린다**.
+  ///
+  /// **여기가 비어 있었다.** 서버는 읽는 사람 기준으로 `hiddenByBlock` 을 계산해 붙여
+  /// 보내는데(`community_repository.dart:360`), 그 값을 보는 화면이 글 상세
+  /// (`post_detail_screen.dart:802`)와 채팅(`family_chat_screen.dart:1104`)뿐이었다.
+  /// 목록은 그대로 그렸다 — **가리기를 눌러도 피드에서는 아무것도 달라지지 않았다.**
+  /// 2026-09-18 에 사장님이 실기기에서 "상세에는 가리기가 나오는데 기본 화면에서 보면
+  /// 그대로 노출된다" 고 알려 주셨다.
+  ///
+  /// **사진을 빼는 것이 핵심이다.** 글자만 접고 사진을 남기면 가장 불쾌할 수 있는 것이
+  /// 그대로 남는다. 제목도 뺀다 — 제목에 욕을 적으면 그만이다.
+  ///
+  /// 상세와 달리 **여기서는 펴지 않는다.** 목록의 탭은 글을 여는 동작이라 "눌러서 보기" 와
+  /// 부딪친다. 펴는 것은 상세에 이미 있으므로(`_revealed`), 눌러서 들어가면 된다.
+  Widget _blockedCard(CommunityPost post) => GestureDetector(
+        onTap: () => _open(post),
+        behavior: HitTestBehavior.opaque,
+        child: GlassCard(
+          padding: const EdgeInsets.fromLTRB(13, 12, 12, 12),
+          child: Row(children: [
+            const Icon(Icons.visibility_off_rounded,
+                size: 18, color: T.textMuted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('가린 사람의 글입니다 · 눌러서 보기',
+                  key: Key('blocked-post-${post.id}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic,
+                      color: T.textMuted)),
+            ),
+          ]),
+        ),
+      );
+
   Widget _card(CommunityPost post) {
+    if (post.hiddenByBlock) return _blockedCard(post);
     final folded = _folded(context);
     return GestureDetector(
       onTap: () => _open(post),
@@ -1047,6 +1090,7 @@ class _FeedScreenState extends State<FeedScreen> {
       };
 
   Widget _row(CommunityPost post) {
+    if (post.hiddenByBlock) return _blockedCard(post);
     return GestureDetector(
       onTap: () => _open(post),
       behavior: HitTestBehavior.opaque,
