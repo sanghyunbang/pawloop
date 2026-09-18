@@ -18,6 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
+import 'package:heat_trip_flutter/v2/data/walk_feed.dart';
+import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/screens/main_shell.dart';
 import 'package:heat_trip_flutter/v2/screens/today_screen.dart';
@@ -47,6 +49,67 @@ Future<void> _pump(WidgetTester tester, {required double width, required double 
   await tester.pumpAndSettle();
 }
 
+
+const _bori = DogProfile(
+    serverId: 1, name: '보리', breed: '푸들', size: DogSize.small, ageMonths: 24);
+
+/// 서버를 안 부르는 저장소 — `today_walk_doors_test.dart` 의 것과 같다.
+class _Repo implements WalkRepository {
+  @override
+  Future<ServerWalkPage> walks({int? dogId, String? cursor, int? limit}) async =>
+      ServerWalkPage(items: [_walkToday()], nextCursor: null, hasMore: false);
+
+  @override
+  Future<ServerWalkStats> stats({int? dogId}) async => const ServerWalkStats(
+        weekKm: [0, 0, 0, 0, 0, 0, 0],
+        totalKm: 0.7,
+        walkCount: 1,
+        avgKm: 0.7,
+        allTimeKm: 0.7,
+        allTimeCount: 1,
+        allTimeMinutes: 99,
+      );
+
+  @override
+  Future<List<ServerPet>> pets() async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation i) =>
+      throw UnimplementedError('${i.memberName} 은 이 테스트가 안 쓴다');
+}
+
+ServerWalk _walkToday() {
+  final now = DateTime.now();
+  return ServerWalk(
+    id: 14,
+    dogId: 1,
+    dogIds: const [1],
+    clientWalkId: 'ck-14',
+    startedAt: DateTime(now.year, now.month, now.day, 8, 30),
+    distanceM: 704,
+    durationS: 720,
+  );
+}
+
+/// **로그인하고 아이를 등록한 집**의 홈. 위 `_home` 은 게스트라 목표 줄을 안 그린다.
+Future<void> _pumpSignedIn(WidgetTester tester,
+    {required double width, required double scale}) async {
+  useWidth(tester, width);
+  AuthState.signInForTest(const AuthUser(id: 1, nickname: 'walker'));
+  replacePets(const [_bori]);
+
+  await tester.pumpWidget(MaterialApp(
+    home: Builder(
+      builder: (context) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(scale)),
+        child: TodayScreen(feed: WalkFeed(repository: _Repo())),
+      ),
+    ),
+  ));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -70,6 +133,78 @@ void main() {
     await _pump(tester, width: 393, scale: 2.0);
 
     expect(tester.takeException(), isNull);
+  });
+
+
+  // ── 로그인한 집 ──────────────────────────────────────────────
+  //
+  // **여기가 비어 있었다.** 위 검사들은 전부 `AuthStatus.unauthenticated` 로 돌아서
+  // `if (!data.guest) WalkGoalRow(...)`(`today_screen.dart`)를 **한 번도 안 그렸다.**
+  // 홈의 글자 배율 검사가 모두 초록인데 목표 줄만 측정 밖이었고, 그래서 360dp 에서
+  // 1.0배에 16px · 1.5배에 153px · 2.0배에 289px 넘치는 것을 아무도 몰랐다.
+  //
+  // 게스트 판을 지우지 않고 **옆에 둔다** — 게스트 홈도 여전히 안 넘쳐야 한다.
+  for (final scale in [1.0, 1.3, 1.5, 2.0]) {
+    testWidgets('로그인 · 아이 등록 · 360dp · 글자 $scale배에서 홈이 안 넘친다', (tester) async {
+      await _pumpSignedIn(tester, width: 360, scale: scale);
+
+      expect(tester.takeException(), isNull, reason: '''
+로그인하고 아이를 등록하면 "이번 주 목표" 줄이 생긴다. 게스트 판에는 그 줄이 아예 없어서
+이 넘침이 여태 안 잡혔다.''');
+    });
+  }
+
+  testWidgets('로그인 · 393dp · 글자 2.0배에서도 안 넘친다', (tester) async {
+    await _pumpSignedIn(tester, width: 393, scale: 2.0);
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('글자를 키우면 목표 줄이 위아래로 선다 — 좁은 칸에 두 줄로 우겨넣지 않는다', (tester) async {
+    // **되돌리기 증명이 찾아낸 자리다.** `Flexible` 만 있어도 넘침은 안 난다 — 세로 배치를
+    // 빼고 돌려도 위의 넘침 검사들이 전부 초록이었다. 그러니 세로 배치는 넘침 방지가 아니라
+    // **읽기 편하라고** 넣은 것이고, 그것을 지키는 검사가 따로 있어야 한다.
+    //
+    // 나란히 두면 2.0배에서 숫자가 라벨 옆 좁은 칸에서 두 줄로 접힌다 —
+    // `1/5일 ·` / `12/150분` 처럼 끊겨서 한 덩이로 안 읽힌다.
+    await _pumpSignedIn(tester, width: 360, scale: 2.0);
+
+    final label = find.text('이번 주 목표');
+    final value = find.byKey(const Key('walk-goal-label'));
+    expect(tester.getRect(value).top,
+        greaterThanOrEqualTo(tester.getRect(label).bottom),
+        reason: '2.0배에서는 숫자가 라벨 **아래**에 와야 온 폭을 쓴다');
+  });
+
+  testWidgets('1.0배에서는 목표 줄이 나란하다 — 평소 화면을 안 바꾼다', (tester) async {
+    await _pumpSignedIn(tester, width: 360, scale: 1.0);
+
+    final label = find.text('이번 주 목표');
+    final value = find.byKey(const Key('walk-goal-label'));
+    expect(tester.getRect(value).left, greaterThan(tester.getRect(label).right),
+        reason: '평소에는 한 줄이다 — 문턱을 0 으로 낮춰 늘 세우면 이 검사가 잡는다');
+  });
+
+  testWidgets('목표 줄의 글자가 안 잘린다 — 넘침을 말줄임으로 바꿔 놓고 끝내지 않는다', (tester) async {
+    // 넘침을 없애는 가장 쉬운 길은 `Flexible` + `overflow: ellipsis` 인데, 그러면
+    // `1/5일 · 12/150…` 처럼 **숫자가 잘린다.** 목표 줄은 그 숫자가 전부라 잘리면 뜻이
+    // 없어진다. 그래서 배율이 높으면 위아래로 세우고 낮은 배율에서는 줄바꿈으로 받는다.
+    //
+    // **재는 방법을 한 번 바꿨다.** 처음에는 `TextPainter` 로 "한 줄에 다 들어가는가" 를
+    // 쟀는데, 고친 코드가 2.0배에서 **두 줄로 줄바꿈**하자 그것을 잘림으로 읽고 빨개졌다.
+    // 줄바꿈은 잘림이 아니다 — 글자가 다 보인다. 그래서 위젯이 **잘라내도록 설정돼
+    // 있는가**를 직접 본다.
+    await _pumpSignedIn(tester, width: 360, scale: 2.0);
+
+    final label = find.byKey(const Key('walk-goal-label'));
+    expect(label, findsOneWidget);
+    final text = tester.widget<Text>(label);
+
+    expect(text.overflow, isNot(TextOverflow.ellipsis), reason: '''
+목표 줄의 숫자에 말줄임을 걸면 "1/5일 · 12/150…" 이 된다 — 남은 것은 아무 뜻도 없다.
+넘치면 줄바꿈이나 세로 배치로 받아야 한다.''');
+    expect(text.maxLines, isNull, reason: '''
+줄 수를 묶으면 넘치는 판에서 결국 잘린다. 이 줄은 몇 줄이 되든 다 보여야 한다.''');
   });
 
   testWidgets('안 들어가면 스크롤로 받는다 — 잘라내지 않는다', (tester) async {
