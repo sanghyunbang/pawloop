@@ -56,6 +56,17 @@ class WalkTrackingScreen extends StatefulWidget {
   /// 산책 중 사진(#450) — 카메라. 테스트가 가짜를 꽂는 자리. 없으면 실물이다.
   final MediaPicker? picker;
 
+  /// 테스트가 **첫 위치**를 넣는 자리. 앱에서는 `null` 이라 진짜 [LocationService] 가 선다 —
+  /// [picker]·[photoStore] 와 같은 자리다.
+  ///
+  /// **이 자리가 없어서 이 화면에는 테스트가 한 개도 없었다.** 위치가 static 호출이라 위젯
+  /// 테스트가 진짜 GPS 를 부르려 들었다. 그래서 #706 같은 버그가 검사 밖에 있었다.
+  /// 지도는 이미 막을 필요가 없다 — 키가 없으면 [MapUnavailable] 이 대신 선다.
+  final Future<LocationFix> Function()? locate;
+
+  /// 테스트가 **걸어가는 좌표**를 넣는 자리. `null` 이면 진짜 스트림이다.
+  final Stream<Position> Function({required String notificationTitle})? positions;
+
   /// 찍은 사진을 두는 곳. 테스트가 임시 폴더를 꽂는다.
   final WalkPhotoStore photoStore;
 
@@ -66,6 +77,8 @@ class WalkTrackingScreen extends StatefulWidget {
     this.courseLine,
     this.dogIds = const [],
     this.picker,
+    this.locate,
+    this.positions,
     this.photoStore = const WalkPhotoStore(),
   });
   @override
@@ -86,6 +99,12 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
 
   /// 끝내기를 두 번 누르는 것을 막는다 — 스냅숏을 찍는 1초 사이.
   bool _finishing = false;
+
+  /// 끝내기 시트에서 **이 화면을 떠났는가** — 저장하러 갔거나(`onSave`) 버렸다(`onDiscard`).
+  ///
+  /// 시트를 밖을 탭해 닫으면 둘 다 아니고, 그때 산책은 **계속된다**. 그 경우에만
+  /// 시계와 위치 구독을 되살린다(#706).
+  bool _leavingAfterFinish = false;
   Timer? _timer;
   StreamSubscription<Position>? _posSub;
   bool _paused = false;
@@ -250,7 +269,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   /// 못 쓰면 **아무것도 시작하지 않는다** — 타이머도 안 돌린다. 걷지 않은 시간이
   /// 올라가면 저장 화면이 그 값을 물려받는다.
   Future<void> _start() async {
-    final fix = await LocationService.locate();
+    final fix = await (widget.locate ?? LocationService.locate)();
     if (!mounted) return;
     setState(() => _fix = fix);
     final pos = fix.position;
@@ -280,6 +299,18 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
     // 안드로이드 13+: 알림 권한이 있어야 포그라운드 서비스 알림이 보인다. 거부해도 기록은 된다.
     await LocationService.requestNotificationPermission();
     if (!mounted) return;
+    _startTicking();
+    _listenPositions();
+    _loadNearbyPlaces(_path.first);
+  }
+
+  /// 1초마다 시간을 올리고 5초마다 스냅숏을 남긴다.
+  ///
+  /// **[_start] 와 [_finish] 가 둘 다 부른다.** 끝내기 시트를 저장 없이 닫으면 산책은
+  /// 계속되므로 여기를 다시 켜야 한다 — 예전에는 [_finish] 가 끄기만 하고 되살리지
+  /// 않았다(#706).
+  void _startTicking() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       // 일시정지 중에도 적는다 — 멈춰 선 채 앱이 죽어도 그때까지의 경로는 남아야 한다.
@@ -290,8 +321,6 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       if (_paused) return;
       setState(() => _seconds++);
     });
-    _listenPositions();
-    _loadNearbyPlaces(_path.first);
   }
 
   /// 위치 스트림 구독. 끊기면(플러그인 오류·서비스 종료) 말하고 다시 이을 길을 준다 — 조용히
@@ -299,7 +328,9 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   void _listenPositions() {
     _posSub?.cancel();
     final dogName = kMyDog.value?.name ?? '우리 아이';
-    _posSub = LocationService.stream(notificationTitle: '$dogName랑 산책 기록 중').listen((p) {
+    _posSub = (widget.positions ?? LocationService.stream)(
+            notificationTitle: '$dogName랑 산책 기록 중')
+        .listen((p) {
       if (_paused || !mounted) return;
       final cur = NLatLng(p.latitude, p.longitude);
       setState(() {
@@ -996,6 +1027,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   Future<void> _finish() async {
     if (_finishing) return;
     _finishing = true;
+    _leavingAfterFinish = false;
     _timer?.cancel();
     _posSub?.cancel();
     // 산책은 끝났다 — 저장 화면이 실패해도 초안 큐(WalkOutbox)가 맡는다. 스냅숏은 지운다.
@@ -1032,6 +1064,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
         readPhoto: widget.photoStore.read,
         warm: _warm,
         onSave: () {
+          _leavingAfterFinish = true;
           Navigator.pop(sheetCtx);
           Navigator.pushReplacement(
             context,
@@ -1044,11 +1077,22 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
           );
         },
         onDiscard: () {
+          _leavingAfterFinish = true;
           Navigator.pop(sheetCtx);
           Navigator.pop(context);
         },
       ),
     );
+    // 시트를 그냥 닫았으면(밖을 탭) 산책은 **계속된다**. 그런데 위에서 시계(999줄)와 위치
+    // 구독(1000줄)을 껐다 — **되살리지 않으면 화면은 "산책 기록 중" 을 띄운 채 아무것도
+    // 안 센다.** 2026-09-18 에 실기기에서 8분을 걸었는데 26초·59m 로 저장된 것이 이것이다
+    // (#706). 사장님이 "끝내기 눌렀다가 또 다시 하고 그랬다" 고 확인해 주셨다.
+    //
+    // 스냅숏도 위에서 지웠지만(1002줄) 되살린 타이머가 5초 안에 다시 쓴다.
+    if (!_leavingAfterFinish && mounted) {
+      _startTicking();
+      _listenPositions();
+    }
     // 시트를 그냥 닫았으면(밖을 탭) 다시 끝낼 수 있어야 한다.
     _finishing = false;
   }
