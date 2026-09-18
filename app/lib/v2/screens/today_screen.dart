@@ -21,6 +21,7 @@ import 'main_shell.dart';
 import 'start_walk.dart';
 import 'family_screen.dart';
 import 'insight_screen.dart';
+import 'myrecords_screen.dart';
 import '../widgets/dog_avatar.dart';
 import '../widgets/neighbor_photo_strip.dart';
 
@@ -170,12 +171,17 @@ class TodayScreen extends StatelessWidget {
                     builder: (_, data, __) => Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        GestureDetector(
-                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InsightScreen())),
-                          behavior: HitTestBehavior.opaque,
-                          // 예전에는 `const WalkToday()` 였다 — 무엇을 걷든 영원히 0회 0.0km 0분.
-                          child: _walkSummary(data, dog),
-                        ),
+                        // **카드 전체를 덮던 손을 뗐다**(#708). 통계로 가는 문이 여기
+                        // 있었는데 셰브론도 글자도 낭독기 라벨도 없어서 아무도 못 찾았다 —
+                        // 사장님이 "프로필에 다 몰려 있다" 고 하신 것은 길이 없어서가 아니라
+                        // 손잡이가 없어서였다. 문은 카드 맨 아래 이름표 둘로 옮긴다.
+                        //
+                        // 떼면 게스트가 0짜리 통계 화면으로 들어가던 길도 막힌다 —
+                        // `insight_screen.dart` 에도 `myrecords_screen.dart` 에도 로그인
+                        // 가드가 한 줄도 없다.
+                        //
+                        // 예전에는 `const WalkToday()` 였다 — 무엇을 걷든 영원히 0회 0.0km 0분.
+                        _walkSummary(context, data, dog),
                         const SizedBox(height: 12),
                         TodayCareCard(
                           onOpenFamily: () => Navigator.of(context).push(
@@ -313,7 +319,7 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
-  Widget _walkSummary(WalkFeedData data, DogProfile? dog) {
+  Widget _walkSummary(BuildContext context, WalkFeedData data, DogProfile? dog) {
     final today = data.today;
     final pendingToday = data.pending.length;
     final unknown = data.numbersUnknown;
@@ -387,6 +393,9 @@ class TodayScreen extends StatelessWidget {
         // 이번 주 목표와 연속 일수 (#341). 아이가 없거나 개가 아니면 줄 자체가 없다 —
         // 산책 권장량은 개에 대한 자료라 고양이에게 제안하면 근거 없는 숫자가 된다.
         if (!data.guest) WalkGoalRow(dog: dog, data: data),
+        // 문 둘 — 게스트에게는 없다. 위에서 이미 "로그인하면 오늘 산책이 여기 쌓여요" 를
+        // 말하고 있고, 그 사람의 기록·통계 화면은 어차피 전부 0 이다.
+        if (!data.guest) _walkDoors(context),
         // 아무것도 안 그린다 — 저녁 알림 예약을 이 자료에 맞춰 두는 자리다(#341).
         // 홈이 자료를 다시 읽는 순간이 곧 "다시 걸어야 하는 순간" 이라 여기 붙인다.
         WalkReminderSync(data: data, dogName: dog?.name),
@@ -402,6 +411,96 @@ class TodayScreen extends StatelessWidget {
   /// 넣거나 말줄임으로 자르는 길도 있지만, 글자를 키운 사람에게 글자를 다시 줄여 보이는
   /// 것은 설정을 무시하는 것이고 "코스 …" 는 무엇을 누르는지 알 수 없다. 한 줄에 하나씩
   /// 두면 폭이 두 배로 늘어 어떤 배율에서도 온전한 이름이 보인다.
+
+  /// 요약 카드 맨 아래 이름표 둘 — **있는 문에 이름을 붙인다**(#708).
+  ///
+  /// 통계로 가는 문은 원래 있었다. 카드 전체가 [InsightScreen] 으로 가는 손을 달고 있었는데
+  /// 셰브론도 글자도 낭독기 라벨도 없어서 **아무도 못 찾았다.** 게다가 이 카드에 보이는
+  /// 유일한 셰브론(`walk_goal_row.dart:169`)은 통계가 아니라 목표 시트로 간다 — 문에는
+  /// 이름이 없고, 보이는 화살표는 딴 데를 가리키고 있었다.
+  ///
+  /// 기록 목록은 그나마도 없었다. [MyRecordsScreen] 으로 가려면 홈 → 우상단 아바타 →
+  /// 내 프로필 → 내 산책 기록, **네 걸음**이었다. 산책 앱에서 내 산책이 가장 깊은 곳에 있었다.
+  ///
+  /// 이름은 프로필의 두 줄과 **똑같이** 적는다(`me_screen.dart:586` · `590`). 같은 곳에 다른
+  /// 이름을 붙이면 사용자에게는 다른 화면이 된다. 프로필 쪽은 그대로 둔다 — 빼면 거기서 찾던
+  /// 사람이 길을 잃는다.
+  ///
+  /// **숫자를 안 적는다.** 바로 위 목표 줄이 이미 `이번 주 목표 3/5일 · 42/90분` 이다. 그 밑에
+  /// `이번 주 5회 · 8.3km` 를 더하면 분모가 다른 "이번 주" 두 줄이 붙어 서로 다투는 것처럼
+  /// 읽힌다.
+  ///
+  /// **글자를 키우면 접지 않고 위아래로 세운다.** 접는 규칙(#396 · #402 · #433)은 "빼도 뜻이
+  /// 서는 보조 정보" 에만 쓴다 — 문을 접으면 기능이 없어진다. 문턱은 이 파일의 두 버튼과 같은
+  /// [_stackButtonsFrom] 이다.
+  Widget _walkDoors(BuildContext context) {
+    final records = _door(
+      id: const Key('home-my-records'),
+      label: '내 산책 기록',
+      onTap: () => Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const MyRecordsScreen())),
+    );
+    final stats = _door(
+      id: const Key('home-walk-stats'),
+      label: '산책 통계',
+      onTap: () => Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const InsightScreen())),
+    );
+    // 실제로 쓰는 글자 크기로 잰다 — `TextScaler` 는 선형이 아닐 수 있다.
+    final stacked =
+        MediaQuery.textScalerOf(context).scale(11.5) >= 11.5 * _stackButtonsFrom;
+    return Column(children: [
+      // 위 목표 줄과 같은 치수의 구분선. 아이를 아직 등록 안 한 집에서는 목표 줄이 통째로
+      // 사라지므로(`walk_goal_row.dart:100`), 이 선이 숫자와 문 사이를 나누는 유일한 선이 된다.
+      const SizedBox(height: 12),
+      Container(height: 1, color: T.accentSoft),
+      // 4 뿐인 이유: 아래 [_door] 가 자기 안에 위아래 11 을 들고 있다. 그 여백은 눈에
+      // 보이라고 넣은 것이 아니라 **누를 자리**를 만드느라 넣은 것이라, 여기서 또 띄우면
+      // 구분선과 글자가 멀어 보인다.
+      const SizedBox(height: 4),
+      if (stacked)
+        Column(children: [records, stats])
+      else
+        Row(children: [Expanded(child: records), Expanded(child: stats)]),
+    ]);
+  }
+
+  /// 이름표 하나. 옷은 같은 카드의 "다시 시도" 와 똑같다 — 이 앱에서 코랄은 "누를 수 있다"
+  /// 는 뜻이다.
+  Widget _door(
+          {required Key id,
+          required String label,
+          required VoidCallback onTap}) =>
+      GestureDetector(
+        key: id,
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Semantics(
+          button: true,
+          label: label,
+          // **위아래 11 은 보이라고 넣은 여백이 아니라 누를 자리다.** 글자만 두면 높이가
+          // 17pt 라, 걸으면서 엄지로 누르면 자주 빗나간다 — 애플 지침이 44×44pt 를
+          // 권한다(HIG, Layout). 11+17+11 ≈ 39pt 로 거기 가깝게 맞춘다. 가로는
+          // `Expanded` 가 카드 절반을 주므로 따로 넓힐 것이 없다.
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            // 말줄임은 **바닥**이다 — 더 좁은 기기가 나와도 노란 줄무늬 대신 이걸로 끝난다.
+              Flexible(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: T.warmText)),
+              ),
+              const Icon(Icons.chevron_right, size: 15, color: T.warmText),
+            ]),
+          ),
+        ),
+      );
+
   static const _stackButtonsFrom = 1.3;
 
   Widget _ctas(BuildContext context) {
