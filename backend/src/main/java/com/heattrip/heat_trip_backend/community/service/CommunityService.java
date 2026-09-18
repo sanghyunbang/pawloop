@@ -561,7 +561,11 @@ public class CommunityService {
         // 필터가 통째로 우회된다. null 인 필드는 안 보낸 것이라 검사할 것이 없다.
         contentFilter.requireClean(request.title(), request.body());
 
-        Post post = requirePost(postId);
+        // findDetail 로 dog 을 미리 열어 둔다 (2026-09-18 운영 사고). 아래 media.replace 가
+        // MediaObjectRepository.attach 의 clearAutomatically 로 영속성 컨텍스트를 비우므로,
+        // requirePost 로 읽어 dog 을 프록시로 두면 그 뒤 dogOf(post) 에서 세션 없는 프록시를
+        // 건드려 LazyInitializationException 으로 500 이 난다. detail() 도 같은 쿼리를 쓴다.
+        Post post = posts.findDetail(postId).orElseThrow(CommunityService::notFound);
         requireMine(post.getUser(), me.getId(), "글");
         post.edit(request.board(), request.title(), request.body());
         if (request.dogId() != null) {
@@ -590,6 +594,8 @@ public class CommunityService {
      */
     @Transactional
     public PostResponse attachCourse(User me, long postId, long courseId) {
+        // 여기와 dogOf 사이에 미디어 호출이 끼면 updatePost 와 같은 사고가 난다 — clearAutomatically
+        // 가 dog 프록시를 떼어낸다. 그때는 findDetail 로 바꿔야 한다 (2026-09-18).
         Post post = requirePost(postId);
         requireMine(post.getUser(), me.getId(), "글");
         CourseAttachment.AttachedCourse card = requireAttachable(courseId, me);
@@ -607,6 +613,8 @@ public class CommunityService {
     /** 붙은 코스를 뗀다. 코스 자체는 그대로다 — 글에서 그림만 빠진다. */
     @Transactional
     public PostResponse detachCourse(User me, long postId) {
+        // attachCourse 와 같다 — 여기와 dogOf 사이에 미디어 호출이 끼면 dog 프록시가 떨어져
+        // 터진다. 그때는 findDetail 로 바꿔야 한다 (2026-09-18).
         Post post = requirePost(postId);
         requireMine(post.getUser(), me.getId(), "글");
         post.attachCourse(null);
