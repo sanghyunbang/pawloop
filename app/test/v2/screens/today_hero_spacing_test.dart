@@ -22,6 +22,7 @@ import 'package:heat_trip_flutter/v2/data/walk_feed.dart';
 import 'package:heat_trip_flutter/v2/data/walk_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/screens/today_screen.dart';
+import 'package:heat_trip_flutter/v2/widgets/dog_avatar.dart';
 
 const _bori = DogProfile(
     serverId: 1, name: '보리', breed: '푸들', size: DogSize.small, ageMonths: 24);
@@ -85,6 +86,30 @@ void main() {
 
     expect(gap, greaterThanOrEqualTo(8.0),
         reason: '칩이 카드에 닿으면 카드에 딸린 줄처럼 읽힌다 (지금 ${gap.toStringAsFixed(1)}px)');
+  });
+
+  testWidgets('히어로 원이 150 이다 — 이 상수가 줄면 화면 균형이 통째로 바뀐다', (t) async {
+    // **이름을 낮춘 자리다.** 처음에는 '카드가 커져도 사진이 안 작아진다' 였는데, 요약 카드에
+    // `SizedBox(height: 1200)` 을 넣고 돌려도 초록이었다 — `_fitOrScroll`(today_screen.dart:252)
+    // 이 페이지를 `SingleChildScrollView` + `minHeight` + `IntrinsicHeight` 로 감싸서, 카드가
+    // 길어지면 히어로가 눌리는 게 아니라 **스크롤이 생기기** 때문이다. 그러니 이 검사가 잡는
+    // 것은 `_dogHero` 의 상수 하나뿐이다. 잡기는 잡는다(150→120 으로 바꾸면 빨개진다).
+    // 요약 카드에 줄이 늘면(#708 의 문 둘) 히어로가 쓸 자리가 줄고, 히어로는 `FittedBox`
+    // 안에 있어서 **자리가 모자라면 조용히 줄어든다.** 넘침도 실패도 안 나니 아무 테스트도
+    // 안 잡는다 — 화면에서는 우리 아이 사진만 작아져 있다.
+    //
+    // `getSize` 가 아니라 `getRect` 로 잰다. `FittedBox` 는 자식의 상자 크기를 그대로 두고
+    // **그리는 배율만** 바꾸므로, 상자만 재면 줄어들어도 150 이 나온다.
+    //
+    // 재는 것은 `DogAvatar` 가 아니라 그것을 담은 원이다 — 사진을 아직 안 올린 아이의
+    // `DogAvatar` 는 이모지 96 만 그린다(`dog_avatar.dart`). 150 은 원의 지름이다.
+    await _pump(t);
+
+    final hero = find
+        .ancestor(of: find.byType(DogAvatar).first, matching: find.byType(Container))
+        .first;
+
+    expect(t.getRect(hero).height, 150.0);
   });
 
   testWidgets('아이가 하나면 칩 줄이 없고, 그래도 카드가 이름에 안 붙는다', (t) async {
