@@ -390,6 +390,28 @@ class MediaAttachmentIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("반려견이 붙은 글에 사진을 더해도 200 이고 꼬리표가 남는다 (2026-09-18 운영 사고)")
+    void patchingMediaKeepsTheDogTag() throws Exception {
+        Account me = account("보리아빠");
+        long bori = newDog(me, "보리");
+        long first = uploadId(me, "a.jpg");
+        long second = uploadId(me, "b.jpg");
+        long postId = body(createPost(me, List.of(first), bori)
+                .andExpect(status().isCreated())).path("id").asLong();
+
+        // dogId 는 일부러 안 보낸다 — 앱의 "사진만 더하기" 가 보내는 것도 mediaIds 뿐이고,
+        // dogId 를 보내면 attachDog 가 프록시를 진짜 엔티티로 갈아 끼워 사고가 안 재현된다.
+        JsonNode patched = body(patchPost(me, postId, "{\"mediaIds\":[" + first + "," + second + "]}")
+                .andExpect(status().isOk()));
+
+        assertThat(idsOf(patched.path("media"))).containsExactly(first, second);
+        assertThat(patched.path("dog").path("id").asLong())
+                .as("media.replace 의 clearAutomatically 가 영속성 컨텍스트를 비운다 — dog 을 "
+                        + "프록시로 두면 dogOf 에서 LazyInitializationException 으로 500 이다")
+                .isEqualTo(bori);
+    }
+
+    @Test
     @DisplayName("고칠 때도 남의 사진은 안 붙고, 글은 그대로다")
     void patchRefusesSomeoneElsesMedia() throws Exception {
         Account me = account("고치는사람");
@@ -549,16 +571,33 @@ class MediaAttachmentIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     private ResultActions createPost(Account who, List<Long> mediaIds) throws Exception {
+        return createPost(who, mediaIds, null);
+    }
+
+    /** 아이를 함께 찍어 올리는 판. {@code dogId} 가 null 이면 위의 판과 같다. */
+    private ResultActions createPost(Account who, List<Long> mediaIds, Long dogId) throws Exception {
         ObjectNode body = MAPPER.createObjectNode()
                 .put("board", "free")
                 .put("title", "보리 사진")
                 .put("body", "오늘 산책하다 찍었어요");
         ArrayNode ids = body.putArray("mediaIds");
         mediaIds.forEach(ids::add);
+        if (dogId != null) {
+            body.put("dogId", dogId);
+        }
         return mockMvc.perform(post("/api/community/posts")
                 .header("Authorization", "Bearer " + who.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body.toString()));
+    }
+
+    /** 아이 하나. {@code PostDogIntegrationTest.newDog} 과 같은 길이다. */
+    private long newDog(Account who, String name) throws Exception {
+        return body(mockMvc.perform(post("/api/dogs")
+                        .header("Authorization", "Bearer " + who.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"" + name + "\",\"species\":\"dog\",\"size\":\"small\"}"))
+                .andExpect(status().isCreated())).path("id").asLong();
     }
 
     private ResultActions patchPost(Account who, long postId, String json) throws Exception {
