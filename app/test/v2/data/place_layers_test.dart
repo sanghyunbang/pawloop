@@ -183,5 +183,39 @@ void main() {
       expect(nearest.first.distM, greaterThan(8000),
           reason: '이때 화면이 "가장 가까운 코스는 N km 밖이에요" 를 띄운다(#328)');
     });
+
+    test('한국 밖에서는 넓히지 않는다 — 9,000km 밖 코스를 "가장 가까운" 이라 부르지 않는다', () async {
+      // 코스는 서울에 그대로 두고 **보는 자리**를 애플 본사(쿠퍼티노)로 옮긴다.
+      // 상한이 없을 때는 8,923km 밖 코스 스무 개가 목록에 뜨고, 화면이 그것을
+      // "가장 가까운 코스는 8923.0km 밖이에요" 라고 말하며 지도 카메라가 태평양을 건넜다.
+      final r = trailsSpacedNorth(kTrailNearestLimit + 5);
+
+      final abroad =
+          await r.nearby(lat: 37.3349, lng: -122.0090, contentTypeId: 'trail');
+
+      expect(abroad, isEmpty, reason: '''
+한국 밖에서는 넓혀도 줄 것이 없다. 빈 목록이면 화면이 "이 지역엔 등록된 곳이 없어요" 를
+그린다 — 그것이 사실이다.''');
+    });
+
+    test('백령도·울릉도만큼 멀어도 넓힌다 — 상한을 좁히면 섬이 죽는다', () async {
+      // `local_trails.json` 1,302개와 행정동 3,516개를 맞대어 잰 값: 전국에서 가장 불리한
+      // 옹진군 백령면이 가장 가까운 코스까지 137.9km, 울릉읍이 137.6km 다. 거기 사는
+      // 사람에게는 넓히기가 바로 그 기능이다.
+      //
+      // 위도 1도 ≈ 111km 이므로 1.35도면 약 150km — 백령도보다도 불리한 자리다.
+      final r = trailsSpacedNorth(kTrailNearestLimit + 5, from: 37.5445 + 1.35);
+
+      final far =
+          await r.nearby(lat: 37.5445, lng: 127.0374, contentTypeId: 'trail');
+
+      expect(far, hasLength(kTrailNearestLimit), reason: '''
+`kTrailWidenLimitM` 를 150km 밑으로 줄이면 백령도·울릉도에서 산책로 칩이 빈 목록이 된다.
+이 검사가 없으면 상한을 10km 로 조여도 위의 국외 검사가 초록이다.''');
+      expect(far.first.distM, greaterThan(140000),
+          reason: '실제로 상한 근처까지 넓힌 결과여야 이 검사가 의미가 있다');
+      expect(far.first.distM, lessThan(kTrailWidenLimitM),
+          reason: '상한을 넘은 것이 섞이면 안 된다');
+    });
   });
 }

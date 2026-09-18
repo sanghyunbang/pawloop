@@ -173,9 +173,13 @@ class PlaceCatalogRepository {
           : within;
     }
     // 반경 안이 비었다 — 그때만 넓힌다. 화면이 "8km 안에는 없어서" 를 말한다.
-    return matched.length > kTrailNearestLimit
-        ? matched.sublist(0, kTrailNearestLimit)
-        : matched;
+    // **넓히는 데에도 끝이 있다**([kTrailWidenLimitM]). 없으면 한국 밖에서 9,000km 밖 코스가
+    // "가장 가까운 코스" 로 뜨고 지도가 태평양을 건넌다.
+    final reachable =
+        matched.where((p) => p.distM <= kTrailWidenLimitM).toList();
+    return reachable.length > kTrailNearestLimit
+        ? reachable.sublist(0, kTrailNearestLimit)
+        : reachable;
   }
 
   /// 이름으로 찾는다 — **기기 안에서** (#338).

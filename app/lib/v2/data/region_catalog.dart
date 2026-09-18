@@ -24,6 +24,8 @@
 library;
 
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -140,11 +142,40 @@ class RegionCatalog {
     return [...starts, ...contains].take(limit).toList();
   }
 
+  /// "현재 위치 근처" 라고 부를 수 있는 한계(km).
+  ///
+  /// **한국 밖에서 눌러 보고 넣은 값이다.** 예전에는 상한이 없어서 전국 3,516개를 거리순으로
+  /// 정렬하고 **무조건** 위 다섯을 돌려줬다. 애플 심사자가 있는 쿠퍼티노(37.33, -122.01)에서
+  /// "현재 위치로 찾기" 를 누르면 화면이 **"현재 위치 근처"** 라는 제목 아래 인천 옹진군
+  /// 백령면(9,210km)·대청면(9,218km)·전남 신안군 흑산면(9,407km)을 그렸다. 화면은 그것이
+  /// 근처가 아니라는 말을 한 마디도 하지 않았다.
+  ///
+  /// **100km 는 재서 고른 값이다.** 이 목록은 "내가 지금 어느 동에 있나" 를 묻는다. 그래서
+  /// 상한은 "동 중심점이 얼마나 성기게 있나" 로 정해야 한다. 3,516개를 서로 맞대어 각 동에서
+  /// 가장 가까운 다른 동까지의 거리를 전부 쟀다.
+  ///
+  /// | 어디 | 가장 가까운 다른 동 |
+  /// |:---|---:|
+  /// | 신안군 흑산면 (전국 최악) | 48.4 km |
+  /// | 옹진군 연평면 | 42.8 km |
+  /// | 여수시 삼산면 | 41.3 km |
+  /// | 쿠퍼티노에서 가장 가까운 동 | 9,210 km |
+  ///
+  /// 처음에 50km 로 잡았다가 이 표를 보고 고쳤다 — **최악의 빈틈과 같은 값이라 여유가 없었다.**
+  /// 다도해 끝자락에 서 있으면 자기 동 중심점이 그 절반 너머일 수 있고, 그러면 화면이 아무것도
+  /// 못 준다. 100km 면 그 빈틈의 두 배고, 국외(9,210km)와는 92배가 벌어진다.
+  ///
+  /// 넘으면 한국에 있지 않다는 뜻이고, 그때는 빈 목록이 맞다 — 화면은 시·도 목록을 그대로
+  /// 띄우고 있으므로 사람은 손으로 고를 수 있다.
+  static const double nearestLimitKm = 100;
+
   /// 좌표에서 가까운 동 — "현재 위치로 찾기".
   ///
   /// **기기 안에서 고른다.** 좌표를 서버에 보내 물어보지 않는다(#235 A안). 중심점 사이의
   /// 거리라 경계와는 다를 수 있지만, 후보를 **추천**하는 자리라 그것으로 충분하다 —
   /// 고르는 것은 사람이다.
+  ///
+  /// [nearestLimitKm] 를 넘는 것은 주지 않는다. 빈 목록이 나올 수 있다.
   List<Neighborhood> nearest(double lat, double lng, {int limit = 5}) {
     final scored = <(double, Neighborhood)>[];
     for (final n in _all) {
@@ -155,7 +186,33 @@ class RegionCatalog {
       scored.add((dLat * dLat + dLng * dLng, n));
     }
     scored.sort((a, b) => a.$1.compareTo(b.$1));
-    return [for (final s in scored.take(limit)) s.$2];
+
+    // 위의 점수는 **순서**를 위한 평면 근사다. 자르는 자리에서는 그것을 쓰면 안 된다 —
+    // 한국 밖에서는 근사와 실제가 크게 어긋난다(쿠퍼티노에서 근사 21,778km, 실제 9,210km).
+    // 여기서만 진짜 거리를 잰다. 어차피 다섯 개를 채우면 멈춘다.
+    final out = <Neighborhood>[];
+    for (final (_, n) in scored) {
+      if (out.length >= limit) break;
+      if (kmBetween(lat, lng, n.lat, n.lng) <= nearestLimitKm) out.add(n);
+    }
+    return out;
+  }
+
+  /// 두 점 사이의 실제 거리(km). 하버사인.
+  ///
+  /// `place_catalog_repository.dart` 에 같은 계산이 있지만 그 파일은 `http` 와
+  /// `path_provider` 를 import 한다. **이 파일은 네트워크를 모르는 채로 둔다**(머리말) —
+  /// 열 줄을 다시 쓰는 편이 그 규칙을 지키는 값으로 싸다.
+  @visibleForTesting
+  static double kmBetween(double lat1, double lng1, double lat2, double lng2) {
+    const r = 6371.0088;
+    final p1 = lat1 * math.pi / 180;
+    final p2 = lat2 * math.pi / 180;
+    final dPhi = (lat2 - lat1) * math.pi / 180;
+    final dLambda = (lng2 - lng1) * math.pi / 180;
+    final h = math.sin(dPhi / 2) * math.sin(dPhi / 2) +
+        math.cos(p1) * math.cos(p2) * math.sin(dLambda / 2) * math.sin(dLambda / 2);
+    return 2 * r * math.asin(math.sqrt(h));
   }
 
   /// 코드로 하나. 서버가 준 코드를 이름으로 되돌릴 때 쓴다.
