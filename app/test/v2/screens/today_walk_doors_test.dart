@@ -82,20 +82,17 @@ Future<void> _pump(WidgetTester t) async {
 
 /// 좁은 실기기 폭(360dp)에서 **글자 배율**만 바꿔 가며 재는 판.
 ///
-/// 여기서는 아이를 등록 안 한 집으로 둔다. 목표 줄(`WalkGoalRow`)은 이 화면과 별개 위젯인데
-/// 360dp 에서 `이번 주 목표 1/5일 · 12/150분` + `1일째` 가 가로로 안 들어간다 — #708 을
-/// 넣기 **전에도** 넘쳤고(문 줄을 빼고 돌려서 확인했다), `today_screen_text_scale_test.dart`
-/// 는 게스트로만 돌아서 그 줄을 한 번도 안 그렸다. 그 넘침까지 여기서 받으면 이 테스트가
-/// 무엇 때문에 빨간지 알 수 없게 된다. 목표 줄은 아이가 없으면 통째로 사라지므로
-/// (`walk_goal_row.dart:100`) 문 둘만 남는다.
+/// **한동안 아이를 등록 안 한 집으로 돌렸다.** 목표 줄(`WalkGoalRow`)이 360dp 에서
+/// `이번 주 목표 1/5일 · 12/150분` + `1일째` 를 가로로 못 담아 1.0배에 16px · 2.0배에 289px
+/// 넘쳤고, 그 넘침까지 여기서 받으면 이 테스트가 무엇 때문에 빨간지 알 수 없었기 때문이다.
+/// 그 넘침은 `walk_goal_row.dart` 의 `_labelLine` 이 고쳤고, 지키는 검사는
+/// `today_screen_text_scale_test.dart` 의 로그인 판에 있다. 그래서 **아이를 등록한 채로
+/// 돌린다** — 실기기에서 제일 흔한 판이고, 목표 줄과 문 줄이 같은 화면에 있는 모양이다.
 Future<void> _pumpNarrow(WidgetTester t, double scale) async {
   const ratio = 3.0;
   t.view.physicalSize = const Size(360 * ratio, 780 * ratio);
   t.view.devicePixelRatio = ratio;
   addTearDown(t.view.reset);
-
-  replacePets(const []);
-  kMyDog.value = null;
 
   await t.pumpWidget(MaterialApp(
     home: Builder(

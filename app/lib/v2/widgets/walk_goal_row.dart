@@ -94,6 +94,56 @@ class _WalkGoalRowState extends State<WalkGoalRow> {
         );
   }
 
+  /// 이 배율부터 라벨과 숫자를 **위아래로 세운다.**
+  ///
+  /// `today_screen.dart` 의 `_stackButtonsFrom` · `feed_screen.dart` 의 `_foldFrom` ·
+  /// `walk_stats_panel.dart` 의 `_hideHintFrom` 과 같은 문턱이다 — 화면마다 다르면 같은
+  /// 배율에서 어떤 곳은 접히고 어떤 곳은 안 접혀 사용자가 규칙을 못 읽는다.
+  static const double _stackFrom = 1.3;
+
+  /// `이번 주 목표` + `1/5일 · 12/150분`.
+  ///
+  /// **여기가 넘치던 자리다.** 예전에는 `Row(children: [Text, SizedBox, Text])` 였고 둘 다
+  /// [Flexible] 이 아니었다. 오른쪽 `N일째` 배지가 폭을 먹어 이 줄에 231dp 밖에 안 남는데,
+  /// 360dp 폭에서 1.0배에 16px · 1.3배에 98px · 1.5배에 153px · 2.0배에 289px 넘쳤다.
+  ///
+  /// **말줄임으로 막지 않는다.** `1/5일 · 12/150…` 이 되면 이 줄은 뜻이 없어진다 — 목표
+  /// 줄은 그 숫자가 전부다. 배율이 높으면 위아래로 세워 숫자에 온 폭을 주고, 낮은 배율에서도
+  /// [Flexible] 로 감싸 **줄바꿈**으로 받는다.
+  ///
+  /// 이 넘침이 여태 안 잡힌 이유는 `today_screen_text_scale_test.dart` 가 게스트로만 돌아서
+  /// 이 위젯을 한 번도 안 그렸기 때문이다 — 홈은 `if (!data.guest) WalkGoalRow(...)` 다.
+  Widget _labelLine(BuildContext context,
+      {required bool unknown,
+      required WalkGoal goal,
+      required WalkGoalProgress progress}) {
+    const label = Text('이번 주 목표',
+        style: TextStyle(
+            fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textMuted));
+    final value = Text(
+        unknown
+            ? '${goal.daysPerWeek}일 · ${goal.minutesPerWeek}분'
+            : progress.label,
+        key: const Key('walk-goal-label'),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: unknown
+              ? T.textMuted
+              : (progress.met ? const Color(0xFF4CAF88) : T.textSecondary),
+        ));
+
+    // 실제로 쓰는 글자 크기로 잰다 — `TextScaler` 는 선형이 아닐 수 있다.
+    if (MediaQuery.textScalerOf(context).scale(12) >= 12 * _stackFrom) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [label, const SizedBox(height: 2), value],
+      );
+    }
+    // 줄바꿈으로 받는다 — `overflow: ellipsis` 를 주지 않는 것이 핵심이다.
+    return Row(children: [label, const SizedBox(width: 6), Flexible(child: value)]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final goal = _goal;
@@ -124,24 +174,7 @@ class _WalkGoalRowState extends State<WalkGoalRow> {
         Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                const Text('이번 주 목표',
-                    style: TextStyle(
-                        fontSize: 11.5, fontWeight: FontWeight.w700, color: T.textMuted)),
-                const SizedBox(width: 6),
-                Text(
-                    unknown
-                        ? '${goal.daysPerWeek}일 · ${goal.minutesPerWeek}분'
-                        : progress.label,
-                    key: const Key('walk-goal-label'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: unknown
-                          ? T.textMuted
-                          : (progress.met ? const Color(0xFF4CAF88) : T.textSecondary),
-                    )),
-              ]),
+              _labelLine(context, unknown: unknown, goal: goal, progress: progress),
               const SizedBox(height: 6),
               ClipRRect(
                 borderRadius: BorderRadius.circular(5),
