@@ -1048,6 +1048,10 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      // **없으면 시트가 화면의 9/16(약 56%)에서 잘린다.** 기본값이 false 라 그렇다.
+      // 그 안에서 내용이 스크롤되긴 했지만, 잘리는 자리에 들어가는 것이 하필
+      // `기록 저장하기` 였다 — 2분을 걷고 돌아온 사람이 저장 버튼을 못 찾았다(#704).
+      isScrollControlled: true,
       builder: (sheetCtx) => WalkFinishSheet(
         timeLabel: _timeLabel,
         distanceLabel: distanceLabel,

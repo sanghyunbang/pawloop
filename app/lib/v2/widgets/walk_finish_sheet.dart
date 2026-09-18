@@ -181,10 +181,19 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
       padding: EdgeInsets.fromLTRB(20, 18, 20, 18 + MediaQuery.of(context).padding.bottom),
       // 줄이 하나 늘 때마다 넘치던 자리다 — 한 손 기록 요약(#340)을 더하자 26px 넘쳤다.
       // 시트 높이는 화면·글자 크기에 따라 달라지므로 넘치면 스크롤로 받는다.
-      child: SingleChildScrollView(
-        child: Column(
+      //
+      // **다만 버튼은 스크롤 밖에 둔다**(#704). 예전에는 버튼까지 스크롤 안에 있어서,
+      // 사진과 기록이 붙은 산책일수록 `기록 저장하기` 가 접힌 자리로 밀려났다. 2026-09-18
+      // 에 사장님이 2분을 걷고 돌아와 "저장 버튼도 없고 아무것도 없다" 고 하셨다 —
+      // 걷고 나서 그 기록을 남기는 **단 하나의 버튼**이다. 내용이 길든 짧든 늘 보여야 한다.
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
           // 시스템 이모지 대신 자산 — 디자인 시스템은 Fluent 3D 이모지다(#327).
           Row(mainAxisSize: MainAxisSize.min, children: [
             const Text(
@@ -237,8 +246,14 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
               style: TextStyle(fontSize: 12, color: T.textMuted),
             ),
             const SizedBox(height: 12),
-          ],
+                ],
+              ]),
+            ),
+          ),
+          // 여기부터는 **늘 보인다.** 스크롤 밖이다.
+          const SizedBox(height: 12),
           GestureDetector(
+            key: const Key('finish-save'),
             onTap: widget.onSave,
             child: Container(
               height: 52,
@@ -255,11 +270,11 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
           ),
           const SizedBox(height: 8),
           TextButton(
+            key: const Key('finish-discard'),
             onPressed: widget.onDiscard,
             child: const Text('저장 안 함', style: TextStyle(color: T.textMuted)),
           ),
         ],
-        ),
       ),
     );
   }

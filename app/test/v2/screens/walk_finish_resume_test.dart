@@ -67,7 +67,7 @@ class _Walk {
   }
 }
 
-Future<_Walk> _pumpWalk(WidgetTester tester) async {
+Future<_Walk> _pumpWalk(WidgetTester tester, {double height = 900}) async {
   final feed = StreamController<Position>.broadcast();
   addTearDown(feed.close);
   final listens = <String>[];
@@ -75,7 +75,7 @@ Future<_Walk> _pumpWalk(WidgetTester tester) async {
 
   // 기본 800x600 은 가로로 누운 화면이라 끝내기 시트의 아래 버튼이 화면 밖으로 밀린다.
   // 실제로 이 화면을 쓰는 모양(세로 폰)으로 맞춘다.
-  tester.view.physicalSize = const Size(400, 900);
+  tester.view.physicalSize = Size(400, height);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -204,6 +204,41 @@ void main() {
     // 저장 화면(`CreateScreen`)이 이 테스트의 관심사가 아니다. 그 화면이 뜨면서 던지는
     // 것(네트워크·저장소)은 여기서 다루지 않는다 — 우리가 재는 것은 **떠나는 길에
     // 구독을 다시 열지 않는가** 하나다.
+    tester.takeException();
+  });
+
+  testWidgets('짧은 화면에서도 "기록 저장하기" 가 스크롤 없이 보인다 (#704)', (tester) async {
+    // **2026-09-18 에 사장님이 실제로 막힌 자리다.** 2분을 걷고 돌아왔는데
+    // "저장 버튼도 없고 아무것도 없다" 고 하셨다. 시트는 화면의 9/16(약 56%)에서 잘렸고,
+    // 잘린 자리에 들어간 것이 하필 `기록 저장하기` 였다. 걷고 나서 그 기록을 남기는
+    // **단 하나의 버튼**이다.
+    //
+    // **380 은 재서 고른 값이다.** 시트는 사진·기록·경로 그림이 붙을수록 길어지는데, 짧은
+    // 화면은 그 긴 내용을 한 판에 재현하는 가장 싼 방법이다. 처음에 600 으로 잡았더니
+    // 내용이 짧아 스크롤이 아예 안 생겨서, **버튼을 다시 스크롤 안에 넣는 되돌림을 못
+    // 잡았다** — `isScrollControlled` 까지 같이 빼야 빨개졌다. 460 도 마찬가지였다.
+    // 380 에서는 그 하나만 되돌려도 잡힌다(저장 버튼 아래끝이 408pt 가 된다).
+    final w = await _pumpWalk(tester, height: 380);
+    await w.walk(_pos(37.5010, 127.0000));
+
+    await tester.tap(find.text('종료'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final save = find.byKey(const Key('finish-save'));
+    expect(save, findsOneWidget, reason: '끝내기 시트에 저장 버튼이 있어야 한다');
+
+    final box = tester.getRect(save);
+    final screen = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    expect(box.bottom, lessThanOrEqualTo(screen), reason: '''
+저장 버튼 아래끝이 ${box.bottom.toStringAsFixed(0)}pt 인데 화면은 ${screen.toStringAsFixed(0)}pt 다.
+스크롤해야 닿는 자리에 있으면, 걷고 돌아온 사람은 앱이 고장난 줄 안다(#704).''');
+    expect(box.top, greaterThanOrEqualTo(0));
+
+    // 눌러서 실제로 닿는지까지 본다 — 보이기만 하고 다른 것이 위를 덮고 있으면 소용없다.
+    await tester.tap(save);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     tester.takeException();
   });
 
