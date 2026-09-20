@@ -2,9 +2,9 @@ package com.heattrip.heat_trip_backend.place.service;
 
 import com.heattrip.heat_trip_backend.place.OrsProperties;
 import com.heattrip.heat_trip_backend.place.dto.PlaceLoopDto;
-import com.heattrip.heat_trip_backend.place.entity.PetPlaceDetailRow;
 import com.heattrip.heat_trip_backend.place.entity.TrailRoute;
 import com.heattrip.heat_trip_backend.place.layer.GpxParser;
+import com.heattrip.heat_trip_backend.place.layer.LayerPlaceIndex;
 import com.heattrip.heat_trip_backend.place.repository.PetPlaceDetailRepository;
 import com.heattrip.heat_trip_backend.place.repository.TrailRouteRepository;
 import org.springframework.stereotype.Service;
@@ -32,6 +32,13 @@ import java.util.Optional;
  * <h2>못 줄 때는 200 + {@code available=false}</h2>
  * <p>키 없음 · 한도 소진 · 바깥 실패 · 남이 받는 중 — 넷 다 "지금은 없음" 이지 오류가 아니다.
  * 모르는 장소만 404 다(상세와 같은 규칙 — 허용목록 밖은 바깥 호출 0).
+ *
+ * <h2>출발점은 두 곳에서 찾는다</h2>
+ * <p>관광공사 장소는 {@code pet_place_detail}(허용목록)에 있지만, 산책로(두루누비 · 동네 길)와
+ * 놀이터는 거기 없다 — 레이어 한 벌({@link LayerPlaceIndex})에만 산다. 처음 판은 허용목록만 봐서
+ * 동네 길 1,302곳이 전부 404 였다(2026-09-21, 사장님 폰). 홈 카드의 후보는 대부분 산책로라 추천
+ * 코스 줄이 늘 "못 받아요" 였다. 레이어 한 벌도 우리가 실어 보낸 목록이므로 허용목록과 같은 뜻이다
+ * — 바깥 호출은 여전히 우리가 아는 장소에만 나간다.
  */
 @Service
 public class PlaceLoopService {
@@ -46,6 +53,7 @@ public class PlaceLoopService {
 
     private final TrailRouteRepository routes;
     private final PetPlaceDetailRepository details;
+    private final LayerPlaceIndex layers;
     private final OrsRoutingClient ors;
     private final KtoCallBudget budget;
     private final UpstreamGate gate;
@@ -54,6 +62,7 @@ public class PlaceLoopService {
 
     public PlaceLoopService(TrailRouteRepository routes,
                             PetPlaceDetailRepository details,
+                            LayerPlaceIndex layers,
                             OrsRoutingClient ors,
                             KtoCallBudget budget,
                             UpstreamGate gate,
@@ -61,6 +70,7 @@ public class PlaceLoopService {
                             Clock clock) {
         this.routes = routes;
         this.details = details;
+        this.layers = layers;
         this.ors = ors;
         this.budget = budget;
         this.gate = gate;
@@ -88,15 +98,15 @@ public class PlaceLoopService {
             return Optional.of(ready(stored.get(), contentId, lengthM));
         }
 
-        PetPlaceDetailRow place = details.findById(contentId).orElse(null);
-        if (place == null || place.getLat() == null || place.getLng() == null) {
+        Origin origin = locate(contentId).orElse(null);
+        if (origin == null) {
             return Optional.empty();
         }
         if (!ors.isConfigured()) {
             return Optional.of(PlaceLoopDto.unavailable(contentId, lengthM, "nokey"));
         }
 
-        PlaceLoopDto fetched = gate.runIfOwner(courseId, () -> fetchAndStore(place, contentId, lengthM, courseId));
+        PlaceLoopDto fetched = gate.runIfOwner(courseId, () -> fetchAndStore(origin, contentId, lengthM, courseId));
         if (fetched != null) {
             return Optional.of(fetched);
         }
@@ -106,7 +116,28 @@ public class PlaceLoopService {
                 .orElse(PlaceLoopDto.unavailable(contentId, lengthM, "busy")));
     }
 
-    private PlaceLoopDto fetchAndStore(PetPlaceDetailRow place, String contentId, int lengthM, String courseId) {
+    /** 코스의 출발점 — 어디서 알아냈든 좌표와 이름만 남긴다. */
+    record Origin(double lat, double lng, String title) { }
+
+    /**
+     * 출발점을 찾는다 — 허용목록({@code pet_place_detail})에 먼저, 없으면 레이어 한 벌에서.
+     * 둘 다 모르는 id 면 빈 값이고, 그때만 404 다. 레이어 한 벌은 메모리 객체(ETag 가 바뀔 때만
+     * 다시 읽음)라 id 하나를 훑는 값은 싸다.
+     */
+    private Optional<Origin> locate(String contentId) {
+        Optional<Origin> known = details.findById(contentId)
+                .filter(row -> row.getLat() != null && row.getLng() != null)
+                .map(row -> new Origin(row.getLat(), row.getLng(), row.getTitle()));
+        if (known.isPresent()) {
+            return known;
+        }
+        return layers.allLayers().stream()
+                .filter(p -> contentId.equals(p.contentId()))
+                .findFirst()
+                .map(p -> new Origin(p.lat(), p.lng(), p.title()));
+    }
+
+    private PlaceLoopDto fetchAndStore(Origin place, String contentId, int lengthM, String courseId) {
         List<OrsRoutingClient.Loop> candidates = new ArrayList<>();
         boolean budgetExhausted = false;
         for (int seed = 1; seed <= Math.max(1, properties.getLoopAttempts()); seed++) {
@@ -114,7 +145,7 @@ public class PlaceLoopService {
                 budgetExhausted = true;
                 break;
             }
-            ors.roundTrip(place.getLat(), place.getLng(), lengthM, properties.getLoopPoints(), seed)
+            ors.roundTrip(place.lat(), place.lng(), lengthM, properties.getLoopPoints(), seed)
                     .ifPresent(candidates::add);
         }
         Optional<OrsRoutingClient.Loop> best = LoopPicker.pick(candidates, lengthM);
@@ -126,7 +157,7 @@ public class PlaceLoopService {
         double[] start = loop.lngLat().get(0);
         TrailRoute row = routes.save(TrailRoute.builder()
                 .courseId(courseId)
-                .name(nameOf(place.getTitle(), lengthM))
+                .name(nameOf(place.title(), lengthM))
                 .pointCount(loop.lngLat().size())
                 .lengthM((int) Math.round(loop.distanceM()))
                 .startLat(start[1])
