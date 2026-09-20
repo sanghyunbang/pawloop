@@ -92,10 +92,6 @@ public class DogController {
         return dogService.one(user.getId(), dogId);
     }
 
-    /**
-     * 소프트 삭제, 204. 남의 것·없는 것·이미 지운 것은 같은 404 — {@code DogService.delete}.
-     * 한도 표에서는 등록과 같은 {@code group-write} 다.
-     */
     /** 부분 수정 (#516). 보낸 것만 바꾼다 — 남의 것과 없는 것은 같은 404 다. */
     @PatchMapping("/{dogId}")
     public DogResponse patch(@CurrentUser User user, @PathVariable long dogId,
@@ -103,6 +99,10 @@ public class DogController {
         return dogService.patch(user.getId(), dogId, request);
     }
 
+    /**
+     * 소프트 삭제, 204. 남의 것·없는 것·이미 지운 것은 같은 404 — {@code DogService.delete}.
+     * 한도 표에서는 등록과 같은 {@code group-write} 다.
+     */
     @DeleteMapping("/{dogId}")
     public ResponseEntity<Void> delete(@CurrentUser User user, @PathVariable long dogId) {
         dogService.delete(user.getId(), dogId);

@@ -142,11 +142,18 @@ public record WeeklyInsightInput(
         return s.endsWith(".0") ? s.substring(0, s.length() - 2) : s;
     }
 
+    /**
+     * 몸집 말 — 종류 중립이다(#719). 고양이·기타도 이 입력을 타는데 '소형견' 은 강아지 말이다.
+     *
+     * <p>종류를 실어 '소형묘' 로 고르지 <b>않는</b> 이유: {@code DogProfileView} 가 모델에 보내는 필드
+     * 목록은 개인정보처리방침 v1.8 "AI 주간 요약" 항목(크기 · 나이대)과 묶여 있다. 종류를 더하면 그
+     * 문서와 동의 화면이 같이 움직여야 한다. 라벨을 중립으로 두면 목록이 그대로다.
+     */
     private static String sizeLabel(String key) {
         return switch (key) {
-            case "medium" -> "중형견";
-            case "large" -> "대형견";
-            default -> "소형견";
+            case "medium" -> "몸집 중형";
+            case "large" -> "몸집 대형";
+            default -> "몸집 소형";
         };
     }
 

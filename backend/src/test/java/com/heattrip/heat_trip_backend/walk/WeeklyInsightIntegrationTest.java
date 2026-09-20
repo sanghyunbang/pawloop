@@ -241,7 +241,7 @@ class WeeklyInsightIntegrationTest extends AbstractMySqlIntegrationTest {
         org.mockito.ArgumentCaptor<String> sent = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(model).complete(anyString(), sent.capture());
         assertThat(sent.getValue()).doesNotContain("보리").doesNotContain("127.").doesNotContain("서울숲")
-                .contains("1.5km").contains("소형견");
+                .contains("1.5km").contains("몸집 소형");
     }
 
     // ── 도우미 ─────────────────────────────────────────────
