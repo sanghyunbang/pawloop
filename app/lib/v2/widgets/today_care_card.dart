@@ -29,6 +29,7 @@
 // 낼 수 있는 가장 나쁜 거짓말이다 — 그걸 보고 밥을 한 번 더 준다. 그래서 로딩·실패·
 // "가족 없음" 을 각각 다른 문구로 그린다.
 
+import '../screens/care_log_screen.dart';
 import '../screens/login_screen.dart';
 import 'package:flutter/material.dart';
 
@@ -38,6 +39,7 @@ import '../domain/pet.dart' show kMyDog, kPetCategories;
 import '../screens/main_shell.dart' show RootTab;
 import '../theme/app_tokens.dart';
 import 'care_glyph.dart';
+import 'care_log_line.dart';
 import 'aurora.dart';
 
 /// 한 화면에서 기록하면 다른 화면의 카드도 다시 읽게 하는 신호.
@@ -211,10 +213,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
   /// 얘기하고 있거나, 목록을 못 읽어 기본 일곱으로 그리는 중이다. 그때만 종류로 붙인다.
   /// <b>평상시에는 이 두 번째 갈래를 타지 않는다</b> — 타기 시작하면 세는 규칙이 서버와 앱
   /// 두 곳에 사는 것이라, 그 사실을 여기 적어 둔다.
-  bool _belongsTo(CareLogEntry log, CareItemEntry item) {
-    if (log.careItemId != null) return log.careItemId == item.id;
-    return item.systemType != null && log.type == item.systemType;
-  }
+  bool _belongsTo(CareLogEntry log, CareItemEntry item) => log.belongsTo(item);
 
   /// 그 칸의 **가장 최근** 기록. 없으면 null.
   ///
@@ -374,13 +373,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
   /// 종류에서 뽑으면 직접 만든 항목에 쓸 말이 없다. 에뮬레이터에서 "Bathtime" 을 누르고
   /// "오늘 한 일" 을 봤더니 **`케어`** 라고 적혀 있었다 — 무엇을 했는지가 그 줄의 전부인데
   /// 그것만 빠진 셈이다.
-  String _nameOf(CareLogEntry log) {
-    for (final item in _items) {
-      if (_belongsTo(log, item)) return item.name;
-    }
-    // 목록에 짝이 없는 기록(접힌 뒤 지운 항목 등). 종류라도 있으면 그 이름을 쓴다.
-    return _labelOf(log.type);
-  }
+  String _nameOf(CareLogEntry log) => log.nameAmong(_items);
 
   /// 오늘 이 칸을 누른 사람들. **중복 없이, 최근 순으로.**
   ///
@@ -763,9 +756,6 @@ class _TodayCareCardState extends State<TodayCareCard> {
     ]);
   }
 
-  /// "오늘 한 일" 의 사람 칸 폭. 390dp 에서 `CrewOwner` 가 들어가는 값이다.
-  static const double _logNameWidth = 78;
-
   /// 홈이 보여 줄 "오늘 한 일" 줄 수. 나머지는 헤더의 "우리 가족 →" 이 받는다.
   static const int homeLogLines = 3;
 
@@ -794,16 +784,31 @@ class _TodayCareCardState extends State<TodayCareCard> {
       const SizedBox(height: 10),
       Container(height: 1, color: T.line),
       const SizedBox(height: 8),
-      Row(children: [
-        const Text('오늘 한 일',
-            key: Key('care-log-title'),
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w800, color: T.textMuted)),
-        const SizedBox(width: 6),
-        Text('${_logs.length}',
-            style: const TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w800, color: T.textFaint)),
-      ]),
+      // 머리를 누르면 날짜별 기록 화면이 열린다(#737) — 오늘만 보이는 이 줄의 "더" 다.
+      // 기록이 하나도 없는 날은 이 줄 자체가 없으니 문도 없다 — 그날은 우리 가족 화면의
+      // "케어 기록" 줄로 간다.
+      GestureDetector(
+        key: const Key('care-log-open'),
+        behavior: HitTestBehavior.opaque,
+        onTap: _openLog,
+        child: Row(children: [
+          const Text('오늘 한 일',
+              key: Key('care-log-title'),
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w800, color: T.textMuted)),
+          const SizedBox(width: 6),
+          // Expanded 다 — Spacer 는 0 아래로 못 줄어들어 큰 글자에서 줄이 넘친다(#396).
+          Expanded(
+            child: Text('${_logs.length}',
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w800, color: T.textFaint)),
+          ),
+          const Text('날짜별',
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: T.textMuted)),
+          const Icon(Icons.chevron_right_rounded, size: 14, color: T.textMuted),
+        ]),
+      ),
       for (final log in shown) ...[
         const SizedBox(height: 5),
         _logLine(log),
@@ -817,39 +822,18 @@ class _TodayCareCardState extends State<TodayCareCard> {
     ];
   }
 
-  /// `10:39  아빠  물` — 시각 · 사람 · 무엇. 셋 다 왼쪽에 맞춘다.
-  ///
-  /// 사람 칸에 고정 폭을 주는 이유: 이름 길이가 제각각이라 그냥 두면 종류가 들쭉날쭉
-  /// 앉는다. 훑을 때 눈이 따라가는 세로줄이 "무엇" 이라 그 줄이 흔들리면 안 읽힌다.
-  ///
-  /// 폭 [_logNameWidth] 는 에뮬레이터에서 보고 늘린 값이다 — 58 로 뒀더니 `CrewOwner`
-  /// 가 `CrewOw…` 로 잘렸다. 그보다 긴 이름은 여전히 줄임표로 접는다(잘리는 편이
-  /// 종류 줄이 흔들리는 것보다 낫다).
-  Widget _logLine(CareLogEntry log) => Row(key: Key('care-log-${log.id}'), children: [
-        SizedBox(
-          width: 42,
-          child: Text(log.timeLabel,
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: T.textMuted,
-                  fontFeatures: [FontFeature.tabularFigures()])),
-        ),
-        SizedBox(
-          width: _logNameWidth,
-          child: Text(log.doneByName.isEmpty ? '누군가' : log.doneByName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700, color: T.textSecondary)),
-        ),
-        Expanded(
-          child: Text(_nameOf(log),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: T.textSecondary)),
-        ),
-      ]);
+  /// `10:39  아빠  물` — 날짜별 기록 화면과 같은 줄(`widgets/care_log_line.dart`, #737).
+  Widget _logLine(CareLogEntry log) =>
+      CareLogLine(key: Key('care-log-${log.id}'), log: log, name: _nameOf(log));
+
+  /// 날짜별 기록 화면(#737). 그룹을 아직 못 읽었으면 아무것도 안 한다 — 이 줄은 기록이 있을
+  /// 때만 그려지므로 그때는 그룹이 있다.
+  void _openLog() {
+    final group = _group;
+    if (group == null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => CareLogScreen(groupId: group.id, repository: _repo)));
+  }
 
   /// "아빠가 아침에 1.2km 걸었어요" — 이슈 #343.
   ///
@@ -1059,9 +1043,6 @@ String subjectParticle(String name) {
 
 /// 칸의 이름 — 문구와 로그 줄이 같은 말을 쓰게 한다.
 ///
-/// 직접 만든 항목의 기록에는 종류가 없다(#560). 카드는 이제 `_nameOf` 로 **항목 이름**을
-/// 쓰므로 여기는 <b>마지막 대비책</b>만 남았다 — 목록에 짝이 없는 기록에만 걸린다.
-String _labelOf(ServerCareType? type) => type?.label ?? '케어';
 
 /// 내 기록이 있는 칸을 다시 눌렀을 때의 선택(#329).
 enum _Retap { undo, again, cancel }

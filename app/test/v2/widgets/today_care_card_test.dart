@@ -23,6 +23,7 @@ import 'package:http/testing.dart';
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
+import 'package:heat_trip_flutter/v2/screens/care_log_screen.dart';
 import 'package:heat_trip_flutter/v2/theme/app_tokens.dart';
 import 'package:heat_trip_flutter/v2/widgets/today_care_card.dart';
 
@@ -152,6 +153,19 @@ void main() {
     expect(find.text('오늘 12:30 엄마가 물을 갈아줬어요. 이번이 오늘 3번째예요.'), findsOneWidget,
         reason: '마지막 기록(엄마 12:30)과 그 칸의 수(물 2) — 밥은 안 센다');
     expect(find.text('3번째로 기록'), findsOneWidget);
+  });
+
+  testWidgets('"오늘 한 일" 머리를 누르면 날짜별 기록 화면이 열린다 (#737)', (tester) async {
+    final f = fixture(logs: [
+      _log(id: 1, type: 'meal', who: '아빠', at: '2026-08-30T14:20:00'),
+    ]);
+    await pumpCard(tester, f.repo);
+
+    await tester.tap(find.byKey(const Key('care-log-open')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CareLogScreen), findsOneWidget);
+    expect(find.text('케어 기록'), findsOneWidget);
   });
 
   testWidgets('취소하면 기록하지 않는다', (tester) async {

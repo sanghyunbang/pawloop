@@ -7,6 +7,7 @@ import '../data/invite_share.dart';
 import '../widgets/aurora.dart';
 import '../widgets/today_care_card.dart';
 import 'care_items_screen.dart';
+import 'care_log_screen.dart';
 import 'family_chat_screen.dart';
 
 /// 우리 가족 — 가족 구성원 · 오늘의 케어 공유 · 산책 주의사항 · 가족 채팅.
@@ -228,6 +229,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     // 가까이 있는 것끼리 한 덩이로 읽힌다 — 그 차이를 벌린다.
                     const SizedBox(height: 4),
                     if (_group case final group?) _careItemsLink(group.id),
+                    if (_group case final group?) _careLogLink(group.id),
                     const SizedBox(height: 20),
                     _walkNotesCard(),
                     const SizedBox(height: 16),
@@ -1007,6 +1009,33 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
           ),
           const Icon(Icons.chevron_right, size: 16, color: T.textMuted),
+        ]),
+      ),
+    );
+  }
+
+  /// 날짜별 케어 기록(#737). 카드의 "오늘 한 일" 머리도 같은 화면을 열지만, 그 줄은 오늘
+  /// 기록이 있을 때만 있다 — 아무것도 안 한 날에도 어제를 볼 문이 여기 있어야 한다.
+  Widget _careLogLink(int groupId) {
+    return GestureDetector(
+      key: const Key('family-care-log-link'),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => CareLogScreen(groupId: groupId)),
+      ),
+      behavior: HitTestBehavior.opaque,
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(children: [
+          Icon(Icons.history_rounded, size: 16, color: T.textMuted),
+          SizedBox(width: 6),
+          Expanded(
+            child: Text('케어 기록 — 날짜별로 보기',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w700, color: T.textSecondary)),
+          ),
+          Icon(Icons.chevron_right, size: 16, color: T.textMuted),
         ]),
       ),
     );
