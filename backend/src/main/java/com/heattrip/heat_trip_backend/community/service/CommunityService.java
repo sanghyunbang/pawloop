@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.community.service;
 
 import com.heattrip.heat_trip_backend.community.CommunityTime;
+import com.heattrip.heat_trip_backend.community.dto.PlaceSummaryResponse;
 import com.heattrip.heat_trip_backend.community.dto.BookmarkStateResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
@@ -16,6 +17,7 @@ import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.community.entity.Post;
 import com.heattrip.heat_trip_backend.community.entity.PostBookmark;
 import com.heattrip.heat_trip_backend.walk.CourseAttachment;
+import com.heattrip.heat_trip_backend.walk.PlaceWalks;
 import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.community.entity.Reaction;
 import com.heattrip.heat_trip_backend.community.repository.CommentRepository;
@@ -145,13 +147,17 @@ public class CommunityService {
      */
     private final MediaAttachment media;
 
+    /** 장소 머리의 "산책 N회"(#729) — walk 모듈의 루트 공개 표면. */
+    private final PlaceWalks placeWalks;
+
     public CommunityService(PostRepository posts, CommentRepository comments,
                             ReactionRepository reactions, Reports reports, Blocks blocks,
                             CourseAttachment courses, NeighborhoodCatalog neighborhoods,
                             ViewerNeighborhood viewerNeighborhood, MediaAttachment media,
                             PostBookmarkRepository bookmarks, DogOwnership dogs,
-                            ContentFilter contentFilter) {
+                            ContentFilter contentFilter, PlaceWalks placeWalks) {
         this.contentFilter = contentFilter;
+        this.placeWalks = placeWalks;
         this.media = media;
         this.bookmarks = bookmarks;
         this.dogs = dogs;
@@ -166,6 +172,25 @@ public class CommunityService {
     }
 
     // ─────────────────────────── 글 ───────────────────────────
+
+    /**
+     * 장소 머리의 숫자 셋(#729) — 글 · 사진 · 산책. 글은 공개라 게스트도 본다.
+     *
+     * <p>사진은 <b>그 장소 글에 붙은 것</b>만 센다 — 장소 자체의 카탈로그 사진은 아니다. 모르는 장소는
+     * 404 가 아니라 전부 0 이다: "이 장소의 글" 화면이 빈 상태를 그려야 하지, 오류를 그리면 안 된다.
+     */
+    public PlaceSummaryResponse placeSummary(String contentId) {
+        List<Long> ids = posts.idsByPlace(contentId);
+        long photos = 0;
+        if (!ids.isEmpty()) {
+            List<String> refs = ids.stream().map(String::valueOf).toList();
+            for (List<MediaAttachment.AttachedMedia> list
+                    : media.attachedTo(MediaAttachment.REF_POST, refs).values()) {
+                photos += list.size();
+            }
+        }
+        return new PlaceSummaryResponse(ids.size(), photos, placeWalks.countAtPlace(contentId));
+    }
 
     /**
      * 글 목록 한 장.

@@ -118,7 +118,7 @@ void main() {
     await t.tap(find.text('이 장소의 글 보기'));
     await t.pumpAndSettle();
 
-    expect(find.text('성수연방의 글'), findsOneWidget);
+    expect(find.byKey(const Key('place-posts-header')), findsOneWidget, reason: '장소 페이지의 머리(#729)');
     expect(find.byKey(const Key('place-posts-empty')), findsOneWidget, reason: '가짜 저장소가 빈 목록을 줬다');
   });
 
