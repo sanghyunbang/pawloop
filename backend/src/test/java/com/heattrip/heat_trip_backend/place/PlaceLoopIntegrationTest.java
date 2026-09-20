@@ -6,6 +6,8 @@ import com.heattrip.heat_trip_backend.place.entity.PetPlaceDetailRow;
 import com.heattrip.heat_trip_backend.place.repository.PetPlaceDetailRepository;
 import com.heattrip.heat_trip_backend.place.repository.TrailRouteRepository;
 import com.heattrip.heat_trip_backend.place.service.OrsRoutingClient;
+import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
+import com.heattrip.heat_trip_backend.place.service.CatalogSnapshotStore;
 import com.heattrip.heat_trip_backend.place.service.PlaceLoopService;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <ul>
  *   <li>seed 셋을 받아 <b>가장 가까운</b> 것을 주고, 두 번째 요청은 <b>표에서</b> 온다(가짜가 더 안 불린다).</li>
- *   <li>모르는 장소는 404 — 바깥 호출 0.</li>
+ *   <li>모르는 장소는 404 — 바깥 호출 0. 허용목록에 없어도 레이어 한 벌(동네 길)에 있으면 아는 장소다.</li>
  *   <li>길이는 500 단위로 맞춘다.</li>
  *   <li>키 없음 · 예산 소진은 200 + {@code available=false}.</li>
  * </ul>
@@ -94,6 +96,7 @@ class PlaceLoopIntegrationTest extends AbstractMySqlIntegrationTest {
     @Autowired private PetPlaceDetailRepository details;
     @Autowired private TrailRouteRepository routes;
     @Autowired private KtoBudgetProperties budget;
+    @Autowired private CatalogSnapshotStore snapshots;
 
     private String contentId;
 
@@ -111,6 +114,24 @@ class PlaceLoopIntegrationTest extends AbstractMySqlIntegrationTest {
                 .lng(127.0376)
                 .contentTypeId("12")
                 .build());
+    }
+
+    @Test
+    @DisplayName("동네 길(trail:lt…)처럼 허용목록에 없어도 레이어 한 벌에 있으면 코스를 준다 — 2026-09-21 폰에서 전부 404 였다")
+    void trailFromLayerIndex() throws Exception {
+        String trailId = "trail:lt" + System.nanoTime();
+        // 제주 바닷가 — 다른 검사가 넣어 둔 관광공사 항목과 같은 자리에 두면 겹침 정리(#411)에 빠진다.
+        snapshots.store(CatalogSource.LOCALTRAIL, List.of(new PlaceDto(trailId, "3.1운동길B", "trail", "trail",
+                null, 33.2461, 126.5653, "제주", "", "", null, null)), 1);
+
+        JsonNode body = body(mockMvc.perform(get("/api/places/{id}/loop", trailId).param("lengthM", "2000"))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(body.path("available").asBoolean()).as("허용목록만 보면 여기서 404 다").isTrue();
+        assertThat(body.path("distanceM").asInt()).isEqualTo(2130);
+        assertThat(body.path("points").get(0).get(1).asDouble()).as("출발점은 그 길의 좌표다").isEqualTo(33.2461);
+        assertThat(ors.calls.get()).isEqualTo(3);
+        assertThat(routes.findById(PlaceLoopService.courseIdOf(trailId, 2000))).isPresent();
     }
 
     @Test
