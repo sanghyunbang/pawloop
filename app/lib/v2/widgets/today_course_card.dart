@@ -380,6 +380,9 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
     parts.add('목표 ${pick.targetKm.toStringAsFixed(1)}km');
     if (pick.course.isMine) parts.add('내가 만든 코스');
     if (pick.visitedRecently) parts.add('최근에 간 곳');
+    // 2km 안에 걷는 곳이 없어 넓힌 후보다(`CourseCandidates.widenRadiusM`). 왜 먼 코스를 권하는지
+    // 말해야 "2.6km 거리" 가 실수로 안 읽힌다 — 양재동에서 카드가 조용히 사라지던 자리(2026-09-21).
+    if (pick.course.distanceM > CourseCandidates.radiusM) parts.add('2km 안엔 걸을 곳이 없어 조금 멀어요');
     return parts.join(' · ');
   }
 }

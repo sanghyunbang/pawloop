@@ -39,6 +39,10 @@ const _park = CourseCandidate(
     id: '2733847', title: '서울숲 호수', kind: CourseKind.park, distanceM: 800, lengthM: 1200, source: 'kto', contentId: '2733847',
     lat: 37.5445, lng: 127.0374);
 const _mine = CourseCandidate(id: 'course:7', title: '아침 한 바퀴', kind: CourseKind.myCourse, distanceM: 1500, lengthM: 2000);
+/// 2km 안에 걷는 곳이 없어 넓힌 후보 — 2.6km 밖 공원.
+const _parkFar = CourseCandidate(
+    id: '99', title: '양재시민의숲', kind: CourseKind.park, distanceM: 2600, lengthM: 1500, source: 'kto', contentId: '99',
+    lat: 37.47, lng: 127.04);
 /// 시작 지점을 아는 내 코스 — 칩이 좌표를 들고 가는지 재는 데 쓴다.
 const _mineAt = CourseCandidate(
     id: 'course:7', title: '아침 한 바퀴', kind: CourseKind.myCourse, distanceM: 1500, lengthM: 2000,
@@ -118,6 +122,16 @@ void main() {
     expect(find.textContaining('내가 만든 코스'), findsOneWidget);
     expect(find.text('이 코스 걷기'), findsOneWidget);
     expect(find.text('여기서 산책 시작'), findsNothing, reason: '#724 — 멀리서도 "여기서" 로 읽히던 말');
+    expect(find.textContaining('조금 멀어요'), findsNothing, reason: '2km 안의 후보에는 안 붙는다');
+  });
+
+  testWidgets('2km 안에 걷는 곳이 없어 넓힌 후보면 "2.6km 거리" 와 함께 왜 먼지 말한다 (2026-09-21)', (tester) async {
+    await _pump(tester, _card(source: _Source(const [_parkFar])));
+
+    expect(find.byKey(const Key('today-course')), findsOneWidget, reason: '넓힌 후보를 추천기가 버리면 카드가 없다');
+    expect(find.text('양재시민의숲'), findsOneWidget);
+    expect(find.textContaining('2.6km 거리'), findsOneWidget);
+    expect(find.textContaining('2km 안엔 걸을 곳이 없어 조금 멀어요'), findsOneWidget);
   });
 
   testWidgets('"다른 코스" 는 다음 점수의 후보 — 한 바퀴 돌면 처음으로', (tester) async {

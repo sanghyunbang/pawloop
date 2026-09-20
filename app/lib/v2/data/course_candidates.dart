@@ -27,8 +27,13 @@ class CourseCandidates implements CourseCandidateSource {
   })  : _catalog = catalog ?? PlaceCatalogRepository.instance,
         _courses = courses ?? CourseRepository();
 
-  /// 걸어서 가는 거리 — 추천기의 [CourseRecommender.maxDistanceM] 과 같다.
+  /// 걸어서 가는 거리 — 추천기의 [CourseRecommender.walkRadiusM] 과 같다. 먼저 이 안에서 찾는다.
   static const int radiusM = 2000;
+
+  /// 2km 안에 걷는 곳이 없을 때 넓히는 끝 — [CourseRecommender.maxDistanceM] 과 같다. 2026-09-21
+  /// 양재동에서 홈 카드가 조용히 사라졌다: 2km 안에 산책로·공원·놀이터가 0곳이었다(가장 가까운
+  /// 산책로 2.6km). 없으면 아무 말 없이 숨는 것보다 "2.6km 거리" 라고 적힌 카드가 낫다.
+  static const int widenRadiusM = 5000;
 
   /// 걷는 곳만. 병원 · 펫샵 · 카페는 목적지가 아니라 코스가 아니다.
   static const Set<String> walkableKeys = {'trail', 'playground', '12'};
@@ -48,7 +53,14 @@ class CourseCandidates implements CourseCandidateSource {
   @override
   Future<List<CourseCandidate>> around({required double lat, required double lng}) async {
     final out = <CourseCandidate>[];
-    final places = await _catalog.nearby(lat: lat, lng: lng, radius: radiusM, limit: 200);
+    var radius = radiusM;
+    var places = await _catalog.nearby(lat: lat, lng: lng, radius: radius, limit: 200);
+    if (!places.any((p) => walkableKeys.contains(p.categoryKey))) {
+      // 2km 안에 걷는 곳이 없다 — 5km 까지. 넓히면 카페·병원도 많이 걸리므로 상한을 올린다
+      // (거리순 상한이라 걷는 곳이 잘려 나가면 안 된다). 전부 기기 안 카탈로그라 네트워크는 없다.
+      radius = widenRadiusM;
+      places = await _catalog.nearby(lat: lat, lng: lng, radius: radius, limit: 600);
+    }
     for (final p in places) {
       if (!walkableKeys.contains(p.categoryKey)) continue;
       _places[p.contentId] = p;
@@ -74,7 +86,7 @@ class CourseCandidates implements CourseCandidateSource {
           if (start == null || start.length < 2) continue;
           // 경로는 `[경도, 위도]` 순이다(`WalkDraft.path` 와 같다).
           final d = haversineMeters(lat, lng, start[1], start[0]);
-          if (d > radiusM) continue;
+          if (d > radius) continue;
           out.add(CourseCandidate(
             id: 'course:${c.id}',
             title: c.name,

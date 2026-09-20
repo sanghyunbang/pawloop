@@ -128,9 +128,11 @@ void main() {
 
   testWidgets('경계 — 2km 는 안, 2,001m 는 밖. 홈 카드의 후보 반지름과 같은 값이다', (t) async {
     expect(WalkDestination.nearM, 2000);
-    expect(WalkDestination.nearM, CourseRecommender.maxDistanceM,
+    expect(WalkDestination.nearM, CourseRecommender.walkRadiusM,
         reason: '카드가 "걸어서 가는 거리" 라며 내민 코스를 시작에서 막으면 앞뒤가 안 맞는다');
     expect(WalkDestination.nearM, CourseCandidates.radiusM);
+    expect(CourseRecommender.maxDistanceM, CourseCandidates.widenRadiusM,
+        reason: '2km 에 없어 5km 까지 넓힌 후보를 추천기가 도로 버리면 카드는 여전히 빈다');
     expect(const WalkDestination(lat: 0, lng: 0, distanceM: 2000).isNear, isTrue);
     expect(const WalkDestination(lat: 0, lng: 0, distanceM: 2001).isNear, isFalse);
     expect(const WalkDestination(lat: 0, lng: 0, distanceM: 0).isNear, isTrue);

@@ -13,7 +13,7 @@ const _local = CourseCandidate(
 const _playground = CourseCandidate(
     id: 'pg:1', title: '성수 놀이터', kind: CourseKind.playground, distanceM: 200, source: 'playground', contentId: 'pg:1');
 const _mine = CourseCandidate(id: 'course:7', title: '아침 한 바퀴', kind: CourseKind.myCourse, distanceM: 1500, lengthM: 2000);
-const _far = CourseCandidate(id: 'trail:far', title: '한강 먼 길', kind: CourseKind.trail, distanceM: 5000, lengthM: 2000);
+const _far = CourseCandidate(id: 'trail:far', title: '한강 먼 길', kind: CourseKind.trail, distanceM: 6000, lengthM: 2000);
 
 const _five = [_trail, _park, _local, _playground, _mine];
 
@@ -21,7 +21,7 @@ List<String> _order(List<CourseRecommendation> r) => [for (final x in r) x.cours
 
 void main() {
   group('rank', () {
-    test('보통 날 · 목표 30분(2km)이면 길이가 2km 에 가까운 것이 앞이고, 2km 밖 후보는 빠진다', () {
+    test('보통 날 · 목표 30분(2km)이면 길이가 2km 에 가까운 것이 앞이고, 5km(넓힌 끝) 밖 후보는 빠진다', () {
       final r = CourseRecommender.rank(candidates: [..._five, _far], targetMinutes: 30);
       expect(_order(r).first, 'course:7', reason: '내 코스 2.0km, 가점 0.5');
       expect(_order(r), isNot(contains('trail:far')));
