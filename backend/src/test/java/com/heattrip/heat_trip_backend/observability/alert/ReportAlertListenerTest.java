@@ -31,10 +31,10 @@ class ReportAlertListenerTest {
     // ─────────────────────── 실리는 것 ───────────────────────
 
     @Test
-    @DisplayName("운영자가 DB 질의를 짤 수 있는 좌표가 다 실린다 — 번호·사유·대상·작성자·신고자·시각·메모 유무")
+    @DisplayName("운영자가 DB 질의를 짤 수 있는 좌표가 다 실린다 — 번호·사유·대상·작성자·신고자·시각·메모")
     void carriesTheCoordinatesAnOperatorNeeds() {
         String text = ReportAlertListener.format(new ReportFiled(
-                1204L, "abuse", 128L, 41L, true, FILED,
+                1204L, "abuse", 128L, 41L, "광고 계정 같아요. 세 번째 글이에요", FILED,
                 List.of(new ReportFiled.Target("community_post", 873L, 41L, "달리는초코",
                         "야 너 진짜 그러지 마라"))));
 
@@ -47,14 +47,15 @@ class ReportAlertListenerTest {
                 .contains("신고자 u#128")
                 .as("저장은 UTC 지만 운영자는 한국에 있다 — KST 로 보여야 시각을 두 번 계산하지 않는다")
                 .contains("2026-09-18 14:03 KST")
-                .contains("메모   있음");
+                .as("메모는 운영자에게 쓴 글이다 — '있음' 만 보이면 운영자가 DB 를 열어야 하는데 열 화면이 없다")
+                .contains("메모   \"광고 계정 같아요. 세 번째 글이에요\"");
     }
 
     @Test
     @DisplayName("탈퇴한 사람의 글이면 작성자 자리에 '탈퇴' 라고 적는다 — 빈칸이면 버그로 읽힌다")
     void aDeletedAuthorIsSaidSo() {
         String text = ReportAlertListener.format(new ReportFiled(
-                7L, "spam", 9L, null, false, FILED,
+                7L, "spam", 9L, null, null, FILED,
                 List.of(new ReportFiled.Target("community_comment", 55L, null, null, "광고"))));
 
         assertThat(text).contains("(글쓴이 탈퇴)").contains("메모   없음");
@@ -68,7 +69,7 @@ class ReportAlertListenerTest {
         // 사건 자체가 채팅이면 body·name 을 null 로 든다(Reports 가 그렇게 만든다). 그런데 누가
         // 실수로 값을 넣어 보내도 본문 줄은 채팅에서 그려지지 않아야 한다 — 두 겹으로 막는다.
         String text = ReportAlertListener.format(new ReportFiled(
-                31L, "sexual", 5L, 6L, false, FILED,
+                31L, "sexual", 5L, 6L, null, FILED,
                 List.of(new ReportFiled.Target("chat_message", 900L, 6L, "가족방의 아빠", "은밀한 말"))));
 
         assertThat(text)
@@ -118,7 +119,7 @@ class ReportAlertListenerTest {
             }
         };
         ReportAlertListener listener = new ReportAlertListener(stub, new SimpleMeterRegistry());
-        ReportFiled event = new ReportFiled(1L, "other", 2L, 3L, false, FILED,
+        ReportFiled event = new ReportFiled(1L, "other", 2L, 3L, null, FILED,
                 List.of(new ReportFiled.Target("community_post", 4L, 3L, "누구", "본문")));
 
         listener.onReportFiled(event);            // 거짓 → 1

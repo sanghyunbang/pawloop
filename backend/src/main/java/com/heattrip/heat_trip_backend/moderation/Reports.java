@@ -144,9 +144,9 @@ public class Reports {
                     chat ? null : input.authorName(),
                     chat ? null : ReportFiled.preview(input.body())));
         }
-        String trimmed = trimmedMemo(memo);
+        // 메모도 본문과 같은 상한으로 자른다. 넘겼는지는 끝의 … 로 보인다. 없으면 null.
         return new ReportFiled(reportId, reason.wireValue(), reporterUserId, reportedUserId,
-                trimmed != null, filedAt, targets);
+                ReportFiled.preview(trimmedMemo(memo)), filedAt, targets);
     }
 
     /**
