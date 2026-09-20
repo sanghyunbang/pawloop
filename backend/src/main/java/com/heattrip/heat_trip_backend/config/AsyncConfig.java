@@ -57,11 +57,6 @@ public class AsyncConfig {
     }
 
     /**
-     * 모델 호출은 하나에 몇 초씩 걸리고 돈이다 — 스레드 둘, 대기 50 이면 충분하고, 그 이상은 <b>거절</b>한다
-     * (기본 {@code AbortPolicy}). 거절은 부르는 쪽이 받아 "이번 요청은 문장 없이" 로 처리한다 — 조용히 버리면
-     * 부르는 쪽의 "만드는 중" 표식이 안 풀린다.
-     */
-    /**
      * 신고는 드물고 한 건이 소중하다 — 스레드 하나로 충분하고, 큐는 넉넉히 두되 <b>안 버린다</b>
      * (기본 {@code AbortPolicy}). 거절이 나면 {@code @Async} 가 예외로 던지고 리스너는 그것을
      * 못 잡는데, 그 전에 큐 200 이 차려면 분당 수백 건이 와야 한다 — 입구 한도가 그것을 막는다.
@@ -79,6 +74,11 @@ public class AsyncConfig {
         return executor;
     }
 
+    /**
+     * 모델 호출은 하나에 몇 초씩 걸리고 돈이다 — 스레드 둘, 대기 50 이면 충분하고, 그 이상은 <b>거절</b>한다
+     * (기본 {@code AbortPolicy}). 거절은 부르는 쪽이 받아 "이번 요청은 문장 없이" 로 처리한다 — 조용히 버리면
+     * 부르는 쪽의 "만드는 중" 표식이 안 풀린다.
+     */
     @Bean(INSIGHT_EXECUTOR)
     public ThreadPoolTaskExecutor insightExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

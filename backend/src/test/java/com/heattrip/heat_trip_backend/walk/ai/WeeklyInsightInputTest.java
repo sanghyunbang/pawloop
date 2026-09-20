@@ -45,7 +45,7 @@ class WeeklyInsightInputTest {
                 .contains("월 1.2, 화 0, 수 2")
                 .contains("아침 2회")
                 .contains("지난주: 2km · 1회 · 30분")
-                .contains("소형견, 2살, 하루 권장 30분");
+                .contains("몸집 소형, 2살, 하루 권장 30분");
     }
 
     @Test

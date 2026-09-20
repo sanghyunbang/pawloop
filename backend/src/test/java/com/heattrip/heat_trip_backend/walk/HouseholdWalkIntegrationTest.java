@@ -225,7 +225,7 @@ class HouseholdWalkIntegrationTest extends AbstractMySqlIntegrationTest {
         verify(model).complete(anyString(), prompt.capture());
         assertThat(prompt.getValue())
                 .as("아빠는 자기 아이가 없다 — 사람 기준으로 찾으면 프로필이 null 이라 이 줄이 통째로 빠진다")
-                .contains("- 아이: 소형견");
+                .contains("- 아이: 몸집 소형");
     }
 
     @Test
