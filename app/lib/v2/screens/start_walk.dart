@@ -91,23 +91,20 @@ Future<void> startWalk(
 
   if (!context.mounted) return;
 
-  // 어디서 시작할지 (#623). **위치 권한·강아지 고르기보다 앞이다** — "길 안내" 를 고르면
-  // 걷지 않으므로 그 셋을 물을 이유가 없다.
+  // 멀면 시작하지 않는다 (#623 → #724). 기준(`WalkDestination.nearM`) 안이면 이 블록을
+  // 건너뛰고 바로 시작한다. 밖이거나 거리를 모르면 "N km 떨어져 있어요" 를 말하고 길 안내만
+  // 내민다 — 지금 자리에서 시작하는 길은 **없다.** 부산 코스를 서울에서 시작하던 자리다.
   //
-  // 끊긴 산책 이어가기보다도 앞이다. 이어 걷는 사람은 이미 어딘가를 걷고 있어서 "어디서
-  // 시작할까요" 가 뜻이 없고, 여기서 먼저 물으면 그 사람에게 한 장이 더 생긴다 — 그래서
-  // 이어가기 물음 **앞**에 두되, 목적지를 들고 온 경우에만 묻는다.
-  if (place != null && destination != null) {
+  // **위치 권한·강아지 고르기보다 앞이다** — 걷지 않을 사람에게 그 셋을 물을 이유가 없다.
+  // 끊긴 산책 이어가기보다도 앞이다. 이어 걷는 사람은 이미 어딘가를 걷고 있어서 거리 얘기가
+  // 뜻이 없고, 여기서 먼저 말하면 그 사람에게 한 장이 더 생긴다.
+  if (place != null && destination != null && !destination.isNear) {
     final choice = await WalkStartPointSheet.ask(context, place.title, destination);
     // 닫았으면 아무것도 시작하지 않는다. 실수로 눌렀을 때 30분짜리 기록이 시작되는 것보다
-    // 아무 일도 안 나는 쪽이 낫다.
+    // 아무 일도 안 나는 쪽이 낫다. 유일한 답은 길 안내다.
     if (choice == null) return;
-    if (choice == WalkStartChoice.directions) {
-      await ExternalMaps.directions(
-          lat: destination.lat, lng: destination.lng, name: place.title);
-      return;
-    }
-    if (!context.mounted) return;
+    await ExternalMaps.directions(lat: destination.lat, lng: destination.lng, name: place.title);
+    return;
   }
 
   final leftover = await WalkResumePrompt.offer(context, store: resumeStore);

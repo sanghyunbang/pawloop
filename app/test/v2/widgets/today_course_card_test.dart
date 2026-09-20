@@ -103,7 +103,8 @@ void main() {
     expect(find.textContaining('코스 2.0km'), findsOneWidget);
     expect(find.textContaining('목표 2.0km'), findsOneWidget);
     expect(find.textContaining('내가 만든 코스'), findsOneWidget);
-    expect(find.text('여기서 산책 시작'), findsOneWidget);
+    expect(find.text('이 코스 걷기'), findsOneWidget);
+    expect(find.text('여기서 산책 시작'), findsNothing, reason: '#724 — 멀리서도 "여기서" 로 읽히던 말');
   });
 
   testWidgets('"다른 코스" 는 다음 점수의 후보 — 한 바퀴 돌면 처음으로', (tester) async {
@@ -154,7 +155,7 @@ void main() {
     expect(find.textContaining('최근에 간 곳'), findsOneWidget);
   });
 
-  testWidgets('"여기서 산책 시작" 은 그 장소와 **좌표**를 들고 산책을 시작한다 (#623)', (tester) async {
+  testWidgets('"이 코스 걷기" 는 그 장소와 **좌표**를 들고 산책을 시작한다 (#623)', (tester) async {
     WalkPlaceRef? started;
     WalkDestination? startedTo;
     await _pump(tester, _card(source: _Source(const [_park]), onStart: (_, place, dest) async {
