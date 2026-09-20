@@ -85,8 +85,28 @@ task_outcome() {
 # 테스트 이름에 붙인다. 개수만 세더라도 같은 도구를 쓴다.
 #
 # "OK <클래스> <테스트> <실패> <에러> <건너뜀>" 또는 "ERR <이유>" 를 찍는다.
+#
+# 셀 수 있는 파이썬을 고른다. 윈도우의 `python3` 는 스토어 안내 **스텁**일 수 있다 — "Python" 한 줄을
+# 찍고 0 으로 끝나서, 그대로 믿으면 "클래스 개 · 테스트 개" 짜리 숫자 없는 초록이 된다(2026-09-20 실측).
+# 그래서 이름이 아니라 **실제로 7 을 찍는지**로 고른다.
+python_for_counting() {
+  local candidate
+  for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1         && [ "$("$candidate" -c 'print(7)' 2>/dev/null)" = "7" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 backend_test_totals() {
-  python3 - "$1" <<'PY'
+  local py
+  if ! py=$(python_for_counting); then
+    echo "ERR 셀 수 있는 파이썬이 없다 (python3 · python 둘 다 스텁이거나 없음)"
+    return
+  fi
+  "$py" - "$1" <<'PY'
 import glob
 import sys
 import xml.etree.ElementTree as ET
@@ -127,8 +147,8 @@ flutter_test_count() {
 run_backend() {
   echo "── backend — test + jacoco 게이트 ──────────────────────────"
 
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "  근거 없음 — python3 가 없어 테스트 개수를 셀 수 없다."
+  if ! python_for_counting >/dev/null; then
+    echo "  근거 없음 — 셀 수 있는 파이썬이 없어 테스트 개수를 셀 수 없다 (python3 가 스토어 스텁이면 여기다)."
     echo "  개수를 못 대면 초록이라고 말하지 않는다 (#643)."
     FAILED+=("backend")
     return
@@ -175,6 +195,14 @@ run_backend() {
   case "$summary" in
     "ERR "*)
       echo "  근거 없음 — ${summary#ERR }"
+      FAILED+=("backend")
+      return
+      ;;
+    "OK "*)
+      ;;
+    *)
+      # "OK" 도 "ERR" 도 아닌 줄 — 세는 도구가 엉뚱한 것을 찍었다. 숫자 없는 초록을 내지 않는다.
+      echo "  근거 없음 — 개수 줄을 못 읽었다: ${summary:-(빈 줄)}"
       FAILED+=("backend")
       return
       ;;
