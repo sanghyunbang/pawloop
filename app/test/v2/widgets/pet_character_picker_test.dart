@@ -14,7 +14,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
-import 'package:heat_trip_flutter/v2/domain/pet_characters.dart';
 import 'package:heat_trip_flutter/v2/widgets/pet_character_picker.dart';
 
 const double _screen = 390;
