@@ -63,6 +63,25 @@ class WalkIntegrationTest extends AbstractMySqlIntegrationTest {
 
     // ─────────────── 완료 조건 1 — 끝낸 산책이 서버에 남는다 ───────────────
 
+    /** 장소 머리의 "산책 N회" — 이슈 #729. 사람이 아니라 장소 기준이라 남의 산책도 센다. */
+    @Test
+    @DisplayName("장소 머리의 산책 수는 그 장소에서 한 산책을 센다 — 다른 장소 · 장소 없는 산책은 빠진다")
+    void placeSummaryCountsWalksAtThatPlace() throws Exception {
+        Account me = account("장소산책");
+        long dogId = dog(me, "보리");
+        String place = "walks-" + UUID.randomUUID();
+        Instant when = Instant.parse("2026-09-14T08:00:00Z");
+        save(me, walkAtPlace(dogId, when, "kto", place, "어느 공원")).andExpect(status().isCreated());
+        save(me, walkAtPlace(dogId, when.plusSeconds(600), "kto", place, "어느 공원")).andExpect(status().isCreated());
+        save(me, walkAtPlace(dogId, when.plusSeconds(1200), "kto", "other-" + place, "다른 곳")).andExpect(status().isCreated());
+        save(me, walkAtPlace(dogId, when.plusSeconds(1800), null, null, null)).andExpect(status().isCreated());
+
+        JsonNode summary = body(mockMvc.perform(get("/api/community/places/" + place + "/summary"))
+                .andExpect(status().isOk()));
+        assertThat(summary.path("walks").asLong()).isEqualTo(2);
+        assertThat(summary.path("posts").asLong()).isEqualTo(0);
+    }
+
     @Test
     @DisplayName("경로·거리·시간이 저장되고, 상세로 다시 꺼내면 좌표가 그대로다")
     void aWalkSurvivesTheRoundTrip() throws Exception {

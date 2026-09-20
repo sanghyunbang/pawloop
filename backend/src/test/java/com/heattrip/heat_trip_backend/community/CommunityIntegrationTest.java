@@ -89,6 +89,34 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
      * <p>피드는 전역이라 크기를 세지 않는다(클래스 javadoc). 내가 만든 셋의 id 가 <b>들어 있는가 ·
      * 빠져 있는가</b>만 본다.
      */
+    /** 장소 머리의 숫자 — 이슈 #729. 글 수만 여기서 잰다(산책 수는 {@code WalkIntegrationTest}). */
+    @Test
+    @DisplayName("장소 머리의 글 수는 그 장소를 골라 쓴 글만 세고, 모르는 장소는 0 이다 — 인증 없이도")
+    void placeSummaryCountsPostsOfThatPlace() throws Exception {
+        Account me = account("장소머리");
+        String place = "summary-" + ACCOUNT_SEQUENCE.incrementAndGet();
+        createPost(me, """
+                {"board":"pet_place","title":"첫 글","body":"a","loc":"어느 곳","contentId":"%s"}
+                """.formatted(place)).andExpect(status().isCreated());
+        createPost(me, """
+                {"board":"pet_place","title":"둘째 글","body":"b","loc":"어느 곳","contentId":"%s"}
+                """.formatted(place)).andExpect(status().isCreated());
+        createPost(me, """
+                {"board":"free","title":"장소 없는 글","body":"c"}
+                """).andExpect(status().isCreated());
+
+        JsonNode summary = body(mockMvc.perform(get("/api/community/places/" + place + "/summary"))
+                .andExpect(status().isOk()));
+        assertThat(summary.path("posts").asLong()).isEqualTo(2);
+        assertThat(summary.path("photos").asLong()).as("사진 없는 글 둘").isEqualTo(0);
+        assertThat(summary.path("walks").asLong()).as("이 장소에서 한 산책은 없다").isEqualTo(0);
+
+        JsonNode unknown = body(mockMvc.perform(get("/api/community/places/no-such-place/summary"))
+                .andExpect(status().isOk()));
+        assertThat(unknown.path("posts").asLong()).isEqualTo(0);
+        assertThat(unknown.path("walks").asLong()).isEqualTo(0);
+    }
+
     @Test
     @DisplayName("?contentId= 는 그 장소에 연결된 글만 준다 — 다른 장소 · 장소 없는 글은 빠진다")
     void feedFiltersByLinkedPlace() throws Exception {

@@ -96,5 +96,7 @@ public final class PublicPaths {
     public static final List<String> COMMUNITY_GUEST_GETS = List.of(
             "/api/community/posts",
             "/api/community/posts/*",
-            "/api/community/posts/*/comments");
+            "/api/community/posts/*/comments",
+            // 장소 머리의 숫자 셋(#729) — 글이 공개이니 그 집계도 공개다. 세는 것뿐이라 새는 것이 없다.
+            "/api/community/places/*/summary");
 }

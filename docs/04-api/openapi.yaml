@@ -1753,6 +1753,35 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   # ─────────────────────────── Community ───────────────────────────
+  /api/community/places/{contentId}/summary:
+    get:
+      tags: [Community]
+      summary: 장소 머리의 숫자 셋 — 글 · 사진 · 산책 (#729)
+      description: |
+        "이 장소의 글" 화면 머리에 쓰는 집계입니다. 글은 공개라 **인증 없이** 봅니다.
+        `photos` 는 그 장소 글에 붙은 사진·영상의 수이고(장소의 카탈로그 사진이 아닙니다), `walks` 는
+        그 장소에서 한 **모든 사람의** 산책 수입니다 — 세는 것뿐이라 누가·어디는 안 나갑니다.
+        모르는 장소는 404 가 아니라 전부 0 입니다.
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - name: contentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 집계
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [posts, photos, walks]
+                properties:
+                  posts: { type: integer, format: int64 }
+                  photos: { type: integer, format: int64 }
+                  walks: { type: integer, format: int64 }
   /api/community/posts:
     get:
       tags: [Community]

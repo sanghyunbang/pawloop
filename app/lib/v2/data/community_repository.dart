@@ -573,6 +573,14 @@ class CommunityRepository {
     return _page(json, CommunityPost.tryParse);
   }
 
+  /// 장소 머리의 숫자 셋 — 글 · 사진 · 산책(#729). 인증 없이도 온다. 모르는 장소는 전부 0.
+  Future<PlaceSummary> placeSummary(String contentId) async {
+    final json = await _send(
+      () => _authed.getJson(Uri.parse('$baseUrl/api/community/places/$contentId/summary')),
+    );
+    return PlaceSummary.fromJson((json as Map).cast<String, dynamic>());
+  }
+
   /// 글 하나.
   Future<CommunityPost> post(int postId) async {
     final json = await _send(
@@ -917,4 +925,20 @@ class CommunityRepository {
       _ => CommunityFailureKind.network,
     });
   }
+}
+
+/// 장소 머리의 숫자 셋 — `GET /api/community/places/{contentId}/summary`(#729).
+class PlaceSummary {
+  final int posts;
+  final int photos;
+  final int walks;
+
+  const PlaceSummary({required this.posts, required this.photos, required this.walks});
+
+  /// 셋 다 서버가 세는 수라 없으면 0 이다 — 빈 값을 오류로 만들지 않는다.
+  factory PlaceSummary.fromJson(Map<String, dynamic> json) => PlaceSummary(
+        posts: (json['posts'] as num?)?.toInt() ?? 0,
+        photos: (json['photos'] as num?)?.toInt() ?? 0,
+        walks: (json['walks'] as num?)?.toInt() ?? 0,
+      );
 }

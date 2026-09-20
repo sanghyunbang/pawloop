@@ -380,7 +380,9 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
                 && ("/api/community/posts".equals(path)
                     || "/api/community/bookmarks".equals(path)
                     || path.matches("^/api/community/posts/[^/]+$")
-                    || path.matches("^/api/community/posts/[^/]+/comments$"))) {
+                    || path.matches("^/api/community/posts/[^/]+/comments$")
+                    // 장소 머리의 숫자 셋(#729) — PublicPaths.COMMUNITY_GUEST_GETS 와 같은 집합.
+                    || path.matches("^/api/community/places/[^/]+/summary$"))) {
             return new Rule("community-read", rateLimitProperties.getCommunityReadMaxRequests());
         }
         // 쓰기 전부. 버킷을 나눈 이유는 목록을 새로고침하다 한도에 닿아 글을 못 쓰게

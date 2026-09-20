@@ -210,4 +210,8 @@ public interface WalkRepository extends JpaRepository<Walk, Long> {
             """)
     @org.springframework.data.jpa.repository.Modifying
     int deleteMine(@Param("walkId") long walkId, @Param("userId") long userId);
+
+    /** 장소에서 한 산책의 수 — 모든 사람의 것(#729, {@code PlaceWalks}). 산책은 소프트 삭제가 없어 그대로 센다. */
+    @Query("select count(w) from Walk w where w.placeContentId = :contentId")
+    long countByPlaceContentId(@Param("contentId") String contentId);
 }

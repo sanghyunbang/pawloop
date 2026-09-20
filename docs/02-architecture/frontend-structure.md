@@ -86,7 +86,7 @@ lib/
 | `location_priming_sheet.dart` | **위치 사전 안내** — 첫 산책 시작 앞 한 장 · 허용하기 뒤에만 OS 대화상자 · 거부한 뒤엔 설정에서 켜기 (#325) | `startWalk()` |
 | `walk_start_point_sheet.dart` | **N km 떨어져 있어요** — 코스가 300m 밖일 때 한 장 · 지도 앱으로 길 안내 / 닫기 · 지금 자리에서 시작하는 길이 없다 · 300m 안이면 이 장 없이 바로 추적 (#623 → #724) | `startWalk()` |
 | `course_sheet.dart` | **코스 장소 시트** — 홈 '오늘의 코스' 카드 본문 → 지도 탭과 같은 장소 시트 · 이 코스 걷기 / 길찾기 / 이 장소의 글 보기 / 이 장소로 글쓰기 · 내 코스는 아직 없음 (#723) | 홈 `onOpen`(함수) |
-| `place_posts_screen.dart` | **이 장소의 글** — `?contentId=` 로 좁힌 글을 사진 벽 + 글 줄로 · 없으면 첫 글의 문 · 토큰 문 없음(글은 공개) (#723 조각 2) | 장소 시트 '이 장소의 글 보기' |
+| `place_posts_screen.dart` | **장소 페이지** — 머리(사진 · 분류 · 거리 · 주소 · 글/사진/산책 수) · 사진 | 글 갈래 · 글은 피드와 같은 `PostCard`(`post_list_actions.dart`) · 정렬 둘 · 바닥 고정 글쓰기 · 토큰 문 없음 (#723 → #729) | 장소 시트 '이 장소의 글 보기' |
 | `start_walk.dart` | 산책 시작 진입 — 미로그인이면 로그인부터 · 아이가 둘 이상이면 "누구랑 나가요?"(`widgets/walk_dog_picker.dart`, #343) | 화면 아님(함수) |
 
 > **주의:** 화면 파일명은 감정 시절 이름(explore/feed/insight/me)을 유지하지만 내용은 전부 반려/산책으로 대체됐다. 예: `explore_screen.dart` = 지도, `insight_screen.dart` = 산책 통계.

@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.community.controller;
 
+import com.heattrip.heat_trip_backend.community.dto.PlaceSummaryResponse;
 import com.heattrip.heat_trip_backend.community.dto.BookmarkStateResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentPageResponse;
 import com.heattrip.heat_trip_backend.community.dto.CommentRequest;
@@ -90,6 +91,12 @@ public class CommunityController {
                                  @RequestParam(required = false) String contentId) {
         return community.pageForNeighborhood(viewerId, board, cursor, limit, neighborhood, dogId,
                 contentId);
+    }
+
+    /** 장소 머리의 숫자 셋(#729) — 글 · 사진 · 산책. 인증 없이도 본다(글은 공개). 모르는 장소는 전부 0. */
+    @GetMapping("/places/{contentId}/summary")
+    public PlaceSummaryResponse placeSummary(@PathVariable("contentId") String contentId) {
+        return community.placeSummary(contentId);
     }
 
     @GetMapping("/posts/{postId}")

@@ -65,7 +65,7 @@ Widget placePostsLink(BuildContext screenContext, BuildContext sheetCtx, PetPlac
     onTap: () {
       Navigator.pop(sheetCtx);
       Navigator.of(screenContext).push(MaterialPageRoute(
-        builder: (_) => PlacePostsScreen(contentId: p.contentId, title: p.title, repository: repository),
+        builder: (_) => PlacePostsScreen(contentId: p.contentId, title: p.title, place: p, repository: repository),
       ));
     },
     behavior: HitTestBehavior.opaque,

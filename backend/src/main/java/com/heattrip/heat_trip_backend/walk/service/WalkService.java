@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.walk.service;
 
+import com.heattrip.heat_trip_backend.walk.PlaceWalks;
 import com.heattrip.heat_trip_backend.S3.MediaAttachment;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.dog.DogOwnership;
@@ -54,7 +55,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class WalkService {
+public class WalkService implements PlaceWalks {
 
     /** 우리 주 경계의 기준. */
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -478,5 +479,11 @@ public class WalkService {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    /** {@link PlaceWalks} — 장소 머리의 "산책 N회"(#729). */
+    @Override
+    public long countAtPlace(String contentId) {
+        return walks.countByPlaceContentId(contentId);
     }
 }

@@ -85,4 +85,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
              where p.id = :id
             """)
     java.util.Optional<Post> findDetail(@Param("id") long id);
+
+    /** 장소를 골라 쓴 글의 id 전부 — 머리의 "글 N · 사진 N"(#729). 사진은 이 id 들에 붙은 것을 센다. */
+    @Query("select p.id from Post p where p.contentId = :contentId")
+    List<Long> idsByPlace(@Param("contentId") String contentId);
 }

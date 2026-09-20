@@ -50,6 +50,13 @@ void main() {
     expect(q['limit'], '30');
   });
 
+  test('장소 머리의 숫자 셋은 /api/community/places/{contentId}/summary 에서 온다 (#729)', () async {
+    final s = await repo.placeSummary('2745594');
+    expect(requests.single.url.path, '/api/community/places/2745594/summary');
+    expect(requests.single.method, 'GET');
+    expect([s.posts, s.photos, s.walks], [0, 0, 0], reason: '가짜 서버가 items 만 주면 셋 다 0 으로 읽는다 — 없는 값은 오류가 아니다');
+  });
+
   test('안 주거나 비어 있으면 쿼리에 없다 — 빈 값을 보내 서버에 해석을 떠넘기지 않는다', () async {
     await repo.feed();
     await repo.feed(contentId: '');
