@@ -269,7 +269,9 @@ public class SecurityConfig {
         // 그래서 채팅 버킷만 별도 필터로 인증 뒤에 둔다.
         //
         // 이 순서를 되돌리면 SecurityContext 가 비어 있어 사용자 열쇠 대신 IP 로 떨어진다 —
-        // 조용히 잘못 세는 것이라 ChatRateLimitFilterChainOrderIntegrationTest 가 지킨다.
+        // 조용히 잘못 세는 것이라 SecurityFilterRegistrationIntegrationTest 가 지킨다 — 같은 IP 뒤의
+        // 두 사용자가 각자 세는지를 배포되는 체인으로 본다. (예전 주석이 가리키던
+        // ChatRateLimitFilterChainOrderIntegrationTest 는 저장소에 없었다 — #661.)
         http.addFilterAfter(chatRateLimitFilter, JWTAuthenticationFilter.class);
         return http.build();
     }
