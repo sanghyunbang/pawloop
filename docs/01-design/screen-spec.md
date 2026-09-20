@@ -346,6 +346,7 @@
 | 홈 | `today_screen.dart` | 탭 0 | `kMyDog`, `WalkFeedData.today`(서버 + 전송 대기) |
 | 지도(리스트·지도) | `explore_screen.dart` | 탭 1 | 기기 카탈로그(24h 갱신) — 관광공사 반려동반 · 인허가 병원/펫샵 · 두루누비 산책로 전부 실데이터(#291·#317·#321). 거리 계산은 기기 안 |
 | 일정 | `schedule_screen.dart` | 탭 2 | `GET /api/schedules?from=&to=` — 한 달치. 주인을 안 주면 내가 볼 수 있는 전부가 한 목록으로 온다(#419) |
+| 글 카드 동작(화면 아님) | `post_list_actions.dart` | 피드 · 이 장소의 글 | 반응 · 저장 · 두 번 탭 하트를 한 벌로(#729). 카드 자체는 `widgets/post_card.dart` — 두 화면이 같은 것을 그린다 |
 | 커뮤니티 | `feed_screen.dart` | 탭 3 | `GET /api/community/posts` 커서 페이지 — 서버(#170·#171) |
 | 크루 목록 | `crew_section.dart` | 탭 3 **안의 갈래** | `GET /api/crews?scope=mine\|neighborhood`(#417). 우리 동네는 **시군구 앞 다섯 자리**로 찾는다 — 좌표를 안 쓴다(A안 #235) |
 | 크루 홈 | `crew_home_screen.dart` | 크루 카드 탭 | `GET /api/crews/{id}`. 안 든 공개 크루는 **인원 수까지만** 보이고 멤버는 안 온다 |
