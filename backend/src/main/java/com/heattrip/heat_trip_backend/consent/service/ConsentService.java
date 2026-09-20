@@ -7,6 +7,7 @@ import com.heattrip.heat_trip_backend.consent.dto.ConsentResponse;
 import com.heattrip.heat_trip_backend.consent.entity.UserConsent;
 import com.heattrip.heat_trip_backend.consent.ConsentStatus;
 import com.heattrip.heat_trip_backend.consent.repository.UserConsentRepository;
+import com.heattrip.heat_trip_backend.user.UnconsentedAccounts;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,9 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.EnumMap;
 import java.util.List;
@@ -35,7 +38,7 @@ import java.util.Map;
  * 밀리초 단위로 갈리고, "언제 동의했는가" 를 셀 때 그 차이가 뜻이 있는 것처럼 보인다.
  */
 @Service
-public class ConsentService implements ConsentStatus {
+public class ConsentService implements ConsentStatus, UnconsentedAccounts {
 
     private final UserConsentRepository consents;
     private final Clock clock;
@@ -81,6 +84,31 @@ public class ConsentService implements ConsentStatus {
     /** 필수 셋. {@code MARKETING} 은 선택이라 없다. */
     public static final Set<ConsentKind> REQUIRED =
             Collections.unmodifiableSet(EnumSet.of(ConsentKind.TERMS, ConsentKind.PRIVACY, ConsentKind.LOCATION));
+
+    /**
+     * {@code userIds} 중 필수 셋 하나라도 <b>한 번도</b> 동의하지 않은 계정 — 이슈 #660 완료 조건 4.
+     * {@code user} 가 묻고({@link UnconsentedAccounts}) 여기가 답한다. 그 계정을 지우는 것은
+     * {@code user.service.UnconsentedAccountSweeper} 이고, 이 모듈은 여전히 판정도 삭제도 안 한다.
+     *
+     * <p>{@link #hasAgreedToRequired} 와 <b>다른 질문</b>이다. 그쪽은 "지금 동의 상태인가" 라 철회하면
+     * {@code false} 이고, 이쪽은 "동의한 행이 한 줄이라도 있었는가" 라 철회해도 남는다. 계정을 지우는
+     * 근거로 "지금" 을 쓰면 철회한 사람이 다음 날 새벽에 사라진다 — 그 이유는 인터페이스의 javadoc 에 있다.
+     *
+     * <p>{@link #latestPerKind} 로 계정마다 고르지 않고 한 장을 한 문장으로 묻는다 — 부르는 쪽이 500개씩
+     * 넘기므로 계정마다 쿼리가 나가면 밤마다 사용자 수만큼이 된다. 다 동의한 쪽을 받아 빼는 이유는
+     * "없는 것" 을 SQL 로 세는 것보다 "있는 것" 을 세는 편이 인덱스를 그대로 타기 때문이다.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> among(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Set.of();
+        }
+        List<String> required = REQUIRED.stream().map(ConsentKind::name).toList();
+        Set<Long> lacking = new TreeSet<>(userIds);
+        lacking.removeAll(consents.findUserIdsHavingAgreedToAllOf(userIds, required, required.size()));
+        return lacking;
+    }
 
     /**
      * 받은 항목을 <b>전부 새 행으로</b> 적고 지금 상태를 돌려준다.
