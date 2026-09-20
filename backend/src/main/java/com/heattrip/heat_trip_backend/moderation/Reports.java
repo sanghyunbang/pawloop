@@ -5,6 +5,7 @@ import com.heattrip.heat_trip_backend.moderation.entity.ReportSnapshot;
 import com.heattrip.heat_trip_backend.moderation.repository.ReportRepository;
 import com.heattrip.heat_trip_backend.moderation.repository.ReportSnapshotRepository;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,10 +45,20 @@ public class Reports {
     private final ReportSnapshotRepository snapshots;
     private final Clock clock;
 
-    public Reports(ReportRepository reports, ReportSnapshotRepository snapshots, Clock clock) {
+    /**
+     * "접수됐다" 를 밖으로 말하는 유일한 통로 — 이슈 #707.
+     *
+     * <p>이 모듈은 아무도 못 부른다({@code allowedDependencies = {}}). 운영자 알림은 이 사건을
+     * 듣는 다른 모듈이 한다. 여기서 누가 듣는지는 모르고, 듣는 쪽이 없어도 서버는 뜬다.
+     */
+    private final ApplicationEventPublisher events;
+
+    public Reports(ReportRepository reports, ReportSnapshotRepository snapshots, Clock clock,
+                   ApplicationEventPublisher events) {
         this.reports = reports;
         this.snapshots = snapshots;
         this.clock = clock;
+        this.events = events;
     }
 
     /**
@@ -102,7 +113,40 @@ public class Reports {
         }
         snapshots.saveAll(rows);
 
+        // 트랜잭션 **안**에서 발행한다. 듣는 쪽이 AFTER_COMMIT 으로 받으므로 롤백이면 안 나간다.
+        events.publishEvent(filedEvent(saved.getId(), saved.createdAtInstant(),
+                reporterUserId, reportedUserId, reason, memo, inputs));
+
         return new ReportReceipt(saved.getId(), saved.createdAtInstant());
+    }
+
+    /**
+     * 사건에 실을 값을 고른다 — <b>무엇을 안 싣는지</b>가 여기서 정해진다({@link ReportFiled}).
+     *
+     * <p>대상 줄만 싣고 맥락 줄은 뺀다. 채팅이면 본문도 작성자 이름도 {@code null} 로 보낸다 —
+     * 사적 대화는 알림 채널에 한 글자도 안 실린다. 커뮤니티 본문은 앞
+     * {@value ReportFiled#BODY_PREVIEW_LENGTH}자까지다.
+     */
+    private static ReportFiled filedEvent(long reportId, java.time.Instant filedAt,
+                                          long reporterUserId, Long reportedUserId,
+                                          ReportReason reason, String memo,
+                                          List<ReportSnapshotInput> inputs) {
+        List<ReportFiled.Target> targets = new ArrayList<>();
+        for (ReportSnapshotInput input : inputs) {
+            if (input.role() != ReportSnapshotInput.Role.TARGET) {
+                continue;
+            }
+            boolean chat = input.target().type() == ReportTarget.Type.CHAT_MESSAGE;
+            targets.add(new ReportFiled.Target(
+                    input.target().type().wireValue(),
+                    input.target().id(),
+                    input.authorUserId(),
+                    chat ? null : input.authorName(),
+                    chat ? null : ReportFiled.preview(input.body())));
+        }
+        String trimmed = trimmedMemo(memo);
+        return new ReportFiled(reportId, reason.wireValue(), reporterUserId, reportedUserId,
+                trimmed != null, filedAt, targets);
     }
 
     /**
