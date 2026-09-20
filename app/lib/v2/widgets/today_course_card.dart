@@ -17,6 +17,7 @@ import '../data/walk_repository.dart' show WalkPlaceRef;
 import '../data/walk_safety.dart';
 import '../data/walk_safety_repository.dart';
 import '../domain/course_recommender.dart';
+import '../data/pet_places_repository.dart' show PetPlace;
 import '../domain/walk_destination.dart';
 import '../domain/pet.dart';
 import '../domain/walk_goal.dart';
@@ -30,6 +31,10 @@ import 'aurora.dart';
 typedef StartCourseWalk = Future<void> Function(
     BuildContext context, WalkPlaceRef place, WalkDestination? destination);
 
+/// 카드 **본문**을 눌렀을 때 — 홈이 장소 시트를 연다(#723). 예전에는 칩 하나만 반응했다.
+typedef OpenCourse = Future<void> Function(
+    BuildContext context, CourseCandidate course, PetPlace? place);
+
 class TodayCourseCard extends StatefulWidget {
   const TodayCourseCard({
     super.key,
@@ -40,6 +45,7 @@ class TodayCourseCard extends StatefulWidget {
     this.now,
     this.goals = const WalkGoalStore(),
     required this.onStart,
+    this.onOpen,
   });
 
   final DogProfile? dog;
@@ -56,6 +62,9 @@ class TodayCourseCard extends StatefulWidget {
   /// "이 코스 걷기" — 홈이 `startWalk(place:)` 를 꽂는다(위젯은 화면을 import 하지 않는다,
   /// `legacy_shell_reachability_test`). 테스트가 가짜를 꽂는다.
   final StartCourseWalk onStart;
+
+  /// 본문 탭 — 홈이 `openCourse` 를 꽂는다(#723). 없으면 본문은 예전처럼 아무 일도 안 한다.
+  final OpenCourse? onOpen;
 
   @override
   State<TodayCourseCard> createState() => _TodayCourseCardState();
@@ -108,6 +117,9 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
     if (old.dog?.serverId != widget.dog?.serverId) _loadGoal();
   }
 
+  /// 후보를 준 곳 — 카드를 누르면 `placeOf` 로 장소 시트의 재료를 묻는다(#723).
+  CourseCandidateSource? _source;
+
   Future<void> _load() async {
     await Future.wait([_loadCandidates(), _loadGoal()]);
   }
@@ -116,6 +128,7 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
     final where = await (widget.locate ?? _locate)();
     if (where == null) return;
     final source = widget.source ?? CourseCandidates(includeMine: !widget.data.guest);
+    _source = source;
     List<CourseCandidate> found;
     try {
       found = await source.around(lat: where.lat, lng: where.lng);
@@ -234,66 +247,73 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
       child: GlassCard(
         key: const Key('today-course'),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Text('오늘의 코스',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: T.warmText)),
-            const Spacer(),
-            Text(c.kind.label, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
-          ]),
-          const SizedBox(height: 10),
-          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            _leading(c),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(c.title,
-                    key: const Key('today-course-title'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
-                const SizedBox(height: 3),
-                Text(_subtitle(c), style: const TextStyle(fontSize: 12.5, color: T.textSecondary)),
-              ]),
-            ),
-          ]),
-          const SizedBox(height: 8),
-          Text(_reason(pick, verdict),
-              key: const Key('today-course-reason'),
-              style: const TextStyle(fontSize: 12, color: T.textMuted, height: 1.4)),
-          const SizedBox(height: 10),
-          Row(children: [
-            if (hasNext)
-              TextButton(
-                key: const Key('today-course-next'),
-                onPressed: () => setState(() => _index++),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(0, 36),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text('다른 코스',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
-              ),
-            const Spacer(),
-            GestureDetector(
-              key: const Key('today-course-start'),
-              onTap: () => _start(c),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(999)),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.pets, size: 15, color: Colors.white),
-                  SizedBox(width: 6),
-                  // '여기서 산책 시작' 이었다 — 멀리서도 "여기서" 로 읽혀서 바꿨다(#724).
-                  // 300m 밖이면 `startWalk` 이 "N km 떨어져 있어요" 로 막는다.
-                  Text('이 코스 걷기',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+        // 본문 어디를 눌러도 장소 시트가 열린다(#723) — 예전에는 칩 하나만 반응했다. 칩과
+        // '다른 코스' 는 안쪽 GestureDetector 라 먼저 잡고, 본문으로 번지지 않는다.
+        child: GestureDetector(
+          key: const Key('today-course-open'),
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onOpen == null ? null : () => widget.onOpen!(context, c, _source?.placeOf(c)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Text('오늘의 코스',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: T.warmText)),
+              const Spacer(),
+              Text(c.kind.label, style: const TextStyle(fontSize: 11.5, color: T.textMuted)),
+            ]),
+            const SizedBox(height: 10),
+            Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              _leading(c),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(c.title,
+                      key: const Key('today-course-title'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                  const SizedBox(height: 3),
+                  Text(_subtitle(c), style: const TextStyle(fontSize: 12.5, color: T.textSecondary)),
                 ]),
               ),
-            ),
+            ]),
+            const SizedBox(height: 8),
+            Text(_reason(pick, verdict),
+                key: const Key('today-course-reason'),
+                style: const TextStyle(fontSize: 12, color: T.textMuted, height: 1.4)),
+            const SizedBox(height: 10),
+            Row(children: [
+              if (hasNext)
+                TextButton(
+                  key: const Key('today-course-next'),
+                  onPressed: () => setState(() => _index++),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('다른 코스',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.textSecondary)),
+                ),
+              const Spacer(),
+              GestureDetector(
+                key: const Key('today-course-start'),
+                onTap: () => _start(c),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(999)),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.pets, size: 15, color: Colors.white),
+                    SizedBox(width: 6),
+                    // '여기서 산책 시작' 이었다 — 멀리서도 "여기서" 로 읽혀서 바꿨다(#724).
+                    // 300m 밖이면 `startWalk` 이 "N km 떨어져 있어요" 로 막는다.
+                    Text('이 코스 걷기',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+                  ]),
+                ),
+              ),
+            ]),
           ]),
-        ]),
+        ),
       ),
     );
   }
