@@ -18,6 +18,7 @@ import '../widgets/walk_safety_card.dart';
 import '../widgets/pet_registration_sheet.dart';
 import '../data/walk_feed.dart';
 import 'main_shell.dart';
+import 'course_sheet.dart';
 import 'start_walk.dart';
 import 'family_screen.dart';
 import 'insight_screen.dart';
@@ -203,6 +204,8 @@ class TodayScreen extends StatelessWidget {
                           data: data,
                           onStart: (context, place, destination) =>
                               startWalk(context, place: place, destination: destination),
+                          // 본문을 누르면 장소 시트(#723) — 지도 탭과 같은 것.
+                          onOpen: openCourse,
                         ),
                       ],
                     ),

@@ -90,6 +90,8 @@ void main() {
         reason: '놀이터는 코스가 아니라 길이가 없다 — 0 으로 눕히면 짧은 목표에서 산책로를 이긴다');
     expect(park.source, 'kto');
     expect(park.contentId, '2733847');
+    expect(source.placeOf(park)?.contentId, '2733847', reason: '카드를 누르면 여는 장소 시트의 재료다(#723)');
+    expect(source.placeOf(park)?.title, park.title);
   });
 
   test('목표 2km 면 1.9km 코스가 4.2km 코스와 바로 앞 공원을 이긴다 (#539)', () async {
@@ -123,6 +125,7 @@ void main() {
     final mine = found.singleWhere((c) => c.id == 'course:7');
     expect(mine.kind, CourseKind.myCourse);
     expect(mine.lengthM, 2000);
+    expect(source.placeOf(mine), isNull, reason: '내 코스는 카탈로그 장소가 아니다 — 시트를 열 재료가 없다');
     expect(mine.distanceM, closeTo(270, 60), reason: '시작점(127.0402, 37.5455)까지 약 270m');
     expect(found.any((c) => c.id == 'course:8'), isFalse, reason: '시작점이 14km 밖');
     expect(seen.single, 'GET $_base/api/courses/me', reason: '좌표가 요청에 없다');

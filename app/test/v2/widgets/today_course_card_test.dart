@@ -14,6 +14,7 @@ import 'package:heat_trip_flutter/v2/domain/course_recommender.dart';
 import 'package:heat_trip_flutter/v2/domain/walk_destination.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/widgets/today_course_card.dart';
+import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
 
 class _Source implements CourseCandidateSource {
   _Source(this.candidates);
@@ -24,10 +25,16 @@ class _Source implements CourseCandidateSource {
     calls++;
     return candidates;
   }
+
+  @override
+  PetPlace? placeOf(CourseCandidate course) => course.id == _park.id ? _parkPlace : null;
 }
 
 const _trail = CourseCandidate(
     id: 'trail:1', title: '서울숲 둘레길', kind: CourseKind.trail, distanceM: 500, lengthM: 3000, source: 'trail', contentId: 'trail:1');
+const _parkPlace = PetPlace(
+    contentId: '2733847', title: '서울숲 호수', contentTypeId: '12', addr: '서울 성동구', image: '', tel: '',
+    lat: 37.5445, lng: 127.0374, distM: 800);
 const _park = CourseCandidate(
     id: '2733847', title: '서울숲 호수', kind: CourseKind.park, distanceM: 800, lengthM: 1200, source: 'kto', contentId: '2733847',
     lat: 37.5445, lng: 127.0374);
@@ -78,6 +85,7 @@ TodayCourseCard _card({
   DogProfile? dog,
   bool located = true,
   StartCourseWalk? onStart,
+  OpenCourse? onOpen,
 }) =>
     TodayCourseCard(
       dog: dog ?? _dog,
@@ -86,6 +94,7 @@ TodayCourseCard _card({
       locate: () async => located ? (lat: 37.5445, lng: 127.0374) : null,
       now: () => _now,
       onStart: onStart ?? (_, __, ___) async {},
+      onOpen: onOpen,
     );
 
 void main() {
@@ -153,6 +162,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('서울숲 호수'), findsOneWidget);
     expect(find.textContaining('최근에 간 곳'), findsOneWidget);
+  });
+
+  testWidgets('카드 본문을 누르면 onOpen 에 그 후보가 간다 — 칩은 onStart 만 부른다 (#723)', (tester) async {
+    CourseCandidate? opened;
+    PetPlace? openedPlace;
+    var started = 0;
+    await _pump(
+        tester,
+        _card(
+          source: _Source(const [_park]),
+          onOpen: (_, c, p) async {
+            opened = c;
+            openedPlace = p;
+          },
+          onStart: (_, __, ___) async => started++,
+        ));
+
+    await tester.tap(find.byKey(const Key('today-course-title')));
+    await tester.pumpAndSettle();
+    expect(opened?.id, '2733847');
+    expect(openedPlace?.title, '서울숲 호수', reason: '시트를 열 재료(카탈로그 장소)를 후보를 준 곳에서 받아 함께 보낸다');
+    expect(started, 0);
+
+    opened = null;
+    await tester.tap(find.byKey(const Key('today-course-start')));
+    await tester.pumpAndSettle();
+    expect(started, 1);
+    expect(opened, isNull, reason: '칩은 안쪽 GestureDetector 라 본문 탭으로 번지지 않는다');
   });
 
   testWidgets('"이 코스 걷기" 는 그 장소와 **좌표**를 들고 산책을 시작한다 (#623)', (tester) async {

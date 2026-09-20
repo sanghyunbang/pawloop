@@ -12,6 +12,11 @@ import 'place_catalog_repository.dart';
 /// 후보를 주는 자리 — 위젯 테스트가 가짜를 꽂는다.
 abstract class CourseCandidateSource {
   Future<List<CourseCandidate>> around({required double lat, required double lng});
+
+  /// 후보의 **카탈로그 장소 그 자체** — 카드를 누르면 여는 장소 시트의 재료(#723). 내 코스는
+  /// `null`. 후보(`CourseCandidate`)는 domain 이라 data 의 `PetPlace` 를 들 수 없어서 여기서
+  /// 잇는다 — `course_recommender_no_network_test` 가 그 선을 잠근다.
+  PetPlace? placeOf(CourseCandidate course);
 }
 
 class CourseCandidates implements CourseCandidateSource {
@@ -31,6 +36,12 @@ class CourseCandidates implements CourseCandidateSource {
   final PlaceCatalogRepository _catalog;
   final CourseRepository _courses;
 
+  /// [around] 가 채운다 — 후보 id(= `contentId`) → 장소.
+  final Map<String, PetPlace> _places = {};
+
+  @override
+  PetPlace? placeOf(CourseCandidate course) => _places[course.id];
+
   /// 로그인 전 · 오프라인이면 내 코스 없이 간다.
   final bool includeMine;
 
@@ -40,6 +51,7 @@ class CourseCandidates implements CourseCandidateSource {
     final places = await _catalog.nearby(lat: lat, lng: lng, radius: radiusM, limit: 200);
     for (final p in places) {
       if (!walkableKeys.contains(p.categoryKey)) continue;
+      _places[p.contentId] = p;
       out.add(CourseCandidate(
         id: p.contentId,
         title: p.title,
