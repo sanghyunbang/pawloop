@@ -10,6 +10,11 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  # iOS 빌드가 Swift Package Manager 로 플러그인을 `build/ios/SourcePackages/` 에 체크아웃하는데,
+  # 그 안의 **플러그인 예제 앱 Dart 파일**(firebase_messaging 의 example 등)까지 analyze 가 읽어
+  # 우리 것이 아닌 오류 11개를 냈다(2026-09-21, #757 뒤 처음 iOS 로 돌린 맥). build/ 는 우리 코드가 아니다.
+  exclude:
+    - build/**
   errors:
     # `await` 뒤에 살아 있는지 확인하지 않고 BuildContext 를 쓰면 **컴파일 실패**로 막는다.
     #
