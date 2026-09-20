@@ -36,13 +36,13 @@ const _place = PetPlace(
   tel: '',
   lat: 37.5417,
   lng: 127.0569,
-  distM: 810,
+  distM: 2400,
 );
 const _course = CourseCandidate(
   id: '2745594',
   title: '성수연방',
   kind: CourseKind.park,
-  distanceM: 810,
+  distanceM: 2400,
   source: 'kto',
   contentId: '2745594',
   lat: 37.5417,
@@ -151,7 +151,7 @@ void main() {
     expect(find.byKey(const Key('place-posts-empty')), findsOneWidget, reason: '가짜 저장소가 빈 목록을 줬다');
   });
 
-  testWidgets('"이 코스 걷기" 는 카드가 잰 거리를 들고 startWalk 로 간다 — 810m 는 멀어서 시작하지 않는다',
+  testWidgets('"이 코스 걷기" 는 카드가 잰 거리를 들고 startWalk 로 간다 — 2.4km 는 멀어서 시작하지 않는다',
       (t) async {
     WalkDestination? asked;
     WalkStartPointSheet.ask = (_, __, dest) async {
@@ -164,8 +164,8 @@ void main() {
     await t.tap(find.text('이 코스 걷기'));
     await t.pumpAndSettle();
 
-    expect(asked, isNotNull, reason: '810m 는 멀다 — "떨어져 있어요" 가 떠야 한다(#724)');
-    expect(asked!.distanceM, 810);
+    expect(asked, isNotNull, reason: '2.4km 는 멀다 — "떨어져 있어요" 가 떠야 한다(#724)');
+    expect(asked!.distanceM, 2400);
     expect(asked!.lat, 37.5417);
     expect(asked!.lng, 127.0569);
   });

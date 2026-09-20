@@ -58,16 +58,22 @@ Future<void> _open(
 void main() {
   final launched = <Uri>[];
   final original = ExternalMaps.launcher;
+  final originalCanOpen = ExternalMaps.canOpen;
 
   setUp(() {
     launched.clear();
+    // 네이버 지도가 "있다" 고 답하는 기기로 둔다 — 안 그러면 길찾기가 웹으로 간다(2026-09-21).
+    ExternalMaps.canOpen = (_) async => true;
     ExternalMaps.launcher = (uri) async {
       launched.add(uri);
       return true;
     };
   });
 
-  tearDown(() => ExternalMaps.launcher = original);
+  tearDown(() {
+    ExternalMaps.launcher = original;
+    ExternalMaps.canOpen = originalCanOpen;
+  });
 
   testWidgets('가까운 셋만 보여 준다 — 넷째는 없다', (t) async {
     await _open(t, places: [

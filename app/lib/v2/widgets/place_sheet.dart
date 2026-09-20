@@ -64,6 +64,9 @@ class PlaceActions {
   ///
   /// 넘기는 좌표는 **카탈로그의 것**이지 사용자 위치가 아니다. 목적지만 건네고 출발지는
   /// 지도 앱이 스스로 잡는다 (A안 #235).
+  ///
+  /// "열 수 없어요" 는 열 것이 **하나도 없을 때만** — iOS 의 "열까요?" 에서 취소한 사람에게는
+  /// 아무 말도 안 한다(`ExternalOpen.declined`). 그 사람은 열 수 없었던 게 아니라 안 열었다.
   static PlaceSheetAction directions(
     PetPlace place,
     ScaffoldMessengerState messenger, {
@@ -74,8 +77,9 @@ class PlaceActions {
         label: '길찾기',
         primary: primary,
         onTap: () async {
-          if (!await ExternalMaps.directions(
-              lat: place.lat, lng: place.lng, name: place.title)) {
+          final result = await ExternalMaps.directions(
+              lat: place.lat, lng: place.lng, name: place.title);
+          if (result == ExternalOpen.unavailable) {
             messenger.showSnackBar(const SnackBar(content: Text('지도 앱을 열 수 없어요')));
           }
         },

@@ -18,8 +18,10 @@ import 'package:heat_trip_flutter/v2/screens/location_priming_sheet.dart';
 import 'package:heat_trip_flutter/v2/screens/walk_start_point_sheet.dart';
 import 'package:heat_trip_flutter/v2/data/external_maps.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
+import 'package:heat_trip_flutter/v2/data/place_loop_repository.dart';
 import 'package:heat_trip_flutter/v2/data/trail_route_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/explore_screen.dart';
+import 'package:heat_trip_flutter/v2/screens/start_walk.dart' show lastCourseLineForTest;
 
 PetPlace _place(
   String id,
@@ -85,6 +87,22 @@ class _FakeTrailsMany extends TrailRouteRepository {
         );
 }
 
+/// 추천 코스(#725)를 서버 대신 답한다 — 계약의 `PlaceLoop` 모양 그대로, 어느 장소·길이에도 세 점 고리.
+class _FakeLoops extends PlaceLoopRepository {
+  _FakeLoops()
+      : super(
+          client: MockClient((req) async {
+            final id = Uri.decodeComponent(req.url.pathSegments[2]);
+            final body = '{"contentId":"$id","targetM":2000,"available":true,"reason":null,'
+                '"distanceM":2130,"durationS":1704,"pointCount":3,'
+                '"points":[[126.82,37.59],[126.83,37.60],[126.82,37.59]]}';
+            return http.Response.bytes(utf8.encode(body), 200,
+                headers: {'content-type': 'application/json'});
+          }),
+          baseUrl: 'http://unused',
+        );
+}
+
 class _FakeRepo extends PetPlacesRepository {
   _FakeRepo()
       : super(
@@ -134,7 +152,13 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   final original = ExternalMaps.launcher;
-  tearDown(() => ExternalMaps.launcher = original);
+  final originalCanOpen = ExternalMaps.canOpen;
+  // 네이버 지도가 "있다" 고 답하는 기기로 둔다 — 안 그러면 길찾기가 웹으로 간다(2026-09-21).
+  setUp(() => ExternalMaps.canOpen = (_) async => true);
+  tearDown(() {
+    ExternalMaps.launcher = original;
+    ExternalMaps.canOpen = originalCanOpen;
+  });
 
   testWidgets('자리표시 "우리 동네 업체 자리" 카드가 없다', (tester) async {
     await _pumpWide(tester, ExploreScreen(repository: _FakeRepo()));
@@ -213,7 +237,7 @@ void main() {
 
     expect(find.text('지도에서 보기'), findsOneWidget);
     expect(find.text('전화'), findsOneWidget, reason: '관리기관 전화번호는 있다');
-    expect(find.text('여기서 산책 시작'), findsOneWidget);
+    expect(find.text('이 코스 걷기'), findsOneWidget);
     expect(find.text('길찾기'), findsOneWidget);
     expect(find.text('동네 길 · 지자체(공공데이터포털)'), findsOneWidget,
         reason: '두루누비라고 적으면 출처가 거짓이다');
@@ -279,7 +303,7 @@ void main() {
         reason: '누를 것이 먼저, 읽을 것이 나중이다 — 조각 수가 코스마다 1~51 로 다르다');
   });
 
-  testWidgets('지도 시트의 "여기서 산책 시작" 도 어디서 시작할지 묻는다 — 홈 카드와 같게 (#623)', (tester) async {
+  testWidgets('지도 시트의 "이 코스 걷기" 도 멀면 묻는다 — 홈 카드와 같게 (#623)', (tester) async {
     // 되돌리기에서 이 자리가 비어 있는 것이 드러났다: 지도 시트만 안 묻게 고쳐도 검사가
     // 전부 초록이었다. 같은 이름의 버튼이 두 곳에서 다른 일을 하는 것을 아무도 안 보고 있었다.
     AuthState.signInForTest(const AuthUser(id: 1, nickname: 'walker'));
@@ -299,20 +323,63 @@ void main() {
     };
 
     await _pumpWide(tester,
-        ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrails()));
+        ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrails(), loops: _FakeLoops()));
     await tester.tap(_chip('산책로'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('3.1운동길B'));
+    // 19.8km 짜리 두루누비 — 407m 짜리 동네 길은 2km 안이라 묻지 않고 바로 시작한다.
+    await tester.tap(find.text('DMZ 평화의 길 4-1코스'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('여기서 산책 시작'));
+    await tester.tap(find.text('이 코스 걷기'));
     await tester.pumpAndSettle();
 
     expect(asked, isNotNull,
         reason: '홈 카드는 묻는데 여기가 안 물으면 같은 버튼이 다른 일을 한다');
-    expect(askedTitle, '3.1운동길B');
+    expect(askedTitle, 'DMZ 평화의 길 4-1코스');
     expect(asked!.lat, 37.5445);
     expect(asked!.lng, 127.0374);
-    expect(asked!.distanceM, 407, reason: '목록에 뜬 거리를 그대로 들고 가야 한다');
+    expect(asked!.distanceM, 19800, reason: '목록에 뜬 거리를 그대로 들고 가야 한다');
+  });
+
+  testWidgets('지도 탭 장소 시트에도 추천 코스가 있다 — 받은 선을 그리고, "이 코스 걷기" 가 그 선을 들고 간다 (#725)',
+      (tester) async {
+    AuthState.signInForTest(const AuthUser(id: 1, nickname: 'walker'));
+    LocationPriming.checkPermission = () async => LocationPermission.whileInUse;
+    addTearDown(() {
+      AuthState.resetForTest();
+      LocationPriming.resetForTest();
+      WalkStartPointSheet.resetForTest();
+    });
+    // 19.8km 라 멀다 — 묻는 시트에서 닫아 흐름을 여기서 세운다. 재는 것은 "선이 startWalk 까지 오는가" 다.
+    WalkStartPointSheet.ask = (_, __, ___) async => null;
+    lastCourseLineForTest = null;
+
+    await _pumpWide(tester,
+        ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrails(), loops: _FakeLoops()));
+    await tester.tap(_chip('산책로'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DMZ 평화의 길 4-1코스'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('추천 코스'), findsOneWidget, reason: 'PR #753 이 "다음 조각" 으로 남긴 자리 — 홈 시트와 같은 줄');
+    expect(find.byKey(const Key('loop-len-2000')), findsOneWidget);
+    expect(find.textContaining('실제 2.1km · 약 28분'), findsOneWidget);
+    expect(find.byKey(const Key('loop-preview')), findsOneWidget, reason: '걷기 전에 우리 화면에 그린다');
+
+    await tester.tap(find.text('이 코스 걷기'));
+    await tester.pumpAndSettle();
+
+    expect(lastCourseLineForTest, isNotNull, reason: '시트가 받은 선이 startWalk 까지 와야 추적 화면이 깐다');
+    expect(lastCourseLineForTest, hasLength(3));
+    expect(lastCourseLineForTest!.first, [126.82, 37.59]);
+  });
+
+  testWidgets('병원 시트에는 추천 코스가 없다 — 걸을 곳이 아니다', (tester) async {
+    await _pumpWide(tester, ExploreScreen(repository: _FakeRepo(), loops: _FakeLoops()));
+    await tester.tap(find.text('성수 숲속 피부과 동물병원'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('추천 코스'), findsNothing);
+    expect(find.text('이 코스 걷기'), findsNothing);
   });
 
   testWidgets('두루누비 시트에는 그대로 "지도에서 보기" 가 있고, 경유지 칸은 안 쓴다', (tester) async {
@@ -346,7 +413,7 @@ void main() {
     await tester.tap(find.text('3.1운동길B'));
     await tester.pumpAndSettle();
 
-    expect(find.text('여기서 산책 시작'), findsOneWidget);
+    expect(find.text('이 코스 걷기'), findsOneWidget);
     expect(find.text('전화'), findsOneWidget);
     expect(find.text('길찾기'), findsOneWidget);
     expect(tester.takeException(), isNull,
@@ -379,7 +446,7 @@ void main() {
     // 같은 줄에 선 칸끼리다 — 줄이 다르면 남는 자리가 달라 값도 다른 게 맞다.
     double rowOf(String label) => tester.getRect(find.byKey(Key('place-action-$label'))).top;
 
-    const labels = ['여기서 산책 시작', '전화', '길찾기', '지도에서 보기'];
+    const labels = ['이 코스 걷기', '전화', '길찾기', '지도에서 보기'];
     final pads = {for (final l in labels) l: padding(l)};
 
     for (final e in pads.entries) {
@@ -419,7 +486,7 @@ void main() {
 
     double widthOf(String label) => tester.getSize(find.byKey(Key('place-action-$label'))).width;
 
-    expect(widthOf('여기서 산책 시작'), greaterThan(widthOf('길찾기')));
+    expect(widthOf('이 코스 걷기'), greaterThan(widthOf('길찾기')));
     expect(widthOf('길찾기'), greaterThan(widthOf('전화')),
         reason: '세 글자가 두 글자보다 넓어야 한다 — 같으면 폭을 n등분하고 있는 것이다');
   });
