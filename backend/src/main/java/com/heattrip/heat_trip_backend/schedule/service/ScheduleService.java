@@ -403,7 +403,9 @@ public class ScheduleService {
             // 미용·목욕·사료·그 밖은 케어 종류가 아니다 — ScheduleKind.careWire javadoc.
             return;
         }
-        careLogging.recordFor(groupId, careWire, actor).ifPresent(schedule::linkCareLog);
+        // 일정의 아이를 기록에도 붙인다(#743) — 안 붙이면 아이별 화면이 그 줄을 "아이 안 정함" 으로 본다.
+        Long dogId = schedule.getDog() == null ? null : schedule.getDog().getId();
+        careLogging.recordFor(groupId, careWire, actor, dogId).ifPresent(schedule::linkCareLog);
     }
 
     // ─────────────────────────── 읽기 ───────────────────────────

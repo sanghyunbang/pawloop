@@ -451,17 +451,20 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
     // ─────────────────── 완료하면 케어 기록이 함께 남는다 (#420) ───────────────────
 
     @Test
-    @DisplayName("가족 일정을 완료로 바꾸면 오늘의 케어에 한 줄이 생긴다 — 같은 일을 두 번 안 적게")
+    @DisplayName("가족 일정을 완료로 바꾸면 오늘의 케어에 한 줄이 생긴다 — 같은 일을 두 번 안 적게, 아이까지")
     void markingDoneWritesACareLog() throws Exception {
         Account dad = account("아빠J");
         long groupId = family(dad, "보리네 가족");
+        long dogId = dog(dad, "보리");
         long scheduleId = body(create(dad, """
-                {"ownerKind":"group","ownerRef":%d,"kind":"vet","title":"보리 병원",
+                {"ownerKind":"group","ownerRef":%d,"dogId":%d,"kind":"vet","title":"보리 병원",
                  "onDate":"2026-10-03"}
-                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+                """.formatted(groupId, dogId)).andExpect(status().isCreated())).path("id").asLong();
 
-        update(dad, scheduleId, 0,
-                "{\"title\":\"보리 병원\",\"onDate\":\"2026-10-03\",\"status\":\"done\"}")
+        // 앱은 PATCH 에 아이를 늘 같이 보낸다 — 빼면 "아이 없음" 으로 고치는 것이 된다.
+        update(dad, scheduleId, 0, """
+                {"title":"보리 병원","onDate":"2026-10-03","dogId":%d,"status":"done"}
+                """.formatted(dogId))
                 .andExpect(status().isOk());
 
         JsonNode logs = careLogs(dad, groupId);
@@ -470,6 +473,28 @@ class ScheduleIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(logs.get(0).path("doneBy").path("userId").asLong())
                 .as("수행자는 담당자가 아니라 **실제로 누른 사람**이다 — care_log 가 이미 그 규칙이다")
                 .isEqualTo(dad.id());
+        assertThat(logs.get(0).path("dogId").asLong())
+                .as("일정의 아이가 기록에도 붙는다(#743) — 안 붙으면 날짜별 화면이 '아이 안 정함' 으로 본다")
+                .isEqualTo(dogId);
+    }
+
+    @Test
+    @DisplayName("아이가 없는 가족 일정을 완료하면 기록의 아이도 비어 있다 — 가족 공통은 그대로")
+    void markingDoneWithoutDogLeavesTheLogWithoutDog() throws Exception {
+        Account dad = account("아빠K");
+        long groupId = family(dad, "보리네 가족");
+        long scheduleId = body(create(dad, """
+                {"ownerKind":"group","ownerRef":%d,"kind":"walk","title":"가족 산책",
+                 "onDate":"2026-10-03"}
+                """.formatted(groupId)).andExpect(status().isCreated())).path("id").asLong();
+
+        update(dad, scheduleId, 0,
+                "{\"title\":\"가족 산책\",\"onDate\":\"2026-10-03\",\"status\":\"done\"}")
+                .andExpect(status().isOk());
+
+        JsonNode logs = careLogs(dad, groupId);
+        assertThat(logs.size()).isEqualTo(1);
+        assertThat(logs.get(0).path("dogId").isNull()).isTrue();
     }
 
     @Test

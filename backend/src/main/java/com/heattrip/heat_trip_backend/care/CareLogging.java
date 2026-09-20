@@ -49,18 +49,21 @@ public class CareLogging {
      * @param actor        <b>실제로 누른 사람</b>이다. 담당자가 아니다 —
      *                     {@code care_log.done_by} 가 이미 그 규칙이고, 그래야 화면의
      *                     "아빠가 줬습니다" 를 믿을 수 있다
+     * @param dogId        어느 아이에게 한 일인가 — 일정의 아이(#743). 없으면 {@code null}
+     *                     (가족 공통). 그 집의 아이가 아니면 403 이다 — 카드에서 누를 때와
+     *                     같은 확인이다. 안 붙이면 뭉치 병원이 "아이 안 정함" 으로 간다
      * @return 남긴 기록의 id. 부르는 쪽이 그것을 들고 있다가 되돌릴 때 쓴다
      * @throws org.springframework.web.server.ResponseStatusException 403 — 그 그룹의 방
      *         멤버가 아니면. 부르는 쪽이 이미 확인했더라도 여기서 한 번 더 본다
      */
-    public java.util.Optional<Long> recordFor(long groupId, String careTypeWire, User actor) {
+    public java.util.Optional<Long> recordFor(long groupId, String careTypeWire, User actor, Long dogId) {
         CareType type;
         try {
             type = CareType.of(careTypeWire);
         } catch (IllegalArgumentException notACareType) {
             return java.util.Optional.empty();
         }
-        return java.util.Optional.of(care.recordLinked(groupId, type, actor).id());
+        return java.util.Optional.of(care.recordLinked(groupId, type, actor, dogId).id());
     }
 
     /**
