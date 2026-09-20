@@ -39,6 +39,10 @@ const _park = CourseCandidate(
     id: '2733847', title: '서울숲 호수', kind: CourseKind.park, distanceM: 800, lengthM: 1200, source: 'kto', contentId: '2733847',
     lat: 37.5445, lng: 127.0374);
 const _mine = CourseCandidate(id: 'course:7', title: '아침 한 바퀴', kind: CourseKind.myCourse, distanceM: 1500, lengthM: 2000);
+/// 시작 지점을 아는 내 코스 — 칩이 좌표를 들고 가는지 재는 데 쓴다.
+const _mineAt = CourseCandidate(
+    id: 'course:7', title: '아침 한 바퀴', kind: CourseKind.myCourse, distanceM: 1500, lengthM: 2000,
+    lat: 37.5445, lng: 127.0374);
 
 const _dog = DogProfile(
   serverId: 9,
@@ -164,7 +168,8 @@ void main() {
     expect(find.textContaining('최근에 간 곳'), findsOneWidget);
   });
 
-  testWidgets('카드 본문을 누르면 onOpen 에 그 후보가 간다 — 칩은 onStart 만 부른다 (#723)', (tester) async {
+  testWidgets('카탈로그 장소면 본문도 칩("코스 보기")도 장소 시트를 연다 — 추천 코스가 거기 있다 (#723 · #725)',
+      (tester) async {
     CourseCandidate? opened;
     PetPlace? openedPlace;
     var started = 0;
@@ -179,6 +184,10 @@ void main() {
           onStart: (_, __, ___) async => started++,
         ));
 
+    expect(find.text('코스 보기'), findsOneWidget);
+    expect(find.text('이 코스 걷기'), findsNothing,
+        reason: '그 이름의 버튼은 시트 안에 있다 — 여기서 같은 이름으로 다른 일을 하면 안 된다');
+
     await tester.tap(find.byKey(const Key('today-course-title')));
     await tester.pumpAndSettle();
     expect(opened?.id, '2733847');
@@ -188,31 +197,42 @@ void main() {
     opened = null;
     await tester.tap(find.byKey(const Key('today-course-start')));
     await tester.pumpAndSettle();
-    expect(started, 1);
-    expect(opened, isNull, reason: '칩은 안쪽 GestureDetector 라 본문 탭으로 번지지 않는다');
+    expect(opened?.id, '2733847',
+        reason: '2026-09-21 — 칩이 시트를 건너뛰어 바로 "떨어져 있어요" 로 갔고, 추천 코스는 한 번도 안 보였다');
+    expect(started, 0, reason: '걷기는 시트의 "이 코스 걷기" 가 한다 — 받은 코스 선을 들고');
   });
 
-  testWidgets('"이 코스 걷기" 는 그 장소와 **좌표**를 들고 산책을 시작한다 (#623)', (tester) async {
+  testWidgets('내 코스는 열 시트가 아직 없다 — 칩이 "이 코스 걷기" 이고 **좌표**를 들고 바로 산책을 시작한다 (#623 · #723)',
+      (tester) async {
     WalkPlaceRef? started;
     WalkDestination? startedTo;
-    await _pump(tester, _card(source: _Source(const [_park]), onStart: (_, place, dest) async {
-      started = place;
-      startedTo = dest;
-    }));
+    var opened = 0;
+    await _pump(
+        tester,
+        _card(
+          source: _Source(const [_mineAt]),
+          onOpen: (_, __, ___) async => opened++,
+          onStart: (_, place, dest) async {
+            started = place;
+            startedTo = dest;
+          },
+        ));
+
+    expect(find.text('이 코스 걷기'), findsOneWidget);
+    expect(find.text('코스 보기'), findsNothing, reason: '열 시트가 없는데 "보기" 라고 적으면 거짓이다');
 
     await tester.tap(find.byKey(const Key('today-course-start')));
     await tester.pumpAndSettle();
 
-    expect(started?.title, '서울숲 호수');
-    expect(started?.source, 'kto');
-    expect(started?.contentId, '2733847');
+    expect(opened, 0);
+    expect(started?.title, '아침 한 바퀴');
 
-    // 좌표가 없으면 `startWalk` 이 "어디서 시작할까요?" 를 못 묻고, 카드가 `800m 거리` 를
-    // 보여 주면서 그 거리를 없는 것처럼 다루던 옛 화면으로 돌아간다.
-    expect(startedTo, isNotNull, reason: '카드가 좌표를 안 넘기면 물을 수가 없다');
+    // 좌표가 없으면 `startWalk` 이 거리를 못 가르고, 카드가 `1.5km 거리` 를 보여 주면서 그 거리를
+    // 없는 것처럼 다루던 옛 화면으로 돌아간다.
+    expect(startedTo, isNotNull, reason: '카드가 좌표를 안 넘기면 가를 수가 없다');
     expect(startedTo!.lat, 37.5445);
     expect(startedTo!.lng, 127.0374);
-    expect(startedTo!.distanceM, 800);
+    expect(startedTo!.distanceM, 1500);
   });
 
   // 셋을 한 테스트에서 pumpWidget 으로 이어 그리면 같은 자리의 State 가 재사용돼 initState 가 다시

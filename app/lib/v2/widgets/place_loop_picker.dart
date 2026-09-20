@@ -1,7 +1,12 @@
 // 장소 시트의 "추천 코스" — 이슈 #725.
 //
-// 1 · 2 · 3km 중 하나를 고르면 서버에 그 장소의 왕복 코스를 묻고, **실제 길이와 시간**을 적는다.
-// "2km" 를 부탁했는데 2.1km 가 오면 2.1km 라고 적는다 — 카드가 거짓말하면 안 된다.
+// 1 · 2 · 3km 중 하나를 고르면 서버에 그 장소의 왕복 코스를 묻고, **실제 길이와 시간**을 적고,
+// **그 선을 바로 그린다.** "2km" 를 부탁했는데 2.1km 가 오면 2.1km 라고 적는다 — 카드가 거짓말하면 안 된다.
+//
+// 그림이 여기 있는 이유(2026-09-21): 받은 선을 그리는 곳이 추적 화면 하나였고, 그 화면은 장소 가까이에
+// 있을 때만 열렸다. 집에서 카드를 눌러 본 사장님은 우리 지도에 그려진 코스를 한 번도 못 봤고, "네이버로
+// 넘기지 말고 그리라고 했다" 고 했다. 그래서 받은 자리에서 먼저 보여 준다 — 지도 탭 코스 시트가 쓰는
+// 캔버스(`RouteCanvasPainter`) 그대로라 새 그리기 코드가 없다.
 //
 // 받은 선은 [onLoop] 로 부르는 쪽에 건넨다. 시트의 "이 코스 걷기" 가 그 선을 `startWalk(courseLine:)`
 // 으로 넘기고, 추적 화면이 연한 선으로 깐다(#339 의 그 자리). 못 받으면 한 줄만 적고 나머지 동작은
@@ -10,6 +15,7 @@ import 'package:flutter/material.dart';
 
 import '../data/place_loop_repository.dart';
 import '../theme/app_tokens.dart';
+import '../walk/route_image.dart';
 import 'form_kit.dart';
 
 class PlaceLoopPicker extends StatefulWidget {
@@ -80,21 +86,24 @@ class _PlaceLoopPickerState extends State<PlaceLoopPicker> {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(Icons.route_rounded, size: 16, color: T.textSecondary),
-          const SizedBox(width: 7),
-          const Text('추천 코스',
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: T.textSecondary)),
-          const SizedBox(width: 10),
+        // Row 가 아니라 Wrap — 큰 글자(1.6배)·좁은 화면에서 칩 셋이 오른쪽으로 81px 넘쳤다
+        // (`explore_place_photo_test` 가 잡음). 자리가 모자라면 칩이 다음 줄로 내려간다.
+        Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          const Padding(
+            padding: EdgeInsets.only(right: 4),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.route_rounded, size: 16, color: T.textSecondary),
+              SizedBox(width: 7),
+              Text('추천 코스',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: T.textSecondary)),
+            ]),
+          ),
           for (final lengthM in PlaceLoopPicker.lengths)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: PillChip(
-                key: Key('loop-len-$lengthM'),
-                label: '${lengthM ~/ 1000}km',
-                selected: _lengthM == lengthM,
-                onTap: () => _pick(lengthM),
-              ),
+            PillChip(
+              key: Key('loop-len-$lengthM'),
+              label: '${lengthM ~/ 1000}km',
+              selected: _lengthM == lengthM,
+              onTap: () => _pick(lengthM),
             ),
         ]),
         const SizedBox(height: 6),
@@ -104,12 +113,29 @@ class _PlaceLoopPickerState extends State<PlaceLoopPicker> {
         else if (loop == null)
           const Text('지금은 추천 코스를 못 받아요',
               key: Key('loop-unavailable'), style: TextStyle(fontSize: 12.5, color: T.textMuted))
-        else
+        else ...[
           Text(
             '실제 ${loop.distanceLabel} · ${loop.timeLabel} — "이 코스 걷기" 를 누르면 지도에 선으로 깔려요',
             key: const Key('loop-summary'),
             style: const TextStyle(fontSize: 12.5, color: T.textSecondary),
           ),
+          const SizedBox(height: 8),
+          // 받은 선을 바로 그린다 — 걷기 전에, 여기서. 지도 탭 코스 시트와 같은 캔버스다.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 120,
+              child: CustomPaint(
+                key: const Key('loop-preview'),
+                painter: RouteCanvasPainter(
+                  RouteArt(lngLat: loop.lngLat, distanceLabel: '', timeLabel: '', dateLabel: ''),
+                  withCaption: false,
+                ),
+                size: Size.infinite,
+              ),
+            ),
+          ),
+        ],
       ]),
     );
   }

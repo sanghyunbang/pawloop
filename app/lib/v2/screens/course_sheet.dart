@@ -37,7 +37,8 @@ Future<void> openCourse(BuildContext context, CourseCandidate course, PetPlace? 
     context,
     p,
     actions: (sheetCtx, messenger) => [
-      // 홈 카드의 칩과 **같은 일**을 한다(#724) — 300m 안이면 바로 추적, 멀면 "떨어져 있어요".
+      // 이 시트의 진짜 걷기 버튼(#724) — 2km(`WalkDestination.nearM`) 안이면 바로 추적, 멀면 "떨어져
+      // 있어요". 카드의 칩은 2026-09-21 부터 이 시트를 연다 — 추천 코스가 여기 있어서다.
       PlaceSheetAction(
         icon: Icons.directions_walk_rounded,
         label: '이 코스 걷기',

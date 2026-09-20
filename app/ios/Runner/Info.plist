@@ -90,5 +90,11 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!-- 길찾기(#328)가 canLaunchUrl 로 "네이버 지도가 있나" 를 묻는다. iOS 는 여기 적은 스킴만 답한다 —
+	     빼면 깔려 있어도 "없다" 가 되어 늘 웹으로 간다. 취소를 실패로 읽던 버그(2026-09-21)의 고침과 한 짝이다. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>nmap</string>
+	</array>
 </dict>
 </plist>

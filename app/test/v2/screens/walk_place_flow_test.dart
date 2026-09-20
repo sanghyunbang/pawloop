@@ -1,4 +1,4 @@
-// 발견 → 기록: 지도에서 "여기서 산책 시작", 저장 화면의 이름 검색, 통계의 "자주 가는 곳" (#338).
+// 발견 → 기록: 지도에서 "이 코스 걷기"(예전 "여기서 산책 시작"), 저장 화면의 이름 검색, 통계의 "자주 가는 곳" (#338).
 //
 // 검색은 **기기 안 카탈로그**에서 돈다. 검색어가 서버로 나가면 좌표를 안 보내면서 "서울숲"
 // 을 보내는 셈이라, 앞문을 잠그고 뒷문을 여는 것이 된다(#235).
@@ -190,13 +190,13 @@ void main() {
   });
 
   group('지도에서 산책으로', () {
-    testWidgets('걸을 만한 곳에는 "여기서 산책 시작" 이 있다', (tester) async {
+    testWidgets('걸을 만한 곳에는 "이 코스 걷기" 가 있다', (tester) async {
       await _pumpWide(tester, ExploreScreen(repository: _FakeRepo()));
 
       await tester.tap(find.text('서울숲'));
       await tester.pumpAndSettle();
 
-      expect(find.text('여기서 산책 시작'), findsOneWidget);
+      expect(find.text('이 코스 걷기'), findsOneWidget);
     });
 
     testWidgets('병원에는 없다 — 거기서 산책을 시작한다는 말이 어색하다', (tester) async {
@@ -205,7 +205,7 @@ void main() {
       await tester.tap(find.text('성수 동물병원'));
       await tester.pumpAndSettle();
 
-      expect(find.text('여기서 산책 시작'), findsNothing);
+      expect(find.text('이 코스 걷기'), findsNothing);
       expect(find.text('길찾기'), findsOneWidget, reason: '다른 동작은 그대로다');
     });
   });

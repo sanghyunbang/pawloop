@@ -189,6 +189,21 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
         hot: (WalkSafetyStore.reading?.tempC ?? 0) >= 25,
       );
 
+  /// 큰 칩을 눌렀을 때. 카탈로그 장소면 **장소 시트를 연다** — 추천 코스(1·2·3km, #725)와 진짜
+  /// "이 코스 걷기" 가 거기 있다. 2026-09-21 사장님이 폰에서 이 칩을 눌러 바로 "N km 떨어져 있어요" 로
+  /// 갔고 추천 코스는 한 번도 못 봤다 — 시트는 본문을 눌러야 열렸고, 본문이 눌린다는 표시가 없었다.
+  /// 내 코스는 열 시트가 아직 없어서(#723 다음 조각) 예전처럼 바로 [_start] 다.
+  Future<void> _primary(CourseCandidate c) {
+    final place = _source?.placeOf(c);
+    final open = widget.onOpen;
+    if (place != null && open != null) return open(context, c, place);
+    return _start(c);
+  }
+
+  /// 시트를 열 것이면 '코스 보기', 바로 걷기 시작이면 '이 코스 걷기' — 하는 일과 이름이 같아야 한다.
+  String _primaryLabel(CourseCandidate c) =>
+      _source?.placeOf(c) != null && widget.onOpen != null ? '코스 보기' : '이 코스 걷기';
+
   Future<void> _start(CourseCandidate c) async {
     final place = WalkPlaceRef(title: c.title, source: c.source, contentId: c.contentId);
     // 좌표를 함께 넘긴다 (#623). 이 카드는 `450m 거리` 를 직접 보여 주면서 그 거리를
@@ -297,17 +312,18 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
               const Spacer(),
               GestureDetector(
                 key: const Key('today-course-start'),
-                onTap: () => _start(c),
+                onTap: () => _primary(c),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                   decoration: BoxDecoration(gradient: _warm, borderRadius: BorderRadius.circular(999)),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.pets, size: 15, color: Colors.white),
-                    SizedBox(width: 6),
-                    // '여기서 산책 시작' 이었다 — 멀리서도 "여기서" 로 읽혀서 바꿨다(#724).
-                    // 300m 밖이면 `startWalk` 이 "N km 떨어져 있어요" 로 막는다.
-                    Text('이 코스 걷기',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.pets, size: 15, color: Colors.white),
+                    const SizedBox(width: 6),
+                    // '여기서 산책 시작' 이었다 — 멀리서도 "여기서" 로 읽혀서 바꿨다(#724). 장소면
+                    // '코스 보기' 로 시트를 연다(2026-09-21) — 추천 코스와 걷기 버튼이 거기 있다.
+                    // 2km 밖이면 `startWalk` 이 "N km 떨어져 있어요" 로 막는다.
+                    Text(_primaryLabel(c),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
                   ]),
                 ),
               ),

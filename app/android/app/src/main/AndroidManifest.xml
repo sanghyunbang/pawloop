@@ -116,5 +116,15 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- 길찾기(#328)가 canLaunchUrl 로 "네이버 지도(nmap)·아무 지도 앱(geo)이 있나" 를 묻는다.
+             Android 11+ 는 여기 적은 스킴만 답한다 — 빼면 깔려 있어도 "없다" 가 되어 늘 웹으로 간다. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="nmap"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
+        </intent>
     </queries>
 </manifest>

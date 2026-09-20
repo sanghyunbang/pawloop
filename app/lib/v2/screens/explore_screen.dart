@@ -6,6 +6,7 @@ import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
 import '../widgets/marker_icons.dart';
 import '../widgets/place_sheet.dart';
+import '../widgets/place_loop_picker.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import '../data/community_repository.dart';
 import '../theme/app_tokens.dart';
@@ -21,6 +22,7 @@ import 'start_walk.dart';
 import '../data/walk_repository.dart';
 import '../data/pet_places_repository.dart';
 import '../data/place_catalog_repository.dart';
+import '../data/place_loop_repository.dart';
 import '../data/trail_route_repository.dart';
 import '../data/location_upload_policy.dart';
 import '../data/location_service.dart';
@@ -114,6 +116,9 @@ class ExploreScreen extends StatefulWidget {
   /// 산책로 경로 저장소 — 선이든 경유지든 (#291 · #619). **테스트만 넘긴다.**
   final TrailRouteRepository? trailRoutes;
 
+  /// 추천 코스 저장소 (#725) — 장소 시트의 1·2·3km 줄이 쓴다. **테스트만 넘긴다.**
+  final PlaceLoopRepository? loops;
+
   const ExploreScreen({
     super.key,
     this.initialView = 'list',
@@ -121,6 +126,7 @@ class ExploreScreen extends StatefulWidget {
     this.courses,
     this.neighborhoods,
     this.trailRoutes,
+    this.loops,
   });
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
@@ -1687,6 +1693,34 @@ class _ExploreScreenState extends State<ExploreScreen> {
     ));
   }
 
+  /// 추천 코스(#725)의 선을 지도 위에 깐다 — 시트가 받은 고리다. 길이를 바꾸면 옛 선을 지우고
+  /// 새 선을 깐다(`null` 이면 지우기만). 리스트 뷰거나 지도가 아직 없으면 아무것도 안 한다.
+  /// 시트가 화면 아래를 가리므로 아래쪽 여백을 크게 두어 선이 시트 위에 보이게 한다.
+  Future<void> _drawLoop(PetPlace p, PlaceLoop? loop) async {
+    final c = _mapCtrl;
+    if (c == null || view != 'map' || !mounted) return;
+    final id = 'loop-${p.contentId}';
+    try {
+      await c.deleteOverlay(NOverlayInfo(type: NOverlayType.polylineOverlay, id: id));
+    } catch (_) {
+      // 없던 선을 지우는 것은 실패가 아니다.
+    }
+    if (loop == null || loop.lngLat.length < 2) return;
+    final coords = [for (final q in loop.lngLat) NLatLng(q[1], q[0])];
+    await c.addOverlay(NPolylineOverlay(id: id, coords: coords, color: T.warmEnd, width: 5));
+    double minLat = coords.first.latitude, maxLat = minLat, minLng = coords.first.longitude, maxLng = minLng;
+    for (final q in coords) {
+      if (q.latitude < minLat) minLat = q.latitude;
+      if (q.latitude > maxLat) maxLat = q.latitude;
+      if (q.longitude < minLng) minLng = q.longitude;
+      if (q.longitude > maxLng) maxLng = q.longitude;
+    }
+    await c.updateCamera(NCameraUpdate.fitBounds(
+      NLatLngBounds(southWest: NLatLng(minLat, minLng), northEast: NLatLng(maxLat, maxLng)),
+      padding: const EdgeInsets.fromLTRB(60, 60, 60, 340),
+    ));
+  }
+
   /// 장소 상세 — 시트 자체는 [PlaceSheet] 가 그린다(#664).
   ///
   /// 예전에는 이 메서드가 시트를 통째로 그렸다. 그래서 급할 때 시트(#337)의 병원 카드는
@@ -1701,20 +1735,41 @@ class _ExploreScreenState extends State<ExploreScreen> {
     // FutureBuilder 가 로딩으로 돌아가고, 목록이 깜빡인다. 받아 둔 것은 저장소가
     // 기억하므로(`_memory`) 여기서 한 번 부르는 값이 곧 캐시다.
     final Future<TrailRoute?>? stops = p.isTrail ? _trails.fetch(p.trailCourseId) : null;
+    // 추천 코스(#725) — 홈 카드의 시트와 같은 줄. 걸을 만한 곳(아래 '이 코스 걷기' 와 같은 조건)에만.
+    // 받은 선은 상자에 두고 "이 코스 걷기" 가 들고 간다. 지도 뷰면 지도 위에도 깐다(2026-09-21 —
+    // 그리는 곳이 추적 화면 하나라 사장님이 우리 지도에 그려진 코스를 한 번도 못 봤다).
+    final walkable = kWalkStartCategories.contains(p.categoryKey) && p.contentId.isNotEmpty;
+    final loopHolder = ValueNotifier<PlaceLoop?>(null);
     PlaceSheet.show(
       context,
       p,
       beforeActions: stops == null ? null : _trailNoLineNote(stops),
-      afterActions: stops == null ? null : _trailStops(stops, p.petCategory),
+      afterActions: !walkable && stops == null
+          ? null
+          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (walkable)
+                PlaceLoopPicker(
+                  contentId: p.contentId,
+                  repository: widget.loops,
+                  onLoop: (loop) {
+                    loopHolder.value = loop;
+                    unawaited(_drawLoop(p, loop));
+                  },
+                ),
+              if (stops != null) _trailStops(stops, p.petCategory),
+            ]),
       footer: Builder(builder: (sheetCtx) => _writeAboutPlace(sheetCtx, p)),
       // 순서가 예전과 같다 — 산책 시작 · 전화 · 지도에서 보기 · 길찾기.
       actions: (sheetCtx, messenger) => [
         // 발견에서 기록으로 잇는 자리 (#338). 걸을 만한 곳에만 둔다 — 병원·펫샵·숙박에
-        // "여기서 산책 시작" 은 뜻이 없다.
+        // "이 코스 걷기" 는 뜻이 없다.
         if (kWalkStartCategories.contains(p.categoryKey))
           PlaceSheetAction(
             icon: Icons.directions_walk_rounded,
-            label: '여기서 산책 시작',
+            // '여기서 산책 시작' 이었다 — 홈 카드가 #724 에서 바꾼 것과 같은 이유다: 멀면 시작하지
+            // 않는데 "여기서" 라고 적혀 있었다. 추천 코스 줄이 "'이 코스 걷기' 를 누르면…" 이라고
+            // 말하므로 이름이 같아야 한다.
+            label: '이 코스 걷기',
             primary: true,
             onTap: () async {
               Navigator.pop(sheetCtx);
@@ -1724,6 +1779,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 // 홈 카드와 **같게** 군다 (#623). 두 곳이 다르면 같은 이름의 버튼이 다른 일을
                 // 하게 되고, 그건 버튼 이름이 거짓이 되는 것과 같다.
                 destination: WalkDestination(lat: p.lat, lng: p.lng, distanceM: p.distM),
+                // 추천 코스를 받았으면 그 선을 따라 걷는다(#725). 못 받았으면 선 없이 — 지금까지와 같다.
+                courseLine: loopHolder.value?.lngLat,
               );
             },
           ),

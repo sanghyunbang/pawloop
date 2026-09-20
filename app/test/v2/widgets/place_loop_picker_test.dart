@@ -119,6 +119,37 @@ void main() {
     expect(got2.last, isNull);
   });
 
+  testWidgets('받은 선을 바로 그린다 — 걷기 전에, 여기서. 못 받으면 그림도 없다 (2026-09-21)', (tester) async {
+    await pump(tester, fixture((_) => _json(loopJson())));
+    expect(find.byKey(const Key('loop-preview')), findsOneWidget,
+        reason: '그리는 곳이 추적 화면 하나면 집에서 카드를 눌러 본 사람은 코스를 영영 못 본다');
+
+    await pump(tester, fixture((_) => _json(unavailableJson)));
+    expect(find.byKey(const Key('loop-preview')), findsNothing, reason: '없는 선을 그린 척하지 않는다');
+  });
+
+  testWidgets('큰 글자(1.6배) · 좁은 화면(320dp)에서 칩이 넘치지 않고 줄을 바꾼다', (tester) async {
+    tester.view.physicalSize = const Size(320 * 3, 480 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+    final f = fixture((_) => _json(loopJson()));
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery.withClampedTextScaling(
+        minScaleFactor: 1.6,
+        maxScaleFactor: 1.6,
+        child: Scaffold(
+          body: PlaceLoopPicker(key: UniqueKey(), contentId: '2745594', repository: f.repo),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull,
+        reason: '"추천 코스" 와 칩 셋을 한 줄에 욱여넣으면 큰 글자에서 오른쪽으로 넘친다 — '
+            '`explore_place_photo_test` 가 지도 탭 시트에서 81px 를 잡았다');
+    expect(find.byKey(const Key('loop-len-3000')), findsOneWidget);
+  });
+
   test('PlaceLoop 은 선이 두 점 미만이거나 available 이 아니면 null', () {
     expect(PlaceLoop.tryParse(Map<String, dynamic>.from(unavailableJson)), isNull);
     final onePoint = Map<String, dynamic>.from(loopJson())..['points'] = [[127.0, 37.5]];
