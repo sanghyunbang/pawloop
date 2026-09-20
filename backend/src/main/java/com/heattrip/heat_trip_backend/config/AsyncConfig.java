@@ -33,6 +33,12 @@ public class AsyncConfig {
      */
     public static final String INSIGHT_EXECUTOR = "insightExecutor";
 
+    /**
+     * 신고 알림(#707) — {@code observability.alert.ReportAlertListener} 가 문자열로 든다.
+     * {@link #PUSH_EXECUTOR} 를 안 쓰는 이유는 그쪽이 넘치면 <b>버리는</b> 정책이기 때문이다.
+     */
+    public static final String REPORT_ALERT_EXECUTOR = "reportAlertExecutor";
+
     @Bean(PUSH_EXECUTOR)
     public ThreadPoolTaskExecutor pushExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -55,6 +61,24 @@ public class AsyncConfig {
      * (기본 {@code AbortPolicy}). 거절은 부르는 쪽이 받아 "이번 요청은 문장 없이" 로 처리한다 — 조용히 버리면
      * 부르는 쪽의 "만드는 중" 표식이 안 풀린다.
      */
+    /**
+     * 신고는 드물고 한 건이 소중하다 — 스레드 하나로 충분하고, 큐는 넉넉히 두되 <b>안 버린다</b>
+     * (기본 {@code AbortPolicy}). 거절이 나면 {@code @Async} 가 예외로 던지고 리스너는 그것을
+     * 못 잡는데, 그 전에 큐 200 이 차려면 분당 수백 건이 와야 한다 — 입구 한도가 그것을 막는다.
+     */
+    @Bean(REPORT_ALERT_EXECUTOR)
+    public ThreadPoolTaskExecutor reportAlertExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("report-alert-");
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(200);
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(10);
+        executor.initialize();
+        return executor;
+    }
+
     @Bean(INSIGHT_EXECUTOR)
     public ThreadPoolTaskExecutor insightExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
