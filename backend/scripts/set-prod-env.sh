@@ -113,7 +113,7 @@ if [ -n "$(tail -c1 "$BEFORE")" ]; then echo >> "$BEFORE"; fi
 cp "$BEFORE" "$AFTER"
 
 BEFORE_KEYS=$(grep -cE '^[A-Za-z_][A-Za-z0-9_]*=' "$BEFORE" || true)
-echo "파라미터: $PARAM (버전 $OLD_VERSION · 키 $BEFORE_KEYS줄)"
+echo "파라미터: $PARAM (버전 $OLD_VERSION · 키 ${BEFORE_KEYS}줄)"
 
 # ── 중복 키 ────────────────────────────────────────────────────────────
 touched() {  # 이번 호출에서 지우거나 세팅하는 키인가
@@ -188,7 +188,7 @@ CHANGED=$(diff <(sort "$BEFORE") <(sort "$AFTER") | grep -cE '^[<>]' || true)
 BYTES_AFTER=$(wc -c < "$AFTER" | tr -d ' ')
 
 echo
-echo "키 $BEFORE_KEYS → $AFTER_KEYS줄 · 바뀐 줄 $CHANGED · $BYTES_AFTER 바이트"
+echo "키 $BEFORE_KEYS → ${AFTER_KEYS}줄 · 바뀐 줄 $CHANGED · $BYTES_AFTER 바이트"
 
 # ── 안전장치 ───────────────────────────────────────────────────────────
 # 하나라도 걸리면 저장하지 않는다. 운영 설정은 되돌리기가 재기동이라 비싸다.
