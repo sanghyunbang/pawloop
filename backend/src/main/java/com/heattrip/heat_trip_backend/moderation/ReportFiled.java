@@ -24,8 +24,12 @@ import java.util.List;
  * <p>여기 실린 것은 곧 알림 채널에 실릴 수 있는 것이다. 그래서 <b>싣지 않는 것</b>을 여기서
  * 정한다.
  * <ul>
- *   <li><b>메모 본문</b>은 없다. {@link #hasMemo} 뿐이다 — 신고자가 자기 연락처나 제3자
- *       정보를 적는 자리다({@link Reports#MAX_MEMO_LENGTH}). 있음/없음이면 판단에 충분하다.</li>
+ *   <li><b>메모는 앞 {@value #BODY_PREVIEW_LENGTH}자까지</b>다({@link #memoPreview}). 처음에는
+ *       있음/없음만 실었다 — 신고자가 자기 연락처나 제3자 정보를 적는 자리라서
+ *       ({@link Reports#MAX_MEMO_LENGTH}). 2026-09-20 운영의 첫 신고에서 사장님이 "메모 내용이
+ *       안 보인다" 고 했고 맞는 말이었다: <b>메모는 운영자에게 쓴 글</b>이고, 읽을 화면이 따로
+ *       없어 "있음" 은 아무 쓸모가 없었다. 본문을 앞 80자 싣는 것과 같은 규칙으로 싣는다 —
+ *       채널은 운영자만 보는 곳이다.</li>
  *   <li><b>신고자 닉네임</b>은 없다. id 뿐이다 — 이름까지 실으면 알림 채널이 보복의 재료가 된다.</li>
  *   <li>채팅이면 <b>본문도 작성자 이름도 없다.</b> 사적 대화다. {@link Target#body} 와
  *       {@link Target#authorName} 이 {@code null} 로 온다. 공개 글과 사적 대화를 같은 규칙으로
@@ -37,7 +41,7 @@ import java.util.List;
  * @param reason         {@code ReportReason} 의 wire 값(소문자)
  * @param reporterUserId 신고한 사람의 id. 이름은 없다
  * @param reportedUserId 신고당한 사람의 id. 탈퇴했으면 {@code null}
- * @param hasMemo        메모가 있었는가. 본문은 싣지 않는다
+ * @param memoPreview    메모 앞부분({@value #BODY_PREVIEW_LENGTH}자까지). 메모가 없으면 {@code null}
  * @param filedAt        접수 시각(UTC). 표시할 때 KST 로 바꾼다
  * @param targets        대상 줄들 — 커뮤니티는 하나, 채팅은 최대 셋. 맥락 줄은 없다
  */
@@ -46,7 +50,7 @@ public record ReportFiled(
         String reason,
         long reporterUserId,
         Long reportedUserId,
-        boolean hasMemo,
+        String memoPreview,
         Instant filedAt,
         List<Target> targets) {
 
@@ -79,7 +83,15 @@ public record ReportFiled(
         targets = List.copyOf(targets);
     }
 
-    /** 커뮤니티 본문을 상한까지 자른다. 채팅에는 부르지 않는다 — 부르는 쪽이 {@code null} 을 넣는다. */
+    /** 메모가 있었는가 — 알림이 "없음" 을 찍는 갈래다. */
+    public boolean hasMemo() {
+        return memoPreview != null;
+    }
+
+    /**
+     * 본문이나 메모를 상한까지 자른다. 채팅 본문에는 부르지 않는다 — 부르는 쪽이 {@code null} 을
+     * 넣는다. 잘리면 끝에 {@code …} 를 붙여 잘렸음을 보인다.
+     */
     public static String preview(String body) {
         if (body == null) {
             return null;

@@ -38,6 +38,14 @@ import java.time.format.DateTimeFormatter;
  * 로그만 남고 아무도 못 본다. 그래서 "예외가 안 난다" 는 아무것도 잠그지 못하는 공짜 초록이다.
  * 대신 <b>실패를 센다</b>({@code report_alert_failures_total}). 검사는 그 수를 잰다.
  *
+ * <h2>성공도 한 줄 남긴다</h2>
+ * <p>처음에는 실패만 경고로 찍고 성공은 조용했다. 2026-09-20 운영에서 첫 신고가 들어왔을 때
+ * 사장님은 "슬랙에 아무것도 없다" 고 했고 로그에는 전송 흔적이 한 줄도 없었다 — 그 침묵이 "안 갔다"
+ * 인지 "갔는데 못 봤다" 인지 로그로는 판단이 안 됐고, 결국 {@code /actuator/prometheus} 의
+ * {@code executor_completed_tasks_total} 과 실패 카운터 0 을 대조해서야 "갔다" 를 알았다(실제로는
+ * DM 화면을 보고 있어서 못 본 것이었다). 신고는 드문 사건이라 성공 한 줄이 소음이 아니고,
+ * {@code docker logs | grep "신고 알림"} 한 번으로 갔는지 안 갔는지가 갈려야 한다.
+ *
  * <h2>도배를 막지 않는다</h2>
  * <p>{@link AlertRateLimiter} 를 재사용하지 않는다. 에러는 같은 스택트레이스 100번이 사건 하나지만
  * <b>신고는 같은 글 10건이 사건 10건이고 그 몰림 자체가 가장 강한 신호</b>다. 입구가 이미 막혀
@@ -67,7 +75,9 @@ public class ReportAlertListener {
     public void onReportFiled(ReportFiled event) {
         try {
             boolean sent = slack.sendReport(format(event));
-            if (!sent) {
+            if (sent) {
+                log.info("신고 알림 보냄 — report {}", event.reportId());
+            } else {
                 failures.increment();
                 log.warn("신고 알림이 안 나갔다 — report {} (웹훅이 비었거나 발송 실패)", event.reportId());
             }
@@ -111,7 +121,12 @@ public class ReportAlertListener {
 
         text.append("신고자 u#").append(event.reporterUserId()).append('\n');
         text.append("시각   ").append(WHEN.format(event.filedAt().atZone(DISPLAY_ZONE))).append(" KST\n");
-        text.append("메모   ").append(event.hasMemo() ? "있음" : "없음");
+        text.append("메모   ");
+        if (event.hasMemo()) {
+            text.append('"').append(event.memoPreview()).append('"');
+        } else {
+            text.append("없음");
+        }
         return text.toString();
     }
 

@@ -145,9 +145,11 @@ class ReportAlertIntegrationTest extends AbstractMySqlIntegrationTest {
                 .contains("community_post 873")
                 .contains("u#41").contains("\"달리는초코\"")
                 .contains("신고자 u#128")
-                .contains("메모   있음")
-                .as("메모 본문은 절대 안 실린다 — 연락처를 적는 자리다")
-                .doesNotContain("010-1234-5678");
+                // 처음엔 "있음" 만 싣고 본문은 안 실었다 — 연락처를 적는 자리라서. 그런데 메모는
+                // 운영자에게 쓴 글이고 읽을 화면이 따로 없어 "있음" 은 쓸모가 없었다(2026-09-20 첫 신고).
+                // 본문과 같은 80자 규칙으로 싣는다. 채널은 운영자만 본다.
+                .as("메모 앞부분이 그대로 실린다 — 운영자가 이것만 보고 판단해야 한다")
+                .contains("메모   \"연락처 010-1234-5678\"");
         assertThat(text.indexOf("가".repeat(81)))
                 .as("커뮤니티 본문은 앞 80자까지다")
                 .isEqualTo(-1);
