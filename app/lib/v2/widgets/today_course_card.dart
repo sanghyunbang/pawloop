@@ -321,7 +321,6 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
                     const SizedBox(width: 6),
                     // '여기서 산책 시작' 이었다 — 멀리서도 "여기서" 로 읽혀서 바꿨다(#724). 장소면
                     // '코스 보기' 로 시트를 연다(2026-09-21) — 추천 코스와 걷기 버튼이 거기 있다.
-                    // 2km 밖이면 `startWalk` 이 "N km 떨어져 있어요" 로 막는다.
                     Text(_primaryLabel(c),
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
                   ]),

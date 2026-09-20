@@ -34,7 +34,7 @@ import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/screens/main_shell.dart';
 
 /// 왼쪽부터. 번호가 곧 자리다.
-const _labels = ['홈', '지도', '일정', '커뮤니티', '채팅'];
+const _labels = ['홈', '탐색', '일정', '커뮤니티', '채팅'];
 
 Future<void> _pumpShell(WidgetTester tester,
     {required double width, required double scale}) async {

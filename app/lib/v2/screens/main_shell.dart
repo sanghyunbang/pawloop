@@ -229,7 +229,7 @@ class _ShellNav extends StatelessWidget {
                 // 다섯 칸 전부 Expanded — 같은 폭이라 좌우가 대칭이다.
                 child: Row(children: [
                   item(Icons.home_rounded, '홈', 0),
-                  item(Icons.map_outlined, '지도', 1),
+                  item(Icons.explore_outlined, '탐색', 1),
                   item(Icons.event_note_outlined, '일정', 2),
                   item(Icons.forum_outlined, '커뮤니티', 3),
                   item(Icons.chat_bubble_outline, '채팅', 4, dot: ChatUnread.any),

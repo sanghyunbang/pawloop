@@ -13,15 +13,14 @@ import 'package:http/testing.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
-import 'package:heat_trip_flutter/v2/domain/walk_destination.dart';
 import 'package:heat_trip_flutter/v2/screens/location_priming_sheet.dart';
-import 'package:heat_trip_flutter/v2/screens/walk_start_point_sheet.dart';
 import 'package:heat_trip_flutter/v2/data/external_maps.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
 import 'package:heat_trip_flutter/v2/data/place_loop_repository.dart';
 import 'package:heat_trip_flutter/v2/data/trail_route_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/explore_screen.dart';
-import 'package:heat_trip_flutter/v2/screens/start_walk.dart' show lastCourseLineForTest;
+import 'package:heat_trip_flutter/v2/screens/start_walk.dart'
+    show lastCourseLineForTest, lastDestinationForTest, trackingOpenerForTest;
 
 PetPlace _place(
   String id,
@@ -303,41 +302,41 @@ void main() {
         reason: '누를 것이 먼저, 읽을 것이 나중이다 — 조각 수가 코스마다 1~51 로 다르다');
   });
 
-  testWidgets('지도 시트의 "이 코스 걷기" 도 멀면 묻는다 — 홈 카드와 같게 (#623)', (tester) async {
-    // 되돌리기에서 이 자리가 비어 있는 것이 드러났다: 지도 시트만 안 묻게 고쳐도 검사가
-    // 전부 초록이었다. 같은 이름의 버튼이 두 곳에서 다른 일을 하는 것을 아무도 안 보고 있었다.
+  testWidgets('지도 시트의 "이 코스 걷기" 도 멀어도 우리 추적 화면을 연다 — 홈 카드와 같게 (#623 · 2026-09-21)',
+      (tester) async {
+    // 같은 이름의 버튼이 두 곳에서 다른 일을 하면 안 된다 — 홈 시트와 같은 startWalk 를 지나
+    // 같은 목적지를 들고 간다. #724 의 "멀면 묻는다" 는 지웠다.
     AuthState.signInForTest(const AuthUser(id: 1, nickname: 'walker'));
     LocationPriming.checkPermission = () async => LocationPermission.whileInUse;
     addTearDown(() {
       AuthState.resetForTest();
       LocationPriming.resetForTest();
-      WalkStartPointSheet.resetForTest();
+      trackingOpenerForTest = null;
     });
 
-    WalkDestination? asked;
-    String? askedTitle;
-    WalkStartPointSheet.ask = (_, title, dest) async {
-      askedTitle = title;
-      asked = dest;
-      return null; // 닫은 것으로 둔다 — 여기서 재는 것은 "묻는가" 하나다.
+    var opened = 0;
+    trackingOpenerForTest = (_, __, place) async {
+      opened++;
+      expect(place?.title, 'DMZ 평화의 길 4-1코스');
     };
+    lastDestinationForTest = null;
 
     await _pumpWide(tester,
         ExploreScreen(repository: _FakeRepo(), trailRoutes: _FakeTrails(), loops: _FakeLoops()));
     await tester.tap(_chip('산책로'));
     await tester.pumpAndSettle();
-    // 19.8km 짜리 두루누비 — 407m 짜리 동네 길은 2km 안이라 묻지 않고 바로 시작한다.
+    // 19.8km 짜리 두루누비 — 멀어도 연다.
     await tester.tap(find.text('DMZ 평화의 길 4-1코스'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('이 코스 걷기'));
     await tester.pumpAndSettle();
 
-    expect(asked, isNotNull,
-        reason: '홈 카드는 묻는데 여기가 안 물으면 같은 버튼이 다른 일을 한다');
-    expect(askedTitle, 'DMZ 평화의 길 4-1코스');
+    expect(opened, 1, reason: '멀다고 지도 앱으로 넘기지 않는다 — 우리 추적 화면이다');
+    final asked = lastDestinationForTest;
+    expect(asked, isNotNull, reason: '추적 화면이 "코스 시작점까지 N km" 를 적을 재료');
     expect(asked!.lat, 37.5445);
-    expect(asked!.lng, 127.0374);
-    expect(asked!.distanceM, 19800, reason: '목록에 뜬 거리를 그대로 들고 가야 한다');
+    expect(asked.lng, 127.0374);
+    expect(asked.distanceM, 19800, reason: '목록에 뜬 거리를 그대로 들고 가야 한다');
   });
 
   testWidgets('지도 탭 장소 시트에도 추천 코스가 있다 — 받은 선을 그리고, "이 코스 걷기" 가 그 선을 들고 간다 (#725)',
@@ -347,10 +346,10 @@ void main() {
     addTearDown(() {
       AuthState.resetForTest();
       LocationPriming.resetForTest();
-      WalkStartPointSheet.resetForTest();
+      trackingOpenerForTest = null;
     });
-    // 19.8km 라 멀다 — 묻는 시트에서 닫아 흐름을 여기서 세운다. 재는 것은 "선이 startWalk 까지 오는가" 다.
-    WalkStartPointSheet.ask = (_, __, ___) async => null;
+    // 추적 화면 대신 빈 함수 — 재는 것은 "선이 startWalk 까지 오는가" 다.
+    trackingOpenerForTest = (_, __, ___) async {};
     lastCourseLineForTest = null;
 
     await _pumpWide(tester,
@@ -363,7 +362,9 @@ void main() {
     expect(find.text('추천 코스'), findsOneWidget, reason: 'PR #753 이 "다음 조각" 으로 남긴 자리 — 홈 시트와 같은 줄');
     expect(find.byKey(const Key('loop-len-2000')), findsOneWidget);
     expect(find.textContaining('실제 2.1km · 약 28분'), findsOneWidget);
-    expect(find.byKey(const Key('loop-preview')), findsOneWidget, reason: '걷기 전에 우리 화면에 그린다');
+    expect(find.byKey(const Key('loop-preview')), findsOneWidget, reason: '걷기 전에 우리 화면에 그린다(키 없는 검사는 캔버스)');
+    expect(find.byKey(const Key('place-posts-link')), findsOneWidget,
+        reason: '홈 시트에만 있던 "이 장소의 글 보기" 를 탐색 탭 시트에도(2026-09-21 사장님)');
 
     await tester.tap(find.text('이 코스 걷기'));
     await tester.pumpAndSettle();
