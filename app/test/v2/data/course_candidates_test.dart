@@ -110,6 +110,22 @@ void main() {
         reason: '길이를 모르는 후보도 목록에서 사라지면 안 된다 — 지금의 0.5 자리 그대로');
   });
 
+  test('2km 안에 걷는 곳이 없으면 5km 까지 넓힌다 — 양재동에서 카드가 조용히 사라졌다 (2026-09-21)', () async {
+    final source = CourseCandidates(catalog: catalog(), courses: courses('[]'));
+
+    // 서울숲에서 북쪽으로 약 2.6km — 2km 안에는 카페·병원도 없고, 걷는 곳은 전부 2.6km 밖이다.
+    final found = await source.around(lat: 37.5679, lng: 127.0374);
+
+    final ids = found.map((c) => c.id).toSet();
+    expect(ids, containsAll(['trail:101', 'trail:lt9', 'pg:1', '2733847']),
+        reason: '2km 에 없다고 빈손으로 돌아오면 카드가 아무 말 없이 숨는다');
+    expect(ids, isNot(contains('trail:far')), reason: '넓혀도 끝이 있다 — 6km 는 아니다');
+    final park = found.singleWhere((c) => c.id == '2733847');
+    expect(park.distanceM, closeTo(2600, 100), reason: '거리는 그대로 적힌다 — 카드가 "2.6km 거리" 라고 말한다');
+    expect(CourseRecommender.rank(candidates: found, targetMinutes: 30), isNotEmpty,
+        reason: '추천기가 2km 로 도로 걸러 버리면 넓힌 뜻이 없다');
+  });
+
   test('내 코스는 시작점이 2km 안이면 코스 길이와 함께 든다 — 경로는 [경도, 위도] 순', () async {
     final seen = <String>[];
     final source = CourseCandidates(

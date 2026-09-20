@@ -103,8 +103,14 @@ class CourseRecommender {
   /// 아무리 줄여도 이보다 짧은 목표는 안 낸다 — 0.8km 아래는 "산책" 이 아니다.
   static const double minTargetKm = 0.8;
 
-  /// 후보 반경. 걸어서 가는 거리라 2km 다.
-  static const double maxDistanceM = 2000;
+  /// 걸어서 가는 반경 — 이 안이면 지금 자리에서 시작한다(`WalkDestination.nearM` · `CourseCandidates.radiusM`
+  /// 과 같은 값). 후보를 모을 때 먼저 보는 반경이다.
+  static const double walkRadiusM = 2000;
+
+  /// 후보 반경의 끝. 2km 안에 걷는 곳이 없으면 여기까지 넓혀 "조금 먼 코스" 로 보여 준다(2026-09-21 —
+  /// 양재동에서 카드가 조용히 사라졌다: 가장 가까운 산책로 2.6km · 공원 2.8km). 거리 감점(1km 에 0.5)이
+  /// 있어 가까운 것이 있으면 그것이 앞선다. `CourseCandidates.widenRadiusM` 과 같은 값.
+  static const double maxDistanceM = 5000;
 
   /// 점수 순 목록. 안전 지수가 [WalkSafetyLevel.avoid] 면 **빈 목록** — 카드는 "오늘은 쉬어요".
   ///
