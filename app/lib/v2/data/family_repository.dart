@@ -87,6 +87,10 @@ class CareLogEntry {
   final DateTime occurredAt;
   final String? memo;
 
+  /// 어느 아이에게 한 일인가(#563). 옛 기록과 "모든 아이" 로 적은 기록은 `null` 이다.
+  /// 날짜별 기록 화면(#737)이 아이별로 묶을 때 쓴다.
+  final int? dogId;
+
   const CareLogEntry({
     required this.id,
     required this.type,
@@ -95,7 +99,27 @@ class CareLogEntry {
     required this.doneByName,
     required this.occurredAt,
     this.memo,
+    this.dogId,
   });
+
+  /// 이 기록이 그 칸의 것인가 — **규칙은 서버가 이미 풀었다**(#560 조각 2).
+  ///
+  /// `careItemId` 가 있으면 그것 하나로 끝난다. 없는 경우는 둘뿐이다 — 조각 2 이전 서버와
+  /// 얘기하고 있거나, 목록을 못 읽어 기본 일곱으로 그리는 중이다. 그때만 종류로 붙인다.
+  /// 홈 카드와 날짜별 기록 화면이 같은 답을 내야 해서 여기 한 곳에 둔다(#737).
+  bool belongsTo(CareItemEntry item) {
+    if (careItemId != null) return careItemId == item.id;
+    return item.systemType != null && type == item.systemType;
+  }
+
+  /// 이 기록의 이름 — 그 집의 **칸 이름**으로(#560). 짝이 없는 기록(접힌 뒤 지운 항목 등)은
+  /// 종류 이름, 그것도 없으면 '케어'.
+  String nameAmong(List<CareItemEntry> items) {
+    for (final item in items) {
+      if (belongsTo(item)) return item.name;
+    }
+    return type?.label ?? '케어';
+  }
 
   /// `HH:mm`. 확인 문구와 카드가 같은 표기를 쓰도록 여기 한 곳에서 만든다.
   String get timeLabel =>
@@ -125,6 +149,7 @@ class CareLogEntry {
       doneByName: doneBy is Map ? '${doneBy['nickname'] ?? ''}' : '',
       occurredAt: occurredAt,
       memo: json['memo'] as String?,
+      dogId: (json['dogId'] as num?)?.toInt(),
     );
   }
 }
