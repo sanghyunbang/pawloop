@@ -199,6 +199,43 @@ CREATE DATABASE heat_trip_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 > OAuth(구글/카카오/네이버)·AWS S3·Kakao Local API 키는 전부 dev 기본값(placeholder)이 들어가 있어 로컬 부팅은 되지만, 소셜 로그인/이미지 업로드/장소 백필을 실제로 쓰려면 해당 키를 env로 주입해야 한다.
 
+### 5.2.1 그 `.env` 는 **내 컴퓨터 것**이다 — 운영은 SSM 을 본다
+
+같은 이름의 파일이 넷인데 서로 아무 관계가 없다. 2026-09-20 에 로컬 `.env` 를 고치고 운영이
+바뀐 줄 알았다가 하루를 썼다([#747](https://github.com/sanghyunbang/heattrip/issues/747)).
+
+| 파일 | 무엇 | 운영에 영향 |
+|:---|:---|:---|
+| `backend/.env` (맥) | 로컬 개발용. gitignore | **없음** |
+| `backend/.env` (윈도우) | 로컬 개발용. 맥 것과도 무관 | **없음** |
+| `backend/.env.example` | **키 이름의 목록**. 값은 비어 있다 | 없음 |
+| **SSM `/pawloop/prod/backend/env`** | **운영의 원본.** 서버가 부팅할 때 받아 `.env` 를 만든다 | **이것만** |
+
+**값은 달라야 정상이다** — 로컬은 로컬 DB, 운영은 운영 DB. **맞아야 하는 건 키 이름의 목록**이고 그것이
+`.env.example` 이다. 코드가 새 키를 읽기 시작하면 `.env.example` 에 한 줄 더하고, 각 환경이 자기
+값을 정한다(운영은 진짜 값, 로컬은 빈 값이어도 된다).
+
+위 표의 `SPRING_JPA_HIBERNATE_DDL_AUTO=update` 는 **로컬 기본값**이다. 운영은 `validate` 다 — Flyway 가
+스키마를 쥐고 있어서 둘이 같은 DB 를 고치면 안 된다(#747 에서 실제로 `update` 로 돌고 있었다).
+
+```bash
+# 키 목록이 맞는지 — 코드가 읽는 키 · .env.example · 운영 SSM 을 이름으로 대조. 값은 안 찍는다
+bash backend/scripts/check-prod-env.sh local   # AWS 없이. PR 올리기 전에 (윈도우에서도)
+bash backend/scripts/check-prod-env.sh         # 운영까지
+
+# 운영 값을 고칠 때 — 먼저 --dry-run 으로 보고, 그대로 다시
+bash backend/scripts/set-prod-env.sh --dry-run SLACK_REPORT_WEBHOOK_URL=https://hooks.slack.com/...
+bash backend/scripts/set-prod-env.sh           SLACK_REPORT_WEBHOOK_URL=https://hooks.slack.com/...
+
+# 서버에 먹이기 — 손으로 .env 를 덮으면 Caddy 가 도메인을 못 읽고 API 까지 죽는다
+ssh -i ~/Downloads/pawloop-staging.pem ec2-user@<운영 IP>
+sudo EXPECT_KEYS=<서버 .env 기대 키 수> bash /opt/pawloop-backend/repo/backend/scripts/refresh-prod-env.sh
+```
+
+> **같은 키가 두 줄이면 뒤엣것이 이긴다.** 앞줄만 보고 켜져 있다고 믿게 되는 자리다 —
+> `APP_SECURITY_RATE_LIMIT_ENABLED` 가 `true`(30줄)·`false`(49줄)로 있어 운영 레이트리밋이 꺼진 채
+> 돌았다. `set-prod-env.sh` 와 `check-prod-env.sh` 가 이것을 잡는다.
+
 ### 5.3 백엔드 실행
 
 ```bash
