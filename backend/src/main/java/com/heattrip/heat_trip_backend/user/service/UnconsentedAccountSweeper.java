@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.user.service;
 
 import com.heattrip.heat_trip_backend.user.UnauthenticatedException;
 import com.heattrip.heat_trip_backend.user.UnconsentedAccounts;
+import com.heattrip.heat_trip_backend.user.repository.UserRepository;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -9,6 +10,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -41,6 +43,15 @@ import java.util.List;
  * 더는 없다")으로 돌아오므로 건너뛴다. 그 사이에 지워져 {@code delete} 가 다른 예외로 실패해도
  * 다음 계정으로 간다 — 어느 쪽이든 그 계정은 이미 없다.
  *
+ * <h2>한 장씩 읽는다 — 자기 표에서</h2>
+ *
+ * <p>유예가 지난 계정은 곧 <b>가입자 거의 전부</b>다. 그 id 를 통째로 들지 않고 {@value #PAGE_SIZE}
+ * 개씩 id 순으로 읽어(키셋 — 앞 장의 계정을 지워도 다음 장이 밀리지 않는다) 그 장에 대해서만
+ * {@link UnconsentedAccounts} 에 묻는다. 시각으로 거르는 것은 {@code users.created_at} 이라 이
+ * 모듈의 일이고, 동의 여부는 {@code user_consent} 라 저쪽의 일이다 — 어느 쪽 쿼리도 남의 표를
+ * 안 부른다({@code CrossModuleQueryJoinsTest}). 밤에 가벼운 쿼리가 장 수의 두 배만큼 나가는 것이
+ * 남의 스키마에 묶이는 것보다 싸다.
+ *
  * <h2>무엇을 "동의 없음" 으로 보나</h2>
  *
  * <p>여기서는 정하지 않는다. {@link UnconsentedAccounts} 가 정하고 {@code consent} 가 답한다 —
@@ -62,17 +73,23 @@ public class UnconsentedAccountSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(UnconsentedAccountSweeper.class);
 
+    /** 한 장에 읽는 id 수. 500 이면 IN 절 하나로 묻기에 넉넉하고 한 장이 커넥션을 오래 잡지 않는다. */
+    static final int PAGE_SIZE = 500;
+
+    private final UserRepository userRepository;
     private final UnconsentedAccounts unconsented;
     private final UserService users;
     private final Clock clock;
     private final Duration grace;
     private final Counter swept;
 
-    public UnconsentedAccountSweeper(UnconsentedAccounts unconsented,
+    public UnconsentedAccountSweeper(UserRepository userRepository,
+                                     UnconsentedAccounts unconsented,
                                      UserService users,
                                      Clock clock,
                                      MeterRegistry registry,
                                      @Value("${app.consent.cleanup.grace-hours:24}") long graceHours) {
+        this.userRepository = userRepository;
         this.unconsented = unconsented;
         this.users = users;
         this.clock = clock;
@@ -90,22 +107,38 @@ public class UnconsentedAccountSweeper {
      * @return 이번 실행에서 실제로 지운 수. 다른 인스턴스가 먼저 지운 것은 세지 않는다
      */
     public int sweep() {
-        List<Long> ids = unconsented.idsCreatedBefore(cutoff());
+        LocalDateTime cutoff = cutoff();
         int removed = 0;
-        for (Long id : ids) {
-            try {
-                users.deleteMe(id);
-                removed++;
-            } catch (UnauthenticatedException alreadyGone) {
-                // 다른 인스턴스가 먼저 지웠거나 그 사이에 스스로 탈퇴했다. 결과는 같다.
-            } catch (RuntimeException e) {
-                log.warn("[consent] 동의 없는 계정 하나를 거두지 못했다 — 다음 실행에 다시 본다: {}",
-                        e.toString());
+        long afterId = 0;
+        while (true) {
+            List<Long> page = userRepository.findIdsCreatedBefore(cutoff, afterId, PageRequest.of(0, PAGE_SIZE));
+            if (page.isEmpty()) {
+                break;
             }
+            for (Long id : unconsented.among(page)) {
+                if (remove(id)) {
+                    removed++;
+                }
+            }
+            afterId = page.get(page.size() - 1); // id 순이라 마지막이 가장 크다 — 다음 장은 그 뒤부터
         }
         swept.increment(removed);
         log.info("[consent] 필수 약관에 동의하지 않은 채 {}시간 지난 계정 {}건을 거뒀다", grace.toHours(), removed);
         return removed;
+    }
+
+    /** 탈퇴 경로로 하나를 지운다. 이미 없거나 실패하면 {@code false} — 어느 쪽이든 다음 계정으로 간다. */
+    private boolean remove(long userId) {
+        try {
+            users.deleteMe(userId);
+            return true;
+        } catch (UnauthenticatedException alreadyGone) {
+            // 다른 인스턴스가 먼저 지웠거나 그 사이에 스스로 탈퇴했다. 결과는 같다.
+            return false;
+        } catch (RuntimeException e) {
+            log.warn("[consent] 동의 없는 계정 하나를 거두지 못했다 — 다음 실행에 다시 본다: {}", e.toString());
+            return false;
+        }
     }
 
     /**

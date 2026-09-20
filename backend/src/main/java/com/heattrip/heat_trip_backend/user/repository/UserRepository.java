@@ -3,8 +3,10 @@ package com.heattrip.heat_trip_backend.user.repository;
 import com.heattrip.heat_trip_backend.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.Optional;
@@ -54,6 +56,24 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("select u.id from User u where u.id in :ids")
     List<Long> findExistingIds(@Param("ids") Collection<Long> ids);
+
+    /**
+     * {@code createdBefore} 보다 먼저 만들어진 계정의 id 를 {@code afterId} <b>다음부터</b> id 순으로 한 장 —
+     * 이슈 #660 완료 조건 4. {@code UnconsentedAccountSweeper} 가 유예 지난 계정을 한 장씩 훑는 자리다.
+     *
+     * <p><b>키셋 페이징이다.</b> 오프셋으로 넘기면 앞 장의 계정을 지운 만큼 다음 장이 앞으로 밀려 건너뛴다.
+     * "마지막으로 본 id 뒤" 로 넘기면 지워도 안 밀린다. 엔티티를 안 읽고 id 만 가져오는 이유는
+     * {@link #findExistingIds} 와 같다 — 필요한 것이 id 뿐이다.
+     *
+     * <p>{@code created_at} 이 비어 있는 행은 {@code <} 비교가 거짓이라 <b>안 나온다</b> — 언제 만들어졌는지
+     * 모르는 계정은 거두지 않는다.
+     *
+     * @param page 장 크기만 쓴다({@code PageRequest.of(0, n)}). 정렬은 쿼리가 정한다
+     */
+    @Query("select u.id from User u where u.createdAt < :createdBefore and u.id > :afterId order by u.id")
+    List<Long> findIdsCreatedBefore(@Param("createdBefore") LocalDateTime createdBefore,
+                                    @Param("afterId") long afterId,
+                                    Pageable page);
 
 
 }

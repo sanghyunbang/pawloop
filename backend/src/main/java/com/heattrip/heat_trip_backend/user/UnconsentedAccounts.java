@@ -1,10 +1,10 @@
 package com.heattrip.heat_trip_backend.user;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Collection;
+import java.util.Set;
 
 /**
- * 필수 약관에 <b>한 번도 다 동의하지 않은</b> 계정을 찾는 자리 — 이슈 #660 완료 조건 4.
+ * 이 계정들 중 필수 약관에 <b>한 번도 다 동의하지 않은</b> 것을 가려내는 자리 — 이슈 #660 완료 조건 4.
  * <b>{@code user} 가 묻고 {@code consent} 가 답한다.</b>
  *
  * <h2>왜 인터페이스인가 — 방향이 뒤집혀 있다</h2>
@@ -27,22 +27,21 @@ import java.util.List;
  * <b>1년 된 계정이 철회한 다음 날 새벽에 사라진다</b>. 이 자리가 겨냥하는 것은 동의 화면에서
  * 앱을 지운 사람 — 아무 동의도 받지 않은 개인정보를 오래 들고 있지 않기 위한 것이다.
  *
- * <h2>왜 시각을 함께 받나</h2>
+ * <h2>왜 id 목록으로 묻나 — 시각은 넘기지 않는다</h2>
  *
- * <p>"동의 안 한 계정 전부" 를 받아 여기서 시각을 거르면 <b>동의 안 한 사람 전부</b>가 매일 밤
- * 이 모듈로 건너온다. 방금 가입해 동의 화면을 보고 있는 사람까지. 답하는 쪽이 {@code users}
- * 엔티티를 볼 수 있으므로({@code consent} 는 {@code user :: entity} 를 연다) 한 문장으로 거른다.
+ * <p>"유예가 지난 계정" 은 {@code users.created_at} 의 이야기라 이 모듈이 자기 표에서 고른다.
+ * 그 시각을 넘겨 {@code consent} 가 {@code User} 를 JPQL 로 묻게 하면 한 문장으로 끝나지만, 그건
+ * {@code consent} 가 남의 표에 묶이는 것이다 — {@code CrossModuleQueryJoinsTest} 가 그 쿼리를 세고
+ * 있고, 지금 그 기준선에는 원자성 때문에 어쩔 수 없는 {@code walk → dog} 하나뿐이다. 여기는
+ * 야간 배치라 그럴 이유가 없다. 대신 {@code user} 가 id 를 한 장씩({@code UnconsentedAccountSweeper}
+ * 의 키셋 페이지) 넘기고, 답하는 쪽은 {@code user_consent} 만 본다.
  */
 public interface UnconsentedAccounts {
 
     /**
-     * {@code createdBeforeUtc} 보다 먼저 만들어졌고, 필수 약관 중 하나라도 <b>동의한 행이 한 줄도
-     * 없는</b> 계정의 id — 오름차순.
+     * {@code userIds} 중 필수 약관 하나라도 <b>동의한 행이 한 줄도 없는</b> 계정 — id 오름차순.
      *
-     * <p>{@code users.created_at} 은 UTC 를 담은 {@code LocalDateTime} 이다({@link UserTime}).
-     * 그 컬럼이 비어 있는 행은 <b>대상이 아니다</b> — 언제 만들어졌는지 모르는 계정을 지우지 않는다.
-     *
-     * @param createdBeforeUtc 이 시각보다 먼저 만들어진 계정만. 담긴 값이 UTC 여야 한다
+     * @param userIds 비면 빈 집합이고 <b>쿼리를 보내지 않는다</b>
      */
-    List<Long> idsCreatedBefore(LocalDateTime createdBeforeUtc);
+    Set<Long> among(Collection<Long> userIds);
 }
