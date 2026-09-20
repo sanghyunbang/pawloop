@@ -540,6 +540,10 @@ GET https://apis.data.go.kr/B551011/KorPetTourService2/locationBasedList2
 
 ---
 
+### 4.6 코스 추천 왕복 경로 ✅ (#725)
+
+`GET /api/places/{contentId}/loop?lengthM=2000` — 그 장소에서 출발해 돌아오는 도보 코스 하나. 서버가 OpenRouteService 를 대신 부르고(키는 서버에만) 한 번 받은 코스는 `trail_route` 에 `loop:{contentId}:{lengthM}` 로 남는다. 못 줄 때도 200 에 `available: false`(`nokey`·`budget`·`upstream`·`busy`), 모르는 장소만 404. 게스트도 본다. 한도는 `places-loop` 버킷(분당 10)과 하루 예산(`ors-loop` 풀 150). 계약: `PlaceLoop`.
+
 ## 5. 산책 (Walks)
 
 실시간 GPS 트래킹 결과를 저장/조회. 프론트: `ServerWalk`(계약의 `Walk` 그대로) + 아직 못 보낸 `WalkDraft`.

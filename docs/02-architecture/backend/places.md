@@ -242,3 +242,19 @@
 > 원본의 `intro`(1,302개 전부 있고 중앙값 29자)는 사람이 쓴 소개 문장이라 **상세 시트에는 어울린다.** 지금 계약에 그 자리가 없어 넣지 않았다 — 넣으려면 `PlaceDto` 에 필드를 하나 더 열어야 한다.
 
 > **레이어 스냅숏은 부팅 때 만들어진다.** `place_catalog` 표에 출처별 한 행으로 저장되고, 그 행이 있으면 다시 안 만든다. 그래서 **요약 문구를 고친 뒤에는 그 행을 지우고 서버를 다시 띄워야** 화면에 반영된다(개발 중 실측 — 코드만 고치고 재시작하면 옛 문구가 그대로 나갔다).
+
+---
+
+## 7. 코스 추천 왕복 경로 (#725)
+
+| | |
+|:---|:---|
+| 표면 | `GET /api/places/{contentId}/loop?lengthM=` → `PlaceLoopDto` (게스트 OK, `places-loop` 버킷 분당 10) |
+| 서비스 | `PlaceLoopService` — 길이를 500 단위로 맞추고(`normalizeLength`), `trail_route` 에 `loop:{contentId}:{lengthM}` 가 있으면 그것, 없으면 `OrsRoutingClient` 로 seed 를 `app.ors.loop-attempts` 개 돌려 `LoopPicker` 가 목표에 가장 가까운 것을 고른 뒤 저장 |
+| 바깥 | `WebClientOrsRoutingClient` — `POST /v2/directions/foot-walking/geojson`, 키는 `Authorization` 헤더(URL 에 안 실림 → #192 의 로그 자리에 안 남음). 인터페이스 `OrsRoutingClient` 라 검사는 가짜를 꽂는다 |
+| 예산 | `KtoPool.ORS_LOOP`(하루 `app.kto.budget.ors-loop-max-calls-per-day`, 기본 150 — 상대 한도 200 실측) · 같은 코스를 둘이 받지 않게 `UpstreamGate` |
+| 저장 | 새 표 없음 — `trail_route` 행 하나(코스 id 접두어 `loop:`). 공원의 길은 안 바뀌므로 만료 없음 |
+| 못 줄 때 | 200 + `available=false`(`nokey`·`budget`·`upstream`·`busy`). 404 는 모르는 장소(`pet_place_detail` 허용목록 밖)뿐 — 바깥 호출 0 |
+| 검사 | `LoopPickerTest`(고르기) · `PlaceLoopIntegrationTest`(가짜 ORS: 가장 가까운 것 · 두 번째는 표에서 · 404 · 길이 맞춤 · 키 없음 · 예산 소진) · `PlacesContractSpecTest`(429·계약 등재) |
+
+앱은 `data/place_loop_repository.dart` 로 받아 장소 시트(`widgets/place_loop_picker.dart`)에 "실제 2.1km · 약 28분" 을 적고, "이 코스 걷기" 가 그 선을 `startWalk(courseLine:)` 으로 넘겨 추적 화면이 연한 선으로 깐다(#339 의 그 자리).

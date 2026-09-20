@@ -90,6 +90,12 @@ public class KtoBudgetProperties {
     private int durunubiMaxCallsPerDay = 100;
 
     /**
+     * ORS 왕복 경로의 하루 상한 — 이슈 #725. 시도 하나 = 1콜. 상대 한도 200(실측)에서 50 을 남긴다 —
+     * 손으로 확인할 몫과 헤더가 말한 수가 틀렸을 때의 여유다.
+     */
+    private int orsLoopMaxCallsPerDay = 150;
+
+    /**
      * 셀 스냅샷을 다시 받아 보려는 주기(시간).
      *
      * <p><b>만료가 아니다.</b> 이 시간이 지나도 예산이 없으면 옛 스냅샷을 <b>그대로 계속

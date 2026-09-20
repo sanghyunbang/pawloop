@@ -150,6 +150,28 @@ check_public_data() {
     required '"pm10Value"'
 }
 
+# ── OpenRouteService (#725) — 코스 추천 왕복 경로. 키는 헤더로 나가고 값은 어디에도 안 찍는다 ─
+check_ors() {
+  echo
+  echo "── OpenRouteService — 코스 추천 (#725) ────────────────────────"
+  local key status
+  key="$(read_env "$ROOT/backend/.env" ORS_API_KEY)"
+  if [ -z "$key" ]; then
+    printf '  %s %s %s\n' "$(pad "ORS 도보 길찾기" 34)" "$(pad "비어 있음" 16)" "backend/.env 의 ORS_API_KEY — openrouteservice.org 대시보드의 토큰"
+    return
+  fi
+  status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 -X POST \
+    'https://api.openrouteservice.org/v2/directions/foot-walking/geojson' \
+    -H "Authorization: $key" -H 'Content-Type: application/json' \
+    --data '{"coordinates":[[127.0376,37.5443],[127.0569,37.5417]]}' 2>/dev/null)"
+  case "$status" in
+    200) printf '  %s %s %s\n' "$(pad "ORS 도보 길찾기" 34)" "$(pad "OK" 16)" "서울숲 → 성수연방 200 (하루 한도는 대시보드 Key Quotas)" ;;
+    401|403) printf '  %s %s %s\n' "$(pad "ORS 도보 길찾기" 34)" "$(pad "키 거절 $status" 16)" "토큰이 틀렸거나 만료"; BROKEN=$((BROKEN + 1)) ;;
+    429) printf '  %s %s %s\n' "$(pad "ORS 도보 길찾기" 34)" "$(pad "한도 소진 429" 16)" "오늘 200콜을 다 썼다"; BROKEN=$((BROKEN + 1)) ;;
+    *) printf '  %s %s %s\n' "$(pad "ORS 도보 길찾기" 34)" "$(pad "응답 없음 $status" 16)" "네트워크나 ORS 장애"; BROKEN=$((BROKEN + 1)) ;;
+  esac
+}
+
 # ── 이름과 채움 여부만 ───────────────────────────────────────────────
 check_env_names() {
   echo
@@ -163,6 +185,7 @@ check_env_names() {
                 GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
                 APPLE_CLIENT_ID APPLE_TEAM_ID APPLE_KEY_ID APPLE_PRIVATE_KEY \
                 AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_S3_BUCKET \
+                ORS_API_KEY \
                 JWT_SECRET; do
       local value
       value="$(read_env "$file" "$name")"
@@ -192,9 +215,9 @@ check_env_names() {
 }
 
 case "$WHAT" in
-  public) check_public_data ;;
+  public) check_public_data; check_ors ;;
   env) check_env_names ;;
-  all) check_public_data; check_env_names ;;
+  all) check_public_data; check_ors; check_env_names ;;
   *) echo "쓰는 법: bash scripts/check-external-keys.sh [all|public|env]"; exit 2 ;;
 esac
 

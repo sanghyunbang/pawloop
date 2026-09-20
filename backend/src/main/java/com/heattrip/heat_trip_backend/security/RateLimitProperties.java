@@ -239,6 +239,15 @@ public class RateLimitProperties {
     private int placesCatalogMaxRequests = 5;
 
     /**
+     * 코스 추천 경로 버킷 — {@code GET /api/places/&#123;contentId&#125;/loop}. (이슈 #725)
+     *
+     * <p>처음 한 번은 바깥(ORS)을 seed 수만큼 부르는 경로다. 하루 예산이 150 이라 분당 30 을 주면
+     * 두 IP 가 몇 분에 태운다. 앱은 시트를 열 때 한 번 부르고 길이를 바꿀 때 한 번 더 부르므로
+     * 10 이면 넉넉하다.
+     */
+    private int placesLoopMaxRequests = 10;
+
+    /**
      * 산책 안전 지수 버킷 — {@code GET /api/walk-safety/now}. (이슈 #336)
      *
      * <p>인증이 없는 경로라 열쇠가 IP 뿐이다. 앱은 홈이 뜰 때 한 번, 그 뒤 30분마다 부른다 —

@@ -64,6 +64,9 @@ public final class PublicPaths {
             "/api/places/*",
             // 산책로의 선(#291). 셋째 경로다 — 지도는 로그인 전에도 보여야 한다.
             "/api/places/trails/*/route",
+            // 코스 추천 경로(#725). 넷째 — 시작점이 장소라 누구의 위치도 아니다. 한도는
+            // rate limit 의 places-loop 버킷과 하루 예산(ors-loop 풀) 둘이 지킨다.
+            "/api/places/*/loop",
             // 산책 안전 지수(#336). 5km 격자 번호만 받는 GET 하나. **인증을 안 받는 것이 의도다** —
             // 누구의 격자인지 서버가 모르게 둔다(A안 #235). 한도는 rate limit 의 walk-safety 버킷(IP).
             "/api/walk-safety/now"

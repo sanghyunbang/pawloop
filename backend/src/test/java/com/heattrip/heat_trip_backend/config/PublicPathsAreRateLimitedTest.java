@@ -146,6 +146,8 @@ class PublicPathsAreRateLimitedTest {
             case "/api/places/nearby" -> new Sample("GET", "/api/places/nearby");
             case "/api/places/*" -> new Sample("GET", "/api/places/126508");
             case "/api/places/trails/*/route" -> new Sample("GET", "/api/places/trails/T_ROUTE_1/route");
+            // 코스 추천 경로(#725). 처음 한 번은 바깥(ORS)을 세 번 부르는 경로라 한도가 곧 예산이다.
+            case "/api/places/*/loop" -> new Sample("GET", "/api/places/2745594/loop");
             // 산책 안전 지수(#336). 인증이 없으므로 IP 한도가 유일한 문지기다.
             // 쿼리(?nx=&ny=)는 붙이지 않는다 — MockHttpServletRequest 는 그것까지 requestURI 로
             // 삼아서 규칙에 안 걸리고, "한도가 없다" 는 엉뚱한 실패가 된다.

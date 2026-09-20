@@ -120,6 +120,13 @@ class PlacesContractSpecTest {
     // ─────────────────── B. 코드 ↔ 계약 ───────────────────
 
     @Test
+    @DisplayName("코스 추천 경로도 버킷에 걸리고 계약이 429 · 404 를 선언한다 — permitAll 이 넷째 경로를 열었다 (#725)")
+    void loopPathIsRateLimitedAndDeclared() throws Exception {
+        assertThat(secondCallStatus("/api/places/2745594/loop")).isEqualTo(429);
+        assertThat(declaredStatuses("/api/places/{contentId}/loop")).contains("429", "404");
+    }
+
+    @Test
     @DisplayName("컨트롤러의 매핑이 전부 계약에 등재돼 있다 — 경로는 코드에서 읽는다")
     void everyImplementedEndpoint_isDeclaredInTheContract() {
         List<String> implemented = operationsOf(PlaceController.class);
@@ -247,6 +254,7 @@ class PlacesContractSpecTest {
         props.setWindowSeconds(60);
         props.setPlacesMaxRequests(1);
         props.setPlacesDetailMaxRequests(1);
+        props.setPlacesLoopMaxRequests(1);
         ApiRateLimitFilter filter = new ApiRateLimitFilter(props, new ObjectMapper());
 
         call(filter, path);
