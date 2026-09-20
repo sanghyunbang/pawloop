@@ -149,8 +149,23 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
       ];
     }
+    // 가족 방은 대화가 없어도 맨 위다(#730) — 집의 허브(케어 · 일정 · 초대)가 크루 대화에 밀려
+    // 떠내려가지 않게. 나머지는 서버가 준 순서(최근 대화순) 그대로 두고 소제목 하나로 묶는다.
+    final family = rooms.where((r) => r.tag == '가족').toList();
+    final others = rooms.where((r) => r.tag != '가족').toList();
     return [
-      for (final room in rooms) ...[
+      for (final room in family) ...[
+        _roomCard(context, room),
+        const SizedBox(height: 12),
+      ],
+      if (family.isNotEmpty && others.isNotEmpty)
+        const Padding(
+          key: Key('chat-others-title'),
+          padding: EdgeInsets.fromLTRB(4, 4, 4, 10),
+          child: Text('참여 중인 크루 · 이웃',
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: T.textMuted)),
+        ),
+      for (final room in others) ...[
         _roomCard(context, room),
         const SizedBox(height: 12),
       ],
@@ -196,6 +211,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget _roomCard(BuildContext context, ChatRoomSummary room) {
     final accent = _accentFor(room.tag);
     return GestureDetector(
+      key: Key('room-card-${room.id}'),
       onTap: () async {
         await Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => FamilyChatScreen(
@@ -244,6 +260,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     child: Text(room.tag,
                         style: TextStyle(
                             fontSize: 10.5, fontWeight: FontWeight.w800, color: accent)),
+                  ),
+                ],
+                // 내가 만든 크루(#730). 가족 방은 누구나 관리로 가니 안 단다.
+                if (room.isOwner && room.tag != '가족') ...[
+                  const SizedBox(width: 5),
+                  Container(
+                    key: Key('room-owner-${room.id}'),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                        border: Border.all(color: accent.withValues(alpha: 0.5)),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text('방장',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: accent)),
                   ),
                 ],
                 const SizedBox(width: 6),
