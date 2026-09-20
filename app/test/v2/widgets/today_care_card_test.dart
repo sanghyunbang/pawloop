@@ -2,8 +2,12 @@
 //
 // 서버는 같은 종류를 하루에 두 번 찍어도 막지 않는다(백엔드
 // `CareSharingIntegrationTest.feedingTwiceInOneDay_keepsBothRows` 가 그것을 잠근다).
-// 그래서 "그래도 기록할까요?" 를 띄우는 책임이 **앱에만** 있고, 그 문구가 사라지면
+// 그래서 "다음 기록을 남길까요?" 를 띄우는 책임이 **앱에만** 있고, 그 문구가 사라지면
 // 어느 백엔드 테스트도 빨간불이 되지 않는다 — 이 파일이 그 자리다.
+//
+// 묻는 말은 **"그래도" 가 아니다**(사장님 2026-09-20 — "개 물을 한 번만 갈아 주니?"). 물·밥은
+// 하루 여러 번이 보통이라, 마지막이 누구·언제였고 이번이 오늘 몇 번째인지를 말하고 "다음
+// 기록" 을 묻는다. 그 두 사실이 문구에 있는지를 여기서 잰다.
 //
 // 가짜 저장소를 만들지 않고 **진짜 FamilyRepository 에 MockClient 를 꽂는다.**
 // 그래야 JSON 파싱·경로·실패 분류까지 한 번에 지난다. 저장소를 목으로 갈아끼우면
@@ -111,7 +115,7 @@ Future<void> pumpCard(WidgetTester tester, FamilyRepository repo, {int? myUserId
 }
 
 void main() {
-  testWidgets('오늘 이미 기록이 있으면 확인 문구가 뜬다 — "오늘 14:20 아빠가 밥을 줬습니다"',
+  testWidgets('오늘 기록이 있으면 묻는다 — 누가·언제 했고 이번이 몇 번째인지, "다음 기록을 남길까요?"',
       (tester) async {
     final f = fixture(logs: [
       _log(id: 1, type: 'meal', who: '아빠', at: '2026-08-30T14:20:00'),
@@ -121,13 +125,33 @@ void main() {
     await tester.tap(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
 
+    expect(find.text('다음 기록을 남길까요?'), findsOneWidget,
+        reason: '"그래도 기록할까요?" 가 아니다 — 물·밥은 하루 여러 번이 보통이다');
     expect(
-      find.text('오늘 14:20 아빠가 밥을 줬습니다. 그래도 기록할까요?'),
+      find.text('오늘 14:20 아빠가 밥을 줬어요. 이번이 오늘 2번째예요.'),
       findsOneWidget,
       reason: '이 문구가 완료 조건 2 그 자체다. 서버는 두 번째를 막지 않으므로 '
           '여기가 사라지면 아무 데서도 안 막힌다',
     );
+    expect(find.text('2번째로 기록'), findsOneWidget);
+    expect(find.text('그래도 기록'), findsNothing);
     expect(f.posts, isEmpty, reason: '확인을 받기 전에 보내면 그게 곧 "막지도 알리지도 않는" 것이다');
+  });
+
+  testWidgets('몇 번째인지는 오늘 그 칸의 수로 센다 — 물 두 번 뒤에 누르면 3번째다', (tester) async {
+    final f = fixture(logs: [
+      _log(id: 1, type: 'water', who: '아빠', at: '2026-08-30T07:00:00'),
+      _log(id: 2, type: 'meal', who: '아빠', at: '2026-08-30T07:10:00'),
+      _log(id: 3, type: 'water', who: '엄마', at: '2026-08-30T12:30:00'),
+    ]);
+    await pumpCard(tester, f.repo);
+
+    await tester.tap(find.byKey(const Key('care-cell-water')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('오늘 12:30 엄마가 물을 갈아줬어요. 이번이 오늘 3번째예요.'), findsOneWidget,
+        reason: '마지막 기록(엄마 12:30)과 그 칸의 수(물 2) — 밥은 안 센다');
+    expect(find.text('3번째로 기록'), findsOneWidget);
   });
 
   testWidgets('취소하면 기록하지 않는다', (tester) async {
@@ -144,7 +168,7 @@ void main() {
     expect(f.posts, isEmpty);
   });
 
-  testWidgets('"그래도 기록" 을 누르면 서버로 보낸다 — 막는 것이 아니라 알리는 것이다',
+  testWidgets('"2번째로 기록" 을 누르면 서버로 보낸다 — 막는 것이 아니라 알리는 것이다',
       (tester) async {
     final f = fixture(logs: [
       _log(id: 1, type: 'meal', who: '아빠', at: '2026-08-30T14:20:00'),
@@ -153,7 +177,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('그래도 기록'));
+    await tester.tap(find.text('2번째로 기록'));
     await tester.pumpAndSettle();
 
     expect(f.posts, hasLength(1));
@@ -169,9 +193,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('오늘 이미 기록이 있어요'),
+      find.text('다음 기록을 남길까요?'),
       findsNothing,
-      reason: '아무 때나 확인을 물으면 사람은 곧 읽지 않고 누른다 — 그러면 진짜 경고도 안 읽는다',
+      reason: '아무 때나 물으면 사람은 곧 읽지 않고 누른다 — 그러면 진짜 물어야 할 때도 안 읽는다',
     );
     expect(f.posts, hasLength(1));
   });
@@ -258,12 +282,12 @@ void main() {
     await tester.tap(find.byKey(const Key('care-cell-water')));
     await tester.pumpAndSettle();
 
-    expect(find.text('이미 기록한 칸이에요'), findsOneWidget);
+    expect(find.text('다음 기록을 남길까요?'), findsOneWidget);
     expect(
-      find.text('오늘 15:40 에 내가 남긴 물 기록이에요. 잘못 눌렀다면 지우고, 한 번 더 한 거면 다시 기록해요.'),
+      find.text('오늘 15:40 에 내가 물 기록을 남겼어요. 이번이 오늘 2번째예요. 잘못 눌렀다면 지울 수 있어요.'),
       findsOneWidget,
     );
-    expect(find.text('그래도 기록'), findsNothing, reason: '내 기록에는 "이미 있음" 경고가 아니라 무르기다');
+    expect(find.text('지우기'), findsOneWidget, reason: '내 기록이면 무르는 문이 같은 자리에 있다');
     expect(f.deletes, isEmpty, reason: '고르기 전에는 보내지 않는다');
 
     await tester.tap(find.text('지우기'));
@@ -274,7 +298,7 @@ void main() {
     expect(f.posts, isEmpty);
   });
 
-  testWidgets('"한 번 더 기록" 이면 POST 가 나간다 — 두 끼는 실제로 있다', (tester) async {
+  testWidgets('"2번째로 기록" 이면 POST 가 나간다 — 두 끼는 실제로 있다', (tester) async {
     final f = fixture(logs: [
       _log(id: 7, type: 'meal', who: '나', at: '2026-08-30T08:10:00'),
     ]);
@@ -282,7 +306,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('care-cell-meal')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('한 번 더 기록'));
+    await tester.tap(find.text('2번째로 기록'));
     await tester.pumpAndSettle();
 
     expect(f.posts, hasLength(1));
@@ -305,7 +329,7 @@ void main() {
     expect(f.deletes, isEmpty);
   });
 
-  testWidgets('남의 기록이 있는 칸은 다시 눌러도 지우기가 없다 — "그래도 기록" 만 묻는다', (tester) async {
+  testWidgets('남의 기록이 있는 칸은 다시 눌러도 지우기가 없다 — 다음 기록만 묻는다', (tester) async {
     final f = fixture(logs: [
       _log(id: 7, type: 'walk', who: '엄마', at: '2026-08-30T07:05:00'),
     ]);
@@ -314,7 +338,7 @@ void main() {
     await tester.tap(find.byKey(const Key('care-cell-walk')));
     await tester.pumpAndSettle();
 
-    expect(find.text('그래도 기록'), findsOneWidget);
+    expect(find.text('2번째로 기록'), findsOneWidget);
     expect(find.text('지우기'), findsNothing, reason: '지울 수 있으면 산책 누락이 그 자리에서 생긴다');
   });
 
@@ -345,9 +369,9 @@ void main() {
   });
 
   group('문구 조립', () {
-    test('종류마다 서술어가 다르다', () {
-      String warn(ServerCareType? type, {String what = '밥'}) =>
-          duplicateWarning(
+    test('종류마다 서술어가 다르고, 뒷문장은 몇 번째인지다', () {
+      String ask(ServerCareType? type, {String what = '밥', int nth = 2}) =>
+          nextRecordQuestion(
               CareLogEntry(
                 id: 1,
                 type: type,
@@ -356,15 +380,20 @@ void main() {
                 doneByName: '아빠',
                 occurredAt: DateTime(2026, 8, 30, 9, 5),
               ),
-              what);
+              what,
+              nth);
 
-      expect(warn(ServerCareType.walk), '오늘 09:05 아빠가 산책을 다녀왔습니다. 그래도 기록할까요?');
-      expect(warn(ServerCareType.vet), '오늘 09:05 아빠가 병원에 다녀왔습니다. 그래도 기록할까요?');
+      expect(ask(ServerCareType.walk), '오늘 09:05 아빠가 산책을 다녀왔어요. 이번이 오늘 2번째예요.');
+      expect(ask(ServerCareType.vet), '오늘 09:05 아빠가 병원에 다녀왔어요. 이번이 오늘 2번째예요.');
+      expect(ask(ServerCareType.water, nth: 4), endsWith('이번이 오늘 4번째예요.'));
+      expect(ask(ServerCareType.meal), isNot(contains('그래도')),
+          reason: '"그래도" 는 두 번째를 잘못이라 부르는 말이다 — 물은 하루 몇 번이고 간다');
+      expect(nextRecordLabel(3), '3번째로 기록');
     });
 
     test('직접 만든 항목은 칸 이름을 쓴다 — 종류가 없어 서술어를 못 고른다(#560)', () {
-      String warn(ServerCareType? type, {String what = '밥'}) =>
-          duplicateWarning(
+      String ask(ServerCareType? type, {String what = '밥'}) =>
+          nextRecordQuestion(
               CareLogEntry(
                 id: 1,
                 type: type,
@@ -373,11 +402,13 @@ void main() {
                 doneByName: '아빠',
                 occurredAt: DateTime(2026, 8, 30, 9, 5),
               ),
-              what);
+              what,
+              2);
 
-      expect(warn(null, what: '양치'), contains('양치 기록을 남겼습니다'),
+      expect(ask(null, what: '양치'), contains('양치 기록을 남겼어요'),
           reason: '조사를 붙이면 "약을" 과 "양치를" 이 달라 이름마다 틀린다');
-      expect(warn(null, what: '양치'), contains('아빠'));
+      expect(ask(null, what: '양치'), contains('아빠'));
+      expect(ask(null, what: '양치'), endsWith('이번이 오늘 2번째예요.'));
     });
 
     test('주격 조사는 받침으로 고른다 — "지훈가" 가 되면 안 된다', () {

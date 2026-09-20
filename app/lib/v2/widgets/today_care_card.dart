@@ -8,11 +8,16 @@
 // 한다). 둘 다 "오늘 누가 무엇을 했는지" 를 한 화면에 놓으면 사라진다 — 그래서 칸마다
 // **누가·언제**를 함께 그린다. 체크 표시만 있으면 "내가 했나?" 를 지우지 못한다.
 //
-// ## 확인 문구는 앱이 만든다 (완료 조건 2)
+// ## 묻는 말은 앱이 만든다 (완료 조건 2)
 //
 // 서버는 같은 종류를 하루에 두 번 찍어도 **막지 않는다** — 두 번째가 실수인지 사실인지
-// 서버는 모르고, 막으면 실제로 한 일이 기록에서 사라진다. 대신 "오늘 14:20 아빠가 밥을
-// 줬습니다. 그래도 기록할까요?" 를 여기서 띄운다.
+// 서버는 모르고, 막으면 실제로 한 일이 기록에서 사라진다. 대신 여기서 한 장 묻는다.
+//
+// **"그래도 기록할까요?" 가 아니다** — 물은 하루에 몇 번이고 갈고, 밥은 두세 끼, 배변은
+// 세는 값이다. 두 번째를 "중복" 이라 부르면 정상인 날마다 경고를 읽게 되고, 그러면
+// 진짜 실수(아침 8시에 세 번째 밥)도 안 읽는다. 그래서 **사실 두 가지**를 놓고 묻는다:
+// 마지막 기록이 누구·언제인지, 이번이 오늘 **몇 번째**인지 — "오늘 08:50 엄마가 물을
+// 갈아줬어요. 이번이 오늘 2번째예요. 다음 기록을 남길까요?" (사장님 2026-09-20).
 //
 // 왜 앱인가: 확인 문구는 **쓰기 전에** 떠야 하므로 결국 읽기에서 나오고, 그 읽기는 이
 // 카드가 이미 하고 있다(누가·언제를 그리려고). 응답에 "오늘 이미 있음" 필드를 더하면
@@ -398,11 +403,14 @@ class _TodayCareCardState extends State<TodayCareCard> {
 
     final already = _latestOf(item);
     if (already != null) {
+      // 이번이 오늘 몇 번째인가 — 물 세 번째는 정상이고 밥 세 번째는 볼 일이다. 숫자를
+      // 주면 사용자가 칸마다 다른 "정상 횟수" 를 스스로 안다(앱이 항목별 상한을 안 가진다).
+      final nth = _countOf(item) + 1;
       final me = widget.myUserId ?? AuthState.user?.id;
       if (me != null && already.doneByUserId == me) {
-        // 내 기록이 있는 칸을 다시 누른 것 — 대개 잘못 눌렀거나 무르고 싶은 것이다(#329).
-        // 두 끼는 실제로 있으니 "한 번 더 기록" 도 같은 자리에서 고른다.
-        final choice = await _askRetap(already, item.name);
+        // 내 기록이 있는 칸을 다시 누른 것 — 다음 기록이 보통이고, 잘못 눌렀으면 지운다
+        // (#329). 둘 다 같은 자리에서 고른다.
+        final choice = await _askRetap(already, item.name, nth);
         if (!mounted) return;
         switch (choice) {
           case _Retap.undo:
@@ -414,7 +422,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
             break;
         }
       } else {
-        final ok = await _confirmDuplicate(already, item.name);
+        final ok = await _confirmNext(already, item.name, nth);
         // await 뒤의 첫 문장에서 가른다 — 이 State 가 사라졌으면 아무것도 하지 않는다.
         if (!mounted) return;
         if (!ok) return;
@@ -440,19 +448,22 @@ class _TodayCareCardState extends State<TodayCareCard> {
     }
   }
 
-  /// "오늘 14:20 에 내가 남긴 밥 기록이에요" — 지우기 / 한 번 더 기록 / 취소.
-  Future<_Retap> _askRetap(CareLogEntry mine, String what) async {
+  /// "오늘 14:20 에 내가 밥을 줬어요. 이번이 오늘 2번째예요." — 취소 / 지우기 / 2번째로 기록.
+  ///
+  /// 으뜸 버튼은 **다음 기록**이다 — 하루 여러 번이 보통이라서. 지우기는 잘못 누른 것을 무르는
+  /// 문이라 곁에 둔다(길게 눌러도 지운다).
+  Future<_Retap> _askRetap(CareLogEntry mine, String what, int nth) async {
     final answer = await showDialog<_Retap>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         backgroundColor: T.surfaceBright,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
-          '이미 기록한 칸이에요',
+          '다음 기록을 남길까요?',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
         ),
         content: Text(
-          retapWarning(mine, what),
+          retapWarning(mine, what, nth),
           style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
         ),
         actions: [
@@ -461,15 +472,15 @@ class _TodayCareCardState extends State<TodayCareCard> {
             child: const Text('취소', style: TextStyle(color: T.textMuted)),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, _Retap.again),
-            child: const Text('한 번 더 기록',
+            onPressed: () => Navigator.pop(dialogCtx, _Retap.undo),
+            child: const Text('지우기',
                 style: TextStyle(fontWeight: FontWeight.w700, color: T.textSecondary)),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, _Retap.undo),
-            child: const Text(
-              '지우기',
-              style: TextStyle(fontWeight: FontWeight.w800, color: T.warmText),
+            onPressed: () => Navigator.pop(dialogCtx, _Retap.again),
+            child: Text(
+              nextRecordLabel(nth),
+              style: const TextStyle(fontWeight: FontWeight.w800, color: T.warmText),
             ),
           ),
         ],
@@ -478,19 +489,19 @@ class _TodayCareCardState extends State<TodayCareCard> {
     return answer ?? _Retap.cancel;
   }
 
-  /// "오늘 14:20 아빠가 밥을 줬습니다. 그래도 기록할까요?"
-  Future<bool> _confirmDuplicate(CareLogEntry already, String what) async {
+  /// "오늘 14:20 아빠가 밥을 줬어요. 이번이 오늘 2번째예요." — 취소 / 2번째로 기록.
+  Future<bool> _confirmNext(CareLogEntry already, String what, int nth) async {
     final answer = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         backgroundColor: T.surfaceBright,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
-          '오늘 이미 기록이 있어요',
+          '다음 기록을 남길까요?',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
         ),
         content: Text(
-          duplicateWarning(already, what),
+          nextRecordQuestion(already, what, nth),
           style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
         ),
         actions: [
@@ -500,9 +511,9 @@ class _TodayCareCardState extends State<TodayCareCard> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
-            child: const Text(
-              '그래도 기록',
-              style: TextStyle(fontWeight: FontWeight.w800, color: T.warmText),
+            child: Text(
+              nextRecordLabel(nth),
+              style: const TextStyle(fontWeight: FontWeight.w800, color: T.warmText),
             ),
           ),
         ],
@@ -995,33 +1006,42 @@ const int kCareCardColumnsPerRow = 4;
 String deleteWarning(CareLogEntry entry, String what) =>
     '${entry.timeLabel} 에 남긴 $what 기록을 지웁니다. 가족 화면에서도 사라져요.';
 
-/// "오늘 14:20 아빠가 밥을 줬습니다. 그래도 기록할까요?"
+/// "오늘 14:20 아빠가 밥을 줬어요. 이번이 오늘 2번째예요."
 ///
 /// 위젯 밖에 두는 이유: 이 문구가 완료 조건 2 그 자체라 **테스트가 직접 부를 수 있어야**
 /// 한다. 위젯 안에 있으면 문구를 확인하는 방법이 화면을 띄우는 것뿐이다.
-String duplicateWarning(CareLogEntry already, String what) {
+///
+/// [nth] 는 이번 기록이 오늘 몇 번째인지다. **"그래도" 라고 묻지 않는다** — 물·밥·배변은
+/// 하루 여러 번이 보통이라 두 번째가 중복이 아니다. 마지막이 누구·언제였고 이번이 몇 번째인지를
+/// 말해 주면, 몇 번이 정상인지는 사용자가 안다(사장님 2026-09-20).
+String nextRecordQuestion(CareLogEntry already, String what, int nth) {
   // 직접 만든 항목에는 종류가 없다(#560) — 그때는 칸 이름을 그대로 넣는다.
-  // "양치를 했습니다" 가 "양치 기록을 남겼습니다" 보다 읽히지만, 이름이 무엇일지 모르므로
+  // "양치를 했어요" 가 "양치 기록을 남겼어요" 보다 읽히지만, 이름이 무엇일지 모르므로
   // 조사를 붙이지 않는 쪽을 고른다 — '약' 과 '양치' 는 붙는 조사가 다르다.
   if (already.type == null) {
-    return '오늘 ${already.timeLabel} 에 ${already.doneByName}님이 $what 기록을 남겼습니다.\n'
-        '그래도 기록할까요?';
+    return '오늘 ${already.timeLabel} 에 ${already.doneByName}님이 $what 기록을 남겼어요. '
+        '${nthToday(nth)}';
   }
   final phrase = switch (already.type!) {
-    ServerCareType.water => '물을 갈아줬습니다',
-    ServerCareType.meal => '밥을 줬습니다',
-    ServerCareType.walk => '산책을 다녀왔습니다',
-    ServerCareType.med => '약을 줬습니다',
-    ServerCareType.vet => '병원에 다녀왔습니다',
-    // 산책 중 한 탭으로 들어오는 것들(#340). 이 문구는 "그래도 기록할까요?" 앞에 붙는데,
-    // 배변·마킹은 하루에 여러 번이 정상이라 중복 경고를 띄울 자리가 아니다 — 그래도
-    // 값이 빠지면 화면이 죽으므로 문장은 만들어 둔다.
-    ServerCareType.poop => '배변을 기록했습니다',
-    ServerCareType.pee => '마킹을 기록했습니다',
+    ServerCareType.water => '물을 갈아줬어요',
+    ServerCareType.meal => '밥을 줬어요',
+    ServerCareType.walk => '산책을 다녀왔어요',
+    ServerCareType.med => '약을 줬어요',
+    ServerCareType.vet => '병원에 다녀왔어요',
+    // 산책 중 한 탭으로 들어오는 것들(#340). 배변·마킹은 원래 세는 값이라 "몇 번째" 가
+    // 곧 답이다 — 값이 빠지면 화면이 죽으므로 문장을 만들어 둔다.
+    ServerCareType.poop => '배변을 기록했어요',
+    ServerCareType.pee => '마킹을 기록했어요',
   };
   final name = already.doneByName.isEmpty ? '누군가' : already.doneByName;
-  return '오늘 ${already.timeLabel} $name${subjectParticle(name)} $phrase. 그래도 기록할까요?';
+  return '오늘 ${already.timeLabel} $name${subjectParticle(name)} $phrase. ${nthToday(nth)}';
 }
+
+/// "이번이 오늘 2번째예요." — 묻는 말의 뒷문장. 첫 기록에는 안 묻으므로 2 부터 온다.
+String nthToday(int nth) => '이번이 오늘 $nth번째예요.';
+
+/// 으뜸 버튼 — "2번째로 기록". "그래도 기록" 이 아니다.
+String nextRecordLabel(int nth) => '$nth번째로 기록';
 
 /// 주격 조사 — 받침이 있으면 `이`, 없으면 `가`.
 ///
@@ -1046,5 +1066,5 @@ String _labelOf(ServerCareType? type) => type?.label ?? '케어';
 /// 내 기록이 있는 칸을 다시 눌렀을 때의 선택(#329).
 enum _Retap { undo, again, cancel }
 
-String retapWarning(CareLogEntry mine, String what) =>
-    '오늘 ${mine.timeLabel} 에 내가 남긴 $what 기록이에요. 잘못 눌렀다면 지우고, 한 번 더 한 거면 다시 기록해요.';
+String retapWarning(CareLogEntry mine, String what, int nth) =>
+    '오늘 ${mine.timeLabel} 에 내가 $what 기록을 남겼어요. ${nthToday(nth)} 잘못 눌렀다면 지울 수 있어요.';
