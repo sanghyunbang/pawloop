@@ -26,6 +26,10 @@
 #
 #     sudo bash /opt/pawloop-backend/repo/backend/scripts/refresh-prod-env.sh
 #
+# SSM 에서 키를 **일부러 지운** 날은 몇 개여야 하는지를 말해 준다. 안 그러면 "줄었다" 며 선다.
+#
+#     sudo EXPECT_KEYS=54 bash /opt/pawloop-backend/repo/backend/scripts/refresh-prod-env.sh
+#
 # 비밀값은 화면에 찍지 않는다. 키 개수와 바뀐 줄 수만 말한다.
 set -euo pipefail
 
@@ -94,9 +98,19 @@ set_env_value ACME_EMAIL "$EMAIL"
 AFTER_KEYS=$(grep -cE '^[A-Z_]+=' "$TMP" || true)
 CHANGED=$(diff <(sort .env) <(sort "$TMP") | grep -c '^[<>]' || true)
 
-if [ "$AFTER_KEYS" -lt "$BEFORE_KEYS" ]; then
+# 일부러 키를 지운 날은 EXPECT_KEYS 로 "몇 개여야 하는지" 를 말한다. 그러면 줄어든 것이
+# 의도인지 사고인지 이 스크립트가 구별할 수 있다 — #747 에서 중복 키 하나와 쓸모없는 줄
+# 하나를 지웠다. 안 주면 예전처럼 "줄면 선다".
+if [ -n "${EXPECT_KEYS:-}" ]; then
+  if [ "$AFTER_KEYS" -ne "$EXPECT_KEYS" ]; then
+    echo "새 .env 의 키가 $AFTER_KEYS 개인데 EXPECT_KEYS=$EXPECT_KEYS 라고 했다." >&2
+    echo "SSM 이 생각과 다르다. 여기서 선다 — .env 는 안 바꿨다." >&2
+    exit 1
+  fi
+elif [ "$AFTER_KEYS" -lt "$BEFORE_KEYS" ]; then
   echo "새 .env 의 키가 줄었다: $BEFORE_KEYS → $AFTER_KEYS" >&2
   echo "값이 빠진 채로 재시작하면 앱이 안 뜬다. 여기서 선다 — .env 는 안 바꿨다." >&2
+  echo "일부러 지운 것이면 EXPECT_KEYS=$AFTER_KEYS 를 앞에 붙여 다시 돌려라." >&2
   exit 1
 fi
 
