@@ -15,6 +15,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin") // Flutter Gradle 플러그인
 }
 
+// 서버 푸시(#83) — google-services.json 이 있을 때만 Firebase 플러그인을 얹는다.
+//
+// 그 파일은 저장소 밖이다(.gitignore). 플러그인은 파일이 없으면 빌드를 막으므로, 없는 기계(새 클론 · CI)
+// 에서도 빌드가 되게 조건을 건다. 없이 빌드한 앱은 Firebase 없이 뜨고 푸시만 꺼진다
+// (lib/v2/data/firebase_push.dart 가 initializeApp 의 예외를 잡는다).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.warn("google-services.json 이 없다 — 푸시(FCM) 없이 빌드한다 (#83)")
+}
+
 android {
     // ──────────────────────────────────────────────────────────────────────────
     // [앱 기본 메타]

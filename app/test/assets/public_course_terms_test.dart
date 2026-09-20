@@ -44,13 +44,25 @@ void main() {
     // 요약의 국외 처리위탁(OpenAI, #486)이다. 수집 항목이나 처리 주체가 늘 때마다 올린다.
     // v1.9 는 수집 항목이 아니라 **12항의 법정 기재사항**이다(#682) — 개인정보 보호책임자의
     // 성명·직위·전화번호 자리를 만들었다. 이용자가 7항의 권리를 행사할 때 찾아가는 자리라
-    // 같은 규칙으로 올린다.
-    expect(privacy, contains('버전: v1.9'),
+    // 같은 규칙으로 올린다. v1.10 은 기기 알림 토큰(#83) — 수집 항목이 하나 늘고, 전달을 맡는
+    // Google(FCM) 이 4·5항에 들어갔다.
+    expect(privacy, contains('버전: v1.10'),
         reason: '수집 항목이 늘어난 것은 다시 알려야 하는 변경이다');
 
     final screen = _read(File('lib/v2/screens/settings/legal_document_screen.dart'));
-    expect(screen, contains("ConsentKind.privacy, 'v1.9'"),
+    expect(screen, contains("ConsentKind.privacy, 'v1.10'"),
         reason: '문서만 올리고 상수를 안 올리면 아무에게도 다시 안 묻는다');
+  });
+
+  test('기기 알림 토큰이 수집 항목에 있고, 어디를 거쳐 가는지 적혀 있다 (#83)', () {
+    expect(privacy, contains('기기 알림 토큰(로그인한 기기, 푸시 알림용)'),
+        reason: '앱이 PUT /api/push/tokens 로 보내는 것을 방침이 말해야 한다');
+    expect(privacy, contains('로그인하지 않은 기기의 토큰은 수집하지 않습니다'),
+        reason: 'push_registrar 의 규칙 1 이 곧 이 문장이다');
+    expect(privacy, contains('로그아웃하면 즉시 폐기'),
+        reason: '서버의 UserSessionsRevoked → revokeAllOf 가 이 문장이다');
+    expect(privacy, contains('Firebase Cloud Messaging 을 거쳐'),
+        reason: '제목·본문이 Google 을 지난다 — 처리위탁·국외 이전 항목이 있어야 한다');
   });
 
   test('동네가 수집 항목에 있고, 보이는 단위가 구까지라고 적혀 있다 (#342)', () {

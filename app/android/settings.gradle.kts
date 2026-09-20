@@ -20,6 +20,8 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "8.11.1" apply false
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
+    // 서버 푸시(#83) — app/build.gradle.kts 가 google-services.json 이 있을 때만 얹는다.
+    id("com.google.gms.google-services") version "4.4.3" apply false
 }
 
 include(":app")

@@ -31,6 +31,7 @@ import 'package:heat_trip_flutter/features/auth/service/secure_token_store.dart'
 // 전역 로그인 상태
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/data/avatar_border_store.dart';
+import 'package:heat_trip_flutter/v2/data/firebase_push.dart';
 import 'package:heat_trip_flutter/v2/data/local_notification_sink.dart';
 import 'package:heat_trip_flutter/v2/data/location_service.dart';
 import 'package:heat_trip_flutter/v2/data/session_traces.dart';
@@ -94,6 +95,10 @@ Future<void> main() async {
   // 여기서 네트워크 왕복을 기다리면 첫 프레임 자체가 늦는다. 검증이 끝날 때까지
   // 상태는 `AuthStatus.unknown` 이고 라우터는 스플래시를 띄운다(완료 조건 7).
   unawaited(AuthState.init());
+
+  // 서버 푸시(#83). 로그인이 확정되면 기기 토큰을 서버에 두고, 온 푸시를 기기 알림과 같은 길로
+  // 보낸다. Firebase 설정 파일이 없는 빌드면 안에서 잡고 푸시만 끈다 — 역시 await 하지 않는다.
+  unawaited(FirebasePush.start());
 
   // Flutter 위젯 트리에서 발생한 모든 에러를 콘솔로
   FlutterError.onError = (FlutterErrorDetails details) {

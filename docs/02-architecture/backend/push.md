@@ -87,10 +87,12 @@ PushDispatcher.onMessagePosted  @TransactionalEventListener(AFTER_COMMIT) @Async
 
 ## 7. 남은 것 (앱 · 사장님)
 
-- Firebase 프로젝트 → Android(`app.pawloop`) · iOS 앱 등록 → `google-services.json` · `GoogleService-Info.plist` · 서비스 계정 JSON · APNs `.p8`(Apple Developer 계정 — #301 과 같은 계정).
-- 앱: `firebase_core` · `firebase_messaging` · `flutter_local_notifications`(Android 포그라운드) · 시작·로그인 때 `PUT /api/push/tokens` · 알림 설정 화면(전체 끄기 · 방별 음소거 — 방 목록의 `muted`).
-- `privacy_ko.md` 에 기기 토큰 항목(완료 조건 4) — 수집이 시작되는 앱 PR 에서 버전과 함께 올린다.
-- 완료 조건 1(실기기 도착)은 사람이 본다 — Android 실기기 + iOS 실기기 + APNs 키.
+- ✅ Android 는 앱까지 이어졌다(2026-09-21). Firebase 프로젝트 `pawloop-b3393` 에 `app.pawloop` 이 등록돼 있고, `app/lib/v2/data/firebase_push.dart` 가 Firebase 를 아는 유일한 파일이다 — 로그인이 확정되면 `PUT /api/push/tokens`, 앞에 있을 때는 `flutter_local_notifications` 로 띄우고, 누르면 기기 알림과 같은 길(`notification_route.dart`)로 간다(`docs/02-architecture/frontend-structure.md` §2.3). `google-services.json` 은 저장소 밖(gitignore) — 없으면 gradle 이 플러그인을 안 얹고 앱은 푸시 없이 뜬다.
+- ✅ `privacy_ko.md` v1.10 에 기기 알림 토큰 항목(완료 조건 4).
+- iOS: `GoogleService-Info.plist` · APNs `.p8`(Apple Developer 계정 — #301 과 같은 계정) — 맥에서.
+- 앱의 알림 설정 화면(전체 끄기 `PUT /api/push/settings` · 방별 음소거 — 방 목록의 `muted`)은 아직 없다.
+- 운영 서버의 `APP_PUSH_FIREBASE_CREDENTIALS_FILE`(서비스 계정 JSON, 저장소 밖) — 맥에서 올린다. 서비스 계정 키는 프로젝트 id 도 들고 있어 부팅 로그가 그 이름을 찍는다.
+- 완료 조건 1(실기기 도착)은 사람이 본다 — Android 실기기 + iOS 실기기 + APNs 키. 에뮬레이터 도착은 2026-09-21 실측(#83 댓글의 캡처).
 
 ---
 
