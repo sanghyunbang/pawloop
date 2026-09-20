@@ -135,7 +135,7 @@ flowchart TD
 
 ## 3. 커뮤니티 글 읽기 / 쓰기 / 고치기
 
-`feed_screen.dart`(목록) → `post_detail_screen.dart`(상세) → `post_write_screen.dart`(쓰기·고치기). **읽기·쓰기·수정·삭제·반응·댓글 전부 서버다**(#170·#171·#172·#211·#243). 게스트도 읽을 수 있고, 쓰기·반응·댓글은 로그인이 필요하다(ADR-0019).
+`feed_screen.dart`(목록) → `post_detail_screen.dart`(상세) → `post_write_screen.dart`(쓰기·고치기). **읽기·쓰기·수정·삭제·반응·댓글 전부 서버다**(#170·#171·#172·#211·#243). 게스트도 읽을 수 있고, 쓰기·반응·댓글은 로그인이 필요하다(ADR-0019). 카드는 `widgets/post_card.dart`, 반응·저장·두 번 탭은 `post_list_actions.dart`(믹스인, 화면 아님)가 든다 — 장소의 글 화면과 같은 것(#729).
 
 ```mermaid
 flowchart TD

@@ -53,7 +53,8 @@ lib/
 | `today_screen.dart` | 홈(오늘) — 강아지 히어로 · 오늘 산책 요약 · 오늘의 코스(#485) · 근처 동반장소 | 탭 0 |
 | `explore_screen.dart` | 지도 — KTO 반려동반 장소 + 병원/펫샵/산책로(실데이터, #291) + 필터 (리스트/지도 토글). 산책로 시트를 열면 선을 그린다 | 탭 1 |
 | `schedule_screen.dart` | 일정 — 월 달력(종류별 점) · 그날 목록 · 필터 칩 · 만들기/고치기 시트 (#419·#421). 화면을 열 때 알림 예약을 다시 건다(#420). 되풀이하는 하루를 고칠 때는 "이 날만 / 앞으로 전부" 를 먼저 묻는다 | 탭 2 |
-| `feed_screen.dart` | 커뮤니티 — 게시글 카드/리스트 (더미) | 탭 3 |
+| `feed_screen.dart` | 커뮤니티 — 글 목록. 카드는 `widgets/post_card.dart`, 반응·저장·두 번 탭은 `post_list_actions.dart` 가 든다(#729) | 탭 3 |
+| `post_list_actions.dart` | **글 목록의 동작 믹스인**(화면 아님) — 반응 · 저장 · 두 번 탭 하트. 피드와 장소의 글이 같은 카드(`widgets/post_card.dart`)에 같은 동작을 쓰려고 꺼냈다(#729) | `feed_screen.dart` · `place_posts_screen.dart` |
 | `crew_section.dart` | 크루 목록 — 커뮤니티 탭 **안의 갈래**(#417). 내 크루 · 우리 동네 두 범위 · 만들기 · 초대 코드로 참여. 화면이 아니라 본문 조각이라 `Scaffold` 를 안 만든다 | 탭 3 안 |
 | `crew_home_screen.dart` | 크루 홈 — 소개 · 멤버 · 대화방으로 가기 · 초대 코드 보내기(방장) · 나가기 · 강퇴(방장) · **품앗이**(목록 · 부탁 올리기 시트 `widgets/crew_favor_sheet.dart` · 제가 할게요 · 무르기 · 거둬들이기) · 방장 넘기기 · 크루 지우기(혼자일 때만) | `crew_section` → push |
 | `insight_screen.dart` | 통계 — 이번 주 요약 + 주간 거리 막대(fl_chart). 자주 가는 곳은 빈 상태 | `me_screen` → push |
