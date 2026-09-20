@@ -11,6 +11,7 @@ import '../data/community_repository.dart';
 import '../theme/app_tokens.dart';
 import 'post_write_screen.dart';
 import '../domain/pet.dart';
+import '../domain/serial_refresh.dart';
 import '../domain/vet_hours.dart';
 import '../walk/route_image.dart';
 import '../domain/course_path.dart';
@@ -1448,7 +1449,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
     await _load();
   }
 
-  Future<void> _refreshMarkers() async {
+  /// 한 번에 하나만 다시 그린다 — #758. `onMapReady` 와 카메라 이동 뒤의 `_load` 가 겹치면
+  /// 한쪽의 `clearOverlays` 가 다른 쪽이 넣는 중인 마커를 지워 플러그인이 "overlay can't
+  /// found" 를 내고, 그 상태에서 네이버 지도 클러스터러가 AssertionError 로 앱을 죽였다
+  /// (에뮬레이터 실측, 2026-09-21). 겹친 부름은 끝난 뒤 한 번 더 돈다.
+  final SerialRefresh _markerRefresh = SerialRefresh();
+
+  Future<void> _refreshMarkers() => _markerRefresh.run(_refreshMarkersNow);
+
+  Future<void> _refreshMarkersNow() async {
     final c = _mapCtrl;
     if (c == null || !mounted) return;
     await c.clearOverlays();
@@ -1460,6 +1469,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
       m.setOnTapListener((_) => _showPlaceSheet(p));
       markers.add(m);
     }
+    // 아이콘을 굽는 사이 지도가 바뀌었으면(탭 이동·재생성) 옛 컨트롤러에 넣지 않는다.
+    if (!mounted || _mapCtrl != c) return;
     if (markers.isNotEmpty) await c.addOverlayAll(markers);
     // 필터를 바꿔도 카메라는 안 옮긴다 — 사용자가 보고 있는 곳이 기준이다. 산책로만 예외다
     // (`_fitToPlaces`, #328): 가장 가까운 코스가 화면 밖이라 빈 지도가 됐었다.
