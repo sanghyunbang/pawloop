@@ -18,6 +18,12 @@
 // 못 불러오면 "불러오지 못했어요" 를 안 적는다. 오늘의 케어 카드와 다른 답인 것이 의도다 —
 // 거기는 사용자가 **누르러 온 자리**라 안 되면 말해야 하지만, 여기는 지나가다 보는 한 줄이고,
 // 못 본다고 잃는 것이 없다. 일정 탭이 같은 것을 제대로 말한다.
+//
+// ## 일정이 바뀌면 다시 읽는다 (#741)
+//
+// 바로 위의 케어 카드가 병원 기록을 하면서 오늘 병원 일정을 완료로 바꿀 수 있다. 그때 이 줄이
+// "할 일 1 · 병원" 을 계속 들고 있으면 방금 한 일이 안 끝난 것처럼 보인다 — `kScheduleRev` 를
+// 듣고 다시 읽는다.
 import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
@@ -66,12 +72,14 @@ class _TodayScheduleLineState extends State<TodayScheduleLine> {
     super.initState();
     // 로그인 상태가 나중에 바뀌면 그때 다시 묻는다 — 처음 열 때는 아직 게스트일 수 있다.
     AuthState.status.addListener(_load);
+    kScheduleRev.addListener(_load);
     _load();
   }
 
   @override
   void dispose() {
     AuthState.status.removeListener(_load);
+    kScheduleRev.removeListener(_load);
     super.dispose();
   }
 

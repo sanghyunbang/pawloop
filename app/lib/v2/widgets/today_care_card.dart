@@ -28,6 +28,17 @@
 // 네트워크가 없을 때 빈 카드를 그리면 "아무도 아무것도 안 했다" 로 읽힌다. 그건 이 화면이
 // 낼 수 있는 가장 나쁜 거짓말이다 — 그걸 보고 밥을 한 번 더 준다. 그래서 로딩·실패·
 // "가족 없음" 을 각각 다른 문구로 그린다.
+//
+// ## 일정과의 연결 (#741, 사장님 A)
+//
+// 산책·병원·투약은 일정 탭에도 있다. 카드에서 "병원 다녀왔다" 를 누르는데 오늘 같은 종류의
+// 열린 일정이 있으면, 기록하기 **전에** "일정을 완료로 할까요?" 를 한 장 묻는다. 완료로 하면
+// 일정을 PATCH 하고 **케어 기록은 안 보낸다** — 서버가 그 일정의 기록을 스스로 남기므로
+// (`ScheduleService.syncCareLog`, 아이까지 #743) 여기서 또 보내면 두 번 남는다.
+//
+// 묻지 않고 자동으로 완료하지 않는 이유: 같은 날 같은 종류가 둘이면(아침 산책 · 저녁 산책)
+// 어느 것을 끝낸 것인지 앱이 모른다. 시각이 빠른 것 하나를 놓고 묻는다 — 사용자가 안다.
+// 일정을 못 읽은 날은 묻지 않고 기록만 한다. 일정은 이 카드의 곁다리라 케어를 막으면 안 된다.
 
 import '../screens/care_log_screen.dart';
 import '../screens/login_screen.dart';
@@ -35,7 +46,9 @@ import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
 import '../data/family_repository.dart';
-import '../domain/pet.dart' show kMyDog, kPetCategories;
+import '../data/schedule_repository.dart';
+import '../domain/pet.dart' show kMyDog, kMyPets, kPetCategories;
+import '../domain/schedule.dart';
 import '../screens/main_shell.dart' show RootTab;
 import '../theme/app_tokens.dart';
 import 'care_glyph.dart';
@@ -65,12 +78,20 @@ class TodayCareCard extends StatefulWidget {
   /// 한 번 더 "가족 그룹 만들기" 를 눌러야 하는 두 단계였다(#329).
   final VoidCallback? onCreateFamily;
 
+  /// 오늘 일정을 읽는 저장소(#741). 테스트가 갈아 끼우고, 운영 경로에서는 null 이다.
+  final ScheduleRepository? scheduleRepository;
+
+  /// "오늘" — 일정을 오늘 하루치만 묻는 데 쓴다. 테스트가 고정하지 않으면 기기 시계다.
+  final DateTime? today;
+
   const TodayCareCard({
     super.key,
     this.onOpenFamily,
     this.repository,
     this.myUserId,
     this.onCreateFamily,
+    this.scheduleRepository,
+    this.today,
   });
 
   @override
@@ -79,9 +100,15 @@ class TodayCareCard extends StatefulWidget {
 
 class _TodayCareCardState extends State<TodayCareCard> {
   late final FamilyRepository _repo = widget.repository ?? FamilyRepository();
+  late final ScheduleRepository _scheduleRepo =
+      widget.scheduleRepository ?? ScheduleRepository();
 
   FamilyGroupSummary? _group;
   List<CareLogEntry> _logs = const [];
+
+  /// 오늘 일정(#741). 산책·병원·투약 칸을 누를 때 "완료로 할까요?" 를 물을지 여기서 가른다.
+  /// 못 읽었으면 빈 목록이고, 그때는 묻지 않는다.
+  List<Schedule> _schedules = const [];
 
   /// 그 집이 챙기는 일 — **카드의 칸이 이 목록이다**(#560). 접힌 것은 빼고 순서대로다.
   List<CareItemEntry> _items = const [];
@@ -147,11 +174,13 @@ class _TodayCareCardState extends State<TodayCareCard> {
       // 카드가 누리 밥까지 세고, "밥 2회" 가 보리한테 두 번인지 둘이 한 번씩인지 모르게 된다.
       final logs = await _repo.careLogs(group.id, dogId: kMyDog.value?.serverId);
       final items = await _itemsOf(group.id);
+      final schedules = await _todaySchedules();
       if (!mounted) return;
       setState(() {
         _group = group;
         _logs = logs;
         _items = items;
+        _schedules = schedules;
         _loading = false;
       });
     } on FamilyFailure catch (e) {
@@ -204,6 +233,24 @@ class _TodayCareCardState extends State<TodayCareCard> {
       return live.isEmpty ? _fallbackItems : live;
     } on FamilyFailure {
       return _fallbackItems;
+    }
+  }
+
+  /// 오늘 일정 — **못 읽으면 빈 목록**이다(#741).
+  ///
+  /// 일정은 이 카드의 곁다리다. 일정 서버가 흔들린다고 케어 카드를 실패로 그리면 사용자는
+  /// 물·밥을 못 적는다 — 홈의 할 일 줄이 같은 이유로 조용하다(`today_schedule_line.dart`).
+  ///
+  /// **아이로 거르지 않는다.** 아이 없는 가족 일정("병원" 만 적어 둔 것)도 물어야 하고, 어느
+  /// 아이 것인지는 누를 때 [openScheduleFor] 가 가른다. 서버에 `dogId` 를 보내면 그 일정이
+  /// 빠진다.
+  Future<List<Schedule>> _todaySchedules() async {
+    final now = widget.today ?? DateTime.now();
+    final day = DateTime(now.year, now.month, now.day);
+    try {
+      return await _scheduleRepo.range(from: day, to: day);
+    } on ScheduleFailure {
+      return const [];
     }
   }
 
@@ -394,6 +441,24 @@ class _TodayCareCardState extends State<TodayCareCard> {
     final group = _group;
     if (group == null || _sending != null) return;
 
+    // 일정 물음이 **먼저**다(#741). 오늘 같은 종류의 열린 일정이 있으면 "완료로 할까요?" —
+    // 완료로 하면 서버가 케어 기록을 스스로 남기므로 아래 "다음 기록" 물음까지 갈 일이 없다.
+    // "아니요 · 기록만" 이면 지금까지의 흐름 그대로다.
+    final linked = openScheduleFor(item.systemType, _schedules, dogId: kMyDog.value?.serverId);
+    if (linked != null) {
+      final answer = await _askScheduleDone(linked);
+      if (!mounted) return;
+      switch (answer) {
+        case _ScheduleAnswer.done:
+          await _completeSchedule(item, linked);
+          return;
+        case _ScheduleAnswer.dismissed:
+          return;
+        case _ScheduleAnswer.recordOnly:
+          break;
+      }
+    }
+
     final already = _latestOf(item);
     if (already != null) {
       // 이번이 오늘 몇 번째인가 — 물 세 번째는 정상이고 밥 세 번째는 볼 일이다. 숫자를
@@ -513,6 +578,91 @@ class _TodayCareCardState extends State<TodayCareCard> {
       ),
     );
     return answer ?? false;
+  }
+
+  /// "오늘 10:30 뭉치 병원 — 광견병 접종 일정이 있어요." — 아니요 · 기록만 / 완료로.
+  ///
+  /// 으뜸 버튼은 **완료로**다 — 카드에서 병원을 누르는 사람은 대개 그 일정을 다녀온 것이다.
+  /// 바깥을 눌러 닫으면 아무것도 안 한다: 기록도 완료도 사용자가 고른 것이어야 한다.
+  Future<_ScheduleAnswer> _askScheduleDone(Schedule schedule) async {
+    final answer = await showDialog<_ScheduleAnswer>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: T.surfaceBright,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          '일정을 완료로 할까요?',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary),
+        ),
+        content: Text(
+          scheduleDoneQuestion(schedule, dogName: _petNameOf(schedule.dogId)),
+          style: const TextStyle(fontSize: 13.5, color: T.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            key: const Key('care-schedule-record-only'),
+            onPressed: () => Navigator.pop(dialogCtx, _ScheduleAnswer.recordOnly),
+            child: const Text('아니요 · 기록만', style: TextStyle(color: T.textMuted)),
+          ),
+          TextButton(
+            key: const Key('care-schedule-done'),
+            onPressed: () => Navigator.pop(dialogCtx, _ScheduleAnswer.done),
+            child: const Text(
+              '완료로',
+              style: TextStyle(fontWeight: FontWeight.w800, color: T.warmText),
+            ),
+          ),
+        ],
+      ),
+    );
+    return answer ?? _ScheduleAnswer.dismissed;
+  }
+
+  /// 일정을 완료로 — `PATCH /api/schedules/{id}?version=N` 하나뿐이다(#741).
+  ///
+  /// **케어 기록은 보내지 않는다.** 서버가 그 일정의 기록을 스스로 남긴다
+  /// (`ScheduleService.syncCareLog`). 그 뒤 카드와 홈의 할 일 줄이 다시 읽는다 — 그 기록이
+  /// 칸에 보여야 사용자가 "됐다" 를 안다.
+  ///
+  /// 409 는 남이 먼저 고친 것이다. 최신 값이 함께 오면 그것으로 바꾸고, 어느 쪽이든 다시
+  /// 읽는다 — 남이 완료했으면 서버가 케어 기록도 남겼으므로 칸도 바뀌어야 한다.
+  Future<void> _completeSchedule(CareItemEntry item, Schedule schedule) async {
+    setState(() => _sending = item.id);
+    try {
+      final updated = await _scheduleRepo.mark(schedule, ScheduleStatus.done);
+      if (!mounted) return;
+      setState(() {
+        _sending = null;
+        _schedules = _replaceSchedule(_schedules, updated);
+      });
+      kScheduleRev.value++;
+      kServerCareRev.value++;
+    } on ScheduleFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sending = null;
+        final current = e.current;
+        if (current != null) _schedules = _replaceSchedule(_schedules, current);
+      });
+      _showMessage(e.userMessage);
+      if (e.kind == ScheduleFailureKind.conflict) {
+        kScheduleRev.value++;
+        kServerCareRev.value++;
+      }
+    }
+  }
+
+  /// 바뀐 일정 하나를 갈아 끼운다. 키는 `(id, 날짜)` 다 — 펼친 하루들이 id 를 나눠 쓴다.
+  static List<Schedule> _replaceSchedule(List<Schedule> list, Schedule updated) =>
+      [for (final s in list) s.key == updated.key ? updated : s];
+
+  /// 일정에 적힌 아이의 이름. 아이가 없거나 내 목록에 없으면 null — 문구에서 이름을 뺀다.
+  static String? _petNameOf(int? dogId) {
+    if (dogId == null) return null;
+    for (final p in kMyPets.value) {
+      if (p.serverId == dogId) return p.name;
+    }
+    return null;
   }
 
   /// 칸을 길게 누르면 그 종류의 가장 최근 기록을 지운다 — **내 기록일 때만**(#209).
@@ -1049,3 +1199,64 @@ enum _Retap { undo, again, cancel }
 
 String retapWarning(CareLogEntry mine, String what, int nth) =>
     '오늘 ${mine.timeLabel} 에 내가 $what 기록을 남겼어요. ${nthToday(nth)} 잘못 눌렀다면 지울 수 있어요.';
+
+// ─────────────────────── 일정과의 연결 (#741) ───────────────────────
+
+/// "일정을 완료로 할까요?" 의 답.
+enum _ScheduleAnswer {
+  /// 완료로 — 일정을 PATCH 하고 케어 기록은 안 보낸다.
+  done,
+
+  /// 아니요 · 기록만 — 지금까지의 흐름 그대로.
+  recordOnly,
+
+  /// 바깥을 눌러 닫았다 — 아무것도 안 한다.
+  dismissed,
+}
+
+/// 케어 종류 → 일정 종류. **서버의 `ScheduleKind.careWire` 와 같은 짝**이다 — 산책·병원·투약뿐.
+///
+/// 물·밥·배변·마킹에는 짝이 없다(`null`). 미용·목욕·사료·그 밖은 케어가 아니라 반대쪽에서
+/// 짝이 없다. 짝을 여기서 늘리면 서버가 안 남기는 종류를 앱이 "완료로" 묻게 된다.
+ScheduleKind? scheduleKindOf(ServerCareType? type) => switch (type) {
+      ServerCareType.walk => ScheduleKind.walk,
+      ServerCareType.vet => ScheduleKind.vet,
+      ServerCareType.med => ScheduleKind.med,
+      _ => null,
+    };
+
+/// 이 칸을 누를 때 물을 오늘 일정 — 없으면 `null` 이고 그때는 묻지 않는다(#741).
+///
+/// 셋을 본다. **같은 종류**이고, **열려 있고**(완료·건너뜀은 아니다), **고른 아이 것이거나
+/// 아이 없는 것**이다 — 다른 아이의 병원 일정을 뭉치 카드에서 완료하면 안 된다. 같은 종류가
+/// 둘 이상이면 **시각이 빠른 것 하나**다([Schedule.compare], 하루 종일은 뒤).
+///
+/// [dogId] 가 null 이면(아이를 한 마리도 안 등록한 집) 아이 없는 일정만 짝이 된다.
+Schedule? openScheduleFor(ServerCareType? type, List<Schedule> today, {int? dogId}) {
+  final kind = scheduleKindOf(type);
+  if (kind == null) return null;
+  Schedule? first;
+  for (final s in today) {
+    if (s.kind != kind || !s.status.isOpen) continue;
+    if (s.dogId != null && s.dogId != dogId) continue;
+    if (first == null || Schedule.compare(s, first) < 0) first = s;
+  }
+  return first;
+}
+
+/// "오늘 10:30 뭉치 병원 — 광견병 접종 일정이 있어요."
+///
+/// 시각은 있을 때만(하루 종일이면 뺀다), 아이 이름도 있을 때만, 그다음이 **종류**다 — 제목이
+/// 아니라 종류를 앞세우는 이유는 제목이 사람이 쓴 문장이라 "병원" 이라는 사실이 그 안에 없을
+/// 수 있어서다. 제목은 그 뒤에 붙인다. 위젯 밖에 두는 이유는 `nextRecordQuestion` 과 같다 —
+/// 문구를 재는 테스트가 화면을 띄우지 않고도 부를 수 있어야 한다.
+String scheduleDoneQuestion(Schedule schedule, {String? dogName}) {
+  final head = [
+    '오늘',
+    if (schedule.atTime != null) Schedule.formatTime(schedule.atTime!),
+    if (dogName != null && dogName.isNotEmpty) dogName,
+    schedule.kind.label,
+  ].join(' ');
+  final title = schedule.title.trim();
+  return title.isEmpty ? '$head 일정이 있어요.' : '$head — $title 일정이 있어요.';
+}

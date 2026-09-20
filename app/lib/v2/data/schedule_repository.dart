@@ -53,9 +53,43 @@ class ScheduleFailure implements Exception {
 
   const ScheduleFailure(this.kind, {this.current, this.message});
 
+  /// 화면에 그대로 띄우는 문구. 일정 탭과 홈의 케어 카드가 **같은 말**을 한다(#741).
+  ///
+  /// 충돌은 누가 고쳤는지까지 말한다 — 최신 값이 함께 오므로([current]) 화면은 그것으로
+  /// 바꾼 뒤 이 한 줄을 붙인다. 사람을 모르면 지어내지 않는다.
+  String get userMessage {
+    switch (kind) {
+      case ScheduleFailureKind.conflict:
+        final who = current?.updatedBy?.nickname;
+        return who == null
+            ? '다른 분이 방금 고쳤어요. 최신 내용으로 바꿨어요.'
+            : '$who님이 방금 고쳤어요. 최신 내용으로 바꿨어요.';
+      case ScheduleFailureKind.notFound:
+        return '이미 지워진 일정이에요.';
+      case ScheduleFailureKind.invalid:
+        return message ?? '이 일정은 아직 만들 수 없어요.';
+      // 둘 다 "다시 시도" 로 풀리지 않는다(#680). 목록을 못 받을 때는 화면이 로그인 안내를
+      // 따로 그리고, 여기는 완료 체크·저장 같은 쓰기가 막혔을 때의 말이다.
+      case ScheduleFailureKind.unauthorized:
+        return '로그인이 필요해요.';
+      case ScheduleFailureKind.forbidden:
+        return '이 일정은 고칠 수 없어요.';
+      case ScheduleFailureKind.network:
+        return '연결이 불안정해요. 잠시 뒤 다시 해 주세요.';
+    }
+  }
+
   @override
   String toString() => 'ScheduleFailure($kind, $message)';
 }
+
+/// 일정이 바뀌었다는 신호 — 이슈 #741.
+///
+/// 홈의 "할 일" 줄과 오늘의 케어 카드는 같은 화면에 있는데 서로를 모른다. 카드가 일정을
+/// 완료로 바꾸면 그 줄이 낡는다 — 그래서 바꾼 쪽이 이 값을 올리고 그리는 쪽이 듣고 다시
+/// 읽는다. `kServerCareRev`(오늘의 케어)가 같은 방식이다. 일정 탭이 완료 체크할 때도
+/// 올린다 — 바꾼 쪽이 누가 듣는지 알 필요는 없다.
+final ValueNotifier<int> kScheduleRev = ValueNotifier<int>(0);
 
 class ScheduleRepository {
   static const Duration timeout = NetTimeouts.standard;

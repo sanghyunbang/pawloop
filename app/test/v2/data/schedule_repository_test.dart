@@ -279,6 +279,13 @@ void main() {
       );
     });
 
+    test('401·403 의 화면 문구 — 일정 탭과 홈의 케어 카드가 같은 말을 한다 (#741 · #680)', () {
+      expect(const ScheduleFailure(ScheduleFailureKind.unauthorized).userMessage,
+          '로그인이 필요해요.');
+      expect(const ScheduleFailure(ScheduleFailureKind.forbidden).userMessage,
+          '이 일정은 고칠 수 없어요.');
+    });
+
     test('400 은 이유를 그대로 옮긴다 — "실패했어요" 로 뭉개지 않는다', () async {
       final f = fixture((_) async => _json({
             'error': {'code': 'VALIDATION', 'message': '크루 일정은 아직 만들 수 없습니다.'}

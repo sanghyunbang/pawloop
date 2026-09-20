@@ -23,6 +23,7 @@ import 'package:http/testing.dart';
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
+import 'package:heat_trip_flutter/v2/data/schedule_repository.dart';
 import 'package:heat_trip_flutter/v2/widgets/today_care_card.dart';
 
 const _base = 'https://api.example.test';
@@ -148,23 +149,26 @@ void main() {
 
     // 문을 열어 줄 때까지 응답을 안 주는 클라이언트 — 그동안 카드가 "불러오는 중" 에 머문다.
     final gate = Completer<void>();
-    final repo = FamilyRepository(
+    final client = AuthedClient(
+      inner: MockClient((request) async {
+        await gate.future;
+        return request.url.path == '/api/groups/me'
+            ? _json({'id': 3, 'name': '보리네', 'roomId': 9, 'members': []})
+            : _json(const []);
+      }),
       baseUrl: _base,
-      client: AuthedClient(
-        inner: MockClient((request) async {
-          await gate.future;
-          return request.url.path == '/api/groups/me'
-              ? _json({'id': 3, 'name': '보리네', 'roomId': 9, 'members': []})
-              : _json(const []);
-        }),
-        baseUrl: _base,
-        store: _Tokens(),
-      ),
+      store: _Tokens(),
     );
+    final repo = FamilyRepository(baseUrl: _base, client: client);
+    // 카드가 #741 부터 오늘 일정도 읽는다 — 같은 문 뒤의 같은 목을 꽂는다. 안 꽂으면 기본
+    // 저장소가 진짜 클라이언트로 나가고, 문을 연 직후 트리를 지우는 이 검사에는 그 요청의
+    // 9초 타임아웃 타이머가 남아 "Timer is still pending" 으로 죽는다.
+    final schedules = ScheduleRepository(baseUrl: _base, client: client);
     await t.pumpWidget(MaterialApp(
       home: MediaQuery(
         data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
-        child: Scaffold(body: TodayCareCard(repository: repo)),
+        child: Scaffold(
+            body: TodayCareCard(repository: repo, scheduleRepository: schedules)),
       ),
     ));
     await t.pump();
