@@ -53,7 +53,7 @@ class TodayCourseCard extends StatefulWidget {
   final DateTime Function()? now;
   final WalkGoalStore goals;
 
-  /// "여기서 산책 시작" — 홈이 `startWalk(place:)` 를 꽂는다(위젯은 화면을 import 하지 않는다,
+  /// "이 코스 걷기" — 홈이 `startWalk(place:)` 를 꽂는다(위젯은 화면을 import 하지 않는다,
   /// `legacy_shell_reachability_test`). 테스트가 가짜를 꽂는다.
   final StartCourseWalk onStart;
 
@@ -285,7 +285,9 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
                 child: const Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.pets, size: 15, color: Colors.white),
                   SizedBox(width: 6),
-                  Text('여기서 산책 시작',
+                  // '여기서 산책 시작' 이었다 — 멀리서도 "여기서" 로 읽혀서 바꿨다(#724).
+                  // 300m 밖이면 `startWalk` 이 "N km 떨어져 있어요" 로 막는다.
+                  Text('이 코스 걷기',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
                 ]),
               ),
