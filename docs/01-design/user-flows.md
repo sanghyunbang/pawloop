@@ -191,12 +191,10 @@ flowchart TD
     C -->|기존 계정| H
     E --> H
     H -->|오늘의 코스 카드 본문| CS[course_sheet.dart<br/>장소 시트 — 이 코스 걷기 / 길찾기 / 이 장소로 글쓰기]
-    H -->|이 코스 걷기 · 300m 밖| WS[walk_start_point_sheet.dart<br/>450m 떨어져 있어요 — 지도 앱으로 길 안내 / 닫기]
-    CS -->|이 코스 걷기 · 300m 밖| WS
+    H -->|코스 보기| CS
     CS -->|이 장소의 글 보기| PP[place_posts_screen.dart<br/>이 장소의 글 — 사진 벽 + 글 줄 · 없으면 첫 글 쓰기]
     H -->|케어 카드 '오늘 한 일' 머리 · 우리 가족 '케어 기록'| CL[care_log_screen.dart<br/>케어 기록 — 하루 한 장 · 전날/다음 날 · 아이별 · 시각 순]
-    WS -->|길 안내| MAP[지도 앱<br/>nmap://route/walk — 도착해서 다시 시작]
-    H -->|이 코스 걷기 · 300m 안| LP
+    CS -->|이 코스 걷기 · 멀어도 여기서| LP
     H -->|첫 산책 시작| LP[location_priming_sheet.dart<br/>왜 · 기기에만 남음 · 프로필에서 끔 — 허용하기 / 나중에]
     LP -->|허용하기| F[OS 위치 권한 대화상자<br/>geolocator]
     LP -->|나중에| H
