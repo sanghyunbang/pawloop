@@ -112,6 +112,8 @@ lib/
 
 같은 폴더의 순수 함수들 — 화면은 결과를 그리기만 한다: `course_recommender.dart`(오늘의 코스 점수, #485) · `chat_thread.dart`(채팅방 말풍선 묶기 · 날짜 구분선 `layoutThread`, #452) · `pet_characters.dart`(사진이 없을 때의 얼굴 열셋, #585).
 
+`serial_refresh.dart` 는 **"한 번에 하나만, 겹치면 끝난 뒤 한 번 더"**(#758). 지도의 마커 다시 그리기가 이것을 쓴다 — `onMapReady` 와 카메라 이동 뒤의 `_load` 가 겹쳐 `clearOverlays` 가 넣는 중인 마커를 지우면 네이버 지도 클러스터러가 AssertionError 로 앱을 죽였다(에뮬레이터 실측). 겹친 부름을 버리지 않는 이유는 그 사이 필터·검색어가 바뀌었을 수 있어서다.
+
 `pet_characters.dart` 의 규칙은 하나다 — **열쇠말이 곧 파일 이름**(`assets/emoji/<열쇠말>.png`)이라 예외표가 없다. 그래서 `petCharacterAsset` 은 **모르는 열쇠말에 `null`** 을 준다: 서버가 이 값에 DB 제약을 안 걸어서(#586) 새 앱이 고른 얼굴이 옛 앱에 오는데, 그대로 그리면 홈 한가운데가 깨진 그림 상자가 된다. `DogProfile.avatarAsset` 이 그때 종류 기본 그림(`petSpeciesAsset`)으로 떨어뜨린다.
 
 ### 2.3 `data/` — 레포지토리 (데이터 소스)
