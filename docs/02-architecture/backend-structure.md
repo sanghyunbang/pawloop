@@ -160,6 +160,8 @@ refresh 를 타므로 이 차이가 클라이언트 분기를 바꾼다.
 
 둘 다 `KtoCallBudget`(풀별 일일 예산)과 `UpstreamGate`(중복 적재 잠금)를 지난다. 감정 여행 시절의 `tour/schedules/TourFetchScheduler`(관광공사 전 지역 수집, 비활성)는 #94 로 지웠다.
 
+외부 데이터가 아니라 **우리 행을 거두는** 잡은 따로 있다 — `user/service/RefreshTokenPurgeScheduler`(04:30, 만료 refresh 토큰) · `user/verification/VerificationPurgeScheduler`(04:40, 만료된 인증 대기 행) · `S3/media/MediaOrphanSweeper`(04:10, §4.1) · `user/service/UnconsentedAccountSweepScheduler`(04:50, #660 — 필수 약관에 한 번도 다 동의하지 않은 채 하루 지난 계정을 탈퇴 경로 `UserService.deleteMe` 로 거둔다. "동의 없음" 은 `user/UnconsentedAccounts` 가 묻고 `consent` 가 답하며 철회는 세지 않는다. `app.consent.cleanup.enabled` 로 끈다 — 기본 켬, 테스트 프로파일은 끔). 넷 다 행·계정 단위로 멱등이라 두 인스턴스가 함께 돌아도 같다(📌 #86 원칙 2).
+
 ---
 
 ## 7. 외부 연동 · 설정 (`config/`)

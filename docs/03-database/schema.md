@@ -1010,6 +1010,8 @@ CREATE TABLE `user_consent` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
+> **각주 — 동의 없이 하루 지난 계정은 거둔다.** 토큰이 동의보다 먼저 발급되므로 동의 화면에서 앱을 지운 사람의 `users` 행이 동의 없이 남는다(#660). `UnconsentedAccountSweepScheduler` 가 매일 04:50(KST) 에 필수 셋(`TERMS`·`PRIVACY`·`LOCATION`) 중 하나라도 `agreed = 1` 인 행이 **한 줄도 없는** 채 `users.created_at` 이 24시간 넘게 지난 계정을 탈퇴 경로(`UserService.deleteMe`)로 지운다. **철회는 세지 않는다** — 동의했다가 `agreed = 0` 을 남긴 사람은 대상이 아니다. 이 표의 행은 남는다(`users` 로의 FK 가 없다) — 지워진 계정의 동의 증빙이다. `created_at` 이 비어 있는 계정은 건드리지 않는다. 계정마다 트랜잭션 하나라 두 인스턴스가 함께 돌아도 같다(📌 #86 원칙 2). `app.consent.cleanup.enabled` 로 끈다.
+
 ---
 
 ## 29. `device_token` — 기기 토큰 원장 (**실재**)
