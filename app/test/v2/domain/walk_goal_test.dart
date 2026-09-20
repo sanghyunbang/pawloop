@@ -82,7 +82,7 @@ void main() {
       }.entries) {
         final minutes = WalkGoal.recommendedDailyMinutes(size: entry.key, ageMonths: 0);
         expect(minutes, entry.value);
-        expect(spec, contains('${entry.key.label} 하루 $minutes분'),
+        expect(spec, contains('${entry.key.labelFor(PetSpecies.dog)} 하루 $minutes분'),
             reason: '문서와 코드가 갈리면 화면의 "참고" 라벨이 가리키는 근거가 거짓이 된다');
       }
     });

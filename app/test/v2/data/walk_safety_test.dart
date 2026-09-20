@@ -105,6 +105,19 @@ void main() {
       expect(WalkSafety.judge(_r(temp: 27, pm25: 10), hour: 14, dog: _big).level, WalkSafetyLevel.short);
     });
 
+    test('고양이면 이유 칩도 고양이 말이다 — 대형묘 · 노령묘 (#719)', () {
+      const bigCat = DogProfile(
+          serverId: 11, name: 'Mong', breed: '메인쿤', size: DogSize.large, ageMonths: 30, species: PetSpecies.cat);
+      const oldCat = DogProfile(
+          serverId: 12, name: 'Old', breed: '코숏', size: DogSize.medium, ageMonths: 100, species: PetSpecies.cat);
+      final big = WalkSafety.judge(_r(temp: 28, pm25: 10), hour: 14, dog: bigCat);
+      final old = WalkSafety.judge(_r(temp: 27, pm25: 10), hour: 14, dog: oldCat);
+      expect(big.reasons, contains('대형묘'));
+      expect(old.reasons, contains('노령묘'));
+      const dogWords = ['소형견', '중형견', '대형견', '노령견'];
+      expect([...big.reasons, ...old.reasons].any((s) => dogWords.any(s.contains)), isFalse);
+    });
+
     test('아이가 없어도 판정한다 — 보정 없이', () {
       expect(WalkSafety.judge(_r(temp: 27, pm25: 10), hour: 14).level, WalkSafetyLevel.short);
     });

@@ -90,7 +90,7 @@ class WalkAdvice {
   /// 자리를 채우려고 아무 말이나 넣지 않는다.
   ///
   /// [hour] 는 판정과 같은 기기 시각(0~23)이다. 같은 27°C 라도 낮과 밤이 다르다.
-  /// [dog] 가 `null` 이면 아이 얘기(단두종·노령견·소형견)는 아예 안 나온다 — 우리 아이가
+  /// [dog] 가 `null` 이면 아이 얘기(단두종·나이·몸집)는 아예 안 나온다 — 우리 아이가
   /// 단두종이 아닌데 단두종 얘기를 하면 그건 남 얘기다.
   static List<WalkAdviceLine> pick(
     WalkSafetyReading r, {
@@ -131,7 +131,8 @@ class WalkAdvice {
             '짧게 다녀오세요. 발이 시릴 수 있으니 돌아와서 발을 닦아 주세요'),
       if (t <= coatC && small)
         const WalkAdviceLine(
-            WalkAdviceKind.coat, Icons.checkroom_rounded, '소형견은 체온이 더 빨리 떨어져요 — 옷을 입혀 주세요'),
+            // 종류를 안 부른다 — 고양이·기타에도 같은 말이 맞아야 한다(#719).
+            WalkAdviceKind.coat, Icons.checkroom_rounded, '몸집이 작으면 체온이 더 빨리 떨어져요 — 옷을 입혀 주세요'),
       if (dustModerate)
         const WalkAdviceLine(
             WalkAdviceKind.dust, Icons.masks_outlined, '짧게 다녀오고, 돌아와서 발과 털을 닦아 주세요'),
@@ -146,7 +147,7 @@ class WalkAdvice {
             '우리 아이는 단두종이라 더위에 특히 약해요 — 한 단계 보수적으로 봐 주세요'),
       if (senior && (t >= hotGroundC || t <= coldC))
         const WalkAdviceLine(
-            WalkAdviceKind.senior, Icons.favorite_outline_rounded, '노령견은 더위도 추위도 더 힘들어요 — 천천히, 자주 쉬어 가요'),
+            WalkAdviceKind.senior, Icons.favorite_outline_rounded, '나이 든 아이는 더위도 추위도 더 힘들어요 — 천천히, 자주 쉬어 가요'),
     ];
 
     return lines.length <= maxLines ? lines : lines.sublist(0, maxLines);

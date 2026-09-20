@@ -107,10 +107,26 @@ void main() {
   });
 
   group('DogSize', () {
-    test('각 크기에 한국어 라벨이 붙어 있다', () {
-      expect(DogSize.small.label, '소형견');
-      expect(DogSize.medium.label, '중형견');
-      expect(DogSize.large.label, '대형견');
+    test('라벨은 종류를 따라간다 — 소형견 · 소형묘 · 소형 (#719)', () {
+      expect(DogSize.small.labelFor(PetSpecies.dog), '소형견');
+      expect(DogSize.medium.labelFor(PetSpecies.dog), '중형견');
+      expect(DogSize.large.labelFor(PetSpecies.dog), '대형견');
+      expect(DogSize.small.labelFor(PetSpecies.cat), '소형묘');
+      expect(DogSize.medium.labelFor(PetSpecies.cat), '중형묘');
+      expect(DogSize.large.labelFor(PetSpecies.cat), '대형묘');
+      expect(DogSize.small.labelFor(PetSpecies.other), '소형');
+      expect(DogSize.medium.labelFor(PetSpecies.other), '중형');
+      expect(DogSize.large.labelFor(PetSpecies.other), '대형');
+    });
+
+    test('고양이 프로필의 부제와 몸집 라벨에 "견" 이 없다 (#719)', () {
+      const cat = DogProfile(
+          serverId: 1, name: '나비', breed: '코숏', size: DogSize.small, ageMonths: 36, species: PetSpecies.cat);
+      expect(cat.sizeLabel, '소형묘');
+      expect(cat.subtitle, '고양이 · 코숏 · 3살 · 소형묘');
+      expect(['소형견', '중형견', '대형견'].any(cat.subtitle.contains), isFalse);
+      expect(PetSpecies.cat.seniorLabel, '노령묘');
+      expect(PetSpecies.other.seniorLabel, '노령');
     });
   });
 }

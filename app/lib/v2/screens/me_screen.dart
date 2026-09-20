@@ -641,7 +641,8 @@ class MeScreen extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('우리 아이 정보 관리', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Colors.white)),
               SizedBox(height: 2),
-              Text('견종 · 나이 · 크기를 수정할 수 있어요', style: TextStyle(fontSize: 12, color: T.cardBg)),
+              // 등록 시트와 같은 말 — '견종' 은 강아지 말이라 고양이 집에는 틀린다(#719).
+              Text('품종 · 나이 · 몸집을 수정할 수 있어요', style: TextStyle(fontSize: 12, color: T.cardBg)),
             ]),
           ),
           Icon(Icons.chevron_right, size: 20, color: Colors.white),
