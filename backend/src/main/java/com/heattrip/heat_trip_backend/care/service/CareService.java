@@ -252,8 +252,10 @@ public class CareService {
      * <p>수행자·시각은 {@link #record} 와 같은 규칙이다 — 토큰의 사용자와 서버 시계다.
      */
     @Transactional
-    public CareLogResponse recordLinked(long groupId, CareType type, User actor) {
+    public CareLogResponse recordLinked(long groupId, CareType type, User actor, Long dogId) {
         FamilyGroup group = requireMemberGroup(groupId, actor.getId());
+        // 일정의 아이를 그대로 붙인다(#743) — 카드에서 누를 때({@link #record})와 같은 확인이다.
+        Dog dog = dogId == null ? null : dogs.requireInFamilyEntity(groupId, dogId);
 
         // saveAndFlush 가 아니라 save 다. flush 는 **영속성 컨텍스트 전체**를 밀어내는데,
         // 부르는 쪽(일정 완료)은 그 시점에 이미 자기 엔티티를 더럽혀 뒀다. 여기서 밀면 그
@@ -263,6 +265,7 @@ public class CareService {
         // id 는 그래도 채워진다 — IDENTITY 라 Hibernate 가 그 한 행만 즉시 INSERT 한다.
         CareLog saved = careLogs.save(CareLog.builder()
                 .group(group)
+                .dog(dog)
                 .type(type)
                 .doneBy(actor)
                 .occurredAt(LocalDateTime.now(clock))
