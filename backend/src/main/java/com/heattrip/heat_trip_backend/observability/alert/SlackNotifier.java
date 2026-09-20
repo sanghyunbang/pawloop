@@ -26,8 +26,8 @@ import java.util.concurrent.TimeUnit;
  * <h2>타임아웃이 걸려 있다 — 이슈 #707 §3</h2>
  * <p>예전에는 자동설정된 맨 {@code WebClient.Builder} 를 그대로 {@code build()} 해서
  * 인자 없는 {@code block()} 을 불렀다. <b>한 겹도 안 걸려 있었다.</b> 슬랙이 꺼져 있어 I/O 전에
- * 빠지니 안 터졌을 뿐, 켜는 순간 {@code ErrorAlertingAspect} 가 잡는 모든 500 이 무한 대기를
- * 탈 수 있었다. 연결·응답·읽기·쓰기 넷에 건다 — {@code KtoWebClientConfig} 와 같은 모양이다.
+ * 빠지니 안 터졌을 뿐, 켜는 순간 {@code ErrorAlertingFilter} 가 5xx 마다 보내는 경보(#657)가 무한
+ * 대기를 탈 수 있었다. 연결·응답·읽기·쓰기 넷에 건다 — {@code KtoWebClientConfig} 와 같은 모양이다.
  *
  * <h2>두 갈래 — 에러와 신고</h2>
  * <p>{@link #send} 는 에러 알림이고 {@code slack.enabled} 와 기본 웹훅을 본다.
