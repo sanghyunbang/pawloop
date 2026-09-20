@@ -29,6 +29,7 @@ import '../data/location_service.dart';
 import '../data/neighborhood_store.dart';
 import '../domain/neighborhood.dart';
 import '../widgets/aurora.dart';
+import 'course_sheet.dart' show placePostsLink;
 import 'main_shell.dart' show RootTab;
 import '../widgets/profile_avatar.dart';
 
@@ -526,7 +527,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
       padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 100),
       children: [
         Row(children: const [
-          Text('지도', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          // '지도' 였다 — 지도는 보여 주는 방식 중 하나지 이 탭의 일이 아니다(2026-09-21 사장님).
+          Text('탐색', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
           Spacer(),
           ProfileAvatar(),
         ]),
@@ -1744,20 +1746,24 @@ class _ExploreScreenState extends State<ExploreScreen> {
       context,
       p,
       beforeActions: stops == null ? null : _trailNoLineNote(stops),
-      afterActions: !walkable && stops == null
+      afterActions: !walkable && stops == null && p.contentId.isEmpty
           ? null
-          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (walkable)
-                PlaceLoopPicker(
-                  contentId: p.contentId,
-                  repository: widget.loops,
-                  onLoop: (loop) {
-                    loopHolder.value = loop;
-                    unawaited(_drawLoop(p, loop));
-                  },
-                ),
-              if (stops != null) _trailStops(stops, p.petCategory),
-            ]),
+          : Builder(
+              builder: (sheetCtx) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    if (walkable)
+                      PlaceLoopPicker(
+                        contentId: p.contentId,
+                        repository: widget.loops,
+                        onLoop: (loop) {
+                          loopHolder.value = loop;
+                          unawaited(_drawLoop(p, loop));
+                        },
+                      ),
+                    if (stops != null) _trailStops(stops, p.petCategory),
+                    // 이 장소의 글 — 홈 시트에만 있던 문(#723)을 여기도(2026-09-21 사장님). 서버가
+                    // 아는 장소(contentId)만 글을 모을 수 있다.
+                    if (p.contentId.isNotEmpty) placePostsLink(context, sheetCtx, p),
+                  ])),
       footer: Builder(builder: (sheetCtx) => _writeAboutPlace(sheetCtx, p)),
       // 순서가 예전과 같다 — 산책 시작 · 전화 · 지도에서 보기 · 길찾기.
       actions: (sheetCtx, messenger) => [

@@ -7,7 +7,10 @@
 // 카드는 하나다 — "다른 코스" 가 다음 점수를 보여 준다. 안전 지수가 "피하세요" 면 코스 대신
 // "오늘은 쉬어요". 위치가 없거나 후보가 없으면 카드 자체가 없다(가짜를 놓지 않는다).
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' show Geolocator;
 
 import '../data/course_candidates.dart';
 import '../data/location_service.dart';
@@ -66,6 +69,9 @@ class TodayCourseCard extends StatefulWidget {
   /// 본문 탭 — 홈이 `openCourse` 를 꽂는다(#723). 없으면 본문은 예전처럼 아무 일도 안 한다.
   final OpenCourse? onOpen;
 
+  /// 위치를 못 받았을 때 한 번 더 보기까지의 시간. 실내에서 앱을 막 켠 참이면 GPS 가 아직이다.
+  static const Duration retryDelay = Duration(seconds: 8);
+
   @override
   State<TodayCourseCard> createState() => _TodayCourseCardState();
 }
@@ -96,6 +102,7 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     LocationService.consented.removeListener(_retry);
+    _retryTimer?.cancel();
     LocationService.permissionRev.removeListener(_retry);
     super.dispose();
   }
@@ -124,9 +131,23 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
     await Future.wait([_loadCandidates(), _loadGoal()]);
   }
 
+  bool _retriedLocate = false;
+  Timer? _retryTimer;
+
   Future<void> _loadCandidates() async {
     final where = await (widget.locate ?? _locate)();
-    if (where == null) return;
+    if (where == null) {
+      // 2026-09-21 폰에서 카드가 떴다가 **사라졌다** — 홈이 다시 그려지며 이 카드가 새로 서고, 그 순간
+      // 위치를 못 잡으면 그 세션 내내 카드가 없었다. 한 번만 조금 뒤에 다시 본다(동의·권한이 없는
+      // 경우는 `consented`·`permissionRev` 가 따로 깨운다).
+      if (!_retriedLocate) {
+        _retriedLocate = true;
+        _retryTimer = Timer(TodayCourseCard.retryDelay, () {
+          if (mounted) _retry();
+        });
+      }
+      return;
+    }
     final source = widget.source ?? CourseCandidates(includeMine: !widget.data.guest);
     _source = source;
     List<CourseCandidate> found;
@@ -155,8 +176,17 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
   static Future<({double lat, double lng})?> _locate() async {
     final fix = await LocationService.locate(prompt: false);
     final p = fix.position;
-    if (p == null) return null;
-    return (lat: p.latitude, lng: p.longitude);
+    if (p != null) return (lat: p.latitude, lng: p.longitude);
+    // 새 좌표를 못 받았다(실내 GPS 시간 초과 등). 마지막으로 알던 자리면 충분하다 — 이 카드는 2km·5km
+    // 반경으로 고르니 100m 는 상관없다. 동의·권한 문제면 그대로 없음이다(위치를 안 쓰기로 한 사람).
+    if (fix.denial != LocationDenial.unavailable) return null;
+    try {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last == null) return null;
+      return (lat: last.latitude, lng: last.longitude);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 오늘 걸을 분 — 목표가 없으면(아이 없음 · 개가 아님) 30분.
@@ -321,7 +351,6 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
                     const SizedBox(width: 6),
                     // '여기서 산책 시작' 이었다 — 멀리서도 "여기서" 로 읽혀서 바꿨다(#724). 장소면
                     // '코스 보기' 로 시트를 연다(2026-09-21) — 추천 코스와 걷기 버튼이 거기 있다.
-                    // 2km 밖이면 `startWalk` 이 "N km 떨어져 있어요" 로 막는다.
                     Text(_primaryLabel(c),
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
                   ]),

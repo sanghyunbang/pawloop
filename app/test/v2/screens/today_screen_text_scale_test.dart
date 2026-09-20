@@ -291,7 +291,7 @@ void main() {
     testWidgets('라벨이 잘리지 않는다 — "커뮤…" 는 무엇을 누르는지 알 수 없다', (tester) async {
       await pumpShell(tester, 2.0);
 
-      for (final label in ['홈', '지도', '커뮤니티', '채팅']) {
+      for (final label in ['홈', '탐색', '커뮤니티', '채팅']) {
         expect(find.text(label), findsOneWidget, reason: '$label 탭의 이름이 온전히 남아야 한다');
       }
     });

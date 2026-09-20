@@ -86,7 +86,7 @@ lib/
 | `splash_screen.dart` | 저장된 토큰 검증 중 머무는 자리 | 앱 시작 |
 | `intro_screen.dart` | **첫 실행 소개** — 가치 3장 · 건너뛰기 · 기기당 한 번(`IntroGate`) · 설정 > 앱 소개 다시 보기 (#323) | 스플래시 뒤 · 로그인 앞 |
 | `location_priming_sheet.dart` | **위치 사전 안내** — 첫 산책 시작 앞 한 장 · 허용하기 뒤에만 OS 대화상자 · 거부한 뒤엔 설정에서 켜기 (#325) | `startWalk()` |
-| `walk_start_point_sheet.dart` | **N km 떨어져 있어요** — 코스가 300m 밖일 때 한 장 · 지도 앱으로 길 안내 / 닫기 · 지금 자리에서 시작하는 길이 없다 · 300m 안이면 이 장 없이 바로 추적 (#623 → #724) | `startWalk()` |
+| ~~`walk_start_point_sheet.dart`~~ | 2026-09-21 삭제 — 멀면 지도 앱으로 넘기던 장(#724). 이제 멀어도 우리 추적 화면에서 시작하고 "코스 시작점까지 N km" 칩이 안내한다 · 옛 설명: 코스가 300m 밖일 때 한 장 · 지도 앱으로 길 안내 / 닫기 · 지금 자리에서 시작하는 길이 없다 · 300m 안이면 이 장 없이 바로 추적 (#623 → #724) | `startWalk()` |
 | `course_sheet.dart` | **코스 장소 시트** — 홈 '오늘의 코스' 카드 본문 → 지도 탭과 같은 장소 시트 · 이 코스 걷기 / 길찾기 / 이 장소의 글 보기 / 이 장소로 글쓰기 · 내 코스는 아직 없음 · **추천 코스** — 1·2·3km 칩(`widgets/place_loop_picker.dart`, `GET /api/places/{contentId}/loop`), 실제 길이·시간을 적고 '이 코스 걷기' 가 그 선을 `startWalk(courseLine:)` 으로 넘겨 추적 화면이 연한 선으로 깐다 (#723 · #725) | 홈 `onOpen`(함수) |
 | `place_posts_screen.dart` | **장소 페이지** — 머리(사진 · 분류 · 거리 · 주소 · 글/사진/산책 수) · 사진 | 글 갈래 · 글은 피드와 같은 `PostCard`(`post_list_actions.dart`) · 정렬 둘 · 바닥 고정 글쓰기 · 토큰 문 없음 (#723 → #729) | 장소 시트 '이 장소의 글 보기' |
 | `care_log_screen.dart` | **케어 기록(날짜별)** — ‹ › 로 하루씩 · 날짜 고르기 · 요약(N건 · 항목별) · 아이별 묶음 · 이른 것부터 · 이름은 그 집의 칸(`CareLogEntry.nameAmong`) · 줄은 `widgets/care_log_line.dart`(카드의 "오늘 한 일" 과 같은 줄) (#737) | 케어 카드 "오늘 한 일" 머리 · 우리 가족 "케어 기록" 줄 |

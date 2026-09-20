@@ -11,6 +11,7 @@ import '../theme/app_tokens.dart';
 import 'package:heat_trip_flutter/core/config/env.dart';
 import '../widgets/map_unavailable.dart';
 import '../domain/pet.dart';
+import '../domain/walk_destination.dart';
 import '../walk/walk_share_card.dart' show joinDogNames;
 import '../domain/walk_moment.dart';
 import '../data/location_service.dart';
@@ -47,6 +48,10 @@ class WalkTrackingScreen extends StatefulWidget {
   /// 내 경로와 색이 다르다 — 겹쳐 놓고도 어느 쪽이 지금 걷는 것인지 알아야 한다.
   final List<List<double>>? courseLine;
 
+  /// 코스가 어디인가 — 멀어도 여기서 시작하므로(2026-09-21, #724 를 뒤집음) "코스 시작점까지 N km" 를
+  /// 적는 재료다. 거리는 걷는 동안 현재 위치에서 [courseLine] 의 첫 점까지 다시 잰다.
+  final WalkDestination? destination;
+
   /// 함께 나간 아이들의 서버 id — 이슈 #343. 시작 전에 "누구랑 나가요?" 로 고른 것이다.
   ///
   /// **비어 있을 수 있다.** 한 마리면 묻지 않으므로 비고, 그때는 전송이 대표 아이 하나로
@@ -75,6 +80,7 @@ class WalkTrackingScreen extends StatefulWidget {
     this.resume,
     this.place,
     this.courseLine,
+    this.destination,
     this.dogIds = const [],
     this.picker,
     this.locate,
@@ -360,6 +366,16 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
   Future<void> _retry() async {
     setState(() => _fix = null);
     await _start();
+  }
+
+  /// "코스 시작점까지 1.2km" — 코스 선의 첫 점까지, 지금 자리에서. 100m 안이면 코스 위라 아무 말 안 한다.
+  /// 코스가 없으면 `null`.
+  String? get _courseStartHint {
+    final line = widget.courseLine;
+    if (line == null || line.length < 2 || _path.isEmpty) return null;
+    final km = _dist(_path.last, NLatLng(line.first[1], line.first[0]));
+    if (km < 0.1) return null;
+    return '코스 시작점까지 ${km < 1 ? '${(km * 100).round() * 10}m' : '${km.toStringAsFixed(1)}km'}';
   }
 
   double _dist(NLatLng a, NLatLng b) {
@@ -1143,9 +1159,22 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
                   _ctrl = c;
                   // 지도가 늦게 준비되는 동안 이미 걸었을 수 있다 — 지금까지의
                   // 경로를 바로 그리고 카메라를 마지막 점으로 옮긴다.
-                  c.updateCamera(
-                    NCameraUpdate.withParams(target: _path.last, zoom: 16),
-                  );
+                  //
+                  // 따라 걸을 코스가 있으면 **나와 코스를 한 화면에** 담는다(2026-09-21). 멀어도
+                  // 여기서 시작하니 어디로 가야 하는지 첫 화면이 보여 줘야 한다. 그동안은 따라가기를
+                  // 끄고, 사용자가 "내 위치" 를 누르면 다시 따라간다.
+                  final line = widget.courseLine;
+                  if (line != null && line.length >= 2) {
+                    _follow = false;
+                    c.updateCamera(NCameraUpdate.fitBounds(
+                      NLatLngBounds.from([_path.last, for (final p in line) NLatLng(p[1], p[0])]),
+                      padding: const EdgeInsets.fromLTRB(48, 140, 48, 260),
+                    ));
+                  } else {
+                    c.updateCamera(
+                      NCameraUpdate.withParams(target: _path.last, zoom: 16),
+                    );
+                  }
                   _drawCourseLine();
                   _drawPath();
                   // _start 가 지도보다 먼저 끝나면 그때의 POI 적재는 `_ctrl == null`
@@ -1163,6 +1192,26 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
               );
               }),
             ),
+            // 코스 시작점까지 얼마나 남았나 — 멀어도 여기서 시작하므로 어디로 가야 하는지 말한다(2026-09-21).
+            if (_courseStartHint != null)
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 64,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    key: const Key('course-start-hint'),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: T.surfaceBright,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 10, offset: Offset(0, 3))],
+                    ),
+                    child: Text(_courseStartHint!,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: T.textPrimary)),
+                  ),
+                ),
+              ),
             // 상단: 뒤로(확인) + 주변 찾기 검색바
             SafeArea(
               child: Padding(

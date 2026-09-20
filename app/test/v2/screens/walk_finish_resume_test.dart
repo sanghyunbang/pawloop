@@ -254,4 +254,44 @@ void main() {
     expect(w.timeLabel, isNot(t0));
     expect(w.listens, hasLength(1), reason: '구독은 시작할 때 한 번이다');
   });
+
+  testWidgets('따라 걸을 코스가 멀면 "코스 시작점까지 N km" 를 띄우고, 코스 위에 서면 숨긴다 (2026-09-21)', (tester) async {
+    // 멀어도 우리 추적 화면에서 시작한다(#724 를 뒤집음) — 그러면 어디로 가야 하는지는 이 칩이 말한다.
+    final feed = StreamController<Position>.broadcast();
+    addTearDown(feed.close);
+    final nav = GlobalKey<NavigatorState>();
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: nav,
+      home: const Scaffold(body: Center(child: Text('홈'))),
+    ));
+    // 코스 첫 점은 북쪽으로 약 2.8km — 집에서 카드를 눌러 시작한 사람의 자리다.
+    const line = [
+      [127.0000, 37.5252],
+      [127.0030, 37.5270],
+      [127.0000, 37.5252],
+    ];
+    unawaited(nav.currentState!.push(MaterialPageRoute<void>(
+      builder: (_) => WalkTrackingScreen(
+        courseLine: line,
+        locate: () async => LocationFix.found(_pos(37.5000, 127.0000)),
+        positions: ({required String notificationTitle}) => feed.stream,
+      ),
+    )));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const Key('course-start-hint')), findsOneWidget,
+        reason: '멀어도 여기서 시작하니 어디로 가야 하는지 첫 화면이 말해야 한다');
+    expect(find.textContaining('코스 시작점까지 2.8km'), findsOneWidget);
+
+    // 코스 첫 점 50m 앞까지 걸어가면 칩이 사라진다 — 코스 위다.
+    feed.add(_pos(37.5248, 127.0000));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byKey(const Key('course-start-hint')), findsNothing);
+  });
 }

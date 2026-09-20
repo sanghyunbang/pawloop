@@ -20,11 +20,10 @@ import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
 import 'package:heat_trip_flutter/v2/data/place_loop_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/course_recommender.dart';
-import 'package:heat_trip_flutter/v2/domain/walk_destination.dart';
 import 'package:heat_trip_flutter/v2/screens/course_sheet.dart';
 import 'package:heat_trip_flutter/v2/screens/location_priming_sheet.dart';
-import 'package:heat_trip_flutter/v2/screens/start_walk.dart' show lastCourseLineForTest;
-import 'package:heat_trip_flutter/v2/screens/walk_start_point_sheet.dart';
+import 'package:heat_trip_flutter/v2/screens/start_walk.dart'
+    show lastCourseLineForTest, lastDestinationForTest, trackingOpenerForTest;
 
 const _place = PetPlace(
   contentId: '2745594',
@@ -125,7 +124,7 @@ void main() {
   tearDown(() {
     AuthState.resetForTest();
     LocationPriming.resetForTest();
-    WalkStartPointSheet.resetForTest();
+    trackingOpenerForTest = null;
   });
 
   testWidgets('카탈로그 장소면 지도 탭과 같은 장소 시트가 열린다 — 걷기 · 길찾기 · 글쓰기', (t) async {
@@ -151,23 +150,23 @@ void main() {
     expect(find.byKey(const Key('place-posts-empty')), findsOneWidget, reason: '가짜 저장소가 빈 목록을 줬다');
   });
 
-  testWidgets('"이 코스 걷기" 는 카드가 잰 거리를 들고 startWalk 로 간다 — 2.4km 는 멀어서 시작하지 않는다',
+  testWidgets('"이 코스 걷기" 는 카드가 잰 거리·좌표를 들고 startWalk 로 가고, 2.4km 멀어도 우리 추적 화면이 열린다',
       (t) async {
-    WalkDestination? asked;
-    WalkStartPointSheet.ask = (_, __, dest) async {
-      asked = dest;
-      return null;
-    };
+    var opened = 0;
+    trackingOpenerForTest = (_, __, ___) async => opened++;
+    lastDestinationForTest = null;
     await _pump(t, _course, _place);
     await t.tap(find.text('열기'));
     await t.pumpAndSettle();
     await t.tap(find.text('이 코스 걷기'));
     await t.pumpAndSettle();
 
-    expect(asked, isNotNull, reason: '2.4km 는 멀다 — "떨어져 있어요" 가 떠야 한다(#724)');
-    expect(asked!.distanceM, 2400);
-    expect(asked!.lat, 37.5417);
-    expect(asked!.lng, 127.0569);
+    expect(opened, 1, reason: '2026-09-21 — 멀면 지도 앱으로 넘기던 것을 지웠다. 우리 앱의 값은 우리 추적이다');
+    final dest = lastDestinationForTest;
+    expect(dest, isNotNull, reason: '추적 화면이 "코스 시작점까지 N km" 를 적을 재료');
+    expect(dest!.distanceM, 2400);
+    expect(dest.lat, 37.5417);
+    expect(dest.lng, 127.0569);
   });
 
   testWidgets('시트에 추천 코스가 있고 실제 길이를 적는다 — 2km 를 물었고 2.1km 라고 말한다 (#725)', (t) async {
@@ -181,10 +180,10 @@ void main() {
     expect(find.textContaining('실제 2.1km · 약 28분'), findsOneWidget);
   });
 
-  testWidgets('"이 코스 걷기" 는 받은 선을 들고 startWalk 로 간다 — 멀어서 시작은 안 해도 선은 넘어간다',
+  testWidgets('"이 코스 걷기" 는 받은 선을 들고 startWalk 로 간다 — 추적 화면이 그 선을 깐다',
       (t) async {
     lastCourseLineForTest = null;
-    WalkStartPointSheet.ask = (_, __, ___) async => null;
+    trackingOpenerForTest = (_, __, ___) async {};
     await _pump(t, _course, _place);
     await t.tap(find.text('열기'));
     await t.pumpAndSettle();
@@ -198,7 +197,7 @@ void main() {
 
   testWidgets('추천 코스를 못 받으면 한 줄만 적고, 걷기는 선 없이 그대로 간다', (t) async {
     lastCourseLineForTest = const [[0, 0], [1, 1]];
-    WalkStartPointSheet.ask = (_, __, ___) async => null;
+    trackingOpenerForTest = (_, __, ___) async {};
     await _pump(t, _course, _place, loops: _loops(available: false));
     await t.tap(find.text('열기'));
     await t.pumpAndSettle();

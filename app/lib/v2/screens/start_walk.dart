@@ -29,9 +29,7 @@ import '../data/walk_repository.dart';
 import '../data/walk_safety_repository.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/walk_resume_prompt.dart';
-import '../data/external_maps.dart';
 import 'location_priming_sheet.dart';
-import 'walk_start_point_sheet.dart';
 import 'walk_tracking_screen.dart';
 
 /// 산책 트래킹을 연다. **미로그인이면 로그인부터 안내한다.**
@@ -93,26 +91,17 @@ Future<void> startWalk(
 
   if (!context.mounted) return;
 
-  // 멀면 시작하지 않는다 (#623 → #724). 기준(`WalkDestination.nearM`) 안이면 이 블록을
-  // 건너뛰고 바로 시작한다. 밖이거나 거리를 모르면 "N km 떨어져 있어요" 를 말하고 길 안내만
-  // 내민다 — 지금 자리에서 시작하는 길은 **없다.** 부산 코스를 서울에서 시작하던 자리다.
-  //
-  // **위치 권한·강아지 고르기보다 앞이다** — 걷지 않을 사람에게 그 셋을 물을 이유가 없다.
-  // 끊긴 산책 이어가기보다도 앞이다. 이어 걷는 사람은 이미 어딘가를 걷고 있어서 거리 얘기가
-  // 뜻이 없고, 여기서 먼저 말하면 그 사람에게 한 장이 더 생긴다.
-  if (place != null && destination != null && !destination.isNear) {
-    final choice = await WalkStartPointSheet.ask(context, place.title, destination);
-    // 닫았으면 아무것도 시작하지 않는다. 실수로 눌렀을 때 30분짜리 기록이 시작되는 것보다
-    // 아무 일도 안 나는 쪽이 낫다. 유일한 답은 길 안내다.
-    if (choice == null) return;
-    await ExternalMaps.directions(lat: destination.lat, lng: destination.lng, name: place.title);
-    return;
-  }
+  // **멀어도 여기서 시작한다** (2026-09-21 사장님 결정 — #724 를 뒤집음). #724 는 멀면 "N km
+  // 떨어져 있어요" 를 말하고 지도 앱으로 길 안내만 내밀었다. 그러면 우리 앱은 네이버로 가는
+  // 통로일 뿐이다 — 우리 앱의 값은 우리 추적이다. 코스 선을 깔고 그리로 걸어가면 그것이
+  // 산책이고, 추적 화면이 "코스 시작점까지 N km" 를 적는다. 지도 앱으로 넘기던 길은 지웠다.
+  lastDestinationForTest = destination;
+  final open = openTracking ?? trackingOpenerForTest ?? _openTracking;
 
   final leftover = await WalkResumePrompt.offer(context, store: resumeStore);
   if (!context.mounted) return;
   if (leftover != null) {
-    await (openTracking ?? _openTracking)(context, leftover, place);
+    await open(context, leftover, place);
     return;
   }
   final state = await LocationPriming.stateFor();
@@ -148,8 +137,9 @@ Future<void> startWalk(
   }
 
   _courseLineForOpen = courseLine;
+  _destinationForOpen = destination;
   _dogIdsForOpen = chosen;
-  await (openTracking ?? _openTracking)(context, null, place);
+  await open(context, null, place);
 }
 
 /// "피하세요" 판정이 살아 있으면(30분 안) 한 번 묻는다 — 막지 않는다(#336). 홈 카드가 받아 둔 값을
@@ -193,15 +183,29 @@ List<List<double>>? lastCourseLineForTest;
 /// 은 테스트가 꽂는 자리라 인자를 늘리면 그 시그니처가 함께 흔들린다.
 List<int> _dogIdsForOpen = const [];
 
+/// 코스가 어디인가 — 추적 화면이 "코스 시작점까지 N km" 를 적고 첫 화면에 코스와 나를 함께 담는다.
+WalkDestination? _destinationForOpen;
+
+/// 마지막으로 [startWalk] 에 넘어온 목적지 — **테스트만 본다**.
+@visibleForTesting
+WalkDestination? lastDestinationForTest;
+
+/// 추적 화면 대신 꽂는 자리 — **테스트만**. `openCourse`·지도 탭 시트처럼 [startWalk] 의 `openTracking`
+/// 인자에 손이 안 닿는 호출부를 재는 데 쓴다(진짜 추적 화면은 GPS·지도 SDK 를 부른다). 평소엔 `null`.
+@visibleForTesting
+Future<void> Function(BuildContext context, WalkInProgress? resume, WalkPlaceRef? place)? trackingOpenerForTest;
+
 Future<void> _openTracking(BuildContext context, WalkInProgress? resume, WalkPlaceRef? place) {
   final line = _courseLineForOpen;
   _courseLineForOpen = null;
+  final destination = _destinationForOpen;
+  _destinationForOpen = null;
   final dogs = _dogIdsForOpen;
   _dogIdsForOpen = const [];
   return Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) =>
-          WalkTrackingScreen(resume: resume, place: place, courseLine: line, dogIds: dogs),
+      builder: (_) => WalkTrackingScreen(
+          resume: resume, place: place, courseLine: line, destination: destination, dogIds: dogs),
     ),
   );
 }

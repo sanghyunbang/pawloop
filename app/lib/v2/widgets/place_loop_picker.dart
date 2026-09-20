@@ -1,18 +1,22 @@
 // 장소 시트의 "추천 코스" — 이슈 #725.
 //
 // 1 · 2 · 3km 중 하나를 고르면 서버에 그 장소의 왕복 코스를 묻고, **실제 길이와 시간**을 적고,
-// **그 선을 바로 그린다.** "2km" 를 부탁했는데 2.1km 가 오면 2.1km 라고 적는다 — 카드가 거짓말하면 안 된다.
+// **그 선을 지도 위에 바로 그린다.** "2km" 를 부탁했는데 2.1km 가 오면 2.1km 라고 적는다 —
+// 카드가 거짓말하면 안 된다.
 //
-// 그림이 여기 있는 이유(2026-09-21): 받은 선을 그리는 곳이 추적 화면 하나였고, 그 화면은 장소 가까이에
-// 있을 때만 열렸다. 집에서 카드를 눌러 본 사장님은 우리 지도에 그려진 코스를 한 번도 못 봤고, "네이버로
-// 넘기지 말고 그리라고 했다" 고 했다. 그래서 받은 자리에서 먼저 보여 준다 — 지도 탭 코스 시트가 쓰는
-// 캔버스(`RouteCanvasPainter`) 그대로라 새 그리기 코드가 없다.
+// 그림이 여기 있는 이유(2026-09-21): 받은 선을 그리는 곳이 추적 화면 하나였고, 그 화면은 장소
+// 가까이에 있을 때만 열렸다. 집에서 카드를 눌러 본 사장님은 우리 지도에 그려진 코스를 한 번도
+// 못 봤다. 처음엔 격자 캔버스(`RouteCanvasPainter`)에 선만 그렸는데 "뒤에 아무것도 없어서
+// 어딘지 알 수 없다" 는 지적을 받았다 — 그 캔버스는 지도 키 없이 나가는 빌드(#310)용이다. 지금은
+// 키가 있으면 **네이버 지도 위에 선**이고, 키가 없을 때만 캔버스다.
 //
 // 받은 선은 [onLoop] 로 부르는 쪽에 건넨다. 시트의 "이 코스 걷기" 가 그 선을 `startWalk(courseLine:)`
 // 으로 넘기고, 추적 화면이 연한 선으로 깐다(#339 의 그 자리). 못 받으면 한 줄만 적고 나머지 동작은
 // 그대로다 — 선은 덧이지 본문이 아니다.
 import 'package:flutter/material.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 
+import '../../core/config/env.dart';
 import '../data/place_loop_repository.dart';
 import '../theme/app_tokens.dart';
 import '../walk/route_image.dart';
@@ -120,23 +124,72 @@ class _PlaceLoopPickerState extends State<PlaceLoopPicker> {
             style: const TextStyle(fontSize: 12.5, color: T.textSecondary),
           ),
           const SizedBox(height: 8),
-          // 받은 선을 바로 그린다 — 걷기 전에, 여기서. 지도 탭 코스 시트와 같은 캔버스다.
+          // 받은 선을 바로 보여 준다 — 걷기 전에, 여기서. 키가 있으면 진짜 지도 위에.
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: SizedBox(
-              height: 120,
-              child: CustomPaint(
-                key: const Key('loop-preview'),
-                painter: RouteCanvasPainter(
-                  RouteArt(lngLat: loop.lngLat, distanceLabel: '', timeLabel: '', dateLabel: ''),
-                  withCaption: false,
-                ),
-                size: Size.infinite,
-              ),
+              height: Env.hasNaverMap ? 200 : 120,
+              child: Env.hasNaverMap ? _LoopMapPreview(loop: loop) : _LoopCanvasPreview(loop: loop),
             ),
           ),
         ],
       ]),
     );
   }
+}
+
+/// 네이버 지도 위의 코스 선 — 손가락은 안 받는다(시트를 끌 때 지도가 가로채면 안 된다). 길이를 바꾸면
+/// 키가 달라져 지도가 새로 선다 — 컨트롤러를 붙들고 선만 갈아 끼우는 것보다 단순하고, 200px 짜리다.
+class _LoopMapPreview extends StatelessWidget {
+  const _LoopMapPreview({required this.loop});
+
+  final PlaceLoop loop;
+
+  @override
+  Widget build(BuildContext context) {
+    final coords = [for (final p in loop.lngLat) NLatLng(p[1], p[0])];
+    return IgnorePointer(
+      child: NaverMap(
+        key: ValueKey('loop-map-${loop.contentId}-${loop.targetM}'),
+        options: NaverMapViewOptions(
+          initialCameraPosition: NCameraPosition(target: coords.first, zoom: 14),
+          scrollGesturesEnable: false,
+          zoomGesturesEnable: false,
+          tiltGesturesEnable: false,
+          rotationGesturesEnable: false,
+          stopGesturesEnable: false,
+          scaleBarEnable: false,
+          logoClickEnable: false,
+          locale: const Locale('ko'),
+        ),
+        onMapReady: (c) async {
+          await c.addOverlayAll({
+            NPolylineOverlay(id: 'loop', coords: coords, color: T.warmEnd, width: 6),
+            NMarker(id: 'loop-start', position: coords.first, iconTintColor: T.warmEnd),
+          });
+          await c.updateCamera(
+            NCameraUpdate.fitBounds(NLatLngBounds.from(coords), padding: const EdgeInsets.all(28))
+              ..setAnimation(animation: NCameraAnimation.none),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 지도 키 없는 빌드(#310)의 대체 — 격자 위 선. 지도 탭 코스 시트와 같은 캔버스라 새 그리기 코드가 없다.
+class _LoopCanvasPreview extends StatelessWidget {
+  const _LoopCanvasPreview({required this.loop});
+
+  final PlaceLoop loop;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+        key: const Key('loop-preview'),
+        painter: RouteCanvasPainter(
+          RouteArt(lngLat: loop.lngLat, distanceLabel: '', timeLabel: '', dateLabel: ''),
+          withCaption: false,
+        ),
+        size: Size.infinite,
+      );
 }

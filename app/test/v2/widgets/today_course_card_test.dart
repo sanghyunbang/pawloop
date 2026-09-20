@@ -251,6 +251,34 @@ void main() {
 
   // 셋을 한 테스트에서 pumpWidget 으로 이어 그리면 같은 자리의 State 가 재사용돼 initState 가 다시
   // 안 돌고, 앞 카드의 후보가 그대로 남아 "없다" 가 공짜로 통과한다(되돌리기에서 잡혔다). 따로 잰다.
+  testWidgets('처음에 위치를 못 잡으면 8초 뒤 한 번 더 본다 — 실내에서 막 켠 참에 카드가 영영 안 뜨던 자리 (2026-09-21)',
+      (tester) async {
+    var calls = 0;
+    final source = _Source(const [_park]);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: TodayCourseCard(
+            dog: _dog,
+            data: _feed(),
+            source: source,
+            // 첫 번째는 실패, 두 번째부터 자리.
+            locate: () async => ++calls == 1 ? null : (lat: 37.5445, lng: 127.0374),
+            now: () => _now,
+            onStart: (_, __, ___) async {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    expect(find.byKey(const Key('today-course')), findsNothing, reason: '첫 시도는 실패다');
+
+    await tester.pump(TodayCourseCard.retryDelay);
+    await tester.pumpAndSettle();
+    expect(calls, 2, reason: '한 번 더 물어야 한다');
+    expect(find.byKey(const Key('today-course')), findsOneWidget, reason: '두 번째에 잡히면 카드가 선다');
+  });
+
   testWidgets('위치가 없으면 카드가 없고 후보를 묻지도 않는다', (tester) async {
     final source = _Source(const [_park]);
     await _pump(tester, _card(source: source, located: false));
