@@ -83,24 +83,36 @@ PetCategory petCatByType(String? contentTypeId) => kPetCategories.firstWhere(
       const PetCategory('0', '기타', Color(0xFF8E86A8), Icons.place_rounded),
 );
 
-/// 견종 크기.
+/// 몸집. 라벨은 **종류를 알아야** 나온다(#719) — 고양이를 '소형견' 이라 부르던 자리다.
 enum DogSize {
-  small('소형견'),
-  medium('중형견'),
-  large('대형견');
+  small('소형'),
+  medium('중형'),
+  large('대형');
 
-  final String label;
-  const DogSize(this.label);
+  /// 종류 꼬리를 뺀 몸집 말. 화면에는 [labelFor] 로만 그린다 — 여기 상수를 바로 그리면
+  /// 종류가 빠진 라벨이 되고, 그것이 #719 였다.
+  final String base;
+  const DogSize(this.base);
+
+  /// 종류에 맞는 라벨 — 소형견 · 소형묘 · 소형.
+  String labelFor(PetSpecies species) => '$base${species.suffix}';
 }
 
 /// 반려동물 종류. (다견·다묘 가정 지원)
 enum PetSpecies {
-  dog('강아지'),
-  cat('고양이'),
-  other('기타');
+  dog('강아지', '견'),
+  cat('고양이', '묘'),
+  other('기타', '');
 
   final String label;
-  const PetSpecies(this.label);
+
+  /// 몸집·나이 낱말에 붙는 꼬리 — 강아지 `견`, 고양이 `묘`, 기타는 없음(#719).
+  /// "소형견 · 소형묘 · 소형", "노령견 · 노령묘 · 노령" 이 여기서 나온다.
+  final String suffix;
+  const PetSpecies(this.label, this.suffix);
+
+  /// 나이 많은 아이를 부르는 말 — 판정 이유 칩에 쓴다.
+  String get seniorLabel => '노령$suffix';
 }
 
 /// 우리 아이 프로필. (강아지/고양이 등 여러 마리 지원)
@@ -149,7 +161,10 @@ class DogProfile {
   String get ageLabel =>
       ageMonths >= 12 ? '${ageMonths ~/ 12}살' : '$ageMonths개월';
 
-  /// 화면 부제 — "고양이 · 코숏 · 3살 · 소형견".
+  /// 종류에 맞는 몸집 라벨 — 강아지 '소형견', 고양이 '소형묘', 기타 '소형'(#719).
+  String get sizeLabel => size.labelFor(species);
+
+  /// 화면 부제 — "고양이 · 코숏 · 3살 · 소형묘".
   ///
   /// **모르는 것은 안 그린다.** 품종을 안 받았으면 구분점만 남아 "고양이 · · 0개월" 이
   /// 되고, 나이를 모르는데 `ageMonths` 가 0 이면 **"0개월"** 이 되어 갓 태어났다고 말한다.
@@ -160,7 +175,7 @@ class DogProfile {
         species.label,
         if (breed.isNotEmpty) breed,
         if (ageMonths > 0) ageLabel,
-        size.label,
+        sizeLabel,
       ].join(' · ');
 
   /// 사진이 없을 때 그리는 그림 — **고른 얼굴이 먼저, 없으면 종류 기본**(#585).

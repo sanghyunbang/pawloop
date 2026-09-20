@@ -697,7 +697,7 @@ class _EditScreenState extends State<EditScreen> {
               : null,
         ),
         child: Text(
-          s.label,
+          s.labelFor(_species),
           style: TextStyle(
             fontSize: 13.5,
             fontWeight: FontWeight.w700,

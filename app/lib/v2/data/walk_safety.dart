@@ -132,10 +132,11 @@ class WalkSafety {
     final vulnerable = dog != null && (isBrachycephalic(dog.breed) || dog.ageMonths >= seniorMonths);
     if (vulnerable && heat >= 1 && stage < 2) {
       stage += 1;
-      reasons.add(isBrachycephalic(dog.breed) ? '단두종' : '노령견');
+      // 이유 칩은 종류를 따른다 — 노령견 · 노령묘 · 노령(#719). 단두종은 종류 중립이다.
+      reasons.add(isBrachycephalic(dog.breed) ? '단두종' : dog.species.seniorLabel);
     } else if (dog != null && dog.size == DogSize.large && heat == 1 && stage < 2 && r.tempC >= 28) {
       stage = 2;
-      reasons.add('대형견');
+      reasons.add(dog.sizeLabel);
     }
 
     // 추위 — 더위 판정과 겹치지 않는다.

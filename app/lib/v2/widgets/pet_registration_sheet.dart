@@ -241,7 +241,8 @@ class _PetRegistrationSheetState extends State<PetRegistrationSheet> {
             _chips<DogSize>(
               values: DogSize.values,
               selected: _size,
-              labelOf: (v) => v.label,
+              // 종류 칩을 바꾸면 이 라벨도 따라 바뀐다 — 고양이면 소형묘(#719).
+              labelOf: (v) => v.labelFor(_species),
               onTap: (v) => setState(() => _size = v),
             ),
             const SizedBox(height: 14),

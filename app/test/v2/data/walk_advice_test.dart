@@ -31,6 +31,10 @@ const _pug = DogProfile(serverId: 2, name: 'Pug', breed: '퍼그', size: DogSize
 const _old = DogProfile(serverId: 3, name: 'Old', breed: '리트리버', size: DogSize.large, ageMonths: 100);
 const _tiny = DogProfile(serverId: 4, name: 'Tiny', breed: '말티즈', size: DogSize.small, ageMonths: 40);
 
+/// 강아지 말 넷 — 고양이 화면에 이 낱말이 나오면 #719 다. '견' 한 글자로 재면 "못 견뎌요" 에 걸린다.
+const _dogWords = ['소형견', '중형견', '대형견', '노령견'];
+bool _hasDogWord(Iterable<String> texts) => texts.any((t) => _dogWords.any(t.contains));
+
 List<WalkAdviceKind> _kinds(
   WalkSafetyReading r, {
   required int hour,
@@ -86,6 +90,14 @@ void main() {
 
     test('아이를 모르면 옷 얘기가 없다', () {
       expect(_kinds(_r(temp: -1), hour: 14), [WalkAdviceKind.cold]);
+    });
+
+    test('고양이도 옷 얘기는 나오되 문장에 "견" 이 없다 (#719)', () {
+      const kitten = DogProfile(
+          serverId: 5, name: 'Nabi', breed: '코숏', size: DogSize.small, ageMonths: 40, species: PetSpecies.cat);
+      final lines = WalkAdvice.pick(_r(temp: -1), hour: 14, dog: kitten);
+      expect(lines.map((l) => l.kind), [WalkAdviceKind.cold, WalkAdviceKind.coat]);
+      expect(_hasDogWord(lines.map((l) => l.text)), isFalse, reason: lines.map((l) => l.text).join(' / '));
     });
   });
 
@@ -145,6 +157,14 @@ void main() {
           [WalkAdviceKind.hotGround, WalkAdviceKind.senior]);
       expect(_kinds(_r(temp: 3), hour: 14, dog: _old), [WalkAdviceKind.cold, WalkAdviceKind.senior]);
       expect(_kinds(_r(temp: 20), hour: 14, dog: _old), isEmpty);
+    });
+
+    test('나이 든 고양이의 문장에도 "견" 이 없다 (#719)', () {
+      const oldCat = DogProfile(
+          serverId: 6, name: 'Old', breed: '코숏', size: DogSize.medium, ageMonths: 100, species: PetSpecies.cat);
+      final lines = WalkAdvice.pick(_r(temp: 26), hour: 14, dog: oldCat);
+      expect(lines.map((l) => l.kind), contains(WalkAdviceKind.senior));
+      expect(_hasDogWord(lines.map((l) => l.text)), isFalse, reason: lines.map((l) => l.text).join(' / '));
     });
   });
 
