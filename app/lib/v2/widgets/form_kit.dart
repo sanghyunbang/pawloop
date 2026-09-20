@@ -303,12 +303,16 @@ class PillChip extends StatelessWidget {
   /// 가로로 꽉 채우는 칸(종·몸집처럼 셋을 나란히)이면 `true` — 가운데 정렬 상자가 된다.
   final bool stretch;
 
+  /// 골랐을 때 채우는 색. 기본은 강조색이고, 사람 칩은 그 사람의 색을 준다(#736).
+  final Color color;
+
   const PillChip({
     super.key,
     required this.label,
     required this.selected,
     required this.onTap,
     this.stretch = false,
+    this.color = T.accent,
   });
 
   @override
@@ -320,9 +324,9 @@ class PillChip extends StatelessWidget {
       alignment: stretch ? Alignment.center : null,
       decoration: BoxDecoration(
         // 안 골린 칩은 옅은 회색 면 — 흰 바탕에서 흰 칩은 안 보인다(#447).
-        color: selected ? T.accent : T.surface,
+        color: selected ? color : T.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: selected ? T.accent : T.cardBorder),
+        border: Border.all(color: selected ? color : T.cardBorder),
       ),
       child: Text(label,
           style: TextStyle(

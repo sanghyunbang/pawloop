@@ -20,6 +20,7 @@ import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/widgets/dog_avatar.dart';
 import 'package:heat_trip_flutter/v2/domain/schedule_reminder.dart';
 import 'package:heat_trip_flutter/v2/screens/schedule_screen.dart';
+import 'package:heat_trip_flutter/v2/theme/member_colors.dart';
 import 'package:heat_trip_flutter/v2/widgets/aurora.dart';
 import 'package:heat_trip_flutter/v2/widgets/form_kit.dart';
 
@@ -242,8 +243,9 @@ void main() {
     await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 2건'));
     await tester.pumpAndSettle();
 
-    expect(find.text('크루 · 이웃 담당 · 오후 · 두 시간만 부탁드려요'), findsOneWidget,
+    expect(find.text('크루 · 오후 · 두 시간만 부탁드려요'), findsOneWidget,
         reason: '내 아이 일정 사이에 "보리 봐 주기" 만 있으면 누구 것인지, 언제인지 모른다');
+    expect(find.text('이웃 담당'), findsOneWidget, reason: '담당은 태그로 — 같은 줄에 산다(#736)');
     expect(find.textContaining('간식 챙기기'), findsNothing,
         reason: '메모를 줄에 적는 것은 크루 일정뿐이다 — 시간대가 거기 살아서다');
   });
@@ -705,6 +707,90 @@ group('반복과 고치기 (#421)', () {
 
       expect(sink.calls.last.map((r) => r.body), ['내 담당 미용 · 10:30 · 내 담당', '가족 목욕'],
           reason: '아빠 담당 병원이 엄마 폰에서 울리면 담당이라는 말이 알림에서는 없는 셈이다');
+    });
+  });
+
+  group('내 담당 갈래와 사람 색 (#736)', () {
+    const members = [
+      {'userId': 5, 'nickname': '엄마'},
+      {'userId': 6, 'nickname': '아빠'},
+    ];
+    final items = [
+      schedule(id: 1, title: '아빠 담당 병원', onDate: '2026-10-20',
+          assignee: {'userId': 6, 'nickname': '아빠'}),
+      schedule(id: 2, title: '내 담당 미용', onDate: '2026-10-20', kind: 'groom',
+          assignee: {'userId': 5, 'nickname': '엄마'}),
+      schedule(id: 3, title: '가족 목욕', onDate: '2026-10-20', kind: 'bath', atTime: null),
+    ];
+
+    testWidgets('"내 담당" 을 고르면 담당이 나인 일정만 남는다 — 서버는 그대로, 앱에서 거른다',
+        (tester) async {
+      AuthState.signInForTest(const AuthUser(id: 5, nickname: '엄마'));
+      addTearDown(AuthState.resetForTest);
+      final f = fixture(items: items, members: members);
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 3건'));
+      await tester.pumpAndSettle();
+      expect(find.text('아빠 담당 병원'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('schedule-filter-mine')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('내 담당 미용'), findsOneWidget);
+      expect(find.text('아빠 담당 병원'), findsNothing);
+      expect(find.text('가족 목욕'), findsNothing, reason: '담당이 없는 것은 "내 것" 이 아니다');
+      expect(find.bySemanticsLabel('10월 20일 · 일정 1건'), findsOneWidget,
+          reason: '달력의 건수도 갈래를 따른다 — 구글 캘린더처럼');
+      final last = f.sent.lastWhere(
+          (r) => r.method == 'GET' && r.url.path.startsWith('/api/schedules'));
+      expect(last.url.queryParameters.keys, isNot(contains('assignee')),
+          reason: '목록 API 에 담당 조건이 없다 — 이 달은 이미 받아 두었으니 앱에서 거른다');
+    });
+
+    testWidgets('담당자 태그는 사람마다 색이 다르다 — 가족 순서로', (tester) async {
+      final f = fixture(items: items, members: members);
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 3건'));
+      await tester.pumpAndSettle();
+
+      Color tagColor(int id) {
+        final box = tester.widget<Container>(find.byKey(Key('assignee-tag-$id')));
+        return (box.decoration! as BoxDecoration).color!;
+      }
+
+      expect(find.text('아빠 담당'), findsOneWidget);
+      expect(find.text('엄마 담당'), findsOneWidget);
+      expect(tagColor(2), memberColor(0).withAlpha(0x1F), reason: '엄마는 가족 첫째');
+      expect(tagColor(1), memberColor(1).withAlpha(0x1F), reason: '아빠는 가족 둘째');
+      expect(tagColor(1), isNot(tagColor(2)));
+      expect(find.byKey(const Key('assignee-tag-3')), findsNothing,
+          reason: '담당 없는 일정에는 태그가 없다');
+    });
+
+    testWidgets('가족이 없거나 내가 누군지 모르면 "내 담당" 갈래가 없다', (tester) async {
+      // 가족 없음 — 담당을 정할 사람이 없다.
+      final alone = fixture(hasGroup: false, items: [schedule(id: 1, title: '보리 병원')]);
+      await pumpScreen(tester, alone);
+      expect(find.byKey(const Key('schedule-filter-mine')), findsNothing);
+
+      // 가족은 있는데 로그인 상태를 모른다(테스트 기본) — "나" 를 못 가르니 갈래를 안 그린다.
+      final family = fixture(items: items, members: members);
+      await pumpScreen(tester, family);
+      expect(find.byKey(const Key('schedule-filter-mine')), findsNothing);
+    });
+
+    testWidgets('만들기 시트의 담당 칩도 그 사람 색이다 — 목록의 태그와 같은 색', (tester) async {
+      final f = fixture(members: members);
+      await pumpScreen(tester, f);
+      await tester.tap(find.byTooltip('일정 추가'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(GestureDetector, '아빠').first);
+      await tester.pumpAndSettle();
+
+      final chip = tester.widget<PillChip>(find.widgetWithText(PillChip, '아빠'));
+      expect(chip.selected, isTrue);
+      expect(chip.color, memberColor(1));
+      expect(tester.widget<PillChip>(find.widgetWithText(PillChip, '엄마')).color, memberColor(0));
     });
   });
 

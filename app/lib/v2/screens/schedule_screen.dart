@@ -28,6 +28,7 @@ import '../domain/pet.dart';
 import '../domain/schedule.dart';
 import '../domain/schedule_reminder.dart';
 import '../theme/app_tokens.dart';
+import '../theme/member_colors.dart';
 import '../widgets/aurora.dart';
 import '../widgets/dog_avatar.dart';
 import '../widgets/form_kit.dart';
@@ -40,11 +41,16 @@ class ScheduleFilter {
   /// 가족 것만.
   final bool groupOnly;
 
-  const ScheduleFilter({this.dogId, this.groupOnly = false});
+  /// 담당이 나인 것만(#736). 서버에 묻지 않고 앱에서 거른다 — 목록 API 에 담당 조건이 없고,
+  /// 이 달은 이미 다 받아 두었다.
+  final bool mineOnly;
+
+  const ScheduleFilter({this.dogId, this.groupOnly = false, this.mineOnly = false});
 
   static const all = ScheduleFilter();
+  static const mine = ScheduleFilter(mineOnly: true);
 
-  bool get isAll => dogId == null && !groupOnly;
+  bool get isAll => dogId == null && !groupOnly && !mineOnly;
 }
 
 class ScheduleScreen extends StatefulWidget {
@@ -228,7 +234,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     _load();
   }
 
-  List<Schedule> get _visible => _items.toList()..sort(Schedule.compare);
+  /// 갈래를 거친 이 달의 일정. "내 담당" 은 서버가 아니라 여기서 거른다(#736) — 목록 API 에
+  /// 담당 조건이 없고, 이 달은 이미 다 받아 두었다. 알림 예약(`_refreshReminders`)은 `_items` 를
+  /// 보므로 이 갈래에 흔들리지 않는다.
+  List<Schedule> get _visible {
+    final me = AuthState.user?.id;
+    final base = _filter.mineOnly
+        ? _items.where((s) => s.assignee != null && s.assignee!.userId == me)
+        : _items;
+    return base.toList()..sort(Schedule.compare);
+  }
 
   List<Schedule> get _ofSelectedDay =>
       _visible.where((s) => s.isOn(_selected)).toList();
@@ -312,7 +327,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget _filterChips() {
     final pets = kMyPets.value.where((p) => p.serverId != null).toList();
     // 아이 칩에는 그 아이의 사진(없으면 종 이모지)이 앞에 붙는다 — 홈·내 정보와 같은 사진(#448).
-    Widget chip(String label, bool selected, VoidCallback onTap, {DogProfile? dog}) => Padding(
+    Widget chip(String label, bool selected, VoidCallback onTap, {DogProfile? dog, Key? key}) => Padding(
+          key: key,
           padding: const EdgeInsets.only(right: 8),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -357,6 +373,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           if (_groupId != null)
             chip('가족', _filter.groupOnly,
                 () => pick(const ScheduleFilter(groupOnly: true))),
+          // 담당이 나인 것만(#736) — 가족이 있고 내가 누군지 알 때만. 구글 캘린더의 "내 것만".
+          if (_groupId != null && AuthState.user != null)
+            chip('내 담당', _filter.mineOnly, () => pick(ScheduleFilter.mine),
+                key: const Key('schedule-filter-mine')),
         ],
       ),
     );
@@ -588,7 +608,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       // 것인지 모른다(#417).
       if (crew) '크루',
       if (dog != null) dog,
-      if (s.assignee != null) '${s.assignee!.nickname} 담당',
+      // 담당은 글자가 아니라 그 사람 색의 태그다 — 아래 _assigneeTag(#736).
       if (!s.isAllDay) Schedule.formatTime(s.atTime!),
       // 크루 일정은 시각 대신 **시간대를 메모에** 든다("오후 · 두 시간만") — 품앗이가 정하는
       // 것은 시각이 아니라서다. 안 적으면 그날 아침에 언제인지가 안 보인다.
@@ -628,11 +648,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   color: done ? T.textMuted : T.textPrimary,
                   decoration: done ? TextDecoration.lineThrough : null,
                 )),
-            if (parts.isNotEmpty)
-              Text(parts.join(' · '),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: T.textMuted)),
+            if (parts.isNotEmpty || s.assignee != null)
+              Row(children: [
+                if (s.assignee != null) ...[
+                  _assigneeTag(s),
+                  if (parts.isNotEmpty) const SizedBox(width: 6),
+                ],
+                if (parts.isNotEmpty)
+                  Flexible(
+                    child: Text(parts.join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: T.textMuted)),
+                  ),
+              ]),
           ]),
         ),
         IconButton(
@@ -645,6 +674,24 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         ),
       ]),
       ),
+    );
+  }
+
+  /// 담당자 태그 — 사람마다 색(#736). 색은 가족 목록의 순서에서 온다. 목록에 없는 사람(크루
+  /// 일정의 담당 · 가족을 아직 못 읽음)은 회색이다 — 없는 순서를 지어내지 않는다.
+  Widget _assigneeTag(Schedule s) {
+    final a = s.assignee!;
+    final idx = _members.indexWhere((m) => m.userId == a.userId);
+    final color = idx < 0 ? T.textMuted : memberColor(idx);
+    return Container(
+      key: Key('assignee-tag-${s.id}'),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withAlpha(0x1F),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text('${a.nickname} 담당',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
     );
   }
 
@@ -977,9 +1024,13 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
               _label('담당'),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 _chip('안 정함', _assignee == null, () => setState(() => _assignee = null)),
-                for (final m in widget.members)
-                  _chip(m.nickname, _assignee == m.userId,
-                      () => setState(() => _assignee = m.userId)),
+                // 사람 칩은 그 사람의 색으로 — 목록의 담당 태그와 같은 색이다(#736).
+                for (final (i, m) in widget.members.indexed)
+                  PillChip(
+                      label: m.nickname,
+                      selected: _assignee == m.userId,
+                      color: memberColor(i),
+                      onTap: () => setState(() => _assignee = m.userId)),
               ]),
               const SizedBox(height: 14),
             ],
