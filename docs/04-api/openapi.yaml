@@ -1793,6 +1793,13 @@ paths:
             **찍힌 아이로 좁힙니다** (#451 5번, 아이 사진첩). 글은 공개라 남의 아이 id 를 넣어도 `400` 이
             아닙니다 — 그 아이의 글이 있으면 보입니다. `board`·`neighborhood` 와 함께 쓸 수 있습니다.
           schema: { type: integer, format: int64 }
+        - name: contentId
+          in: query
+          description: |
+            **이 장소의 글** (#723). 글에 연결된 장소(`Post.contentId`, `Place.contentId` 와 같은 키)로
+            좁힙니다. 글은 공개라 모르는 장소 id 를 넣어도 `400` 이 아닙니다 — 그 장소의 글이 없으면
+            빈 장입니다. 빈 문자열은 없는 것과 같습니다. 다른 필터와 함께 쓸 수 있습니다.
+          schema: { type: string }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:

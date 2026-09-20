@@ -40,11 +40,13 @@ public interface PostRepository extends JpaRepository<Post, Long> {
                     or (u.neighborhoodCode is not null
                         and u.neighborhoodCode like concat(:sgg, '%')))
                and (:dogId is null or d.id = :dogId)
+               and (:contentId is null or p.contentId = :contentId)
              order by p.createdAt desc, p.id desc
             """)
     List<Post> findPage(@Param("board") String board,
                         @Param("sgg") String sgg,
                         @Param("dogId") Long dogId,
+                        @Param("contentId") String contentId,
                         Limit limit);
 
     /**
@@ -62,6 +64,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
                     or (u.neighborhoodCode is not null
                         and u.neighborhoodCode like concat(:sgg, '%')))
                and (:dogId is null or d.id = :dogId)
+               and (:contentId is null or p.contentId = :contentId)
                and (p.createdAt < :cursorAt
                     or (p.createdAt = :cursorAt and p.id < :cursorId))
              order by p.createdAt desc, p.id desc
@@ -69,6 +72,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findPageAfter(@Param("board") String board,
                              @Param("sgg") String sgg,
                              @Param("dogId") Long dogId,
+                             @Param("contentId") String contentId,
                              @Param("cursorAt") LocalDateTime cursorAt,
                              @Param("cursorId") long cursorId,
                              Limit limit);

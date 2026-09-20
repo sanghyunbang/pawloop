@@ -85,8 +85,11 @@ public class CommunityController {
                                   */
                                  @RequestParam(required = false) String neighborhood,
                                  /* 아이 사진첩 (#451 5번) — 찍힌 아이로 좁힌다. */
-                                 @RequestParam(required = false) Long dogId) {
-        return community.pageForNeighborhood(viewerId, board, cursor, limit, neighborhood, dogId);
+                                 @RequestParam(required = false) Long dogId,
+                                 /* 이 장소의 글 (#723) — 연결된 장소(Place.contentId)로 좁힌다. */
+                                 @RequestParam(required = false) String contentId) {
+        return community.pageForNeighborhood(viewerId, board, cursor, limit, neighborhood, dogId,
+                contentId);
     }
 
     @GetMapping("/posts/{postId}")

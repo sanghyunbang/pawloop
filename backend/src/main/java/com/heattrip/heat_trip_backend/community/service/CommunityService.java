@@ -173,7 +173,7 @@ public class CommunityService {
      * @param viewerId 보는 사람. {@code null} 이면 <b>게스트</b>이고 {@code mine} 은 {@code null} 이다
      */
     public PostPageResponse page(Long viewerId, String board, String cursor, Integer limit) {
-        return page(viewerId, board, cursor, limit, (String) null, null);
+        return page(viewerId, board, cursor, limit, (String) null, null, null);
     }
 
     /**
@@ -186,9 +186,10 @@ public class CommunityService {
      * 조용히 전국을 주면 화면은 "우리 동네" 라고 적힌 채 전국 글을 보여 준다.
      */
     public PostPageResponse pageForNeighborhood(Long viewerId, String board, String cursor,
-                                                Integer limit, String neighborhood, Long dogId) {
+                                                Integer limit, String neighborhood, Long dogId,
+                                                String contentId) {
         if (neighborhood == null || neighborhood.isBlank()) {
-            return page(viewerId, board, cursor, limit, (String) null, dogId);
+            return page(viewerId, board, cursor, limit, (String) null, dogId, contentId);
         }
         if (!"mine".equals(neighborhood)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -201,7 +202,7 @@ public class CommunityService {
         String sgg = viewerNeighborhood.sggOf(viewerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "동네를 먼저 골라 주세요."));
-        return page(viewerId, board, cursor, limit, sgg, dogId);
+        return page(viewerId, board, cursor, limit, sgg, dogId, contentId);
     }
 
     /**
@@ -215,18 +216,22 @@ public class CommunityService {
     /**
      * @param dogId 찍힌 아이로 좁힌다(#451 5번, 아이 사진첩). {@code null} 이면 전부. 글은 공개라 남의
      *              아이 id 를 넣어도 400 이 아니다 — 그 아이의 글이 있으면 보인다.
+     * @param contentId 연결된 장소로 좁힌다(#723, "이 장소의 글"). {@code Place.contentId} 와 같은 키.
+     *                  {@code null} · 빈 문자열이면 전부. 글은 공개라 모르는 장소 id 도 400 이 아니다 —
+     *                  그 장소의 글이 없으면 빈 장이다
      */
     public PostPageResponse page(Long viewerId, String board, String cursor, Integer limit,
-                                 String sggPrefix, Long dogId) {
+                                 String sggPrefix, Long dogId, String contentId) {
         String filter = normalizeBoardFilter(board);
+        String place = contentId == null || contentId.isBlank() ? null : contentId;
         int size = clamp(limit);
 
         // 한 줄 더 읽어 hasMore 를 정한다. 별도 count 쿼리는 다음 장을 여는 사이에 값이
         // 바뀌고, 두 번 읽는 비용이 한 줄 더 읽는 비용보다 크다.
         Limit fetch = Limit.of(size + 1);
         List<Post> rows = CommunityCursor.parse(cursor)
-                .map(c -> posts.findPageAfter(filter, sggPrefix, dogId, c.createdAt(), c.id(), fetch))
-                .orElseGet(() -> posts.findPage(filter, sggPrefix, dogId, fetch));
+                .map(c -> posts.findPageAfter(filter, sggPrefix, dogId, place, c.createdAt(), c.id(), fetch))
+                .orElseGet(() -> posts.findPage(filter, sggPrefix, dogId, place, fetch));
 
         boolean hasMore = rows.size() > size;
         if (hasMore) {

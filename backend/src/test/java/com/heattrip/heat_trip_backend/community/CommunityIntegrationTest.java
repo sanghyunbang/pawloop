@@ -83,6 +83,46 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
 
     // ─────────────────────────── 일곱 경로 ───────────────────────────
 
+    /**
+     * "이 장소의 글" — 이슈 #723. 글에 연결된 장소({@code contentId})로 목록을 좁힌다.
+     *
+     * <p>피드는 전역이라 크기를 세지 않는다(클래스 javadoc). 내가 만든 셋의 id 가 <b>들어 있는가 ·
+     * 빠져 있는가</b>만 본다.
+     */
+    @Test
+    @DisplayName("?contentId= 는 그 장소에 연결된 글만 준다 — 다른 장소 · 장소 없는 글은 빠진다")
+    void feedFiltersByLinkedPlace() throws Exception {
+        Account me = account("장소글");
+        long here = body(createPost(me, """
+                {"board":"pet_place","title":"성수연방 마당","body":"그늘이 좋아요",
+                 "loc":"성수연방","contentId":"2745594"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+        long elsewhere = body(createPost(me, """
+                {"board":"pet_place","title":"서울숲 호수","body":"오리가 있어요",
+                 "loc":"서울숲","contentId":"2733847"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+        long nowhere = body(createPost(me, """
+                {"board":"free","title":"장소 없는 글","body":"그냥 씁니다"}
+                """).andExpect(status().isCreated())).path("id").asLong();
+
+        java.util.List<Long> filtered = idsOf(body(feed(me, "?contentId=2745594").andExpect(status().isOk())));
+        assertThat(filtered).contains(here);
+        assertThat(filtered).doesNotContain(elsewhere, nowhere);
+
+        assertThat(idsOf(body(feed(me, "?contentId=2745594&board=pet_place").andExpect(status().isOk()))))
+                .as("다른 필터와 함께 쓸 수 있다")
+                .contains(here)
+                .doesNotContain(elsewhere, nowhere);
+
+        assertThat(idsOf(body(feed(me, "?contentId=no-such-place").andExpect(status().isOk()))))
+                .as("모르는 장소는 400 이 아니라 빈 장이다 — 글은 공개다")
+                .doesNotContain(here, elsewhere, nowhere);
+
+        assertThat(idsOf(body(feed(me, "?contentId=").andExpect(status().isOk()))))
+                .as("빈 문자열은 필터가 없는 것과 같다")
+                .contains(here, elsewhere, nowhere);
+    }
+
     @Test
     @DisplayName("글을 쓰고, 목록·상세로 읽고, 댓글을 달고, 반응을 켜고 끈다")
     void walksThroughEverySevenPaths() throws Exception {
