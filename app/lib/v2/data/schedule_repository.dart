@@ -31,7 +31,15 @@ enum ScheduleFailureKind {
   /// 기간이 92일을 넘었거나, 아직 못 만드는 크루 일정이다.
   invalid,
 
-  /// 연결이 없다. 다시 보내면 된다.
+  /// 세션이 없거나 끝났다(401). **다시 보내도 같다 — 로그인이 답이다.** `AuthedClient` 가
+  /// 갱신까지 시도한 뒤의 401 이라 여기 오면 정말로 다시 로그인해야 한다. 이 갈래가 없던
+  /// 동안 401 이 [network] 로 떨어져 게스트가 "다시 시도" 를 영원히 눌렀다(#680).
+  unauthorized,
+
+  /// 내 것이 아니라서 막혔다(403). 이것도 다시 보내면 되는 것이 아니다.
+  forbidden,
+
+  /// 연결이 없다(타임아웃 · 5xx). 다시 보내면 된다.
   network,
 }
 
@@ -60,6 +68,12 @@ class ScheduleFailure implements Exception {
         return '이미 지워진 일정이에요.';
       case ScheduleFailureKind.invalid:
         return message ?? '이 일정은 아직 만들 수 없어요.';
+      // 둘 다 "다시 시도" 로 풀리지 않는다(#680). 목록을 못 받을 때는 화면이 로그인 안내를
+      // 따로 그리고, 여기는 완료 체크·저장 같은 쓰기가 막혔을 때의 말이다.
+      case ScheduleFailureKind.unauthorized:
+        return '로그인이 필요해요.';
+      case ScheduleFailureKind.forbidden:
+        return '이 일정은 고칠 수 없어요.';
       case ScheduleFailureKind.network:
         return '연결이 불안정해요. 잠시 뒤 다시 해 주세요.';
     }
@@ -246,6 +260,10 @@ class ScheduleRepository {
       throw ScheduleFailure(ScheduleFailureKind.invalid,
           message: _messageOf(_decode(res.bodyBytes)));
     }
+    // 401·403 은 `>= 400` 보다 **먼저** 가른다 — 아래로 떨어지면 `network` 가 되고 그 뜻은
+    // "다시 보내면 된다" 인데, 로그인이 없는 사람에게는 거짓이다(#680).
+    if (res.statusCode == 401) throw const ScheduleFailure(ScheduleFailureKind.unauthorized);
+    if (res.statusCode == 403) throw const ScheduleFailure(ScheduleFailureKind.forbidden);
     if (res.statusCode >= 400) throw const ScheduleFailure(ScheduleFailureKind.network);
     if (res.bodyBytes.isEmpty) return null;
     return _decode(res.bodyBytes);

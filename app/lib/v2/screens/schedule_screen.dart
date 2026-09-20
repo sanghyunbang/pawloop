@@ -32,6 +32,7 @@ import '../theme/member_colors.dart';
 import '../widgets/aurora.dart';
 import '../widgets/dog_avatar.dart';
 import '../widgets/form_kit.dart';
+import 'login_screen.dart';
 
 /// 목록을 무엇으로 거를까. `전체` 가 기본이다 — 달력의 기본이 합쳐 보기다.
 class ScheduleFilter {
@@ -113,6 +114,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   void initState() {
     super.initState();
+    // 로그인 상태가 바뀌면 다시 읽는다 — 게스트로 열어 둔 탭이 로그인 뒤에도 안내를 들고
+    // 있으면 안 된다(#680). 채팅 탭과 같은 자리다.
+    AuthState.status.addListener(_onAuth);
     _load();
     // 알림이 가리킨 그 일정. 꺼져 있던 앱이 알림으로 떴으면 이미 와 있고(첫 프레임 뒤에 본다),
     // 앱이 떠 있는 동안 누른 것은 듣고 있다가 받는다.
@@ -123,8 +127,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   void dispose() {
     ScheduleFocusInbox.pending.removeListener(_drainFocus);
+    AuthState.status.removeListener(_onAuth);
     _focusOff?.cancel();
     super.dispose();
+  }
+
+  void _onAuth() {
+    if (!mounted) return;
+    // 누구인지가 바뀌었으니 가족도 다시 묻는다 — 게스트일 때는 묻지 않았다.
+    _groupResolved = false;
+    _load();
   }
 
   /// 알림이 말한 날로 옮기고 그 줄을 잠깐 물들인다.
@@ -155,6 +167,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       _loading = true;
       _failure = null;
     });
+
+    if (AuthState.hasNoToken) {
+      // 게스트는 일정이 없는 게 아니라 계정이 없다. 서버를 부르지 않는다(#324 · #680) —
+      // 부르면 가족·일정 둘 다 401 이고, 그것이 "불러오지 못했어요 · 다시 시도" 로 그려졌다.
+      // 소셜 왕복 중에도 토큰은 없으므로 함께 막는다(#673): 그때 나간 401 이 세션 만료로
+      // 번역되면서 로그인 화면이 통째로 사라졌다.
+      setState(() {
+        _items = const [];
+        _failure = ScheduleFailureKind.unauthorized;
+        _loading = false;
+      });
+      return;
+    }
 
     if (!_groupResolved) {
       try {
@@ -501,11 +526,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       );
     }
     if (_failure != null) {
+      // 로그인이 필요한 것은 "다시 시도" 로 풀리지 않는다 — 안내와 로그인 버튼이다(#680).
+      if (_failure == ScheduleFailureKind.unauthorized) return _loginNotice();
       return _notice(
         _failure == ScheduleFailureKind.network
             ? '일정을 불러오지 못했어요'
             : '이 일정은 볼 수 없어요',
-        action: '다시 시도',
+        // 권한이 없는 것(403)도 다시 눌러서 될 일이 아니라 버튼을 안 그린다.
+        action: _failure == ScheduleFailureKind.forbidden ? null : '다시 시도',
         onTap: _load,
       );
     }
@@ -579,6 +607,41 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: T.textMuted)),
         ]),
+      );
+
+  /// 로그인 안내에 적는 이유. 로그인 화면에도 같은 말을 들고 간다.
+  static const String _loginReason = '로그인하면 우리 가족 일정을 함께 봐요';
+
+  /// 게스트·세션 만료의 안내(#680). "다시 시도" 를 안 그린다 — 눌러도 영원히 같다. 채팅 탭의
+  /// 카드와 같은 모양이고 같은 곳(로그인 화면)으로 간다.
+  Widget _loginNotice() => Container(
+        key: const Key('schedule-login-notice'),
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        decoration: BoxDecoration(
+          color: T.cardBg,
+          borderRadius: BorderRadius.circular(T.radius),
+          border: Border.all(color: T.cardBorder),
+        ),
+        child: Column(children: [
+          const Text('로그인이 필요해요',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w800, color: T.textPrimary)),
+          const SizedBox(height: 4),
+          const Text(_loginReason,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: T.textSecondary)),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: _goLogin,
+            icon: const Icon(Icons.login_rounded, size: 17),
+            label: const Text('로그인'),
+          ),
+        ]),
+      );
+
+  void _goLogin() => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const LoginScreen(reason: _loginReason)),
       );
 
   Widget _notice(String text, {String? action, VoidCallback? onTap}) => Container(
@@ -732,6 +795,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       }
     }
     // 문구는 저장소가 든다(#741) — 홈의 케어 카드가 같은 실패에 같은 말을 해야 한다.
+    // 401·403 의 말(#680)도 거기(`userMessage`)에 있다.
     _say(e.userMessage);
   }
 
@@ -810,6 +874,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Future<void> _openCreateSheet() async {
+    if (AuthState.hasNoToken) {
+      // 게스트의 "+" 는 시트가 아니라 로그인이다 — 글쓰기·산책 시작과 같은 길(#680).
+      _goLogin();
+      return;
+    }
     final pets = kMyPets.value.where((p) => p.serverId != null).toList();
     if (_groupId == null && pets.isEmpty) {
       _say('먼저 아이를 등록하거나 가족을 만들어 주세요.');
@@ -1176,6 +1245,8 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
             '다른 분이 방금 고쳤어요. 닫고 다시 열어 주세요',
           ScheduleFailureKind.notFound => '이 아이나 가족의 일정은 만들 수 없어요',
           ScheduleFailureKind.invalid => e.message ?? '아직 만들 수 없는 일정이에요',
+          ScheduleFailureKind.unauthorized => '로그인이 필요해요',
+          ScheduleFailureKind.forbidden => '이 일정은 고칠 수 없어요',
           _ => '연결이 불안정해요. 잠시 뒤 다시 해 주세요',
         };
       });

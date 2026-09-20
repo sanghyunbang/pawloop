@@ -256,6 +256,36 @@ void main() {
       );
     });
 
+    test('401 은 unauthorized — 다시 보내면 되는 것이 아니라 로그인이 답이다 (#680)', () async {
+      // 갱신(`/auth/token/refresh`)까지 401 이라 AuthedClient 가 세션을 끝낸 뒤의 401 이다.
+      final f = fixture((_) async => http.Response('', 401));
+
+      await expectLater(
+        f.repo.range(from: DateTime(2026, 10, 1), to: DateTime(2026, 10, 31)),
+        throwsA(isA<ScheduleFailure>()
+            .having((e) => e.kind, 'kind', ScheduleFailureKind.unauthorized)),
+      );
+    });
+
+    test('403 은 forbidden — 이것도 "다시 시도" 로 풀리지 않는다 (#680)', () async {
+      final f = fixture((_) async => _json({
+            'error': {'code': 'FORBIDDEN', 'message': '권한이 없습니다.'}
+          }, status: 403));
+
+      await expectLater(
+        f.repo.delete(5),
+        throwsA(isA<ScheduleFailure>()
+            .having((e) => e.kind, 'kind', ScheduleFailureKind.forbidden)),
+      );
+    });
+
+    test('401·403 의 화면 문구 — 일정 탭과 홈의 케어 카드가 같은 말을 한다 (#741 · #680)', () {
+      expect(const ScheduleFailure(ScheduleFailureKind.unauthorized).userMessage,
+          '로그인이 필요해요.');
+      expect(const ScheduleFailure(ScheduleFailureKind.forbidden).userMessage,
+          '이 일정은 고칠 수 없어요.');
+    });
+
     test('400 은 이유를 그대로 옮긴다 — "실패했어요" 로 뭉개지 않는다', () async {
       final f = fixture((_) async => _json({
             'error': {'code': 'VALIDATION', 'message': '크루 일정은 아직 만들 수 없습니다.'}
