@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.place.controller;
 
 import com.heattrip.heat_trip_backend.place.dto.PlaceDetailDto;
+import com.heattrip.heat_trip_backend.place.dto.PlaceLoopDto;
 import com.heattrip.heat_trip_backend.place.dto.PlaceDto;
 import com.heattrip.heat_trip_backend.place.dto.TrailRouteDto;
 import com.heattrip.heat_trip_backend.place.layer.TrailRouteQueryService;
@@ -8,6 +9,7 @@ import com.heattrip.heat_trip_backend.place.service.GridCell;
 import com.heattrip.heat_trip_backend.place.service.PlaceCatalogService;
 import com.heattrip.heat_trip_backend.place.service.PlaceDetailService;
 import com.heattrip.heat_trip_backend.place.service.PlaceQueryService;
+import com.heattrip.heat_trip_backend.place.service.PlaceLoopService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -17,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -97,6 +100,9 @@ public class PlaceController {
     private final PlaceDetailService details;
     private final PlaceCatalogService catalog;
     private final TrailRouteQueryService trails;
+
+    /** 코스 추천 — 이슈 #725. */
+    private final PlaceLoopService loops;
 
     /**
      * 내 주변 반려동반 장소 — 거리순.
@@ -226,6 +232,21 @@ public class PlaceController {
      * {@code places} 표에도 없는 id 라면 KTO 에 물어볼 이유가 없다 — 물으면 무작위 id 를
      * 던지는 것만으로 하루 상세 예산이 사라진다.
      */
+    /**
+     * 장소에서 출발해 돌아오는 추천 산책 코스 — 이슈 #725. 게스트도 본다(카탈로그와 같은 이유).
+     *
+     * <p>못 줄 때도 200 이다({@code available=false}). 모르는 장소만 404 — 상세와 같은 규칙이라
+     * 무작위 id 가 바깥 호출에 닿지 않는다. 한도는 {@code places-loop} 버킷(분당 10) 과 하루
+     * 예산({@code ors-loop} 풀) 둘이 지킨다.
+     */
+    @GetMapping("/{contentId}/loop")
+    public PlaceLoopDto loop(@PathVariable("contentId") String contentId,
+                             @RequestParam(name = "lengthM", defaultValue = "2000") int lengthM) {
+        return loops.loop(contentId, lengthM)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "장소를 찾을 수 없습니다."));
+    }
+
     @GetMapping("/{contentId}")
     public PlaceDetailDto detail(@PathVariable("contentId") String contentId) {
         return details.detail(contentId)

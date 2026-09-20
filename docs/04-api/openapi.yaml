@@ -1503,6 +1503,49 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /api/places/{contentId}/loop:
+    get:
+      tags: [Places]
+      summary: 장소에서 출발해 돌아오는 추천 산책 코스
+      description: |
+        그 장소를 시작점이자 도착점으로 하는 도보 코스 하나 — `[[경도, 위도], …]` (이슈 #725).
+
+        **서버가 OpenRouteService 를 대신 부릅니다.** 키는 서버에만 있고, 한 번 받은 코스는
+        `trail_route` 에 `loop:{contentId}:{lengthM}` 로 남아 다음부터는 표에서 옵니다 — 공원의
+        길은 바뀌지 않습니다. 하루 한도(ORS 200콜)는 서버의 `ors-loop` 예산이 지킵니다.
+
+        `lengthM` 은 **부탁하는 길이**입니다. 500 ~ 10,000 을 500 단위로 맞추고(`targetM`),
+        seed 몇 개를 돌려 가장 가까운 것을 고릅니다. 그래도 두 배 넘게 어긋나면 주지 않습니다.
+        실제 길이는 `distanceM` 이고 화면은 그 값을 적어야 합니다 — "2km 코스" 가 5km 면 거짓입니다.
+
+        **못 줄 때도 200 입니다** — `available: false` 와 `reason`(`nokey` 키 없음 · `budget`
+        하루 한도 소진 · `upstream` 바깥 실패 · `busy` 남이 받는 중). 카탈로그가 예산 소진에
+        `[]` 를 주는 것과 같은 태도입니다. **404 는 모르는 장소**뿐이고 바깥 호출 없이 납니다 —
+        상세와 같은 규칙이라 무작위 id 가 예산에 닿지 않습니다.
+
+        시작점이 장소라 **누구의 위치도 아닙니다** — 그래서 게스트도 봅니다. `429` 는 `places-loop`
+        버킷(분당 10)입니다. 처음 한 번은 바깥을 세 번 부르는 경로라 상세보다 좁습니다.
+      security: []
+      parameters:
+        - name: contentId
+          in: path
+          required: true
+          description: 카탈로그 장소 id(KTO 원본 키). 시작점이자 도착점.
+          schema: { type: string, example: "2745594" }
+        - name: lengthM
+          in: query
+          required: false
+          description: 부탁하는 길이(m). 500 ~ 10,000, 500 단위로 맞춥니다. 기본 2000.
+          schema: { type: integer, minimum: 500, maximum: 10000, default: 2000, example: 2000 }
+      responses:
+        '200':
+          description: "코스 — 또는 지금은 없음(available=false)"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlaceLoop' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /api/places/{contentId}:
     get:
       tags: [Places]
@@ -5323,6 +5366,33 @@ components:
             한 줄로 흘리면 말줄임에 걸려 반쪽짜리 이름이 남습니다.
           items: { type: string }
           example: ["보신각", "보성사 터", "탑골공원"]
+
+    PlaceLoop:
+      type: object
+      description: |
+        장소에서 출발해 돌아오는 추천 산책 코스 (이슈 #725). `GET /api/places/{contentId}/loop` 의 본문.
+        못 줄 때도 이 모양입니다 — `available: false` 이고 `points` 는 `[]`, `distanceM`·`durationS` 는 `null`.
+      required: [contentId, targetM, available, pointCount, points]
+      properties:
+        contentId: { type: string, example: "2745594", description: 시작점이자 도착점인 장소 }
+        targetM: { type: integer, example: 2000, description: "부탁한 길이(m) — 500 ~ 10,000, 500 단위로 맞춘 값" }
+        available: { type: boolean, example: true }
+        reason:
+          type: [string, "null"]
+          enum: [nokey, budget, upstream, busy, null]
+          description: "못 줄 때만. `nokey` 키 없음 · `budget` 하루 한도 소진 · `upstream` 바깥 실패 · `busy` 남이 받는 중"
+        distanceM: { type: [integer, "null"], example: 2130, description: "실제 길이(m). 화면은 이 값을 적습니다" }
+        durationS: { type: [integer, "null"], example: 1704, description: "도보 예상 시간(초) — 4.5km/h 로 잰 값" }
+        pointCount: { type: integer, example: 71, description: "`points` 의 길이. 없으면 0" }
+        points:
+          type: array
+          description: "`[[경도, 위도], …]` — `Walk.path`·`TrailRoute.points` 와 같은 순서. 처음과 끝이 같은 자리입니다. 없으면 `[]`"
+          items:
+            type: array
+            items: { type: number, format: double }
+            minItems: 2
+            maxItems: 2
+          example: [[127.037552, 37.544284], [127.0379, 37.5449]]
 
     PlaceDetail:
       allOf:

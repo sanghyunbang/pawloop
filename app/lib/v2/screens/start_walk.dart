@@ -70,6 +70,8 @@ Future<void> startWalk(
   /// "누구랑 나가요?" 를 띄우는 함수 — 테스트가 가짜를 꽂는 자리 (#343).
   Future<List<int>?> Function(BuildContext context, List<DogProfile> pets)? askDogs,
 }) async {
+  // 어떤 갈림보다 먼저 적는다 — 멀어서 시작하지 않은 경우에도 "무엇을 들고 왔나" 를 잰다(#725).
+  lastCourseLineForTest = courseLine;
   if (!AuthState.isAuthenticated) {
     final navigator = Navigator.of(context);
 
@@ -181,6 +183,11 @@ Future<bool> _confirmIfUnsafe(BuildContext context, {required DateTime now}) asy
 
 /// 따라 걸을 선은 화면 인자로만 흐른다 — 초안·서버와 무관하다(#339).
 List<List<double>>? _courseLineForOpen;
+
+/// 마지막으로 [startWalk] 에 넘어온 코스 선 — **테스트만 본다**. 시트가 받은 추천 코스가 실제로
+/// 여기까지 오는지를 재는 자리다(#725). 평소 코드는 읽지 않는다.
+@visibleForTesting
+List<List<double>>? lastCourseLineForTest;
 
 /// 함께 나갈 아이들 (#343). [_courseLineForOpen] 과 같은 자리를 쓴다 — `openTracking`
 /// 은 테스트가 꽂는 자리라 인자를 늘리면 그 시그니처가 함께 흔들린다.

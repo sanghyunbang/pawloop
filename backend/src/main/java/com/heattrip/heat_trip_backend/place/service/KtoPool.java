@@ -42,7 +42,14 @@ public enum KtoPool {
     LOCALDATA("localdata"),
 
     /** 두루누비 걷기여행길 코스 목록 — 이슈 #291. 1페이지 = 1콜(개발계정 1,000/일). GPX 파일은 안 센다. */
-    DURUNUBI("durunubi");
+    DURUNUBI("durunubi"),
+    /**
+     * OpenRouteService 왕복 경로 — 이슈 #725. 시도 하나 = 1콜. 상대 한도가 하루 <b>200</b>이라
+     * (실측 2026-09-20, 응답 헤더) 코스 하나에 seed 셋이면 하루 60여 코스다. 한 번 받은 코스는
+     * {@code trail_route} 에 남아 다시 안 센다. KTO 가 아니지만 같은 표·같은 문을 쓴다 — 예산
+     * 장치를 하나 더 만들 이유가 없다.
+     */
+    ORS_LOOP("ors-loop");
 
     private final String wireValue;
 

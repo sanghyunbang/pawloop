@@ -18,10 +18,12 @@ import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 import 'package:heat_trip_flutter/v2/data/pet_places_repository.dart';
+import 'package:heat_trip_flutter/v2/data/place_loop_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/course_recommender.dart';
 import 'package:heat_trip_flutter/v2/domain/walk_destination.dart';
 import 'package:heat_trip_flutter/v2/screens/course_sheet.dart';
 import 'package:heat_trip_flutter/v2/screens/location_priming_sheet.dart';
+import 'package:heat_trip_flutter/v2/screens/start_walk.dart' show lastCourseLineForTest;
 import 'package:heat_trip_flutter/v2/screens/walk_start_point_sheet.dart';
 
 const _place = PetPlace(
@@ -72,15 +74,42 @@ CommunityRepository _emptyFeed() => CommunityRepository(
       ),
     );
 
-Future<void> _pump(WidgetTester t, CourseCandidate course, PetPlace? place) async {
+/// 추천 코스(#725) — 어느 길이를 물어도 2,130m 짜리 세 점 고리를 준다.
+const _loopPoints = [
+  [127.0569, 37.5417],
+  [127.0592, 37.5431],
+  [127.0569, 37.5417],
+];
+
+PlaceLoopRepository _loops({bool available = true}) => PlaceLoopRepository(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async => http.Response(
+          jsonEncode({
+            'contentId': '2745594',
+            'targetM': int.tryParse(request.url.queryParameters['lengthM'] ?? '') ?? 2000,
+            'available': available,
+            'reason': available ? null : 'budget',
+            'distanceM': available ? 2130 : null,
+            'durationS': available ? 1704 : null,
+            'pointCount': available ? 3 : 0,
+            'points': available ? _loopPoints : const [],
+          }),
+          200,
+          headers: const {'content-type': 'application/json; charset=utf-8'})),
+    );
+
+Future<void> _pump(WidgetTester t, CourseCandidate course, PetPlace? place,
+    {PlaceLoopRepository? loops}) async {
   t.view.physicalSize = const Size(1080, 2400);
   t.view.devicePixelRatio = 2.625;
   addTearDown(t.view.reset);
+  final loopRepo = loops ?? _loops();
   await t.pumpWidget(MaterialApp(
     home: Scaffold(
       body: Builder(
         builder: (ctx) => TextButton(
-            onPressed: () => openCourse(ctx, course, place, repository: _emptyFeed()), child: const Text('열기')),
+            onPressed: () => openCourse(ctx, course, place, repository: _emptyFeed(), loops: loopRepo),
+            child: const Text('열기')),
       ),
     ),
   ));
@@ -139,6 +168,46 @@ void main() {
     expect(asked!.distanceM, 810);
     expect(asked!.lat, 37.5417);
     expect(asked!.lng, 127.0569);
+  });
+
+  testWidgets('시트에 추천 코스가 있고 실제 길이를 적는다 — 2km 를 물었고 2.1km 라고 말한다 (#725)', (t) async {
+    await _pump(t, _course, _place);
+    await t.tap(find.text('열기'));
+    await t.pumpAndSettle();
+
+    expect(find.text('추천 코스'), findsOneWidget);
+    expect(find.byKey(const Key('loop-len-2000')), findsOneWidget);
+    expect(find.byKey(const Key('loop-summary')), findsOneWidget);
+    expect(find.textContaining('실제 2.1km · 약 28분'), findsOneWidget);
+  });
+
+  testWidgets('"이 코스 걷기" 는 받은 선을 들고 startWalk 로 간다 — 멀어서 시작은 안 해도 선은 넘어간다',
+      (t) async {
+    lastCourseLineForTest = null;
+    WalkStartPointSheet.ask = (_, __, ___) async => null;
+    await _pump(t, _course, _place);
+    await t.tap(find.text('열기'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('이 코스 걷기'));
+    await t.pumpAndSettle();
+
+    expect(lastCourseLineForTest, isNotNull, reason: '시트가 받은 선이 startWalk 까지 와야 추적 화면이 깐다');
+    expect(lastCourseLineForTest, hasLength(3));
+    expect(lastCourseLineForTest!.first, [127.0569, 37.5417]);
+  });
+
+  testWidgets('추천 코스를 못 받으면 한 줄만 적고, 걷기는 선 없이 그대로 간다', (t) async {
+    lastCourseLineForTest = const [[0, 0], [1, 1]];
+    WalkStartPointSheet.ask = (_, __, ___) async => null;
+    await _pump(t, _course, _place, loops: _loops(available: false));
+    await t.tap(find.text('열기'));
+    await t.pumpAndSettle();
+
+    expect(find.text('지금은 추천 코스를 못 받아요'), findsOneWidget);
+    expect(find.text('이 코스 걷기'), findsOneWidget, reason: '선은 덧이다 — 걷기 · 길찾기 · 글은 그대로');
+    await t.tap(find.text('이 코스 걷기'));
+    await t.pumpAndSettle();
+    expect(lastCourseLineForTest, isNull);
   });
 
   testWidgets('내 코스는 아직 열 것이 없다 — 아무 시트도 안 뜬다', (t) async {

@@ -125,6 +125,7 @@ public class KtoCallBudget {
             case DETAIL -> properties.getDetailMaxCallsPerDay();
             case LOCALDATA -> properties.getLocaldataMaxCallsPerDay();
             case DURUNUBI -> properties.getDurunubiMaxCallsPerDay();
+            case ORS_LOOP -> properties.getOrsLoopMaxCallsPerDay();
         };
     }
 }

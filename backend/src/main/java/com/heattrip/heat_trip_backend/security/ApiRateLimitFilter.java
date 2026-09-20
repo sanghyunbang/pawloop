@@ -357,6 +357,12 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("GET".equals(method) && "/api/places/catalog".equals(path)) {
             return new Rule("places-catalog", rateLimitProperties.getPlacesCatalogMaxRequests());
         }
+        // 코스 추천 경로(#725). **처음 한 번은 바깥(ORS)을 세 번 부르는 경로**라 상세보다 좁다 —
+        // 한 IP 가 분당 30 을 쓰면 하루 예산 150 을 두 IP 가 몇 분에 태운다. 상세 줄보다 먼저 —
+        // /api/places/{id}/loop 은 두 세그먼트라 상세 정규식에는 안 걸리지만 순서를 뜻으로 둔다.
+        if ("GET".equals(method) && path.matches("^/api/places/[^/]+/loop$")) {
+            return new Rule("places-loop", rateLimitProperties.getPlacesLoopMaxRequests());
+        }
         // 산책로의 선(#291). 응답이 코스당 10KB 안팎이라 상세와 같은 버킷이면 충분하다.
         if ("GET".equals(method) && path.matches("^/api/places/trails/[^/]+/route$")) {
             return new Rule("places-detail", rateLimitProperties.getPlacesDetailMaxRequests());
