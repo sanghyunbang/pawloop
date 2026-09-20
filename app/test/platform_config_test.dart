@@ -16,15 +16,26 @@ import 'package:flutter_test/flutter_test.dart';
 /// 등록이나 OAuth 콘솔에서야 어긋난 것이 드러난다.
 const String kAppId = 'app.pawloop';
 
+/// 설정 파일을 읽어 **줄바꿈을 LF 로 눕힌 뒤** 돌려준다.
+///
+/// 이 저장소는 `core.autocrlf=true` 이고 `app/.gitattributes` 가 `* text=auto` 라,
+/// 같은 파일이 **깃에는 LF · 윈도우 작업 트리에는 CRLF** 로 있다. 그래서 여러 줄에
+/// 걸친 문자열을 `\n` 으로 적어 찾으면 **윈도우에서만 영원히 실패한다** — 맥에서
+/// 통과하니 아무도 깨진 줄 모르고, 그 사이 앱 검사 다리 전체가 빨간불로 굳는다
+/// (2026-09-20 에 실제로 그 상태였다).
+///
+/// 눕히고 비교하면 두 기기에서 같은 답이 나온다. 줄바꿈 자체를 재는 검사는 여기 없다.
+String _readConfig(String path) {
+  final file = File(path);
+  expect(file.existsSync(), isTrue, reason: '$path 가 없다');
+  return file.readAsStringSync().replaceAll('\r\n', '\n');
+}
+
 void main() {
   // 식별자가 박히는 자리가 여섯이다. 하나씩 따로 재면 "한 곳만 고쳤다" 를 못 잡는다 —
   // 그래서 전부 같은 상수와 대조한다.
   group('앱 식별자가 모든 자리에서 같다 (#597)', () {
-    String read(String path) {
-      final file = File(path);
-      expect(file.existsSync(), isTrue, reason: '$path 가 없다');
-      return file.readAsStringSync();
-    }
+    String read(String path) => _readConfig(path);
 
     test('안드로이드 namespace 와 applicationId', () {
       final gradle = read('android/app/build.gradle.kts');
@@ -137,11 +148,7 @@ void main() {
   group('ios/Runner/Info.plist', () {
     late String plist;
 
-    setUpAll(() {
-      final file = File('ios/Runner/Info.plist');
-      expect(file.existsSync(), isTrue, reason: 'ios/Runner/Info.plist 가 없다');
-      plist = file.readAsStringSync();
-    });
+    setUpAll(() => plist = _readConfig('ios/Runner/Info.plist'));
 
     test('CFBundleURLTypes 로 커스텀 스킴을 등록한다', () {
       expect(plist, contains('CFBundleURLTypes'));
@@ -297,11 +304,7 @@ Podfile 의 platform 이 pbxproj 와 어긋나면 의존 팟이 다른 최소 �
   group('android/app/src/main/AndroidManifest.xml', () {
     late String manifest;
 
-    setUpAll(() {
-      final file = File('android/app/src/main/AndroidManifest.xml');
-      expect(file.existsSync(), isTrue, reason: 'AndroidManifest.xml 이 없다');
-      manifest = file.readAsStringSync();
-    });
+    setUpAll(() => manifest = _readConfig('android/app/src/main/AndroidManifest.xml'));
 
     test('pawloop://login-callback 을 받는 intent-filter 가 있다', () {
       expect(manifest, contains('android:scheme="pawloop"'));

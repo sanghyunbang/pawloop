@@ -283,7 +283,7 @@ class _TodayCareCardState extends State<TodayCareCard> {
   ///
   /// "기본으로 주는 일에는 그거에 따라 주변 동물병원이든 애견샵이든 볼 수 있게 하고, 직접
   /// 만든 건 **부가 기능 없이 단순 투두**로" — 사장님(2026-09-16). 그래서 갈래를 아는 것은
-  /// {@link CareItemEntry.systemType} 이 있는 칸뿐이다. 접은 칸은 여기에도 안 나온다.
+  /// [CareItemEntry.systemType] 이 있는 칸뿐이다. 접은 칸은 여기에도 안 나온다.
   ///
   /// <h2>왜 칸 안이 아니라 카드 아래 한 줄인가</h2>
   ///
