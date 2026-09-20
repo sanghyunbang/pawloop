@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
+import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/data/family_repository.dart';
 import 'package:heat_trip_flutter/v2/data/schedule_repository.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
@@ -685,6 +686,25 @@ group('반복과 고치기 (#421)', () {
       await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
       await tester.pumpAndSettle();
       expect(find.text('보리 병원'), findsOneWidget);
+    });
+
+    testWidgets('남의 담당 일정은 이 기기에서 안 건다 — 내 담당과 담당 없는 것만 (#734)', (tester) async {
+      SharedPreferences.setMockInitialValues(
+          {'v2.schedule_reminder': '{"when":"morning_of"}'});
+      AuthState.signInForTest(const AuthUser(id: 5, nickname: '엄마'));
+      addTearDown(AuthState.resetForTest);
+      final sink = _RecordingSink();
+      final f = fixture(items: [
+        schedule(id: 1, title: '아빠 담당 병원', onDate: '2026-10-20',
+            assignee: {'userId': 6, 'nickname': '아빠'}),
+        schedule(id: 2, title: '내 담당 미용', onDate: '2026-10-21', kind: 'groom',
+            assignee: {'userId': 5, 'nickname': '엄마'}),
+        schedule(id: 3, title: '가족 목욕', onDate: '2026-10-22', kind: 'bath', atTime: null),
+      ]);
+      await pumpScreen(tester, f, sink: sink);
+
+      expect(sink.calls.last.map((r) => r.body), ['내 담당 미용 · 10:30 · 내 담당', '가족 목욕'],
+          reason: '아빠 담당 병원이 엄마 폰에서 울리면 담당이라는 말이 알림에서는 없는 셈이다');
     });
   });
 
