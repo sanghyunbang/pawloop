@@ -555,11 +555,15 @@ class CommunityRepository {
 
     /// 찍힌 아이로 좁힌다 (#451 5번, 아이 사진첩).
     int? dogId,
+
+    /// 연결된 장소로 좁힌다 (#723, "이 장소의 글") — `Place.contentId` 와 같은 키. 비면 안 보낸다.
+    String? contentId,
   }) async {
     final uri = Uri.parse('$baseUrl/api/community/posts').replace(
       queryParameters: <String, String>{
         if (board != null) 'board': board.wire,
         if (dogId != null) 'dogId': '$dogId',
+        if (contentId != null && contentId.isNotEmpty) 'contentId': contentId,
         if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
         if (limit != null) 'limit': '$limit',
         if (myNeighborhood) 'neighborhood': 'mine',
