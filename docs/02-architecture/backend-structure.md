@@ -117,6 +117,7 @@ controller  →  service  →  repository(JPA)  →  entity
 - 소셜 로그인: `oauth2Login` + `OAuth/service/CustomOAuth2UserService`(구글/카카오/Apple `OAuth2UserInfo` 분기) + `OAuth/AppleOidcUserService`(OIDC 경로 — Apple, #301 — 모듈 루트에 둔 이유는 그 javadoc)
 - JWT: `OAuth/jwt/JWTProvider`(발급/검증) + `OAuth/jwt/JWTAuthenticationFilter`(요청당 토큰 파싱). `UsernamePasswordAuthenticationFilter` 앞에 등록.
 - 레이트리밋: `security/ApiRateLimitFilter`를 JWT 필터보다 **앞에** 등록.
+- 체인에 붙이는 필터(`ApiRateLimitFilter` · `ChatRateLimitFilter` · `ChatBodySizeLimitFilter` · `ConsentRequiredFilter` · `OAuthAppStateFilter`)는 `@Component` 라 부트가 서블릿 컨테이너에도 자동 등록하는데, `SecurityConfig` 가 필터마다 `FilterRegistrationBean.setEnabled(false)` 로 그 자동 등록을 끈다 — **등록 자리는 시큐리티 체인 하나뿐이다**(#661). 둘이면 체인의 등록 줄을 지워도 자동 등록분이 대신 돌아 아무 테스트도 빨간불이 안 된다. 새 필터를 체인에 붙이면 같은 `@Bean` 을 더해야 하고, 빠뜨리면 `security/SecurityFilterRegistrationIntegrationTest` 가 잡는다.
 - 비밀번호: `BCryptPasswordEncoder`. 자체 로그인/회원은 `user/`(`AuthController`, `UserService`, `User`). 예전에 있던 `login/loginController` 는 **#110 에서 지웠습니다.**
 
 ### 5.2 접근 정책 (실제 매처)

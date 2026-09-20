@@ -39,6 +39,7 @@ import com.heattrip.heat_trip_backend.security.PublicPaths;
 import com.heattrip.heat_trip_backend.security.ChatBodySizeLimitFilter;
 import com.heattrip.heat_trip_backend.security.ChatRateLimitFilter;
 
+import jakarta.servlet.Filter;
 import jakarta.servlet.http.HttpServletRequest;
 
 import lombok.RequiredArgsConstructor;
@@ -71,31 +72,67 @@ public class SecurityConfig {
     private final OAuthAppStateFilter oAuthAppStateFilter;
 
     /**
-     * {@code ConsentRequiredFilter} 의 <b>서블릿 자동 등록을 끈다</b> — 이슈 #660.
+     * 체인에 붙이는 필터의 <b>서블릿 자동 등록을 끈 등록</b> — 이슈 #660 · #661. 아래 {@code @Bean}
+     * 다섯이 필터마다 하나씩 이것을 돌려준다.
      *
      * <h2>왜 필요한가 (두 번 등록되면 초록불이 거짓말을 한다)</h2>
      *
-     * <p>스프링 부트는 {@code Filter} 타입 빈을 <b>서블릿 컨테이너에 자동으로도</b> 등록한다.
-     * 그러면 아래 {@code addFilterAfter} 로 붙인 것과 합쳐 <b>등록이 둘</b>이 된다. 시큐리티 체인이
-     * 먼저라 평소에는 자동 등록분이 {@code OncePerRequestFilter} 의 중복 방지에 걸려 그냥 넘어가고,
-     * 동작은 똑같아 보인다.
+     * <p>스프링 부트는 {@code Filter} 타입 빈을 <b>서블릿 컨테이너에 자동으로도</b> 등록한다. 우리
+     * 필터는 {@code @Component} 라 빈이고, {@link #filterChain} 이 같은 인스턴스를 시큐리티 체인에도
+     * 붙인다. 그러면 <b>등록이 둘</b>이다 — 시큐리티 체인 안의 자리 하나, 서블릿 컨테이너의 자리 하나.
+     * 요청마다 {@code doFilter} 가 두 번 불리고(2026-09-20 실측: 넷이 2, 이미 꺼 둔 동의 필터만 1),
+     * 두 번째는 {@code OncePerRequestFilter} 의 중복 방지에 걸려 그냥 넘어간다. 동작은 똑같아 보인다.
      *
-     * <p><b>문제는 그 줄을 지웠을 때다.</b> 자동 등록분이 대신 돌아서 <b>아무 테스트도 빨간불이
-     * 되지 않는다</b> — 실제로 2026-09-17 에 그랬다. 체인에서 떼어내고 전체를 돌렸는데 7개가 전부
-     * 초록이었다. 그러면 "이 줄이 막고 있다" 를 아무도 증명할 수 없고, 필터가 어느 자리에서 도는지도
-     * 사람마다 다르게 믿게 된다(자동 등록분은 <b>인가 필터 뒤</b>에서 돈다).
+     * <p><b>문제는 체인의 등록 줄을 지웠을 때다.</b> 자동 등록분이 대신 돌아서 <b>아무 테스트도
+     * 빨간불이 되지 않는다</b> — #660 에서 실제로 그랬다. 동의 필터를 체인에서 떼어내고 전체를
+     * 돌렸는데 7개가 전부 초록이었다. #661 에서 다시 쟀다: {@code ChatRateLimitFilter} 의 줄을 지워도
+     * "한도+1 번째 429" 가 초록이었다 — 서블릿 쪽 자리도 인증 뒤라 똑같이 셌기 때문이다. 그러면
+     * "이 줄이 막고 있다" 를 아무도 증명할 수 없고, 필터가 어느 자리에서 도는지도 사람마다 다르게
+     * 믿게 된다. 자동 등록분은 <b>인가 필터 뒤</b>에서 돈다 — 본문 크기 검사가 인증 뒤로 밀리고,
+     * 진입점 요청은 302 로 끝난 뒤라 아예 못 본다.
      *
-     * <p>그래서 등록 자리를 하나로 줄인다. 여기서 끄면 시큐리티 체인의 그 한 줄만 남는다.
+     * <p>그래서 필터마다 {@code FilterRegistrationBean} 을 만들어 {@code setEnabled(false)} 로 둔다 —
+     * 스프링 부트 문서가 적어 둔 방법이다. 그러면 시큐리티 체인의 그 한 줄만 남는다. <b>체인에
+     * 붙이는 필터를 새로 만들면 아래에 {@code @Bean} 을 하나 더해야 한다.</b> 빠뜨리면
+     * {@code SecurityFilterRegistrationIntegrationTest} 가 등록이 둘인 필터 이름을 찍으며 빨간불이다.
      *
-     * <p>다른 필터들({@code ApiRateLimitFilter} 등)에는 이것이 없다. 같은 상태지만 그쪽을 함께
-     * 고치는 것은 이 이슈의 범위가 아니다 — 별도로 다룬다(#661).
+     * <p>필터를 파라미터로 다시 받지 않고 <b>이미 주입된 필드</b>를 넘기는 이유: {@code OAuthAppStateFilter}
+     * 는 {@code OAuth.state} 안에 있어서 파라미터나 제네릭으로 타입을 한 번 더 적으면
+     * {@code ModularityBaselineTest} 의 {@code config -> OAuth.state} 가 오른다. 필드는 이미 세어진 참조다.
+     *
+     * <p>{@code JWTAuthenticationFilter} 는 여기 없다 — 빈이 아니라 {@code new} 로 만들어 체인에만 넣으므로
+     * 자동 등록 자체가 없다. {@code observability} 의 {@code CorrelationIdFilter} 는 반대로 체인 밖의
+     * 서블릿 필터라 자동 등록이 곧 그 필터의 자리다 — 끄면 안 된다.
      */
-    @Bean
-    public FilterRegistrationBean<ConsentRequiredFilter> consentRequiredFilterNotAutoRegistered(
-            ConsentRequiredFilter filter) {
-        var registration = new FilterRegistrationBean<>(filter);
+    private static FilterRegistrationBean<Filter> notAutoRegistered(Filter filter) {
+        var registration = new FilterRegistrationBean<Filter>(filter);
         registration.setEnabled(false);
         return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<Filter> consentRequiredFilterNotAutoRegistered() {
+        return notAutoRegistered(consentRequiredFilter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<Filter> apiRateLimitFilterNotAutoRegistered() {
+        return notAutoRegistered(apiRateLimitFilter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<Filter> chatRateLimitFilterNotAutoRegistered() {
+        return notAutoRegistered(chatRateLimitFilter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<Filter> chatBodySizeLimitFilterNotAutoRegistered() {
+        return notAutoRegistered(chatBodySizeLimitFilter);
+    }
+
+    @Bean
+    public FilterRegistrationBean<Filter> oAuthAppStateFilterNotAutoRegistered() {
+        return notAutoRegistered(oAuthAppStateFilter);
     }
 
     @Bean
@@ -232,7 +269,9 @@ public class SecurityConfig {
         // 그래서 채팅 버킷만 별도 필터로 인증 뒤에 둔다.
         //
         // 이 순서를 되돌리면 SecurityContext 가 비어 있어 사용자 열쇠 대신 IP 로 떨어진다 —
-        // 조용히 잘못 세는 것이라 ChatRateLimitFilterChainOrderIntegrationTest 가 지킨다.
+        // 조용히 잘못 세는 것이라 SecurityFilterRegistrationIntegrationTest 가 지킨다 — 같은 IP 뒤의
+        // 두 사용자가 각자 세는지를 배포되는 체인으로 본다. (예전 주석이 가리키던
+        // ChatRateLimitFilterChainOrderIntegrationTest 는 저장소에 없었다 — #661.)
         http.addFilterAfter(chatRateLimitFilter, JWTAuthenticationFilter.class);
         return http.build();
     }
