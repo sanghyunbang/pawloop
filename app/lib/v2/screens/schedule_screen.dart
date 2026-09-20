@@ -712,6 +712,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       final updated = await _repo.mark(s, next);
       if (!mounted) return;
       setState(() => _items = _replace(_items, updated));
+      // 홈의 할 일 줄이 듣는다(#741). 지금은 셸이 탭마다 화면을 새로 만들어 그 줄이 살아
+      // 있지 않을 수 있지만, 바꾼 쪽이 화면 구조를 알 필요는 없다 — 케어 카드와 같은 신호다.
+      kScheduleRev.value++;
     } on ScheduleFailure catch (e) {
       if (!mounted) return;
       _handleFailure(e);
@@ -727,17 +730,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (current != null) {
         setState(() => _items = _replace(_items, current));
       }
-      final who = current?.updatedBy?.nickname;
-      _say(who == null
-          ? '다른 분이 방금 고쳤어요. 최신 내용으로 바꿨어요.'
-          : '$who님이 방금 고쳤어요. 최신 내용으로 바꿨어요.');
-      return;
     }
-    _say(switch (e.kind) {
-      ScheduleFailureKind.notFound => '이미 지워진 일정이에요.',
-      ScheduleFailureKind.invalid => e.message ?? '이 일정은 아직 만들 수 없어요.',
-      _ => '연결이 불안정해요. 잠시 뒤 다시 해 주세요.',
-    });
+    // 문구는 저장소가 든다(#741) — 홈의 케어 카드가 같은 실패에 같은 말을 해야 한다.
+    _say(e.userMessage);
   }
 
   void _say(String text) {

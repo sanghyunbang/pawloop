@@ -164,6 +164,19 @@ void main() {
     expect(find.textContaining('할 일'), findsNothing);
   });
 
+  testWidgets('일정이 바뀌었다는 신호를 들으면 다시 읽는다 — 케어 카드가 완료로 바꾼 뒤 이 줄이 낡으면 안 된다 (#741)',
+      (tester) async {
+    final f = fixture(items: [_schedule(id: 1, title: '보리 병원')]);
+    await pump(tester, f);
+    expect(f.sent, hasLength(1));
+
+    kScheduleRev.value++;
+    await tester.pumpAndSettle();
+
+    expect(f.sent, hasLength(2),
+        reason: '바로 위 카드가 병원 일정을 완료로 바꿨는데 "할 일 1 · 병원" 이 남으면 안 끝난 것처럼 보인다');
+  });
+
   group('요약 문장', () {
     Schedule at(int id, String kind, String title, {String? who}) => Schedule.tryParse(
         _schedule(

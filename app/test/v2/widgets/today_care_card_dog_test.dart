@@ -67,6 +67,9 @@ Map<String, Object?> _log(int id, String type) => {
         }
         // 카드가 #560 부터 항목 목록도 읽는다. **gets 에는 안 담는다** — 이 파일이 재는
         // 것은 "아이를 물어보는 조회" 라, 섞으면 아래 hasLength 가 무엇을 세는지 흐려진다.
+        // 카드가 #741 부터 오늘 일정도 읽는다. 이것도 **gets 에는 안 담는다** — 일정은 아이로
+        // 거르지 않으므로(아이 없는 가족 일정도 물어야 한다) 여기서 셀 것이 아니다.
+        if (request.url.path == '/api/schedules') return _json(const []);
         if (request.url.path.endsWith('/care-items')) {
           return _json([
             {
