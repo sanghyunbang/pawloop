@@ -1,6 +1,7 @@
 package com.heattrip.heat_trip_backend.push.config;
 
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.messaging.FirebaseMessaging;
@@ -57,12 +58,18 @@ public class PushConfig {
             }
         }
         try (InputStream credentials = open(firebase)) {
-            FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(credentials))
+            GoogleCredentials googleCredentials = GoogleCredentials.fromStream(credentials);
+            FirebaseOptions.Builder options = FirebaseOptions.builder()
+                    .setCredentials(googleCredentials)
                     .setConnectTimeout(firebase.getConnectTimeoutMs())
-                    .setReadTimeout(firebase.getReadTimeoutMs())
-                    .build();
-            return FirebaseApp.initializeApp(options, FIREBASE_APP_NAME);
+                    .setReadTimeout(firebase.getReadTimeoutMs());
+            // 프로젝트 id 는 키 파일에 있다. 안 실으면 부팅 로그가 "Firebase 프로젝트 null" 이라
+            // 어느 프로젝트로 보내는지 로그로는 알 수 없다(2026-09-21 dev 실측).
+            if (googleCredentials instanceof ServiceAccountCredentials serviceAccount
+                    && serviceAccount.getProjectId() != null) {
+                options.setProjectId(serviceAccount.getProjectId());
+            }
+            return FirebaseApp.initializeApp(options.build(), FIREBASE_APP_NAME);
         }
     }
 

@@ -73,6 +73,8 @@ dependencies:
   timezone: ^0.10.1
   video_compress: ^3.1.4
   video_player: ^2.14.0
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
 
 dev_dependencies:
   flutter_test:

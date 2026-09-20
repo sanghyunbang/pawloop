@@ -22,6 +22,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../domain/schedule_reminder.dart';
 import 'notification_route.dart';
+import 'push_route.dart';
 import 'session_traces.dart';
 import 'walk_reminder.dart';
 import 'weekly_report_reminder.dart';
@@ -58,6 +59,12 @@ class LocalNotificationSink
   static const _channelId = 'walk_reminder';
   static const _channelName = '산책 알림';
   static const _channelDescription = '오늘 산책 기록이 없을 때 저녁에 한 번 알려 줍니다.';
+
+  /// 서버 푸시(#83)의 채널. **매니페스트의 FCM 기본 채널 id 와 같아야 한다** — 뒤에서 온 푸시는 FCM 이
+  /// 직접 띄우는데, 그때 이 id 의 채널이 없으면 이름 없는 채널로 가서 설정에 "기타" 로 보인다.
+  static const pushChannelId = 'push';
+  static const _pushChannelName = '가족 알림';
+  static const _pushChannelDescription = '가족이 일정을 맡기거나 채팅을 보내면 알려 줍니다.';
 
   Future<void> _ensureReady() async {
     if (_ready) return;
@@ -107,6 +114,41 @@ class LocalNotificationSink
       return await ios.requestPermissions(alert: true, badge: true, sound: true) ?? false;
     }
     return false;
+  }
+
+  /// 푸시 채널을 만들어 둔다 — 앱이 시작할 때 한 번(`FirebasePush.start`). 이미 있으면 그대로다.
+  Future<void> ensurePushChannel() async {
+    await _ensureReady();
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await android?.createNotificationChannel(const AndroidNotificationChannel(
+      pushChannelId,
+      _pushChannelName,
+      description: _pushChannelDescription,
+      importance: Importance.high,
+    ));
+  }
+
+  /// 앞에 떠 있을 때 온 푸시를 띄운다(#83). 누르면 payload 가 말하는 곳으로 간다 — 위
+  /// `onDidReceiveNotificationResponse` 가 기기 알림과 같은 길로 보낸다.
+  Future<void> showPush(ForegroundNotice notice) async {
+    await _ensureReady();
+    await _plugin.show(
+      notice.id,
+      notice.title,
+      notice.body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          pushChannelId,
+          _pushChannelName,
+          channelDescription: _pushChannelDescription,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      payload: notice.payload,
+    );
   }
 
   @override

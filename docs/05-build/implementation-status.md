@@ -24,7 +24,7 @@
 | 가족 | ✅ 서버 | 그룹 만들기 · 초대코드 · 오늘의 케어 · 산책 주의사항(#76·#196) |
 | 아이 프로필 | ✅ 서버 + 일부 기기 | 목록·등록·삭제·**사진**은 서버(`pet_sync.dart`, #159·#448). 이름·견종 같은 글자 편집은 아직 기기에만 남는다(`PATCH /api/dogs/{id}` 가 계약에만 있다) |
 | 로그인 | ✅ 서버 · 🟡 앱 | 카카오·구글·Apple 소셜은 양쪽 다 선다. **이메일 가입·비밀번호 재설정은 서버만 끝났다**(#635 조각 ①②③) — `POST /auth/signup` 이 202 로 코드를 메일로 보내고 `/auth/signup/verify` 에서 계정이 생긴다. 비밀번호를 잊으면 `/auth/password/reset-request` · `/auth/password/reset` 이고, 바꾸고 나면 그 사람의 refresh 토큰이 전부 폐기된다. 앱의 `AuthRepositoryImpl.register` 는 아직 201 만 성공으로 읽어서 **202 를 실패로 말한다**. 화면 넷은 조각 ④, 릴리스에서 라우트를 여는 것은 조각 ⑤(ADR-0024 가 ADR-0022 결정 1 을 대체한다). 그때까지 이메일 경로는 `kDebugMode` 에서만 보인다 |
-| 알림 | 🟡 기기 · 서버 | 기기 알림(저녁 산책 · 일정 · 일요일 주간 정리)은 다 돈다. **누르면 그 자리로 간다**(#498) — 일정 알림은 그 날·그 줄까지(#420 후속). 서버 푸시는 발송 경로까지 섰고 **Firebase 키 파일 둘을 기다린다**(#83) |
+| 알림 | 🟡 기기 · 서버 | 기기 알림(저녁 산책 · 일정 · 일요일 주간 정리)은 다 돈다. **누르면 그 자리로 간다**(#498) — 일정 알림은 그 날·그 줄까지(#420 후속). 서버 푸시가 **앱까지 이어졌다**(#83, Android) — 로그인하면 기기 토큰을 서버에 두고, 일정 배정·채팅 푸시가 기기에 온다(에뮬레이터 실측 2026-09-21). 남은 것은 iOS 의 `GoogleService-Info.plist` · APNs 키(맥) 와 알림 설정 화면 |
 
 ---
 
@@ -124,7 +124,7 @@
 | 라우팅 | 탭은 `RootTab.index`(전역 `ValueNotifier`), 상세는 `Navigator.push` |
 | 네트워크 | `http` + `AuthedClient`(401 자동 갱신 · 단일 비행). 외부 직접 호출 **0종** |
 | 설정 | 컴파일 타임 `--dart-define` 단독. 단일 진입점 `core/config/env.dart` |
-| 알림 | `flutter_local_notifications` 하나로 산책(341) · 일정(420000+) · 주간 정리(486). 규칙은 순수 함수, 플러그인을 아는 파일은 `data/local_notification_sink.dart` 하나 |
+| 알림 | `flutter_local_notifications` 하나로 산책(341) · 일정(420000+) · 주간 정리(486). 규칙은 순수 함수, 플러그인을 아는 파일은 `data/local_notification_sink.dart` 하나. 서버 푸시는 `firebase_messaging` — 그것을 아는 파일도 `data/firebase_push.dart` 하나(#83) |
 | 디자인 | **흰 바탕 · 외곽선 카드 · 코랄레드 하나**(#447). 파스텔 오라·라일락은 2026-09-14 에 걷어냈다 |
 | 테스트 | `app/test/` 아래 210벌 남짓 — 도메인 규칙 · 저장소 계약 · 위젯까지. 실행은 `bash scripts/local-ci.sh app` |
 

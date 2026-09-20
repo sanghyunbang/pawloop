@@ -23,6 +23,12 @@ void main() {
           reason: '통째로 비교하면 새 payload 가 모르는 값이 되어 앱만 열린다');
     });
 
+    test('채팅 푸시(#83)는 채팅 탭 — 방 id 를 달고 와도 앞머리만 본다', () {
+      expect(chatMessagePayloadFor(7), 'chat-message:7');
+      expect(destinationOf(chatMessagePayloadFor(7)), NotificationDestination.chat);
+      expect(tabOf(NotificationDestination.chat), 4, reason: '채팅은 다섯째 칸이다(#419 이후)');
+    });
+
     test('payload 가 없거나 모르는 값이면 null — 앱만 열린다', () {
       expect(destinationOf(null), isNull);
       expect(destinationOf(''), isNull);

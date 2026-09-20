@@ -86,6 +86,13 @@
 
         <meta-data android:name="flutterEmbedding" android:value="2" />
 
+        <!-- 서버 푸시(#83). 앱이 뒤에 있을 때 온 알림은 FCM 이 직접 띄우는데 그때 쓸 채널이다 —
+             앱이 시작할 때 LocalNotificationSink.ensurePushChannel 이 같은 id("push")로 만들어 둔다.
+             이 줄이 없으면 이름 없는 채널로 가서 알림 설정에 "기타" 로 보인다. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="push" />
+
         <!-- 저녁 산책 알림 (#341). 예약을 받아 실제로 띄우는 리시버와, 재부팅 뒤 예약을
              다시 거는 리시버다. 둘 다 flutter_local_notifications 의 클래스이고
              android:exported="false" 라 다른 앱이 부를 수 없다. -->

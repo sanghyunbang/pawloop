@@ -1,7 +1,8 @@
 // lib/v2/data/notification_route.dart
 //
 // 알림을 누르면 그 자리로 — 저녁 산책 알림(#341)은 홈, 일정 알림(#420)은 일정 탭, 일요일 주간 정리(#486
-// 후속)는 통계 화면.
+// 후속)는 통계 화면. 서버 푸시(#83)는 `push_route.dart` 가 **같은 payload** 로 바꿔 이 길을 탄다 —
+// 일정 배정은 일정 알림과 같은 모양, 채팅은 `chat-message:<방 id>`.
 //
 // ## 일정은 탭까지로 부족하다
 //
@@ -38,6 +39,9 @@ enum NotificationDestination {
 
   /// 일요일 저녁 주간 정리(#486 후속) — 홈 위에 통계 화면.
   weeklyReport,
+
+  /// 채팅 푸시(#83) — 채팅 탭. 서버가 보낸 새 메시지 알림이다.
+  chat,
 }
 
 /// 저녁 산책 알림의 payload.
@@ -49,6 +53,12 @@ const String scheduleReminderPayload = 'schedule-reminder';
 
 /// 일요일 저녁 주간 정리의 payload.
 const String weeklyReportPayload = 'weekly-report';
+
+/// 채팅 푸시(#83) payload 의 **앞머리**. 뒤에 `:<방 id>` 가 붙는다([chatMessagePayloadFor]).
+const String chatMessagePayload = 'chat-message';
+
+/// 채팅 푸시의 payload — `chat-message:<방 id>`. 지금은 탭까지 간다(방을 여는 것은 다음 조각).
+String chatMessagePayloadFor(int roomId) => '$chatMessagePayload:$roomId';
 
 /// payload → 갈 곳. **모르는 값은 null** 이고 그때는 앱만 열린다 — 옛 버전이 걸어 둔 알림(payload 없음)이
 /// 그렇다. 알림은 몇 시간에서 며칠 뒤에 울리므로 그 사이에 앱이 바뀐다.
@@ -62,6 +72,8 @@ NotificationDestination? destinationOf(String? payload) {
       return NotificationDestination.schedule;
     case weeklyReportPayload:
       return NotificationDestination.weeklyReport;
+    case chatMessagePayload:
+      return NotificationDestination.chat;
     default:
       return null;
   }
@@ -74,6 +86,8 @@ int tabOf(NotificationDestination destination) {
   switch (destination) {
     case NotificationDestination.schedule:
       return 2;
+    case NotificationDestination.chat:
+      return 4;
     case NotificationDestination.home:
     case NotificationDestination.weeklyReport:
       return 0;
