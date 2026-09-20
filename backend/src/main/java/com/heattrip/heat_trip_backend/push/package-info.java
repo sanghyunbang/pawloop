@@ -17,11 +17,12 @@
  *
  * <h2>의존 방향</h2>
  * <p>{@code push -> chat}(이벤트 · 수신자 질의) · {@code push -> user}(세션 종료 이벤트 · {@code @CurrentUser} ·
- * {@code User}). {@code chat} 과 {@code user} 는 이 모듈을 모른다.
+ * {@code User}) · {@code push -> schedule}(배정 이벤트 {@code ScheduleAssigned}, #735). {@code chat} · {@code user} ·
+ * {@code schedule} 은 이 모듈을 모른다.
  */
 @ApplicationModule(
         displayName = "Push",
-        allowedDependencies = { "chat", "user", "user :: entity" })
+        allowedDependencies = { "chat", "user", "user :: entity", "schedule" })
 package com.heattrip.heat_trip_backend.push;
 
 import org.springframework.modulith.ApplicationModule;

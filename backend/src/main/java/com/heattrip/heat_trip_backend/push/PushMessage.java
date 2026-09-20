@@ -1,7 +1,11 @@
 package com.heattrip.heat_trip_backend.push;
 
 import com.heattrip.heat_trip_backend.chat.ChatMessagePosted;
+import com.heattrip.heat_trip_backend.schedule.ScheduleAssigned;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -31,5 +35,44 @@ public record PushMessage(String title, String body, Map<String, String> data) {
                 ? event.senderName() + "님이 메시지를 보냈어요"
                 : event.senderName() + ": " + preview;
         return new PushMessage(event.roomName(), body, Map.copyOf(data));
+    }
+
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+
+    /**
+     * "엄마님이 일정을 맡겼어요 — 내일 10:30 · 뭉치 병원" (이슈 #735).
+     *
+     * <p>제목은 <b>누가</b>, 본문은 <b>언제 · 무엇</b>이다. 언제는 오늘·내일·모레까지는 말로,
+     * 그 뒤는 날짜로 — 알림은 한 줄이라 "9월 21일" 보다 "내일" 이 빨리 읽힌다.
+     *
+     * @param today 받는 쪽의 오늘(KST). 발송 시점의 시계라 "내일" 이 사실이다
+     */
+    public static PushMessage forScheduleAssigned(ScheduleAssigned event, LocalDate today) {
+        Map<String, String> data = new LinkedHashMap<>();
+        data.put("kind", "schedule.assigned");
+        data.put("scheduleId", String.valueOf(event.scheduleId()));
+        data.put("onDate", event.onDate().toString());
+        String when = whenLabel(event.onDate(), today)
+                + (event.atTime() == null ? "" : " " + TIME.format(event.atTime()));
+        String what = event.dogName() == null || event.dogName().isBlank()
+                ? event.title()
+                : event.dogName() + " " + event.title();
+        return new PushMessage(event.actorName() + "님이 일정을 맡겼어요", when + " · " + what,
+                Map.copyOf(data));
+    }
+
+    /** 오늘 · 내일 · 모레 · 그 뒤는 "M월 d일". 지난 날짜도 날짜로 — 지난 일을 맡길 수도 있다. */
+    static String whenLabel(LocalDate onDate, LocalDate today) {
+        long days = ChronoUnit.DAYS.between(today, onDate);
+        if (days == 0) {
+            return "오늘";
+        }
+        if (days == 1) {
+            return "내일";
+        }
+        if (days == 2) {
+            return "모레";
+        }
+        return onDate.getMonthValue() + "월 " + onDate.getDayOfMonth() + "일";
     }
 }

@@ -6,6 +6,7 @@ import com.heattrip.heat_trip_backend.chat.ChatRoomView;
 import com.heattrip.heat_trip_backend.dog.DogOwnership;
 import com.heattrip.heat_trip_backend.dog.entity.Dog;
 import com.heattrip.heat_trip_backend.group.service.FamilyGroupService;
+import com.heattrip.heat_trip_backend.schedule.ScheduleAssigned;
 import com.heattrip.heat_trip_backend.schedule.ScheduleTime;
 import com.heattrip.heat_trip_backend.schedule.dto.ScheduleRequest;
 import com.heattrip.heat_trip_backend.schedule.dto.ScheduleResponse;
@@ -22,6 +23,7 @@ import com.heattrip.heat_trip_backend.schedule.repository.ScheduleRepository;
 import com.heattrip.heat_trip_backend.user.KnownUsers;
 import com.heattrip.heat_trip_backend.user.entity.User;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -89,13 +91,17 @@ public class ScheduleService {
     private final CareLogging careLogging;
     private final Clock clock;
 
+    /** 배정 사건({@link ScheduleAssigned})을 내보내는 자리 — 이슈 #735. 푸시는 듣는 쪽이 한다. */
+    private final ApplicationEventPublisher events;
+
     public ScheduleService(ScheduleRepository schedules,
                            ScheduleExceptionRepository exceptions,
                            DogOwnership dogs,
                            ChatRoomService chatRooms,
                            KnownUsers users,
                            CareLogging careLogging,
-                           Clock clock) {
+                           Clock clock,
+                           ApplicationEventPublisher events) {
         this.schedules = schedules;
         this.exceptions = exceptions;
         this.dogs = dogs;
@@ -103,6 +109,7 @@ public class ScheduleService {
         this.users = users;
         this.careLogging = careLogging;
         this.clock = clock;
+        this.events = events;
     }
 
     // ─────────────────────────── 쓰기 ───────────────────────────
@@ -129,7 +136,30 @@ public class ScheduleService {
                         ? request.repeatUntil() : null)
                 .createdBy(me)
                 .build());
+        publishIfAssignedToSomeoneElse(saved, null, me);
         return ScheduleResponse.of(saved);
+    }
+
+    /**
+     * 담당이 <b>남</b>이 됐으면 알린다 — 이슈 #735. 트랜잭션 안에서 부르고, 듣는 쪽이 커밋 뒤에 받는다.
+     *
+     * @param before 고치기 전의 담당 id. 만들 때는 {@code null}
+     */
+    private void publishIfAssignedToSomeoneElse(Schedule saved, Long before, User actor) {
+        User after = saved.getAssignee();
+        if (after == null || after.getId().equals(before) || after.getId().equals(actor.getId())) {
+            return;
+        }
+        Dog dog = saved.getDog();
+        events.publishEvent(new ScheduleAssigned(
+                saved.getId(),
+                after.getId(),
+                actor.getId(),
+                actor.displayName(),
+                saved.getTitle(),
+                dog == null ? null : dog.getName(),
+                saved.getOnDate(),
+                saved.getAtTime()));
     }
 
     /**
@@ -218,6 +248,8 @@ public class ScheduleService {
      */
     private ScheduleResponse apply(Schedule schedule, User me, ScheduleUpdateRequest request) {
         long userId = me.getId();
+        // 배정이 바뀌었는지는 고치기 전의 담당과 견줘야 안다(#735).
+        Long assigneeBefore = schedule.getAssignee() == null ? null : schedule.getAssignee().getId();
         schedule.edit(
                 request.kind() == null ? schedule.getKind() : request.kind(),
                 request.title() == null || request.title().isBlank()
@@ -240,7 +272,9 @@ public class ScheduleService {
             syncCareLog(schedule, me);
         }
 
-        return ScheduleResponse.of(schedules.saveAndFlush(schedule));
+        Schedule saved = schedules.saveAndFlush(schedule);
+        publishIfAssignedToSomeoneElse(saved, assigneeBefore, me);
+        return ScheduleResponse.of(saved);
     }
 
     /**

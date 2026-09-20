@@ -16,7 +16,7 @@
 | 인증 | 전부 인증 필요. 주체는 토큰의 주인 — 경로에 사용자 id 가 없다 |
 | 한도 | `PUT` 셋은 `group-write` 버킷(`PUT /api/consents` 와 같은 판단). `GET /api/push/settings` 는 버킷 없음 |
 | 패키지 | `com.heattrip.heat_trip_backend.push.{controller,service,repository,entity,dto,fcm,config,metrics}` + `config/AsyncConfig` |
-| 의존 | `push → chat`(`ChatMessagePosted` · `notifiableMembers`) · `push → user`(`UserSessionsRevoked` · `@CurrentUser` · `User`). **`chat` 과 `user` 는 `push` 를 모른다** |
+| 의존 | `push → chat`(`ChatMessagePosted` · `notifiableMembers`) · `push → user`(`UserSessionsRevoked` · `@CurrentUser` · `User`) · `push → schedule`(`ScheduleAssigned`, #735). **`chat` · `user` · `schedule` 은 `push` 를 모른다** |
 
 ---
 
@@ -91,3 +91,21 @@ PushDispatcher.onMessagePosted  @TransactionalEventListener(AFTER_COMMIT) @Async
 - 앱: `firebase_core` · `firebase_messaging` · `flutter_local_notifications`(Android 포그라운드) · 시작·로그인 때 `PUT /api/push/tokens` · 알림 설정 화면(전체 끄기 · 방별 음소거 — 방 목록의 `muted`).
 - `privacy_ko.md` 에 기기 토큰 항목(완료 조건 4) — 수집이 시작되는 앱 PR 에서 버전과 함께 올린다.
 - 완료 조건 1(실기기 도착)은 사람이 본다 — Android 실기기 + iOS 실기기 + APNs 키.
+
+---
+
+## 배정 푸시 — 일정 (#735)
+
+```
+ScheduleService.create / update (@Transactional)
+  └─ 담당이 남이 됐으면 events.publishEvent(ScheduleAssigned)   ← 트랜잭션 안 (담당이 나면 · 안 바뀌었으면 발행 안 함)
+                                        │
+                        커밋 ───────────┘
+                                        ▼
+PushDispatcher.onScheduleAssigned  @TransactionalEventListener(AFTER_COMMIT) @Async("pushExecutor")
+  1. preferences.onlyEnabled([담당자])       — 전체 끈 사람 제외 (방별 음소거는 없다)
+  2. deviceTokens.activeTokensOf(...)       — 살아 있는 토큰
+  3. fcm.send(PushMessage.forScheduleAssigned) — "엄마님이 일정을 맡겼어요 / 내일 10:30 · 뭉치 병원", data{kind: schedule.assigned, scheduleId, onDate}
+```
+
+사건은 값만 든다(아이 이름까지 트랜잭션 안에서 읽어 둔다 — 듣는 쪽은 다른 스레드라 지연 로딩이 터진다). 실측은 `ScheduleAssignedPushIntegrationTest`(담당자에게 한 번 · 커밋 뒤 · 나 자신은 조용 · 바뀔 때만 · 끈 사람은 건너뜀) 와 `PushMessageTest`(문구). **앱에 FCM 이 붙는 #83 뒤에야 기기에 도착한다** — 지금은 서버가 보내는 자리까지다.
