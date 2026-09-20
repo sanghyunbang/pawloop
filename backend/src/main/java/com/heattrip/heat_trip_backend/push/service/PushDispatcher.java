@@ -7,6 +7,7 @@ import com.heattrip.heat_trip_backend.push.entity.DeviceToken;
 import com.heattrip.heat_trip_backend.push.fcm.FcmClient;
 import com.heattrip.heat_trip_backend.push.fcm.FcmSendResult;
 import com.heattrip.heat_trip_backend.push.metrics.PushMetrics;
+import com.heattrip.heat_trip_backend.schedule.ScheduleAssigned;
 import com.heattrip.heat_trip_backend.user.UserSessionsRevoked;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -49,6 +52,9 @@ public class PushDispatcher {
     private final FcmClient fcm;
     private final PushMetrics metrics;
 
+    /** "내일" 을 가르는 시계 — {@code ClockConfig} 의 {@code Asia/Seoul} 빈이다. */
+    private final Clock clock;
+
     @Async("pushExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onMessagePosted(ChatMessagePosted event) {
@@ -69,6 +75,36 @@ public class PushDispatcher {
         } catch (RuntimeException e) {
             metrics.dispatchFailed();
             log.warn("푸시 발송 실패 — 방 {} 메시지 {}: {}", event.roomId(), event.messageId(), e.toString());
+        }
+    }
+
+    /**
+     * 가족이 <b>나를 담당으로</b> 일정을 만들거나 고쳤다 — 이슈 #735.
+     *
+     * <p>받는 사람은 담당자 한 명이다. 방별 음소거 같은 것은 없고, 전체 끄기와 살아 있는 토큰만
+     * 본다 — 채팅 푸시의 2·3 단계와 같다. 배정한 사람은 사건에 안 들어온다({@code schedule} 이
+     * 담당이 나면 발행하지 않는다).
+     */
+    @Async("pushExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onScheduleAssigned(ScheduleAssigned event) {
+        try {
+            List<Long> recipients = preferences.onlyEnabled(List.of(event.assigneeUserId()));
+            List<DeviceToken> tokens = deviceTokens.activeTokensOf(recipients);
+            if (tokens.isEmpty()) {
+                metrics.skipped();
+                return;
+            }
+            FcmSendResult result = fcm.send(tokens.stream().map(DeviceToken::getToken).toList(),
+                    PushMessage.forScheduleAssigned(event, LocalDate.now(clock)));
+            if (!result.unregistered().isEmpty()) {
+                deviceTokens.revokeTokens(result.unregistered());
+            }
+            metrics.record(result);
+        } catch (RuntimeException e) {
+            metrics.dispatchFailed();
+            log.warn("배정 푸시 발송 실패 — 일정 {} 담당 {}: {}",
+                    event.scheduleId(), event.assigneeUserId(), e.toString());
         }
     }
 
