@@ -477,6 +477,25 @@ void main() {
       expect(patched.url.queryParameters['version'], '0');
       expect(jsonDecode(patched.body)['status'], 'done');
     });
+
+    testWidgets('완료로 바꾸면 일정이 바뀌었다는 신호가 오른다 — 홈의 할 일 줄이 듣는다 (#741)',
+        (tester) async {
+      final f = fixture(
+        items: [schedule(id: 1, title: '보리 병원', onDate: '2026-10-20')],
+        onPatch: (_) => _json(schedule(
+            id: 1, title: '보리 병원', onDate: '2026-10-20', status: 'done', version: 1)),
+      );
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+      final before = kScheduleRev.value;
+
+      await tester.tap(find.byTooltip('완료로'));
+      await tester.pumpAndSettle();
+
+      expect(kScheduleRev.value, before + 1,
+          reason: '케어 카드와 같은 신호다 — 바꾼 쪽이 누가 듣는지 알 필요는 없다');
+    });
   });
 
 group('반복과 고치기 (#421)', () {
