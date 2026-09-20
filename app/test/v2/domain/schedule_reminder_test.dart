@@ -14,6 +14,7 @@ Schedule _schedule({
   String onDate = '2026-10-20',
   Object? atTime = '10:30:00',
   String status = 'planned',
+  Object? assignee,
 }) =>
     Schedule.tryParse({
       'id': id,
@@ -23,9 +24,13 @@ Schedule _schedule({
       'title': title,
       'onDate': onDate,
       'atTime': atTime,
+      'assignee': assignee,
       'status': status,
       'version': 0,
     })!;
+
+const _me = {'userId': 5, 'nickname': '엄마'};
+const _dad = {'userId': 6, 'nickname': '아빠'};
 
 final _now = DateTime(2026, 10, 15, 9);
 
@@ -140,6 +145,62 @@ void main() {
 
       expect(plan.single.body, '주말 목욕');
       expect(plan.single.body, isNot(contains('00:00')));
+    });
+  });
+
+  group('담당 (#734)', () {
+    test('담당이 있으면 담당자에게만 — 아빠 담당 병원은 엄마 폰에서 안 울린다', () {
+      final plan = planReminders(
+        schedules: [
+          _schedule(id: 1, title: '아빠 담당 병원', assignee: _dad),
+          _schedule(id: 2, title: '내 담당 미용', kind: 'groom', assignee: _me),
+        ],
+        when: ScheduleReminderWhen.morningOf,
+        now: _now,
+        myUserId: 5,
+      );
+
+      expect(plan.map((r) => r.scheduleId), [2],
+          reason: '담당이라는 말이 알림에서도 뜻이 있어야 한다');
+    });
+
+    test('담당이 없으면 모두에게 — 누가 열어도 걸린다', () {
+      for (final me in [5, 6]) {
+        final plan = planReminders(
+          schedules: [_schedule(id: 3, title: '가족 목욕', kind: 'bath')],
+          when: ScheduleReminderWhen.morningOf,
+          now: _now,
+          myUserId: me,
+        );
+        expect(plan.map((r) => r.scheduleId), [3], reason: '$me 의 기기');
+      }
+    });
+
+    test('누군지 모르면 담당 있는 일정은 안 건다 — 남의 것을 울리느니 비운다', () {
+      final plan = planReminders(
+        schedules: [
+          _schedule(id: 1, title: '아빠 담당 병원', assignee: _dad),
+          _schedule(id: 3, title: '가족 목욕', kind: 'bath'),
+        ],
+        when: ScheduleReminderWhen.morningOf,
+        now: _now,
+      );
+
+      expect(plan.map((r) => r.scheduleId), [3]);
+    });
+
+    test('내 담당이면 본문 끝에 "내 담당" 이 붙는다 — 없는 일정에는 안 붙는다', () {
+      final plan = planReminders(
+        schedules: [
+          _schedule(id: 2, title: '보리 병원', assignee: _me),
+          _schedule(id: 3, title: '주말 목욕', kind: 'bath', atTime: null),
+        ],
+        when: ScheduleReminderWhen.morningOf,
+        now: _now,
+        myUserId: 5,
+      );
+
+      expect(plan.map((r) => r.body), ['보리 병원 · 10:30 · 내 담당', '주말 목욕']);
     });
   });
 }

@@ -1,10 +1,12 @@
 // 일정 알림의 **규칙** — 이슈 #420 (부모 #416).
 //
-// ## 기기 로컬이다
+// ## 기기 로컬이다 — 그래서 담당자를 본다 (#734)
 //
-// 푸시(#83)는 서버가 보내지만 이 알림은 **이 기기가 스스로** 건다. 그래서 담당자가 다른
-// 사람이면 **그 사람 기기에는 안 뜬다.** 만들기 시트가 그 한계를 한 줄로 말한다 — 안 말하면
-// 사용자는 "아빠 담당" 이라고 적어 두고 아빠가 알림을 받을 거라고 믿는다.
+// 푸시(#83)는 서버가 보내지만 이 알림은 **이 기기가 스스로** 건다. 가족 일정은 가족 모두의
+// 기기에 내려오므로, 담당자를 안 보면 "아빠 담당" 병원이 엄마 폰에도 똑같이 울린다 — 담당이라는
+// 말이 알림에서는 없는 셈이었다(#734). 그래서 **담당이 있는 일정은 담당자의 기기에서만** 걸고,
+// 담당이 없는 일정은 모두에게 건다. 아빠 기기가 울리려면 아빠가 일정 탭을 한 번은 열어야
+// 한다 — 배정 그 자체를 서버가 알리는 것은 #735 다.
 //
 // ## 규칙만 여기 있다
 //
@@ -137,21 +139,26 @@ class ScheduleReminder {
 
 /// 이 일정들에 걸 알림.
 ///
-/// 규칙 넷이 여기 다 있다.
+/// 규칙 다섯이 여기 다 있다.
 ///
 ///  1. **`none` 이면 하나도 안 건다.**
 ///  2. **이미 한 것·건너뛴 것은 안 건다** — 알림은 앞으로 할 일에만 온다.
 ///  3. **지나간 시각에는 안 건다.** 지난 시각에 지금 울리면 그건 알림이 아니라 잔소리다.
 ///  4. id 가 [ScheduleReminder.maxScheduleId] 를 넘으면 건너뛴다 — 산책 알림 id 와 부딪히느니
 ///     그 하나를 안 거는 쪽이 낫다.
+///  5. **담당이 있는 일정은 담당자에게만** 건다(#734) — [myUserId] 가 담당자일 때만. 담당이
+///     없는 일정은 모두에게. [myUserId] 가 null 이면(누군지 모르면) 담당 있는 일정은 안 건다 —
+///     남의 것을 울리는 쪽이 내 것을 놓치는 쪽보다 나쁘다는 것이 이 이슈의 출발이다.
 ///
 /// 본문은 **제목**이다. 종류가 아니라 제목인 이유는, 알림은 한 건이라 자리가 있고 사용자가
 /// 자기 문장을 그대로 보는 편이 무엇인지 빨리 알기 때문이다(홈의 한 줄은 반대로 종류를 쓴다 —
-/// 거기는 여럿이 한 줄에 들어간다).
+/// 거기는 여럿이 한 줄에 들어간다). 내 담당이면 뒤에 **` · 내 담당`** 을 붙인다 — 가족 일정
+/// 사이에서 "이건 내가 할 것" 이 알림 한 줄에서 읽혀야 한다.
 List<ScheduleReminder> planReminders({
   required List<Schedule> schedules,
   required ScheduleReminderWhen when,
   required DateTime now,
+  int? myUserId,
 }) {
   if (when == ScheduleReminderWhen.none) return const [];
 
@@ -159,6 +166,8 @@ List<ScheduleReminder> planReminders({
   for (final s in schedules) {
     if (!s.status.isOpen) continue;
     if (s.id <= 0 || s.id >= ScheduleReminder.maxScheduleId) continue;
+    final assignee = s.assignee;
+    if (assignee != null && assignee.userId != myUserId) continue;
 
     final at = switch (when) {
       ScheduleReminderWhen.eveningBefore =>
@@ -175,9 +184,10 @@ List<ScheduleReminder> planReminders({
       onDate: DateTime(s.onDate.year, s.onDate.month, s.onDate.day),
       at: at,
       title: s.kind.label,
-      body: s.isAllDay
-          ? s.title
-          : '${s.title} · ${Schedule.formatTime(s.atTime!)}',
+      body: [
+        if (s.isAllDay) s.title else '${s.title} · ${Schedule.formatTime(s.atTime!)}',
+        if (assignee != null) '내 담당',
+      ].join(' · '),
     ));
   }
   return out;

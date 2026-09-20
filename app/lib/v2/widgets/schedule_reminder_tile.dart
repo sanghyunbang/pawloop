@@ -5,11 +5,11 @@
 // 묻지 않고 알림을 보내는 앱이 되면 안 된다 — 저녁 산책 알림(#341)이 고른 것과 같은 답이다.
 // 켜는 것은 사용자가 여기서 하는 일이고, 무엇이 오는지 이 자리에 적어 둔다.
 //
-// ## 한계를 숨기지 않는다
+// ## 누구에게 가는지 숨기지 않는다
 //
-// 이 알림은 **이 기기가 스스로** 건다. 담당자가 다른 사람이면 그 사람 기기에는 안 뜬다.
-// 그 문장을 부제로 둔다 — 안 두면 사용자는 "아빠 담당" 이라고 적어 두고 아빠가 알림을 받을
-// 거라고 믿는다.
+// 이 알림은 **이 기기가 스스로** 건다. 담당이 있는 일정은 담당자에게만, 없는 일정은 가족
+// 모두에게 간다(#734). 그 문장을 부제로 둔다 — 안 두면 사용자는 "아빠 담당" 이라고 적어 두고
+// 자기 폰이 왜 조용한지 모른다.
 import 'package:flutter/material.dart';
 
 import '../domain/schedule_reminder.dart';
@@ -60,8 +60,8 @@ class _ScheduleReminderTileState extends State<ScheduleReminderTile> {
             style: TextStyle(
                 fontSize: 14, fontWeight: FontWeight.w800, color: T.textPrimary)),
         const SizedBox(height: 2),
-        const Text('적어 둔 일정을 미리 알려 줍니다. 이 기기에만 오고, 담당자가 다른 분이면 '
-            '그분께는 안 갑니다.',
+        const Text('적어 둔 일정을 미리 알려 줍니다. 내 담당 일정과 담당이 없는 가족 일정이 '
+            '와요 — 다른 분 담당은 그분 기기에서 울려요.',
             style: TextStyle(fontSize: 12, color: T.textMuted)),
         const SizedBox(height: 10),
         Wrap(spacing: 8, children: [

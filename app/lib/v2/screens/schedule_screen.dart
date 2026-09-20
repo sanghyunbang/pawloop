@@ -20,6 +20,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../data/auth_state.dart';
 import '../data/family_repository.dart';
 import '../data/notification_route.dart';
 import '../data/schedule_repository.dart';
@@ -208,6 +209,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         // 쓰면 "지나간 일정에는 안 건다" 가 테스트 안에서 성립하지 않는다 — 테스트의
         // 10월과 기계의 9월이 다른 달이기 때문이다(실측으로 걸렸다).
         now: widget.today ?? DateTime.now(),
+        // 담당이 있는 일정은 담당자 기기에서만 울린다(#734).
+        myUserId: AuthState.user?.id,
       ));
     } catch (_) {
       // 알림을 못 걸어도 화면은 그대로다.
@@ -998,11 +1001,12 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
               ),
             ),
             const SizedBox(height: 4),
-            // 알림이 기기 로컬이라는 한계를 여기서 말한다(#420). 안 말하면 사용자는
-            // "아빠 담당" 이라고 적어 두고 아빠가 알림을 받을 거라고 믿는다.
+            // 알림이 누구에게 가는지 여기서 말한다(#420 · #734) — 담당이 있으면 담당자만,
+            // 없으면 가족 모두. 안 말하면 사용자는 아무 말 없이 "아빠 담당" 이라고 적어 두고
+            // 자기 폰이 왜 조용한지(또는 왜 울리는지) 모른다.
             const Align(
               alignment: Alignment.centerLeft,
-              child: Text('알림은 이 기기에만 옵니다 — 설정에서 켤 수 있어요',
+              child: Text('알림은 담당자에게만 · 담당이 없으면 가족 모두에게 — 설정에서 켤 수 있어요',
                   style: TextStyle(fontSize: 12, color: T.textMuted)),
             ),
             if (_error != null) ...[
