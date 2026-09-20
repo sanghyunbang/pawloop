@@ -200,6 +200,9 @@ class TodayScreen extends StatelessWidget {
                         _ctas(context),
                         // 오늘의 코스(#485) — 산책 시작 버튼 바로 아래. 규칙으로 고른 하나와 "다른 코스".
                         TodayCourseCard(
+                          // 형제가 늘거나 줄어도(일정 줄 · 케어 카드) 이 카드의 State 가 살아남게 — 새로 서면
+                          // 위치와 후보를 다시 잡고, 그 순간 실패하면 카드가 사라진다(2026-09-21).
+                          key: const ValueKey('today-course-card'),
                           dog: dog,
                           data: data,
                           onStart: (context, place, destination) =>
