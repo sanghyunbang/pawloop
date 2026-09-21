@@ -11,7 +11,7 @@
 | # | 플로우 | 진입점 | 관련 화면 |
 |---|--------|--------|-----------|
 | 1 | 산책 시작 → 실시간 트래킹 → 종료 → 기록 저장 | 홈 "산책 시작" · 가운데 산책 FAB | `today_screen.dart` → `start_walk.dart` → `walk_tracking_screen.dart` → `create_screen.dart` |
-| 2 | 지도에서 장소 찾기 → 상세 | 지도 탭 | `explore_screen.dart`(장소 바텀시트) |
+| 2 | 지도에서 장소 찾기 → 상세 | 탐색 탭 | `explore_screen.dart`(장소 바텀시트) |
 | 3 | 커뮤니티 글 읽기 / 쓰기 / 고치기 | 커뮤니티 탭 | `feed_screen.dart` → `post_detail_screen.dart` · `post_write_screen.dart` |
 | 4 | 첫 실행 → 소개 → 로그인 → 동의 → 반려동물 등록 권유 | 앱 실행 | `splash_screen.dart` → `intro_screen.dart` → `login_screen.dart` → `consent_screen.dart` → `onboarding_screen.dart` → `main_shell.dart` |
 | 5 | 가족 그룹 만들기 · 초대 · 참여 | 홈 케어 카드 "만들기" · 채팅 탭 · 프로필 | `family_screen.dart` · `invite_join_screen.dart` |
@@ -32,7 +32,7 @@
 | 20 | 표시 이름 바꾸기 | 프로필 | `me_screen.dart` → `display_name_screen.dart` |
 | 21 | 기기 접근권한 안내 | 첫 실행 · 설정 | `intro_screen.dart` → `permission_notice_screen.dart` · `settings_screen.dart` → `permission_notice_screen.dart` |
 
-네비게이션 골격은 `main_shell.dart` 의 다섯 자리다: **홈 · 지도 · 일정 · 커뮤니티 · 채팅**(산책은 홈이 연다, #446). 일정은 #419 가 더했다 — 왼쪽 셋 · 오른쪽 둘로 나눈 것은 FAB 오른쪽에 셋을 두면 알약의 무게가 쏠리기 때문이다. 통계·기록·가족·설정은 탭이 아니라 프로필(`me_screen.dart`)에서 들어간다. `pin_picker_screen.dart` 는 파일은 있으나 지금 어디에서도 열리지 않는다(#322 에서 확인 — 지울지는 따로 정한다).
+네비게이션 골격은 `main_shell.dart` 의 다섯 자리다: **홈 · 탐색 · 일정 · 커뮤니티 · 채팅**(산책은 홈이 연다, #446). 일정은 #419 가 더했다 — 왼쪽 셋 · 오른쪽 둘로 나눈 것은 FAB 오른쪽에 셋을 두면 알약의 무게가 쏠리기 때문이다. 통계·기록·가족·설정은 탭이 아니라 프로필(`me_screen.dart`)에서 들어간다. `pin_picker_screen.dart` 는 파일은 있으나 지금 어디에서도 열리지 않는다(#322 에서 확인 — 지울지는 따로 정한다).
 
 ---
 
