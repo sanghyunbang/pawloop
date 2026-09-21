@@ -106,6 +106,14 @@ class PushRegistrar {
   Future<void> _registerIfNeeded() async {
     final token = _token;
     final userId = _userId();
+    if (_status.value == AuthStatus.unauthenticated) {
+      // 로그아웃이면 서버가 이 사람의 토큰을 **전부 폐기**한다(`/auth/logout` 은 전 기기 — 다른 기기에서
+      // 해도). "이미 보냈다" 를 잊어야 같은 사람으로 다시 로그인했을 때 또 보낸다 — 안 잊으면 아래
+      // 비교가 걸러서 이 기기는 다시 로그인하고도 조용히 알림을 못 받는 기기가 된다(2026-09-21, 사장님
+      // 폰). 온보딩·확인 중 같은 흔들림은 잊지 않는다 — 그건 로그아웃이 아니라 요청은 하나여야 한다.
+      _sent = null;
+      return;
+    }
     if (token == null || userId == null || _status.value != AuthStatus.authenticated) return;
     final sent = _sent;
     if (sent != null && sent.token == token && sent.userId == userId) return;
