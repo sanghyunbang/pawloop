@@ -96,7 +96,7 @@ void main() {
 
     expect(find.byKey(const Key('pace-explainer')), findsOneWidget);
     expect(find.text('1km 를 걷는 데 걸리는 시간이에요.'), findsOneWidget);
-    expect(find.textContaining("1km 를 2분 10초 에 걷고 있다"), findsOneWidget,
+    expect(find.textContaining("1km 를 2분 10초에 걷는 속도"), findsOneWidget,
         reason: '지금 화면에 뜬 값을 그대로 들어 설명해야 알아듣는다');
   });
 

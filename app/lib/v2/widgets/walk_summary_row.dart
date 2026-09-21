@@ -187,7 +187,9 @@ Future<void> showPaceExplanation(BuildContext context, String paceLabel) {
           Text(
             words == null
                 ? '아직 거리가 짧아 못 재고 있어요. 조금 더 걸으면 나와요.'
-                : "지금 $paceLabel 은 1km 를 $words 에 걷고 있다는 뜻이에요.",
+                // 완료 시트도 같은 설명을 쓴다 — "걷고 있다" 로 적으면 끝난 산책에 안 맞는다.
+                // 조사는 붙여 쓴다(`$words에`) — 띄우면 "90분 58초 에" 가 된다.
+                : "지금 $paceLabel 은 1km 를 $words에 걷는 속도예요.",
             style: const TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary),
           ),
           const SizedBox(height: 8),
