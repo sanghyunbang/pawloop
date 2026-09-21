@@ -208,7 +208,8 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
             [
               (widget.timeLabel, '시간'),
               (widget.distanceLabel, '거리'),
-              (widget.paceLabel, '페이스'),
+              // 추적 화면과 같은 말로 — 1km 를 걷는 데 걸린 시간이다(2026-09-21).
+              (widget.paceLabel, '페이스(1km)'),
             ],
             valueSize: 20,
           ),
