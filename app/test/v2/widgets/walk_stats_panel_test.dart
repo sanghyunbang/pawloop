@@ -80,6 +80,17 @@ void main() {
     expect(find.text('산책 기록 중'), findsOneWidget);
   });
 
+  testWidgets('페이스 라벨이 무엇을 재는 값인지 말한다 — "페이스" 만으로는 모른다 (2026-09-21)', (tester) async {
+    // 사장님이 폰에서 물었다: "'페이스' 라는 게 뭐 하는 건지 모르겠는데". 값은 `2'10"` 처럼
+    // 나오는데 그것이 **1km 를 걷는 데 걸리는 시간**이라는 말이 화면 어디에도 없었다.
+    // 달리기 앱의 낱말이라 반려인에게는 낯설다.
+    await tester.pumpWidget(_wrap(expanded: true));
+
+    expect(find.text('페이스'), findsNothing,
+        reason: '맨 "페이스" 로 돌아가면 같은 질문을 또 받는다');
+    expect(find.text('페이스(1km)'), findsOneWidget);
+  });
+
   testWidgets('접힘: 알약 하나, 종료는 없다 — 탭하면 onToggle', (tester) async {
     var toggled = 0;
     await tester.pumpWidget(_wrap(expanded: false, onToggle: () => toggled++));

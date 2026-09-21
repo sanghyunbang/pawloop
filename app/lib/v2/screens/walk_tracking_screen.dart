@@ -421,9 +421,49 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       NMarker(
         id: 'walk-head',
         position: _path.last,
-        iconTintColor: T.warmEnd,
+        icon: await _headIcon(),
       ),
     );
+  }
+
+  /// 지금 내가 있는 점 — 경로 선 끝에 찍는다.
+  ///
+  /// 예전에는 `iconTintColor: T.warmEnd` 만 주었는데, 그것은 **플러그인의 기본 핀 그림에
+  /// 색을 곱하는 것**이라 우리 주황이 안 나왔다. 화면에서는 희멀건 연두 물방울로 보였고
+  /// 경로 선(같은 주황)과도 따로 놀았다(사장님, 2026-09-21). 그래서 그림을 직접 굽는다 —
+  /// 탐색 지도의 장소 핀과 같은 방식이다(#533).
+  ///
+  /// **한 번만 굽는다.** 위치는 5m 마다 오고 그때마다 이 표식을 다시 찍으므로, 매번
+  /// 구우면 산책 내내 위젯을 렌더한다.
+  NOverlayImage? _headIconCache;
+
+  Future<NOverlayImage> _headIcon() async {
+    final cached = _headIconCache;
+    if (cached != null) return cached;
+    final made = await NOverlayImage.fromWidget(
+      context: context,
+      size: const Size(34, 34),
+      widget: SizedBox(
+        width: 34,
+        height: 34,
+        child: Center(
+          child: Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: T.warmEnd,
+              border: Border.all(color: Colors.white, width: 4),
+              boxShadow: [
+                BoxShadow(color: T.warmEnd.withValues(alpha: 0.45), blurRadius: 6),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    _headIconCache = made;
+    return made;
   }
 
   // ───────────── 주변 장소 ─────────────
