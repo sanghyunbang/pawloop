@@ -854,7 +854,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
 
     final pets = kMyPets.value.where((p) => p.serverId != null).toList();
-    final saved = await showModalBottomSheet<Schedule>(
+    // 돌아오는 것은 고친 [Schedule] 이거나, 지웠다는 표시([ScheduleDeleted])다.
+    final result = await showModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -868,7 +869,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         onlyThisDay: onlyThisDay,
       ),
     );
-    if (saved == null || !mounted) return;
+    if (result == null || !mounted) return;
+    if (result is ScheduleDeleted) {
+      _say(onlyThisDay ? '${s.onDate.month}월 ${s.onDate.day}일은 건너뛰어요' : '지웠어요');
+    }
     // 무엇이 바뀌었는지(규칙인지 하루인지) 화면이 스스로 셀 수 없다 — 다시 불러온다.
     await _load();
   }
@@ -953,6 +957,14 @@ class ScheduleSheet extends StatefulWidget {
 
   @override
   State<ScheduleSheet> createState() => _ScheduleSheetState();
+}
+
+/// 고치기 시트가 "지웠다" 고 돌려주는 표시. 고친 [Schedule] 과 같은 자리로 온다.
+///
+/// `null` 로 돌리면 "그냥 닫았다" 와 구별이 안 돼 화면이 다시 안 불러온다 — 지운 줄이
+/// 목록에 남는다.
+class ScheduleDeleted {
+  const ScheduleDeleted();
 }
 
 /// 담당자 후보 한 명. 가족 화면이 이미 들고 있는 것과 같은 값이다.
@@ -1137,8 +1149,24 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
               label: _saving ? '저장 중…' : '저장',
               onPressed: _saving ? null : _save,
             ),
+            // 지우기는 고칠 때만 — 새로 적는 시트에는 지울 것이 없다. 범위는 위에서 이미
+            // 물었다("이 날만 / 앞으로 전부") — 여기서 또 묻지 않고 그 답을 따른다.
+            if (_editing) ...[
+              const SizedBox(height: 8),
+              SecondaryButton(
+                buttonKey: const Key('schedule-delete'),
+                label: _deleteLabel,
+                danger: true,
+                onPressed: _saving ? null : _delete,
+              ),
+            ],
       ],
     );
+  }
+
+  String get _deleteLabel {
+    if (widget.onlyThisDay) return '이 날만 건너뛰기';
+    return widget.editing!.repeats ? '반복 전부 지우기' : '지우기';
   }
 
   Widget _label(String text) => Padding(
@@ -1184,6 +1212,71 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
       initialTime: _time ?? const TimeOfDay(hour: 10, minute: 0),
     );
     if (picked != null) setState(() => _time = picked);
+  }
+
+  /// 지운다 — 되돌릴 수 없으니 한 번 묻는다.
+  ///
+  /// 범위는 [ScheduleSheet.onlyThisDay] 를 따른다: 펼친 하루를 "이 날만" 으로 열었으면
+  /// **그 하루만 건너뛰고**(`?date=`, #421) 규칙은 남긴다. 그 밖에는 그 일정(규칙이면
+  /// 규칙 전체)이 사라진다. 서버가 그 둘을 가른다 — 앱은 날짜를 붙이거나 안 붙일 뿐이다.
+  Future<void> _delete() async {
+    final editing = widget.editing!;
+    final onlyDay = widget.onlyThisDay;
+    final day = '${editing.onDate.month}월 ${editing.onDate.day}일';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        key: const Key('schedule-delete-confirm'),
+        backgroundColor: T.surfaceBright,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(onlyDay ? '$day만 건너뛸까요?' : '이 일정을 지울까요?',
+            style: const TextStyle(
+                fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+        content: Text(
+          onlyDay
+              ? '나머지 날은 그대로예요.'
+              : editing.repeats
+                  ? '반복 규칙과 앞으로의 날이 전부 사라져요. 되돌릴 수 없어요.'
+                  : '되돌릴 수 없어요.',
+          style: const TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('취소', style: TextStyle(color: T.textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: Text(onlyDay ? '건너뛰기' : '지우기',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w800, color: SecondaryButton.dangerColor)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.repository
+          .delete(editing.id, onlyDay: onlyDay ? editing.onDate : null);
+      if (!mounted) return;
+      Navigator.of(context).pop(const ScheduleDeleted());
+    } on ScheduleFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = switch (e.kind) {
+          ScheduleFailureKind.notFound => '이미 지워진 일정이에요. 닫고 다시 열어 주세요',
+          ScheduleFailureKind.unauthorized => '로그인이 필요해요',
+          ScheduleFailureKind.forbidden => '이 일정은 지울 수 없어요',
+          _ => '연결이 불안정해요. 잠시 뒤 다시 해 주세요',
+        };
+      });
+    }
   }
 
   Future<void> _save() async {
