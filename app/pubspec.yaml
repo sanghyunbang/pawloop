@@ -2,7 +2,7 @@ name: heat_trip_flutter
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 2.0.1+2
+version: 2.0.0+1
 
 environment:
   sdk: ^3.8.1
