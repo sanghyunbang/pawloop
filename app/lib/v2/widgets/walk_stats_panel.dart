@@ -193,12 +193,16 @@ class WalkStatsPanel extends StatelessWidget {
               (timeLabel, '시간'),
               // **"페이스" 만 있으면 무슨 값인지 모른다**(사장님, 2026-09-21). 값은
               // `25'29"` 처럼 나오는데 그것이 1km 를 걷는 데 걸린 시간이라는 말이 어디에도
-              // 없었다. 달리기 앱의 낱말이라 반려인에게는 낯설다. 괄호 한 쌍으로 말한다.
-              (paceLabel, '페이스(1km)'),
+              // 없었다. 달리기 앱의 낱말이라 반려인에게는 낯설다.
+              //
+              // 처음엔 이름을 `페이스(1km)` 로 늘렸는데 **그게 더 헷갈렸다** — 그 1km 가
+              // 시간인지 거리인지 안 말해 준다. 이름은 짧게 두고 눌렀을 때 설명한다.
+              (paceLabel, '페이스'),
             ],
             valueSize: 24,
             labelSize: 11.5,
             gap: 2,
+            explain: {2: () => showPaceExplanation(context, paceLabel)},
           ),
           const SizedBox(height: 14),
           Row(

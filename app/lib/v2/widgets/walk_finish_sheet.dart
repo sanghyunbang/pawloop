@@ -208,10 +208,11 @@ class _WalkFinishSheetState extends State<WalkFinishSheet> {
             [
               (widget.timeLabel, '시간'),
               (widget.distanceLabel, '거리'),
-              // 추적 화면과 같은 말로 — 1km 를 걷는 데 걸린 시간이다(2026-09-21).
-              (widget.paceLabel, '페이스(1km)'),
+              // 추적 화면과 같은 말로 — 누르면 무슨 값인지 설명한다(2026-09-21).
+              (widget.paceLabel, '페이스'),
             ],
             valueSize: 20,
+            explain: {2: () => showPaceExplanation(context, widget.paceLabel)},
           ),
           // 산책 중 찍은 사진 (#450) — 없으면 줄이 아예 없다.
           if (widget.photoPaths.isNotEmpty) ...[
