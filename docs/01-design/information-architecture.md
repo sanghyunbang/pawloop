@@ -1,6 +1,6 @@
 # 정보구조(IA) — Pawloop(포루프)
 
-> 5탭(홈 / 지도 / 일정 / 커뮤니티 / 채팅) 셸 + 각 탭의 하위 화면 트리와 네비게이션 규칙. 실제 구현(`app/lib/v2/`) 기준으로 작성.
+> 5탭(홈 / 탐색 / 일정 / 커뮤니티 / 채팅) 셸 + 각 탭의 하위 화면 트리와 네비게이션 규칙. 실제 구현(`app/lib/v2/`) 기준으로 작성.
 
 관련 문서: [화면 목록](./screen-spec.md) · [디자인 시스템](./design-system.md) · [ERD](../03-database/erd.md)
 
@@ -24,7 +24,7 @@ graph TD
     Root["MainShell · /home<br/>(하단 글래스 네비)"]
 
     Root -->|탭 0| Home["🏠 홈<br/>TodayScreen"]
-    Root -->|탭 1| Map["🗺️ 지도<br/>ExploreScreen"]
+    Root -->|탭 1| Map["🗺️ 탐색<br/>ExploreScreen"]
     Home -->|"산책 시작" CTA| Walk["✏️ 산책 기록<br/>WalkTrackingScreen"]
     Root -->|탭 2| Schedule["🗓️ 일정<br/>ScheduleScreen"]
     Root -->|탭 3| Community["💬 커뮤니티<br/>FeedScreen"]
@@ -43,7 +43,7 @@ graph TD
 | 슬롯 | 라벨 | 화면 | 파일 | 전환 |
 |---|---|---|---|---|
 | 탭 0 | 홈 | `TodayScreen` | `today_screen.dart` | `RootTab.index=0` |
-| 탭 1 | 지도 | `ExploreScreen` | `explore_screen.dart` | `RootTab.index=1` |
+| 탭 1 | 탐색 | `ExploreScreen` | `explore_screen.dart` | `RootTab.index=1` |
 | (탭 아님) | 산책 기록 | `WalkTrackingScreen` | `walk_tracking_screen.dart` | 홈의 "산책 시작" → `Navigator.push` |
 | 탭 2 | 일정 | `ScheduleScreen` | `schedule_screen.dart` | `RootTab.index=2` |
 | 탭 3 | 커뮤니티 | `FeedScreen` | `feed_screen.dart` | `RootTab.index=3` |
@@ -206,7 +206,7 @@ graph LR
 | 규칙 | 내용 |
 |---|---|
 | **탭 이동** | 화면 push가 아니라 `RootTab.index` 값 변경으로 본문 교체. 탭 간 상태 보존, 백스택 미증가. |
-| **탭 프로그램 전환** | 화면 코드에서 `RootTab.index.value = n`으로 탭 이동(예: 홈 "코스 찾기" → 지도). |
+| **탭 프로그램 전환** | 화면 코드에서 `RootTab.index.value = n`으로 탭 이동(예: 홈 "코스 찾기" → 탐색). |
 | **딥 전환 후 복귀** | `RootTab.go(context, i)`는 push된 모든 화면을 `popUntil(isFirst)`로 닫고 지정 탭으로 이동(옵션 `exView`로 지도 뷰 지정). |
 | **상세/작성/트래킹** | `Navigator.push`(또는 `pushReplacement`)로 셸 위에 스택. 하단 네비 위에 전체화면으로 덮음. |
 | **모달 시트** | 장소 상세·산책 완료·게시판 선택은 `showModalBottomSheet`. 라우트가 아니라 컨텍스트 오버레이. |
