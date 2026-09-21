@@ -12,6 +12,7 @@ import '../data/community_repository.dart';
 import '../theme/app_tokens.dart';
 import 'post_write_screen.dart';
 import '../domain/pet.dart';
+import '../domain/map_camera_owner.dart';
 import '../domain/serial_refresh.dart';
 import '../domain/vet_hours.dart';
 import '../walk/route_image.dart';
@@ -195,6 +196,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// 읽고 바로 되돌리므로 다음에 지도를 그냥 열면 전체다.
   String? _catFilter = RootTab.takeExploreCategory();
 
+  /// 카메라를 지금 누가 쥐고 있나 — 앱인가 사용자인가(#769).
+  final MapCameraOwner _camera = MapCameraOwner();
+
+  /// 앱이 **스스로** 카메라를 옮긴다. 사용자가 이미 지도를 만졌으면 옮기지 않는다.
+  ///
+  /// 여기를 지나지 않는 `updateCamera` 는 **사용자가 부탁한 이동**이다(산책로를 고르면 그 코스로,
+  /// 검색 결과를 누르면 그 장소로). 그런 것까지 막으면 눌러도 지도가 안 따라오는 다른 고장이 된다.
+  Future<void> _autoMoveCamera(NCameraUpdate update) async {
+    if (!_camera.mayAutoMove) return;
+    await _mapCtrl?.updateCamera(update);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -209,9 +222,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
     // 현위치 확보 → 실패 시 기본 중심(서울시청 또는 고른 동네) 유지.
     final pos = await LocationService.current();
     if (mounted && pos != null) {
-      _center = NLatLng(pos.latitude, pos.longitude);
-      _fallbackCenter = false;
-      await _mapCtrl?.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
+      // **사용자가 이미 지도를 만졌으면 뺏지 않는다**(#769). 현위치는 최대 25초까지 기다리는데
+      // (`LocationService.currentSettingsFor` 의 `timeLimit`), 그 사이 사용자는 이미 확대해 놓았다.
+      // 늦게 도착한 값이 그것을 덮어 장소가 다시 뭉치로 접혔다(에뮬레이터 실측).
+      //
+      // 그때는 **보고 있는 곳**이 목록의 기준이다 — 카메라만 남기고 기준점을 현위치로 옮기면
+      // 화면은 명동인데 마커는 성수에 찍힌다. 내 위치로 가고 싶으면 지도의 현위치 버튼이 있다.
+      final at = _camera.mayAutoMove ? null : await _mapCtrl?.getCameraPosition();
+      if (mounted) {
+        _center = at?.target ?? NLatLng(pos.latitude, pos.longitude);
+        _fallbackCenter = false;
+        await _autoMoveCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
+      }
     }
     await _load();
   }
@@ -234,7 +256,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       _myNeighborhood = mine;
       _center = NLatLng(mine.lat, mine.lng);
     });
-    await _mapCtrl?.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
+    await _autoMoveCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
   }
 
   /// 조회 순번 — 칩을 빠르게 두 번 누르면 먼저 간 조회가 늦게 돌아올 수 있다. 마지막만 남긴다.
@@ -770,6 +792,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       if (p.lng < minLng) minLng = p.lng;
       if (p.lng > maxLng) maxLng = p.lng;
     }
+    if (!_camera.mayAutoMove) return; // 사용자가 쥔 카메라는 안 뺏는다(#769).
     if (minLat == maxLat && minLng == maxLng) {
       await c.updateCamera(NCameraUpdate.withParams(target: NLatLng(minLat, minLng), zoom: 12));
       return;
@@ -968,6 +991,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
         key: Key('chip-${key ?? 'all'}'),
         onTap: () {
           if (_catFilter == key) return;
+          // 갈래를 바꾸는 것은 "그쪽을 보여 달라" 는 부탁이다 — 다시 앱 차례다(#769).
+          _camera.appWasAsked();
           setState(() {
             _catFilter = key;
             _only24h = false;
@@ -1325,10 +1350,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
           // 드래그한 중심은 **사용자의 현재 위치가 아니다.** A안(#235)이 막는 것은 기기가
           // 아는 내 위치를 서버로 보내는 것이지, 사용자가 손으로 고른 지점이 아니다.
           onCameraIdle: _onCameraIdle,
+          // 카메라가 움직인 이유를 플러그인이 알려 준다 — 손가락(제스처)과 줌 컨트롤만 사용자 것이다(#769).
+          onCameraChange: (reason, _) => _camera.moved(
+              byUser: reason == NCameraUpdateReason.gesture ||
+                  reason == NCameraUpdateReason.control),
           onMapReady: (c) async {
             _mapCtrl = c;
+            // 아이콘을 굽는 동안 지도는 **이미 만질 수 있다** — 그 사이 확대했으면 여기서도 안 뺏는다(#769).
             await _prepareClusterIcon();
-            c.updateCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
+            await _autoMoveCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
             await _refreshMarkers();
             if (_catFilter == 'trail') await _fitToPlaces();
             final pending = _pendingTrail;
@@ -1443,6 +1473,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Future<void> _researchHere() async {
     final target = _movedTo;
     if (target == null) return;
+    _camera.appWasAsked(); // 사용자가 "여기를 보여 달라" 고 눌렀다(#769).
     await _moveTo(target);
   }
 
