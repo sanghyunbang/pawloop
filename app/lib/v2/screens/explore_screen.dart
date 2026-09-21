@@ -280,7 +280,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   int _loadSeq = 0;
 
-  Future<void> _load() async {
+  /// [byRequest] 는 **사용자가 방금 앱에게 부탁한 조회**다(갈래 칩 · 이 지역에서 다시 찾기).
+  /// 그때는 카메라를 옮겨도 된다 — 옮겨 달라고 한 것이 그 부탁의 내용이다(#769).
+  ///
+  /// 부탁 여부를 [MapCameraOwner] 의 상태로만 두지 않는 이유: 조회는 비동기라 부탁과 이동
+  /// 사이에 시간이 흐르고, 그 사이 들어온 카메라 이벤트가 상태를 되돌려 **부탁이 조용히
+  /// 무시된다**. 지도를 끌었다 놓은 뒤 산책로 칩을 누르면 코스로 안 가는 것이 그 증상이었다
+  /// (에뮬레이터 실측). 그래서 부탁은 호출에 실어 보낸다.
+  Future<void> _load({bool byRequest = false}) async {
     final seq = ++_loadSeq;
     setState(() => _loading = true);
     // 칩 키를 조회에 붙인다 — 받아 놓은 80곳 안에서 거르면 병원은 매장 뒤에 묻힌다(#291 실측).
@@ -309,7 +316,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       _loading = false;
     });
     await _refreshMarkers();
-    if (_catFilter == 'trail') await _fitToPlaces();
+    if (_catFilter == 'trail') await _fitToPlaces(byRequest: byRequest);
   }
 
   /// 공개 코스 한 벌을 받아 **기기에서** 가까운 20개를 고른다 (#339).
@@ -780,7 +787,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   /// 산책로 칩: 카메라를 가까운 코스들에 맞춘다 — 코스가 화면 밖이면 지도가 비어 보였다(#328).
-  Future<void> _fitToPlaces() async {
+  Future<void> _fitToPlaces({bool byRequest = false}) async {
     final c = _mapCtrl;
     // 20개를 다 담으면 파주부터 수원까지 한 화면이다. 가까운 다섯이면 "어디쯤인지" 는 보인다.
     final places = _filtered.take(5).toList();
@@ -792,7 +799,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
       if (p.lng < minLng) minLng = p.lng;
       if (p.lng > maxLng) maxLng = p.lng;
     }
-    if (!_camera.mayAutoMove) return; // 사용자가 쥔 카메라는 안 뺏는다(#769).
+    // 부탁받은 이동이면 옮긴다. 아니면 사용자가 쥔 카메라는 안 뺏는다(#769).
+    if (!byRequest && !_camera.mayAutoMove) return;
     if (minLat == maxLat && minLng == maxLng) {
       await c.updateCamera(NCameraUpdate.withParams(target: NLatLng(minLat, minLng), zoom: 12));
       return;
@@ -998,7 +1006,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             _only24h = false;
             _neighbourCourses = false;
           });
-          _load(); // 끝나면 마커도 다시 그린다.
+          _load(byRequest: true); // 끝나면 마커도 다시 그린다.
         },
         child: Container(
           margin: const EdgeInsets.only(right: 8),
@@ -1474,18 +1482,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final target = _movedTo;
     if (target == null) return;
     _camera.appWasAsked(); // 사용자가 "여기를 보여 달라" 고 눌렀다(#769).
-    await _moveTo(target);
+    await _moveTo(target, byRequest: true);
   }
 
   /// 기준점을 옮기고 다시 거른다. 자동(`_onCameraIdle`)과 버튼이 **같은 길**을 쓴다.
-  Future<void> _moveTo(NLatLng target) async {
+  Future<void> _moveTo(NLatLng target, {bool byRequest = false}) async {
     setState(() {
       _center = target;
       _movedTo = null;
       // 여기는 내가 고른 동네도, 현위치도 아니다 — "서울시청 기준" 안내를 지운다.
       _fallbackCenter = false;
     });
-    await _load();
+    await _load(byRequest: byRequest);
   }
 
   /// 한 번에 하나만 다시 그린다 — #758. `onMapReady` 와 카메라 이동 뒤의 `_load` 가 겹치면
