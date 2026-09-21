@@ -89,6 +89,7 @@ Map<String, Object?> schedule({
   List<Map<String, Object?>> members = const [],
   http.Response Function(http.Request request)? onPatch,
   http.Response Function(http.Request request)? onPost,
+  http.Response Function(http.Request request)? onDelete,
 }) {
   final sent = <http.Request>[];
   final client = AuthedClient(
@@ -105,6 +106,10 @@ Map<String, Object?> schedule({
         }
         if (request.method == 'POST') {
           return onPost?.call(request) ?? _json(items.first, status: 201);
+        }
+        if (request.method == 'DELETE') {
+          // 서버는 204 를 준다 — 본문 없음.
+          return onDelete?.call(request) ?? http.Response('', 204);
         }
         // 목록. dogId 필터는 서버가 하므로 여기서도 흉내 낸다.
         final dogId = request.url.queryParameters['dogId'];
@@ -594,6 +599,134 @@ group('반복과 고치기 (#421)', () {
 
       expect(find.text('되풀이하는 일정이에요'), findsNothing);
       expect(find.text('일정 고치기'), findsOneWidget);
+    });
+  });
+
+  group('지우기 (2026-09-21 — 폰에서 못 지운다고 잡힘)', () {
+    testWidgets('고치기 시트의 "지우기" — 한 번 묻고 DELETE, 목록에서 사라진다', (tester) async {
+      // 지우면 서버 목록에서도 빠진다 — 다시 불러왔을 때 사라져야 진짜 지운 것이다.
+      final items = [schedule(id: 1, title: '보리 병원', onDate: '2026-10-20')];
+      final f = fixture(
+        items: items,
+        onDelete: (_) {
+          items.clear();
+          return http.Response('', 204);
+        },
+      );
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('보리 병원'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('schedule-delete')), findsOneWidget,
+          reason: '고치기 시트에 지우는 길이 없으면 잘못 적은 일정이 영영 남는다');
+      await tester.tap(find.byKey(const Key('schedule-delete')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('이 일정을 지울까요?'), findsOneWidget, reason: '되돌릴 수 없으니 한 번 묻는다');
+      expect(f.sent.where((r) => r.method == 'DELETE'), isEmpty, reason: '묻기 전에 지우면 안 된다');
+
+      await tester.tap(find.widgetWithText(TextButton, '지우기'));
+      await tester.pumpAndSettle();
+
+      final deleted = f.sent.singleWhere((r) => r.method == 'DELETE');
+      expect(deleted.url.path, '/api/schedules/1');
+      expect(deleted.url.queryParameters.containsKey('date'), isFalse,
+          reason: '평범한 일정은 통째로 — 날짜를 붙이면 서버가 "하루 건너뛰기" 로 읽는다');
+      expect(find.text('일정 고치기'), findsNothing, reason: '시트가 닫힌다');
+      expect(find.text('보리 병원'), findsNothing, reason: '다시 불러와 목록에서 빠진다');
+      expect(find.text('지웠어요'), findsOneWidget);
+    });
+
+    testWidgets('취소하면 아무것도 안 나간다', (tester) async {
+      final f = fixture(items: [schedule(id: 1, title: '보리 병원', onDate: '2026-10-20')]);
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('보리 병원'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('schedule-delete')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(TextButton, '취소'));
+      await tester.pumpAndSettle();
+
+      expect(f.sent.where((r) => r.method == 'DELETE'), isEmpty);
+      expect(find.text('일정 고치기'), findsOneWidget, reason: '시트는 그대로 열려 있다');
+    });
+
+    testWidgets('되풀이 일정을 "이 날만" 으로 열었으면 그 하루만 건너뛴다 — ?date= (#421)',
+        (tester) async {
+      final f = fixture(items: [
+        {...schedule(id: 1, title: '목욕', onDate: '2026-10-20'),
+          'repeatKind': 'weekly', 'occurrence': true},
+      ]);
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('목욕'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('10월 20일만 고치기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('이 날만 건너뛰기'), findsOneWidget,
+          reason: '"지우기" 라고 쓰면 매주 목욕을 통째로 지우는 줄 안다');
+      await tester.tap(find.byKey(const Key('schedule-delete')));
+      await tester.pumpAndSettle();
+      expect(find.text('10월 20일만 건너뛸까요?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, '건너뛰기'));
+      await tester.pumpAndSettle();
+
+      final deleted = f.sent.singleWhere((r) => r.method == 'DELETE');
+      expect(deleted.url.path, '/api/schedules/1');
+      expect(deleted.url.queryParameters['date'], '2026-10-20',
+          reason: '날짜가 없으면 서버가 규칙 전체를 지운다');
+      expect(find.text('10월 20일은 건너뛰어요'), findsOneWidget);
+    });
+
+    testWidgets('"앞으로 전부" 로 열었으면 규칙째 지운다 — ?date= 없음', (tester) async {
+      final f = fixture(items: [
+        {...schedule(id: 1, title: '목욕', onDate: '2026-10-20'),
+          'repeatKind': 'weekly', 'occurrence': true},
+      ]);
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('목욕'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('앞으로 전부 고치기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('반복 전부 지우기'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('schedule-delete')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('반복 규칙과 앞으로의 날이 전부 사라져요'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, '지우기'));
+      await tester.pumpAndSettle();
+
+      final deleted = f.sent.singleWhere((r) => r.method == 'DELETE');
+      expect(deleted.url.queryParameters.containsKey('date'), isFalse);
+    });
+
+    testWidgets('서버가 거절하면 시트에 이유가 남고 닫히지 않는다', (tester) async {
+      final f = fixture(
+        items: [schedule(id: 1, title: '보리 병원', onDate: '2026-10-20')],
+        onDelete: (_) => _json({'error': {'code': 'FORBIDDEN'}}, status: 403),
+      );
+      await pumpScreen(tester, f);
+      await tester.tap(find.bySemanticsLabel('10월 20일 · 일정 1건'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('보리 병원'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('schedule-delete')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '지우기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('이 일정은 지울 수 없어요'), findsOneWidget);
+      expect(find.text('일정 고치기'), findsOneWidget, reason: '실패했는데 닫히면 지워진 줄 안다');
+      expect(find.text('보리 병원'), findsWidgets, reason: '목록에도 그대로 있다');
     });
   });
 
