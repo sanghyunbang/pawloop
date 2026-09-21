@@ -51,12 +51,20 @@ class WalkSummaryRow extends StatelessWidget {
   /// 값과 라벨 사이.
   final double gap;
 
+  /// 눌러서 설명을 볼 수 있는 칸 — 칸 번호에서 할 일로.
+  ///
+  /// 그 칸의 라벨 옆에 작은 ⓘ 가 붙고 라벨 줄 전체가 눌린다. **낱말을 늘려 설명하려던 것을
+  /// 되돌린 자리다**(2026-09-21): `페이스(1km)` 는 1km 가 시간인지 거리인지 안 말해 줘서
+  /// 오히려 더 헷갈린다는 지적을 받았다. 짧은 이름은 그대로 두고 설명은 눌렀을 때 준다.
+  final Map<int, VoidCallback> explain;
+
   const WalkSummaryRow(
     this.cells, {
     super.key,
     required this.valueSize,
     this.labelSize = 12,
     this.gap = 3,
+    this.explain = const {},
   });
 
   static const Color labelColor = T.textMuted;
@@ -70,7 +78,7 @@ class WalkSummaryRow extends StatelessWidget {
           final size = _sizeThatFits(context, box.maxWidth / cells.length);
           return Row(
             children: [
-              for (final (value, label) in cells)
+              for (final (i, (value, label)) in cells.indexed)
                 Expanded(
                   child: Column(
                     children: [
@@ -82,12 +90,7 @@ class WalkSummaryRow extends StatelessWidget {
                         style: _valueStyle(size),
                       ),
                       SizedBox(height: gap),
-                      Text(
-                        label,
-                        maxLines: 1,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: labelSize, color: labelColor),
-                      ),
+                      _label(label, explain[i]),
                     ],
                   ),
                 ),
@@ -95,6 +98,32 @@ class WalkSummaryRow extends StatelessWidget {
           );
         },
       );
+
+  /// 칸 이름. 설명이 딸린 칸은 ⓘ 가 붙고 눌린다.
+  Widget _label(String label, VoidCallback? onTap) {
+    final text = Text(
+      label,
+      maxLines: 1,
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: labelSize, color: labelColor),
+    );
+    if (onTap == null) return text;
+    return GestureDetector(
+      key: Key('explain-$label'),
+      onTap: onTap,
+      // 글자만 누르면 잘 안 눌린다 — 라벨 줄 높이만큼 눌리는 영역을 준다.
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(child: text),
+          const SizedBox(width: 2),
+          Icon(Icons.help_outline_rounded, size: labelSize + 1.5, color: labelColor),
+        ],
+      ),
+    );
+  }
 
   /// 한 칸 폭 안에 세 값이 **모두** 들어가는 글자 크기. 다 들어가면 [valueSize] 그대로다.
   ///
@@ -120,4 +149,59 @@ class WalkSummaryRow extends StatelessWidget {
     if (widest <= room || widest == 0) return valueSize;
     return valueSize * room / widest;
   }
+}
+
+/// 페이스 값(`4'35"`)을 사람 말로 — `4분 35초`. 못 잰 값(`-'--"`)이면 `null`.
+///
+/// 화면에 쓰는 표기는 달리기 앱의 관례라 짧지만, 처음 보는 사람에게는 읽히지 않는다.
+/// 설명 안에서는 풀어 쓴다.
+String? paceInWords(String paceLabel) {
+  final m = RegExp(r"^(\d+)'(\d{1,2})\x22?$").firstMatch(paceLabel.trim());
+  if (m == null) return null;
+  return '${m.group(1)}분 ${int.parse(m.group(2)!)}초';
+}
+
+/// "페이스가 뭔가요?" — 눌렀을 때 뜨는 설명.
+///
+/// **낱말을 늘리는 것으로는 안 됐다**(2026-09-21). 라벨을 `페이스(1km)` 로 바꿔 봤더니
+/// 그 1km 가 시간인지 거리인지 안 말해 줘서 더 헷갈린다는 지적을 받았다. 지금 화면에 떠
+/// 있는 값을 그대로 들어 "이 숫자가 이런 뜻이다" 라고 말하는 편이 짧고 확실하다.
+Future<void> showPaceExplanation(BuildContext context, String paceLabel) {
+  final words = paceInWords(paceLabel);
+  return showDialog<void>(
+    context: context,
+    builder: (dialogCtx) => AlertDialog(
+      key: const Key('pace-explainer'),
+      backgroundColor: T.surfaceBright,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('페이스가 뭔가요?',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: T.textPrimary)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('1km 를 걷는 데 걸리는 시간이에요.',
+              style: TextStyle(
+                  fontSize: 14.5, height: 1.5, fontWeight: FontWeight.w700, color: T.textPrimary)),
+          const SizedBox(height: 8),
+          Text(
+            words == null
+                ? '아직 거리가 짧아 못 재고 있어요. 조금 더 걸으면 나와요.'
+                : "지금 $paceLabel 은 1km 를 $words 에 걷고 있다는 뜻이에요.",
+            style: const TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          const Text('빨리 걸을수록 숫자가 작아져요.',
+              style: TextStyle(fontSize: 13.5, height: 1.5, color: T.textSecondary)),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogCtx).pop(),
+          child: const Text('알겠어요',
+              style: TextStyle(fontWeight: FontWeight.w800, color: T.warmText)),
+        ),
+      ],
+    ),
+  );
 }

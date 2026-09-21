@@ -80,15 +80,33 @@ void main() {
     expect(find.text('산책 기록 중'), findsOneWidget);
   });
 
-  testWidgets('페이스 라벨이 무엇을 재는 값인지 말한다 — "페이스" 만으로는 모른다 (2026-09-21)', (tester) async {
+  testWidgets('페이스를 누르면 무슨 값인지 설명이 뜬다 — "페이스" 만으로는 모른다 (2026-09-21)', (tester) async {
     // 사장님이 폰에서 물었다: "'페이스' 라는 게 뭐 하는 건지 모르겠는데". 값은 `2'10"` 처럼
     // 나오는데 그것이 **1km 를 걷는 데 걸리는 시간**이라는 말이 화면 어디에도 없었다.
-    // 달리기 앱의 낱말이라 반려인에게는 낯설다.
+    //
+    // 처음엔 이름을 `페이스(1km)` 로 늘렸다가 **더 헷갈린다**는 지적을 받았다 — 그 1km 가
+    // 시간인지 거리인지 안 말해 준다. 이름은 짧게 두고 눌렀을 때 설명한다.
     await tester.pumpWidget(_wrap(expanded: true));
 
-    expect(find.text('페이스'), findsNothing,
-        reason: '맨 "페이스" 로 돌아가면 같은 질문을 또 받는다');
-    expect(find.text('페이스(1km)'), findsOneWidget);
+    expect(find.text('페이스(1km)'), findsNothing, reason: '이름을 늘리는 방식은 되돌렸다');
+    expect(find.text('페이스'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('explain-페이스')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('pace-explainer')), findsOneWidget);
+    expect(find.text('1km 를 걷는 데 걸리는 시간이에요.'), findsOneWidget);
+    expect(find.textContaining("1km 를 2분 10초 에 걷고 있다"), findsOneWidget,
+        reason: '지금 화면에 뜬 값을 그대로 들어 설명해야 알아듣는다');
+  });
+
+  testWidgets('아직 못 잰 페이스를 누르면 그렇다고 말한다', (tester) async {
+    await tester.pumpWidget(_wrap(expanded: true, paceLabel: "-'--\""));
+
+    await tester.tap(find.byKey(const Key('explain-페이스')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('아직 거리가 짧아'), findsOneWidget);
   });
 
   testWidgets('접힘: 알약 하나, 종료는 없다 — 탭하면 onToggle', (tester) async {
