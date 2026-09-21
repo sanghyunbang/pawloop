@@ -27,7 +27,7 @@
 ```mermaid
 flowchart TB
     subgraph client["📱 클라이언트 — Flutter 앱 (lib/v2)"]
-        UI["화면 5탭<br/>홈·지도·일정·[산책 FAB]·커뮤니티·채팅"]
+        UI["화면 5탭<br/>홈·탐색·일정·[산책 FAB]·커뮤니티·채팅"]
         REPO["Repository<br/>pet_places_repository.dart"]
         MAP["네이버맵 위젯<br/>NaverMap / Controller"]
         GPS["실시간 트래킹<br/>geolocator 위치 스트림"]
@@ -100,7 +100,7 @@ flowchart TB
 
 ### 3.1 클라이언트 (Flutter, `lib/v2/`)
 
-- 진입: `main.dart` → `MainShell`(go_router). 5탭 네비(홈/지도/일정/[산책 FAB]/커뮤니티/채팅) — 일정은 #419 가 더했고 그때 커뮤니티·채팅의 번호가 하나씩 밀렸다. 통계는 탭이 아니라 `me_screen`·`today_screen` 둘에서 push 한다.
+- 진입: `main.dart` → `MainShell`(go_router). 5탭 네비(홈/탐색/일정/[산책 FAB]/커뮤니티/채팅) — 일정은 #419 가 더했고 그때 커뮤니티·채팅의 번호가 하나씩 밀렸다. 통계는 탭이 아니라 `me_screen`·`today_screen` 둘에서 push 한다.
 - 상태관리: `ValueNotifier` + `ValueListenableBuilder`(경량). 예) `RootTab.index`, `kMyDog`.
 - 지도: `main.dart`에서 `FlutterNaverMap().init(clientId: ...)` 초기화 후, `explore_screen.dart`의 `NaverMap` 위젯이 타일·마커를 그린다.
 - 데이터 접근: `data/pet_places_repository.dart`(KTO), 도메인 `domain/pet.dart`(카테고리·강아지 프로필·산책/커뮤니티 샘플).
