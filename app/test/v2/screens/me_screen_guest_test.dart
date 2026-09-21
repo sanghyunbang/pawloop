@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/domain/pet.dart';
 import 'package:heat_trip_flutter/v2/screens/login_screen.dart';
+import 'package:heat_trip_flutter/v2/screens/main_shell.dart' show RootTab;
 import 'package:heat_trip_flutter/v2/screens/me_screen.dart';
 
 void main() {
@@ -32,6 +33,39 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '로그인 / 회원가입'));
     await tester.pumpAndSettle();
     expect(find.byType(LoginScreen), findsOneWidget);
+  });
+
+  testWidgets('프로필에서 로그인하면 프로필로 돌아오지 않고 홈이다 — 안 하고 돌아오면 그대로 (2026-09-21)', (tester) async {
+    AuthState.resetForTest();
+    AuthState.status.value = AuthStatus.unauthenticated;
+    RootTab.index.value = 4; // 채팅 탭에 있다가 아바타로 프로필을 열었다고 치자
+    final nav = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: nav,
+      home: const Scaffold(body: Center(child: Text('껍데기(홈)'))),
+    ));
+    nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => const MeScreen()));
+    await tester.pumpAndSettle();
+
+    // 로그인 안 하고 뒤로 — 프로필 그대로.
+    await tester.tap(find.widgetWithText(FilledButton, '로그인 / 회원가입'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginScreen), findsOneWidget);
+    nav.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(MeScreen), findsOneWidget, reason: '로그인을 안 했으면 돌아올 자리는 프로필이다');
+    expect(RootTab.index.value, 4);
+
+    // 로그인하고 돌아옴 — 로그인 화면은 pop 을 먼저 하고 나서 상태를 확정한다(login_screen.dart).
+    await tester.tap(find.widgetWithText(FilledButton, '로그인 / 회원가입'));
+    await tester.pumpAndSettle();
+    nav.currentState!.pop();
+    AuthState.signInForTest(const AuthUser(id: 1, nickname: 'walker'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MeScreen), findsNothing, reason: '게스트 프로필로 되돌아오면 "로그인하세요" 화면 위에 서게 된다');
+    expect(find.text('껍데기(홈)'), findsOneWidget);
+    expect(RootTab.index.value, 0, reason: '홈 탭이다');
   });
 
   testWidgets('로그인했는데 아이가 없으면 등록이 주 버튼이다', (tester) async {
