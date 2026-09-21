@@ -16,6 +16,7 @@ import 'display_name_screen.dart';
 import 'edit_screen.dart';
 import 'myrecords_screen.dart';
 import 'login_screen.dart';
+import 'main_shell.dart' show RootTab;
 import 'family_screen.dart';
 import 'insight_screen.dart';
 
@@ -150,8 +151,7 @@ class MeScreen extends StatelessWidget {
               const SizedBox(height: 22),
               FilledButton(
                 onPressed: guest
-                    ? () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => const LoginScreen()))
+                    ? () => loginThenHome(context)
                     : (unknown
                         ? () => petRevision.value++
                         : () => showPetRegistrationSheet(context)),
@@ -605,7 +605,7 @@ class MeScreen extends StatelessWidget {
                 ? row(Icons.logout, '로그아웃', color: const Color(0xFFFF6B7E), border: false,
                     onTap: () => _logout(context))
                 : row(Icons.login, '로그인 / 회원가입', color: const Color(0xFF5B8DEF), border: false,
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()))),
+                    onTap: () => loginThenHome(context)),
           ),
         ]),
       ),
@@ -695,3 +695,17 @@ String? providerLabel(String? provider) => switch (provider) {
       'local' || 'email' => '이메일로 로그인',
       _ => null,
     };
+
+/// 프로필에서 시작한 로그인의 끝은 **홈**이다 (2026-09-21 사장님 — "로그인하면 또 프로필로 시작하냐").
+///
+/// 로그인 화면은 열었던 자리로 돌아온다. 산책 시작·글쓰기처럼 **하던 일을 이어야 하는** 자리에서는
+/// 그게 맞다. 그런데 게스트 프로필은 로그인 말고 할 것이 없는 화면이라 돌아올 이유가 없다 —
+/// "둘러보기" 가 홈으로 가는 것(#324)과 같은 이유다. 로그인을 안 하고 돌아왔으면 그대로 둔다.
+Future<void> loginThenHome(BuildContext context) async {
+  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+  // 로그인 화면은 pop 을 먼저 하고 completeLogin 을 부른다 — 여기서 바로 물으면 아직 authenticating 이다.
+  await AuthState.settle();
+  if (!context.mounted || !AuthState.isAuthenticated) return;
+  Navigator.of(context).popUntil((route) => route.isFirst);
+  RootTab.index.value = 0;
+}
