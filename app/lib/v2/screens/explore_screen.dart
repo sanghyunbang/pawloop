@@ -208,6 +208,35 @@ class _ExploreScreenState extends State<ExploreScreen> {
     await _mapCtrl?.updateCamera(update);
   }
 
+  /// 지금 지도에 얹어 둔 코스 선들 — **마커와 생명주기가 다르다**(2026-09-21 검토).
+  ///
+  /// 예전에는 마커를 다시 그릴 때 `clearOverlays()` 가 선까지 쓸어 갔다. 조회는 카메라가
+  /// 멈출 때마다 돌 수 있으므로, 사용자가 보여 달라고 누른 코스가 곧바로 사라졌다. 이제
+  /// 마커 갱신은 마커 타입만 지우고, 선은 여기 적어 두었다가 그린 쪽이 지운다.
+  /// **종류별로 한 줄씩** 든다. 산책로 선과 추천 코스 선은 같은 장소에서 함께 뜨는 것이
+  /// 맞다(`trail` 은 걸을 수 있는 갈래라 코스 고르기도 같이 나온다) — 한 종류가 다른 종류를
+  /// 지우면 안 된다. 같은 종류는 새로 그릴 때 옛것을 지운다.
+  final Map<String, String> _lines = {};
+
+  /// 한 종류의 선을 지운다. 없던 것을 지우는 것은 실패가 아니다.
+  Future<void> _clearLine(String kind) async {
+    final id = _lines.remove(kind);
+    final c = _mapCtrl;
+    if (c == null || id == null) return;
+    try {
+      await c.deleteOverlay(NOverlayInfo(type: NOverlayType.polylineOverlay, id: id));
+    } catch (_) {
+      // 지도가 이미 사라졌거나 그 선이 없다. 어느 쪽이든 할 일은 끝났다.
+    }
+  }
+
+  /// 얹어 둔 선을 전부 지운다 — 보던 것이 통째로 바뀔 때만(갈래 바꾸기 · 목록으로 나가기).
+  Future<void> _clearLines() async {
+    for (final kind in _lines.keys.toList()) {
+      await _clearLine(kind);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -220,6 +249,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
     unawaited(_applyMyNeighborhood());
 
     // 현위치 확보 → 실패 시 기본 중심(서울시청 또는 고른 동네) 유지.
+    //
+    // **여기서 무슨 일이 나도 아래 `_load()` 는 돈다.** 이 자리가 예외로 끊기면 첫 조회가
+    // 아예 없어 목록이 영영 "불러오는 중" 이 된다(`_loading` 의 초기값이 참이다).
+    // 위치 조회와 지도 손잡이 둘 다 밖에서 깨질 수 있는 것이라 통째로 감싼다(2026-09-21 검토).
+    try {
+      await _bootCamera();
+    } catch (e) {
+      debugPrint('[Explore] 첫 자리잡기를 건너뛴다 (${e.runtimeType})');
+    }
+    await _load();
+  }
+
+  /// 현위치를 기다렸다가, 아직 사용자 것이 아니면 카메라와 기준점을 거기로 옮긴다.
+  Future<void> _bootCamera() async {
     final pos = await LocationService.current();
     if (mounted && pos != null) {
       // **사용자가 이미 지도를 만졌으면 뺏지 않는다**(#769). 현위치는 최대 25초까지 기다리는데
@@ -235,7 +278,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
         await _autoMoveCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
       }
     }
-    await _load();
   }
 
   /// 고른 동네가 있으면 그 동네에서 연다 (#342).
@@ -254,7 +296,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (!mounted || mine == null || !_fallbackCenter) return;
     setState(() {
       _myNeighborhood = mine;
-      _center = NLatLng(mine.lat, mine.lng);
+      // 카메라가 이미 사용자 것이면 **기준점도 안 옮긴다**(2026-09-21 검토) — `_bootCamera`
+      // 와 같은 규칙이다. 카메라만 남기고 기준점을 동네로 옮기면 화면은 을지로인데 마커는
+      // 그 동네에 찍힌다.
+      if (_camera.mayAutoMove) _center = NLatLng(mine.lat, mine.lng);
     });
     await _autoMoveCamera(NCameraUpdate.withParams(target: _center, zoom: 13));
   }
@@ -530,12 +575,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final c = _mapCtrl;
     if (c == null || course.path.length < 2) return;
     final coords = [for (final p in course.path) NLatLng(p[1], p[0])];
+    await _clearLine('course'); // 마커 갱신이 더 이상 안 지워 주므로 같은 종류는 여기서 치운다.
+    final id = 'course-${course.id}';
     await c.addOverlay(NPolylineOverlay(
-      id: 'course-${course.id}',
+      id: id,
       coords: coords,
       color: const Color(0xFF0B7A75),
       width: 6,
     ));
+    _lines['course'] = id;
     double minLat = coords.first.latitude, maxLat = minLat;
     double minLng = coords.first.longitude, maxLng = minLng;
     for (final q in coords) {
@@ -999,8 +1047,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
         key: Key('chip-${key ?? 'all'}'),
         onTap: () {
           if (_catFilter == key) return;
-          // 갈래를 바꾸는 것은 "그쪽을 보여 달라" 는 부탁이다 — 다시 앱 차례다(#769).
-          _camera.appWasAsked();
+          // 갈래를 바꾸는 것은 "그쪽을 보여 달라" 는 부탁이다 — 그 허락은 **이 호출에만**
+          // 실어 보낸다(`byRequest`). 카메라 주인을 되돌리면 아직 도착하지 않은 현위치까지
+          // 문이 열려, 칩을 누르고 가만히 있으면 몇 초 뒤 지도를 다시 뺏긴다(#769 의 남은 구멍).
+          unawaited(_clearLines()); // 갈래가 바뀌면 앞서 보던 코스 선은 더 이상 이 화면의 것이 아니다.
           setState(() {
             _catFilter = key;
             _only24h = false;
@@ -1244,7 +1294,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
     Widget seg(String v, IconData icon) {
       final on = view == v;
       return GestureDetector(
-        onTap: () => setState(() => view = v),
+        onTap: () {
+          if (view == v) return;
+          // **목록으로 가면 지도는 트리에서 빠진다** — 플러그인이 컨트롤러를 정리하므로
+          // 들고 있던 것은 죽은 손잡이다(2026-09-21 검토). 그것을 계속 쥐고 있으면 늦게
+          // 도착한 현위치가 `_boot` 에서 `getCameraPosition()` 을 불러 거기서 죽고,
+          // 뒤따르는 `_load()` 가 아예 안 돌아 목록이 영영 "불러오는 중" 이 됐다.
+          if (v == 'list') {
+            _mapCtrl = null;
+            _lines.clear(); // 지도가 사라지면 그 위의 선도 없다.
+          }
+          setState(() => view = v);
+        },
         child: Container(
           width: 42, height: 38, alignment: Alignment.center,
           decoration: BoxDecoration(
@@ -1461,6 +1522,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Future<void> _onCameraIdle() async {
     final c = _mapCtrl;
     if (c == null || !mounted) return;
+    // **앱이 옮긴 카메라는 "사용자가 여기로 왔다" 가 아니다**(2026-09-21 검토).
+    //
+    // 네이버 SDK 의 idle 은 이유를 안 가리고 울린다. 그래서 `_drawTrail`·`_drawLoop` 가 코스에
+    // 맞춰 카메라를 옮기면 여기가 돌고, `_moveTo` → `_load` → `_refreshMarkers` 로 이어져
+    // **방금 그린 그 선을 앱이 스스로 지웠다.** 사용자가 보여 달라고 누른 코스가 1초 만에
+    // 사라지는 것이 그 증상이다. 손가락(제스처·줌 컨트롤)이 옮겼을 때만 다시 거른다.
+    if (!_camera.lastMoveByUser) return;
     final pos = await c.getCameraPosition();
     if (!mounted) return;
     final next = ExploreMap.researchTarget(_center, pos.target);
@@ -1481,7 +1549,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Future<void> _researchHere() async {
     final target = _movedTo;
     if (target == null) return;
-    _camera.appWasAsked(); // 사용자가 "여기를 보여 달라" 고 눌렀다(#769).
+    // 허락은 이 호출에만 실린다(`byRequest`) — 카메라 주인은 사용자로 남는다(#769 후속).
     await _moveTo(target, byRequest: true);
   }
 
@@ -1507,7 +1575,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Future<void> _refreshMarkersNow() async {
     final c = _mapCtrl;
     if (c == null || !mounted) return;
-    await c.clearOverlays();
+    // **마커만 지운다**(2026-09-21 검토). 인자 없는 `clearOverlays()` 는 폴리라인까지 전부
+    // 지운다(플러그인 `NaverMapController.kt:216` — `type == null` 이면 `clearOverlays()` +
+    // `clearClusterableMarker()`). 그래서 조회가 한 번 돌 때마다 사용자가 보여 달라고 누른
+    // 코스 선이 같이 사라졌다. 선은 그린 쪽이 자기 id 로 지운다([_clearLines]).
+    await c.clearOverlays(type: NOverlayType.clusterableMarker);
     final markers = <NAddableOverlay>{};
     for (final p in _filtered) {
       final icon = await _markerIcon(p.petCategory);
@@ -1715,12 +1787,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
       return;
     }
     final coords = [for (final q in route.lngLat) NLatLng(q[1], q[0])];
+    await _clearLine('trail'); // 다른 산책로를 열면 앞서 것은 지운다. 추천 코스 선은 둔다.
+    final id = 'trail-${p.trailCourseId}';
     await c.addOverlay(NPolylineOverlay(
-      id: 'trail-${p.trailCourseId}',
+      id: id,
       coords: coords,
       color: p.petCategory.color,
       width: 6,
     ));
+    _lines['trail'] = id;
     double minLat = coords.first.latitude, maxLat = minLat, minLng = coords.first.longitude, maxLng = minLng;
     for (final q in coords) {
       if (q.latitude < minLat) minLat = q.latitude;
@@ -1741,14 +1816,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final c = _mapCtrl;
     if (c == null || view != 'map' || !mounted) return;
     final id = 'loop-${p.contentId}';
-    try {
-      await c.deleteOverlay(NOverlayInfo(type: NOverlayType.polylineOverlay, id: id));
-    } catch (_) {
-      // 없던 선을 지우는 것은 실패가 아니다.
-    }
+    await _clearLine('loop'); // 길이를 바꾸면 옛 코스 선을 지운다. 산책로 선은 그대로 둔다.
     if (loop == null || loop.lngLat.length < 2) return;
     final coords = [for (final q in loop.lngLat) NLatLng(q[1], q[0])];
     await c.addOverlay(NPolylineOverlay(id: id, coords: coords, color: T.warmEnd, width: 5));
+    _lines['loop'] = id;
     double minLat = coords.first.latitude, maxLat = minLat, minLng = coords.first.longitude, maxLng = minLng;
     for (final q in coords) {
       if (q.latitude < minLat) minLat = q.latitude;

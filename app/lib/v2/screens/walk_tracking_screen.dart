@@ -465,6 +465,18 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
     // 찾아 놓고 못 찾은 척한다.
     setState(() => _places = places);
     _sheetRefresh?.call(() {});
+    await _drawPoiMarkers();
+    if (mounted && places.isNotEmpty) _poisLoaded = true;
+  }
+
+  /// 받아 둔 주변 장소를 지도에 핀으로 얹는다.
+  ///
+  /// **부르는 곳이 둘이다.** 처음 받았을 때와, 끝내기 시트가 경로 그림을 찍느라 오버레이를
+  /// 통째로 지운 뒤다([_captureMap]). 뒤엣것이 없으면 시트를 닫고 계속 걸을 때 주변 장소
+  /// 핀이 영영 안 돌아온다 — `_poisLoaded` 가 참이라 다시 받지도 않는다(2026-09-21 검토).
+  Future<void> _drawPoiMarkers() async {
+    final places = _places;
+    if (!mounted || _ctrl == null || places.isEmpty) return;
     final markers = <NAddableOverlay>{};
     for (final p in places) {
       final m = NMarker(
@@ -475,10 +487,7 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       m.setOnTapListener((_) => _showPoiInfo(p));
       markers.add(m);
     }
-    if (mounted && markers.isNotEmpty) {
-      await _ctrl?.addOverlayAll(markers);
-      _poisLoaded = true;
-    }
+    if (mounted && markers.isNotEmpty) await _ctrl?.addOverlayAll(markers);
   }
 
   Future<NOverlayImage> _poiIcon(PetCategory cat) async {
@@ -1037,6 +1046,10 @@ class _WalkTrackingScreenState extends State<WalkTrackingScreen> with WidgetsBin
       // 시트를 닫고 돌아오면 지도에 선이 있어야 한다.
       unawaited(_drawCourseLine());
       unawaited(_drawPath());
+      // 핀도 마찬가지다. 위의 `clearOverlays()` 가 주변 장소 핀까지 지웠고, `_poisLoaded`
+      // 가 참이라 위치 스트림이 다시 받아 주지도 않는다 — 여기서 안 그리면 시트를 닫고
+      // 계속 걷는 내내 핀이 없다(2026-09-21 검토).
+      unawaited(_drawPoiMarkers());
     }
   }
 
