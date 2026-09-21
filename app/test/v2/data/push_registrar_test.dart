@@ -143,6 +143,20 @@ void main() {
     expect(h.sent, ['T1', 'T1'], reason: '같은 토큰이라도 사람이 다르면 다시 보낸다');
   });
 
+  test('같은 계정으로 다시 로그인해도 또 보낸다 — 로그아웃은 전 기기라 서버가 토큰을 폐기했다 (2026-09-21)', () async {
+    final h = _Harness(status: AuthStatus.authenticated, userId: 2);
+    await h.start();
+    expect(h.sent, ['T1']);
+
+    // 다른 기기(윈도우)에서 같은 계정을 로그아웃 → 서버가 이 사람의 토큰을 전부 폐기 → 이 기기도 결국 로그아웃.
+    h.status.value = AuthStatus.unauthenticated;
+    await h.settle();
+    await h.login(2);
+
+    expect(h.sent, ['T1', 'T1'],
+        reason: '"이미 보냈다" 를 잊지 않으면 다시 로그인하고도 조용히 알림을 못 받는 기기가 된다 — 사장님 폰이 그랬다');
+  });
+
   test('실패했으면 다음 계기에 다시 간다', () async {
     final h = _Harness(status: AuthStatus.authenticated, userId: 3, accept: false);
     await h.start();
