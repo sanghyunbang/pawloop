@@ -228,7 +228,7 @@ bash backend/scripts/set-prod-env.sh --dry-run SLACK_REPORT_WEBHOOK_URL=https://
 bash backend/scripts/set-prod-env.sh           SLACK_REPORT_WEBHOOK_URL=https://hooks.slack.com/...
 
 # 서버에 먹이기 — 손으로 .env 를 덮으면 Caddy 가 도메인을 못 읽고 API 까지 죽는다
-ssh -i ~/Downloads/pawloop-staging.pem ec2-user@<운영 IP>
+ssh -i ~/.ssh/pawloop-staging.pem ec2-user@<운영 IP>
 sudo EXPECT_KEYS=<서버 .env 기대 키 수> bash /opt/pawloop-backend/repo/backend/scripts/refresh-prod-env.sh
 ```
 
