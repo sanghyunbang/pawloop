@@ -74,6 +74,9 @@ replacements.txt
 *.tfstate
 *.tfstate.*
 *.tfvars
+# 손으로 뜬 사본도 같은 내용이다 — `*.tfvars` 는 `.bak` 을 못 잡아서 staging 의
+# `terraform.tfvars.bak`(집 IP · VPC ID) 이 git add 한 번에 올라갈 뻔했다(2026-09-26).
+*.tfvars.bak
 *.tfvars.json
 *.auto.tfvars
 *.auto.tfvars.json

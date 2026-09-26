@@ -41,7 +41,7 @@
 #
 # SSM 은 **다음 재기동 때** 서버로 내려간다. 바로 먹이려면 서버에서:
 #
-#     ssh -i ~/Downloads/pawloop-staging.pem ec2-user@<운영 IP>
+#     ssh -i ~/.ssh/pawloop-staging.pem ec2-user@<운영 IP>
 #     sudo bash /opt/pawloop-backend/repo/backend/scripts/refresh-prod-env.sh
 #
 # `refresh-prod-env.sh` 를 쓰는 이유는 그 파일 머리말에 있다 — 손으로 `.env` 를 덮으면
@@ -260,7 +260,7 @@ cat <<MSG
 
 아직 운영에는 안 먹었다. 서버가 새 .env 를 물어야 한다:
 
-  ssh -i ~/Downloads/pawloop-staging.pem ec2-user@\$(aws ec2 describe-instances \\
+  ssh -i ~/.ssh/pawloop-staging.pem ec2-user@\$(aws ec2 describe-instances \\
     --filters 'Name=tag:Name,Values=pawloop-prod-backend' 'Name=instance-state-name,Values=running' \\
     --query 'Reservations[].Instances[].PublicIpAddress' --output text --region $REGION)
   sudo bash /opt/pawloop-backend/repo/backend/scripts/refresh-prod-env.sh
