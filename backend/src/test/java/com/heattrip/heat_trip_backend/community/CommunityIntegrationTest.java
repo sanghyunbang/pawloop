@@ -471,72 +471,209 @@ class CommunityIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(memoOf(reportId)).hasSize(Reports.MAX_MEMO_LENGTH);
     }
 
+    // ─────────────────── 차단 — 목록에서 뺀다 (애플 지침 1.2) ───────────────────
+    //
+    // 처음(#166)에는 빼지 않고 hiddenByBlock 만 붙였다. 1.2 가 "차단한 사람의 콘텐츠는 피드에서 즉시
+    // 사라져야 한다" 고 요구해서 쿼리가 뺀다. 피드가 전역이라 목록 크기를 셀 수 없으므로(클래스 javadoc)
+    // 여기서는 **이 검사만 쓰는 장소**로 좁혀서 센다 — 그 장소의 글은 이 검사가 만든 것뿐이다.
+
     @Test
-    @DisplayName("가린 사람의 글은 hiddenByBlock 이 true 다 — 목록에서 빠지지는 않는다")
-    void blockedAuthorsPostsAreFlaggedNotRemoved() throws Exception {
-        Account author = account("가려질사람");
-        Account viewer = account("가리는사람");
-        long postId = newPost(author);
+    @DisplayName("차단한 사람의 글은 목록에 아예 안 온다 — 접어서 남기지 않는다(1.2)")
+    void blockedAuthorsPostsAreLeftOutOfTheFeed() throws Exception {
+        Account author = account("차단될사람");
+        Account viewer = account("차단하는사람");
+        String place = freshPlace();
+        long blockedPost = newPostAt(author, place);
+        long kept = newPostAt(viewer, place);
 
         blocks.block(viewer.id(), author.id());
 
-        JsonNode item = itemById(body(feed(viewer, "").andExpect(status().isOk())), postId);
-        assertThat(item.path("hiddenByBlock").asBoolean())
+        assertThat(idsOf(body(feed(viewer, "?contentId=" + place).andExpect(status().isOk()))))
                 .as("""
-                        빼면 커서가 그 글을 건너뛰어 페이지 경계가 어긋나고, 가린 자리에 '보기' 를 \
-                        두려면 본문이 이미 와 있어야 한다 — ChatMessageResponse 와 같은 규약이다.""")
-                .isTrue();
-        assertThat(item.path("body").asText())
-                .as("본문은 그대로 온다. 접는 것은 화면의 일이다")
-                .isEqualTo("본문");
+                        차단한 사람의 글이 목록에 오면, 이미 깔린 앱은 '가린 사람의 글입니다 · 눌러서 보기' 로 \
+                        그 자리를 남긴다 — 1.2 는 피드에서 사라지기를 요구한다.""")
+                .containsExactly(kept);
+        assertThat(idsOf(body(feed(viewer, "").andExpect(status().isOk()))))
+                .as("장소로 좁히지 않은 피드도 같다 — 방금 쓴 글이라 첫 장 맨 위에 있었을 자리다")
+                .doesNotContain(blockedPost)
+                .contains(kept);
     }
 
     @Test
-    @DisplayName("안 가린 사람에게는 false 다 — 읽는 사람마다 다른 값이다")
-    void hiddenByBlockIsPerViewer() throws Exception {
+    @DisplayName("빼도 장은 꽉 찬다 — 쿼리에서 빼므로 둘을 달라면 둘이 오고, 커서도 안 어긋난다")
+    void leavingOutKeepsPagesFull() throws Exception {
+        Account blocked = account("섞인차단");
+        Account neighbour = account("섞인이웃");
+        Account viewer = account("섞인독자");
+        String place = freshPlace();
+        // 쓰인 순서: 이웃 · 차단 · 이웃 · 차단 · 이웃. 차단한 사람의 글이 장 경계마다 끼어 있다.
+        long n1 = newPostAt(neighbour, place);
+        newPostAt(blocked, place);
+        long n2 = newPostAt(neighbour, place);
+        newPostAt(blocked, place);
+        long n3 = newPostAt(neighbour, place);
+        blocks.block(viewer.id(), blocked.id());
+
+        JsonNode first = body(mockMvc.perform(get("/api/community/posts")
+                        .param("contentId", place).param("limit", "2")
+                        .header("Authorization", "Bearer " + viewer.token()))
+                .andExpect(status().isOk()));
+        assertThat(idsOf(first))
+                .as("응답을 만든 뒤 걸렀다면 이 장은 [n3] 하나였다 — 읽은 둘 중 하나가 차단한 사람의 글이다")
+                .containsExactly(n3, n2);
+        assertThat(first.path("hasMore").asBoolean()).isTrue();
+
+        JsonNode second = body(mockMvc.perform(get("/api/community/posts")
+                        .param("contentId", place).param("limit", "2")
+                        .param("cursor", first.path("nextCursor").asText())
+                        .header("Authorization", "Bearer " + viewer.token()))
+                .andExpect(status().isOk()));
+        assertThat(idsOf(second))
+                .as("커서는 돌려준 마지막 줄에서 이어진다 — 건너뛰거나 겹치지 않는다")
+                .containsExactly(n1);
+        assertThat(second.path("hasMore").asBoolean()).isFalse();
+    }
+
+    @Test
+    @DisplayName("차단은 보는 사람의 설정이다 — 남에게는 그 글이 그대로 보인다")
+    void leavingOutIsPerViewer() throws Exception {
         Account author = account("안가려질사람");
         Account blocker = account("가린사람");
         Account other = account("남의눈");
-        long postId = newPost(author);
+        String place = freshPlace();
+        long postId = newPostAt(author, place);
 
         blocks.block(blocker.id(), author.id());
 
-        assertThat(itemById(body(feed(blocker, "")), postId).path("hiddenByBlock").asBoolean())
-                .isTrue();
-        assertThat(itemById(body(feed(other, "")), postId).path("hiddenByBlock").asBoolean())
-                .as("가린 것은 blocker 의 화면 설정이지 글의 속성이 아니다")
+        assertThat(idsOf(body(feed(blocker, "?contentId=" + place)))).doesNotContain(postId);
+        assertThat(itemById(body(feed(other, "?contentId=" + place)), postId).path("hiddenByBlock").asBoolean())
+                .as("차단한 것은 blocker 의 화면 설정이지 글의 속성이 아니다")
                 .isFalse();
     }
 
     @Test
-    @DisplayName("가린 사람의 댓글도 접힌다")
-    void blockedAuthorsCommentsAreFlagged() throws Exception {
-        Account author = account("댓글가려질");
-        Account viewer = account("댓글가리는");
-        long postId = newPost(author);
-        addComment(author, postId, "{\"body\":\"가려질 댓글\"}").andExpect(status().isCreated());
+    @DisplayName("차단한 사람의 글을 직접 열면 글은 오고 hiddenByBlock 이 참이다 — 앱이 내용을 안 그린다")
+    void theDetailOfABlockedAuthorsPostComesFlagged() throws Exception {
+        Account author = account("상세차단될");
+        Account viewer = account("상세차단하는");
+        long postId = newPostAt(author, freshPlace());
 
         blocks.block(viewer.id(), author.id());
 
-        JsonNode page = body(mockMvc.perform(
-                        get("/api/community/posts/" + postId + "/comments")
-                                .header("Authorization", "Bearer " + viewer.token()))
-                .andExpect(status().isOk()));
-        assertThat(page.path("items").get(0).path("hiddenByBlock").asBoolean()).isTrue();
+        JsonNode post = body(detail(viewer, postId).andExpect(status().isOk()));
+        assertThat(post.path("hiddenByBlock").asBoolean())
+                .as("""
+                        링크·알림으로 직접 여는 길이 있다. 404 로 숨기면 '지워진 글' 과 구별이 안 되고, \
+                        false 로 주면 앱이 본문을 그린다.""")
+                .isTrue();
     }
 
     @Test
-    @DisplayName("게스트에게는 아무것도 안 접힌다 — 가린 사람이 없다")
-    void guestsSeeNothingFolded() throws Exception {
+    @DisplayName("차단한 사람의 댓글도 목록에 안 오고 댓글 수에서도 빠진다 — 남에게는 그대로다")
+    void blockedAuthorsCommentsAreLeftOutAndUncounted() throws Exception {
+        Account writer = account("댓글글쓴이");
+        Account troll = account("댓글차단될");
+        Account viewer = account("댓글차단하는");
+        Account other = account("댓글남의눈");
+        String place = freshPlace();
+        long postId = newPostAt(writer, place);
+        addComment(troll, postId, "{\"body\":\"차단될 댓글\"}").andExpect(status().isCreated());
+        addComment(other, postId, "{\"body\":\"남을 댓글\"}").andExpect(status().isCreated());
+
+        blocks.block(viewer.id(), troll.id());
+
+        JsonNode mine = body(comments(viewer, postId).andExpect(status().isOk()));
+        assertThat(mine.path("items")).hasSize(1);
+        assertThat(mine.path("items").get(0).path("body").asText()).isEqualTo("남을 댓글");
+        assertThat(itemById(body(feed(viewer, "?contentId=" + place)), postId).path("commentCount").asInt())
+                .as("목록에서 뺀 댓글을 수에 남기면 '댓글 2' 를 보고 들어가 하나만 보게 된다")
+                .isEqualTo(1);
+        assertThat(body(detail(viewer, postId)).path("commentCount").asInt())
+                .as("상세의 댓글 수도 같은 규칙이다 — 카드와 상세가 다른 수를 말하면 안 된다")
+                .isEqualTo(1);
+
+        assertThat(body(comments(other, postId)).path("items"))
+                .as("남에게는 둘 다 보인다")
+                .hasSize(2);
+        assertThat(body(detail(other, postId)).path("commentCount").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("저장해 둔 글도 그 사람을 차단하면 저장한 글에서 빠지고, 차단을 풀면 돌아온다")
+    void bookmarksLeaveOutBlockedAuthorsUntilUnblocked() throws Exception {
+        Account author = account("저장차단될");
+        Account viewer = account("저장차단하는");
+        long postId = newPostAt(author, freshPlace());
+        mockMvc.perform(post("/api/community/posts/" + postId + "/bookmark")
+                        .header("Authorization", "Bearer " + viewer.token()))
+                .andExpect(status().isOk());
+
+        blocks.block(viewer.id(), author.id());
+        assertThat(idsOf(body(savedPosts(viewer).andExpect(status().isOk()))))
+                .as("저장한 글 화면도 커뮤니티 글 목록이다 — 거기만 남기면 차단한 사람의 사진이 그대로 보인다")
+                .doesNotContain(postId);
+
+        blocks.unblock(viewer.id(), author.id());
+        assertThat(idsOf(body(savedPosts(viewer).andExpect(status().isOk()))))
+                .as("저장 행은 지우지 않았다 — 차단을 풀면 다시 보인다")
+                .contains(postId);
+    }
+
+    @Test
+    @DisplayName("차단 목록이 있는 사람에게도 탈퇴한 사람의 글은 보인다 — not in 이 null 을 삼키지 않는다")
+    void withdrawnAuthorsPostsSurviveTheExclusion() throws Exception {
+        Account gone = account("곧떠날사람");
+        Account someone = account("차단당한아무나");
+        Account viewer = account("차단이있는독자");
+        String place = freshPlace();
+        long postId = newPostAt(gone, place);
+        blocks.block(viewer.id(), someone.id());
+        // 회원 탈퇴가 하는 일 — users 행 물리 삭제. FK 가 SET NULL 이라 post.user_id 가 비워진다.
+        userRepository.deleteById(gone.id());
+
+        assertThat(idsOf(body(feed(viewer, "?contentId=" + place))))
+                .as("""
+                        'u.id is null or' 가 없으면 not in 이 NULL 에 대해 unknown 이라, 차단을 하나라도 \
+                        걸어 둔 사람에게는 탈퇴한 사람의 글이 전부 사라진다.""")
+                .containsExactly(postId);
+    }
+
+    @Test
+    @DisplayName("게스트에게는 아무것도 안 빠진다 — 차단한 사람이 없다")
+    void guestsSeeEverything() throws Exception {
         Account author = account("게스트대상");
         Account blocker = account("게스트가리는");
-        long postId = newPost(author);
+        String place = freshPlace();
+        long postId = newPostAt(author, place);
         blocks.block(blocker.id(), author.id());
 
         JsonNode item = itemById(
-                body(mockMvc.perform(get("/api/community/posts")).andExpect(status().isOk())),
+                body(mockMvc.perform(get("/api/community/posts").param("contentId", place))
+                        .andExpect(status().isOk())),
                 postId);
         assertThat(item.path("hiddenByBlock").asBoolean()).isFalse();
+    }
+
+    /** 이 검사 하나만 쓰는 장소 id. 피드가 전역이어도 이 장소로 좁히면 셀 수 있다. */
+    private static String freshPlace() {
+        return "block-%d-%d".formatted(System.nanoTime(), ACCOUNT_SEQUENCE.incrementAndGet());
+    }
+
+    private long newPostAt(Account account, String contentId) throws Exception {
+        return body(createPost(account, """
+                {"board":"free","title":"제목","body":"본문","contentId":"%s"}
+                """.formatted(contentId)).andExpect(status().isCreated()))
+                .path("id").asLong();
+    }
+
+    private ResultActions comments(Account account, long postId) throws Exception {
+        return mockMvc.perform(get("/api/community/posts/" + postId + "/comments")
+                .header("Authorization", "Bearer " + account.token()));
+    }
+
+    private ResultActions savedPosts(Account account) throws Exception {
+        return mockMvc.perform(get("/api/community/bookmarks")
+                .header("Authorization", "Bearer " + account.token()));
     }
 
     // ─────────────────── 글 수정 (#211) ───────────────────

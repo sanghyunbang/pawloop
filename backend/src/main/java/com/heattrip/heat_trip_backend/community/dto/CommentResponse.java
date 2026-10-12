@@ -18,8 +18,9 @@ import java.time.Instant;
  * (ADR-0017 규약 5가 {@link PersonRefResponse} 로 고쳤다).
  *
  * <h2>{@code hiddenByBlock} 은 읽는 사람마다 다른 값이다</h2>
- * <p>읽는 사람이 이 작성자를 가렸는가(#166). 목록에서 빼지 않는 이유는
- * {@link PostResponse} javadoc 과 같다 — 접는 것은 화면의 일이다.
+ * <p>읽는 사람이 이 작성자를 차단했는가(#166). 차단한 사람의 댓글은 <b>목록에 안 온다</b> — 글
+ * 목록과 같은 규칙이다({@link PostResponse} javadoc). 그래서 목록에서 이 값은 늘 {@code false} 다.
+ * 필드는 계약 그대로 남긴다 — 옛 앱이 읽고, 쿼리가 조건을 빠뜨렸을 때 앱이 거르는 두 번째 겹이다.
  */
 public record CommentResponse(
         long id,
