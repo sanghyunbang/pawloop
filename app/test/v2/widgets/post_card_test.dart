@@ -1,11 +1,12 @@
 // 글 카드 위젯 — 이슈 #729 (피드에서 꺼냄).
 //
-// 여기서 재는 것 셋. 피드 검사들이 보던 키(`bookmark-` · `reaction-` · `post-comment-count-` ·
-// `blocked-post-`)가 그대로인지, 안쪽 탭(저장 · 반응)이 카드를 **열지 않는지**, 가린 글은 제목도
-// 사진도 안 그리는지.
+// 여기서 재는 것 셋. 피드 검사들이 보던 키(`bookmark-` · `reaction-` · `post-comment-count-`)가
+// 그대로인지, 안쪽 탭(저장 · 반응)이 카드를 **열지 않는지**, 차단한 사람의 글이 들어오면 **아무것도**
+// 안 그리는지(애플 지침 1.2 — 목록이 먼저 빼지만 카드가 마지막 그물이다).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:heat_trip_flutter/v2/data/blocked_authors.dart';
 import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 import 'package:heat_trip_flutter/v2/widgets/post_card.dart';
 
@@ -69,14 +70,23 @@ void main() {
     expect(log, ['bookmark', 'reaction:help', 'open']);
   });
 
-  testWidgets('가린 사람의 글은 제목도 본문도 없고 "눌러서 보기" 만 있다', (t) async {
+  testWidgets('차단한 사람의 글은 아무것도 안 그린다 — 접힌 자리도 "눌러서 보기" 도 없다', (t) async {
     final log = <String>[];
     await _pump(t, _post(hidden: true), log: log.add);
 
-    expect(find.byKey(const Key('blocked-post-12')), findsOneWidget);
     expect(find.text('성수연방 마당'), findsNothing);
     expect(find.text('그늘 벤치가 좋아요'), findsNothing);
-    await t.tap(find.byKey(const Key('blocked-post-12')));
-    expect(log, ['open']);
+    expect(find.textContaining('눌러서 보기'), findsNothing,
+        reason: '애플 지침 1.2 — 차단한 사람의 콘텐츠는 피드에서 사라져야 한다. 펴는 길이 있으면 사라진 것이 아니다');
+    expect(find.byType(GestureDetector), findsNothing, reason: '누를 자리도 없다');
+  });
+
+  testWidgets('이 세션에서 방금 차단한 사람의 글도 서버 표시 없이 안 그린다', (t) async {
+    addTearDown(BlockedAuthors.clear);
+    BlockedAuthors.add(7);
+    final log = <String>[];
+    await _pump(t, _post(), log: log.add);
+
+    expect(find.text('성수연방 마당'), findsNothing);
   });
 }

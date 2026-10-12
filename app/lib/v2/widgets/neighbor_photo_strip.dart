@@ -18,6 +18,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
+import '../data/blocked_authors.dart';
 import '../data/community_repository.dart';
 import '../screens/post_detail_screen.dart';
 import '../theme/app_tokens.dart';
@@ -49,13 +50,20 @@ class _NeighborPhotoStripState extends State<NeighborPhotoStrip> {
   void initState() {
     super.initState();
     AuthState.status.addListener(_load);
+    // 차단하면 그 사람의 사진을 다시 부르지 않고 지금 줄에서 뺀다(애플 지침 1.2).
+    BlockedAuthors.ids.addListener(_onBlocksChanged);
     _load();
   }
 
   @override
   void dispose() {
     AuthState.status.removeListener(_load);
+    BlockedAuthors.ids.removeListener(_onBlocksChanged);
     super.dispose();
+  }
+
+  void _onBlocksChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -68,7 +76,8 @@ class _NeighborPhotoStripState extends State<NeighborPhotoStrip> {
     try {
       final page = await _repo.feed(limit: 20);
       if (!mounted) return;
-      setState(() => _posts = PostPhotoWall.withMedia(page.items).take(NeighborPhotoStrip.maxTiles).toList());
+      // 받아 둔 장은 그대로 두고, 그릴 때 차단한 사람의 사진을 뺀다 — 차단은 나중에도 일어난다.
+      setState(() => _posts = PostPhotoWall.withMedia(page.items));
     } catch (_) {
       // 못 불러오면 줄이 없다 — 파일 머리말 참조.
       if (!mounted) return;
@@ -86,7 +95,9 @@ class _NeighborPhotoStripState extends State<NeighborPhotoStrip> {
 
   @override
   Widget build(BuildContext context) {
-    if (_posts.isEmpty) return const SizedBox.shrink();
+    // 홈의 이웃 사진도 커뮤니티 글 목록이다 — 차단한 사람의 사진은 안 건다(애플 지침 1.2).
+    final tiles = visiblePosts(_posts).take(NeighborPhotoStrip.maxTiles).toList();
+    if (tiles.isEmpty) return const SizedBox.shrink();
     // 위 여백은 줄이 있을 때만 — 없으면 홈에 빈 틈이 남는다.
     return Container(
       key: const Key('neighbor-photo-strip'),
@@ -126,9 +137,9 @@ class _NeighborPhotoStripState extends State<NeighborPhotoStrip> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.only(right: 16),
-            itemCount: _posts.length,
+            itemCount: tiles.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (_, i) => _tile(_posts[i]),
+            itemBuilder: (_, i) => _tile(tiles[i]),
           ),
         ),
       ]),

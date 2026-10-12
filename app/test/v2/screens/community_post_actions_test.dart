@@ -24,6 +24,7 @@ import 'package:http/testing.dart';
 import 'package:heat_trip_flutter/core/net/auth_token_store.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
+import 'package:heat_trip_flutter/v2/data/blocked_authors.dart';
 import 'package:heat_trip_flutter/v2/data/community_repository.dart';
 import 'package:heat_trip_flutter/v2/screens/post_detail_screen.dart';
 
@@ -165,6 +166,8 @@ void main() {
 
   tearDown(() {
     AuthState.resetForTest();
+    // 신고하며 차단을 켠 검사가 이 세션의 차단 기억을 남긴다 — 다음 검사에 새지 않게 비운다.
+    BlockedAuthors.clear();
     TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.views.single.reset();
   });
 
@@ -485,9 +488,13 @@ void main() {
   });
 
 
-  // ─────────────────── 가리기 (#166) ───────────────────
+  // ─────────────────── 차단 (#166 · 애플 지침 1.2) ───────────────────
+  //
+  // 예전에는 "가린 사람의 글입니다. 눌러서 보기" 로 접고 누르면 폈다. 1.2 는 차단한 사람의 콘텐츠가
+  // 사라지기를 요구해서, 직접 연 글에도 내용 없이 "차단한 사용자의 글이에요" 만 남긴다. 따로 보이는
+  // 차단 버튼과 목록에서 바로 빠지는 것은 `community_block_action_test.dart` 가 잰다.
 
-  testWidgets('가린 사람의 글은 접힌다 — 목록에서 빠지지는 않는다', (tester) async {
+  testWidgets('차단한 사람의 글은 제목도 본문도 없이 "차단한 사용자의 글이에요" 만 남는다', (tester) async {
     final f = fixture(postAuthor: 99, hiddenByBlock: true);
 
     await tester.pumpWidget(_host(PostDetailScreen(
@@ -496,12 +503,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('본문'), findsNothing);
-    expect(find.textContaining('가린 사람의 글입니다'), findsOneWidget);
-    expect(find.text('지울 수 있는 글'), findsOneWidget,
-        reason: '제목과 카드는 남는다 — 빼면 커서가 그 글을 건너뛰어 페이지 경계가 어긋난다');
+    expect(find.text('지울 수 있는 글'), findsNothing,
+        reason: '제목만 남기면 거기 욕을 적으면 그만이다 — 1.2 는 사라지기를 요구한다');
+    expect(find.text(hiddenPostMessage), findsOneWidget);
   });
 
-  testWidgets('접힌 본문을 누르면 펴진다', (tester) async {
+  testWidgets('차단한 사람의 글은 눌러도 펴지지 않는다 — 펴는 길이 있으면 사라진 것이 아니다', (tester) async {
     final f = fixture(postAuthor: 99, hiddenByBlock: true);
 
     await tester.pumpWidget(_host(PostDetailScreen(
@@ -509,14 +516,14 @@ void main() {
         repository: f.repo)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.textContaining('가린 사람의 글입니다'));
+    await tester.tap(find.text(hiddenPostMessage));
     await tester.pumpAndSettle();
 
-    expect(find.text('본문'), findsOneWidget,
-        reason: '본문은 이미 와 있다 — 누를 때 요청이 한 번 더 필요하면 그 경로에 인가가 또 하나 생긴다');
+    expect(find.text('본문'), findsNothing);
+    expect(find.textContaining('눌러서 보기'), findsNothing);
   });
 
-  testWidgets('안 가린 글은 그대로 보인다', (tester) async {
+  testWidgets('차단하지 않은 글은 그대로 보인다', (tester) async {
     final f = fixture(postAuthor: 99);
 
     await tester.pumpWidget(_host(PostDetailScreen(
@@ -524,10 +531,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('본문'), findsOneWidget);
-    expect(find.textContaining('가린 사람의 글입니다'), findsNothing);
+    expect(find.text(hiddenPostMessage), findsNothing);
   });
 
-  testWidgets('신고하며 가리기를 켜면 신고 뒤에 가린다 — 순서가 반대면 접수 안 된 채 가려진다',
+  testWidgets('신고하며 차단을 켜면 신고 뒤에 차단한다 — 순서가 반대면 접수 안 된 채 차단된다',
       (tester) async {
     final f = fixture(postAuthor: 99);
 
@@ -546,8 +553,8 @@ void main() {
     expect(f.calls, [
       'POST /api/community/posts/12/reports',
       'POST /api/blocks',
-    ], reason: '신고가 먼저다 — 실패하면 가리지 않는다');
-    expect(find.textContaining('가렸어요'), findsOneWidget);
+    ], reason: '신고가 먼저다 — 실패하면 차단하지 않는다');
+    expect(find.textContaining('차단했어요'), findsOneWidget);
   });
 
 
