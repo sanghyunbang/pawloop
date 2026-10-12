@@ -45,12 +45,13 @@ void main() {
     // v1.9 는 수집 항목이 아니라 **12항의 법정 기재사항**이다(#682) — 개인정보 보호책임자의
     // 성명·직위·전화번호 자리를 만들었다. 이용자가 7항의 권리를 행사할 때 찾아가는 자리라
     // 같은 규칙으로 올린다. v1.10 은 기기 알림 토큰(#83) — 수집 항목이 하나 늘고, 전달을 맡는
-    // Google(FCM) 이 4·5항에 들어갔다.
-    expect(privacy, contains('버전: v1.10'),
-        reason: '수집 항목이 늘어난 것은 다시 알려야 하는 변경이다');
+    // Google(FCM) 이 4·5항에 들어갔다. v1.11 은 신고·차단 알림이 지나는 Slack(#715 · #780) — 처리
+    // 주체가 하나 늘었다. 신고 알림은 2026-09-20 부터 나갔는데 방침이 그때 안 따라갔다.
+    expect(privacy, contains('버전: v1.11'),
+        reason: '수집 항목이나 처리 주체가 늘어난 것은 다시 알려야 하는 변경이다');
 
     final screen = _read(File('lib/v2/screens/settings/legal_document_screen.dart'));
-    expect(screen, contains("ConsentKind.privacy, 'v1.10'"),
+    expect(screen, contains("ConsentKind.privacy, 'v1.11'"),
         reason: '문서만 올리고 상수를 안 올리면 아무에게도 다시 안 묻는다');
   });
 
@@ -63,6 +64,21 @@ void main() {
         reason: '서버의 UserSessionsRevoked → revokeAllOf 가 이 문장이다');
     expect(privacy, contains('Firebase Cloud Messaging 을 거쳐'),
         reason: '제목·본문이 Google 을 지난다 — 처리위탁·국외 이전 항목이 있어야 한다');
+  });
+
+  test('신고·차단 알림이 Slack 을 거쳐 간다고 4·5항에 적혀 있다 (#715 · #780)', () {
+    expect(privacy, contains('Slack 으로 운영자에게 알림을 보냅니다'),
+        reason: '신고된 글의 본문 앞부분과 닉네임이 Slack 을 지난다 — 처리위탁 항목이 있어야 한다');
+    expect(privacy, contains('이전받는 자 Slack Technologies, LLC(미국)'),
+        reason: '미국 회사의 서비스라 국외 이전 항목도 있어야 한다');
+
+    // 방침이 말하는 길이와 서버가 실제로 자르는 길이가 같아야 한다 — 서버가 늘리면 방침이 거짓이 된다.
+    final reportFiled = _read(File(
+        '../backend/src/main/java/com/heattrip/heat_trip_backend/moderation/ReportFiled.java'));
+    final cut = RegExp(r'BODY_PREVIEW_LENGTH = (\d+);').firstMatch(reportFiled)?.group(1);
+    expect(cut, isNotNull, reason: 'ReportFiled 에서 미리보기 길이를 못 읽었다 — 이름이 바뀌었으면 함께 고친다');
+    expect(privacy, contains('본문의 앞 $cut자'), reason: '서버는 본문을 앞 $cut자까지 보낸다');
+    expect(privacy, contains('신고 메모의 앞 $cut자'), reason: '서버는 메모를 앞 $cut자까지 보낸다');
   });
 
   test('동네가 수집 항목에 있고, 보이는 단위가 구까지라고 적혀 있다 (#342)', () {
