@@ -39,6 +39,12 @@ public class AsyncConfig {
      */
     public static final String REPORT_ALERT_EXECUTOR = "reportAlertExecutor";
 
+    /**
+     * 차단 알림(애플 지침 1.2) — {@code observability.alert.BlockAlertListener} 가 문자열로 든다.
+     * {@link #REPORT_ALERT_EXECUTOR} 를 같이 쓰지 않는 이유는 아래 빈의 javadoc 에 있다.
+     */
+    public static final String BLOCK_ALERT_EXECUTOR = "blockAlertExecutor";
+
     @Bean(PUSH_EXECUTOR)
     public ThreadPoolTaskExecutor pushExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -70,6 +76,31 @@ public class AsyncConfig {
         executor.setQueueCapacity(200);
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(10);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * 차단 알림은 신고 실행기를 <b>같이 쓰지 않는다.</b> 신고 실행기가 안 버리는 근거는 신고 입구의
+     * 한도이고, 차단 알림은 그 전제가 다르다. 섞어서 신고 알림이 밀리는 일이 없게 갈라 둔다 — 신고에는
+     * 24시간 처리 약속이 걸려 있다.
+     *
+     * <p>그래서 여기는 넘치면 <b>버린다</b>({@link #PUSH_EXECUTOR} 와 같은 정책). 버린 차단도
+     * {@code user_block} 에는 남아 있다 — 잃는 것은 알림 한 줄이지 기록이 아니다.
+     */
+    @Bean(BLOCK_ALERT_EXECUTOR)
+    public ThreadPoolTaskExecutor blockAlertExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("block-alert-");
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(100);
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(10);
+        RejectedExecutionHandler dropAndWarn = (task, pool) ->
+                log.warn("차단 알림 큐가 찼다 — 알림 하나를 버린다 (대기 {}) · 차단 자체는 user_block 에 있다",
+                        pool.getQueue().size());
+        executor.setRejectedExecutionHandler(dropAndWarn);
         executor.initialize();
         return executor;
     }

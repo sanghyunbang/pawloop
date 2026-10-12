@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -51,15 +52,22 @@ public interface PostBookmarkRepository extends JpaRepository<PostBookmark, Long
      * 저장한 글 첫 장. 정렬은 <b>저장한 시각</b> {@code (createdAt, id)} 내림차순이다 — 글이
      * 쓰인 순이 아니다. 글과 글쓴이를 함께 당긴다(목록과 같은 이유, 탈퇴한 글쓴이의 글도
      * 살아남게 {@code left join}).
+     *
+     * <p>차단한 사람의 글은 뺀다 — {@link PostRepository} 의 글 목록과 같은 규칙(애플 지침 1.2)이다.
+     * 저장해 둔 글이라도 그 사람을 차단했으면 내 화면에서 사라진다. 저장 행은 그대로 남아서, 차단을
+     * 풀면 다시 보인다. {@code excludedAuthorIds} 는 비어 있어도 된다({@link PostRepository} javadoc).
      */
     @Query("""
             select b from PostBookmark b
               join fetch b.post p
               left join fetch p.user u
              where b.user.id = :userId
+               and (u.id is null or u.id not in :excludedAuthorIds)
              order by b.createdAt desc, b.id desc
             """)
-    List<PostBookmark> findPage(@Param("userId") long userId, Limit limit);
+    List<PostBookmark> findPage(@Param("userId") long userId,
+                                @Param("excludedAuthorIds") Collection<Long> excludedAuthorIds,
+                                Limit limit);
 
     /** 다음 장. 커서보다 엄격히 뒤인 것만 — {@link PostRepository#findPageAfter} 와 같은 규칙. */
     @Query("""
@@ -67,11 +75,13 @@ public interface PostBookmarkRepository extends JpaRepository<PostBookmark, Long
               join fetch b.post p
               left join fetch p.user u
              where b.user.id = :userId
+               and (u.id is null or u.id not in :excludedAuthorIds)
                and (b.createdAt < :cursorAt
                     or (b.createdAt = :cursorAt and b.id < :cursorId))
              order by b.createdAt desc, b.id desc
             """)
     List<PostBookmark> findPageAfter(@Param("userId") long userId,
+                                     @Param("excludedAuthorIds") Collection<Long> excludedAuthorIds,
                                      @Param("cursorAt") LocalDateTime cursorAt,
                                      @Param("cursorId") long cursorId,
                                      Limit limit);

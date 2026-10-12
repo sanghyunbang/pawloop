@@ -111,11 +111,23 @@ public class CommunityService {
     private final Reports reports;
 
     /**
-     * 가리기 — {@code moderation} 모듈의 공개 표면이다(#166).
+     * 차단(가리기) — {@code moderation} 모듈의 공개 표면이다(#166).
      *
-     * <p>가린 사람의 글을 <b>목록에서 빼지 않는다.</b> 빼면 커서가 그 글을 건너뛰어 페이지
-     * 경계가 어긋나고, 가린 자리에 "보기" 를 두려면 본문이 이미 와 있어야 한다. 접는 것은
-     * 화면의 일이다 — {@code ChatBlocks} javadoc 이 채팅에서 같은 판단을 적어 뒀다.
+     * <h2>차단한 사람의 글·댓글은 목록에서 뺀다 — 애플 지침 1.2</h2>
+     * <p>처음(#166)에는 <b>빼지 않고</b> {@code hiddenByBlock} 만 붙였다. 이유가 둘이었다 — 빼면 커서가
+     * 그 글을 건너뛰어 페이지 경계가 어긋나고, 가린 자리에 "보기" 를 두려면 본문이 와 있어야 한다.
+     *
+     * <p>둘 다 지금은 성립하지 않는다. 1.2 가 "차단한 사람의 콘텐츠는 피드에서 즉시 사라져야 한다" 고
+     * 요구해서 <b>"보기" 를 없앴다.</b> 그리고 응답을 만든 뒤 거르지 않고 <b>쿼리 조건으로</b> 빼므로
+     * 장은 늘 꽉 차고, 커서는 돌려준 마지막 줄에서 이어져 경계가 안 어긋난다.
+     *
+     * <p>앱도 같은 규칙으로 거른다. 서버에서 빼는 이유는 <b>앱 버전과 상관없이</b> 맞추기 위해서다 —
+     * 이미 깔린 안드로이드 앱은 접힌 자리를 그리는데, 서버가 안 보내면 그 자리도 안 생긴다.
+     *
+     * <p><b>상세는 뺀 채로 404 를 주지 않는다.</b> 링크로 차단한 사람의 글을 직접 열면 글은 오고
+     * {@code hiddenByBlock} 이 참이다. 앱은 그것을 보고 "차단한 사용자의 글" 이라고만 그린다.
+     *
+     * <p>채팅은 이 규칙 밖이다 — 미읽음 커서 때문에 빼지 않고 접는다({@code Blocks} javadoc).
      */
     private final Blocks blocks;
 
@@ -254,9 +266,12 @@ public class CommunityService {
         // 한 줄 더 읽어 hasMore 를 정한다. 별도 count 쿼리는 다음 장을 여는 사이에 값이
         // 바뀌고, 두 번 읽는 비용이 한 줄 더 읽는 비용보다 크다.
         Limit fetch = Limit.of(size + 1);
+        // 차단한 사람의 글은 쿼리가 뺀다(1.2). 한 장에 한 번 묻고, 아래 itemsOf 에도 같은 집합을 넘긴다.
+        Set<Long> blocked = blockedBy(viewerId);
         List<Post> rows = CommunityCursor.parse(cursor)
-                .map(c -> posts.findPageAfter(filter, sggPrefix, dogId, place, c.createdAt(), c.id(), fetch))
-                .orElseGet(() -> posts.findPage(filter, sggPrefix, dogId, place, fetch));
+                .map(c -> posts.findPageAfter(filter, sggPrefix, dogId, place, blocked,
+                        c.createdAt(), c.id(), fetch))
+                .orElseGet(() -> posts.findPage(filter, sggPrefix, dogId, place, blocked, fetch));
 
         boolean hasMore = rows.size() > size;
         if (hasMore) {
@@ -266,20 +281,27 @@ public class CommunityService {
             return new PostPageResponse(List.of(), null, false);
         }
 
-        List<PostResponse> items = itemsOf(rows, viewerId);
+        List<PostResponse> items = itemsOf(rows, viewerId, blocked);
 
         Post last = rows.get(rows.size() - 1);
         String next = hasMore ? CommunityCursor.of(last.getCreatedAt(), last.getId()) : null;
         return new PostPageResponse(items, next, hasMore);
     }
 
-    /** 글 상세. 없으면 404 다. */
+    /**
+     * 글 상세. 없으면 404 다.
+     *
+     * <p>차단한 사람의 글이어도 <b>준다</b> — {@code hiddenByBlock} 이 참이고, 앱이 그것을 보고 내용을
+     * 안 그린다. 404 로 숨기면 "지워진 글" 과 구별이 안 된다. 댓글 수는 목록과 같이 차단한 사람 것을
+     * 빼고 센다.
+     */
     public PostResponse detail(Long viewerId, long postId) {
         Post post = posts.findDetail(postId).orElseThrow(CommunityService::notFound);
+        Set<Long> blocked = blockedBy(viewerId);
         return PostResponse.of(post,
-                countComments(List.of(postId)).getOrDefault(postId, 0),
+                countComments(List.of(postId), blocked).getOrDefault(postId, 0),
                 summarizeOne(postId, viewerId),
-                isBlocked(blockedBy(viewerId), post.getUser()),
+                isBlocked(blocked, post.getUser()),
                 toPostCourse(cardOf(post, cardsFor(List.of(post)))),
                 districtOf(post),
                 mediaOf(post),
@@ -291,14 +313,12 @@ public class CommunityService {
      * 목록 한 장의 항목들. 글마다 묻지 않고 <b>관심사마다 한 번씩</b> 묻는다 — 반응 · 댓글 수 ·
      * 가리기 · 코스 · 사진 · 저장. 글마다 물으면 20건 조회에 쿼리가 백 개를 넘는다.
      */
-    private List<PostResponse> itemsOf(List<Post> rows, Long viewerId) {
+    private List<PostResponse> itemsOf(List<Post> rows, Long viewerId, Set<Long> blocked) {
         List<Long> ids = rows.stream().map(Post::getId).toList();
         Map<Long, ReactionSummaryResponse> reactionsById = summarize(ids, viewerId);
-        Map<Long, Integer> commentCounts = countComments(ids);
-
-        // 한 장에 한 번 묻는다. 글마다 "가렸나" 를 물으면 20건 조회에 쿼리가 21개다 —
-        // ChatMessages 가 같은 함정을 이미 피해 뒀다.
-        Set<Long> blocked = blockedBy(viewerId);
+        // 차단한 사람은 쿼리에서 이미 빠졌다. 그래도 표시는 계속 계산한다 — 다음 사람이 쿼리에서
+        // 조건을 빠뜨려도, 앱이 그 표시를 보고 그 글을 뺀다(두 겹).
+        Map<Long, Integer> commentCounts = countComments(ids, blocked);
 
         // 붙은 코스도 한 장에 한 번 묻는다 — 글마다 물으면 20건 조회에 쿼리가 21개다(#339).
         Map<Long, CourseAttachment.AttachedCourse> courseCards = cardsFor(rows);
@@ -389,9 +409,11 @@ public class CommunityService {
         int size = clamp(limit);
         Limit fetch = Limit.of(size + 1);
 
+        // 차단한 사람의 댓글은 쿼리가 뺀다(1.2) — 글 목록과 같은 규칙이다.
+        Set<Long> blocked = blockedBy(viewerId);
         List<Comment> rows = CommunityCursor.parse(cursor)
-                .map(c -> comments.findPageAfter(postId, c.createdAt(), c.id(), fetch))
-                .orElseGet(() -> comments.findPage(postId, fetch));
+                .map(c -> comments.findPageAfter(postId, blocked, c.createdAt(), c.id(), fetch))
+                .orElseGet(() -> comments.findPage(postId, blocked, fetch));
 
         boolean hasMore = rows.size() > size;
         if (hasMore) {
@@ -401,7 +423,6 @@ public class CommunityService {
             return new CommentPageResponse(List.of(), null, false);
         }
 
-        Set<Long> blocked = blockedBy(viewerId);
         Comment last = rows.get(rows.size() - 1);
         return new CommentPageResponse(
                 rows.stream()
@@ -609,7 +630,7 @@ public class CommunityService {
                         request.mediaIds(), me.getId()));
 
         return PostResponse.of(post,
-                countComments(List.of(postId)).getOrDefault(postId, 0),
+                countComments(List.of(postId), blockedBy(me.getId())).getOrDefault(postId, 0),
                 summarizeOne(postId, me.getId()),
                 attached,
                 isBookmarked(postId, me.getId()),
@@ -631,7 +652,7 @@ public class CommunityService {
         CourseAttachment.AttachedCourse card = requireAttachable(courseId, me);
         post.attachCourse(card.id());
         return PostResponse.of(post,
-                countComments(List.of(postId)).getOrDefault(postId, 0),
+                countComments(List.of(postId), blockedBy(me.getId())).getOrDefault(postId, 0),
                 summarizeOne(postId, me.getId()),
                 false,
                 toPostCourse(card),
@@ -649,7 +670,7 @@ public class CommunityService {
         requireMine(post.getUser(), me.getId(), "글");
         post.attachCourse(null);
         return PostResponse.of(post,
-                countComments(List.of(postId)).getOrDefault(postId, 0),
+                countComments(List.of(postId), blockedBy(me.getId())).getOrDefault(postId, 0),
                 summarizeOne(postId, me.getId()),
                 false,
                 null,
@@ -817,9 +838,11 @@ public class CommunityService {
     public PostPageResponse bookmarks(User me, String cursor, Integer limit) {
         int size = clamp(limit);
         Limit fetch = Limit.of(size + 1);
+        // 저장한 글도 차단한 사람의 것은 뺀다(1.2) — 글 목록과 같은 규칙이다.
+        Set<Long> blocked = blockedBy(me.getId());
         List<PostBookmark> rows = CommunityCursor.parse(cursor)
-                .map(c -> bookmarks.findPageAfter(me.getId(), c.createdAt(), c.id(), fetch))
-                .orElseGet(() -> bookmarks.findPage(me.getId(), fetch));
+                .map(c -> bookmarks.findPageAfter(me.getId(), blocked, c.createdAt(), c.id(), fetch))
+                .orElseGet(() -> bookmarks.findPage(me.getId(), blocked, fetch));
 
         boolean hasMore = rows.size() > size;
         if (hasMore) {
@@ -829,7 +852,7 @@ public class CommunityService {
             return new PostPageResponse(List.of(), null, false);
         }
 
-        List<PostResponse> items = itemsOf(rows.stream().map(PostBookmark::getPost).toList(), me.getId());
+        List<PostResponse> items = itemsOf(rows.stream().map(PostBookmark::getPost).toList(), me.getId(), blocked);
         PostBookmark last = rows.get(rows.size() - 1);
         String next = hasMore ? CommunityCursor.of(last.getCreatedAt(), last.getId()) : null;
         return new PostPageResponse(items, next, hasMore);
@@ -911,9 +934,10 @@ public class CommunityService {
         return summarize(List.of(postId), viewerId).get(postId);
     }
 
-    private Map<Long, Integer> countComments(List<Long> postIds) {
+    /** 글마다 댓글 수 — 보는 사람이 차단한 사람의 댓글은 안 센다. 목록에서 뺀 것을 수에 남기지 않는다. */
+    private Map<Long, Integer> countComments(List<Long> postIds, Set<Long> blocked) {
         Map<Long, Integer> out = new HashMap<>();
-        for (Object[] row : comments.countByPostIdInGroupBy(postIds)) {
+        for (Object[] row : comments.countByPostIdInGroupBy(postIds, blocked)) {
             out.put((Long) row[0], ((Number) row[1]).intValue());
         }
         return out;

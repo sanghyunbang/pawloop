@@ -33,6 +33,10 @@ import java.util.concurrent.TimeUnit;
  * <p>{@link #send} 는 에러 알림이고 {@code slack.enabled} 와 기본 웹훅을 본다.
  * {@link #sendReport} 는 신고 알림이고 <b>전용 웹훅만</b> 본다 — 채널을 가르기 위해서다.
  * 둘은 스위치가 독립이다: 신고 알림을 켜도 에러 알림이 한 건도 안 늘고, 그 반대도 같다.
+ *
+ * <p>{@link #sendBlock}(차단 알림)은 갈래가 아니라 <b>신고 갈래의 이름 하나</b>다 — 같은 웹훅,
+ * 같은 스위치다. 메서드를 따로 둔 이유는 부르는 자리가 무엇을 보내는지 이름으로 말하게 하고,
+ * 검사가 둘을 따로 가로챌 수 있게 하기 위해서다.
  */
 @Slf4j
 @Component
@@ -66,6 +70,25 @@ public class SlackNotifier {
      * ({@code #backend-alerts})을 실으면 슬랙이 그쪽으로 덮어써서 갈라 둔 의미가 사라진다.
      */
     public boolean sendReport(String text) {
+        return postToReportChannel(text);
+    }
+
+    /**
+     * 차단 알림 — 애플 지침 1.2 ("차단하면 개발자에게도 알린다"). <b>신고와 같은 웹훅</b>으로 간다.
+     *
+     * <p>채널을 또 가르지 않는다. 운영자가 손으로 들여다볼 사건(신고·차단)이 한 채널에 있어야 같은
+     * 사람에 대한 신고와 차단이 나란히 보인다. 웹훅이 비어 있으면 {@link #sendReport} 와 똑같이
+     * 안 보내고 거짓을 돌려준다.
+     */
+    public boolean sendBlock(String text) {
+        return postToReportChannel(text);
+    }
+
+    /**
+     * 신고 웹훅으로 보낸다. 신고와 차단이 이것을 함께 쓴다 — 서로를 부르지 않는 것은, 검사가
+     * {@link #sendReport} 만 갈아 끼웠을 때 차단 알림이 그쪽으로 새어 들어가지 않게 하기 위해서다.
+     */
+    private boolean postToReportChannel(String text) {
         String url = props.getSlack().getReportWebhookUrl();
         if (isBlank(url)) {
             return false;
