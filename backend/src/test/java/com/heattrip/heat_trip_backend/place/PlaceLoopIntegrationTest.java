@@ -89,6 +89,16 @@ class PlaceLoopIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /**
+     * 검사마다 새 id 를 만드는 번호 — {@code System.nanoTime()} 을 섞지 않는다(2026-10-12).
+     *
+     * <p>{@code nanoTime} 은 원점이 정해져 있지 않아 기계마다, 켜 둔 시간마다 자릿수가 다르다. 코스 번호
+     * {@code loop:{contentId}:{lengthM}} 은 {@code trail_route.course_id}(32자)에 들어가야 하는데, 이 맥이
+     * 15자리를 내자 {@code loop:trail:lt…:2000} 이 33자가 되어 저장이 1406 으로 죽고 응답이 500 이었다.
+     * 14자리에서는 32자라 통과했다 — 같은 검사가 기계에 따라 갈렸다. 번호는 한 JVM 안에서 겹치지 않고,
+     * 컨테이너는 JVM 마다 새로 뜬다({@code MySqlTestContainer}).
+     */
     private static final AtomicLong SEQUENCE = new AtomicLong();
 
     @Autowired private MockMvc mockMvc;
@@ -103,7 +113,7 @@ class PlaceLoopIntegrationTest extends AbstractMySqlIntegrationTest {
     @BeforeEach
     void setUp() {
         ors.reset();
-        contentId = "loop-" + System.nanoTime() + "-" + SEQUENCE.incrementAndGet();
+        contentId = "loop-" + SEQUENCE.incrementAndGet();
         details.save(PetPlaceDetailRow.builder()
                 .contentId(contentId)
                 .title("서울숲")
@@ -119,7 +129,8 @@ class PlaceLoopIntegrationTest extends AbstractMySqlIntegrationTest {
     @Test
     @DisplayName("동네 길(trail:lt…)처럼 허용목록에 없어도 레이어 한 벌에 있으면 코스를 준다 — 2026-09-21 폰에서 전부 404 였다")
     void trailFromLayerIndex() throws Exception {
-        String trailId = "trail:lt" + System.nanoTime();
+        // 자산의 동네 길 번호와 같은 길이(lt 뒤 12자) — 코스 번호는 loop:trail:lt…:2000 으로 30자다.
+        String trailId = "trail:lt%012d".formatted(SEQUENCE.incrementAndGet());
         // 제주 바닷가 — 다른 검사가 넣어 둔 관광공사 항목과 같은 자리에 두면 겹침 정리(#411)에 빠진다.
         snapshots.store(CatalogSource.LOCALTRAIL, List.of(new PlaceDto(trailId, "3.1운동길B", "trail", "trail",
                 null, 33.2461, 126.5653, "제주", "", "", null, null)), 1);
