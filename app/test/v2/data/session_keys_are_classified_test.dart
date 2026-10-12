@@ -19,6 +19,8 @@ import 'package:heat_trip_flutter/v2/data/session_traces.dart';
 /// 세션이 끝나도 **남기는** 키와 그 이유. 이유를 못 적겠으면 지우는 쪽이다.
 const Map<String, String> _deviceKeys = <String, String>{
   'intro_seen_v1': '소개는 기기에 한 번이다. 다음 사람이 다시 볼 이유가 없다',
+  'login_terms_agreed_v1': '로그인 전 약관 체크는 계정이 생기기 전의 기기 사실이다(문서 버전과 함께 남는다). '
+      '계정마다의 동의는 로그인 뒤 동의 화면이 서버에 따로 남긴다',
   'location_paused_v1': '끈 것을 켜면 안 된다 — 지우면 위치 수집이 도로 켜진다(위치정보법 제24조)',
   'location_priming_asked_v1': '"OS 권한을 한 번 물었다" 는 기기의 사실이다',
   'place_catalog_etag_v1': '공개 카탈로그 캐시라 개인의 것이 아니다',

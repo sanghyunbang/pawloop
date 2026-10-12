@@ -94,6 +94,9 @@ void main() {
     };
 
     await tester.pumpWidget(const MaterialApp(home: LoginScreen(showAppleSignIn: true)));
+    // 소셜 버튼은 약관에 체크해야 켜진다(애플 지침 1.2 — login_terms_test.dart).
+    await tester.tap(find.byKey(const Key('login-terms-check')));
+    await tester.pump();
     await tester.tap(find.text(appleLabel));
     await tester.pumpAndSettle();
 
