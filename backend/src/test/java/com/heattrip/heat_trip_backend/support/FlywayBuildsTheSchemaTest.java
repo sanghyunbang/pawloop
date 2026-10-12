@@ -103,7 +103,12 @@ class FlywayBuildsTheSchemaTest {
     @DisplayName("표가 이미 있으면 안 돌고 기준점만 찍는다 — 지금 dev·운영이 이 경로다")
     void populatedDatabaseIsOnlyBaselined() throws Exception {
         String schema = freshSchema("already_there");
-        // "이미 쓰고 있는 DB" 를 흉내 낸다. 표 하나면 충분하다 — Flyway 는 비었는지만 본다.
+        // "이미 쓰고 있는 DB" 를 흉내 낸다 — 기준점을 찍던 날의 dev·운영처럼 V1 의 표가 다 있고 이력은 없다.
+        //
+        // 처음에는 아무 표 하나로 흉내 냈다. Flyway 는 비었는지만 보고, V2·V3 은 새 표를 만들기만 해서 그것으로
+        // 됐다. V4(#782)가 처음으로 **있는 표를 고치자** 그 흉내 DB 에 trail_route 가 없어 1146 으로 죽었다 —
+        // 검사의 바닥이 진짜 DB 와 달랐다는 뜻이다. 기준점 뒤의 V 파일은 V1 의 표 위에 얹히는 것이다.
+        createBaselineTablesWithoutHistory(schema);
         exec(schema, "CREATE TABLE something_already_here (id BIGINT PRIMARY KEY)");
 
         MigrateResult result = flywayFor(schema).migrate();
@@ -134,6 +139,22 @@ class FlywayBuildsTheSchemaTest {
                 .baselineVersion("1")
                 .validateOnMigrate(true)
                 .load();
+    }
+
+    /**
+     * V1 의 표만 깔고 이력은 지운다 — Flyway 를 붙이기 전 dev·운영의 모양이다.
+     *
+     * <p>이력을 지우는 이유: 기준점 찍기({@code baselineOnMigrate})는 이력 표가 <b>없을 때만</b> 탄다.
+     * 그 DB 들은 Flyway 없이 만들어져 이력이 없었다.
+     */
+    private static void createBaselineTablesWithoutHistory(String schema) throws SQLException {
+        Flyway.configure()
+                .dataSource(urlFor(schema), ROOT, MYSQL.getPassword())
+                .locations(MIGRATIONS)
+                .target("1")
+                .load()
+                .migrate();
+        exec(schema, "DROP TABLE flyway_schema_history");
     }
 
     /** 검사마다 깨끗한 스키마를 하나씩 쓴다 — 앞 검사가 만든 표가 다음 판정을 흐리면 안 된다. */

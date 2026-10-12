@@ -546,7 +546,7 @@ CREATE TABLE `trail_route` (
   `start_lat` double NOT NULL,
   `start_lng` double NOT NULL,
   `fetched_at` datetime(6) NOT NULL,
-  `course_id` varchar(32) NOT NULL,
+  `course_id` varchar(80) NOT NULL,
   `name` varchar(150) NOT NULL,
   `payload` longtext NOT NULL,
   PRIMARY KEY (`course_id`)

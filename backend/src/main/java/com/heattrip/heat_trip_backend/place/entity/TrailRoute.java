@@ -29,6 +29,11 @@ import java.time.LocalDateTime;
  *
  * <p>{@link #fetchedAt} 은 {@code place_catalog.fetched_at} 과 같은 <b>서비스 존 벽시계</b>다 —
  * "다시 받아 볼 때가 됐는가" 에만 쓰고 응답으로 나가지 않는다.
+ *
+ * <h2>추천 코스도 이 표에 산다 — #725</h2>
+ * <p>장소에서 출발해 돌아오는 추천 코스({@code PlaceLoopService})가 같은 모양의 선이라 같은 표에
+ * {@code loop:{contentId}:{lengthM}} 번호로 남는다. 그래서 {@link #courseId} 는 두루누비 번호(19자)보다
+ * 훨씬 길 수 있다 — 두루누비 장소의 2km 코스가 {@code loop:trail:T_CRS_MNG0000005118:2000}(35자)다.
  */
 @Entity
 @Table(name = "trail_route")
@@ -39,9 +44,25 @@ import java.time.LocalDateTime;
 @Builder
 public class TrailRoute {
 
-    /** 두루누비의 {@code crsIdx}. 카탈로그 항목의 {@code contentId} 는 {@code trail:} + 이 값이다. */
+    /**
+     * {@link #courseId} 칸의 크기 — {@code V4__trail_route_course_id_80.sql} 과 같아야 한다(#782).
+     *
+     * <p>처음에는 두루누비 번호만 담으려고 32 였다. 추천 코스 번호가 들어오며 두루누비·놀이터 장소의 코스가
+     * 전부 32자를 넘어 저장이 MySQL 1406 으로 죽었다(응답 500, 실패마다 ORS 세 번).
+     *
+     * <p><b>80 인 이유:</b> 이 저장소에서 장소 번호({@code contentId})를 담는 칸은 전부 64자다
+     * ({@code pet_place_detail.content_id} · {@code post.content_id} · {@code walk.place_content_id}).
+     * 64자 번호로 만들 수 있는 가장 긴 코스 번호가 {@code loop:} 5 + 64 + {@code :} 1 + {@code 10000} 5 =
+     * 75자라, 그것을 덮는다. {@code TrailRouteCourseIdWidthTest} 가 이 계산을 잠근다.
+     */
+    public static final int COURSE_ID_LENGTH = 80;
+
+    /**
+     * 두루누비의 {@code crsIdx}(카탈로그 항목의 {@code contentId} 는 {@code trail:} + 이 값) 또는
+     * 추천 코스 번호 {@code loop:{contentId}:{lengthM}}.
+     */
     @Id
-    @Column(name = "course_id", nullable = false, length = 32)
+    @Column(name = "course_id", nullable = false, length = COURSE_ID_LENGTH)
     private String courseId;
 
     @Column(name = "name", nullable = false, length = 150)
