@@ -296,7 +296,7 @@ erDiagram
     }
 
     trail_route {
-        VARCHAR  course_id PK  "두루누비 crsIdx"
+        VARCHAR  course_id PK  "두루누비 crsIdx 또는 추천 코스 loop:contentId:lengthM"
         VARCHAR  name
         INT      point_count   "300 이하"
         INT      length_m      "원본 길이(m)"
@@ -458,7 +458,7 @@ erDiagram
     }
 ```
 
-> `trail_route` 는 두루누비 코스 하나의 선이다. 다른 엔티티와 FK 가 없다 — `course_id` 는 두루누비의 키이고, 카탈로그(`place_catalog` 의 `durunubi` 행)가 같은 코스의 시작점을 `trail:crsIdx` 로 든다(#291). 사용자가 산책로를 눌렀을 때만 선이 나간다.
+> `trail_route` 는 두루누비 코스 하나의 선이다. 다른 엔티티와 FK 가 없다 — `course_id` 는 두루누비의 키이고, 카탈로그(`place_catalog` 의 `durunubi` 행)가 같은 코스의 시작점을 `trail:crsIdx` 로 든다(#291). 사용자가 산책로를 눌렀을 때만 선이 나간다. 장소에서 출발해 돌아오는 추천 코스(#725)도 같은 모양의 선이라 이 표에 `loop:{contentId}:{lengthM}` 번호로 산다(#782 가 칸을 80 으로 넓혔다).
 
 ## 엔티티 설명
 

@@ -13,6 +13,8 @@ import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -143,6 +145,43 @@ class PlaceLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(body.path("points").get(0).get(1).asDouble()).as("출발점은 그 길의 좌표다").isEqualTo(33.2461);
         assertThat(ors.calls.get()).isEqualTo(3);
         assertThat(routes.findById(PlaceLoopService.courseIdOf(trailId, 2000))).isPresent();
+    }
+
+    /**
+     * 출처마다 <b>가장 긴 실제 번호</b>로 코스를 받아 저장까지 되는지 — #782.
+     *
+     * <p>번호는 2026-10-12 운영 카탈로그(18,856곳)에서 출처마다 가장 긴 것이다. 같은 출처 안에서는 길이가
+     * 전부 같다. {@code course_id} 가 32자이던 동안 33자 이상은 전부 500 이었다 — 두루누비 139곳과 놀이터
+     * 5곳이 앱이 고르는 길이(1·2·3km)에서 다 그랬다. 맨 끝 열은 코스 번호의 길이다.
+     *
+     * <p>어느 출처 한 벌에 넣든 코스 번호는 같다 — {@code locate()} 는 레이어 한 벌 전부를 본다. 다른 검사가
+     * 쓰는 출처를 덮지 않으려고 위 검사와 같은 동네 길 한 벌에 넣는다.
+     */
+    @ParameterizedTest(name = "{0} · {1}m → 코스 번호 {2}자")
+    @CsvSource({
+            "trail:T_CRS_MNG0000005118, 3000, 35",
+            "trail:T_CRS_MNG0000005118, 10000, 36",
+            "playground:7d10ab19d06a, 1000, 33",
+            "playground:7d10ab19d06a, 2000, 33",
+            "playground:7d10ab19d06a, 3000, 33",
+            "shop:582000004520260002, 10000, 34",
+    })
+    @DisplayName("두루누비 · 놀이터처럼 번호가 긴 장소도 코스가 저장된다 — 32자 칸에서는 전부 500 이었다(#782)")
+    void longestRealIdsAreStored(String placeId, int lengthM, int courseIdLength) throws Exception {
+        // 고르기가 늘 통과하게 부탁한 길이의 1.02배를 준다 — 여기서 재는 것은 고르기가 아니라 저장이다.
+        ors.distanceBySeed.replaceAll((seed, distance) -> lengthM * 1.02);
+        // 울릉도 — 다른 검사의 장소와 겹치면 겹침 정리(#411)에 빠진다.
+        snapshots.store(CatalogSource.LOCALTRAIL, List.of(new PlaceDto(placeId, "긴 번호의 장소", "trail", "trail",
+                null, 37.4844, 130.9057, "울릉", "", "", null, null)), 1);
+        String courseId = PlaceLoopService.courseIdOf(placeId, lengthM);
+        assertThat(courseId).hasSize(courseIdLength);
+
+        JsonNode body = body(mockMvc.perform(get("/api/places/{id}/loop", placeId).param("lengthM", String.valueOf(lengthM)))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(body.path("available").asBoolean()).isTrue();
+        assertThat(routes.findById(courseId)).as("저장돼야 다음 요청이 ORS 를 안 부른다").isPresent();
+        assertThat(ors.calls.get()).isEqualTo(3);
     }
 
     @Test

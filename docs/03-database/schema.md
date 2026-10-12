@@ -282,7 +282,7 @@ LIMIT 80;
 
 ## 6. `trail_route` — 산책로 코스의 선 (**실재**)
 
-두루누비(걷기여행길) 코스 하나의 경로 — [`24_place_catalog_layers.sql`](../../backend/mysql/post-start/24_place_catalog_layers.sql) · #291. 원본 GPX 를 Douglas–Peucker 로 **300점 이하**로 줄여 `payload` 에 `[[경도, 위도], …]` JSON 으로 둔다 — 응답(`GET /api/places/trails/{courseId}/route`)의 `points` 그대로라 꺼내서 객체로 만들지 않는다(§24 와 같은 원칙). 카탈로그(§24 `durunubi` 행)에는 코스의 **시작점**(`start_lat`/`start_lng`)만 실리고 선은 사용자가 그 산책로를 눌렀을 때 따로 나간다 — 2,000 코스의 선을 한 벌에 실으면 16MB 다. `length_m` 은 줄이기 전 원본의 길이다. FK 는 없다 — `course_id` 는 두루누비의 `crsIdx` 다. `fetched_at` 은 §24 와 같은 **서비스 존 벽시계**로, "다시 받을 때가 됐는가" 에만 쓴다.
+두루누비(걷기여행길) 코스 하나의 경로 — [`24_place_catalog_layers.sql`](../../backend/mysql/post-start/24_place_catalog_layers.sql) · #291. 원본 GPX 를 Douglas–Peucker 로 **300점 이하**로 줄여 `payload` 에 `[[경도, 위도], …]` JSON 으로 둔다 — 응답(`GET /api/places/trails/{courseId}/route`)의 `points` 그대로라 꺼내서 객체로 만들지 않는다(§24 와 같은 원칙). 카탈로그(§24 `durunubi` 행)에는 코스의 **시작점**(`start_lat`/`start_lng`)만 실리고 선은 사용자가 그 산책로를 눌렀을 때 따로 나간다 — 2,000 코스의 선을 한 벌에 실으면 16MB 다. `length_m` 은 줄이기 전 원본의 길이다. FK 는 없다 — `course_id` 는 두루누비의 `crsIdx` 이거나, 같은 표에 사는 **추천 코스**(#725)의 번호 `loop:{contentId}:{lengthM}` 이다. 추천 코스 번호는 두루누비 장소의 2km 코스가 35자라 처음의 32자 칸을 넘었고, `V4__trail_route_course_id_80.sql` 이 80 으로 넓혔다(#782) — 이 저장소의 장소 번호 칸(64자)에서 만들 수 있는 가장 긴 코스 번호가 75자다. `fetched_at` 은 §24 와 같은 **서비스 존 벽시계**로, "다시 받을 때가 됐는가" 에만 쓴다.
 
 > 2026-09-06 이전 이 절은 `LINESTRING` + `SPATIAL INDEX` 의 `trail` 표를 **계획**으로 적고 있었다. 만들지 않았다 — 근접 조회는 카탈로그의 시작점으로 하고 선은 키로 한 건씩 꺼내므로 공간 인덱스가 할 일이 없다(ADR-0013 의 `walk` 판단과 같다).
 
@@ -293,7 +293,7 @@ CREATE TABLE `trail_route` (
   `start_lat` double NOT NULL,
   `start_lng` double NOT NULL,
   `fetched_at` datetime(6) NOT NULL,
-  `course_id` varchar(32) NOT NULL,
+  `course_id` varchar(80) NOT NULL,
   `name` varchar(150) NOT NULL,
   `payload` longtext NOT NULL,
   PRIMARY KEY (`course_id`)
@@ -302,7 +302,7 @@ CREATE TABLE `trail_route` (
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
-| `course_id` | `VARCHAR(32)` | PK | 두루누비 `crsIdx`. 카탈로그 항목의 `contentId` 는 `trail:` + 이 값 |
+| `course_id` | `VARCHAR(80)` | PK | 두루누비 `crsIdx`(카탈로그 항목의 `contentId` 는 `trail:` + 이 값) 또는 추천 코스 번호 `loop:{contentId}:{lengthM}` |
 | `name` | `VARCHAR(150)` | NOT NULL | 코스명 |
 | `point_count` | `INT` | NOT NULL | 줄인 뒤 남은 점 수(≤ 300) |
 | `length_m` | `INT` | NOT NULL | 원본 선의 길이(m) |

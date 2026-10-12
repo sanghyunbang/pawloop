@@ -148,7 +148,7 @@
 ### 5.2 Entity `TrailRoute` (테이블 `trail_route`) — **실재**(#291)
 | 필드 : 타입 | 컬럼 | 매핑/제약 |
 | --- | --- | --- |
-| `courseId : String` | `course_id` | `@Id`, `varchar(32)` — 두루누비 `crsIdx`. 카탈로그 항목의 `contentId` 는 `trail:` + 이 값 |
+| `courseId : String` | `course_id` | `@Id`, `varchar(80)`(`TrailRoute.COURSE_ID_LENGTH`) — 두루누비 `crsIdx`(카탈로그 항목의 `contentId` 는 `trail:` + 이 값) 또는 추천 코스 번호 `loop:{contentId}:{lengthM}`(#725). 32 였다가 추천 코스 번호가 넘쳐 넓혔다(#782 · `V4`) |
 | `name : String` | `name` | NOT NULL, len 150 |
 | `pointCount : int` | `point_count` | 줄인 뒤 점 수(≤ 300) |
 | `lengthM : int` | `length_m` | 원본 GPX 길이(m) |
