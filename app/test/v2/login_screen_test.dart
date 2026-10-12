@@ -26,6 +26,13 @@ import 'package:heat_trip_flutter/features/auth/service/social_login_service.dar
 import 'package:heat_trip_flutter/v2/data/auth_state.dart';
 import 'package:heat_trip_flutter/v2/screens/login_screen.dart';
 
+/// 소셜 버튼은 약관 체크칸을 눌러야 켜진다(애플 지침 1.2 — `login_terms_test.dart`). 버튼을 누르는
+/// 검사는 먼저 체크한다. 문장 가운데는 링크라 동그라미를 누른다.
+Future<void> agreeToTerms(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('login-terms-check')));
+  await tester.pump();
+}
+
 /// 주어진 에셋 경로를 그리는 [SvgPicture] 를 찾는 Finder.
 Finder svgAsset(String assetName) => find.byWidgetPredicate(
       (w) =>
@@ -126,6 +133,7 @@ void main() {
           ({required url, required callbackUrlScheme, required options}) => onAuthenticate();
 
       await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+      await agreeToTerms(tester);
       await tester.tap(find.text('카카오로 시작하기'));
       await tester.pumpAndSettle();
     }
@@ -222,6 +230,7 @@ void main() {
     /// 로그인 화면을 띄우고 카카오를 누른 뒤, **그 화면을 트리에서 뺀다.**
     Future<void> tapThenRemoveScreen(WidgetTester tester) async {
       await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+      await agreeToTerms(tester);
       await tester.tap(find.text('카카오로 시작하기'));
       await tester.pump();
       expect(AuthState.status.value, AuthStatus.authenticating);

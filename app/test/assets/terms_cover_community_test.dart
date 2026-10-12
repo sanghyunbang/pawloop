@@ -79,21 +79,51 @@ void main() {
       );
     });
 
-    test('제7조의2가 신고와 가리기를 적는다 — Google Play UGC 정책이 요구하는 수단이다', () {
-      final article = _article(_read(_terms), '제7조의2(신고와 가리기)');
+    test('제6조가 불쾌한 콘텐츠와 괴롭힘에 무관용이고 신고를 24시간 안에 처리한다고 적는다 — 애플 지침 1.2', () {
+      // 1.2 는 가입 전에 동의받는 약관이 "불쾌한 콘텐츠와 악성 이용자에 대한 무관용" 을 분명히 하라고
+      // 요구한다. App Store 심사가 그 조건으로 반려했다. 조를 지목해 잰다 — 문서 아무 데나 있는 말로는
+      // 조문을 지워도 초록이다.
+      final article = _article(_read(_terms), '제6조(이용자의 의무)');
+
+      expect(article, contains('일절 허용하지 않습니다'),
+          reason: '"할 수 있다" 로는 무관용이 아니다 — 애플이 요구한 것은 허용하지 않는다는 선언이다');
+      for (final kind in ['음란', '폭력', '혐오', '차별', '괴롭힘', '스팸']) {
+        expect(article, contains(kind), reason: '무엇이 불쾌한 콘텐츠인지 이름으로 적는다 — $kind');
+      }
+      expect(article, contains('24시간 안에'),
+          reason: '1.2 — 신고는 24시간 안에 처리해야 한다. 앱 심사 답변에도 같은 약속을 적었다(#707)');
+      expect(article, contains('삭제'), reason: '처리의 뜻 하나 — 그 콘텐츠를 내린다');
+      expect(article, contains('이용을 정지'), reason: '처리의 뜻 둘 — 올린 사람을 내보낸다');
+      expect(article, contains('해지'));
+    });
+
+    test('제7조의2가 신고와 차단을 적는다 — 차단하면 사라지고, 운영자에게 알리고, 상대에게는 안 알린다', () {
+      final article = _article(_read(_terms), '제7조의2(신고와 차단)');
 
       expect(article, contains('신고'));
       expect(
         article,
-        contains('가리기는 삭제가 아닙니다'),
-        reason: '가리기를 삭제로 오해하면, 가려 놓고 "지웠다" 고 믿습니다. '
+        contains('차단은 삭제가 아닙니다'),
+        reason: '차단을 삭제로 오해하면, 차단해 놓고 "지웠다" 고 믿습니다. '
             '실제로는 다른 이용자에게 그대로 보입니다.',
       );
+      expect(
+        article,
+        contains('화면에서 사라지고'),
+        reason: '애플 지침 1.2 — 차단한 사람의 글·댓글은 피드에서 사라진다. 예전 문구("접히고")는 '
+            '"눌러서 보기" 로 펴던 시절의 말이다.',
+      );
+      expect(article, contains('운영자에게'),
+          reason: '1.2 — 차단은 개발자에게도 알린다. 사용자가 그 사실을 약관에서 읽을 수 있어야 한다');
       expect(
         article,
         contains('알리지 않습니다'),
         reason: '신고 사실이 상대에게 가는지는 신고할지 말지를 정하는 데 결정적입니다.',
       );
+      expect(article, contains('차단한 사실은 상대에게 알리지 않'),
+          reason: '차단도 같다 — 앱의 확인 창이 "상대에게는 알리지 않습니다" 라고 말한다');
+      expect(article, contains('가리기'),
+          reason: '채팅 화면과 신고 화면은 같은 것을 "가리기" 라고 부른다 — 약관이 두 이름을 이어 줘야 한다');
     });
 
     test('제9조가 탈퇴해도 커뮤니티 글이 남는다고 적는다', () {
