@@ -4,8 +4,12 @@
 // 써야 해서다 — 두 벌이면 한쪽만 고쳐지고, 그게 "장소 화면은 왜 다르지" 가 된다.
 //
 // 이 위젯은 **상태를 안 든다.** 반응 · 저장 · 두 번 탭 하트는 부르는 쪽(`PostListActions`)이
-// 하고, 여기는 그리고 콜백만 부른다. 키(`bookmark-`, `reaction-`, `post-dog-`, `blocked-post-`,
+// 하고, 여기는 그리고 콜백만 부른다. 키(`bookmark-`, `reaction-`, `post-dog-`,
 // `post-comment-count-`)는 피드 검사들이 보던 그대로다.
+//
+// 차단한 사람의 글은 이 카드까지 오지 않는다 — 목록이 [visiblePosts] 로 먼저 뺀다(애플 지침 1.2).
+// 예전에는 여기서 "가린 사람의 글입니다 · 눌러서 보기" 로 접었는데, 1.2 는 접힌 자리도 남기지 말라고
+// 한다.
 import 'package:flutter/material.dart';
 
 import '../data/community_repository.dart';
@@ -50,7 +54,8 @@ class PostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (post.hiddenByBlock) return blockedPostCard(post, onOpen: onOpen);
+    // 그물 — 목록이 [visiblePosts] 로 이미 뺐어야 한다. 빠뜨린 자리가 생겨도 내용은 안 그린다.
+    if (post.hiddenForViewer) return const SizedBox.shrink();
     return GestureDetector(
       onTap: onOpen,
       behavior: HitTestBehavior.opaque,
@@ -269,28 +274,3 @@ class PostCard extends StatelessWidget {
         CommunityReaction.empathy => mine ? Icons.handshake_rounded : Icons.handshake_outlined,
       };
 }
-
-/// 가린 사람의 글 — 목록에서는 **글도 사진도 안 그린다**.
-///
-/// 서버는 읽는 사람 기준으로 `hiddenByBlock` 을 계산해 붙여 보내는데, 목록이 그 값을 안 보던
-/// 시절이 있었다(2026-09-18 사장님 실기기 신고). **사진을 빼는 것이 핵심이다** — 글자만 접고
-/// 사진을 남기면 가장 불쾌할 수 있는 것이 그대로 남는다. 제목도 뺀다. 여기서는 펴지 않는다 —
-/// 목록의 탭은 글을 여는 동작이라 "눌러서 보기" 와 부딪친다. 펴는 것은 상세에 있다.
-Widget blockedPostCard(CommunityPost post, {required VoidCallback onOpen}) => GestureDetector(
-      onTap: onOpen,
-      behavior: HitTestBehavior.opaque,
-      child: GlassCard(
-        padding: const EdgeInsets.fromLTRB(13, 12, 12, 12),
-        child: Row(children: [
-          const Icon(Icons.visibility_off_rounded, size: 18, color: T.textMuted),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text('가린 사람의 글입니다 · 눌러서 보기',
-                key: Key('blocked-post-${post.id}'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: T.textMuted)),
-          ),
-        ]),
-      ),
-    );

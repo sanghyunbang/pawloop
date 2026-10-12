@@ -42,6 +42,7 @@ import 'chat_repository.dart' show ChatReportReason;
 
 import 'package:heat_trip_flutter/core/config/env.dart';
 import 'package:heat_trip_flutter/core/net/authed_client.dart';
+import 'blocked_authors.dart';
 import 'location_upload_policy.dart';
 import '../domain/post_media.dart';
 import '../../core/net/net_timeouts.dart';
@@ -255,12 +256,16 @@ class CommunityPost {
   final ReactionSummary reactions;
   final DateTime createdAt;
 
-  /// 읽는 사람이 이 작성자를 가렸는가 — 이슈 #166.
+  /// 읽는 사람이 이 작성자를 차단했는가 — 이슈 #166. 서버가 읽는 사람마다 계산해 붙인다.
   ///
-  /// **목록에서 빠지지 않는다.** 빼면 커서가 그 글을 건너뛰어 페이지 경계가 어긋나고,
-  /// 가린 자리에 '보기' 를 두려면 본문이 이미 와 있어야 한다. 접는 것은 화면의 일이다 —
-  /// 채팅의 `hiddenByBlock` 과 같은 규약이다.
+  /// 지금 서버는 차단한 사람의 글을 **목록에 아예 안 보낸다**(애플 지침 1.2). 이 값이 참으로 오는
+  /// 곳은 글 상세(링크로 직접 연 경우)와, 목록에서 빼기 전의 옛 서버다. 어느 쪽이든 화면은 그 글을
+  /// 그리지 않는다 — 규칙은 [hiddenForViewer] 하나다.
   final bool hiddenByBlock;
+
+  /// **이 글을 그리지 않는다** — 서버가 차단 표시를 붙였거나, 이 세션에서 작성자를 차단했다
+  /// ([BlockedAuthors]). 목록 · 사진 벽 · 상세가 전부 이것 하나로 가른다(애플 지침 1.2).
+  bool get hiddenForViewer => hiddenByBlock || BlockedAuthors.contains(author.userId);
 
   /// 글쓴이의 동네 — **구까지만** (#342). 안 골랐으면 `null` 이다.
   ///
@@ -373,8 +378,11 @@ class CommunityComment {
   final String body;
   final DateTime createdAt;
 
-  /// 읽는 사람이 이 작성자를 가렸는가 — #166. 규칙은 `CommunityPost.hiddenByBlock` 과 같다.
+  /// 읽는 사람이 이 작성자를 차단했는가 — #166. 규칙은 `CommunityPost.hiddenByBlock` 과 같다.
   final bool hiddenByBlock;
+
+  /// **이 댓글을 그리지 않는다** — [CommunityPost.hiddenForViewer] 와 같은 규칙이다.
+  bool get hiddenForViewer => hiddenByBlock || BlockedAuthors.contains(author.userId);
 
   const CommunityComment({
     required this.id,
@@ -402,6 +410,21 @@ class CommunityComment {
     );
   }
 }
+
+/// 그릴 글만 — 차단한 사람의 글을 뺀다(애플 지침 1.2: "차단한 사람의 콘텐츠는 피드에서 즉시
+/// 사라져야 한다"). 커뮤니티 글 목록을 그리는 **모든 자리**가 이것을 지난다 — 피드(카드 · 목록 ·
+/// 사진 벽) · 장소의 글 · 저장한 글 · 아이 사진첩 · 홈의 이웃 사진.
+///
+/// 받아 둔 목록 자체는 안 고친다. 커서와 '더 보기' 는 서버가 준 그대로 두고, 그릴 때만 거른다 —
+/// 그래야 방금 차단한 사람의 글이 다음 장을 불러올 때 경계를 흔들지 않는다.
+List<CommunityPost> visiblePosts(Iterable<CommunityPost> posts) =>
+    [for (final post in posts) if (!post.hiddenForViewer) post];
+
+/// 그릴 댓글만 — [visiblePosts] 와 같은 규칙. 차단한 사람의 댓글은 접지 않고 뺀다(1.2).
+///
+/// 답글 구조가 없어서(계약의 `Comment` 에 부모가 없다) 빼도 끊기는 줄기가 없다.
+List<CommunityComment> visibleComments(Iterable<CommunityComment> comments) =>
+    [for (final comment in comments) if (!comment.hiddenForViewer) comment];
 
 /// 커서 한 장 — 계약의 `PostPage` · `CommentPage`.
 ///
@@ -773,10 +796,14 @@ class CommunityRepository {
     );
   }
 
-  /// 이 사람을 가린다 — 이슈 #166.
+  /// 이 사람을 차단한다 — 이슈 #166 · 애플 지침 1.2.
   ///
-  /// **채팅과 같은 경로다**(`POST /api/blocks`). 가리기는 처음부터 사람 단위라 방도
-  /// 게시판도 안 가린다 — 커뮤니티에서 가린 사람은 채팅에서도 접힌다.
+  /// **채팅과 같은 경로다**(`POST /api/blocks`). 차단은 처음부터 사람 단위라 방도
+  /// 게시판도 안 가린다 — 커뮤니티에서 차단한 사람은 채팅에서도 접힌다. 서버는 새로 차단하면
+  /// 운영자에게 알린다.
+  ///
+  /// 여기는 요청만 보낸다. 화면에서 그 사람의 글을 곧바로 빼는 것([BlockedAuthors.add])은 부르는
+  /// 쪽이 성공을 확인한 뒤에 한다.
   ///
   /// **이미 가려 뒀어도 성공이다.** 없던 것과 있던 것을 나누면 앱이 두 갈래를 다뤄야
   /// 하는데 사용자에게는 결과가 같다.

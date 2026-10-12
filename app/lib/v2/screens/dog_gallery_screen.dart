@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/auth_state.dart';
+import '../data/blocked_authors.dart';
 import '../data/community_repository.dart';
 import '../domain/date_label.dart';
 import '../domain/pet.dart';
@@ -40,13 +41,20 @@ class _DogGalleryScreenState extends State<DogGalleryScreen> {
     super.initState();
     // 상세에서 저장 · 반응 · 댓글이 바뀌면 여기로 온다 — 어떻게 나왔든(#548).
     kCommunityRev.addListener(_load);
+    // 차단하면 그 사람의 글을 다시 부르지 않고 지금 그린 것에서 뺀다(애플 지침 1.2).
+    BlockedAuthors.ids.addListener(_onBlocksChanged);
     _load();
   }
 
   @override
   void dispose() {
     kCommunityRev.removeListener(_load);
+    BlockedAuthors.ids.removeListener(_onBlocksChanged);
     super.dispose();
+  }
+
+  void _onBlocksChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -169,9 +177,12 @@ class _DogGalleryScreenState extends State<DogGalleryScreen> {
     if (_loading) return const Center(child: CircularProgressIndicator());
     final failure = _failure;
     if (failure != null) return _failureView(failure);
-    if (_posts.isEmpty) return _emptyView();
-    final withMedia = PostPhotoWall.withMedia(_posts);
-    final textOnly = _posts.where((p) => p.media.isEmpty).toList();
+    // 우리 집 아이를 찍은 글이라도 차단한 사람의 것은 안 그린다(애플 지침 1.2) — 가족방에서 가린
+    // 식구의 글도 그렇다. 차단은 사람 단위다.
+    final visible = visiblePosts(_posts);
+    if (visible.isEmpty && !_hasMore) return _emptyView();
+    final withMedia = PostPhotoWall.withMedia(visible);
+    final textOnly = visible.where((p) => p.media.isEmpty).toList();
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(

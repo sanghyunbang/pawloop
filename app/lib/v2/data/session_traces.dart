@@ -42,6 +42,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/schedule_reminder.dart';
 import 'avatar_border_store.dart';
+import 'blocked_authors.dart';
 import 'neighborhood_store.dart';
 import 'walk_goal_store.dart';
 import 'walk_in_progress.dart';
@@ -105,6 +106,8 @@ Future<void> clearSessionTraces() async {
 
   // 메모리에 있는 것. 다음 사람이 들어오기 전에 화면에서도 사라져야 한다.
   WalkSafetyStore.clear();
+  // 이 세션에서 차단한 사람 — 다음 사람에게 앞사람의 차단이 적용되면 그 사람 화면에서 글이 사라진다.
+  BlockedAuthors.clear();
 
   // 이 값들을 듣는 화면이 아직 떠 있을 수 있다 — 다시 읽게 해서 기본값으로 돌린다.
   kNeighborhoodRev.value++;

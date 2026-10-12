@@ -17,6 +17,7 @@
 // 장소는 지도와 홈에서 게스트도 누른다.
 import 'package:flutter/material.dart';
 
+import '../data/blocked_authors.dart';
 import '../data/community_repository.dart';
 import '../data/pet_places_repository.dart';
 import '../theme/app_tokens.dart';
@@ -80,13 +81,20 @@ class _PlacePostsScreenState extends State<PlacePostsScreen> with PostListAction
     super.initState();
     // 상세에서 저장 · 반응 · 댓글이 바뀌거나 여기서 글을 쓰면 다시 읽는다 — 어떻게 나왔든(#548).
     kCommunityRev.addListener(_load);
+    // 차단하면 그 사람의 글을 다시 부르지 않고 지금 그린 것에서 뺀다(애플 지침 1.2).
+    BlockedAuthors.ids.addListener(_onBlocksChanged);
     _load();
   }
 
   @override
   void dispose() {
     kCommunityRev.removeListener(_load);
+    BlockedAuthors.ids.removeListener(_onBlocksChanged);
     super.dispose();
+  }
+
+  void _onBlocksChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -108,8 +116,8 @@ class _PlacePostsScreenState extends State<PlacePostsScreen> with PostListAction
         _hasMore = page.hasMore;
         _summary = results[1] as PlaceSummary;
         _loading = false;
-        // 사진이 하나도 없으면 사진 갈래는 빈 벽이다 — 글 갈래를 먼저 연다.
-        if (PostPhotoWall.withMedia(page.items).isEmpty) _tab = PlacePostsTab.posts;
+        // 사진이 하나도 없으면 사진 갈래는 빈 벽이다 — 글 갈래를 먼저 연다. 차단한 사람의 사진은 셈에서 뺀다.
+        if (PostPhotoWall.withMedia(visiblePosts(page.items)).isEmpty) _tab = PlacePostsTab.posts;
       });
     } on CommunityFailure catch (failure) {
       if (!mounted) return;
@@ -156,10 +164,11 @@ class _PlacePostsScreenState extends State<PlacePostsScreen> with PostListAction
     );
   }
 
-  /// 정렬된 목록. 반응 많은 순은 세 반응의 합, 같으면 최신이 먼저.
+  /// 정렬된 목록. 반응 많은 순은 세 반응의 합, 같으면 최신이 먼저. 차단한 사람의 글은 뺀다(1.2).
   List<CommunityPost> get _sorted {
-    if (_sort == PlacePostsSort.latest) return _posts;
-    final out = [..._posts];
+    final visible = visiblePosts(_posts);
+    if (_sort == PlacePostsSort.latest) return visible;
+    final out = [...visible];
     out.sort((a, b) {
       final d = _reactionTotal(b) - _reactionTotal(a);
       return d != 0 ? d : b.createdAt.compareTo(a.createdAt);
@@ -227,7 +236,9 @@ class _PlacePostsScreenState extends State<PlacePostsScreen> with PostListAction
     if (_loading) return const Center(child: CircularProgressIndicator());
     final failure = _failure;
     if (failure != null) return _failureView(failure);
-    final withMedia = PostPhotoWall.withMedia(_posts);
+    // 차단한 사람의 글은 사진 갈래에도 글 갈래에도 없다(애플 지침 1.2).
+    final visible = visiblePosts(_posts);
+    final withMedia = PostPhotoWall.withMedia(visible);
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -241,7 +252,7 @@ class _PlacePostsScreenState extends State<PlacePostsScreen> with PostListAction
           if (_tab == PlacePostsTab.photos) ...[
             if (withMedia.isEmpty) _emptyView(photos: true) else PostPhotoWall(posts: withMedia, onTap: _open),
           ] else ...[
-            if (_posts.isEmpty)
+            if (visible.isEmpty)
               _emptyView(photos: false)
             else ...[
               _sortRow(),

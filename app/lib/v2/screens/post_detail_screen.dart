@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/auth_state.dart';
+import '../data/blocked_authors.dart';
 import '../data/community_repository.dart';
 import '../widgets/post_course_card.dart';
 import '../widgets/post_media_strip.dart';
@@ -9,6 +10,13 @@ import 'login_screen.dart';
 import 'post_write_screen.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/aurora.dart';
+
+/// 차단 확인 창의 본문 — 무엇이 일어나는지 셋(사라짐 · 운영자 알림 · 상대 비고지). 검사가 붙든다.
+const String blockConfirmMessage =
+    '이 사람의 글과 댓글이 내 화면에서 사라지고, 운영자에게 알림이 갑니다. 상대에게는 알리지 않습니다.';
+
+/// 차단한 사람의 글을 직접 열었을 때 그 자리에 남는 한 줄.
+const String hiddenPostMessage = '차단한 사용자의 글이에요';
 
 /// 글 상세 (postDetail) — 커뮤니티 글 1건 + 반응 + 댓글 스레드.
 ///
@@ -22,6 +30,13 @@ import '../widgets/aurora.dart';
 /// 값과 이 응답이 어긋날 수 있어서다 — 토큰이 만료된 채 읽기만 하면 앱은 자기가
 /// 로그인했다고 믿지만 서버는 게스트로 대접한다. 화면은 **서버가 방금 말한 것**을
 /// 따른다.
+///
+/// ## 차단한 사람의 글·댓글 — 애플 지침 1.2
+///
+/// 남의 글과 댓글에는 신고와 **따로** "차단" 이 있다(신고 시트 안의 체크칸도 그대로 있다). 차단하면
+/// 그 사람의 댓글은 이 화면에서 바로 빠지고, 그 사람의 글이면 내용 대신 "차단한 사용자의 글이에요" 만
+/// 남는다 — 접어 두고 "눌러서 보기" 로 펴던 것을 1.2 가 "즉시 사라져야 한다" 로 막았다. 목록들도 같은
+/// 순간 그 사람의 글을 뺀다([BlockedAuthors]).
 class PostDetailScreen extends StatefulWidget {
   final CommunityPost post;
 
@@ -75,8 +90,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void initState() {
     super.initState();
+    // 이 화면에서든 다른 곳에서든 차단이 일어나면 다시 그린다 — 글이 가려지고 댓글이 빠진다.
+    BlockedAuthors.ids.addListener(_onBlocksChanged);
     _refreshPost();
     _loadComments();
+  }
+
+  void _onBlocksChanged() {
+    if (mounted) setState(() {});
   }
 
   /// 글을 다시 읽는다. <b>목록이 넘긴 것은 그때의 세션으로 읽은 값이다.</b>
@@ -99,6 +120,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   @override
   void dispose() {
+    BlockedAuthors.ids.removeListener(_onBlocksChanged);
     _ctrl.dispose();
     // 나가면서 **한 번** 알린다(#548). 바뀔 때마다 알리면 반응을 세 번 누른 동안 목록이 세 번
     // 다시 읽는다. 다음 프레임으로 미루는 것은, 지금 이 순간이 위젯을 걷어내는 중이라
@@ -417,8 +439,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   /// 사유를 묻는다. 채팅과 **같은 시트**를 쓴다 — 두 벌이면 문구도 사유 목록도 갈린다.
   ///
-  /// 가리기 칸이 함께 있다. 가리기는 **사람 단위**라, 가리면 그 사람의 글·댓글이
-  /// 커뮤니티와 채팅 **양쪽에서** 접힌다(`POST /api/blocks`, #166).
+  /// 차단 칸(시트에서는 "가리기")이 함께 있다. 차단은 **사람 단위**라 커뮤니티에서는 그 사람의
+  /// 글·댓글이 사라지고 채팅에서는 접힌다(`POST /api/blocks`, #166 · 애플 지침 1.2). 신고와 따로
+  /// 차단하는 버튼도 있다([_blockButton]).
   Future<ReportChoice?> _askReport(String who, String subject) async {
     if (_isGuest) {
       if (!await _askLogin('신고할 수 있어요')) return null;
@@ -433,16 +456,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     setState(() => _sending = true);
     try {
       await send();
-      // **신고가 성공한 뒤에만 가린다.** 순서가 반대면 신고가 실패했을 때 "가려졌는데
+      // **신고가 성공한 뒤에만 차단한다.** 순서가 반대면 신고가 실패했을 때 "차단됐는데
       // 접수는 안 된" 상태가 되고, 사용자는 접수됐다고 믿는다 — 채팅이 같은 순서다.
       if (alsoBlock != null) {
         await _repo.blockUser(alsoBlock);
+        // 차단이 **성공한 뒤에** 적는다 — 목록들이 듣고 그 사람의 글을 곧바로 뺀다(1.2).
+        BlockedAuthors.add(alsoBlock);
       }
       if (!mounted) return;
       setState(() => _sending = false);
       _toast(alsoBlock == null
           ? '신고를 접수했어요. 상대에게는 알리지 않습니다'
-          : '신고를 접수하고 이 사람의 글을 가렸어요');
+          : '신고를 접수하고 이 사람을 차단했어요');
       if (alsoBlock != null) {
         await _refreshPost();
       }
@@ -453,32 +478,74 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
-  /// 가린 사람의 글·댓글을 접는다 — 이슈 #166.
+  /// 차단 버튼 — 애플 지침 1.2 ("악성 이용자를 차단하는 수단"). **신고와 따로** 보인다.
   ///
-  /// **본문은 이미 와 있다.** 서버가 목록에서 빼지 않는 이유는 계약에 적혀 있다 — 빼면
-  /// 커서가 건너뛰고, '보기' 를 누를 때 요청이 한 번 더 필요해진다. 그 요청은 가린 사람만
-  /// 부르는 경로가 되어 인가를 또 하나 만들어야 한다.
+  /// 신고 시트 안에도 차단 칸이 있지만, 신고할 생각이 없는 사람은 그 시트를 열지 않는다 — 차단이
+  /// 있다는 것 자체를 모른다. 그래서 신고 옆에 같은 모양으로 둔다. 조건도 신고와 같다
+  /// ([_canReport]): 내 것이 아니고 작성자가 살아 있어야 한다.
+  Widget _blockButton({required VoidCallback onTap, required Key key}) => GestureDetector(
+        key: key,
+        onTap: _sending ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Text('차단',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: T.textMuted)),
+        ),
+      );
+
+  /// 한 번 묻고 차단한다.
   ///
-  /// **한계를 그대로 적는다.** 이것은 "안 보이게 하는 것" 이지 "안 받는 것" 이 아니다.
-  /// 앱을 뜯으면 가려진 본문을 읽을 수 있다 — `ChatBlocks` javadoc 이 같은 한계를 적었다.
-  String _bodyOf(String body, bool hidden, int key) =>
-      _folded(hidden, key) ? '가린 사람의 글입니다. 눌러서 보기' : body;
+  /// 확인 창이 **무엇이 일어나는지 셋을 다 말한다** — 이 사람의 글·댓글이 내 화면에서 사라진다 ·
+  /// 운영자에게 알림이 간다 · 상대에게는 알리지 않는다. 1.2 가 요구하는 것이 앞의 둘이고, 셋째는
+  /// 차단할지 말지를 정하는 데 결정적이다(신고 시트와 같은 말).
+  ///
+  /// 차단이 **성공한 뒤에만** [BlockedAuthors] 에 적는다. 먼저 적으면 실패했을 때 화면에서는 사라졌는데
+  /// 서버는 모르는 상태가 되고, 다음에 불러올 때 되살아난다.
+  Future<void> _block(PersonRef author) async {
+    if (_sending) return;
+    if (_isGuest) {
+      if (!await _askLogin('차단할 수 있어요')) return;
+      if (!mounted) return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text('${author.nickname} 님을 차단할까요?'),
+        content: const Text(blockConfirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            key: const Key('block-confirm'),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('차단하기', style: TextStyle(color: Color(0xFFD9534F))),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
 
-  bool _folded(bool hidden, int key) => hidden && !_revealed.contains(key);
-
-  void _reveal(int key) {
-    if (_revealed.contains(key)) return;
-    setState(() => _revealed.add(key));
+    setState(() => _sending = true);
+    try {
+      await _repo.blockUser(author.userId);
+      BlockedAuthors.add(author.userId);
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _toast('차단했어요. 이 사람의 글과 댓글이 더 이상 보이지 않아요');
+      // 댓글 수를 서버에 다시 묻는다 — 서버는 차단한 사람의 댓글을 세지 않는다.
+      await _refreshPost();
+    } on CommunityFailure catch (failure) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      _toast(failure.message);
+    }
   }
-
-  /// 이 화면에서 '보기' 를 눌러 편 것들. 글은 [_postKey], 댓글은 댓글 id 다.
-  ///
-  /// **화면을 나가면 다시 접힌다.** 가리기는 계속 유효한 설정이고, 편 것은 이번 한 번
-  /// 보겠다는 뜻이다.
-  final Set<int> _revealed = <int>{};
-
-  /// 글 본문의 접기 열쇠. 댓글 id 와 안 겹치게 음수를 쓴다.
-  static const int _postKey = -1;
 
   void _toast(String message) {
     if (!mounted) return;
@@ -502,9 +569,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     return mounted && !_isGuest;
   }
 
+  /// 이 글을 그리지 않는가 — 서버가 차단 표시를 붙였거나, 이 세션에서 작성자를 차단했다.
+  bool get _postHidden => _post.hiddenForViewer;
+
   @override
   Widget build(BuildContext context) {
     final post = _post;
+    final hidden = _postHidden;
     return Scaffold(
       backgroundColor: T.bgTop,
       body: AuroraBackground(
@@ -548,40 +619,45 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ],
                 ),
               ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
-                  children: [
-                    _postCard(post),
-                    const SizedBox(height: 14),
-                    _reactionRow(),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.forum_outlined,
-                          size: 17,
-                          color: T.warmMid,
-                        ),
-                        const SizedBox(width: 7),
-                        Text(
-                          // 서버가 센 값이다. 화면에 몇 장을 불러왔든 글의 댓글 수는
-                          // 하나다 — 목록 카드의 숫자와도 그래야 같다.
-                          '댓글 ${_post.commentCount}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: T.textPrimary,
+              // 차단한 사람의 글 — 내용 · 반응 · 댓글 · 입력칸 없이 한 줄만. 펼치는 길이 없다(1.2).
+              if (hidden)
+                Expanded(child: _hiddenPost())
+              else ...[
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
+                    children: [
+                      _postCard(post),
+                      const SizedBox(height: 14),
+                      _reactionRow(),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.forum_outlined,
+                            size: 17,
+                            color: T.warmMid,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    ..._commentSection(),
-                  ],
+                          const SizedBox(width: 7),
+                          Text(
+                            // 서버가 센 값이다. 화면에 몇 장을 불러왔든 글의 댓글 수는
+                            // 하나다 — 목록 카드의 숫자와도 그래야 같다.
+                            '댓글 ${_post.commentCount}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: T.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ..._commentSection(),
+                    ],
+                  ),
                 ),
-              ),
-              _inputBar(),
+                _inputBar(),
+              ],
             ],
           ),
         ),
@@ -633,7 +709,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         ),
       ];
     }
-    if (_comments.isEmpty) {
+    // 차단한 사람의 댓글은 접지 않고 뺀다(1.2). 서버가 이미 빼고 보내지만(옛 서버는 표시만 붙인다),
+    // 이 화면에서 방금 차단한 사람의 댓글은 이미 받아 둔 목록에 남아 있다.
+    final visible = visibleComments(_comments);
+    if (visible.isEmpty && !_hasMoreComments) {
       return const [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 24),
@@ -645,7 +724,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       ];
     }
     return [
-      for (final comment in _comments) ...[
+      for (final comment in visible) ...[
         _commentCard(comment),
         const SizedBox(height: 10),
       ],
@@ -724,7 +803,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     const SizedBox(height: 3),
                     Row(
                       children: [
-                        _boardChip(post.board),
+                        // 좁아지면 칩과 장소가 함께 줄어든다 — 칩이 먼저 아이콘 자리까지 잃지 않게 몫을 더 준다.
+                        Flexible(flex: 2, child: _boardChip(post.board)),
                         if (post.loc != null) ...[
                           const SizedBox(width: 7),
                           const Icon(
@@ -755,22 +835,26 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               // 넘쳤다(#331). 실제 글꼴에서는 "9월 1일 16:30" 이 다 들어간다.
               Flexible(
                 flex: 2,
-                child: Text(
-                  dateTimeLabel(post.createdAt),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(fontSize: 11.5, color: T.textMuted),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      dateTimeLabel(post.createdAt),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(fontSize: 11.5, color: T.textMuted),
+                    ),
+                    // 고친 글인지 읽는 사람이 알아야 한다 — 이미 달린 댓글이 무엇에 대한
+                    // 말이었는지 되짚을 수 있는 유일한 단서다. 서버는 **값이 실제로 달라진
+                    // 경우에만** updatedAt 을 만든다(#211). 날짜 **아래**에 둔다 — 옆에 두면
+                    // 신고 · 차단이 함께 서는 머리줄이 폰 폭에서 넘쳤다.
+                    if (post.updatedAt != null)
+                      const Text('수정됨',
+                          style: TextStyle(fontSize: 11.5, color: T.textMuted)),
+                  ],
                 ),
               ),
-              // 고친 글인지 읽는 사람이 알아야 한다 — 이미 달린 댓글이 무엇에 대한
-              // 말이었는지 되짚을 수 있는 유일한 단서다. 서버는 **값이 실제로 달라진
-              // 경우에만** updatedAt 을 만든다(#211).
-              if (post.updatedAt != null) ...[
-                const SizedBox(width: 6),
-                const Text('수정됨',
-                    style: TextStyle(fontSize: 11.5, color: T.textMuted)),
-              ],
               if (_isMine(post.author)) ...[
                 const SizedBox(width: 8),
                 _editButton(onTap: _editPost),
@@ -779,6 +863,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ] else if (_canReport(post.author)) ...[
                 const SizedBox(width: 8),
                 _reportButton(onTap: _reportPost),
+                const SizedBox(width: 8),
+                _blockButton(key: const Key('block-post'), onTap: () => _block(post.author)),
               ],
             ],
           ),
@@ -794,23 +880,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          // 본문 — 가린 사람의 글이면 접힌다(#166). 누르면 펴진다.
-          GestureDetector(
-            onTap: () => _reveal(_postKey),
-            behavior: HitTestBehavior.opaque,
-            child: Text(
-              _bodyOf(post.body, post.hiddenByBlock, _postKey),
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.6,
-                color: _folded(post.hiddenByBlock, _postKey)
-                    ? T.textMuted
-                    : T.textSecondary,
-                fontStyle: _folded(post.hiddenByBlock, _postKey)
-                    ? FontStyle.italic
-                    : FontStyle.normal,
-              ),
-            ),
+          // 본문. 차단한 사람의 글이면 이 카드까지 오지 않는다 — build 가 [_hiddenPost] 를 그린다.
+          Text(
+            post.body,
+            style: const TextStyle(fontSize: 14, height: 1.6, color: T.textSecondary),
           ),
           // 붙은 사진·영상 (#429). 누르면 전체 보기.
           if (post.media.isNotEmpty) ...[
@@ -828,6 +901,27 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
+  /// 차단한 사람의 글을 직접 열었을 때(링크 · 알림 · 방금 차단). **제목도 본문도 사진도 없다.**
+  ///
+  /// 예전에는 "가린 사람의 글입니다. 눌러서 보기" 로 접어 두고 누르면 폈다. 1.2 는 차단한 사람의
+  /// 콘텐츠가 사라지기를 요구하므로 펴는 길을 없앴다. 다시 보려면 차단을 풀어야 한다.
+  Widget _hiddenPost() => ListView(
+        padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
+        children: [
+          GlassCard(
+            key: const Key('hidden-post'),
+            child: Row(children: [
+              const Icon(Icons.block_rounded, size: 20, color: T.textMuted),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(hiddenPostMessage,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: T.textSecondary)),
+              ),
+            ]),
+          ),
+        ],
+      );
+
   Widget _boardChip(CommunityBoard? board) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -840,12 +934,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         children: [
           const Icon(Icons.pets, size: 11, color: T.warmText),
           const SizedBox(width: 4),
-          Text(
-            board?.label ?? '기타',
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: T.warmText,
+          // 머리줄에 수정됨 · 신고 · 차단이 함께 서면 칩 자리가 좁아진다 — 넘치지 않고 말줄임으로 끝난다.
+          Flexible(
+            child: Text(
+              board?.label ?? '기타',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: T.warmText,
+              ),
             ),
           ),
         ],
@@ -955,49 +1054,53 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      comment.author.nickname,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: T.textPrimary,
+                    // 닉네임 아래에 시각 — 신고 옆에 차단이 들어오며 한 줄에 넷(닉네임 · 신고 · 차단 ·
+                    // 시각)이 서면 폰 폭 · 큰 글자에서 넘쳤다. 둘 다 길면 말줄임으로 끝난다.
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            comment.author.nickname,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: T.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            dateTimeLabel(comment.createdAt),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: T.textMuted,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const Spacer(),
                     if (_isMine(comment.author)) ...[
-                      _deleteButton(onTap: () => _confirmDeleteComment(comment)),
                       const SizedBox(width: 8),
+                      _deleteButton(onTap: () => _confirmDeleteComment(comment)),
                     ] else if (_canReport(comment.author)) ...[
+                      const SizedBox(width: 8),
                       _reportButton(onTap: () => _reportComment(comment)),
                       const SizedBox(width: 8),
+                      _blockButton(
+                          key: Key('block-comment-${comment.id}'),
+                          onTap: () => _block(comment.author)),
                     ],
-                    Text(
-                      dateTimeLabel(comment.createdAt),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: T.textMuted,
-                      ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 3),
-                GestureDetector(
-                  onTap: () => _reveal(comment.id),
-                  behavior: HitTestBehavior.opaque,
-                  child: Text(
-                    _bodyOf(comment.body, comment.hiddenByBlock, comment.id),
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      height: 1.45,
-                      color: _folded(comment.hiddenByBlock, comment.id)
-                          ? T.textMuted
-                          : T.textSecondary,
-                      fontStyle: _folded(comment.hiddenByBlock, comment.id)
-                          ? FontStyle.italic
-                          : FontStyle.normal,
-                    ),
-                  ),
+                Text(
+                  comment.body,
+                  style: const TextStyle(fontSize: 13.5, height: 1.45, color: T.textSecondary),
                 ),
               ],
             ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/blocked_authors.dart';
 import '../data/community_repository.dart';
 import '../data/neighborhood_store.dart';
 import '../domain/neighborhood.dart';
@@ -127,6 +128,8 @@ class _FeedScreenState extends State<FeedScreen> with PostListActions<FeedScreen
     kNeighborhoodRev.addListener(_loadNeighborhood);
     // 상세에서 반응 · 저장 · 댓글이 바뀌면 여기로 온다 — 어떻게 나왔든(#548).
     kCommunityRev.addListener(_load);
+    // 차단하면 그 사람의 글을 **다시 부르지 않고** 지금 그린 것에서 뺀다(애플 지침 1.2).
+    BlockedAuthors.ids.addListener(_onBlocksChanged);
     _load();
   }
 
@@ -134,7 +137,12 @@ class _FeedScreenState extends State<FeedScreen> with PostListActions<FeedScreen
   void dispose() {
     kNeighborhoodRev.removeListener(_loadNeighborhood);
     kCommunityRev.removeListener(_load);
+    BlockedAuthors.ids.removeListener(_onBlocksChanged);
     super.dispose();
+  }
+
+  void _onBlocksChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadNeighborhood() async {
@@ -315,17 +323,15 @@ class _FeedScreenState extends State<FeedScreen> with PostListActions<FeedScreen
     if (failure != null) {
       return _failureView(failure);
     }
-    if (_posts.isEmpty) {
+    // **차단한 사람의 글은 카드 · 목록 · 사진 벽 어디에도 안 그린다**(애플 지침 1.2 — "피드에서 즉시
+    // 사라져야 한다"). 예전에는 카드·목록에 "가린 사람의 글입니다 · 눌러서 보기" 로 자리를 남겼다.
+    final visible = visiblePosts(_posts);
+    if (visible.isEmpty && !_hasMore) {
       return _emptyView();
     }
     final padding = EdgeInsets.fromLTRB(12, 4, 12, MediaQuery.of(context).padding.bottom + 100);
     // 사진 벽 — 사진·영상이 있는 글만 두 열로(#451). 한 화면에 여섯~여덟 장이 보인다.
     if (_view == 'grid') {
-      // **사진 벽에서는 가린 사람의 글을 아예 뺀다.** 카드·목록은 "가린 사람의 글입니다" 로
-      // 자리를 남기지만, 사진만 모아 거는 벽에서는 남길 자리가 없다 — 접힌 칸을 끼우면
-      // 벽이 구멍난 것처럼 보인다. 그리고 여기가 **가장 위험한 자리**다: 벽은 사진을 크게
-      // 걸고, 불쾌한 것은 대개 사진이다.
-      final visible = [for (final p in _posts) if (!p.hiddenByBlock) p];
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -348,7 +354,7 @@ class _FeedScreenState extends State<FeedScreen> with PostListActions<FeedScreen
       child: ListView(
         padding: padding,
         children: [
-          for (final post in _posts) ...[
+          for (final post in visible) ...[
             _view == 'card' ? _card(post) : _row(post),
             // 카드 사이 10 — 예전 14. 한 화면에 글이 더 들어온다(#465).
             const SizedBox(height: 10),
@@ -632,7 +638,7 @@ class _FeedScreenState extends State<FeedScreen> with PostListActions<FeedScreen
         // "N개의 글" 은 보조 정보다 — 1.3배부터 접는다. 게시판 이름과 글쓰기는 누르는 것이라
         // 남긴다.
         if (_failure == null && !folded) ...[
-          Text('${_posts.length}개의 글',
+          Text('${visiblePosts(_posts).length}개의 글',
               style: const TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
@@ -730,7 +736,6 @@ class _FeedScreenState extends State<FeedScreen> with PostListActions<FeedScreen
       );
 
   Widget _row(CommunityPost post) {
-    if (post.hiddenByBlock) return blockedPostCard(post, onOpen: () => _open(post));
     return GestureDetector(
       onTap: () => _open(post),
       behavior: HitTestBehavior.opaque,
