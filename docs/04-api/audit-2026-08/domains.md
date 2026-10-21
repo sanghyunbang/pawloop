@@ -1,6 +1,6 @@
 # 2부 · Dogs · Places · Walks · Bookmarks · Community · Groups
 
-[← 인덱스](./README.md) · 관련 이슈 [#24](https://github.com/sanghyunbang/heattrip/issues/24)
+[← 인덱스](./README.md) · 관련 이슈 [#24](https://github.com/sanghyunbang/pawloop/issues/24)
 
 ---
 

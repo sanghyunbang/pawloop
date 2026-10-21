@@ -22,7 +22,7 @@
 | 미디어 | `/media/*` | S3 presigned 업로드 |
 | 동의 | `/api/consents` | 약관 동의 이력(위치정보법 포함) |
 
-감정 여행(heattrip) 시절의 패키지(관광 수집·탐색·감정 추천·감정카드·여정·v1 북마크·피드백·카카오 백필)는 2026-09-06 에 [#94](https://github.com/sanghyunbang/heattrip/issues/94) 로 지웠습니다. 표는 운영 DB 에 남아 있고 코드만 없습니다.
+감정 여행(heattrip) 시절의 패키지(관광 수집·탐색·감정 추천·감정카드·여정·v1 북마크·피드백·카카오 백필)는 2026-09-06 에 [#94](https://github.com/sanghyunbang/pawloop/issues/94) 로 지웠습니다. 표는 운영 DB 에 남아 있고 코드만 없습니다.
 
 ## 기술 스택
 

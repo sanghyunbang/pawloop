@@ -22,7 +22,7 @@ backend_app_allowed_cidr_blocks = [
 ]
 
 # private 저장소라 SSH 형식으로 적는다. https 로 적으면 EC2가 코드를 못 받는다.
-repo_url    = "git@github.com:sanghyunbang/heattrip.git"
+repo_url    = "git@github.com:sanghyunbang/pawloop.git"
 repo_branch = "main"
 
 # 읽기 전용 GitHub deploy key(개인키) 전체. 만드는 절차는 README를 본다.

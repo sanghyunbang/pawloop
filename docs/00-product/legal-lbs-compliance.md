@@ -38,8 +38,8 @@
 > | **사업자등록 이후** | **B'. 소상공인 유예** | 개시 후 1개월 | 같은 코드를 `--dart-define=UPLOAD_LOCATION=true` 로 켭니다 |
 >
 > **A 를 코드를 걷어내서 만든 것이 아닙니다.** 좌표가 기기를 떠나는 자리를 정책 클래스 하나로
-> 모으고 그 정책을 **컴파일 타임 상수**로 껐습니다 — 근거와 방식은 [ADR-0018](https://github.com/sanghyunbang/heattrip/issues/238)
-> 이고, 구현은 [#237](https://github.com/sanghyunbang/heattrip/pull/237) 입니다. 되살리는 것은
+> 모으고 그 정책을 **컴파일 타임 상수**로 껐습니다 — 근거와 방식은 [ADR-0018](https://github.com/sanghyunbang/pawloop/issues/238)
+> 이고, 구현은 [#237](https://github.com/sanghyunbang/pawloop/pull/237) 입니다. 되살리는 것은
 > `--dart-define` 한 줄이고, 그때 이 문서의 §5 "서버 저장 기능 도입 시" 목록이 살아납니다.
 >
 > **커뮤니티·가족 공유·산책 기록은 A 에서도 죽지 않습니다.** 산책은 `path`·`pathT` 만 `null` 로

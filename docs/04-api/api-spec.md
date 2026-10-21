@@ -377,7 +377,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## 4. 장소 (Places)
 
-**현재 상태:** **백엔드가** 관광공사 KTO(`KorPetTourService2`)를 부른다([#40](https://github.com/sanghyunbang/heattrip/issues/40)).
+**현재 상태:** **백엔드가** 관광공사 KTO(`KorPetTourService2`)를 부른다([#40](https://github.com/sanghyunbang/pawloop/issues/40)).
 앱은 `GET /api/places/nearby` 만 안다 — `app/lib/v2/data/pet_places_repository.dart`.
 
 ### 4.1 (참고) 백엔드가 보내는 KTO 요청
@@ -785,7 +785,7 @@ DELETE /api/community/posts/{postId}   # 204
 
 **남의 글은 `404` 가 아니라 `403`** 입니다. `Dogs`·`Walks` 는 404 로 합치지만(ADR-0017 규약 3 — "남의 것과 없는 것이 구별되지 않는다") 커뮤니티는 반대입니다 — 글은 누구나 읽을 수 있어서 **존재가 이미 공개**라, 404 로 숨겨도 방금 `GET` 으로 본 것을 숨기는 셈이고 아무것도 못 가립니다. 대신 사용자가 "지웠는데 사라지지 않았다" 로 읽습니다.
 
-**탈퇴한 사람의 글은 아무도 못 지웁니다**(`author.userId == 0`). 주인 없는 글을 아무나 지우는 것은 관리(moderation)이고, 그 결정은 [#166](https://github.com/sanghyunbang/heattrip/issues/166) 이 갖고 있습니다.
+**탈퇴한 사람의 글은 아무도 못 지웁니다**(`author.userId == 0`). 주인 없는 글을 아무나 지우는 것은 관리(moderation)이고, 그 결정은 [#166](https://github.com/sanghyunbang/pawloop/issues/166) 이 갖고 있습니다.
 
 ### 6.6 댓글 목록 — ✅ 구현(#170) · **인증 선택** · 커서 봉투
 
@@ -825,7 +825,7 @@ DELETE /api/community/posts/{postId}   # 204
 DELETE /api/community/posts/{postId}/comments/{commentId}   # 204
 ```
 
-**내가 쓴 댓글만 지웁니다.** 글 주인이라도 남의 댓글은 못 지웁니다 — 그건 관리이고 [#166](https://github.com/sanghyunbang/heattrip/issues/166) 이 갖는 결정입니다.
+**내가 쓴 댓글만 지웁니다.** 글 주인이라도 남의 댓글은 못 지웁니다 — 그건 관리이고 [#166](https://github.com/sanghyunbang/pawloop/issues/166) 이 갖는 결정입니다.
 
 `commentId` 가 그 글의 댓글이 아니면 **404** 입니다 — 경로가 가리키는 것이 없다는 뜻이지 권한 문제가 아닙니다.
 
@@ -1020,7 +1020,7 @@ MVP 는 **폴링**(`afterSeq`)이다. 소켓은 실측 트리거가 걸릴 때�
 
 ## 17. 크루 (Crews) — ✅ 서버 구현(#417)
 
-동네 반려인 모임. **방·멤버십·초대는 하나도 새로 안 만들었다** — `chat_room` 이 처음부터 범용 다중 방이라(`origin_kind='CREW'`), 크루가 더하는 것은 **이름·소개·동네·공개 범위·정원 다섯**뿐이다([ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72)).
+동네 반려인 모임. **방·멤버십·초대는 하나도 새로 안 만들었다** — `chat_room` 이 처음부터 범용 다중 방이라(`origin_kind='CREW'`), 크루가 더하는 것은 **이름·소개·동네·공개 범위·정원 다섯**뿐이다([ADR-0011](https://github.com/sanghyunbang/pawloop/issues/72)).
 
 **`crew_member` 표가 없다.** 크루의 멤버는 그 크루 방의 멤버이고 그것은 `chat_room_member` 다. 그래서 **크루를 나가는 것과 방을 나가는 것이 같은 동작**이고, 한쪽만 남는 상태가 구조적으로 없다.
 

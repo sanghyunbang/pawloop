@@ -60,7 +60,7 @@ flutter pub get
 
 앱의 환경값은 **컴파일 타임 `--dart-define`** 으로만 들어온다. 읽는 곳은 `lib/core/config/env.dart`의 `Env` 하나뿐이고, 런타임 파일 로드는 없다.
 
-> **왜 `.env`를 버렸나.** `pubspec.yaml`의 `assets`에 올린 파일은 APK/IPA 안에 **원본 그대로** 들어간다. `unzip -p app-release.apk assets/flutter_assets/.env` 한 줄이면 값이 그대로 보였다. → [이슈 #29](https://github.com/sanghyunbang/heattrip/issues/29)
+> **왜 `.env`를 버렸나.** `pubspec.yaml`의 `assets`에 올린 파일은 APK/IPA 안에 **원본 그대로** 들어간다. `unzip -p app-release.apk assets/flutter_assets/.env` 한 줄이면 값이 그대로 보였다. → [이슈 #29](https://github.com/sanghyunbang/pawloop/issues/29)
 
 ### 3.1 값 넣는 법
 
@@ -91,7 +91,7 @@ flutter run --dart-define-from-file=dart-define.json
 > [!IMPORTANT]
 > **운영 주소는 `https://api.pawloop.app` 이다.** 2026-09-17 에 `api.heattrip.link` 에서 옮겼고,
 > 옛 주소는 이제 Cloudflare 530 을 준다 — 살아 있지 않다. 그 주소로 빌드하면 앱이 서버에 못 붙는데,
-> 화면에는 "연결이 불안정해요" 로만 보여서 원인을 찾기 어렵다([#682](https://github.com/sanghyunbang/heattrip/issues/682)).
+> 화면에는 "연결이 불안정해요" 로만 보여서 원인을 찾기 어렵다([#682](https://github.com/sanghyunbang/pawloop/issues/682)).
 > 옛 주소가 문서에 다시 기어들어오는 것은 `.github/scripts/check-docs-drift.sh` 가 막는다.
 
 ### 3.2 키별 설명
@@ -101,18 +101,18 @@ flutter run --dart-define-from-file=dart-define.json
 | `API_BASE` | `Env.apiBase` | (없음) | 로컬/스테이징 전환용 override. `API_BASE_URL`보다 **우선**한다. |
 | `API_BASE_URL` | `Env.apiBase` | (없음) | 백엔드 베이스 URL. 운영은 `https://api.pawloop.app`. |
 | `NAVER_MAP_CLIENT_ID` | `Env.naverMapClientId` | `''` | 네이버 지도 SDK 초기화(`FlutterNaverMap().init`). 비어 있으면 지도 탭이 비활성(안내문)만 표시된다. |
-| `UPLOAD_LOCATION` | `LocationUploadPolicy` | `false` | **좌표를 서버로 보낼지.** 기본이 안전한 쪽이다 — 켜려면 명시해야 한다. 위치기반서비스사업 신고 전에는 켜면 안 된다([#235](https://github.com/sanghyunbang/heattrip/issues/235)). |
+| `UPLOAD_LOCATION` | `LocationUploadPolicy` | `false` | **좌표를 서버로 보낼지.** 기본이 안전한 쪽이다 — 켜려면 명시해야 한다. 위치기반서비스사업 신고 전에는 켜면 안 된다([#235](https://github.com/sanghyunbang/pawloop/issues/235)). |
 
 > `Env.apiBase` 우선순위: **(1)** `--dart-define=API_BASE=...` → **(2)** `--dart-define=API_BASE_URL=...` → **(3)** `http://10.0.2.2:8080`.
 
 > [!WARNING]
-> **관광공사 서비스키는 이제 앱에 없다**([#40](https://github.com/sanghyunbang/heattrip/issues/40)). 호출 자체를 백엔드로 옮겼고, 키는 서버 환경변수 `TOUR_API_SECRET` 으로만 존재한다.
+> **관광공사 서비스키는 이제 앱에 없다**([#40](https://github.com/sanghyunbang/pawloop/issues/40)). 호출 자체를 백엔드로 옮겼고, 키는 서버 환경변수 `TOUR_API_SECRET` 으로만 존재한다.
 >
 > `--dart-define` 은 완화였을 뿐이다 — 값이 컴파일 타임에 코드로 박히고 문자열은 바이너리에 남아 `strings` 한 번이면 나온다. **여기에 그 키를 다시 넣지 말 것.**
 
 ### 3.3 신고 전 배포본 — 좌표를 안 보내는 빌드
 
-위치기반서비스사업 신고(위치정보법 제9조)는 사업자등록이 있어야 할 수 있다. 그것이 없는 동안 배포하는 빌드는 **좌표가 단말을 떠나지 않아야 한다**([#235](https://github.com/sanghyunbang/heattrip/issues/235) · `docs/00-product/legal-lbs-compliance.md`).
+위치기반서비스사업 신고(위치정보법 제9조)는 사업자등록이 있어야 할 수 있다. 그것이 없는 동안 배포하는 빌드는 **좌표가 단말을 떠나지 않아야 한다**([#235](https://github.com/sanghyunbang/pawloop/issues/235) · `docs/00-product/legal-lbs-compliance.md`).
 
 그 빌드는 **아무것도 더 하지 않는 것**으로 만들어진다 — 기본값이 이미 안전한 쪽이다.
 
@@ -202,7 +202,7 @@ CREATE DATABASE heat_trip_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ### 5.2.1 그 `.env` 는 **내 컴퓨터 것**이다 — 운영은 SSM 을 본다
 
 같은 이름의 파일이 넷인데 서로 아무 관계가 없다. 2026-09-20 에 로컬 `.env` 를 고치고 운영이
-바뀐 줄 알았다가 하루를 썼다([#747](https://github.com/sanghyunbang/heattrip/issues/747)).
+바뀐 줄 알았다가 하루를 썼다([#747](https://github.com/sanghyunbang/pawloop/issues/747)).
 
 | 파일 | 무엇 | 운영에 영향 |
 |:---|:---|:---|
@@ -307,7 +307,7 @@ flutter run --dart-define-from-file=dart-define.json \
 | iOS | `app/ios/Runner/Info.plist` | `CFBundleURLTypes` → `CFBundleURLName=app.pawloop`, `CFBundleURLSchemes=[pawloop]` |
 | Android | `app/android/app/src/main/AndroidManifest.xml` | `com.linusu.flutter_web_auth_2.CallbackActivity` + `scheme=pawloop`, `host=login-callback` |
 
-> 스킴은 2026-09 에 `heattrip` 에서 `pawloop` 으로 옮겼다([#649](https://github.com/sanghyunbang/heattrip/issues/649)) — 같은 이름표를 단 예전 앱이 콜백을 가로챌 수 있었기 때문이다. 서버가 허용하는 복귀 주소는 `app.security.oauth.redirect-allowlist` 가 정하고 기본값이 `pawloop://login-callback` 이다.
+> 스킴은 2026-09 에 `heattrip` 에서 `pawloop` 으로 옮겼다([#649](https://github.com/sanghyunbang/pawloop/issues/649)) — 같은 이름표를 단 예전 앱이 콜백을 가로챌 수 있었기 때문이다. 서버가 허용하는 복귀 주소는 `app.security.oauth.redirect-allowlist` 가 정하고 기본값이 `pawloop://login-callback` 이다.
 
 > [!WARNING]
 > 안드로이드 intent-filter 는 **`MainActivity` 가 아니라 플러그인의 `CallbackActivity`** 에 달아야 한다. 플러그인은 `CallbackActivity.onCreate` 에서만 대기 중인 결과를 완료시키기 때문에, `MainActivity` 로 받으면 앱은 앞으로 나오지만 `authenticate()` 의 Future 가 영원히 끝나지 않는다.
@@ -431,7 +431,7 @@ Firebase 서비스 계정 JSON 과 Apple `.p8` 은 어느 기기에도 아직 �
 ### 8.2 받는 기기에서 푸는 법 — 파인더로 끌어다 놓지 말 것
 
 ```bash
-git clone https://github.com/sanghyunbang/heattrip.git
+git clone https://github.com/sanghyunbang/pawloop.git
 cd heattrip
 # -o: 같은 이름이 있으면 덮어쓴다(클론 직후엔 덮을 것이 없다) · -x README.md: zip 의 안내문이 저장소 README 를 덮지 않게 뺀다
 unzip -o ~/Downloads/heattrip-backend-handover.zip -x README.md

@@ -111,7 +111,7 @@
 
 | 서비스 | 제공처 | 용도 | 현재 상태 |
 | --- | --- | --- | --- |
-| KorPetTourService2 (반려동물 동반여행) | 관광공사(data.go.kr, PK 15135102) | 반려동반 가능 장소(관광/문화/레포츠/숙박/쇼핑/음식점) | **실연동**(서울 45곳). **백엔드가 부른다**([#40](https://github.com/sanghyunbang/heattrip/issues/40)) — 서비스키는 서버 환경변수 `TOUR_API_SECRET` 로만 존재하고 앱 바이너리에 없다.<br>일 1,000콜 한도는 `kto_call_budget` 표가 게이트로 지킨다 |
+| KorPetTourService2 (반려동물 동반여행) | 관광공사(data.go.kr, PK 15135102) | 반려동반 가능 장소(관광/문화/레포츠/숙박/쇼핑/음식점) | **실연동**(서울 45곳). **백엔드가 부른다**([#40](https://github.com/sanghyunbang/pawloop/issues/40)) — 서비스키는 서버 환경변수 `TOUR_API_SECRET` 로만 존재하고 앱 바이너리에 없다.<br>일 1,000콜 한도는 `kto_call_budget` 표가 게이트로 지킨다 |
 | LOCALDATA (행안부 인허가) | 행정안전부 | 동물병원 전국 ~9,445건, 펫샵/미용/호텔 | **더미**(좌표 EPSG:5174→WGS84 변환 필요) |
 | 두루누비 (걷기여행길) | 관광공사 | 산책로 코스 좌표/GPX | **더미 폴리라인** |
 
