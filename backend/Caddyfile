@@ -13,6 +13,51 @@
 	email {$ACME_EMAIL}
 }
 
+# ── 앱으로 넘기는 한 자리 — 블루/그린 (이슈 #787) ──────────────────────
+#
+# 앱이 두 벌(app-blue · app-green)이고 **평소에는 한 벌만 돈다.** 배포할 때만 겹치고,
+# 그 사이 Caddy 가 살아 있는 쪽으로 보낸다. 그래서 새 앱의 부팅 시간(약 33초)이
+# 사용자에게 안 보인다.
+#
+# `lb_policy first` — 목록 순서대로, **건강한 첫 번째**에 보낸다. 둘 다 건강하면 blue 다.
+#   배포 스크립트가 새 쪽을 띄우고 healthy 를 확인한 뒤 옛 쪽을 내리면, 그 순간부터
+#   트래픽이 새 쪽으로 간다. 라운드로빈이 아니라서 **겹치는 동안 버전이 안 섞인다.**
+#
+# `lb_try_duration` — 옛 쪽이 내려가는 순간의 틈을 메운다. 능동 헬스체크는 3초마다라
+#   그 사이에 들어온 요청은 아직 "건강한" 옛 쪽으로 간다. 거기서 실패하면 **같은 요청을
+#   다른 쪽으로 다시 보낸다.** 이 줄이 없으면 전환할 때 몇 초가 그대로 에러다.
+#
+# `header_up X-Real-IP` — **이 줄이 없으면 rate limit 이 사라진다.**
+#
+#   ClientIpResolver 는 두 벽을 세워 뒀다 (#14).
+#     1) 연결 상대가 신뢰 프록시가 아니면 헤더를 아예 안 읽는다
+#     2) 읽을 때는 목록의 마지막 원소를 쓴다
+#
+#   Caddy 는 도커 네트워크 안(172.x)이라 trusted-proxies 의 172.16.0.0/12 에 들어간다 —
+#   1번은 통과한다. 그런데 Caddy 는 기본으로 X-Forwarded-For 와 X-Forwarded-Proto 만
+#   붙이고 X-Real-IP 는 안 붙인다. 그러면 헤더가 비어 resolve() 가 연결 상대(= Caddy 의
+#   IP)로 떨어지고, **전 세계가 카운터 하나를 공유한다.** 로그인 한도 10/분이 서비스
+#   전체 합계가 된다 — 증상은 "가끔 로그인이 429" 로만 보인다.
+#
+#   이 줄을 지워도 아무 에러가 안 난다. 그래서 `CaddyIsTheOnlyDoorTest` 가 잠가 뒀다.
+#
+# **넘기는 자리가 셋이라 스니펫으로 묶었다.** 세 벌로 적으면 한 곳만 고치고 나머지가
+# 뒤처지는 날이 온다.
+(app_upstream) {
+	reverse_proxy app-blue:8080 app-green:8080 {
+		lb_policy first
+		lb_try_duration 10s
+		lb_try_interval 250ms
+
+		health_uri /actuator/health
+		health_interval 3s
+		health_timeout 2s
+
+		header_up X-Real-IP {remote_host}
+	}
+}
+
+
 {$PAWLOOP_DOMAIN} {
 	encode gzip
 
@@ -32,9 +77,7 @@
 	# 컨테이너가 시작하자마자 죽는다. 실제로 그렇게 죽었다(2026-09-17, 첫 prod 부팅).
 	@actuator_public path /actuator/health /actuator/health/*
 	handle @actuator_public {
-		reverse_proxy app:8080 {
-			header_up X-Real-IP {remote_host}
-		}
+		import app_upstream
 	}
 
 	@actuator_all path /actuator /actuator/*
@@ -44,24 +87,7 @@
 
 	# ── 나머지 전부 ─────────────────────────────────────────────────
 	handle {
-		reverse_proxy app:8080 {
-			# **이 줄이 없으면 rate limit 이 사라진다.**
-			#
-			# ClientIpResolver 는 두 벽을 세워 뒀다 (#14).
-			#   1) 연결 상대가 신뢰 프록시가 아니면 헤더를 아예 안 읽는다
-			#   2) 읽을 때는 목록의 마지막 원소를 쓴다
-			#
-			# Caddy 는 도커 네트워크 안(172.x)에 있어 trusted-proxies 의
-			# 172.16.0.0/12 에 들어간다 — 1번은 통과한다. 그런데 Caddy 는 기본으로
-			# X-Forwarded-For 와 X-Forwarded-Proto 만 붙이고 X-Real-IP 는 안 붙인다.
-			#
-			# 그러면 헤더가 비어 resolve() 가 연결 상대(= Caddy 의 IP)로 떨어지고,
-			# **전 세계가 카운터 하나를 공유한다.** 로그인 한도 10/분이 서비스 전체
-			# 합계가 된다 — 증상은 "가끔 로그인이 429" 로만 보인다.
-			#
-			# 이 줄을 지워도 아무 에러가 안 난다. 그래서 검사로 잠가 뒀다.
-			header_up X-Real-IP {remote_host}
-		}
+		import app_upstream
 	}
 
 	# ── 나중에 들어올 자리 ──────────────────────────────────────────
@@ -115,4 +141,28 @@
 # 돌려주는 자리를 따로 둔다.
 :8081 {
 	respond "ok" 200
+}
+
+
+# 서버 안에서 쓰는 문 — 이슈 #787.
+#
+# 앱이 두 벌이 되면서 **호스트 포트를 더는 앱이 못 묶는다**(둘이 같은 포트를 못 쓴다).
+# 그래서 compose 가 이 포트를 Caddy 에 묶고, 여기가 앱으로 넘긴다.
+#
+# 그러면 서버 안에서 쓰던 것들이 그대로 돈다 —
+#   curl 127.0.0.1:8080/actuator/health
+# 헬스 확인 스크립트도, 배포 끊김 측정도 고칠 필요가 없다. 오히려 **진짜 경로**(앞단을
+# 지나는 길)를 재게 되어 전보다 정확하다.
+#
+# **actuator 를 안 막는다 — 일부러다.** 이 자리는 예전에 앱이 직접 쓰던 포트를 물려받은
+# 것이고, 거기엔 원래 필터가 없었다. 막으면 서버 안에서 지표를 보던 길이 같이 끊긴다.
+# 공개 도메인 블록은 위에서 그대로 막고 있다.
+#
+# 어디까지 열리는지는 `.env` 의 `APP_PUBLISHED_HOST` 가 정한다.
+#   운영      127.0.0.1  — 루프백뿐. 밖에서 못 닿는다
+#   스테이징  0.0.0.0    — 보안그룹이 허용한 IP 둘에서만 닿는다
+# 둘 다 이 변경 전과 같다. 앱이 그 포트를 쥐고 있을 때도 똑같았다.
+:8080 {
+	encode gzip
+	import app_upstream
 }

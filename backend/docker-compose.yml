@@ -1,41 +1,117 @@
+# 앱이 두 벌이다 — 블루/그린 (이슈 #787)
+#
+# ## 왜 두 벌인가
+#
+# 한 벌이면 배포할 때 **옛것을 내리고 새것을 올리는 사이가 통째로 끊긴다.** 2026-10-21
+# 실측으로 36초였고, 그 36초의 거의 전부가 "포트는 열렸는데 스프링이 아직 부팅 중" 이다.
+# 끄는 쪽을 아무리 빨리 해도 줄지 않는다 — 부팅 시간이 사용자에게 보이는 구조라서다.
+#
+# 두 벌이면 **새 쪽이 다 뜬 뒤에 앞단을 돌릴 수 있다.** 부팅 시간이 사용자 뒤로 숨는다.
+#
+# ## 평소에는 한 벌만 돈다
+#
+# t3.medium 은 메모리가 4GB 고 앱 한 벌이 660MB 를 쓴다(실측). 둘을 상시로 띄우면
+# MySQL·Caddy 까지 2GB 가 고정으로 나간다. 그래서 **겹치는 것은 배포하는 40~60초뿐**이고,
+# 끝나면 옛 쪽을 내린다. `scripts/deploy-bluegreen.sh` 가 그 순서를 쥔다.
+#
+# `docker compose up -d` 를 맨손으로 치면 둘 다 뜨는데, 그래도 깨지지는 않는다 — Caddy 가
+# `lb_policy first` 로 blue 를 먼저 쓰고 green 은 놀고 있을 뿐이다. 다만 메모리를 두 배로
+# 쓰므로 배포는 스크립트로 한다.
+#
+# ## ⚠️ 두 벌이 겹치는 동안 로그인 일부가 실패한다
+#
+# `AuthCodeStore` 가 로그인 코드를 인메모리로 들고 있어서, 발급한 쪽과 교환받는 쪽이
+# 다르면 401 이다. 겹치는 40~60초 동안 **그때 로그인 중이던 사람만** 영향을 받는다 —
+# 지금은 36초 동안 전부 끊기므로 그래도 낫다. 고치는 길은 이슈 #792 에 적었다.
+#
+# ## 앱이 호스트 포트를 안 묶는다
+#
+# 둘이 같은 포트를 못 묶는다. 그래서 앞단(Caddy)만 포트를 묶고, 앱은 도커 네트워크
+# 안에서만 보인다. 안에서 쓰던 `127.0.0.1:8080/actuator/health` 는 그대로 동작한다 —
+# Caddyfile 의 `:8080` 블록이 그 자리를 받아 앱으로 넘긴다.
+
+x-app: &app
+  build: .
+  env_file:
+    - .env
+  environment:
+    - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
+    - SERVER_ADDRESS=0.0.0.0
+    - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-heat_trip_db}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    - SPRING_DATASOURCE_USERNAME=${MYSQL_USER:-heattrip}
+    - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
+  depends_on:
+    # 컨테이너가 "시작됐다" 가 아니라 "접속을 받을 준비가 됐다" 를 기다린다.
+    # 그냥 `- mysql` 이면 앱이 먼저 붙었다가 Flyway 가
+    #   Unable to obtain connection from database: Communications link failure
+    # 로 죽고, restart 로 회복한다. 첫 부팅 로그에 30초와 긴 스택 트레이스가 남아
+    # 진짜 실패를 찾기 어려워진다 (#601).
+    mysql:
+      condition: service_healthy
+  volumes:
+    - ./config:/config
+  healthcheck:
+    # 앱에 헬스체크가 없으면 `docker compose ps` 가 `Up` 만 찍는다. 죽었다 살아나기를
+    # 반복해도 `Up` 이라, CREATED 와 Up 시간의 차이로만 알 수 있다 (#601).
+    #
+    # **배포 스크립트가 이 판정을 그대로 쓴다.** 새 쪽이 healthy 가 되기 전에 앞단을
+    # 돌리면 끊김이 그대로 남는다. 그래서 interval 을 15초에서 3초로 줄였다 — 15초면
+    # 다 떠 있는 앱을 최대 15초 더 기다리게 되고, 그만큼 겹치는 시간이 길어진다.
+    test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+    interval: 3s
+    timeout: 5s
+    retries: 40
+    # 부팅에 30초 남짓 걸리고 레이어 워밍업이 뒤따른다. 이 시간 안의 실패는
+    # retries 로 세지 않는다.
+    start_period: 90s
+  # 도커 기본값은 10초다. 스프링이 요청을 마저 끝내는 데 최대 20초를 쓰므로
+  # (application.properties 의 timeout-per-shutdown-phase), 그 전에 SIGKILL 이
+  # 날아가면 기다리는 의미가 없다. 30초로 여유를 둔다 — 이슈 #787.
+  stop_grace_period: 30s
+  restart: unless-stopped
+
 services:
-  app:
-    build: .
-    container_name: heattrip-backend
-    env_file:
-      - .env
+  app-blue:
+    <<: *app
+    container_name: heattrip-app-blue
+
+  app-green:
+    <<: *app
+    container_name: heattrip-app-green
+
+  caddy:
+    # 바깥문이자 블루/그린의 전환 장치. 운영에서는 docker-compose.prod.yml 이
+    # 여기에 80·443 과 TLS·사이트 볼륨을 덧붙인다.
+    image: caddy:2.10-alpine
+    container_name: heattrip-caddy
     environment:
-      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
-      - SERVER_ADDRESS=0.0.0.0
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-heat_trip_db}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER:-heattrip}
-      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
+      # 운영은 .env 가 진짜 도메인을 준다. 스테이징·로컬에는 그 값이 없는데, 비워 두면
+      # Caddy 가 빈 사이트 주소로 설정을 못 읽고 시작하자마자 죽는다. 그래서 아무도
+      # 안 쓰는 이름을 기본값으로 둔다 — 그 블록은 그냥 트래픽을 안 받는다.
+      PAWLOOP_DOMAIN: ${PAWLOOP_DOMAIN:-unused.invalid}
+      PAWLOOP_SITE_DOMAIN: ${PAWLOOP_SITE_DOMAIN:-http://localhost:8082}
+      # Caddyfile 의 `email {$ACME_EMAIL}` 은 **값이 없으면 인자 없는 지시어**가 되어
+      # 파싱이 깨지고 Caddy 가 시작하자마자 죽는다. 운영에서 그러면 api 까지 같이
+      # 죽는다 — 2026-09-17 에 다른 문법 오류로 그렇게 됐던 자리다.
+      #
+      # 그래서 여기에 자리표시자를 둔다. **운영에는 안 먹는다** — prod 덧붙임이
+      # `ACME_EMAIL: ${ACME_EMAIL}` 로 덮어써서, 진짜 값이 비면 그때는 시끄럽게
+      # 실패한다. 가짜 주소로 인증서를 받아 만료 경고를 놓치는 것이 더 나쁘기 때문이다.
+      ACME_EMAIL: ${ACME_EMAIL:-staging@pawloop.invalid}
     ports:
+      # 안에서 쓰던 그 자리를 그대로 물려받는다. 앱이 더는 포트를 안 묶으므로
+      # `127.0.0.1:8080/actuator/health` 가 여기로 들어와 앱으로 간다.
       - "${APP_PUBLISHED_HOST:-127.0.0.1}:${APP_PUBLISHED_PORT:-8080}:8080"
-    depends_on:
-      # 컨테이너가 "시작됐다" 가 아니라 "접속을 받을 준비가 됐다" 를 기다린다.
-      # 그냥 `- mysql` 이면 앱이 먼저 붙었다가 Flyway 가
-      #   Unable to obtain connection from database: Communications link failure
-      # 로 죽고, restart 로 회복한다. 첫 부팅 로그에 30초와 긴 스택 트레이스가 남아
-      # 진짜 실패를 찾기 어려워진다 (#601).
-      mysql:
-        condition: service_healthy
     volumes:
-      - ./config:/config
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
     healthcheck:
-      # 앱에 헬스체크가 없으면 `docker compose ps` 가 `Up` 만 찍는다. 죽었다 살아나기를
-      # 반복해도 `Up` 이라, CREATED 와 Up 시간의 차이로만 알 수 있다 (#601).
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
-      interval: 15s
+      # Caddyfile 의 :8081 이 200 만 돌려준다. 80 을 두드리면 https 로 되돌리는 308 이
+      # 와서 판정이 애매해진다.
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8081/ || exit 1"]
+      interval: 10s
       timeout: 5s
-      retries: 10
-      # 부팅에 30초 남짓 걸리고 레이어 워밍업이 뒤따른다. 이 시간 안의 실패는
-      # retries 로 세지 않는다.
-      start_period: 90s
-    # 도커 기본값은 10초다. 스프링이 요청을 마저 끝내는 데 최대 20초를 쓰므로
-    # (application.properties 의 timeout-per-shutdown-phase), 그 전에 SIGKILL 이
-    # 날아가면 기다리는 의미가 없다. 30초로 여유를 둔다 — 이슈 #787.
-    stop_grace_period: 30s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   mysql:
