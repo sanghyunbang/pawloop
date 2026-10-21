@@ -62,7 +62,7 @@ route53_zone_id = "ZXXXXXXXXXXXXXXXXXXXX"
 acme_email = "you@example.com"
 
 # private 저장소라 SSH 주소를 쓴다. https 를 적으면 terraform 이 apply 전에 막는다.
-repo_url    = "git@github.com:sanghyunbang/heattrip.git"
+repo_url    = "git@github.com:sanghyunbang/pawloop.git"
 repo_branch = "main"
 
 # SSM SecureString 이름. 값이 아니라 **이름**이다.

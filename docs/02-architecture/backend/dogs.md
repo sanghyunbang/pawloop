@@ -61,7 +61,7 @@ Java `record`. 요청 `XxxRequest`, 응답 `XxxDto`. openapi schema와 매핑.
 | `breed` | `String` | `breed` | nullable |
 | `size` | `String` | `size` (`DogSize`) | `small/medium/large` 문자열 |
 | `birth` | `String` | `birth` | `LocalDate`→ISO date 문자열(`yyyy-MM-dd`), nullable |
-| `ageMonths` | `Integer` | `ageMonths` | **파생 필드** — `birth` 로부터 계산(비저장). ⚠️ **`birth` 가 없으면 서버가 `null` 을 내는데 계약은 `required` 다** — 지금 이 순간 계약 위반이고 [#209](https://github.com/sanghyunbang/heattrip/issues/209)가 소유한다 |
+| `ageMonths` | `Integer` | `ageMonths` | **파생 필드** — `birth` 로부터 계산(비저장). ⚠️ **`birth` 가 없으면 서버가 `null` 을 내는데 계약은 `required` 다** — 지금 이 순간 계약 위반이고 [#209](https://github.com/sanghyunbang/pawloop/issues/209)가 소유한다 |
 | `neutered` | `boolean` | `neutered` | |
 | `avatarUrl` | `String` | `avatarUrl` | nullable. 저장은 objectKey, 응답은 `MediaService.publicUrl(...)` 조립 값 |
 

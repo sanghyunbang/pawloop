@@ -656,7 +656,7 @@ CREATE TABLE chat_room_invite (
 
 **`sender_name` 은 스냅샷이고, 응답의 `senderName` 은 그 값이 아니다.** 폭은 `users.nickname varchar(255)` 와 같다. 응답의 이름은 `users` 에 있으면 **현재 닉네임**(닉네임을 바꾸면 과거 메시지도 따라 바뀐다 — 카카오·라인이 그렇다), 없으면(탈퇴) **"알 수 없음"** 이다.
 
-> **각주 — 그러면 스냅샷은 무엇을 하나 (이슈 [#78](https://github.com/sanghyunbang/heattrip/issues/78)).** 이 절의 예전 초안은 "닉네임이 바뀌어도 과거 대화의 화자는 바뀌지 않는다" 와 "응답은 현재 닉네임" 을 나란히 적었는데, 그 둘은 같은 값을 두고 반대말을 한다. 응답의 이름은 **현재 닉네임**이고, 그 해석은 chat 밖에서 한다(`chatweb.ChatSenderNames`, 조립은 `chatweb.ChatMessages`) — chat 은 `users` 를 이름으로 부를 수도 조인할 수도 없기 때문이다(결정 4, `ChatBoundaryArchitectureTest`). **즉 응답 경로는 `sender_name` 을 읽지 않는다.** 그런데도 컬럼을 두는 이유는 그 값이 답하는 질문이 따로 있어서다: **"그때 방 안의 사람들이 무슨 이름으로 그 말을 봤는가."** 닉네임은 언제든 바뀌므로, 신고를 받아 `idx_chat_sender` 로 발신자의 메시지를 훑는 시점에는 그 이름이 이미 사라져 있다. `emotion_card.handle`·`card_comment.handle` 이 같은 자리다.
+> **각주 — 그러면 스냅샷은 무엇을 하나 (이슈 [#78](https://github.com/sanghyunbang/pawloop/issues/78)).** 이 절의 예전 초안은 "닉네임이 바뀌어도 과거 대화의 화자는 바뀌지 않는다" 와 "응답은 현재 닉네임" 을 나란히 적었는데, 그 둘은 같은 값을 두고 반대말을 한다. 응답의 이름은 **현재 닉네임**이고, 그 해석은 chat 밖에서 한다(`chatweb.ChatSenderNames`, 조립은 `chatweb.ChatMessages`) — chat 은 `users` 를 이름으로 부를 수도 조인할 수도 없기 때문이다(결정 4, `ChatBoundaryArchitectureTest`). **즉 응답 경로는 `sender_name` 을 읽지 않는다.** 그런데도 컬럼을 두는 이유는 그 값이 답하는 질문이 따로 있어서다: **"그때 방 안의 사람들이 무슨 이름으로 그 말을 봤는가."** 닉네임은 언제든 바뀌므로, 신고를 받아 `idx_chat_sender` 로 발신자의 메시지를 훑는 시점에는 그 이름이 이미 사라져 있다. `emotion_card.handle`·`card_comment.handle` 이 같은 자리다.
 
 **컬럼 폭은 `ChatRoomService#postMessage` 가 먼저 본다 — 컬럼은 마지막 방어선이다.** `sender_name`(255) 만 검사가 있던 판을 실제로 돌려 보니, 클라이언트가 실제로 보내는 셋(`body`·`content_type`·`client_msg_id`)은 전부 INSERT 까지 내려가 `Data too long for column …` → **500** 이 났다. `GlobalExceptionHandler` 에 `DataIntegrityViolationException` 핸들러가 없어 캐치올이 잡기 때문이고, `openapi.yaml` 의 전송 오퍼레이션은 500 을 선언하지 않는다. 지금은 넷 다 400 이다. **`body` 는 문자가 아니라 바이트로 센다** — `TEXT` 가 65,535바이트라 UTF-8 3바이트인 한글은 22,000자면 이미 넘는다. `varchar(n)` 셋은 코드포인트로 센다 — 자바 `length()` 로 세면 이모지 닉네임(보조평면 문자)이 컬럼에 들어가는데도 400 으로 거절당한다.
 
@@ -718,7 +718,7 @@ CREATE TABLE chat_message (
 
 ## 16. `walk_note` — 산책 주의사항 (가족 공유 메모) (**실재**)
 
-산책 시 주의사항을 가족이 공유하는 메모. **그룹당 한 장**이다 (`GET|PUT /api/groups/{groupId}/walk-notes`). 이슈 [#76](https://github.com/sanghyunbang/heattrip/issues/76).
+산책 시 주의사항을 가족이 공유하는 메모. **그룹당 한 장**이다 (`GET|PUT /api/groups/{groupId}/walk-notes`). 이슈 [#76](https://github.com/sanghyunbang/pawloop/issues/76).
 
 > **2026-08 에 모양이 바뀌었다 — 이 절은 그 전까지 1:N 목록이었다.** 행마다 `created_at` 을 두고 PUT 은 `{notes:[...]}` 로 전량 교체하는 모양이었는데, 그러면 PUT 때마다 행을 지우고 다시 넣게 되어 행마다 붙는 `updated_by`·`id` 가 매번 갈린다 — "누가 고쳤는지" 가 사실은 아무것도 가리키지 않는다. 이슈 #76 이 정한 `walk_note(id, group_id, body, updated_by, updated_at)` 한 장으로 맞췄고 `openapi.yaml`·`api-spec.md` 도 함께 고쳤다. **앱이 줄 단위 목록으로 그리는 것은 화면의 표현이다** — 서버가 아는 것은 메모 한 장과 그것을 마지막으로 고친 사람뿐이다.
 
@@ -747,7 +747,7 @@ CREATE TABLE walk_note (
 | `updated_by` | `BIGINT` | FK→`users.id` nullable, **ON DELETE SET NULL** | 마지막으로 고친 사람. 그 사람이 탈퇴하면 `NULL` — 아래 경고 참조 |
 | `updated_at` | `DATETIME(6)` | NOT NULL | 마지막으로 고친 시각 |
 
-> `UNIQUE (group_id)` 가 없으면 애플리케이션의 "있으면 고치고 없으면 만든다"(확인-후-쓰기)를 동시에 통과한 두 요청이 메모를 둘 만들고, 조회는 그중 하나만 보여 준다. 마지막 방어선은 DB 다(📌 [#86](https://github.com/sanghyunbang/heattrip/issues/86) 원칙 5).
+> `UNIQUE (group_id)` 가 없으면 애플리케이션의 "있으면 고치고 없으면 만든다"(확인-후-쓰기)를 동시에 통과한 두 요청이 메모를 둘 만들고, 조회는 그중 하나만 보여 준다. 마지막 방어선은 DB 다(📌 [#86](https://github.com/sanghyunbang/pawloop/issues/86) 원칙 5).
 
 > ### ⚠️ `updated_by` 는 `ON DELETE SET NULL` 이다 — CASCADE 였다가 고쳤다
 >
@@ -761,7 +761,7 @@ CREATE TABLE walk_note (
 
 ## 17. `care_log` — 케어 로그 (가족 케어 공유) (**실재**)
 
-물/밥/산책/투약/병원 다섯 종류의 케어를 누가(`done_by`)·언제(`occurred_at`) 했는지 기록해 가족 그룹(`group_id`)에 공유한다. **이중 급여와 산책 누락을 막는 것**이 이 표의 목적이다. 이슈 [#76](https://github.com/sanghyunbang/heattrip/issues/76).
+물/밥/산책/투약/병원 다섯 종류의 케어를 누가(`done_by`)·언제(`occurred_at`) 했는지 기록해 가족 그룹(`group_id`)에 공유한다. **이중 급여와 산책 누락을 막는 것**이 이 표의 목적이다. 이슈 [#76](https://github.com/sanghyunbang/pawloop/issues/76).
 
 **같은 종류를 하루에 두 번 찍어도 두 행이 남는다.** 두 번째가 실수인지 사실인지 서버는 모르고(아침·저녁 두 번 주는 집에서 두 번째 밥은 정상이다), 막으면 실제로 한 일이 기록에서 사라진다. 확인 문구는 앱이 조회 결과를 보고 만든다.
 
@@ -835,7 +835,7 @@ CREATE TABLE care_log (
 
 ## 18. 감정카드 셋 — 코드는 지웠고 표는 운영 DB 에 남아 있다 (#94)
 
-`emotion_card` · `card_comment` · `card_reaction` 은 감정 여행 시절의 표다. 2026-09-03 에는 지우지 않고 격리하기로 했고([#174](https://github.com/sanghyunbang/heattrip/issues/174)), 2026-09-06 에 그 코드(`social` 패키지)를 [#94](https://github.com/sanghyunbang/heattrip/issues/94) 로 지웠다. **표와 데이터는 그대로다** — 다만 정본 `01_schema.sql` 은 엔티티에서 뽑으므로 여기서 빠졌고, 새 DB 에는 만들어지지 않는다. 지우는 SQL 은 만들지 않았다 — 되돌릴 수 없는 일은 따로 정한다. 같은 처지의 표가 부록 A 아래에 20개 더 있다. §19·§20 번호는 비워 둔다 — 뒤 절의 번호를 흔들지 않기 위해서다.
+`emotion_card` · `card_comment` · `card_reaction` 은 감정 여행 시절의 표다. 2026-09-03 에는 지우지 않고 격리하기로 했고([#174](https://github.com/sanghyunbang/pawloop/issues/174)), 2026-09-06 에 그 코드(`social` 패키지)를 [#94](https://github.com/sanghyunbang/pawloop/issues/94) 로 지웠다. **표와 데이터는 그대로다** — 다만 정본 `01_schema.sql` 은 엔티티에서 뽑으므로 여기서 빠졌고, 새 DB 에는 만들어지지 않는다. 지우는 SQL 은 만들지 않았다 — 되돌릴 수 없는 일은 따로 정한다. 같은 처지의 표가 부록 A 아래에 20개 더 있다. §19·§20 번호는 비워 둔다 — 뒤 절의 번호를 흔들지 않기 위해서다.
 
 ---
 
@@ -1355,7 +1355,7 @@ CREATE TABLE crew (
 | `capacity` | `INT` | NOT NULL, CHECK 2..100 | **방장이 정한 정원**. 방의 정원과 다른 숫자다 |
 | `created_at` / `updated_at` | `DATETIME(6)` | — | 서버가 찍는 UTC |
 
-> **`crew_member` 표를 안 만든다.** 크루의 멤버는 **그 크루 방의 멤버**이고 그것은 `chat_room_member` 다 — [ADR-0011](https://github.com/sanghyunbang/heattrip/issues/72) 이 채팅을 범용 다중 방으로 정하면서 `chat_room.origin_kind`/`origin_ref` 를 열어 뒀고, 그 컬럼 주석이 이미 "가족방도 산책 크루 방도 같은 표에 산다" 고 적고 있었다. 표를 따로 만들면 멤버십이 **두 곳**에 생기고, 언젠가 "크루는 나갔는데 방에는 남아 있는" 계정이 만들어진다. `family_group` 이 같은 이유로 사용자 컬럼을 안 갖는다.
+> **`crew_member` 표를 안 만든다.** 크루의 멤버는 **그 크루 방의 멤버**이고 그것은 `chat_room_member` 다 — [ADR-0011](https://github.com/sanghyunbang/pawloop/issues/72) 이 채팅을 범용 다중 방으로 정하면서 `chat_room.origin_kind`/`origin_ref` 를 열어 뒀고, 그 컬럼 주석이 이미 "가족방도 산책 크루 방도 같은 표에 산다" 고 적고 있었다. 표를 따로 만들면 멤버십이 **두 곳**에 생기고, 언젠가 "크루는 나갔는데 방에는 남아 있는" 계정이 만들어진다. `family_group` 이 같은 이유로 사용자 컬럼을 안 갖는다.
 >
 > **방장 컬럼도 없다.** 방장은 그 방의 `OWNER` 멤버(`chat_room_member.role`)다. 컬럼을 따로 두면 둘이 갈리는 날 "크루 화면에서는 방장인데 대화방에서는 못 내보내는" 사람이 생긴다.
 >
