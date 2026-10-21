@@ -17,6 +17,9 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
 /**
  * compose 가 <b>기다리는가</b>, 그리고 <b>건강을 말하는가</b> — 이슈 #601.
  *
@@ -55,10 +58,18 @@ class ComposeWaitsAndReportsHealthTest {
     /** prod 에서만 얹는 덧붙임. Caddy 와 DB 볼륨 분리가 여기 있다 (#609). */
     private static final String PROD_COMPOSE_FILE = "docker-compose.prod.yml";
 
-    @Test
-    @DisplayName("앱은 DB 가 healthy 가 될 때까지 기다린다 — 시작만 기다리지 않는다")
-    void appWaitsUntilTheDatabaseIsHealthy() {
-        Map<String, Object> app = service("app");
+    /**
+     * 앱이 <b>두 벌</b>이다 — 블루/그린 (이슈 #787). 둘 다 같은 조건을 지켜야 한다.
+     *
+     * <p>compose 의 YAML 앵커로 한 벌을 베껴 쓰고 있어서 지금은 자동으로 같지만,
+     * <b>앵커를 풀고 한쪽만 고치는 날</b>이 이 검사가 막는 자리다. 배포 중에 green 이
+     * 준비 안 된 DB 에 붙어 죽으면, 앞단이 그쪽으로 보내는 순간 서비스가 끊긴다.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"app-blue", "app-green"})
+    @DisplayName("앱 두 벌 다 DB 가 healthy 가 될 때까지 기다린다 — 시작만 기다리지 않는다")
+    void appWaitsUntilTheDatabaseIsHealthy(String serviceName) {
+        Map<String, Object> app = service(serviceName);
 
         Object dependsOn = app.get("depends_on");
 

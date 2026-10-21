@@ -13,7 +13,10 @@ services:
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     depends_on:
-      - app
+      # app-green 은 안 적는다 — 적으면 `up` 할 때마다 green 까지 떠서 평소에 앱이
+      # 두 벌이 된다 (이슈 #787 · #792). 수집 대상에는 둘 다 적혀 있고, 안 뜬 쪽은
+      # up=0 으로 남는다.
+      - app-blue
     restart: unless-stopped
 
   mysqld-exporter:

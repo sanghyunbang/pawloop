@@ -7,7 +7,11 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - app:8080
+          # 앱이 두 벌이다 (이슈 #787). 평소에는 한 벌만 돌아서 다른 쪽 수집은
+          # 실패하는데, 프로메테우스는 그것을 up=0 으로 적고 넘어간다 — 나머지
+          # 수집에는 영향이 없다. 배포 중에 둘 다 사는 구간도 그대로 보인다.
+          - app-blue:8080
+          - app-green:8080
 
   - job_name: prometheus
     static_configs:
