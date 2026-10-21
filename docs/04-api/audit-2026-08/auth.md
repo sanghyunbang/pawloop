@@ -1,6 +1,6 @@
 # 1부 · `/auth` 계약 검증
 
-[← 인덱스](./README.md) · 관련 이슈 [#23](https://github.com/sanghyunbang/heattrip/issues/23)
+[← 인덱스](./README.md) · 관련 이슈 [#23](https://github.com/sanghyunbang/pawloop/issues/23)
 
 > `NEW-*` 번호는 검증 에이전트별로 독립 부여되어 중복된다. 내용이 겹치는 항목이 있다.
 

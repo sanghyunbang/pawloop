@@ -13,7 +13,7 @@
 | `/auth` | CONFIRMED **18** · PARTIAL **5** · REFUTED **0** (총 23건) | [1부 — auth.md](./auth.md) |
 | Dogs · Places · Walks · Bookmarks · Community · Groups | high **16** · medium **31** · low **11** (총 58건) | [2부 — domains.md](./domains.md) |
 
-관련 이슈: [#23](https://github.com/sanghyunbang/heattrip/issues/23) (`/auth`) · [#24](https://github.com/sanghyunbang/heattrip/issues/24) (나머지 도메인)
+관련 이슈: [#23](https://github.com/sanghyunbang/pawloop/issues/23) (`/auth`) · [#24](https://github.com/sanghyunbang/pawloop/issues/24) (나머지 도메인)
 
 ## 반복해서 나온 뿌리 원인
 

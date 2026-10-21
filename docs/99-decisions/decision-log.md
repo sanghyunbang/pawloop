@@ -176,7 +176,7 @@ Pawloop의 데이터는 대부분 **공간(geo) 데이터**다: 산책 경로(LI
 
 ## ADR-0006 — KTO 앱에서 직접 호출(임시) → 백엔드 프록시 계획
 
-- **상태**: **대체됨 (Superseded)** — 2026-08-31, [ADR-0013](#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다) 이 대체한다 ([#40](https://github.com/sanghyunbang/heattrip/issues/40))
+- **상태**: **대체됨 (Superseded)** — 2026-08-31, [ADR-0013](#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다) 이 대체한다 ([#40](https://github.com/sanghyunbang/pawloop/issues/40))
 - **날짜**: 2026-07
 
 ### 맥락
@@ -794,7 +794,7 @@ ADR-0010 은 Redis 를 **인증 맥락**(RT 검증 캐시 · AT 블록리스트)
 
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-08
-- **관련 이슈**: [#99 참조 이슈](https://github.com/sanghyunbang/heattrip/issues/99) · 개념 #97 · 우리 저장소 적용 #98 · 첫 작업 #100 · 패키지 규약 #95
+- **관련 이슈**: [#99 참조 이슈](https://github.com/sanghyunbang/pawloop/issues/99) · 개념 #97 · 우리 저장소 적용 #98 · 첫 작업 #100 · 패키지 규약 #95
 
 > 상태: 제안(Proposed) · 날짜: 2026-08-31 · 대상: `backend/`
 >
@@ -1323,7 +1323,7 @@ slices().matching("com.heattrip.heat_trip_backend.(*)..").should().beFreeOfCycle
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-08-31
 - **대체**: [ADR-0006](#adr-0006--kto-앱에서-직접-호출임시--백엔드-프록시-계획)
-- **이슈**: [#40](https://github.com/sanghyunbang/heattrip/issues/40)
+- **이슈**: [#40](https://github.com/sanghyunbang/pawloop/issues/40)
 
 ### 맥락
 
@@ -1429,7 +1429,7 @@ ADR-0008 이 04-api 계열을 올릴 때 쓴 것과 같은 기준이다.
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-09-01
 - **부분 대체**: [ADR-0013](#adr-0013--kto-프록시는-격자-캐시와-일일-호출-예산으로-간다) 의 "`hibernate-spatial` 의존성을 들이지 않는다" 판단
-- **이슈**: [#145](https://github.com/sanghyunbang/heattrip/issues/145)
+- **이슈**: [#145](https://github.com/sanghyunbang/pawloop/issues/145)
 
 ### 맥락
 
@@ -1501,13 +1501,13 @@ ADR-0008 이 04-api 계열을 올릴 때 쓴 것과 같은 기준이다.
 
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-09-02
-- **이슈**: [#166](https://github.com/sanghyunbang/heattrip/issues/166) · [#164](https://github.com/sanghyunbang/heattrip/issues/164) · [#211](https://github.com/sanghyunbang/heattrip/issues/211) · 참조 이슈 [#216](https://github.com/sanghyunbang/heattrip/issues/216)
+- **이슈**: [#166](https://github.com/sanghyunbang/pawloop/issues/166) · [#164](https://github.com/sanghyunbang/pawloop/issues/164) · [#211](https://github.com/sanghyunbang/pawloop/issues/211) · 참조 이슈 [#216](https://github.com/sanghyunbang/pawloop/issues/216)
 - **관련**: [ADR-0011](#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다) · [ADR-0017](#adr-0017--계약이-지키는-여섯-규약--이름을-손으로-적는-대신-전체를-도는-검사로-잠근다)
 
 ### 맥락
 
 M3.1(커뮤니티)의 **표를 짜기 전에** 정해야 하는 것이 셋이다. 셋 다 "나중에 정하면 마이그레이션"
-이라는 공통점이 있고, [#169](https://github.com/sanghyunbang/heattrip/issues/169) 가 스스로
+이라는 공통점이 있고, [#169](https://github.com/sanghyunbang/pawloop/issues/169) 가 스스로
 *"이 결정 전에는 이 표를 만들지 않습니다"* 로 막아 뒀다.
 
 세 결정의 근거를 각각 코드에서 모으고, **모은 근거를 다시 반박**했다. 반박이 **첫 결론 둘을 뒤집었다** —
@@ -1537,12 +1537,12 @@ M3.1(커뮤니티)의 **표를 짜기 전에** 정해야 하는 것이 셋이다
 > `report` 라는 것, 차단은 옮길 것이 표가 아니라 패키지 위치뿐이라는 진단,
 > 그리고 되돌리기 비용 산정(`INSERT ... SELECT`). **미룬다는 결론만 뒤집힙니다.**
 >
-> 실행은 [#166](https://github.com/sanghyunbang/heattrip/issues/166) 이 갖습니다.
+> 실행은 [#166](https://github.com/sanghyunbang/pawloop/issues/166) 이 갖습니다.
 
-[#166](https://github.com/sanghyunbang/heattrip/issues/166) 의 제목은 *"커뮤니티 착수 전이 가장 싸다"* 인데,
+[#166](https://github.com/sanghyunbang/pawloop/issues/166) 의 제목은 *"커뮤니티 착수 전이 가장 싸다"* 인데,
 **그 전제가 절반만 참이다.**
 
-`chat_report` 는 [#82](https://github.com/sanghyunbang/heattrip/issues/82) 에서 **이미 섰다.**
+`chat_report` 는 [#82](https://github.com/sanghyunbang/pawloop/issues/82) 에서 **이미 섰다.**
 그래서 "표가 서기 전" 이라는 창은 채팅 쪽에서는 이미 닫혔고, 열려 있는 것은 커뮤니티 쪽뿐이다.
 
 #### 무엇이 채팅 좌표에 못박혀 있나
@@ -1562,7 +1562,7 @@ M3.1(커뮤니티)의 **표를 짜기 전에** 정해야 하는 것이 셋이다
 
 처음에는 *"커뮤니티 전용 신고 표를 지금 만든다"* 로 결론냈다. **반박이 그 비용 산정을 무너뜨렸다.**
 
-- [#169](https://github.com/sanghyunbang/heattrip/issues/169) 의 완료 조건이 **표 개수를 숫자로 못박는다** —
+- [#169](https://github.com/sanghyunbang/pawloop/issues/169) 의 완료 조건이 **표 개수를 숫자로 못박는다** —
   *"`CREATE TABLE` 이 **3** 늘어나고 `post`·`comment`·`reaction` 이 거기 있다"*. 신고 표를 얹으면 4가 되어
   그 조건이 빨간불이다.
 - `SchemaDdlDriftTest` 가 **엔티티 없는 표를 정본에서 금지**한다. 그런데 #169 는 *"엔티티를 만들지 않습니다"* 다.
@@ -1737,9 +1737,9 @@ A(단수)→B(복수)는 계약의 파괴적 변경이고, B→A 는 **행을 �
 
 ### 결과
 
-- **[#169](https://github.com/sanghyunbang/heattrip/issues/169) 가 풀린다.** `reaction` 의 `UNIQUE` 는
+- **[#169](https://github.com/sanghyunbang/pawloop/issues/169) 가 풀린다.** `reaction` 의 `UNIQUE` 는
   `(post_id, user_id, type)` 이고, 그건 `schema.md`·`community.md` 의 초안 그대로라 **고칠 것이 없다.**
-- **마이그레이션 번호는 `14` 다.** `13` 은 [#155](https://github.com/sanghyunbang/heattrip/issues/155) 의
+- **마이그레이션 번호는 `14` 다.** `13` 은 [#155](https://github.com/sanghyunbang/pawloop/issues/155) 의
   `13_walk_path_t.sql` 이 이미 쓴다. 로드맵과 #169 본문이 적은 `13_community.sql` 은 충돌한다.
   그리고 `backend/mysql/README.md` 의 실행 목록과 표가 **`12_walk.sql` 에서 끝난다** — 13 도 등재돼 있지 않다.
 - **계약이 바뀐다** — 반응 오퍼레이션이 `POST`/`DELETE .../reactions/{type}` 둘로 갈리고,
@@ -1758,7 +1758,7 @@ A(단수)→B(복수)는 계약의 파괴적 변경이고, B→A 는 **행을 �
   중 하나가 *"`Comment.author` 에 식별자가 없어 차단이 계약상 불가능하다"* 였다. 즉 오늘 결정이 이미
   그날을 준비했다. 미루는 근거는 *"요구가 없다"* 가 아니라 **"표를 옮기는 값이 지금 제일 비싸다"** 다.
 - **모르는 것을 적어 둔다**: 게스트 읽기에 붙일 rate limit 의 적정값(관측이 없다) ·
-  `report` 표를 만드는 날 `emotion_card` 계열까지 담을지(레거시 셸 처리 [#94](https://github.com/sanghyunbang/heattrip/issues/94) 와 물린다) ·
+  `report` 표를 만드는 날 `emotion_card` 계열까지 담을지(레거시 셸 처리 [#94](https://github.com/sanghyunbang/pawloop/issues/94) 와 물린다) ·
   복수 반응에서 카운트를 화면이 어떻게 읽히게 쓸지(*"7명"* 이 아니라 *"7"* 이다).
 
 ---
@@ -1767,13 +1767,13 @@ A(단수)→B(복수)는 계약의 파괴적 변경이고, B→A 는 **행을 �
 
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-09-02
-- **이슈**: [#24](https://github.com/sanghyunbang/heattrip/issues/24) · 참조 이슈 [#207](https://github.com/sanghyunbang/heattrip/issues/207)
-- **관련**: [#201](https://github.com/sanghyunbang/heattrip/issues/201) 의 `x-status` 표시 규약 · [#4](https://github.com/sanghyunbang/heattrip/issues/4) "계약이 코드보다 우선"
+- **이슈**: [#24](https://github.com/sanghyunbang/pawloop/issues/24) · 참조 이슈 [#207](https://github.com/sanghyunbang/pawloop/issues/207)
+- **관련**: [#201](https://github.com/sanghyunbang/pawloop/issues/201) 의 `x-status` 표시 규약 · [#4](https://github.com/sanghyunbang/pawloop/issues/4) "계약이 코드보다 우선"
 
 ### 맥락
 
 `openapi.yaml` 첫머리는 **design-first(계약 우선)** 를 선언한다. 그러면 이 문서가 구현의 기준인데,
-2026-08 감사가 여섯 도메인에서 **58건**의 어긋남을 찾았다([#24](https://github.com/sanghyunbang/heattrip/issues/24)).
+2026-08 감사가 여섯 도메인에서 **58건**의 어긋남을 찾았다([#24](https://github.com/sanghyunbang/pawloop/issues/24)).
 
 착수하면서 그 58건을 **오늘 파일과 다시 대조했다.** 감사는 2026-08 에 쓰였고 그 뒤로 M1·M2·M2.5·M2.6·M2.7 이
 나갔다. 결과가 이 ADR 이 필요한 이유를 그대로 말해 준다.
@@ -1874,7 +1874,7 @@ Chat·Groups 는 **반대로** 갔는데 이유가 같다. `openapi.yaml` 이 �
 
 `PersonRef` 의 설명이 반드시 답해야 하는 것이 하나 있다 — **`nickname` 이 현재 값인가 작성 시점
 스냅샷인가.** 채팅은 "있으면 현재 닉네임, 탈퇴면 `알 수 없음`" 으로 이미 정해져 있는데
-[#169](https://github.com/sanghyunbang/heattrip/issues/169) 는 `post`·`comment` 표에 작성 시점 스냅샷
+[#169](https://github.com/sanghyunbang/pawloop/issues/169) 는 `post`·`comment` 표에 작성 시점 스냅샷
 컬럼을 넣으라고 한다. 계약이 어느 쪽을 싣는지 말하지 않으면 **저장은 스냅샷, 표시는 현재값이라는 서로
 다른 두 규칙이 한 화면에서 만난다.**
 
@@ -1932,8 +1932,8 @@ security: [{}, {bearerAuth: []}]   # 인증은 선택 — 있으면 개인화한
   상태에 따라 비는 필드(삭제된 메시지·탈퇴한 멤버·회수된 초대)를 특히 살펴야 한다.
 - **Community 는 지금 고치는 것이 공짜다.** 컨트롤러가 없어서 살아남은 42건 중 아홉이 거기 있는데,
   뒤집으면 **구현 전이라 무료**라는 뜻이다. 그리고 이것이 M3.1 의 착수 조건이다 —
-  [#170](https://github.com/sanghyunbang/heattrip/issues/170) 이 `mine`/게스트 조합을,
-  [#169](https://github.com/sanghyunbang/heattrip/issues/169) 가 반응 카디널리티를
+  [#170](https://github.com/sanghyunbang/pawloop/issues/170) 이 `mine`/게스트 조합을,
+  [#169](https://github.com/sanghyunbang/pawloop/issues/169) 가 반응 카디널리티를
   *"결정 전에는 표를 만들지 않는다"* 로 스스로 막아 뒀다.
 - **`Dog.ageMonths` 는 지금 이 순간 계약 위반이다.** 규약 1 이 이것을 드러냈다. 계약을 고칠지
   서버를 고칠지는 Dogs 후속에서 정한다 — 규약이 정해졌으니 그건 이제 판단이 아니라 적용이다.
@@ -1952,8 +1952,8 @@ security: [{}, {bearerAuth: []}]   # 인증은 선택 — 있으면 개인화한
 
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-09-03
-- **이슈**: [#235](https://github.com/sanghyunbang/heattrip/issues/235) · 참조 이슈 [#238](https://github.com/sanghyunbang/heattrip/issues/238)
-- **관련**: [#200](https://github.com/sanghyunbang/heattrip/issues/200) 신고 · [#40](https://github.com/sanghyunbang/heattrip/issues/40) KTO 프록시 · `docs/00-product/legal-lbs-compliance.md`
+- **이슈**: [#235](https://github.com/sanghyunbang/pawloop/issues/235) · 참조 이슈 [#238](https://github.com/sanghyunbang/pawloop/issues/238)
+- **관련**: [#200](https://github.com/sanghyunbang/pawloop/issues/200) 신고 · [#40](https://github.com/sanghyunbang/pawloop/issues/40) KTO 프록시 · `docs/00-product/legal-lbs-compliance.md`
 
 ### 맥락
 
@@ -2026,7 +2026,7 @@ security: [{}, {bearerAuth: []}]   # 인증은 선택 — 있으면 개인화한
   좁히고 왜 outbox 가 대상이 아닌지 적었다 — 예외 목록에 파일 이름을 적기 시작하면 진짜 전송이
   그 목록에 숨는다.
 - **이 정책은 법 판단을 하지 않는다.** 무엇이 위치정보인지, 공모전 배포가 사업 개시인지,
-  격자 셀이 개인위치정보인지는 여기서 정하지 않는다([#235](https://github.com/sanghyunbang/heattrip/issues/235) §5).
+  격자 셀이 개인위치정보인지는 여기서 정하지 않는다([#235](https://github.com/sanghyunbang/pawloop/issues/235) §5).
   정책이 하는 일은 **끄고 켜는 자리를 하나로 만드는 것**뿐이고, 답이 오면 그 자리만 바꾼다.
 - **모르는 것을 적어 둔다**: 큐에 남은 옛 초안을 배포 전에 비우는 방법 · 레거시 감정여행 트리의
   좌표 경로 셋(UI 도달 불가지만 APK 에 실린다) · 타일 없이 경로를 그리는 화면의 모양.
@@ -2047,11 +2047,11 @@ security: [{}, {bearerAuth: []}]   # 인증은 선택 — 있으면 개인화한
 
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-09-04
-- **이슈**: [#253](https://github.com/sanghyunbang/heattrip/issues/253) · 참조 이슈 [#263](https://github.com/sanghyunbang/heattrip/issues/263)
-- **관련**: [#82](https://github.com/sanghyunbang/heattrip/issues/82) `ChatTermsGate` ·
-  [#180](https://github.com/sanghyunbang/heattrip/issues/180) `ConsentGate` ·
-  [#166](https://github.com/sanghyunbang/heattrip/issues/166) 커뮤니티 신고·차단 ·
-  [#190](https://github.com/sanghyunbang/heattrip/issues/190) 동의를 서버에 남긴다
+- **이슈**: [#253](https://github.com/sanghyunbang/pawloop/issues/253) · 참조 이슈 [#263](https://github.com/sanghyunbang/pawloop/issues/263)
+- **관련**: [#82](https://github.com/sanghyunbang/pawloop/issues/82) `ChatTermsGate` ·
+  [#180](https://github.com/sanghyunbang/pawloop/issues/180) `ConsentGate` ·
+  [#166](https://github.com/sanghyunbang/pawloop/issues/166) 커뮤니티 신고·차단 ·
+  [#190](https://github.com/sanghyunbang/pawloop/issues/190) 동의를 서버에 남긴다
 
 ### 맥락
 
@@ -2108,7 +2108,7 @@ security: [{}, {bearerAuth: []}]   # 인증은 선택 — 있으면 개인화한
 **5. 재동의 장치는 여기서 만들지 않습니다.** 약관을 v1.2 로 올리면서 저장 키
 (`account_consent_v1_<id>`)를 그대로 두므로, **이미 동의한 계정은 새 조항을 다시 보지
 않습니다.** 지금은 배포된 클라이언트가 없어 실질 대상이 0이지만, 이것은 방어가 아니라
-시한입니다 — 첫 배포 전에 [#190](https://github.com/sanghyunbang/heattrip/issues/190) 이
+시한입니다 — 첫 배포 전에 [#190](https://github.com/sanghyunbang/pawloop/issues/190) 이
 먼저 들어가야 합니다.
 
 **6. 개정은 자기 약관대로 밟습니다.** 이용약관 제3조2가 "변경 시 사전 공지합니다" 라고
@@ -2147,10 +2147,10 @@ security: [{}, {bearerAuth: []}]   # 인증은 선택 — 있으면 개인화한
 
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-09-05
-- **이슈**: [#190](https://github.com/sanghyunbang/heattrip/issues/190) · 참조 이슈 [#286](https://github.com/sanghyunbang/heattrip/issues/286)
-- **관련**: [#180](https://github.com/sanghyunbang/heattrip/issues/180) `ConsentGate` ·
-  [#253](https://github.com/sanghyunbang/heattrip/issues/253) 약관 v1.2 ·
-  [#248](https://github.com/sanghyunbang/heattrip/issues/248) 시각 규약 ·
+- **이슈**: [#190](https://github.com/sanghyunbang/pawloop/issues/190) · 참조 이슈 [#286](https://github.com/sanghyunbang/pawloop/issues/286)
+- **관련**: [#180](https://github.com/sanghyunbang/pawloop/issues/180) `ConsentGate` ·
+  [#253](https://github.com/sanghyunbang/pawloop/issues/253) 약관 v1.2 ·
+  [#248](https://github.com/sanghyunbang/pawloop/issues/248) 시각 규약 ·
   [ADR-0019](#adr-0019--커뮤니티에-동의-창을-만들지-않는다--비어-있던-것은-시점이-아니라-내용이다)
 
 ### 맥락
@@ -2205,10 +2205,10 @@ B안으로 전환하는 이슈에서 `legal-lbs-compliance.md` §4.1 의 `locati
 
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-09-05
-- **이슈**: [#223](https://github.com/sanghyunbang/heattrip/issues/223) · 참조 이슈 [#296](https://github.com/sanghyunbang/heattrip/issues/296)
-- **관련**: [#170](https://github.com/sanghyunbang/heattrip/issues/170) 커뮤니티 읽기(인증 선택) ·
-  [#104](https://github.com/sanghyunbang/heattrip/issues/104) `OAuth` 공개 표면 ·
-  [#5](https://github.com/sanghyunbang/heattrip/issues/5) principal 을 `Long id` 로 ·
+- **이슈**: [#223](https://github.com/sanghyunbang/pawloop/issues/223) · 참조 이슈 [#296](https://github.com/sanghyunbang/pawloop/issues/296)
+- **관련**: [#170](https://github.com/sanghyunbang/pawloop/issues/170) 커뮤니티 읽기(인증 선택) ·
+  [#104](https://github.com/sanghyunbang/pawloop/issues/104) `OAuth` 공개 표면 ·
+  [#5](https://github.com/sanghyunbang/pawloop/issues/5) principal 을 `Long id` 로 ·
   [ADR-0016](#adr-0016--커뮤니티는-신고와-차단을-moderation-으로-올린다) 결정 3 (이 문서가 그 중 "새 애노테이션을 만들지 않는다" 를 대체한다)
 
 ### 맥락
@@ -2268,9 +2268,9 @@ Spring Modulith 의 "named interface 는 최소로" 도 지킵니다(타입이 �
 
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-09-05
-- **이슈**: 참조 이슈 [#300](https://github.com/sanghyunbang/heattrip/issues/300) · Apple 로그인 [#301](https://github.com/sanghyunbang/heattrip/issues/301)
-- **관련**: [#12](https://github.com/sanghyunbang/heattrip/issues/12) `LoginScreen` 둘 중 정본 ·
-  [#190](https://github.com/sanghyunbang/heattrip/issues/190) 동의 이력 ·
+- **이슈**: 참조 이슈 [#300](https://github.com/sanghyunbang/pawloop/issues/300) · Apple 로그인 [#301](https://github.com/sanghyunbang/pawloop/issues/301)
+- **관련**: [#12](https://github.com/sanghyunbang/pawloop/issues/12) `LoginScreen` 둘 중 정본 ·
+  [#190](https://github.com/sanghyunbang/pawloop/issues/190) 동의 이력 ·
   [ADR-0010](#adr-0010--소셜-로그인-공급자와-앱-세션-토큰-전략) 소셜 로그인 공급자
 
 ### 맥락
@@ -2310,9 +2310,9 @@ Apple 이 더해집니다(심사 지침 4.8). 이메일 화면은 지우지 않�
 
 - **상태**: 채택 (Accepted)
 - **날짜**: 2026-09-15
-- **이슈**: [#452](https://github.com/sanghyunbang/heattrip/issues/452) 채팅 탭 · 참조 이슈 [#500](https://github.com/sanghyunbang/heattrip/issues/500)
+- **이슈**: [#452](https://github.com/sanghyunbang/pawloop/issues/452) 채팅 탭 · 참조 이슈 [#500](https://github.com/sanghyunbang/pawloop/issues/500)
 - **관련**: [ADR-0011](#adr-0011--채팅은-가족-그룹-종속이-아니라-범용-다중-방이다) 결정 2(커서는 `room_seq`) ·
-  [#79](https://github.com/sanghyunbang/heattrip/issues/79) 델타 폴링 · [#197](https://github.com/sanghyunbang/heattrip/issues/197) 내 메시지 삭제
+  [#79](https://github.com/sanghyunbang/pawloop/issues/79) 델타 폴링 · [#197](https://github.com/sanghyunbang/pawloop/issues/197) 내 메시지 삭제
 
 ### 맥락
 

@@ -1,7 +1,7 @@
 # Push (푸시 알림) — 백엔드 (서버 쪽, #83)
 
 > 계약: [`openapi.yaml`](../../04-api/openapi.yaml) `Push` 태그(`/api/push/tokens`, `/api/push/settings`)와 `Chat` 의 `PUT /api/chat/rooms/{roomId}/mute` · 데이터: [erd.md](../../03-database/erd.md) `device_token` · `push_preference`, [schema.md](../../03-database/schema.md) §29 · §30 · §13(`muted_at`)
-> 이슈: [#83](https://github.com/sanghyunbang/heattrip/issues/83) · 원칙: [#86](https://github.com/sanghyunbang/heattrip/issues/86) §3·§4·§5 · 로드맵 M2.8
+> 이슈: [#83](https://github.com/sanghyunbang/pawloop/issues/83) · 원칙: [#86](https://github.com/sanghyunbang/pawloop/issues/86) §3·§4·§5 · 로드맵 M2.8
 
 **2026-09-06 에 서버 쪽을 다 짰다.** 앱 쪽(`firebase_core` · `firebase_messaging` · 알림 설정 화면)은 사장님이 Firebase 프로젝트에서 받는 `google-services.json` · `GoogleService-Info.plist` 가 와야 붙는다. 그전까지 서버는 **키 없이** 뜬다 — 토큰 등록·설정·음소거는 저장되고 발송만 조용히 건너뛴다.
 
