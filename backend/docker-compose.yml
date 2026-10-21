@@ -32,6 +32,10 @@ services:
       # 부팅에 30초 남짓 걸리고 레이어 워밍업이 뒤따른다. 이 시간 안의 실패는
       # retries 로 세지 않는다.
       start_period: 90s
+    # 도커 기본값은 10초다. 스프링이 요청을 마저 끝내는 데 최대 20초를 쓰므로
+    # (application.properties 의 timeout-per-shutdown-phase), 그 전에 SIGKILL 이
+    # 날아가면 기다리는 의미가 없다. 30초로 여유를 둔다 — 이슈 #787.
+    stop_grace_period: 30s
     restart: unless-stopped
 
   mysql:
