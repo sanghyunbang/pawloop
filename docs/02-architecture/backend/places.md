@@ -218,7 +218,7 @@
    - social의 `Map.of("error", msg)` 대신 openapi `Error` 스키마(`{error:{code,message,traceId}}`)를 따른다. 전역 `@RestControllerAdvice` 하나로 400/404/429 매핑 권장.
 
 9. **겹치는 자리는 하나만 나간다 (#411).**
-   - 우리 자산(놀이터 `PLAYGROUND` · 동네 길 `LOCALTRAIL`, `CatalogSource.isAsset()`)이 관광공사 · 두루누비 · 인허가 항목과 **200m 안 · 공백을 지운 이름이 같거나 한쪽이 다른 쪽을 포함(둘 다 두 글자 이상)** 이면 우리 것을 뺀다 — 사진이 있는 쪽을 남긴다는 결정(사장님, 2026-09-13). 상대는 **같은 곳일 수 있는 종류**(관광지 12 · 문화 14 · 레포츠 28 · 여행코스 25 · 걷기길)여야 한다 — 실제 한 벌로 돌려 보니 동네 길 "삼청동" 이 139m 안의 쇼핑 "은나무 삼청동점" 에 포함돼 묶였다(`PlaceDedupe.SAME_PLACE_KINDS`). 규칙은 `place/layer/PlaceDedupe`(순수 함수), 적용은 `LayerPlaceIndex.merged()` 가 출처 다섯의 ETag 가 바뀔 때만 다시 만든다.
+   - 우리 자산(놀이터 `PLAYGROUND` · 동네 길 `LOCALTRAIL`, `CatalogSource.isAsset()`)이 관광공사 · 두루누비 · 인허가 항목과 **200m 안 · 공백을 지운 이름이 같거나 한쪽이 다른 쪽을 포함(둘 다 두 글자 이상)** 이면 우리 것을 뺀다 — 사진이 있는 쪽을 남긴다는 결정(2026-09-13). 상대는 **같은 곳일 수 있는 종류**(관광지 12 · 문화 14 · 레포츠 28 · 여행코스 25 · 걷기길)여야 한다 — 실제 한 벌로 돌려 보니 동네 길 "삼청동" 이 139m 안의 쇼핑 "은나무 삼청동점" 에 포함돼 묶였다(`PlaceDedupe.SAME_PLACE_KINDS`). 규칙은 `place/layer/PlaceDedupe`(순수 함수), 적용은 `LayerPlaceIndex.merged()` 가 출처 다섯의 ETag 가 바뀔 때만 다시 만든다.
    - **놀이터만 옮겨 단다.** 밀린 관광공사 항목은 `category=playground` · `contentTypeId=null`(앱이 `contentTypeId` 를 먼저 보므로 비워야 놀이터로 읽는다) · 관광공사에 없는 전화는 우리 것으로. 동네 길은 옮기지 않는다 — "자라섬째즈길" 에 밀린 "자라섬" 은 산책로가 아니다.
    - 두 경로가 같은 한 벌을 본다. `GET /api/places/catalog` 는 문자열을 그대로 잇던 것을 객체로 다시 쓴다(ETag 가 바뀔 때 한 번, `PlaceCatalogService.lastServed`) — 그래서 ETag 에 `SERVE_FORMAT` 을 섞어 옛 본문을 캐시한 앱이 새 것을 받게 했다. `GET /api/places/nearby` 는 KTO 셀 항목을 옮겨 단 사본으로 바꿔 끼우고, **셀에 없으면 전체 · 놀이터 칩에서 사본을 따로 더한다** — KTO 의 주변 조회는 전국 한 벌보다 좁아서 일산 셀 19곳에 "일산호수공원 반려견놀이터" 가 없었다(2026-09-14 실측). 안 더하면 우리 놀이터를 뺀 자리가 비어 사용자가 그 놀이터를 잃는다.
    - 관광공사 한 벌을 객체로 못 읽으면(저장 경로가 깨진 것) 정리를 포기하고 옛 방식으로 잇는다 — 겹치는 두 줄이 빈 지도보다 낫다.

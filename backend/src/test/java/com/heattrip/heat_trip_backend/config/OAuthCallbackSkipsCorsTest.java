@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 애플 로그인이 {@code Invalid CORS request} 로 막히던 것을 잡아 둔다. (이슈 #695)
  *
- * <p>사장님이 아이폰 실기기에서 애플 로그인을 눌렀더니 그 메시지가 떴다. 운영 서버에
+ * <p>아이폰 실기기에서 애플 로그인을 눌렀더니 그 메시지가 떴다. 운영 서버에
  * 직접 쏴 보니 <b>{@code Origin} 헤더 하나로 갈렸다</b> — 붙이면 403, 빼면 302 로
  * 정상 흐름이었다.
  *
@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class OAuthCallbackSkipsCorsTest extends AbstractMySqlIntegrationTest {
 
-    /** 스프링이 CORS 를 거절할 때 쓰는 본문. 사장님이 화면에서 본 그 문장이다. */
+    /** 스프링이 CORS 를 거절할 때 쓰는 본문. 화면에서 본 그 문장이다. */
     private static final String REJECTED = "Invalid CORS request";
 
     private static final String APPLE_ORIGIN = "https://appleid.apple.com";
@@ -68,7 +68,7 @@ class OAuthCallbackSkipsCorsTest extends AbstractMySqlIntegrationTest {
         assertThat(response.getContentAsString())
                 .as("""
                         애플이 form_post 로 돌아올 때 붙이는 Origin 이다. 여기서 잘리면 사용자는 \
-                        로그인 화면에서 "invalid cors request" 만 보고 끝난다 — 사장님이 아이폰에서 \
+                        로그인 화면에서 "invalid cors request" 만 보고 끝난다 — 아이폰 실기기에서 \
                         본 그것이다(#695).""")
                 .isNotEqualTo(REJECTED);
         assertThat(response.getStatus())

@@ -4,7 +4,7 @@
 
 - **기준 시점**: 2026-09-15
 - **엔트리**: `app/lib/main.dart` → go_router(`app/lib/app/app_router.dart`) → `/home` = `v2/screens/main_shell.dart`(`MainShell`)
-- **네비**: 플로팅 글래스 알약 **다섯 탭 — 홈 / 지도 / 일정 / 커뮤니티 / 채팅**. 다섯 칸이 같은 폭이고 **산책 FAB 은 없다** — 산책은 홈의 "산책 시작" 이 연다(#446, 사장님 결정 2026-09-14). 통계(`insight_screen`)는 탭이 아니라 `me_screen`·`today_screen` 둘에서 진입한다
+- **네비**: 플로팅 글래스 알약 **다섯 탭 — 홈 / 지도 / 일정 / 커뮤니티 / 채팅**. 다섯 칸이 같은 폭이고 **산책 FAB 은 없다** — 산책은 홈의 "산책 시작" 이 연다(#446, 2026-09-14 결정). 통계(`insight_screen`)는 탭이 아니라 `me_screen`·`today_screen` 둘에서 진입한다
 - **상태 표기**: `서버`(앱이 서버와 주고받음) · `기기`(기기 안에만 남음) · `더미`(하드코딩) · `미구현`
 
 ---
@@ -132,7 +132,7 @@
 
 ## 5. 남은 것
 
-1. **Firebase 키 파일 둘**(`google-services.json` · `GoogleService-Info.plist`) — 서버 푸시는 다 섰고 앱 배선만 남았다(#83, 사장님 손).
+1. **Firebase 키 파일 둘**(`google-services.json` · `GoogleService-Info.plist`) — 서버 푸시는 다 섰고 앱 배선만 남았다(#83, 사람 손).
 2. **iOS 실기기 QA** — 소셜 로그인·권한 문구·계정 삭제(#484 · #198).
 3. **아이 글자 편집의 서버화** — `PATCH /api/dogs/{dogId}`.
 4. **지도 검색** · **기록 화면의 날짜 선택** — 둘 다 자리만 있다.

@@ -42,7 +42,7 @@ OUT = pathlib.Path(__file__).resolve().parent.parent / "docs" / "diagrams"
 
 # ── 팔레트 ────────────────────────────────────────────────────────────
 #
-# 밝은 판은 사장님 웹사이트(betterworldwithlucas.com)의 종이색 계열을 따른다.
+# 밝은 판은 내 웹사이트(betterworldwithlucas.com)의 종이색 계열을 따른다.
 # 어두운 판은 깃헙 다크 테마의 캔버스(#0d1117) 위에서 읽히도록 다시 골랐다 —
 # 밝은 판의 색을 그대로 어둡게 깔면 오커가 진흙색이 된다.
 

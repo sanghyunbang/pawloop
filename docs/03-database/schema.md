@@ -1633,7 +1633,7 @@ CREATE TABLE care_item (
 
 > **접는 것이지 지우는 것이 아니다.** `archived_at` 을 두고 행을 남기는 이유는 `care_log.care_item_id` 가 이 행을 가리키기 때문이다. 지우면 지난 기록이 이름을 잃는다. 조회는 접힌 것까지 주고(`CareItemRepository.findOfGroup`) 카드가 `archived_at IS NULL` 로 거른다 — 고치기 화면이 "다시 켜기" 를 그리려면 접힌 것을 봐야 한다.
 
-> **주기 칸이 없는 것은 결정이다**(사장님, 2026-09-16). 이 카드는 <b>매일 반복되는 돌봄</b>이고, 한 번 하고 끝나는 일(중성화)과 달마다 하는 일(심장사상충)은 <b>일정 탭</b>이 맡는다 — §33 `schedule` 이 이미 반복 규칙을, §34 `schedule_exception` 이 하루짜리 예외를 들고 있고, 일정을 완료하면 케어 기록이 남는 경로도 이미 있다(`CareService.recordLinked`). 여기에 주기를 또 두면 "반복" 의 정의가 두 곳에 생긴다. 하루에 여러 번은 `daily_target` 이 맡는다.
+> **주기 칸이 없는 것은 결정이다**(2026-09-16). 이 카드는 <b>매일 반복되는 돌봄</b>이고, 한 번 하고 끝나는 일(중성화)과 달마다 하는 일(심장사상충)은 <b>일정 탭</b>이 맡는다 — §33 `schedule` 이 이미 반복 규칙을, §34 `schedule_exception` 이 하루짜리 예외를 들고 있고, 일정을 완료하면 케어 기록이 남는 경로도 이미 있다(`CareService.recordLinked`). 여기에 주기를 또 두면 "반복" 의 정의가 두 곳에 생긴다. 하루에 여러 번은 `daily_target` 이 맡는다.
 
 > **목록이 생겨나는 자리는 둘이다.** 이미 있던 집은 마이그레이션이 채우고, 새로 만드는 집은 `FamilyGroupCreated` 를 듣는 `AFTER_COMMIT` 리스너가 채운다. 둘 중 하나만 있으면 한쪽 집단의 카드가 통째로 빈다 — `CareItemMigrationExecutionTest` 와 `CareItemSeedIntegrationTest` 가 각각을 잰다.
 

@@ -198,7 +198,7 @@ class _ShellNav extends StatelessWidget {
               ),
             );
 
-        // 산책은 바에 없다 — 사장님 결정(2026-09-14, #446): 일정 탭은 필수라 가운데 산책까지
+        // 산책은 바에 없다 — 결정(2026-09-14, #446): 일정 탭은 필수라 가운데 산책까지
         // 두면 여섯이 되고, Apple·Material 둘 다 다섯이 한계다. 산책은 홈의 "산책 시작" 이
         // 맡는다. 다섯 칸 전부 Expanded 라 좌우가 대칭이고 가운데가 일정이다.
         final bottom = MediaQuery.of(context).padding.bottom;

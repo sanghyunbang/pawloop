@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * {@code app.push.*} — 푸시 발송 설정 (이슈 #83).
  *
  * <h2>키 자리는 비어 있어도 된다</h2>
- * <p>Firebase 서비스 계정 키는 사장님이 Firebase 콘솔에서 받는다(절차는 {@code .env.example}).
+ * <p>Firebase 서비스 계정 키는 운영자가 Firebase 콘솔에서 받는다(절차는 {@code .env.example}).
  * 둘 중 하나로 준다 — 파일 경로({@link Firebase#getCredentialsFile()}) 또는 JSON 을 base64 로 한 줄
  * ({@link Firebase#getCredentialsJson()}). 둘 다 비어 있으면 {@link #isConfigured()} 가 false 이고
  * {@code PushConfig} 가 발송을 끈 클라이언트를 든다. 토큰 등록·설정·음소거는 그대로 저장된다.

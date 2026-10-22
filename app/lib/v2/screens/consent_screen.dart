@@ -44,7 +44,7 @@
 //
 // 소개 끝에 나오는 접근권한 안내(`settings/permission_notice_screen.dart`)도 항목을
 // 필수와 선택으로 나눈다. 거기서는 **위치가 선택**이다 — 권한을 거부해도 앱이 돌기
-// 때문이다. 그런데 여기서는 위치기반서비스 이용약관이 필수다. 사장님이 실기기에서
+// 때문이다. 그런데 여기서는 위치기반서비스 이용약관이 필수다. 실기기에서
 // 그 둘을 나란히 보고 "위치는 다 선택인 것처럼 하더니 여기선 왜 또 필수냐" 고 물었다.
 //
 // 둘은 다른 것이다. 앞은 **기기의 기능을 켜는 허용**이고 여기는 **서비스를 쓰기 위한
@@ -226,7 +226,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
                           value: _location,
                           onChanged: (v) => setState(() => _location = v),
                           doc: LegalDocument.location,
-                          // 사장님이 걸린 자리다 — 앞 화면에서 위치가 선택이었는데
+                          // 실기기 점검에서 걸린 자리다 — 앞 화면에서 위치가 선택이었는데
                           // 여기서 필수라 모순으로 읽혔다. 둘은 다른 것이다(#682).
                           note: ConsentScreen.locationPermissionNote),
                       _divider(),

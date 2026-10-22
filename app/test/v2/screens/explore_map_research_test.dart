@@ -7,7 +7,7 @@
 //     빌더를 덮으면서 같이 잃었다 — 80곳이 한 점으로 뭉쳐도 숫자가 없다
 //   - `onCameraIdle` 을 아예 안 듣고 있었다. 다시 받는 코드가 한 줄도 없었다
 //
-// 지도 SDK 는 위젯 테스트에 없다. 그래서 **판단만** 잰다 — 화면은 사장님이 실기기에서
+// 지도 SDK 는 위젯 테스트에 없다. 그래서 **판단만** 잰다 — 화면은 실기기에서
 // 본다. 여기서 지키는 것은 "숫자가 조용히 바뀌지 않는 것" 이다.
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,7 +16,7 @@ import 'package:heat_trip_flutter/v2/data/location_upload_policy.dart';
 import 'package:heat_trip_flutter/v2/screens/explore_screen.dart';
 
 void main() {
-  // 노원구 중계동 — 사장님이 걸어 본 자리.
+  // 노원구 중계동 — 걸어 본 자리.
   const here = NLatLng(37.6447, 127.0654);
 
   group('이 지역에서 다시 찾기', () {

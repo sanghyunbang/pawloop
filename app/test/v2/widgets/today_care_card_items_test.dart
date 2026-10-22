@@ -321,7 +321,7 @@ void main() {
     ), findsOneWidget, reason: '기본 항목도 이름은 그 집이 적은 것이다');
     expect(find.text('케어'), findsNothing);
   });
-  group('주변 찾기 — 기본 배지에만 붙는다 (사장님, 2026-09-16)', () {
+  group('주변 찾기 — 기본 배지에만 붙는다 (2026-09-16)', () {
     testWidgets('병원·밥·산책이 있으면 세 갈래가 뜬다 — 물·배변·마킹은 갈 곳이 없다', (t) async {
       final f = fixture(items: _eight());
       await _pump(t, f.repo);

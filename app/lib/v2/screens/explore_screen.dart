@@ -604,7 +604,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 100),
       children: [
         Row(children: const [
-          // '지도' 였다 — 지도는 보여 주는 방식 중 하나지 이 탭의 일이 아니다(2026-09-21 사장님).
+          // '지도' 였다 — 지도는 보여 주는 방식 중 하나지 이 탭의 일이 아니다(2026-09-21).
           Text('탐색', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: T.textPrimary)),
           Spacer(),
           ProfileAvatar(),
@@ -1177,7 +1177,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// 이름으로 찾는다 — **기기 안에서** (#620).
   ///
   /// 여기 있던 것은 `Container` 안의 `Text` 였다. 검색창처럼 생겼지만 `TextField` 도
-  /// `onTap` 도 없어서 눌러도 키보드가 안 올라왔다 — 2026-09-17 에 사장님이
+  /// `onTap` 도 없어서 눌러도 키보드가 안 올라왔다 — 2026-09-17 에 
   /// "아예 무용지물" 이라고 신고했다.
   Widget _searchRow() {
     return Row(children: [
@@ -1513,7 +1513,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// 0 이다.** 부를 서버가 없는데 버튼을 눌러 달라고 할 이유가 없다.
   ///
   /// 이 자리를 한 번 버튼으로 뒀다가 바로 고쳤다 — "조회가 폭발한다" 고 썼는데 폭발할
-  /// 조회가 애초에 없었다. 사장님이 "어떤 구조로 하고 있길래" 라고 물어 다시 따라가 보고
+  /// 조회가 애초에 없었다. "어떤 구조로 하고 있길래" 라는 물음에 다시 따라가 보고
   /// 알았다(2026-09-17).
   ///
   /// <h3>서버를 부르는 빌드는 버튼으로 둔다</h3>
@@ -1671,7 +1671,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   ///
   /// <h3>한 줄로 흘리지 않는다</h3>
   /// 예전에 카드 요약에 `보신각 → 보성사 터 →…` 꼴로 넣었다가 화면이 말줄임으로 잘라
-  /// **"화살표가 이어지다 끊긴 문장"** 이 됐다(사장님 신고로 뺐다). 여기서는 조각마다 한
+  /// **"화살표가 이어지다 끊긴 문장"** 이 됐다(신고로 뺐다). 여기서는 조각마다 한
   /// 칸씩 준다 — 이름이 길면 그 칸만 줄바꿈되고, 뜻이 깨지지 않는다.
   ///
   /// <h3>왜 "시작 지점만" 을 굳이 적나</h3>
@@ -1718,14 +1718,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
   ///
   /// 처음에는 요약 바로 밑에 뒀는데, 경유지가 열한 곳인 코스에서 <b>주 동작 버튼이 화면
   /// 밖으로 밀렸다</b>(2026-09-17 실기기). 시트는 스크롤되니 "없는" 것은 아니지만, 찾아서
-  /// 내려야 보이는 버튼은 없는 것과 비슷하다 — 사장님이 "지도로 넘어갈 수가 없다" 고 했다.
+  /// 내려야 보이는 버튼은 없는 것과 비슷하다 — "지도로 넘어갈 수가 없다" 는 지적이 있었다.
   ///
   /// 그래서 <b>누를 것을 먼저, 읽을 것을 나중에</b> 둔다. 조각 수가 코스마다 1~51 로 크게
   /// 달라서, 이 목록 위에 무엇을 두든 그만큼 밀린다.
   ///
   /// <h3>한 줄로 흘리지 않는다</h3>
   /// 예전에 카드 요약에 `보신각 → 보성사 터 →…` 꼴로 넣었다가 화면이 말줄임으로 잘라
-  /// <b>"화살표가 이어지다 끊긴 문장"</b> 이 됐다(사장님 신고로 뺐다). 조각마다 한 칸씩
+  /// <b>"화살표가 이어지다 끊긴 문장"</b> 이 됐다(신고로 뺐다). 조각마다 한 칸씩
   /// 주면 이름이 길어도 그 칸만 줄바꿈되고 뜻이 안 깨진다.
   Widget _trailStops(Future<TrailRoute?> pending, PetCategory cat) {
     return _whenLineless(pending, (route) {
@@ -1850,7 +1850,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final Future<TrailRoute?>? stops = p.isTrail ? _trails.fetch(p.trailCourseId) : null;
     // 추천 코스(#725) — 홈 카드의 시트와 같은 줄. 걸을 만한 곳(아래 '이 코스 걷기' 와 같은 조건)에만.
     // 받은 선은 상자에 두고 "이 코스 걷기" 가 들고 간다. 지도 뷰면 지도 위에도 깐다(2026-09-21 —
-    // 그리는 곳이 추적 화면 하나라 사장님이 우리 지도에 그려진 코스를 한 번도 못 봤다).
+    // 그리는 곳이 추적 화면 하나라 우리 지도에 그려진 코스를 한 번도 못 보는 상태였다).
     final walkable = kWalkStartCategories.contains(p.categoryKey) && p.contentId.isNotEmpty;
     final loopHolder = ValueNotifier<PlaceLoop?>(null);
     PlaceSheet.show(
@@ -1871,7 +1871,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         },
                       ),
                     if (stops != null) _trailStops(stops, p.petCategory),
-                    // 이 장소의 글 — 홈 시트에만 있던 문(#723)을 여기도(2026-09-21 사장님). 서버가
+                    // 이 장소의 글 — 홈 시트에만 있던 문(#723)을 여기도(2026-09-21). 서버가
                     // 아는 장소(contentId)만 글을 모을 수 있다.
                     if (p.contentId.isNotEmpty) placePostsLink(context, sheetCtx, p),
                   ])),

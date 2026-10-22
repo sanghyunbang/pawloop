@@ -220,7 +220,7 @@ class _TodayCourseCardState extends State<TodayCourseCard> with WidgetsBindingOb
       );
 
   /// 큰 칩을 눌렀을 때. 카탈로그 장소면 **장소 시트를 연다** — 추천 코스(1·2·3km, #725)와 진짜
-  /// "이 코스 걷기" 가 거기 있다. 2026-09-21 사장님이 폰에서 이 칩을 눌러 바로 "N km 떨어져 있어요" 로
+  /// "이 코스 걷기" 가 거기 있다. 2026-09-21 실기기에서 이 칩을 눌러 바로 "N km 떨어져 있어요" 로
   /// 갔고 추천 코스는 한 번도 못 봤다 — 시트는 본문을 눌러야 열렸고, 본문이 눌린다는 표시가 없었다.
   /// 내 코스는 열 시트가 아직 없어서(#723 다음 조각) 예전처럼 바로 [_start] 다.
   Future<void> _primary(CourseCandidate c) {

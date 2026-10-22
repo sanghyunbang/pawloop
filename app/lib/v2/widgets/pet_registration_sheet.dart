@@ -209,7 +209,7 @@ class _PetRegistrationSheetState extends State<PetRegistrationSheet> {
             Center(child: _photoPicker()),
             const SizedBox(height: 14),
 
-            // 사진을 안 올리는 사람이 있다(사장님, 2026-09-16). 그 사람의 아이도 이름을 읽기
+            // 사진을 안 올리는 사람이 있다(2026-09-16). 그 사람의 아이도 이름을 읽기
             // 전에 갈려야 한다 — 종류당 한 얼굴이면 홈의 고르기 칩이 같은 얼굴 둘로 선다.
             _label('얼굴 (사진이 없을 때)'),
             PetCharacterPicker(

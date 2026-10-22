@@ -13,7 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 6개월 안에 만료돼야 한다. 그래서 등록의 {@code client-secret} 은 자리표시이고, 실제 값은
  * 토큰 요청 직전에 {@link AppleClientSecret} 이 이 세 값으로 만든다.
  *
- * <p>세 값 다 <b>사장님이 Apple Developer 에서 발급</b>한다({@code .env.example} 의 절차).
+ * <p>세 값 다 <b>운영자가 Apple Developer 에서 발급</b>한다({@code .env.example} 의 절차).
  * 비어 있으면 {@link #isConfigured()} 가 거짓이고, Apple 로그인은 앱에 {@code error=apple_not_configured}
  * 로 돌아간다 — 서버는 뜨고 카카오·구글은 그대로 된다.
  */

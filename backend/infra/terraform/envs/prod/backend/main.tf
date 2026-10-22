@@ -164,7 +164,7 @@ module "backend_host" {
 #
 # **여기서 만드는 것은 도메인 인증과 DKIM 레코드 셋뿐이다.** SMTP 자격증명(IAM 사용자 +
 # 액세스 키)은 만들지 않는다 — terraform 이 만들면 그 비밀번호가 **state 파일에 평문으로
-# 남는다.** SES 콘솔이 한 번만 보여 주는 값을 사장님이 직접 .env 에 넣는다.
+# 남는다.** SES 콘솔이 한 번만 보여 주는 값을 운영자가 직접 .env 에 넣는다.
 #
 # 인증이 없으면 SES 는 무엇을 보내든 거절한다. 그래서 이것이 보내기의 전제다.
 resource "aws_ses_domain_identity" "mail" {

@@ -234,7 +234,7 @@ $name 은 단말에 저장된 정보도, 자동 저장된 정보도, 고유정�
       expect(location.ifDenied, contains(kLocationIsNotTheTerms), reason: '''
 두 화면 다 위치를 필수라 부르지만 뜻이 다르다 — 여기서는 기기의 GPS 를 켜는 허용이고,
 동의 화면에서는 위치기반서비스 이용약관이라는 계약 문서다. 설명이 없으면 같은 "필수" 가
-두 화면에서 다른 뜻이라 읽는 사람이 헷갈린다 — 사장님이 실기기에서 그렇게 읽었다(#682).''');
+두 화면에서 다른 뜻이라 읽는 사람이 헷갈린다 — 실기기에서 그렇게 읽었다(#682).''');
       expect(find.textContaining(kLocationIsNotTheTerms), findsOneWidget,
           reason: '상수에만 있고 화면에 안 그려지면 아무 말도 안 한 것이다');
     });

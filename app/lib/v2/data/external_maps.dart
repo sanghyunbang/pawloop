@@ -12,7 +12,7 @@
 //
 // iOS 는 다른 앱을 열 때 "'네이버 지도'에서 열까요?" 를 묻고, 취소하면 `launchUrl` 이 false 를
 // 준다. 예전에는 그 false 를 "앱이 없다" 로 읽어 다음 후보(웹 네이버 지도)를 열었다 — 취소했는데
-// 사파리의 네이버 지도가 뜨는 것을 사장님이 폰에서 봤다. 이제 **열 수 있는지**(`canLaunchUrl`)를
+// 사파리의 네이버 지도가 뜨는 것을 실기기에서 봤다. 이제 **열 수 있는지**(`canLaunchUrl`)를
 // 먼저 묻고, 열 수 있다고 한 앱이 안 열리면 거기서 멈춘다. 그 false 는 사람의 답이다.
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
