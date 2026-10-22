@@ -115,6 +115,22 @@ module "backend_host" {
   root_volume_size_gb     = var.root_volume_size_gb
   tags                    = local.tags
 
+  # ⚠️ **AMI 를 고정한다. 안 하면 apply 한 번이 운영 서버를 통째로 바꾼다.**
+  #
+  # 모듈은 `most_recent = true` 로 "Amazon Linux 2023 최신" 을 집어 온다. 아마존이
+  # 새 이미지를 내면 그 값이 바뀌고, terraform 은 AMI 변경을 **교체**로 처리한다.
+  # 2026-10-22 에 아무것도 안 바꾼 채 plan 을 돌렸더니 이랬다 —
+  #
+  #     ami = "ami-0c97793ee5ea0967f" -> "ami-05bdc0f50fa4be3dd"  # forces replacement
+  #     Plan: 3 to add, 0 to change, 3 to destroy
+  #
+  # 누가 어떤 이유로 apply 하든(태그 한 줄을 고치려 해도) 서버가 다시 선다. 데이터는
+  # 별도 EBS 라 살아남지만 부팅 스크립트가 처음부터 돌고, 그동안 서비스가 끊긴다.
+  #
+  # 그래서 **지금 도는 이미지를 적어 둔다.** 올릴 때는 이 줄을 의도적으로 바꾸고,
+  # 그때 한 번만 교체가 일어나게 한다. 교체 전에는 컨테이너를 내리고 DB 덤프를 뜬다.
+  ami_id = "ami-0c97793ee5ea0967f" # Amazon Linux 2023 · 2026-10-22 기준 운영 중
+
   # 여기서부터 staging 과 성격이 갈린다 — **세상에 연다.**
   #
   # 8080 은 열지 않는다. 앱은 .env 의 APP_PUBLISHED_HOST=127.0.0.1 로 루프백에만
