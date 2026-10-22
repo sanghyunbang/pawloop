@@ -116,7 +116,7 @@ services:
       - mysql
       - recommender
     volumes:
-      - /Users/hyun/apps/heattrip-backend/config:/config
+      - <운영 홈>/apps/heattrip-backend/config:/config
     restart: unless-stopped
 
   recommender:
@@ -144,9 +144,9 @@ services:
 
 작업 대상:
 
-- `/Users/hyun/apps/heattrip-backend/docker-compose.yml`
-- `/Users/hyun/apps/heattrip-backend/.env`
-- `/Users/hyun/apps/heattrip-backend/config/application-private.properties`
+- `<운영 홈>/apps/heattrip-backend/docker-compose.yml`
+- `<운영 홈>/apps/heattrip-backend/.env`
+- `<운영 홈>/apps/heattrip-backend/config/application-private.properties`
 
 순서:
 
@@ -161,10 +161,10 @@ services:
 ## 5. 운영 서버용 점검 명령
 
 ```bash
-cp /Users/hyun/apps/heattrip-backend/docker-compose.yml /Users/hyun/apps/heattrip-backend/docker-compose.yml.bak
-cat /Users/hyun/apps/heattrip-backend/.env
-docker compose -f /Users/hyun/apps/heattrip-backend/docker-compose.yml config
-docker compose -f /Users/hyun/apps/heattrip-backend/docker-compose.yml up -d
+cp <운영 홈>/apps/heattrip-backend/docker-compose.yml <운영 홈>/apps/heattrip-backend/docker-compose.yml.bak
+cat <운영 홈>/apps/heattrip-backend/.env
+docker compose -f <운영 홈>/apps/heattrip-backend/docker-compose.yml config
+docker compose -f <운영 홈>/apps/heattrip-backend/docker-compose.yml up -d
 docker ps
 lsof -i -P -n | grep LISTEN
 docker logs --tail 100 heattrip-backend

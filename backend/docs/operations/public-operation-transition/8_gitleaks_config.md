@@ -37,7 +37,7 @@
 
 ## 이번에 어떻게 했나
 
-루트에 [.gitleaks.toml](/C:/Users/mm206/git_projects/heat_trip_backend/.gitleaks.toml) 파일을 추가했다.
+루트에 [.gitleaks.toml](../../../.gitleaks.toml) 파일을 추가했다.
 
 이 파일은 공식 문서 기준으로 아래 방식으로 동작한다.
 

@@ -28,7 +28,7 @@ flowchart LR
     app[Spring Boot container<br/>heattrip-backend]
     rec[Recommender container<br/>*:8000]
     db[(MySQL container)]
-    cfg[/Host config mount<br/>/Users/hyun/apps/heattrip-backend/config/]
+    cfg[/Host config mount<br/><운영 홈>/apps/heattrip-backend/config/]
 
     user --> cf
     cf -->|api.heattrip.link| cfd
@@ -75,10 +75,10 @@ cat ~/.cloudflared/config.yml
 - 실제 설정 파일:
   - `/opt/homebrew/etc/cloudflared/config.yml`
 - 동일 내용의 사용자 설정 파일:
-  - `/Users/hyun/.cloudflared/config.yml`
+  - `<운영 홈>/.cloudflared/config.yml`
 - 확인된 실제값:
   - `tunnel: heattrip`
-  - `credentials-file: /Users/hyun/.cloudflared/24b2ef97-38ea-4c2d-9af4-ee6c794a8971.json`
+  - `credentials-file: <운영 홈>/.cloudflared/<터널 ID>.json`
   - `hostname: api.heattrip.link`
   - `service: http://localhost:8080`
 
@@ -114,7 +114,7 @@ nginx -v
 
 ```bash
 docker ps
-cat /Users/hyun/apps/heattrip-backend/docker-compose.yml
+cat <운영 홈>/apps/heattrip-backend/docker-compose.yml
 docker inspect heattrip-backend
 docker inspect heattrip-backend-recommender-1
 docker inspect heattrip-mysql
@@ -124,7 +124,7 @@ lsof -i -P -n | grep LISTEN
 확인 결과:
 
 - 운영 compose 경로:
-  - `/Users/hyun/apps/heattrip-backend/docker-compose.yml`
+  - `<운영 홈>/apps/heattrip-backend/docker-compose.yml`
 - 실행 중 컨테이너:
   - `heattrip-backend`
   - `heattrip-backend-recommender-1`
@@ -158,9 +158,9 @@ find ~ -type d -name "config" 2>/dev/null
 확인 결과:
 
 - 실제 운영 private config 후보:
-  - `/Users/hyun/apps/heattrip-backend/config/application-private.properties`
+  - `<운영 홈>/apps/heattrip-backend/config/application-private.properties`
 - compose bind mount:
-  - `/Users/hyun/apps/heattrip-backend/config:/config`
+  - `<운영 홈>/apps/heattrip-backend/config:/config`
 
 해석:
 
@@ -173,16 +173,16 @@ find ~ -type d -name "config" 2>/dev/null
 | public domain | `api.heattrip.link` |
 | cloudflared config path | `/opt/homebrew/etc/cloudflared/config.yml` |
 | tunnel name | `heattrip` |
-| tunnel credentials path | `/Users/hyun/.cloudflared/24b2ef97-38ea-4c2d-9af4-ee6c794a8971.json` |
+| tunnel credentials path | `<운영 홈>/.cloudflared/<터널 ID>.json` |
 | cloudflared service target | `http://localhost:8080` |
 | nginx config path | 없음 |
 | nginx listen port | 없음 |
 | nginx server_name | 없음 |
 | nginx upstream target | 없음 |
 | spring boot listen port | host `127.0.0.1:8080`, container `0.0.0.0:8080` |
-| docker compose path | `/Users/hyun/apps/heattrip-backend/docker-compose.yml` |
-| private config dir | `/Users/hyun/apps/heattrip-backend/config` |
-| application-private.properties path | `/Users/hyun/apps/heattrip-backend/config/application-private.properties` |
+| docker compose path | `<운영 홈>/apps/heattrip-backend/docker-compose.yml` |
+| private config dir | `<운영 홈>/apps/heattrip-backend/config` |
+| application-private.properties path | `<운영 홈>/apps/heattrip-backend/config/application-private.properties` |
 
 ## public 전환 관점의 핵심 판단
 

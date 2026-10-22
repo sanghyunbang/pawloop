@@ -1,5 +1,15 @@
 # Public History Cleanup Runbook (Local Only)
 
+> **⚠️ 2026-10-22 덧말 — 이 런북을 실행하지 마라.**
+>
+> 이 런북은 모노레포 전 저장소에서 `documents/` 와 `replacements.txt` 를 히스토리에서
+> 지우려고 쓴 것이다. **이 저장소에는 둘 다 추적된 적이 없다** — 첫 커밋부터 없고,
+> `git log --all --diff-filter=A` 로 확인했다.
+>
+> 지워야 할 값도 없다. 이유와 실측은
+> [../public-operation-transition/README.md](../public-operation-transition/README.md) 에
+> 있다.
+
 이 문서는 로컬에서만 유지한다.
 `documents/` 는 `.gitignore` 에 들어가 있으므로 Git 추적 대상이 아니다.
 

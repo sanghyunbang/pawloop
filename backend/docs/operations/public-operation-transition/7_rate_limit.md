@@ -47,15 +47,15 @@ IP 기반 in-memory rate limit filter를 추가했다.
 
 추가 파일:
 
-- [PublicSecurityProperties.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/config/PublicSecurityProperties.java)
-- [PublicSecurityConfig.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/config/PublicSecurityConfig.java)
-- [ApiRateLimitFilter.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/security/ApiRateLimitFilter.java)
+- [PublicSecurityProperties.java](../../../src/main/java/com/heattrip/heat_trip_backend/config/PublicSecurityProperties.java)
+- [PublicSecurityConfig.java](../../../src/main/java/com/heattrip/heat_trip_backend/config/PublicSecurityConfig.java)
+- [ApiRateLimitFilter.java](../../../src/main/java/com/heattrip/heat_trip_backend/security/ApiRateLimitFilter.java)
 
 연결 파일:
 
-- [SecurityConfig.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java)
-- [application.properties](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/resources/application.properties)
-- [.env.example](/C:/Users/mm206/git_projects/heat_trip_backend/.env.example)
+- [SecurityConfig.java](../../../src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java)
+- [application.properties](../../../src/main/resources/application.properties)
+- [.env.example](../../../.env.example)
 
 ## 어떤 요청을 제한하나
 

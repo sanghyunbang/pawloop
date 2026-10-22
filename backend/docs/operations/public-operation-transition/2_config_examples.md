@@ -9,8 +9,8 @@ public 저장소에서도 실행 구조를 이해할 수 있도록 예시 설정
 
 ## 추가한 파일
 
-- [.env.example](/C:/Users/mm206/git_projects/heat_trip_backend/.env.example)
-- [application-private.properties.example](/C:/Users/mm206/git_projects/heat_trip_backend/application-private.properties.example)
+- [.env.example](../../../.env.example)
+- [application-private.properties.example](../../../application-private.properties.example)
 
 ## 포함한 항목
 
@@ -26,9 +26,9 @@ public 저장소에서도 실행 구조를 이해할 수 있도록 예시 설정
 
 ## 실제 수정 파일
 
-- [src/main/resources/application.properties](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/resources/application.properties)
-- [.env.example](/C:/Users/mm206/git_projects/heat_trip_backend/.env.example)
-- [application-private.properties.example](/C:/Users/mm206/git_projects/heat_trip_backend/application-private.properties.example)
+- [src/main/resources/application.properties](../../../src/main/resources/application.properties)
+- [.env.example](../../../.env.example)
+- [application-private.properties.example](../../../application-private.properties.example)
 
 ## 전환 결과
 

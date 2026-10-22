@@ -32,7 +32,7 @@ GitHub Actions workflow로 `gitleaks`를 추가했다.
 
 추가 파일:
 
-- [.github/workflows/secret-scan.yml](/C:/Users/mm206/git_projects/heat_trip_backend/.github/workflows/secret-scan.yml)
+- [.github/workflows/secret-scan.yml](../../../.github/workflows/secret-scan.yml)
 
 동작 시점:
 

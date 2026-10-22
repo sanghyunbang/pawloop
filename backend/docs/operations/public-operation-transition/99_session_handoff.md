@@ -45,30 +45,30 @@
 
 실제 수정된 핵심 파일:
 
-- [docker-compose.yml](/C:/Users/mm206/git_projects/heat_trip_backend/docker-compose.yml)
-- [application.properties](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/resources/application.properties)
-- [SecurityConfig.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java)
-- [.github/workflows/deploy-backend.yml](/C:/Users/mm206/git_projects/heat_trip_backend/.github/workflows/deploy-backend.yml)
-- [.gitignore](/C:/Users/mm206/git_projects/heat_trip_backend/.gitignore)
-- [.dockerignore](/C:/Users/mm206/git_projects/heat_trip_backend/.dockerignore)
-- [.env.example](/C:/Users/mm206/git_projects/heat_trip_backend/.env.example)
-- [application-private.properties.example](/C:/Users/mm206/git_projects/heat_trip_backend/application-private.properties.example)
-- [README.md](/C:/Users/mm206/git_projects/heat_trip_backend/README.md)
+- [docker-compose.yml](../../../docker-compose.yml)
+- [application.properties](../../../src/main/resources/application.properties)
+- [SecurityConfig.java](../../../src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java)
+- `.github/workflows/deploy-backend.yml` *(지금은 없다 — 배포는 `backend/scripts/deploy-bluegreen.sh` 가 한다)*
+- [.gitignore](../../../.gitignore)
+- [.dockerignore](../../../.dockerignore)
+- [.env.example](../../../.env.example)
+- [application-private.properties.example](../../../application-private.properties.example)
+- [README.md](../../../README.md)
 
 ### 3. secret scan 추가
 
 추가 파일:
 
-- [secret-scan.yml](/C:/Users/mm206/git_projects/heat_trip_backend/.github/workflows/secret-scan.yml)
-- [.gitleaks.toml](/C:/Users/mm206/git_projects/heat_trip_backend/.gitleaks.toml)
+- [secret-scan.yml](../../../.github/workflows/secret-scan.yml)
+- [.gitleaks.toml](../../../.gitleaks.toml)
 
 ### 4. 앱 레벨 rate limit 추가
 
 추가 파일:
 
-- [PublicSecurityProperties.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/config/PublicSecurityProperties.java)
-- [PublicSecurityConfig.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/config/PublicSecurityConfig.java)
-- [ApiRateLimitFilter.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/security/ApiRateLimitFilter.java)
+- [PublicSecurityProperties.java](../../../src/main/java/com/heattrip/heat_trip_backend/config/PublicSecurityProperties.java)
+- [PublicSecurityConfig.java](../../../src/main/java/com/heattrip/heat_trip_backend/config/PublicSecurityConfig.java)
+- [ApiRateLimitFilter.java](../../../src/main/java/com/heattrip/heat_trip_backend/security/ApiRateLimitFilter.java)
 
 ## 핵심 결정 사항
 
