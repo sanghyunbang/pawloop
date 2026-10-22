@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 560" width="920" height="560" id="deploy-dark" role="img" aria-labelledby="deploy-dark-t deploy-dark-d">
+<title id="deploy-dark-t">배포 중 끊김 — 전과 후</title>
+<desc id="deploy-dark-d">전에는 docker compose up -d 한 줄로 배포했고 평균 36.0초가 끊겼다. 그 36초의 98퍼센트는 포트는 열렸는데 스프링이 아직 부팅 중인 구간이었다. 후에는 쉬는 쪽을 새 이미지로 띄우고 healthy 가 된 것을 확인한 뒤 옛 쪽을 내린다. 배포에 걸리는 시간은 44초로 늘었지만 그동안 사용자는 옛 쪽을 쓰고 있어서 끊김은 0초, 실패는 표본 600건 중 0건이다.</desc>
+<defs>
+  <marker id="deploy-dark-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#484f58"/>
+  </marker>
+</defs>
+<style>
+  #deploy-dark .bg{fill:#0d1117}
+  #deploy-dark .band{fill:#11161d;stroke:#30363d;stroke-width:1.5}
+  #deploy-dark .card{fill:#161b22;stroke:#30363d;stroke-width:1.5}
+  #deploy-dark .mine{fill:#2a2113;stroke:#e3b341;stroke-width:2}
+  #deploy-dark .keyb{fill:#0f2b28;stroke:#56d4c4;stroke-width:2}
+  #deploy-dark .warnb{fill:#2d1416;stroke:#ff7b72;stroke-width:2}
+  #deploy-dark .idle{fill:#161b22;stroke:#484f58;stroke-width:1.5;stroke-dasharray:6 5}
+  #deploy-dark .t{font:600 15px 'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;fill:#e6edf3}
+  #deploy-dark .tb{font:700 16px 'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;fill:#e6edf3}
+  #deploy-dark .h{font:700 13px 'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;fill:#9198a1;letter-spacing:.06em}
+  #deploy-dark .s{font:400 12.5px 'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;fill:#9198a1}
+  #deploy-dark .m{font:500 12px 'SFMono-Regular',Consolas,'Liberation Mono',monospace;fill:#9198a1}
+  #deploy-dark .mine-t{font:700 15px 'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;fill:#e3b341}
+  #deploy-dark .key-t{font:700 15px 'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;fill:#56d4c4}
+  #deploy-dark .key-n{font:800 26px 'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;fill:#56d4c4}
+  #deploy-dark .warn-t{font:700 15px 'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;fill:#ff7b72}
+  #deploy-dark .warn-n{font:800 26px 'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;fill:#ff7b72}
+  #deploy-dark .ln{fill:none;stroke:#484f58;stroke-width:1.8}
+  #deploy-dark .ln-key{fill:none;stroke:#56d4c4;stroke-width:2.4}
+  #deploy-dark .ln-warn{fill:none;stroke:#ff7b72;stroke-width:2.4}
+  #deploy-dark .dash{fill:none;stroke:#484f58;stroke-width:1.5;stroke-dasharray:6 5}
+</style>
+<rect width="920" height="560" class="bg"/>
+<text x="40" y="40" class="tb">배포 중 끊김 — 전과 후</text>
+<text x="40" y="62" class="s">스테이징에서 0.2초 간격으로 600번씩 찔러 재었다 · 2026-10-21</text>
+<rect x="40" y="84" width="840" height="186" rx="10" class="band"/>
+<text x="56" y="108" class="h">전 — docker compose up -d</text>
+<text x="56" y="132" class="s">옛 것을 내리고 새 것을 올린다. 그 사이가 통째로 빈다.</text>
+<rect x="40" y="152" width="82.5" height="30" rx="6" class="card"/>
+<text x="52" y="172" class="s">옛 앱</text>
+<rect x="122.5" y="152" width="495.0" height="30" rx="6" class="warnb"/>
+<text x="370.0" y="172" class="warn-t" text-anchor="middle">끊김</text>
+<rect x="617.5" y="152" width="82.5" height="30" rx="6" class="card"/>
+<text x="629.5" y="172" class="s">새 앱</text>
+<path d="M122.5 194 H617.5" class="ln-warn" marker-end="none"/>
+<text x="370.0" y="214" class="s" text-anchor="middle">98% 가 curl 56 — 포트는 열렸는데 스프링이 아직 부팅 중</text>
+<text x="370.0" y="232" class="s" text-anchor="middle">끄는 쪽을 아무리 빨리 해도 안 줄어든다</text>
+<rect x="724" y="148" width="156" height="92" rx="10" class="warnb"/>
+<text x="802" y="186" class="warn-n" text-anchor="middle">36.0초</text>
+<text x="802" y="208" class="s" text-anchor="middle">평균 끊김</text>
+<text x="802" y="226" class="s" text-anchor="middle">실패 180건 / 600</text>
+<rect x="40" y="286" width="840" height="196" rx="10" class="band"/>
+<text x="56" y="310" class="h">후 — deploy-bluegreen.sh</text>
+<text x="56" y="334" class="s">쉬는 쪽을 먼저 띄우고, healthy 를 확인한 뒤에 옛 쪽을 내린다.</text>
+<rect x="40" y="356" width="605.0" height="30" rx="6" class="card"/>
+<text x="52" y="376" class="s">app-blue — 사용자는 내내 이쪽을 쓴다</text>
+<rect x="95.0" y="396" width="550.0" height="30" rx="6" class="idle"/>
+<text x="107.0" y="416" class="s">app-green 부팅 중</text>
+<rect x="645.0" y="396" width="55.0" height="30" rx="6" class="mine"/>
+<text x="657.0" y="416" class="mine-t">서빙</text>
+<path d="M645.0 352 V434" class="ln-key" marker-end="none"/>
+<text x="635.0" y="344" class="key-t" text-anchor="end">healthy 확인 → 여기서 바꾼다</text>
+<rect x="724" y="350" width="156" height="112" rx="10" class="keyb"/>
+<text x="802" y="390" class="key-n" text-anchor="middle">0초</text>
+<text x="802" y="412" class="s" text-anchor="middle">끊김</text>
+<text x="802" y="432" class="s" text-anchor="middle">실패 0건 / 600</text>
+<text x="802" y="450" class="s" text-anchor="middle">양방향 2회 모두</text>
+<text x="40" y="508" class="s">배포에 걸리는 시간은 11초 → 44초로 늘었다. 맞바꾼 값이다 — 그 44초 동안 사용자는 옛 쪽을 쓰고 있다.</text>
+<text x="40" y="530" class="s">겹치는 동안 로그인 코드가 인메모리라 그때 로그인 중이던 사람은 다시 시도해야 한다(이슈 #792). 전에는 그 시간 동안 전부 끊겼다.</text>
+</svg>

@@ -216,9 +216,30 @@ OLD_SCHEME='heattrip://|CFBundleURLSchemes=\[heattrip\]|scheme=heattrip|scheme="
 scan "문서가 옛 딥링크 스킴을 말한다"        "docs"      "$OLD_SCHEME"    '*.md'   "$OLD_SCHEME_ALLOW" "$OLD_SCHEME_HINT"
 scan "README 가 옛 딥링크 스킴을 말한다"     "README.md" "$OLD_SCHEME"    '*.md'   "$OLD_SCHEME_ALLOW" "$OLD_SCHEME_HINT"
 
+# ── README 의 그림이 생성기와 어긋났나 ────────────────────────────────────
+#
+# 같은 종류의 고장이다. `docs/diagrams/*.svg` 는 **밝은 판과 어두운 판 두 벌**이고,
+# `scripts/build_diagrams.py` 가 한 소스에서 둘을 뽑는다. 손으로 고치면 **한쪽만 고친
+# 채로 넘어간다** — 깃헙 라이트에서는 맞는데 다크에서는 옛 그림이 뜨는 식이고, 고친
+# 사람은 자기 테마만 보므로 모른다.
+#
+# 그래서 커밋된 `.svg` 가 생성기의 지금 출력과 같은지 본다. 다르면 다시 뽑아 커밋해야
+# 한다.
+if command -v python3 >/dev/null 2>&1; then
+  if DIAG_OUT=$(python3 scripts/build_diagrams.py --check 2>&1); then
+    echo "  OK  $DIAG_OUT"
+  else
+    echo "  실패  README 그림이 생성기와 어긋난다"
+    echo "$DIAG_OUT" | sed 's/^/        /'
+    FAILED=1
+  fi
+else
+  echo "  건너뜀  python3 가 없어 README 그림을 대조하지 못했다"
+fi
+
 echo
 if [ "$FAILED" -ne 0 ]; then
   echo "실패 — 위 줄들을 고치거나 이력 서술로 명시할 것."
   exit 1
 fi
-echo "통과 — 낡은 .env 서술·죽은 주소·옛 딥링크 스킴 없음."
+echo "통과 — 낡은 .env 서술·죽은 주소·옛 딥링크 스킴 없고, README 그림도 생성기와 같다."
