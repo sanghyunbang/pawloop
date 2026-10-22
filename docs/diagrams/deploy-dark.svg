@@ -31,7 +31,7 @@
 </style>
 <rect width="920" height="560" class="bg"/>
 <text x="40" y="40" class="tb">배포 중 끊김 — 전과 후</text>
-<text x="40" y="62" class="s">스테이징에서 0.2초 간격으로 600번씩 찔러 재었다 · 2026-10-21</text>
+<text x="40" y="62" class="s">스테이징에서 서버 안으로 0.2초 간격 600표본 · 2026-10-21  (운영 숫자는 README 표)</text>
 <rect x="40" y="84" width="840" height="186" rx="10" class="band"/>
 <text x="56" y="108" class="h">전 — docker compose up -d</text>
 <text x="56" y="132" class="s">옛 것을 내리고 새 것을 올린다. 그 사이가 통째로 빈다.</text>
