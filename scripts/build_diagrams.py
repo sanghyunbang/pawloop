@@ -321,7 +321,7 @@ def dep_body() -> str:
     A(rect(724, 148, 156, 92, "warnb"))
     A(txt(802, 186, "36.0초", "warn-n", "middle"))
     A(txt(802, 208, "평균 끊김", "s", "middle"))
-    A(txt(802, 226, "실패 180건 / 600", "s", "middle"))
+    A(txt(802, 226, "실패 157건 / 600", "s", "middle"))
 
     # ── 후 ──
     A(rect(40, 286, 840, 196, "band"))

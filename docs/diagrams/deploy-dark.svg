@@ -47,7 +47,7 @@
 <rect x="724" y="148" width="156" height="92" rx="10" class="warnb"/>
 <text x="802" y="186" class="warn-n" text-anchor="middle">36.0초</text>
 <text x="802" y="208" class="s" text-anchor="middle">평균 끊김</text>
-<text x="802" y="226" class="s" text-anchor="middle">실패 180건 / 600</text>
+<text x="802" y="226" class="s" text-anchor="middle">실패 157건 / 600</text>
 <rect x="40" y="286" width="840" height="196" rx="10" class="band"/>
 <text x="56" y="310" class="h">후 — deploy-bluegreen.sh</text>
 <text x="56" y="334" class="s">쉬는 쪽을 먼저 띄우고, healthy 를 확인한 뒤에 옛 쪽을 내린다.</text>
