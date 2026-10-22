@@ -65,7 +65,7 @@
 
 ### 6. Secret scan CI 추가
 
-- 파일: [secret-scan.yml](../../../.github/workflows/secret-scan.yml)
+- 파일: [secret-scan.yml](../../../../.github/workflows/secret-scan.yml)
 - 결과: PR, push, 수동 실행 시 `gitleaks` 검사 수행
 
 ### 7. 앱 레벨 최소 rate limit 추가

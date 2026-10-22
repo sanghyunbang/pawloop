@@ -1,0 +1,34 @@
+# 오탐 허용 목록 — 이슈 #796.
+#
+# gitleaks 는 **저장소 루트의 `.gitleaks.toml`** 을 읽는다. 전에는 `backend/` 아래에
+# 있었는데, 그때는 `backend/` 가 독립 저장소의 루트였다. 모노레포가 된 뒤로는 루트가
+# 여기다.
+#
+# ## 허용 목록에 넣는 기준
+#
+# **무엇이 걸렸는지 보고 나서 넣는다.** 미리 짐작해서 넣으면 진짜를 함께 가린다.
+# 넣을 때는 `description` 에 **왜 가짜인지**를 적는다 — "오탐" 이라고만 적으면 다음
+# 사람이 그 판단을 다시 할 수 없다.
+title = "Pawloop Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Allow documented example config files"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)application-private\.properties\.example$'''
+]
+
+[[allowlists]]
+description = "Allow common placeholders used in sample configs and docs"
+regexTarget = "match"
+regexes = [
+  '''change-me''',
+  '''example\.com''',
+  '''127\.0\.0\.1''',
+  '''localhost''',
+  '''heat-trip-alert-bot''',
+  '''gpt-4\.1-mini'''
+]

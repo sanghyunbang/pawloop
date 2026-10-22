@@ -1,0 +1,61 @@
+# JetBrains Qodana 코드 품질 검사 — 이슈 #796.
+#
+# ## ⚠️ 지금은 손으로 돌릴 때만 돈다
+#
+# 이 파일도 `backend/.github/workflows/` 에 있어서 **한 번도 돈 적이 없다**(이유는
+# `secret-scan.yml` 머리말 참고). 루트로 옮기면서 트리거를 `workflow_dispatch` 하나만
+# 남겼다. 이유는 둘이다.
+#
+#   1. **이 모양의 저장소에서 돌려 본 적이 없다.** `backend/` 가 독립 저장소였을 때
+#      쓰던 설정이고, 지금은 Flutter 앱과 함께 있는 모노레포다. 무엇을 어디까지 보는지
+#      한 번 보고 나서 켜는 것이 맞다.
+#   2. `post-pr-comment: true` 라 **PR 마다 댓글을 쓴다.** 무엇을 말하는지 모르는 채로
+#      켜면 PR 마다 소음이 쌓인다.
+#
+# 한 번 돌려 보고 결과가 쓸모 있으면 아래 `on:` 에 `pull_request:` 를 더하면 된다.
+#
+#     gh workflow run Qodana
+#
+# `backend/` 가 루트였을 때 있던 `feature/notification` 푸시 트리거는 뺐다 — 그 브랜치가
+# 없다.
+name: Qodana
+
+on:
+  workflow_dispatch:
+
+jobs:
+  qodana:
+    name: 코드 품질 검사
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      # `push-fixes: 'none'` 이라 코드를 밀지 않는다. 읽기로 충분하다.
+      contents: read
+      pull-requests: write
+      checks: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: 'Qodana Scan'
+        uses: JetBrains/qodana-action@v2025.2
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+        with:
+          # 바뀐 파일만 본다.
+          pr-mode: true
+          use-caches: true
+          post-pr-comment: true
+          use-annotations: true
+          upload-result: true
+          # 고쳐 주기는 Ultimate 플랜에서만 된다.
+          push-fixes: 'none'
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ runner.temp }}/qodana/results/qodana.sarif.json
+          category: qodana
