@@ -120,7 +120,27 @@ install -m 600 "$TMP" .env
 echo "키 $BEFORE_KEYS → $AFTER_KEYS · 바뀐 줄 $CHANGED"
 echo "도메인 $DOMAIN 유지"
 
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ── 어느 한 벌만 띄운다 (이슈 #787 뒤) ────────────────────────────────
+#
+# 앱이 `app-blue` · `app-green` 두 벌이 됐다. **서비스 이름 없이 `up -d` 를 하면 둘 다
+# 뜬다.** t3.medium 은 4GB 이고 앱 한 벌이 660MB 라, 평소에 두 벌을 띄워 둘 이유가 없다.
+#
+# `--remove-orphans` 는 **compose 가 더 이상 모르는 컨테이너를 치운다.** 블루/그린
+# 이전에는 서비스 이름이 `app` 이어서 컨테이너가 `heattrip-backend` 였고, 그것이 남아
+# 있으면 **호스트 8080 을 쥐고 있어 Caddy 가 포트를 못 잡는다** — 스테이징에서 실제로
+# 겪었다. Caddy 가 못 뜨면 api·site 가 둘 다 죽는다.
+COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
+
+# `|| true` 가 꼭 있어야 한다. 이 스크립트는 `set -euo pipefail` 이고, 둘 다 안 돌고
+# 있으면 `grep` 이 1 로 끝나면서 **여기서 스크립트가 죽는다** — `.env` 는 이미 새것으로
+# 갈아 끼운 뒤라, 코드는 옛것인데 설정만 새것인 상태로 남는다.
+# 블루/그린으로 넘어가는 **첫 배포가 정확히 그 경우**다(아직 `app` 뿐이다).
+LIVE=$("${COMPOSE[@]}" ps --status running --services 2>/dev/null \
+         | grep -E '^app-(blue|green)$' | head -1 || true)
+: "${LIVE:=app-blue}"
+echo "앱은 $LIVE 한 벌만 띄운다"
+
+"${COMPOSE[@]}" up -d --remove-orphans mysql caddy "$LIVE"
 
 echo
 echo "확인:"
