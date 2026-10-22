@@ -1,5 +1,24 @@
 ﻿# 공개 운영형 전환 계획
 
+> **⚠️ 2026-10-22 덧말 — 이 문서의 "현재" 는 2026-03-18 이다.**
+>
+> 아래 "현재 저장소에서 보이는 주요 위험" 절과 1단계 인벤토리 표는 **이 저장소가 아니라
+> 그 전 저장소**를 가리킨다. 이 문서의 기본 원칙 —
+>
+> > 현재 private 저장소를 그대로 public 으로 전환하지 않는다.
+> > 비밀값과 운영 정보를 제거한 새 public 저장소를 만든다.
+>
+> — 이 그대로 실행됐고, **그 새 저장소가 지금 이것이다.** 첫 커밋이
+> `87ec6f1d`(2026-06-29, 735개 파일 스냅샷)이고 그 전 히스토리는 들어오지 않았다.
+>
+> 그래서 표의 "현재 `MYSQL_ROOT_PASSWORD` 평문 존재" 같은 비고는 **지금 사실이 아니다.**
+> `docker-compose*.yml` 의 과거 판본 14개를 전부 열어 보니 비밀번호 줄이 모두
+> `${환경변수}` 참조였고, 워크플로에 self-hosted 러너 절대경로도 없다(전부
+> `runs-on: ubuntu-latest`).
+>
+> 무엇을 어떻게 쟀는지는
+> [public-operation-transition/README.md](public-operation-transition/README.md) 에 있다.
+
 ## 목적
 
 - 새 저장소를 `public`으로 만들고, 그 저장소를 앞으로 실제 개발 및 운영의 기준 저장소로 사용한다.
@@ -60,7 +79,7 @@
 | OpenAI API key | AI 요약 및 분석 | `src/main/resources/application.properties`에서 `OPENAI_API_KEY` 참조 | 불가 | 외부 주입 | 현재 env 참조 구조 |
 | Tour API key | 공공데이터 관광 API 호출 | `src/main/java/com/heattrip/heat_trip_backend/tour/service/TourApiClient.java`의 `TOUR.API.SECRET` | 불가 | 외부 주입 | query param에 직접 사용 |
 | 내부 LLM 추천기 URL 또는 내부 서비스 인증값 | 내부 추천 서비스 호출 | `src/main/java/com/heattrip/heat_trip_backend/config/LlmWebClientConfig.java`, `src/main/java/com/heattrip/heat_trip_backend/llm/RecommenderHealthChecker.java` | 조건부 | 외부 설정 | 내부망 주소면 public 저장소에 직접 두지 않는 편이 안전 |
-| self-hosted runner 경로 | 배포 러너 경로 및 서버 구조 | `.github/workflows/deploy-backend.yml` | 불가 | public 저장소에서 제거 또는 private workflow 분리 | `/Users/hyun/apps/heattrip-backend` 노출 |
+| self-hosted runner 경로 | 배포 러너 경로 및 서버 구조 | `.github/workflows/deploy-backend.yml` | 불가 | public 저장소에서 제거 또는 private workflow 분리 | `<운영 홈>/apps/heattrip-backend` 노출 |
 
 ## 2단계. 현재 상황 기준 현실적인 방향
 

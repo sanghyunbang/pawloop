@@ -171,10 +171,10 @@ runner 공유가 뜻하지 않는 것:
 Mac mini 안에서 아래처럼 분리하는 것을 권장한다.
 
 ```text
-/Users/hyun/apps/heattrip-backend
-/Users/hyun/apps/heattrip-backend/config
-/Users/hyun/apps/heattrip-recommender
-/Users/hyun/apps/heattrip-recommender/config
+<운영 홈>/apps/heattrip-backend
+<운영 홈>/apps/heattrip-backend/config
+<운영 홈>/apps/heattrip-recommender
+<운영 홈>/apps/heattrip-recommender/config
 ```
 
 backend 와 recommender 가 서로 다른 repo 라면, 작업 디렉터리도 분리하는 편이 안전하다.

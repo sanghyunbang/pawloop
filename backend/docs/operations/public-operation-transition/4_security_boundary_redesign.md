@@ -16,8 +16,8 @@ public 저장소 기반 운영을 전제로, 비용이 크거나 사용자 데�
 
 ## 실제 수정 파일
 
-- [src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java)
-- [src/main/resources/application.properties](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/resources/application.properties)
+- [src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java](../../../src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java)
+- [src/main/resources/application.properties](../../../src/main/resources/application.properties)
 
 ## 의도
 

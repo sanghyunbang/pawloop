@@ -40,37 +40,37 @@
 
 ### 1. 평문 DB 비밀번호 제거
 
-- 파일: [docker-compose.yml](/C:/Users/mm206/git_projects/heat_trip_backend/docker-compose.yml)
+- 파일: [docker-compose.yml](../../../docker-compose.yml)
 - 결과: 고정 문자열 제거, `.env` 기반으로 전환
 
 ### 2. 공개 가능한 예시 설정 파일 추가
 
-- 파일: [application-private.properties.example](/C:/Users/mm206/git_projects/heat_trip_backend/application-private.properties.example), [.env.example](/C:/Users/mm206/git_projects/heat_trip_backend/.env.example)
+- 파일: [application-private.properties.example](../../../application-private.properties.example), [.env.example](../../../.env.example)
 - 결과: public 저장소에 실제 값 없이 설정 구조 설명 가능
 
 ### 3. 배포 workflow 절대경로 제거
 
-- 파일: [deploy-backend.yml](/C:/Users/mm206/git_projects/heat_trip_backend/.github/workflows/deploy-backend.yml)
+- 파일: `.github/workflows/deploy-backend.yml` *(지금은 없다 — 배포는 `backend/scripts/deploy-bluegreen.sh` 가 한다)*
 - 결과: `github.workspace` 기준으로 정리
 
 ### 4. 공개 범위 축소
 
-- 파일: [SecurityConfig.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java)
+- 파일: [SecurityConfig.java](../../../src/main/java/com/heattrip/heat_trip_backend/config/SecurityConfig.java)
 - 결과: `/api/curation/**`, `/public/**` 인증 필요로 변경
 
 ### 5. 운영 기본 로그 및 에러 노출 축소
 
-- 파일: [application.properties](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/resources/application.properties)
+- 파일: [application.properties](../../../src/main/resources/application.properties)
 - 결과: 에러 상세와 DEBUG 로그를 기본값에서 낮춤
 
 ### 6. Secret scan CI 추가
 
-- 파일: [secret-scan.yml](/C:/Users/mm206/git_projects/heat_trip_backend/.github/workflows/secret-scan.yml)
+- 파일: [secret-scan.yml](../../../.github/workflows/secret-scan.yml)
 - 결과: PR, push, 수동 실행 시 `gitleaks` 검사 수행
 
 ### 7. 앱 레벨 최소 rate limit 추가
 
-- 파일: [ApiRateLimitFilter.java](/C:/Users/mm206/git_projects/heat_trip_backend/src/main/java/com/heattrip/heat_trip_backend/security/ApiRateLimitFilter.java)
+- 파일: [ApiRateLimitFilter.java](../../../src/main/java/com/heattrip/heat_trip_backend/security/ApiRateLimitFilter.java)
 - 결과: 로그인, 추천, 검색, 피드백, 업로드 경로에 429 보호선 추가
 
 ## 아직 남은 주요 작업

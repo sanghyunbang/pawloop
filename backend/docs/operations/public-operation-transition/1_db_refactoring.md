@@ -16,10 +16,10 @@
 
 ## 실제 수정 파일
 
-- [docker-compose.yml](/C:/Users/mm206/git_projects/heat_trip_backend/docker-compose.yml)
-- [.env.example](/C:/Users/mm206/git_projects/heat_trip_backend/.env.example)
-- [.gitignore](/C:/Users/mm206/git_projects/heat_trip_backend/.gitignore)
-- [.dockerignore](/C:/Users/mm206/git_projects/heat_trip_backend/.dockerignore)
+- [docker-compose.yml](../../../docker-compose.yml)
+- [.env.example](../../../.env.example)
+- [.gitignore](../../../.gitignore)
+- [.dockerignore](../../../.dockerignore)
 
 ## 전환 결과
 
