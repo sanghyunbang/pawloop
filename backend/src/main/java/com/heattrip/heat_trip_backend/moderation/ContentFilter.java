@@ -50,6 +50,20 @@ public class ContentFilter {
             "올릴 수 없는 표현이 들어 있습니다. 내용을 고쳐서 다시 보내 주세요.";
 
     /**
+     * 걸러 낼 말들. <b>이제 주입받는다</b> — 이슈 #789.
+     *
+     * <p>예전에는 {@code BannedWords.matches(…)} 를 static 으로 불렀고 목록이 코드에
+     * 박혀 있었다. 저장소를 공개로 돌리면 그 목록이 통째로 읽히고, 무엇보다 낱말을
+     * 하나 더하려면 빌드와 배포가 필요했다 — 운영하면서 계속 느는 값이 있을 자리가
+     * 아니다.
+     */
+    private final BannedWords bannedWords;
+
+    ContentFilter(BannedWords bannedWords) {
+        this.bannedWords = bannedWords;
+    }
+
+    /**
      * 하나라도 걸리면 {@code 400} 으로 던진다.
      *
      * <p>{@code null} 은 검사할 것이 없는 자리다 — 안 보낸 필드({@code PATCH} 의 생략)와
@@ -60,7 +74,7 @@ public class ContentFilter {
      */
     public void requireClean(String... texts) {
         for (String text : texts) {
-            if (BannedWords.matches(text)) {
+            if (bannedWords.matches(text)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, REJECTION_MESSAGE);
             }
         }

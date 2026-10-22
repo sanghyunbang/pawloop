@@ -39,7 +39,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>애너테이션이 두 줄뿐인 것은 의도다 — {@code CommunityIntegrationTest} 와 글자 그대로
  * 같아야 스프링 컨텍스트 캐시를 공유한다(#21).
  */
-@SpringBootTest
+@SpringBootTest(properties = {
+        // **자바 소스에 적는다.** application-test.properties 에 적으면 ISO-8859-1 로
+        // 읽혀 한글이 조용히 깨진다 — 아무것도 안 걸리는데 에러도 안 난다 (#789).
+        //
+        // 지어낸 낱말이다. 운영 목록과 상관이 없다 — 검사가 운영 데이터를 붙들고 있으면
+        // 운영에서 낱말 하나를 빼는 날 검사가 깨진다.
+        "app.moderation.banned-words=가짜욕,가짜혐오",
+        // 허용 낱말은 금칙어를 통째로 품고 있어야 그 장치를 재는 뜻이 있다.
+        "app.moderation.safe-words=가짜욕역,가짜욕점"
+})
 @AutoConfigureMockMvc
 class ContentFilterIntegrationTest extends AbstractMySqlIntegrationTest {
 
@@ -47,12 +56,40 @@ class ContentFilterIntegrationTest extends AbstractMySqlIntegrationTest {
     private static final AtomicLong SEQUENCE = new AtomicLong();
 
     /** 검사 대상으로 쓰는 욕설 하나. 어디에 넣어도 같은 판정이어야 한다. */
-    private static final String DIRTY = "씨발 진짜 지랄이네";
+    /**
+     * 지어낸 금칙어 — 이슈 #789. 운영 목록과 상관이 없고,
+     * {@code application-test.properties} 가 이 낱말을 주입한다.
+     */
+    private static final String DIRTY = "가짜욕 진짜 가짜혐오네";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private UserRepository userRepository;
     @Autowired private JWTProvider jwtProvider;
     @Autowired private ChatRoomService chatRooms;
+    @Autowired private BannedWords bannedWords;
+
+    /**
+     * 설정에서 온 낱말이 <b>글자 그대로</b> 도착했는가.
+     *
+     * <p>이 검사가 없으면 글자가 깨져도 아무도 모른다. 2026-10-22 에 검사용 목록을
+     * {@code application-test.properties} 에 적었다가 겪었다 — {@code .properties} 는
+     * 자바 규약상 ISO-8859-1 로 읽혀서 한글이 {@code ê°ì§ì} 처럼 들어왔다.
+     *
+     * <p><b>에러도 로그도 안 났다.</b> 목록 개수는 맞게 세어졌고("금칙어 2개"), 다만
+     * 글자가 달라 아무것도 안 걸렸다. 아래 HTTP 검사들이 400 대신 201 을 받고서야 알았다.
+     * 운영에서 같은 일이 나면 <b>필터가 있는 척만 하는 채로</b> 돌아간다.
+     */
+    @Test
+    @DisplayName("목록이 설정에서 글자 그대로 들어온다 — 깨져도 에러가 안 나는 종류다")
+    void theListArrivesIntact() {
+        assertThat(bannedWords.matches("가짜욕"))
+                .as("설정에 넣은 금칙어가 안 걸린다 — 글자가 깨져서 들어왔을 것이다")
+                .isTrue();
+        assertThat(bannedWords.matches("가짜욕역"))
+                .as("허용 낱말이 먼저 안 지워졌다 — 평범한 낱말을 쓴 사람이 막힌다")
+                .isFalse();
+    }
+
 
     // ─────────────────────────── 커뮤니티 ───────────────────────────
 
@@ -77,11 +114,13 @@ class ContentFilterIntegrationTest extends AbstractMySqlIntegrationTest {
 
         JsonNode created = body(createPost(me, """
                 {"board":"free","title":"우리 개가 새끼를 낳았어요",
-                 "body":"새벽에 개소리가 커서 깼는데 미친 듯이 뛰어놀아요. 산책로 시발점에서 만나요"}
+                 "body":"새벽에 개소리가 커서 깼는데 미친 듯이 뛰어놀아요. 가짜욕점에서 만나요"}
                 """).andExpect(status().isCreated()));
 
         assertThat(created.path("id").asLong())
-                .as("금칙어처럼 보이지만 평범한 낱말들이다 — BannedWords javadoc 이 왜 뺐는지 적어 뒀다")
+                .as("""
+                        금칙어처럼 보이지만 평범한 낱말들이다 — BannedWords javadoc 이 왜 뺐는지 \
+                        적어 뒀다. "가짜욕점" 은 허용 낱말이라 먼저 지워진다.""")
                 .isPositive();
     }
 
@@ -150,7 +189,7 @@ class ContentFilterIntegrationTest extends AbstractMySqlIntegrationTest {
 
         assertThat(error.path("message").asText())
                 .isEqualTo(ContentFilter.REJECTION_MESSAGE)
-                .doesNotContain("씨발", "지랄", "진짜");
+                .doesNotContain("가짜욕", "가짜혐오", "진짜");
         assertThat(error.path("code").asText())
                 .as("""
                         400 이 늘 쓰는 그 코드다(GlobalExceptionHandler.codeOf) — 금칙어 전용 코드를

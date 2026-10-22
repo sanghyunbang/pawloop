@@ -4,6 +4,12 @@ import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Component;
+
 /**
  * 게시 전에 거를 말들 — 이슈 #681.
  *
@@ -45,10 +51,16 @@ import java.util.Locale;
  *   <li><b>"미친"</b> — "미친 듯이 뛰어요" 가 칭찬으로 쓰인다.</li>
  * </ul>
  *
- * <h2>{@link #SAFE_WORDS} 가 있는 이유</h2>
- * <p>"시발" 은 가장 흔한 표기라 빼기 아까운데, <b>"시발점"·"시발역"</b> 은 평범한 낱말이다.
- * 그래서 금칙어를 찾기 <b>전에</b> 이 낱말들을 먼저 지운다. 지우고 남은 자리에 "시발" 이
- * 여전히 있으면 그때는 욕이다.
+ * <h2>허용 낱말이 있는 이유</h2>
+ * <p>금칙어 중에는 <b>평범한 낱말 안에 통째로 들어앉는</b> 것이 있다. 흔한 욕 하나가 어떤
+ * 지명이나 전문용어의 앞 두 글자와 같은 식이다. 그 욕을 빼자니 가장 흔한 표기를 놓치고,
+ * 넣자니 그 지명을 쓴 사람이 이유도 모른 채 막힌다.
+ *
+ * <p>그래서 금칙어를 찾기 <b>전에</b> 그 평범한 낱말들을 먼저 지운다. 지우고 남은 자리에
+ * 욕이 여전히 있으면 그때는 진짜 욕이다.
+ *
+ * <p><b>실제 짝은 여기 안 적는다.</b> 적으면 목록을 코드 밖으로 뺀 뜻이 없어진다(#789).
+ * 운영 설정의 {@code MODERATION_SAFE_WORDS} 에 있다.
  *
  * <h2>왜 NFKC 로 고르는가</h2>
  * <p>iOS·macOS 가 보내는 한글은 자모가 풀린 형태(NFD)일 수 있다. 그대로 비교하면 눈에는
@@ -56,44 +68,82 @@ import java.util.Locale;
  * 다시 한 글자로 합치고, 전각({@code ｓ})·호환 문자도 같은 자리로 모은다. 목록 자체도 같은
  * 방식으로 한 번 접어 둔다 — 한쪽만 접으면 비교가 어긋난다.
  */
-final class BannedWords {
+@Component
+class BannedWords {
 
-    private BannedWords() {
+    private static final Logger log = LoggerFactory.getLogger(BannedWords.class);
+
+    /**
+     * 걸러 낼 말과, 찾기 전에 지워 둘 평범한 낱말.
+     *
+     * <h2>왜 코드에 안 적혀 있나 — 이슈 #789</h2>
+     * <p>예전에는 이 자리에 낱말이 그대로 적혀 있었다. 둘 때문에 뺐다.
+     *
+     * <ul>
+     *   <li><b>저장소를 공개로 돌린다.</b> 거르려고 만든 목록을 거르려는 사람이 그대로
+     *       읽는다. "숨김에 기대지 말라" 는 원칙의 몇 안 되는 예외가 이 종류다 —
+     *       금칙어는 본질적으로 숨어 있어야 작동한다.</li>
+     *   <li><b>운영하면서 계속 는다.</b> 새 욕설, 새 우회 표기, 신고를 받고 알게 되는
+     *       말들. 그때마다 코드를 고치고 빌드하고 배포해야 한다면 자리가 틀린 것이다.
+     *       <b>공개와 무관하게 옮기는 게 맞다.</b></li>
+     * </ul>
+     *
+     * <p>값은 운영 설정(SSM 의 {@code .env})에서 온다. 쉼표로 가른다.
+     * 고치는 법은 {@code scripts/set-prod-env.sh}, 먹이는 법은
+     * {@code scripts/refresh-prod-env.sh} 다.
+     *
+     * <p><b>히스토리에는 옛 목록이 남는다.</b> 공개로 돌리면 누구나 {@code git log} 로
+     * 읽을 수 있다. 히스토리 전체의 해시를 다시 쓰는 것보다, <b>옮긴 뒤 목록을 한 번
+     * 손보는 것</b>이 싸고 확실하다 — 그러면 공개된 것은 옛 목록이고 도는 것은 다른
+     * 목록이다.
+     */
+    private final List<String> words;
+
+    private final List<String> safeWords;
+
+    BannedWords(
+            @Value("${app.moderation.banned-words:}") List<String> words,
+            @Value("${app.moderation.safe-words:}") List<String> safeWords,
+            Environment environment) {
+        this.words = folded(words);
+        this.safeWords = folded(safeWords);
+        requireWordsWhereItMatters(environment);
     }
 
     /**
-     * 걸러 낼 말. <b>부분 문자열</b>로 찾는다 — "씨발놈" 은 "씨발" 로 걸린다.
+     * 목록이 비면 <b>운영에서는 뜨지 않는다.</b>
      *
-     * <p>넓히기 전에 위 javadoc 의 "과차단이 더 나쁜 버그다" 를 먼저 읽어라. 한 낱말을 더할
-     * 때마다 <b>그 낱말이 들어가는 평범한 문장이 있는지</b>를 먼저 찾아봐야 한다.
-     */
-    private static final List<String> RAW_WORDS = List.of(
-            // ── 욕설·비속어 ──
-            "씨발", "시발", "씨팔", "시팔", "씨빨", "십새끼", "씹새끼", "씹할",
-            "개새끼", "개세끼", "개색기", "좆", "지랄", "병신", "븅신", "썅",
-            "니미럴", "니애미", "느금마", "엠창",
-
-            // ── 성적 표현 ──
-            // 임상 용어("중성화"·"발정")는 이 앱에서 매일 쓰이는 말이라 넣지 않았다.
-            "야동", "포르노", "조건만남", "섹파", "성매매", "몸캠",
-
-            // ── 혐오 표현 ──
-            // 특정 집단을 가리키는 멸칭만. 정치 진영 용어는 판단이 갈려서 넣지 않았다.
-            "틀딱", "짱깨", "쪽바리", "쪽발이", "한남충", "김치녀", "맘충", "급식충");
-
-    /**
-     * 금칙어를 찾기 <b>전에</b> 지워 두는 평범한 낱말.
+     * <p>비어 있어도 {@link #matches}는 조용히 {@code false}만 돌려준다 — 필터가 <b>있는
+     * 척</b>만 하고 아무것도 안 거른다. 로그 한 줄도 없다. 애플 지침 1.2 가 요구하는 넷 중
+     * 하나가 그렇게 조용히 사라지면 다음 심사에서야 안다.
      *
-     * <p>"시발점" 을 지우면 "시발" 이 남지 않는다. 이 목록이 없으면 지하철·버스 얘기를 하는
-     * 사람이 이유도 모르고 막힌다.
+     * <p>뜨지 않게 하는 쪽이 안전하다. 블루/그린 배포(#787)가 새 쪽의 healthy 를 기다렸다가
+     * 안 되면 <b>옛 쪽을 그대로 두므로</b>, 설정을 빠뜨린 배포는 서비스에 닿지 않고 멈춘다.
+     *
+     * <p>dev·test 에서는 비어도 된다. 검사는 자기 목록을 직접 넣어 돌린다.
      */
-    private static final List<String> RAW_SAFE_WORDS = List.of(
-            "시발점", "시발역", "시발지", "시발택시");
+    private void requireWordsWhereItMatters(Environment environment) {
+        boolean prod = List.of(environment.getActiveProfiles()).contains("prod");
+        if (!words.isEmpty()) {
+            log.info("[MODERATION] 금칙어 {}개 · 허용 낱말 {}개", words.size(), safeWords.size());
+            return;
+        }
+        if (prod) {
+            throw new IllegalStateException(
+                    "app.moderation.banned-words 가 비어 있다. 운영에서 금칙어 없이 뜨면 "
+                            + "글 거르기가 통째로 사라진다 (애플 지침 1.2). "
+                            + "운영 설정에 MODERATION_BANNED_WORDS 를 넣어라 — 이슈 #789.");
+        }
+        log.warn("[MODERATION] 금칙어 목록이 비었다 — 아무것도 안 거른다. "
+                + "운영이 아니라 넘어간다(프로필: {})", (Object) environment.getActiveProfiles());
+    }
 
-    private static final List<String> WORDS = RAW_WORDS.stream().map(BannedWords::fold).toList();
-
-    private static final List<String> SAFE_WORDS =
-            RAW_SAFE_WORDS.stream().map(BannedWords::fold).toList();
+    /** 목록과 입력에 똑같은 모양을 건다. 빈 줄은 버린다 — 설정이 비면 빈 원소가 하나 온다. */
+    private static List<String> folded(List<String> raw) {
+        return raw == null ? List.of()
+                : raw.stream().map(String::strip).filter(s -> !s.isEmpty())
+                        .map(BannedWords::fold).toList();
+    }
 
     /**
      * 이 글에 금칙어가 있는가.
@@ -101,17 +151,17 @@ final class BannedWords {
      * @param text 검사할 글. {@code null} 이거나 비어 있으면 {@code false} — 빈 글을
      *             막는 것은 이 파일의 일이 아니다(본문 필수 여부는 각 도메인이 이미 본다)
      */
-    static boolean matches(String text) {
+    boolean matches(String text) {
         if (text == null || text.isBlank()) {
             return false;
         }
         String folded = fold(text);
-        for (String safe : SAFE_WORDS) {
+        for (String safe : safeWords) {
             // 자리를 없애지 않고 공백으로 바꾼다 — 지워 붙이면 앞뒤 글자가 맞닿아
             // 원문에 없던 낱말이 생긴다.
             folded = folded.replace(safe, " ");
         }
-        for (String word : WORDS) {
+        for (String word : words) {
             if (folded.contains(word)) {
                 return true;
             }
