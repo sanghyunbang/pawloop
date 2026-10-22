@@ -3,7 +3,7 @@
 > 계약: [`openapi.yaml`](../../04-api/openapi.yaml) `Push` 태그(`/api/push/tokens`, `/api/push/settings`)와 `Chat` 의 `PUT /api/chat/rooms/{roomId}/mute` · 데이터: [erd.md](../../03-database/erd.md) `device_token` · `push_preference`, [schema.md](../../03-database/schema.md) §29 · §30 · §13(`muted_at`)
 > 이슈: [#83](https://github.com/sanghyunbang/pawloop/issues/83) · 원칙: [#86](https://github.com/sanghyunbang/pawloop/issues/86) §3·§4·§5 · 로드맵 M2.8
 
-**2026-09-06 에 서버 쪽을 다 짰다.** 앱 쪽(`firebase_core` · `firebase_messaging` · 알림 설정 화면)은 사장님이 Firebase 프로젝트에서 받는 `google-services.json` · `GoogleService-Info.plist` 가 와야 붙는다. 그전까지 서버는 **키 없이** 뜬다 — 토큰 등록·설정·음소거는 저장되고 발송만 조용히 건너뛴다.
+**2026-09-06 에 서버 쪽을 다 짰다.** 앱 쪽(`firebase_core` · `firebase_messaging` · 알림 설정 화면)은 운영자가 Firebase 프로젝트에서 받는 `google-services.json` · `GoogleService-Info.plist` 가 와야 붙는다. 그전까지 서버는 **키 없이** 뜬다 — 토큰 등록·설정·음소거는 저장되고 발송만 조용히 건너뛴다.
 
 ---
 
@@ -85,7 +85,7 @@ PushDispatcher.onMessagePosted  @TransactionalEventListener(AFTER_COMMIT) @Async
 
 ---
 
-## 7. 남은 것 (앱 · 사장님)
+## 7. 남은 것 (앱 · 사람 손)
 
 - ✅ Android 는 앱까지 이어졌다(2026-09-21). Firebase 프로젝트 `pawloop-b3393` 에 `app.pawloop` 이 등록돼 있고, `app/lib/v2/data/firebase_push.dart` 가 Firebase 를 아는 유일한 파일이다 — 로그인이 확정되면 `PUT /api/push/tokens`, 앞에 있을 때는 `flutter_local_notifications` 로 띄우고, 누르면 기기 알림과 같은 길(`notification_route.dart`)로 간다(`docs/02-architecture/frontend-structure.md` §2.3). `google-services.json` 은 저장소 밖(gitignore) — 없으면 gradle 이 플러그인을 안 얹고 앱은 푸시 없이 뜬다.
 - ✅ `privacy_ko.md` v1.10 에 기기 알림 토큰 항목(완료 조건 4).

@@ -91,7 +91,7 @@ void main() {
 
       expect(parsed.systemType, ServerCareType.vet);
       expect(parsed.isSystem, isTrue,
-          reason: '기본 배지에만 "주변 찾기" 같은 것이 붙는다(사장님, 2026-09-16)');
+          reason: '기본 배지에만 "주변 찾기" 같은 것이 붙는다(2026-09-16)');
     });
 
     test('직접 만든 항목은 종류가 없다', () {

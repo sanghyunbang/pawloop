@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code 16_user_block.sql} 을 <b>실제 MySQL 에 돌려</b> 검증한다 — 이슈 #166.
  *
  * <h2>왜 이제야 있나</h2>
- * <p>이 스크립트는 실행 테스트가 없었다. 2026-09-05 에 사장님 dev DB 에 돌리다 <b>멈췄다</b> —
+ * <p>이 스크립트는 실행 테스트가 없었다. 2026-09-05 에 로컬 dev DB 에 돌리다 <b>멈췄다</b> —
  * 표 이름은 {@code user_block} 으로 바뀌었는데 인덱스 이름은 {@code uq_chat_block} 그대로였고,
  * 사후 검증이 {@code uq_user_block} 을 못 찾아 ABORT 했다. 반쯤 적용된 채로 멈춘 것이다.
  *

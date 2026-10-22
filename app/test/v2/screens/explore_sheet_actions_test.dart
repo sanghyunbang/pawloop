@@ -67,7 +67,7 @@ class _FakeTrails extends TrailRouteRepository {
         );
 }
 
-/// 경유지가 **열한 곳**인 코스 — 2026-09-17 에 사장님 화면에 뜬 그 코스다.
+/// 경유지가 **열한 곳**인 코스 — 2026-09-17 에 실기기 화면에 뜬 그 코스다.
 ///
 /// 조각 수는 코스마다 1~51 로 크게 다르다. 많은 쪽으로 재지 않으면 "버튼이 밀린다" 를
 /// 영영 못 본다 — 세 곳짜리로는 밀리지 않는다.
@@ -223,7 +223,7 @@ void main() {
 
   // 이 자리에는 '동네 길 시트에는 "지도에서 보기" 가 없다' 는 검사가 있었다. 그 판단의
   // 근거("그릴 선이 없다")는 맞았지만, 결과는 **누를 것이 하나도 없는 시트**였다 —
-  // 2026-09-17 에 사장님이 "저렇게 해놓으면 어쩌라는 거지" 라고 신고했다(#619).
+  // 2026-09-17 에 "저렇게 해놓으면 어쩌라는 거지" 라는 신고가 들어왔다(#619).
   // 선이 없어도 할 일이 있다: 지도를 시작 지점으로 옮기고, 거쳐 가는 곳 이름을 보여 준다.
   testWidgets('동네 길 시트에도 "지도에서 보기" 가 있다 — 선이 없어도 어디인지는 보여 준다 (#619)', (tester) async {
     await _pumpWide(tester,
@@ -276,7 +276,7 @@ void main() {
     expect(find.text('거쳐 가는 곳 11곳'), findsOneWidget);
 
     // 시트는 스크롤되니 버튼이 "없는" 것은 아니다. 그런데 찾아서 내려야 보이는 버튼은
-    // 없는 것과 비슷하다 — 사장님이 "지도로 넘어갈 수가 없다" 고 했다(2026-09-17).
+    // 없는 것과 비슷하다 — "지도로 넘어갈 수가 없다" 는 지적이 있었다(2026-09-17).
     final screen = tester.view.physicalSize.height / tester.view.devicePixelRatio;
     final button = tester.getRect(find.byKey(const Key('place-action-지도에서 보기')));
     expect(button.bottom, lessThanOrEqualTo(screen),
@@ -364,7 +364,7 @@ void main() {
     expect(find.textContaining('실제 2.1km · 약 28분'), findsOneWidget);
     expect(find.byKey(const Key('loop-preview')), findsOneWidget, reason: '걷기 전에 우리 화면에 그린다(키 없는 검사는 캔버스)');
     expect(find.byKey(const Key('place-posts-link')), findsOneWidget,
-        reason: '홈 시트에만 있던 "이 장소의 글 보기" 를 탐색 탭 시트에도(2026-09-21 사장님)');
+        reason: '홈 시트에만 있던 "이 장소의 글 보기" 를 탐색 탭 시트에도(2026-09-21)');
 
     await tester.tap(find.text('이 코스 걷기'));
     await tester.pumpAndSettle();

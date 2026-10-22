@@ -72,7 +72,7 @@ PREPARE stmt FROM @stmt; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 -- **COUNT(DISTINCT index_name) 이어야 한다.** information_schema.statistics 는 인덱스의
 -- 컬럼마다 한 행이라, 두 컬럼짜리 uq_chat_block 은 COUNT(*) 가 2 다. 예전에는 `= 1` 로
 -- 견줘서 이 문장이 한 번도 안 돌았고, 그 뒤 사후 검증이 uq_user_block 을 못 찾아 멈췄다 —
--- 표 이름은 이미 바뀐 채로. 사장님 dev DB 에서 2026-09-05 에 실제로 그렇게 멈췄다.
+-- 표 이름은 이미 바뀐 채로. 로컬 dev DB 에서 2026-09-05 에 실제로 그렇게 멈췄다.
 SET @has_old_index := (
     SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics
     WHERE table_schema = DATABASE() AND table_name = 'user_block'

@@ -194,7 +194,7 @@ class CareItemEntry {
   bool get archived => archivedAt != null;
 
   /// 기본 일곱인가. **"주변 찾기" 같은 부가 기능이 붙는 자리**이고, 직접 만든 항목은
-  /// 단순 투두다(사장님, 2026-09-16).
+  /// 단순 투두다(2026-09-16).
   bool get isSystem => systemType != null;
 
   /// 이름이나 아이콘을 못 읽으면 `null` — 그 칸은 그릴 것이 없다.

@@ -74,7 +74,7 @@ FamilyRepository _repo(List<Map<String, Object?>> logs) => FamilyRepository(
       ),
     );
 
-/// 사장님 화면 그대로 — 물 · 산책(거리 있음) · 투약 · 배변 · 마킹은 했고 밥 · 병원은 아직.
+/// 실기기 화면 그대로 — 물 · 산책(거리 있음) · 투약 · 배변 · 마킹은 했고 밥 · 병원은 아직.
 List<Map<String, Object?>> _mixed() => [
       _log(id: 1, type: 'water'),
       _log(id: 2, type: 'walk', memo: '0.6km'),

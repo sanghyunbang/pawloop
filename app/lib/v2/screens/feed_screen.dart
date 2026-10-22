@@ -57,7 +57,7 @@ class _FeedScreenState extends State<FeedScreen> with PostListActions<FeedScreen
   /// 지금 보고 있는 갈래. 커뮤니티 안에서 **이야기와 크루**가 자리를 나눈다(#417).
   ///
   /// 탭을 여섯째로 늘리지 않은 이유는 라벨이 접히기 때문이다 — #396 에서 다섯 탭이
-  /// 360dp·글자 1.5배에서 이미 한계였다. 사장님이 "소모임은 커뮤니티에 넣을 수 있지
+  /// 360dp·글자 1.5배에서 이미 한계였다. "소모임은 커뮤니티에 넣을 수 있지
   /// 않나" 라고 한 것도 같은 자리다.
   _Section _section = _Section.posts;
 

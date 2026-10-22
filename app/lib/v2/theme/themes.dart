@@ -20,7 +20,7 @@ class AppThemeDef {
 }
 
 const List<AppThemeDef> kThemes = [
-  // 기본 — 흰 바탕, 블롭 없음(#447, 사장님: "배경은 시각적 부담 없는 흰색으로"). 오라 테마들은
+  // 기본 — 흰 바탕, 블롭 없음(#447, "배경은 시각적 부담 없는 흰색으로"). 오라 테마들은
   // 고르기 옵션으로 남는다.
   AppThemeDef('화이트', Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF)),
   AppThemeDef('라일락', Color(0xFFF3E8F9), Color(0xFFE4D6F0), Color(0xFFFFC79E), Color(0xFFD4B0FF), Color(0xFF9EE2C4)),

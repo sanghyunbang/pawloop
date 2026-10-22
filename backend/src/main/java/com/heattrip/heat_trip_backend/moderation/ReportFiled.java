@@ -26,7 +26,7 @@ import java.util.List;
  * <ul>
  *   <li><b>메모는 앞 {@value #BODY_PREVIEW_LENGTH}자까지</b>다({@link #memoPreview}). 처음에는
  *       있음/없음만 실었다 — 신고자가 자기 연락처나 제3자 정보를 적는 자리라서
- *       ({@link Reports#MAX_MEMO_LENGTH}). 2026-09-20 운영의 첫 신고에서 사장님이 "메모 내용이
+ * ({@link Reports#MAX_MEMO_LENGTH}). 2026-09-20 운영의 첫 신고에서 "메모 내용이
  *       안 보인다" 고 했고 맞는 말이었다: <b>메모는 운영자에게 쓴 글</b>이고, 읽을 화면이 따로
  *       없어 "있음" 은 아무 쓸모가 없었다. 본문을 앞 80자 싣는 것과 같은 규칙으로 싣는다 —
  *       채널은 운영자만 보는 곳이다.</li>
