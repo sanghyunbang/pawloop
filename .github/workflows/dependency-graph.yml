@@ -1,0 +1,78 @@
+# Gradle 의존성을 깃헙에 제출한다 — 이슈 #801.
+#
+# ## 왜 이게 필요한가
+#
+# Dependabot 을 켜 놓고 "깃헙이 무엇을 의존성으로 아는가" 를 확인했더니, **167개가 전부
+# Flutter(157)와 깃헙 액션(9)이고 Gradle 은 0개**였습니다. 스프링 부트 백엔드가 통째로
+# 안 보였습니다.
+#
+#     gh api repos/sanghyunbang/pawloop/dependency-graph/sbom
+#
+# 깃헙은 **`build.gradle` 을 정적으로 읽지 않습니다.** Maven 의 `pom.xml` 은 선언적
+# XML 이라 파싱되는데, Gradle 은 스크립트라 **돌려 봐야** 무엇에 의존하는지 압니다.
+# 우리 파일이 그 예입니다 — 의존성 37줄 중 버전이 적힌 건 10줄이고, 나머지는 스프링 부트
+# BOM 이 정합니다.
+#
+#     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'   // 버전이 없다
+#
+# 그래서 Gradle 쪽은 "자동 의존성 제출" 이 유일한 길입니다. 이 워크플로가 그것입니다 —
+# 실제로 의존성을 해석해서 그 목록을 깃헙에 올립니다. 전이 의존성까지 들어갑니다.
+#
+# ## ⚠️ 이 종류의 고장이 제일 나쁩니다
+#
+# Dependabot 이 켜져 있고, 설정에 `enabled` 라고 떠 있고, 알림이 0건이고, **아무 에러도
+# 안 났습니다.** 그런데 백엔드는 한 번도 검사된 적이 없었습니다.
+#
+# > **"알림 0건" 은 "취약점 없음" 이 아닙니다. "안 봤다" 도 0건입니다.**
+#
+# 같은 모양을 #796 에서도 겪었습니다 — 비밀값 스캔 워크플로가 깃헙이 안 읽는 자리에
+# 있어서 한 번도 안 돌았는데, 문서에는 "추가했다" 고 적혀 있었습니다.
+#
+# ## 켠 뒤에 확인하는 법
+#
+# 워크플로가 초록인 것으로 끝내지 마세요. **그래프에 실제로 들어갔는지**를 셉니다.
+#
+#     gh api repos/sanghyunbang/pawloop/dependency-graph/sbom \
+#       --jq '[.sbom.packages[].externalRefs[0].referenceLocator
+#              | select(startswith("pkg:")) | split("/")[0]] | group_by(.) | map({(.[0]): length}) | add'
+#
+# `pkg:maven` 이 0 이 아니어야 합니다.
+name: Dependency Graph
+
+on:
+  push:
+    branches: [main]
+    # **좁히지 않습니다.** 의존성은 `build.gradle` 말고도 바뀔 수 있고(플러그인 ·
+    # 서브프로젝트), 필터가 한 번 어긋나면 그래프가 **조용히** 낡습니다. 그 조용함이
+    # 이 이슈를 만든 바로 그것입니다. 백엔드가 바뀌면 그냥 다시 올립니다.
+    paths:
+      - 'backend/**'
+      - '.github/workflows/dependency-graph.yml'
+  workflow_dispatch:
+
+# 같은 브랜치에 새 커밋이 오면 이전 실행을 취소한다 — 마지막 것만 의미가 있다.
+concurrency:
+  group: depgraph-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    name: Gradle 의존성 제출
+    runs-on: ubuntu-latest
+    permissions:
+      # 제출 API 를 쓰려면 이게 있어야 한다. 코드를 밀지는 않는다.
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java 21 준비
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 의존성을 해석해 깃헙에 올린다
+        uses: gradle/actions/dependency-submission@v4
+        with:
+          # `gradlew` 가 여기 있다. 안 주면 저장소 루트를 보고 아무것도 못 찾는다.
+          build-root-directory: backend
