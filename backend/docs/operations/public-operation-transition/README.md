@@ -48,24 +48,25 @@ backend into one monorepo", 735개 파일)이고, **그 전 히스토리는 들�
 ### 3. 조용히 멈춘 것 — gitleaks 스캔은 한 번도 안 돌았다
 
 [5_current_status.md](5_current_status.md) 가 반영했다고 적은 항목에
-`GitHub Actions gitleaks secret scan 추가` 가 있다. 파일은 실제로 있다 —
-`backend/.github/workflows/secret-scan.yml`. **그런데 한 번도 돈 적이 없다.**
+`GitHub Actions gitleaks secret scan 추가` 가 있다. 파일은 실제로 있었다 —
+`backend/.github/workflows/secret-scan.yml`. **그런데 한 번도 돈 적이 없었다.**
 
 깃헙 액션은 **저장소 루트의 `.github/workflows/`** 만 읽는다. `backend/` 가 독립
 저장소였을 때는 그 자리가 루트였으니 돌았다. 모노레포로 합칠 때(`87ec6f1d`)
 `backend/.github/workflows/` 로 한 칸 내려앉았고, 그때부터 깃헙은 그 파일을 **아예
 모른다.** 2026-10-22 에 확인한 등록 목록에는 `CI` 하나만 있다.
 
-같은 자리에 `qodana_code_quality.yml` 도 있고 같은 이유로 안 돈다.
+같은 자리에 `qodana_code_quality.yml` 도 있었고 같은 이유로 안 돌았다.
 
 > **이 모양이 제일 위험한 종류다.** 파일이 있고, 문서에 "추가했다" 고 적혀 있고,
 > 아무 에러도 안 난다. 없는 것보다 나쁘다 — 있다고 믿게 되니까.
 
-고치려면 두 파일을 루트 `.github/workflows/` 로 옮기면 된다. 이슈로 남겼다.
+**2026-10-22 에 고쳤다**(이슈 #796) — 두 파일과 `.gitleaks.toml` 을 루트로 옮겼다.
+Qodana 는 이 모양의 저장소에서 돌려 본 적이 없어 `workflow_dispatch` 하나만 남겼다.
 
-> 덧붙여, 루트의 `CI` 워크플로는 2026-10-22 기준 `disabled_manually` 다. 마지막 실행은
-> 2026-09-13 이고 전부 실패했다(지출 한도 — 이슈 #412). 공개로 돌려도 **그것만으로는
-> 자동으로 안 돈다.** 한도와 활성화가 함께 필요하다.
+> 덧붙여, 루트의 `CI` 워크플로는 `disabled_manually` 였다. 마지막 실행은 2026-09-13 이고
+> 전부 실패했다(지출 한도 — 이슈 #412). **공개로 돌리는 것만으로는 안 돈다** — 2026-10-22
+> 에 `gh workflow enable CI` 로 켰다. 공개 저장소는 표준 러너가 공짜라 한도에 안 닿는다.
 
 ### 4. 문서에 박혀 있던 남의 로컬 경로를 치웠다
 

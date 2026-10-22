@@ -59,8 +59,8 @@
 
 추가 파일:
 
-- [secret-scan.yml](../../../.github/workflows/secret-scan.yml)
-- [.gitleaks.toml](../../../.gitleaks.toml)
+- [secret-scan.yml](../../../../.github/workflows/secret-scan.yml)
+- [.gitleaks.toml](../../../../.gitleaks.toml)
 
 ### 4. 앱 레벨 rate limit 추가
 
