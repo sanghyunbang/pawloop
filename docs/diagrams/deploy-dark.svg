@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 560" width="920" height="560" id="deploy-dark" role="img" aria-labelledby="deploy-dark-t deploy-dark-d">
 <title id="deploy-dark-t">배포 중 끊김 — 전과 후</title>
-<desc id="deploy-dark-d">전에는 docker compose up -d 한 줄로 배포했고 평균 36.0초가 끊겼다. 그 36초의 98퍼센트는 포트는 열렸는데 스프링이 아직 부팅 중인 구간이었다. 후에는 쉬는 쪽을 새 이미지로 띄우고 healthy 가 된 것을 확인한 뒤 옛 쪽을 내린다. 배포에 걸리는 시간은 44초로 늘었지만 그동안 사용자는 옛 쪽을 쓰고 있어서 끊김은 0초, 실패는 표본 600건 중 0건이다.</desc>
+<desc id="deploy-dark-d">전에는 docker compose up -d 한 줄로 배포했고 평균 35.2초가 끊겼다. 그 36초의 98퍼센트는 포트는 열렸는데 스프링이 아직 부팅 중인 구간이었다. 후에는 쉬는 쪽을 새 이미지로 띄우고 healthy 가 된 것을 확인한 뒤 옛 쪽을 내린다. 배포에 걸리는 시간은 44초로 늘었지만 그동안 사용자는 옛 쪽을 쓰고 있어서 끊김은 0초, 실패는 표본 600건 중 0건이다.</desc>
 <defs>
   <marker id="deploy-dark-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
     <path d="M0 0 L10 5 L0 10 z" fill="#484f58"/>
@@ -31,7 +31,7 @@
 </style>
 <rect width="920" height="560" class="bg"/>
 <text x="40" y="40" class="tb">배포 중 끊김 — 전과 후</text>
-<text x="40" y="62" class="s">스테이징에서 서버 안으로 0.2초 간격 600표본 · 2026-10-21  (운영 숫자는 README 표)</text>
+<text x="40" y="62" class="s">스테이징 · 서버 내부에서 0.2초 간격 600회 측정 · 2026-10-22  (운영 수치는 README 표)</text>
 <rect x="40" y="84" width="840" height="186" rx="10" class="band"/>
 <text x="56" y="108" class="h">전 — docker compose up -d</text>
 <text x="56" y="132" class="s">옛 것을 내리고 새 것을 올린다. 그 사이가 통째로 빈다.</text>
@@ -45,9 +45,9 @@
 <text x="370.0" y="214" class="s" text-anchor="middle">98% 가 curl 56 — 포트는 열렸는데 스프링이 아직 부팅 중</text>
 <text x="370.0" y="232" class="s" text-anchor="middle">끄는 쪽을 아무리 빨리 해도 안 줄어든다</text>
 <rect x="724" y="148" width="156" height="92" rx="10" class="warnb"/>
-<text x="802" y="186" class="warn-n" text-anchor="middle">36.0초</text>
-<text x="802" y="208" class="s" text-anchor="middle">평균 끊김</text>
-<text x="802" y="226" class="s" text-anchor="middle">실패 157건 / 600</text>
+<text x="802" y="186" class="warn-n" text-anchor="middle">35.2초</text>
+<text x="802" y="208" class="s" text-anchor="middle">평균 끊김 (4회)</text>
+<text x="802" y="226" class="s" text-anchor="middle">실패 154건 / 600</text>
 <rect x="40" y="286" width="840" height="196" rx="10" class="band"/>
 <text x="56" y="310" class="h">후 — deploy-bluegreen.sh</text>
 <text x="56" y="334" class="s">쉬는 쪽을 먼저 띄우고, healthy 를 확인한 뒤에 옛 쪽을 내린다.</text>

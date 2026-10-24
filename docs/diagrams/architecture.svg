@@ -64,7 +64,7 @@
 <text x="332" y="410" class="s">같은 이미지, 다음 판</text>
 <text x="332" y="428" class="s">평소에는 꺼져 있다</text>
 <rect x="56" y="462" width="508" height="46" rx="10" class="card"/>
-<text x="72" y="481" class="h">Spring Modulith 경계</text>
+<text x="72" y="481" class="h">Spring Modulith 경계 — 22개 중 도메인 7</text>
 <text x="72" y="500" class="m">chat · walk · community · place · schedule · moderation · family</text>
 <path d="M180 508 L180 542" class="ln" marker-end="url(#architecture-a)"/>
 <rect x="56" y="546" width="508" height="66" rx="10" class="card"/>
