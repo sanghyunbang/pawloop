@@ -221,7 +221,7 @@ def arch_body() -> str:
 
     # 모듈 띠
     A(rect(56, 462, 508, 46, "card"))
-    A(txt(72, 481, "Spring Modulith 경계", "h"))
+    A(txt(72, 481, "Spring Modulith 경계 — 22개 중 도메인 7", "h"))
     mods = "chat · walk · community · place · schedule · moderation · family"
     A(txt(72, 500, mods, "m"))
 
@@ -276,7 +276,7 @@ DEP_W, DEP_H = 920, 560
 
 DEP_TITLE = "배포 중 끊김 — 전과 후"
 DEP_DESC = (
-    "전에는 docker compose up -d 한 줄로 배포했고 평균 36.0초가 끊겼다. "
+    "전에는 docker compose up -d 한 줄로 배포했고 평균 35.2초가 끊겼다. "
     "그 36초의 98퍼센트는 포트는 열렸는데 스프링이 아직 부팅 중인 구간이었다. "
     "후에는 쉬는 쪽을 새 이미지로 띄우고 healthy 가 된 것을 확인한 뒤 옛 쪽을 내린다. "
     "배포에 걸리는 시간은 44초로 늘었지만 그동안 사용자는 옛 쪽을 쓰고 있어서 "
@@ -288,7 +288,7 @@ def dep_body() -> str:
     o = []
     A = o.append
     A(txt(40, 40, "배포 중 끊김 — 전과 후", "tb"))
-    A(txt(40, 62, "스테이징에서 서버 안으로 0.2초 간격 600표본 · 2026-10-21  (운영 숫자는 README 표)", "s"))
+    A(txt(40, 62, "스테이징 · 서버 내부에서 0.2초 간격 600회 측정 · 2026-10-22  (운영 수치는 README 표)", "s"))
 
     L, R = 40, 700           # 눈금 왼쪽 / 오른쪽
     def tx(sec, span):       # 초 → x 좌표
@@ -319,9 +319,9 @@ def dep_body() -> str:
           "끄는 쪽을 아무리 빨리 해도 안 줄어든다", "s", "middle"))
 
     A(rect(724, 148, 156, 92, "warnb"))
-    A(txt(802, 186, "36.0초", "warn-n", "middle"))
-    A(txt(802, 208, "평균 끊김", "s", "middle"))
-    A(txt(802, 226, "실패 157건 / 600", "s", "middle"))
+    A(txt(802, 186, "35.2초", "warn-n", "middle"))
+    A(txt(802, 208, "평균 끊김 (4회)", "s", "middle"))
+    A(txt(802, 226, "실패 154건 / 600", "s", "middle"))
 
     # ── 후 ──
     A(rect(40, 286, 840, 196, "band"))
