@@ -1,12 +1,15 @@
 name: 버그 (Bug)
 description: 의도대로 동작하지 않음
-title: "[BE] "
+title: ""
 labels: ["type/bug"]
 body:
   - type: markdown
     attributes:
       value: |
         **재현 절차가 없는 버그 리포트는 고칠 수 없습니다.** 재현이 안 되면 그것도 적어주세요.
+
+        **목표(🎯) 아래에 만듭니다.** 만든 뒤 오른쪽 `Relationships` 에서 부모 이슈로 목표를 고르거나, 목표 이슈의 `Sub-issues` 에서 붙입니다.
+        라벨은 **3개까지** — 기능 `area/` 1 · 종류 `type/` 1 · 우선순위 `prio/` 1. 규칙은 [프로젝트 규약 #4](https://github.com/sanghyunbang/pawloop/issues/4) 에 있습니다.
   - type: textarea
     id: symptom
     attributes:

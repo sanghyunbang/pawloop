@@ -1,17 +1,18 @@
-name: Epic — 여러 이슈를 묶는 상위 작업
-description: PR 하나로 안 끝나거나, 백엔드·프론트에 동시에 걸치는 큰 작업
-title: "[Epic] "
+name: 목표(🎯) — 하위 이슈를 묶는 큰 일
+description: 끝이 있는 큰 일 — 하위 이슈가 모두 닫히면 끝난다
+title: "🎯 "
 labels: ["meta/epic"]
 body:
   - type: markdown
     attributes:
       value: |
-        Epic에는 **우선순위 라벨을 붙이지 않습니다.** 서브이슈들이 각자 우선순위를 가집니다.
-        만든 뒤 `Sub-issues` 섹션에서 서브이슈를 연결하면 진행률이 자동으로 표시됩니다.
+        모든 작업은 어느 목표의 하위 이슈입니다. 만든 뒤 `Sub-issues` 섹션에서 하위 이슈를 연결하면 진행률이 자동으로 표시됩니다.
+        라벨은 `meta/epic`(자동) · 기능 `area/` 1 · 우선순위 `prio/` 1 — 우선순위는 **목표끼리의 순서**입니다.
+        만든 뒤 [목표 목록 #20](https://github.com/sanghyunbang/pawloop/issues/20) 의 표에 한 줄 더해 주세요.
   - type: textarea
     id: goal
     attributes:
-      label: 목표 — 무엇이 끝나면 이 Epic이 닫히나
+      label: 무엇이 끝나면 이 목표가 닫히나
     validations:
       required: true
   - type: textarea
@@ -34,7 +35,7 @@ body:
   - type: textarea
     id: dod
     attributes:
-      label: Epic 완료 조건
+      label: 목표 완료 조건
       description: 서브이슈 전체를 관통하는 인수 조건. 사용자가 실제로 할 수 있게 되는 일로 쓰면 좋습니다.
     validations:
       required: true
