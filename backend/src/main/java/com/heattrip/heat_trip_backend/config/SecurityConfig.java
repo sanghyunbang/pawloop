@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -67,6 +68,9 @@ public class SecurityConfig {
 
     /** 채팅 본문 크기. 읽기 전에 막아야 해서 체인 <b>맨 앞</b>이다 (#129). */
     private final ChatBodySizeLimitFilter chatBodySizeLimitFilter;
+
+    /** 운영자 경로({@code /internal/**})를 들어온 커넥터로 가른다 (#718). */
+    private final OperatorChannel operatorChannel;
 
     /** 앱이 만든 state 를 소셜 왕복 동안 세션에 붙들어 둔다. (이슈 #14) */
     private final OAuthAppStateFilter oAuthAppStateFilter;
@@ -170,6 +174,14 @@ public class SecurityConfig {
             .formLogin(login -> login.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // ── 운영자 경로는 맨 앞에서, 토큰이 아니라 들어온 커넥터로 가른다 (#718) ──────
+                //
+                // JWT 를 보지 않는다. 운영자 권한을 토큰에 실으면 토큰을 훔치거나 users.role 을 바꾸는
+                // 것만으로 남의 글을 지울 수 있다. 컨테이너 안 루프백에만 묶인 커넥터로 들어온 요청만
+                // 통과한다 — 이유는 OperatorChannel javadoc. 본 커넥터로 오면 토큰이 없을 때 401,
+                // 있을 때(서명이 맞고 role 이 무엇이든) 403 이다.
+                .requestMatchers(OperatorChannel.PATH_PATTERN).access((authentication, context) ->
+                        new AuthorizationDecision(operatorChannel.carries(context.getRequest())))
                 .requestMatchers(publicMatchers.toArray(String[]::new)).permitAll()
                 // ── 커뮤니티 읽기는 인증이 선택이다 (ADR-0016 결정 3 · #170) ────────
                 //

@@ -141,6 +141,55 @@ class CaddyIsTheOnlyDoorTest {
     }
 
     /** 주석 줄을 뺀 설정 — 주석이 만족시킬 수 있는 검사는 검사가 아니다. */
+    /**
+     * 운영자 경로({@code /internal}) 는 Caddy 의 <b>어느 문으로도</b> 앱에 넘기지 않는다 — 이슈 #718.
+     *
+     * <p>앱이 이미 막는다 — 운영자 경로는 앱 컨테이너 안의 루프백 커넥터로 온 요청만 받는다
+     * ({@code config.OperatorChannel}). 이 검사는 그 겹 방어를 잰다: 앱 쪽 규칙이 언젠가 빠져도 Caddy 를 지나는
+     * 요청은 앱에 닿지 않아야 한다. 공개 도메인뿐 아니라 서버 안쪽 문({@code :8080})까지, 앱으로 넘기는 블록마다.
+     */
+    @Test
+    @DisplayName("앱으로 넘기는 블록마다 /internal 을 404 로 먼저 끊는다")
+    void operatorPathIsClosedOnEveryDoor() {
+        List<List<String>> forwarding = siteBlocks().stream()
+                .filter(block -> block.contains("import app_upstream"))
+                .toList();
+        assertThat(forwarding).as("앱으로 넘기는 블록을 하나도 못 찾았다 — 읽기가 늙었다").hasSizeGreaterThanOrEqualTo(2);
+
+        for (List<String> block : forwarding) {
+            String head = block.get(0);
+            assertThat(block).as("%s — /internal matcher 가 없다", head).contains("@internal path /internal /internal/*");
+            int internal = block.indexOf("handle @internal {");
+            assertThat(internal).as("%s — /internal 을 끊는 handle 이 없다", head).isNotNegative();
+            assertThat(block.get(internal + 1)).as("%s — /internal 은 404 로 끝나야 한다", head).isEqualTo("respond 404");
+            // 비교 대상은 조건 없는 '나머지 전부' 블록이다. 앞쪽의 health 전용 handle 안에도 import app_upstream 이
+            // 있어서, 그 줄과 비교하면 멀쩡한 설정이 빨개진다.
+            int catchAll = block.indexOf("handle {");
+            assertThat(catchAll).as("%s — 앱으로 넘기는 줄이 '나머지 전부' handle 안에 있어야 한다", head).isPositive();
+            assertThat(internal)
+                    .as("%s — /internal 을 끊는 블록이 '나머지 전부' 보다 앞에 있어야 한다", head)
+                    .isLessThan(catchAll);
+        }
+    }
+
+    /** 최상위 블록(사이트·스니펫·전역 옵션)을 하나씩 — 각 블록은 주석 없는 줄 목록이고 첫 줄이 머리다. */
+    private static List<List<String>> siteBlocks() {
+        List<List<String>> blocks = new java.util.ArrayList<>();
+        List<String> current = null;
+        int depth = 0;
+        for (String line : code()) {
+            if (depth == 0 && line.endsWith("{")) {
+                current = new java.util.ArrayList<>();
+                blocks.add(current);
+            }
+            if (current != null) {
+                current.add(line);
+            }
+            depth += line.chars().filter(c -> c == '{').count() - line.chars().filter(c -> c == '}').count();
+        }
+        return blocks;
+    }
+
     private static List<String> code() {
         Path path = TestProjectPaths.requireFile(CADDYFILE);
         try {

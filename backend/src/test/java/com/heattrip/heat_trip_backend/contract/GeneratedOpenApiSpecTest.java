@@ -108,6 +108,21 @@ class GeneratedOpenApiSpecTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("운영자 경로(/internal)는 생성된 계약에 나오지 않는다 — 앱이 부를 수 없는 경로다(#718)")
+    void generatedSpec_hidesTheOperatorPaths() throws Exception {
+        List<String> internal = new ArrayList<>();
+        generatedSpec().path("paths").fieldNames().forEachRemaining(path -> {
+            if (path.startsWith("/internal")) {
+                internal.add(path);
+            }
+        });
+
+        assertThat(internal)
+                .as("운영자 컨트롤러에 @Hidden 이 빠졌다 — 공개 저장소의 문서가 부를 수 없는 경로를 광고한다")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("GET /auth/me 는 생성된 계약에서도 요청 파라미터가 하나도 없다")
     void generatedSpec_authMeTakesNoParameters() throws Exception {
         JsonNode authMeGet = generatedSpec().path("paths").path("/auth/me").path("get");
