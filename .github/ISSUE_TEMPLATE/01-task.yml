@@ -1,15 +1,15 @@
 name: 작업 (Task)
 description: 기능 추가 · 개선 · 리팩터링 — 코드를 바꾸는 일반 작업
-title: "[BE] "
+title: ""
 labels: ["type/feature"]
 body:
   - type: markdown
     attributes:
       value: |
-        제목은 `[BE]` `[FE]` `[Infra]` `[Docs]` 중 하나로 시작하고, **결과 상태**를 적어주세요.
-        예: `[BE] JWT subject를 users.id로 통일 — 인증 주체 추출 한 곳으로`
+        제목에는 **결과 상태**를 적어주세요. 예: `JWT subject를 users.id로 통일 — 인증 주체 추출 한 곳으로`
 
-        우선순위 판정 기준은 [프로젝트 규약 #4](https://github.com/sanghyunbang/pawloop/issues/4)를 따릅니다.
+        **목표(🎯) 아래에 만듭니다.** 만든 뒤 오른쪽 `Relationships` 에서 부모 이슈로 목표를 고르거나, 목표 이슈의 `Sub-issues` 에서 붙입니다.
+        라벨은 **3개까지** — 기능 `area/` 1 · 종류 `type/` 1 · 우선순위 `prio/` 1. 규칙은 [프로젝트 규약 #4](https://github.com/sanghyunbang/pawloop/issues/4) 에 있습니다.
   - type: textarea
     id: why
     attributes:

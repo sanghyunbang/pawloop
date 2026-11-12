@@ -1,13 +1,14 @@
 name: 결정 필요 (ADR 후보)
 description: 되돌리기 비싼 선택 — 논의하고 ADR로 기록할 사안
 title: "[결정] "
-labels: ["type/adr", "status/needs-decision"]
+labels: ["type/adr"]
 body:
   - type: markdown
     attributes:
       value: |
         판단 기준: **6개월 뒤에 "왜 이렇게 했지?"라는 질문이 나올 만한가.**
         결정되면 `docs/99-decisions/decision-log.md`에 ADR로 기록하고, 이 이슈에 요약과 링크를 남긴 뒤 닫습니다.
+        결정을 기다리는 동안은 프로젝트 보드에서 Status 를 **확인 대기**로 둡니다(상태 라벨은 쓰지 않습니다).
   - type: textarea
     id: context
     attributes:
