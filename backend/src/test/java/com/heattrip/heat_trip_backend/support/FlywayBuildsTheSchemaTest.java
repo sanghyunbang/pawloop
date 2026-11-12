@@ -4,6 +4,7 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -17,13 +18,16 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * <b>빈 DB 에 앱을 올리면 Flyway 가 스키마를 만든다</b> — 이슈 #592.
@@ -42,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>표가 이미 있는 DB → <b>안 돌고 기준점만 찍는다</b>. 지금 dev 와 앞으로 옮겨 올 운영이
  *       이 경로다 — 이 PR 로 아무것도 안 바뀌어야 한다
  *   <li>{@code V1} 이 만드는 표가 파일에 적힌 것과 <b>정확히 같다</b>
+ *   <li>마지막 V 파일까지 돈 DB 에서 <b>바로 앞 릴리스가 부팅한다</b> — 배포를 되돌릴 길(#718)
  * </ol>
  */
 class FlywayBuildsTheSchemaTest {
@@ -129,15 +134,50 @@ class FlywayBuildsTheSchemaTest {
                 .contains("1");
     }
 
+    @Test
+    @DisplayName("배포를 되돌려도 부팅한다 — 앞 릴리스는 자기가 모르는 마지막 V 파일을 건너뛴다")
+    void thePreviousReleaseStillBoots(@TempDir Path previousRelease) throws Exception {
+        String schema = freshSchema("rolled_back");
+        flywayFor(schema).migrate();
+
+        // 바로 앞 릴리스의 db/migration — 마지막 V 파일 하나만 없다.
+        List<Path> files = migrationFiles();
+        assertThat(files).as("V 파일이 하나뿐이면 되돌릴 앞 릴리스가 없다").hasSizeGreaterThan(1);
+        for (Path file : files.subList(0, files.size() - 1)) {
+            Files.copy(file, previousRelease.resolve(file.getFileName()));
+        }
+
+        // 운영에서 이 길은 이렇게 온다: 새 이미지가 V 파일을 돌린 뒤 문제가 보여 앞 이미지를 다시 띄운다.
+        // 그 이미지의 Flyway 는 DB 이력에서 자기가 모르는 버전을 본다. 그것을 "고장" 으로 읽으면
+        // validate-on-migrate 가 부팅을 멈추고, 되돌리기가 서버를 내리는 일이 된다.
+        assertThatCode(() -> flywayFor(schema, "filesystem:" + previousRelease).migrate())
+                .as("""
+                        마지막 V 파일을 돌린 DB 에서 앞 릴리스가 부팅을 멈춘다 — 배포를 되돌릴 수 없다. \
+                        스프링 부트는 spring.flyway.ignore-migration-patterns 를 *:future 로 넘긴다 \
+                        (FlywayProperties 의 기본값). 그 설정을 바꿨는지 본다.""")
+                .doesNotThrowAnyException();
+    }
+
     // ─────────────────────────── 지그 ───────────────────────────
 
     private static Flyway flywayFor(String schema) {
+        return flywayFor(schema, MIGRATIONS);
+    }
+
+    /**
+     * 운영이 넘기는 것과 같은 설정 — {@code application-prod.properties} 의 세 줄과, 스프링 부트가
+     * 따로 적지 않아도 넘기는 {@code *:future}. 스프링 부트 3.5 의 {@code FlywayProperties} 가
+     * 그 값을 기본으로 갖는다(jar 의 생성자에서 확인). 여기 적어 두는 것은 Flyway 자체의 기본값이
+     * 바뀌어도 이 검사가 운영과 같은 것을 재게 하려는 것이다.
+     */
+    private static Flyway flywayFor(String schema, String location) {
         return Flyway.configure()
                 .dataSource(urlFor(schema), ROOT, MYSQL.getPassword())
-                .locations(MIGRATIONS)
+                .locations(location)
                 .baselineOnMigrate(true)
                 .baselineVersion("1")
                 .validateOnMigrate(true)
+                .ignoreMigrationPatterns("*:future")
                 .load();
     }
 
@@ -211,6 +251,23 @@ class FlywayBuildsTheSchemaTest {
             }
         }
         return rows;
+    }
+
+    /** {@code db/migration} 의 V 파일을 <b>번호 순</b>으로. 글자 순이면 V10 이 V2 앞에 온다. */
+    private static List<Path> migrationFiles() {
+        Pattern version = Pattern.compile("^V(\\d+)__.*\\.sql$");
+        try (var files = Files.list(BASELINE.getParent())) {
+            return files
+                    .filter(f -> version.matcher(f.getFileName().toString()).matches())
+                    .sorted(Comparator.comparingInt(f -> {
+                        Matcher matcher = version.matcher(f.getFileName().toString());
+                        matcher.matches();
+                        return Integer.parseInt(matcher.group(1));
+                    }))
+                    .toList();
+        } catch (IOException e) {
+            throw new UncheckedIOException("마이그레이션 폴더를 못 읽었다", e);
+        }
     }
 
     /** {@code db/migration} 의 V 파일 수. 손으로 적으면 늘 때마다 낡는다. */

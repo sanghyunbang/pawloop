@@ -7,8 +7,14 @@
  * {@code @CurrentUser User} 가 필요하다. 그 예외를 {@code moderation} 에 여는 대신 층을
  * 얇게 얹는 쪽을 골랐다.
  *
- * <p>여기 있는 것은 컨트롤러와 요청 record 뿐이다. 판단은 전부
+ * <p>가리기에 대해 여기 있는 것은 컨트롤러와 요청 record 뿐이다. 판단은 전부
  * {@link com.heattrip.heat_trip_backend.moderation.Blocks} 가 한다.
+ *
+ * <h2>운영자 경로도 여기 있다 — 이슈 #718</h2>
+ * <p>{@code /internal/moderation/**} 는 신고를 보고 처리한다. 처리하려면 {@code moderation}(신고·조치 기록)과
+ * {@code community}(신고된 글·댓글 지우기)를 <b>한 트랜잭션에서</b> 함께 불러야 하는데, {@code moderation} 은
+ * 나가는 참조가 0이어야 한다. 그래서 둘을 잇는 일({@code OperatorModeration})을 이 층이 맡는다. 아래
+ * {@code "community"} 의존은 그 하나({@code community.CommunityTakedown}) 때문이다.
  *
  * <h2>신고는 왜 여기 없나</h2>
  * <p>신고 경로는 {@code /api/community/posts/{postId}/reports} 라 <b>대상이 실재하는지·누가
@@ -17,7 +23,7 @@
  */
 @ApplicationModule(
         displayName = "Moderation Web Adapter",
-        allowedDependencies = { "moderation", "user", "user :: entity" })
+        allowedDependencies = { "moderation", "community", "user", "user :: entity" })
 package com.heattrip.heat_trip_backend.moderationweb;
 
 import org.springframework.modulith.ApplicationModule;

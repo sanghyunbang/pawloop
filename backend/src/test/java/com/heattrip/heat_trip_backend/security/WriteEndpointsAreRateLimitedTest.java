@@ -71,6 +71,10 @@ class WriteEndpointsAreRateLimitedTest {
         UNMETERED_ON_PURPOSE.put("DELETE /api/chat/rooms/{roomId}/invites/{code}",
                 "자기 방의 코드를 죽이는 것뿐이라 반복해도 새로 생기는 것이 없다. 유출 대응을"
                         + " 한도로 막으면 그게 더 나쁘다 — ApiRateLimitFilter 에 같은 문장이 있다.");
+        UNMETERED_ON_PURPOSE.put("POST /internal/moderation/reports/{reportId}/resolve",
+                "운영자 통로다(#718). 앱 컨테이너 안의 루프백 커넥터로만 들어오고 공개 문에서는 403 이라"
+                        + " 부르는 사람이 서버에 들어간 운영자뿐이다. 신고가 몰린 날 한꺼번에 처리하는 것을"
+                        + " 한도로 막을 이유가 없다 — 한 신고에 판단은 한 번이라 반복해도 줄이 안 는다(409).");
     }
 
     @Test
