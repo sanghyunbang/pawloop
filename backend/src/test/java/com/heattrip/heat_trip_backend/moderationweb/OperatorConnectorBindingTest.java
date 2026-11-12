@@ -1,5 +1,9 @@
 package com.heattrip.heat_trip_backend.moderationweb;
 
+import com.heattrip.heat_trip_backend.moderation.ReportReason;
+import com.heattrip.heat_trip_backend.moderation.ReportSnapshotInput;
+import com.heattrip.heat_trip_backend.moderation.ReportTarget;
+import com.heattrip.heat_trip_backend.moderation.Reports;
 import com.heattrip.heat_trip_backend.support.AbstractMySqlIntegrationTest;
 
 import org.apache.catalina.connector.Connector;
@@ -11,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.web.embedded.tomcat.TomcatWebServer;
 import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -18,10 +23,14 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,6 +53,8 @@ class OperatorConnectorBindingTest extends AbstractMySqlIntegrationTest {
 
     @LocalServerPort private int serverPort;
     @Autowired private ServletWebServerApplicationContext context;
+    @Autowired private Reports reports;
+    @Autowired private JdbcTemplate jdbc;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
@@ -72,6 +83,40 @@ class OperatorConnectorBindingTest extends AbstractMySqlIntegrationTest {
         assertThat(statusOf("http://127.0.0.1:" + serverPort + path))
                 .as("본 포트에서는 토큰이 없으니 401")
                 .isEqualTo(401);
+    }
+
+    /**
+     * 운영 스크립트가 보내는 모양 그대로 보낸다 — {@code curl --data-urlencode} 는 {@code Content-Type} 에 charset 을
+     * 안 붙이고 공백을 {@code %20} 으로 보낸다(#718 둘째 조각).
+     *
+     * <p>가짜 요청의 {@code MockMvc.param()} 은 본문을 거치지 않아서 이 해석을 재지 못한다. charset 이 없는 폼을 서블릿
+     * 기본값(ISO-8859-1)으로 풀면 한글 사유가 깨진 채 조치 기록에 남는다 — 지운 이유를 나중에 못 읽는다.
+     */
+    @Test
+    @DisplayName("운영 스크립트와 같은 폼 본문(charset 없음)으로 처리하면 한글 사유가 그대로 기록된다")
+    void theScriptsFormBodyKeepsTheReasonIntact() throws Exception {
+        long reportId = reports.file(71_001L, 71_002L, ReportReason.SPAM, null,
+                List.of(ReportSnapshotInput.target(ReportTarget.post(71_003L), 71_002L, "쓴 사람", "제목", "본문",
+                        Instant.now()))).reportId();
+        String reason = "광고 \"반복\" & 100% + 첫 줄\n둘째 줄";
+        String form = "decision=dismiss&reason=" + curlEncoded(reason) + "&actor=" + curlEncoded("운영자");
+
+        HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + OPERATOR_PORT + "/internal/moderation/reports/" + reportId + "/resolve"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        assertThat(jdbc.queryForObject("SELECT reason FROM moderation_action WHERE report_id = ?", String.class, reportId))
+                .isEqualTo(reason);
+        assertThat(jdbc.queryForObject("SELECT actor FROM moderation_action WHERE report_id = ?", String.class, reportId))
+                .isEqualTo("운영자");
+    }
+
+    /** {@code curl --data-urlencode} 처럼 — UTF-8 바이트를 {@code %XX} 로, 공백은 {@code %20}. */
+    private static String curlEncoded(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     private int statusOf(String url) throws Exception {
