@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 신고 접수 — 이 모듈의 공개 표면이다. 이슈 #166.
@@ -199,6 +200,34 @@ public class Reports {
                     "같은 대상이 두 번 실렸습니다. 상한이 그만큼 우회됩니다.");
         }
     }
+    /**
+     * 신고 한 건과 그 사본 전부 — 운영자가 판단하는 재료(#718). 없는 번호면 빈 값이다.
+     *
+     * <p>사본은 role 로 가른다. 저장소 쿼리는 role 의 글자순이라 {@code context} 가 먼저 오므로, 순서에
+     * 기대지 않는다({@link ReportCase} javadoc).
+     */
+    public Optional<ReportCase> caseOf(long reportId) {
+        return reports.findById(reportId).map(report -> {
+            List<ReportCase.Line> targets = new ArrayList<>();
+            List<ReportCase.Line> context = new ArrayList<>();
+            for (ReportSnapshot snapshot : snapshots.findByReportIdOrderByRoleAscIdAsc(reportId)) {
+                (ROLE_TARGET.equals(snapshot.getRole()) ? targets : context).add(lineOf(snapshot));
+            }
+            return new ReportCase(report.getId(), report.getReason(), report.getMemo(),
+                    report.getReporterUserId(), report.getReportedUserId(),
+                    ModerationTime.toInstant(report.getCreatedAt()),
+                    List.copyOf(targets), List.copyOf(context));
+        });
+    }
+
+    private static final String ROLE_TARGET = "target";
+
+    private static ReportCase.Line lineOf(ReportSnapshot snapshot) {
+        return new ReportCase.Line(snapshot.getTargetType(), snapshot.getTargetId(), snapshot.getTargetOrdinal(),
+                snapshot.getAuthorUserId(), snapshot.getAuthorName(), snapshot.getTitle(), snapshot.getBody(),
+                snapshot.getContentType(), ModerationTime.toInstant(snapshot.getOccurredAt()));
+    }
+
     /** 공백뿐이면 없는 것으로 본다. 넘치면 자른다. */
     private static String trimmedMemo(String memo) {
         if (memo == null) {

@@ -85,6 +85,16 @@
 		respond 404
 	}
 
+	# ── 운영자 경로 (#718) — 밖에서는 존재하지도 않는다 ───────────────────
+	#
+	# 앱이 이미 막는다 — /internal/** 는 컨테이너 안 루프백 커넥터로 들어온 요청만 받고, 여기서
+	# 넘기는 요청은 8080 으로 가므로 401/403 이다(config/OperatorChannel). 이 블록은 겹 방어다:
+	# 앱 쪽 규칙이 언젠가 빠져도 밖에서 오는 요청은 앱에 닿지 않는다. 위 actuator 와 같은 모양.
+	@internal path /internal /internal/*
+	handle @internal {
+		respond 404
+	}
+
 	# ── 나머지 전부 ─────────────────────────────────────────────────
 	handle {
 		import app_upstream
@@ -162,7 +172,18 @@
 #   운영      127.0.0.1  — 루프백뿐. 밖에서 못 닿는다
 #   스테이징  0.0.0.0    — 보안그룹이 허용한 IP 둘에서만 닿는다
 # 둘 다 이 변경 전과 같다. 앱이 그 포트를 쥐고 있을 때도 똑같았다.
+#
+# **운영자 경로(/internal)는 여기서도 404 다 — #718.** actuator 와 달리 이 자리에서 쓸 일이
+# 없다. 운영자 호출은 Caddy 를 지나지 않고 앱 컨테이너 안의 루프백 커넥터로 바로 간다
+# (config/OperatorChannel). 그래서 "Caddy 는 어느 문으로든 /internal 을 넘기지 않는다" 가
+# 늘 참이 되게 둔다 — CaddyIsTheOnlyDoorTest 가 앱으로 넘기는 자리마다 이것을 잰다.
 :8080 {
 	encode gzip
-	import app_upstream
+	@internal path /internal /internal/*
+	handle @internal {
+		respond 404
+	}
+	handle {
+		import app_upstream
+	}
 }
