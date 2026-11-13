@@ -36,6 +36,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>그래서 <b>둘을 각각 빈 DB 에 적용해 나온 스키마</b>를 비교한다. 이러면 {@code V} 가 몇
  * 개로 늘든 계속 유효하다.
+ *
+ * <h2>컬럼만으로는 모자란다 — 이슈 #718</h2>
+ *
+ * <p>통합 테스트는 Flyway 를 끄고 <b>엔티티에서</b> 표를 만든다({@code AbstractMySqlIntegrationTest}).
+ * 그래서 {@code V} 파일에 손으로 적은 CHECK·FK·인덱스가 엔티티와 다르면, 테스트가 확인한 규칙과
+ * <b>운영 DB 가 지키는 규칙이 달라지는데</b> 어떤 검사도 그것을 안 봤다. 컬럼 비교는 타입과
+ * 널허용만 본다. 둘째 검사가 그 셋을 이름까지 대조한다.
  */
 class CanonicalSchemaMatchesMigrationsTest {
 
@@ -64,6 +71,80 @@ class CanonicalSchemaMatchesMigrationsTest {
                           ./gradlew test --tests '*SchemaDdlDriftTest*'
                           cp build/generated-schema.sql mysql/init/01_schema.sql""")
                 .isEqualTo(fromMigrations);
+    }
+
+    @Test
+    @DisplayName("CHECK·FK·인덱스도 이름까지 같다 — 통합 테스트는 엔티티에서 표를 만들어 이것들을 안 본다")
+    void theConstraintsAgreeToo() throws Exception {
+        Map<String, List<String>> fromMigrations;
+        try (ScratchDatabase migrated = ScratchDatabase.withMigrations()) {
+            fromMigrations = constraints(migrated);
+        }
+
+        Map<String, List<String>> fromCopy;
+        try (ScratchDatabase copied = ScratchDatabase.withCommittedSchema()) {
+            fromCopy = constraints(copied);
+        }
+
+        for (Map.Entry<String, List<String>> expected : fromMigrations.entrySet()) {
+            // 조회가 조용히 0줄을 돌려주면 아래 비교가 빈 목록끼리 초록이 된다.
+            assertThat(expected.getValue())
+                    .as("마이그레이션에서 %s 를 하나도 못 읽었다 — 조회가 늙었다", expected.getKey())
+                    .isNotEmpty();
+            assertThat(fromCopy.get(expected.getKey()))
+                    .as("""
+                            %s 가 마이그레이션(운영)과 읽기용 사본(엔티티)에서 다르다.
+
+                            통합 테스트는 엔티티에서 표를 만든다. 이대로 두면 테스트가 확인한 규칙과 \
+                            운영 DB 가 지키는 규칙이 다르다.
+
+                            고치는 법: 어느 쪽이 맞는지 정한다. 아직 운영에 안 나간 V 파일이 틀렸으면 그 \
+                            파일을 고치고, 이미 나간 것이면 새 V 파일로 따라오게 한다. 엔티티가 틀렸으면 \
+                            엔티티를 고치고 사본을 다시 뽑는다.""", expected.getKey())
+                    .containsExactlyElementsOf(expected.getValue());
+        }
+    }
+
+    /**
+     * 종류 → 한 줄씩. <b>이름까지</b> 넣는다 — 위반 메시지(MySQL 3819)와 되돌리기 문장이 이름으로
+     * 그것을 가리키므로, 규칙이 같아도 이름이 다르면 운영에서 찾을 수가 없다.
+     */
+    private static Map<String, List<String>> constraints(ScratchDatabase db) throws SQLException {
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        out.put("CHECK", db.queryStrings("""
+                SELECT CONCAT_WS(' ', tc.table_name, cc.constraint_name, cc.check_clause)
+                FROM information_schema.check_constraints cc
+                JOIN information_schema.table_constraints tc
+                  ON tc.constraint_schema = cc.constraint_schema
+                 AND tc.constraint_name = cc.constraint_name
+                 AND tc.constraint_type = 'CHECK'
+                WHERE cc.constraint_schema = DATABASE()
+                ORDER BY 1
+                """));
+        out.put("FK", db.queryStrings("""
+                SELECT CONCAT_WS(' ', k.table_name, k.constraint_name, k.column_name, '->',
+                                 k.referenced_table_name, k.referenced_column_name,
+                                 'on delete', r.delete_rule, 'on update', r.update_rule)
+                FROM information_schema.key_column_usage k
+                JOIN information_schema.referential_constraints r
+                  ON r.constraint_schema = k.constraint_schema
+                 AND r.constraint_name = k.constraint_name
+                 AND r.table_name = k.table_name
+                WHERE k.table_schema = DATABASE()
+                  AND k.referenced_table_name IS NOT NULL
+                ORDER BY 1
+                """));
+        out.put("인덱스", db.queryStrings("""
+                SELECT CONCAT_WS(' ', table_name, index_name,
+                                 IF(non_unique = 0, 'unique', 'non-unique'),
+                                 GROUP_CONCAT(column_name ORDER BY seq_in_index))
+                FROM information_schema.statistics
+                WHERE table_schema = DATABASE()
+                  AND table_name <> 'flyway_schema_history'
+                GROUP BY table_name, index_name, non_unique
+                ORDER BY 1
+                """));
+        return out;
     }
 
     /** 표 → "컬럼 타입 널허용" 목록. {@code SchemaDdlDriftTest} 와 같은 방식으로 읽는다. */

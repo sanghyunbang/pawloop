@@ -1,5 +1,6 @@
 package com.heattrip.heat_trip_backend.community.service;
 
+import com.heattrip.heat_trip_backend.community.CommunityTakedown;
 import com.heattrip.heat_trip_backend.community.CommunityTime;
 import com.heattrip.heat_trip_backend.community.dto.PlaceSummaryResponse;
 import com.heattrip.heat_trip_backend.community.dto.BookmarkStateResponse;
@@ -42,6 +43,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Optional;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -76,7 +78,7 @@ import java.util.Set;
  */
 @Service
 @Transactional(readOnly = true)
-public class CommunityService {
+public class CommunityService implements CommunityTakedown {
 
     /** 계약의 {@code Board} enum. ASCII 키이고 화면 문구는 앱이 든다(ADR-0016). */
     static final Set<String> BOARDS = Set.of("walk_review", "pet_place", "health", "free", "brag");
@@ -750,11 +752,54 @@ public class CommunityService {
     public void deletePost(User me, long postId) {
         Post post = requirePost(postId);
         requireMine(post.getUser(), me.getId(), "글");
-        // 붙은 사진·영상은 글과 함께 사라진다 — 행도 S3 객체도 (#429). DB 의 CASCADE 로는 안
-        // 된다: media_objects 는 post 로 나가는 FK 가 없고(ref_type/ref_id 는 불투명한 쌍),
-        // 있어도 S3 의 파일은 DB 가 모른다.
-        media.detachAll(MediaAttachment.REF_POST, String.valueOf(postId));
+        erase(post);
+    }
+
+    /**
+     * 글을 지우는 일 자체 — 작성자 삭제와 운영자 삭제(#718)가 함께 쓴다. 두 벌이면 한쪽만 사진을 떼게 된다.
+     *
+     * <p>붙은 사진·영상은 글과 함께 사라진다 — 행도 S3 객체도 (#429). DB 의 CASCADE 로는 안 된다:
+     * media_objects 는 post 로 나가는 FK 가 없고(ref_type/ref_id 는 불투명한 쌍), 있어도 S3 의 파일은 DB 가
+     * 모른다. 댓글·반응·저장은 FK 의 {@code ON DELETE CASCADE} 로 함께 사라진다.
+     */
+    private void erase(Post post) {
+        media.detachAll(MediaAttachment.REF_POST, String.valueOf(post.getId()));
         posts.delete(post);
+    }
+
+    /**
+     * 운영자가 신고된 글을 지운다(#718) — 작성자 확인 없이, 작성자 삭제와 같은 {@link #erase(Post)} 로.
+     *
+     * <p>사본은 <b>지우기 전에</b> 만든다. 사진을 떼는 호출이 영속성 컨텍스트를 비울 수 있어서, 지운 뒤에 읽으면
+     * 작성자 닉네임이 안 읽힐 수 있다. 탈퇴한 사람의 글이면 작성자 칸은 비어 있다.
+     */
+    @Override
+    @Transactional
+    public Optional<CommunityTakedown.Removed> removePost(long postId) {
+        return posts.findDetail(postId).map(post -> {
+            CommunityTakedown.Removed copy = new CommunityTakedown.Removed(
+                    ReportTarget.Type.COMMUNITY_POST.wireValue(), post.getId(),
+                    post.getUser() == null ? null : post.getUser().getId(),
+                    post.getUser() == null ? null : post.getUser().getNickname(),
+                    post.getTitle(), post.getBody(), CommunityTime.toInstant(post.getCreatedAt()));
+            erase(post);
+            return copy;
+        });
+    }
+
+    /** 운영자가 신고된 댓글을 지운다(#718) — 작성자 확인 없이. 사본은 지우기 전에. */
+    @Override
+    @Transactional
+    public Optional<CommunityTakedown.Removed> removeComment(long commentId) {
+        return comments.findById(commentId).map(comment -> {
+            CommunityTakedown.Removed copy = new CommunityTakedown.Removed(
+                    ReportTarget.Type.COMMUNITY_COMMENT.wireValue(), comment.getId(),
+                    comment.getUser() == null ? null : comment.getUser().getId(),
+                    comment.getUser() == null ? null : comment.getUser().getNickname(),
+                    null, comment.getBody(), CommunityTime.toInstant(comment.getCreatedAt()));
+            comments.delete(comment);
+            return copy;
+        });
     }
 
     /**

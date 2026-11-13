@@ -315,6 +315,32 @@ CREATE TABLE `media_objects` (
   CONSTRAINT `ck_media_status` CHECK ((`status` in (_utf8mb4'pending',_utf8mb4'ready')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE `moderation_action` (
+  `created_at` datetime(6) NOT NULL,
+  `ends_at` datetime(6) DEFAULT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `kind` varchar(8) NOT NULL,
+  `occurred_at` datetime(6) DEFAULT NULL,
+  `report_id` bigint DEFAULT NULL,
+  `subject_user_id` bigint DEFAULT NULL,
+  `target_id` bigint DEFAULT NULL,
+  `target_type` varchar(24) DEFAULT NULL,
+  `actor` varchar(64) NOT NULL,
+  `title` varchar(200) DEFAULT NULL,
+  `reason` varchar(500) NOT NULL,
+  `author_name` varchar(255) DEFAULT NULL,
+  `body` text,
+  PRIMARY KEY (`id`),
+  KEY `idx_moderation_action_subject` (`subject_user_id`,`id`),
+  KEY `idx_moderation_action_report` (`report_id`),
+  CONSTRAINT `fk_moderation_action_report` FOREIGN KEY (`report_id`) REFERENCES `report` (`id`),
+  CONSTRAINT `chk_moderation_action_ends_only_on_suspend` CHECK (((`kind` = _utf8mb4'suspend') or (`ends_at` is null))),
+  CONSTRAINT `chk_moderation_action_kind` CHECK ((`kind` in (_utf8mb4'remove',_utf8mb4'suspend',_utf8mb4'lift',_utf8mb4'dismiss'))),
+  CONSTRAINT `chk_moderation_action_remove_has_copy` CHECK (((`kind` <> _utf8mb4'remove') or ((`target_type` is not null) and (`target_id` is not null) and (`body` is not null)))),
+  CONSTRAINT `chk_moderation_action_standing_has_subject` CHECK (((`kind` not in (_utf8mb4'suspend',_utf8mb4'lift')) or (`subject_user_id` is not null))),
+  CONSTRAINT `chk_moderation_action_target_type` CHECK (((`target_type` is null) or (`target_type` in (_utf8mb4'community_post',_utf8mb4'community_comment',_utf8mb4'chat_message'))))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE `password_reset` (
   `attempts` int NOT NULL,
   `created_at` datetime(6) NOT NULL,

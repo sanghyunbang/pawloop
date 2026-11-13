@@ -76,6 +76,7 @@ public final class ModuleTables {
             Map.entry("user_consent", "consent"),
             Map.entry("report", "moderation"),
             Map.entry("report_snapshot", "moderation"),
+            Map.entry("moderation_action", "moderation"),
             Map.entry("user_block", "moderation"),
             Map.entry("schedule", "schedule"),
             Map.entry("schedule_exception", "schedule"));

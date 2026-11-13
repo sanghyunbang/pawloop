@@ -236,7 +236,7 @@ bash scripts/local-ci.sh backend    # 하나만 (backend | app | docs)
 | [구현 현황](docs/05-build/implementation-status.md) | 화면·기능이 지금 어디까지 와 있는가 |
 | [결정 기록(ADR) 23건](docs/99-decisions/decision-log.md) | 무엇을 **고르지 않았는지**까지 적혀 있습니다 |
 | [시스템 개요](docs/02-architecture/system-overview.md) · [백엔드 구조](docs/02-architecture/backend-structure.md) · [프론트 구조](docs/02-architecture/frontend-structure.md) | 구성도와 패키지 규약 |
-| [ERD](docs/03-database/erd.md) · [스키마](docs/03-database/schema.md) | 표 38개의 DDL·제약·인덱스와 그 이유 |
+| [ERD](docs/03-database/erd.md) · [스키마](docs/03-database/schema.md) | 표 39개의 DDL·제약·인덱스와 그 이유 |
 | [openapi.yaml](docs/04-api/openapi.yaml) · [API 명세](docs/04-api/api-spec.md) | 계약 정본과 사람이 읽는 판 |
 | [디자인 시스템](docs/01-design/design-system.md) · [화면 명세](docs/01-design/screen-spec.md) | 흰 바탕 · 외곽선 카드 · 코랄레드 하나 |
 | [제품 기획](docs/00-product/concept.md) · [페르소나](docs/00-product/personas.md) · [수익화](docs/00-product/monetization.md) | 왜 이 제품인가 |

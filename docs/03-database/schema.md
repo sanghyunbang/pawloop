@@ -15,7 +15,7 @@
 
 > 공간 컬럼은 MySQL 8.0 기준 `SRID 4326`을 명시해야 `SPATIAL INDEX`와 `ST_Distance_Sphere`가 올바르게 동작한다. 좌표 삽입 시 `ST_GeomFromText('POINT(127.0 37.5)', 4326)` 형태를 사용한다.
 
-> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **36개** 있고 **전부 이 문서에 절이 있다**(목록은 [부록 A](#부록-a-정본의-표-36개--어디에-적혀-있나)). 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 감정 여행·관광 수집 시절의 표는 #94 로 정본에서 빠졌다 — 운영 DB 에는 남아 있고(§18 아래 목록) 새 DB 에는 안 만들어진다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
+> **어디까지가 실재인가.** 정본은 `backend/mysql/init/01_schema.sql` 이고 JPA 엔티티가 그 스키마를 만든다 — 거기에 표가 **39개** 있고 **전부 이 문서에 절이 있다**(목록은 [부록 A](#부록-a-정본의-표-39개--어디에-적혀-있나)). 나머지 절(`§5 place` · `§10 bookmark`)은 아직 **계획**이며, 마일스톤이 오면 여기 적힌 모양대로 만든다. 감정 여행·관광 수집 시절의 표는 #94 로 정본에서 빠졌다 — 운영 DB 에는 남아 있고(§18 아래 목록) 새 DB 에는 안 만들어진다. `DocDriftTest` 가 정본·절 제목·부록·ERD 넷을 대조한다(#176).
 >
 > 절마다 제목에 **실재**를 달아 두었으니 목록을 세지 말고 제목을 보면 된다.
 
@@ -1727,9 +1727,69 @@ CREATE TABLE password_reset (
 
 마이그레이션 `db/migration/V3__password_reset.sql`.
 
+## 44. `moderation_action` — 운영자 조치 기록 (**실재**)
+
+신고를 처리한 결과를 한 줄씩 덧붙인다(#718). 고치거나 지우지 않는다. 운영자는 앱이 아니라 서버에서 `backend/scripts/moderate.sh` 로 처리한다 — 운영자 경로(`/internal/**`)는 앱 컨테이너 안의 루프백 커넥터로만 열리고, 공개 문으로는 어떤 토큰으로도 403 이다.
+
+```sql
+CREATE TABLE moderation_action (
+  id              BIGINT       NOT NULL AUTO_INCREMENT,
+  kind            VARCHAR(8)   NOT NULL COMMENT 'remove · dismiss · suspend · lift',
+  report_id       BIGINT       NULL     COMMENT '신고 없이 한 정지·해제면 비어 있다',
+  subject_user_id BIGINT       NULL     COMMENT '조치를 받은 사람 — FK 없음',
+  target_type     VARCHAR(24)  NULL,
+  target_id       BIGINT       NULL,
+  ends_at         DATETIME(6)  NULL     COMMENT 'suspend 에만 — 비면 무기한',
+  author_name     VARCHAR(255) NULL,
+  title           VARCHAR(200) NULL,
+  body            TEXT         NULL     COMMENT 'remove 면 지우기 직전의 본문',
+  occurred_at     DATETIME(6)  NULL,
+  reason          VARCHAR(500) NOT NULL,
+  actor           VARCHAR(64)  NOT NULL,
+  created_at      DATETIME(6)  NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_moderation_action_subject (subject_user_id, id),
+  KEY idx_moderation_action_report (report_id),
+  CONSTRAINT fk_moderation_action_report FOREIGN KEY (report_id) REFERENCES report (id),
+  CONSTRAINT chk_moderation_action_kind CHECK (kind in ('remove','suspend','lift','dismiss')),
+  CONSTRAINT chk_moderation_action_target_type
+    CHECK (target_type is null or target_type in ('community_post','community_comment','chat_message')),
+  CONSTRAINT chk_moderation_action_remove_has_copy
+    CHECK (kind <> 'remove' or (target_type is not null and target_id is not null and body is not null)),
+  CONSTRAINT chk_moderation_action_standing_has_subject
+    CHECK (kind not in ('suspend','lift') or subject_user_id is not null),
+  CONSTRAINT chk_moderation_action_ends_only_on_suspend CHECK (kind = 'suspend' or ends_at is null)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK | |
+| `kind` | `VARCHAR(8)` | NOT NULL, CHECK | `remove`(글·댓글을 지웠다) · `dismiss`(살펴봤고 지울 것 없음) · `suspend`·`lift`(사람 정지·해제 — 다음 조각) |
+| `report_id` | `BIGINT` | FK → `report`, idx | 어느 신고에 대한 조치인가. 신고는 지워지지 않으므로 FK 를 건다 |
+| `subject_user_id` | `BIGINT` | idx `(subject_user_id, id)` | 조치를 받은 사람. **FK 가 없다** — 아래 |
+| `target_type` · `target_id` | `VARCHAR(24)` · `BIGINT` | CHECK | 지운 대상. §26 신고 사본과 같은 낱말이다 |
+| `author_name` · `title` · `body` · `occurred_at` | | `remove` 면 `body` NOT NULL(CHECK) | **지우기 직전의 사본** — 닉네임·제목·본문·쓴 시각(UTC) |
+| `ends_at` | `DATETIME(6)` | CHECK | 정지가 끝나는 시각(UTC). `suspend` 에만 있고, 비면 무기한이다 |
+| `reason` | `VARCHAR(500)` | NOT NULL | 왜 — 운영자가 적는다 |
+| `actor` | `VARCHAR(64)` | NOT NULL | 누가 — 서버에 들어간 계정 이름을 스크립트가 채운다 |
+| `created_at` | `DATETIME(6)` | NOT NULL | 조치한 시각(UTC) |
+
+> **지우는 길은 작성자가 지울 때와 같다.** 글이면 `media_objects` 행을 거두고(파일은 커밋 뒤 S3 에서 지운다) 댓글·반응·저장은 FK `ON DELETE CASCADE` 로 함께 사라진다. 그래서 무엇을 지웠는지 아는 곳은 이 표뿐이다 — §26 `report_snapshot` 은 **신고한 때의** 글이라, 그 뒤에 고쳐진 글을 지웠다면 내용이 다르다. 지우는 것과 이 줄을 쓰는 것은 한 트랜잭션이다.
+
+> **한 신고에 판단은 한 번이다.** 이미 지웠거나 기각한 신고를 다시 처리하면 409 다. 같은 글을 다른 신고로 지우려 하면 그 글은 이미 없어서 아무것도 쓰지 않고 응답의 `alreadyGone` 에 담는다 — 그 신고는 `dismiss` 로 닫는다.
+
+> **`users` 로 FK 를 안 건다** — §25 `report` · §27 `user_block` 과 같은 규약이다. 탈퇴가 조치 기록을 지우면 안 된다. 탈퇴한 사람의 글은 남아 있고(`post.user_id` 가 `SET NULL`), 그 글을 지우면 `subject_user_id` 와 `author_name` 이 비어 있다.
+
+> **채팅 메시지는 아직 지우지 않는다.** 채팅 신고를 `remove` 로 처리하면 409 이고 아무것도 쓰지 않는다. 그동안 채팅에서 문제를 일으킨 사람은 정지로 막는다(다음 조각). `target_type` 의 CHECK 이 `chat_message` 를 미리 받아 두는 것은 그때 이 표를 다시 고치지 않으려는 것이다.
+
+> **얼마나 남길지는 아직 정하지 않았다.** 지운 글의 본문이 들어 있으므로 개인정보다. 보관 기간은 개인정보 처리방침과 함께 정한다(#718).
+
+마이그레이션 `db/migration/V5__moderation_action.sql`.
+
 ---
 
-## 부록 A. 정본의 표 38개 — 어디에 적혀 있나
+## 부록 A. 정본의 표 39개 — 어디에 적혀 있나
 
 `01_schema.sql` 의 `CREATE TABLE` 전부다. **상태**는 전부 `실재 §N` 이고 그 절이 정의다. 감정 여행·관광 수집 시절의 표 23개는 2026-09-06 에 #94 로 코드를 지우면서 정본에서 빠졌다 — 운영 DB 에는 남아 있다(§18, 아래 목록). `DocDriftTest` 가 이 표의 이름 집합이 정본의 `CREATE TABLE` 집합과 **정확히 같은지** 재고, `실재 §N` 이 실제 절 번호·제목의 **실재** 표시와 맞는지 잰다(#176) — 정본에서 표 하나가 생기거나 사라지면 여기가 빨간불이다.
 
@@ -1751,6 +1811,7 @@ CREATE TABLE password_reset (
 | `dog` | 실재 §3 | `dog` | 반려동물 프로필(소프트 삭제 `deleted_at`) |
 | `family_group` | 실재 §11 | `group` | 가족 케어 그룹 |
 | `kto_call_budget` | 실재 §21 | `place` | KTO 일 호출 예산 |
+| `moderation_action` | 실재 §44 | `moderation` | 운영자 조치 기록(#718) — 덧붙이기만 한다. 지운 글·댓글은 지우기 직전의 사본을 이 줄이 든다. 서버의 `moderate.sh` 가 쓴다 |
 | `media_objects` | 실재 §37 | `S3` · `community` | 업로드 객체 원장(S3 key). #429 가 커뮤니티 글의 사진·영상을 여기에 얹었다 — `ref_type=POST`. 안 붙은 것은 하루 뒤 거둔다 |
 | `pet_place_detail` | 실재 §23 | `place` | 장소 상세 캐시 |
 | `place_catalog` | 실재 §24 | `place` | 장소 한 벌 — 출처별 한 행(kto·localdata·durunubi, #291) |
