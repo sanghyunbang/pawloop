@@ -4663,9 +4663,10 @@ components:
                      UNSUPPORTED_MEDIA_TYPE, RATE_LIMITED, INTERNAL,
                      ROOM_MEMBER_LIMIT, INVITE_EXPIRED, INVITE_REVOKED, INVITE_USES_EXHAUSTED,
                      REPORT_EMPTY, REPORT_MESSAGE_LIMIT, REPORT_MIXED_SENDERS, REPORT_SELF,
-                     REPORT_MESSAGE_NOT_FOUND, REPORT_REASON_UNKNOWN]
+                     REPORT_MESSAGE_NOT_FOUND, REPORT_REASON_UNKNOWN,
+                     CONSENT_REQUIRED, ACCOUNT_SUSPENDED]
               description: |
-                닫힌 목록입니다. 어휘의 출처는 둘뿐이고 던지는 쪽이 문자열을 손으로 적지 않습니다.
+                닫힌 목록입니다. 어휘의 출처는 셋뿐이고 던지는 쪽이 문자열을 손으로 적지 않습니다.
 
                 **① HTTP 상태에서 파생되는 여덟** (`GlobalExceptionHandler.codeOf`)
                 400 `VALIDATION` · 403 `FORBIDDEN` · 404 `NOT_FOUND` · 405 `METHOD_NOT_ALLOWED` ·
@@ -4685,6 +4686,16 @@ components:
                 `REPORT_REASON_UNKNOWN`(사유 분류가 목록에 없다).
                 같은 400 을 다섯으로 나눈 이유도 같습니다 — "고른 것을 줄이세요" 와
                 "선택을 나누세요" 는 앱이 보여줄 안내도 다음 동작도 다릅니다.
+
+                **④ 계정 상태 둘** (`AccountStateCode`, #718) — **둘 다 403** 입니다.
+                `CONSENT_REQUIRED`(필수 약관에 아직 동의하지 않았다 — 동의 화면으로) ·
+                `ACCOUNT_SUSPENDED`(운영 정책 위반으로 정지됐다 — 정지 안내 화면으로).
+                `FORBIDDEN` 과 다릅니다. 토큰은 멀쩡하고 막힌 이유가 그 사람의 계정에 있으므로
+                **다시 로그인시키지 마세요** — 같은 답이 돌아옵니다. 둘 다 로그인한 요청이면 경로와
+                상관없이 올 수 있습니다. `CONSENT_REQUIRED` 는 `/api/**` 의 인증 경로에서,
+                `ACCOUNT_SUSPENDED` 는 계정 삭제(`DELETE /auth/me`)와 로그아웃(`POST /auth/logout`)을
+                뺀 전부에서 옵니다. 둘이 겹치면 `ACCOUNT_SUSPENDED` 가 먼저입니다. 정지 문구에는
+                기한이 있으면 풀리는 한국 시각이 들어 있습니다.
             message:
               type: string
               example: "해당 장소를 찾을 수 없습니다."

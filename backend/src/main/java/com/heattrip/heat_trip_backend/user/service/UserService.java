@@ -16,6 +16,7 @@ import com.heattrip.heat_trip_backend.user.dto.LoginRequest;
 import com.heattrip.heat_trip_backend.user.dto.SignupRequest;
 import com.heattrip.heat_trip_backend.user.dto.UserResponse;
 import com.heattrip.heat_trip_backend.user.UserSessionsRevoked;
+import com.heattrip.heat_trip_backend.user.UserSessions;
 import com.heattrip.heat_trip_backend.user.ViewerNeighborhood;
 import com.heattrip.heat_trip_backend.user.UserTime;
 import com.heattrip.heat_trip_backend.user.entity.User;
@@ -26,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class UserService implements ViewerNeighborhood {
+public class UserService implements ViewerNeighborhood, UserSessions {
     
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder; // 이건 뭐지?
@@ -299,6 +300,13 @@ public class UserService implements ViewerNeighborhood {
     public void logout(Long userId) {
         refreshTokenService.revokeAllByUserId(userId);
         events.publishEvent(new UserSessionsRevoked(userId, false));
+    }
+
+    /** 운영자 정지(#718) — 전 기기 로그아웃과 같은 일이다. {@link UserSessions} javadoc 참조. */
+    @Override
+    @Transactional
+    public void endAll(long userId) {
+        logout(userId);
     }
 
      // helpers

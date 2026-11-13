@@ -5,14 +5,20 @@ import com.heattrip.heat_trip_backend.moderation.ModerationActions;
 import com.heattrip.heat_trip_backend.moderation.ReportCase;
 import com.heattrip.heat_trip_backend.moderation.ReportTarget;
 import com.heattrip.heat_trip_backend.moderation.Reports;
+import com.heattrip.heat_trip_backend.moderation.SuspensionStatus;
+import com.heattrip.heat_trip_backend.user.KnownUsers;
+import com.heattrip.heat_trip_backend.user.UserSessions;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -28,8 +34,14 @@ import java.util.Optional;
  *
  * <h2>채팅은 아직</h2>
  * <p>채팅 메시지 신고를 '지움' 으로 처리하면 409 이고 아무것도 쓰지 않는다. 채팅 코드는 따로 손으로 짜는 영역이라
- * 메시지를 지우는 운영자 길은 그쪽에서 붙인다. 그때까지 채팅에서 문제를 일으킨 사람은 정지(다음 조각)로 막는다 —
- * 정지된 사람은 채팅도 못 보내고 못 읽는다. '기각' 은 채팅 신고에도 된다.
+ * 메시지를 지우는 운영자 길은 그쪽에서 붙인다. 그때까지 채팅에서 문제를 일으킨 사람은 정지로 막는다 — 정지된
+ * 사람은 채팅도 못 보내고 못 읽는다. '기각' 은 채팅 신고에도 된다.
+ *
+ * <h2>정지 — 셋째 조각</h2>
+ * <p>정지는 사람에게 거는 것이라 신고가 없어도 된다. 신고 번호를 함께 주면 <b>그 신고의 대상이 바로 이 사람인지</b>
+ * 확인한다 — 번호를 잘못 옮겨 엉뚱한 사람을 내보내는 일을 막는다. 정지하면 그 사람의 refresh 토큰을 전부 폐기하고
+ * (다음 로그인 연장을 끊는다) 그 뒤의 요청은 {@code AccountSuspensionFilter} 가 막는다. 정지 중에 다시 정지하거나
+ * 정지 아닌 사람을 풀면 409 다 — 기간을 바꾸려면 풀고 다시 건다. 줄이 둘 남아 무엇을 했는지가 그대로 보인다.
  */
 @Service
 public class OperatorModeration {
@@ -38,15 +50,22 @@ public class OperatorModeration {
     static final String DISMISS = "dismiss";
     static final int MAX_REASON = 500;
     static final int MAX_ACTOR = 64;
+    /** 기간 정지의 상한 — 10년. 그보다 길면 무기한(기간을 비움)이 뜻에 맞다. */
+    static final int MAX_DAYS = 3_650;
 
     private final Reports reports;
     private final ModerationActions actions;
     private final CommunityTakedown takedown;
+    private final KnownUsers users;
+    private final UserSessions sessions;
 
-    public OperatorModeration(Reports reports, ModerationActions actions, CommunityTakedown takedown) {
+    public OperatorModeration(Reports reports, ModerationActions actions, CommunityTakedown takedown,
+                              KnownUsers users, UserSessions sessions) {
         this.reports = reports;
         this.actions = actions;
         this.takedown = takedown;
+        this.users = users;
+        this.sessions = sessions;
     }
 
     @Transactional
@@ -90,6 +109,72 @@ public class OperatorModeration {
         return new Resolution(reportId, REMOVE, actionIds, removed, alreadyGone);
     }
 
+    /**
+     * 사람을 정지한다.
+     *
+     * @param reportId 근거가 된 신고 — 주면 그 신고의 대상이 이 사람인지 확인한다. 없어도 된다
+     * @param days     기간(1~{@value #MAX_DAYS}일). 비우면 무기한
+     */
+    @Transactional
+    public Standing suspend(long userId, Long reportId, Integer days, String reason, String actor) {
+        String why = required("reason", reason, MAX_REASON);
+        String who = required("actor", actor, MAX_ACTOR);
+        if (days != null && (days < 1 || days > MAX_DAYS)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "days 는 1~" + MAX_DAYS + " 입니다 — 무기한이면 비워 두세요");
+        }
+        requireUser(userId);
+        if (reportId != null) {
+            ReportCase report = reports.caseOf(reportId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "그런 신고가 없습니다"));
+            if (!Objects.equals(report.reportedUserId(), userId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "신고 #" + reportId + " 의 대상은 사용자 #" + report.reportedUserId() + " 입니다");
+            }
+        }
+        Optional<SuspensionStatus.Suspension> current = actions.currentSuspensionOf(userId);
+        if (current.isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "이미 정지 중입니다 — " + until(current.get()) + ". 기간을 바꾸려면 풀고 다시 거세요");
+        }
+        actions.recordSuspension(reportId, userId, days == null ? null : Duration.ofDays(days), why, who);
+        sessions.endAll(userId);
+        return standing(userId);
+    }
+
+    /** 정지를 푼다. 정지 중이 아니면 409. */
+    @Transactional
+    public Standing lift(long userId, String reason, String actor) {
+        String why = required("reason", reason, MAX_REASON);
+        String who = required("actor", actor, MAX_ACTOR);
+        requireUser(userId);
+        if (actions.currentSuspensionOf(userId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "정지 중인 사람이 아닙니다");
+        }
+        actions.recordLift(userId, why, who);
+        return standing(userId);
+    }
+
+    /** 한 사람의 지금 상태와 받은 조치. 탈퇴한 사람이어도 기록은 보인다. */
+    @Transactional(readOnly = true)
+    public Standing standing(long userId) {
+        Optional<SuspensionStatus.Suspension> current = actions.currentSuspensionOf(userId);
+        return new Standing(userId, users.byId(userId).isPresent(), current.isPresent(),
+                current.map(SuspensionStatus.Suspension::since).orElse(null),
+                current.map(SuspensionStatus.Suspension::endsAt).orElse(null),
+                actions.historyOf(userId));
+    }
+
+    private void requireUser(long userId) {
+        if (users.byId(userId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "그런 사용자가 없습니다");
+        }
+    }
+
+    private static String until(SuspensionStatus.Suspension suspension) {
+        return suspension.endsAt() == null ? "무기한" : suspension.endsAt() + " 까지";
+    }
+
     private Optional<CommunityTakedown.Removed> remove(ReportCase.Line target) {
         if (ReportTarget.Type.COMMUNITY_POST.wireValue().equals(target.targetType())) {
             return takedown.removePost(target.targetId());
@@ -123,5 +208,18 @@ public class OperatorModeration {
 
     /** 글·댓글 하나 — 신고 사본과 같은 낱말의 종류와 id. */
     public record Target(String targetType, long targetId) {
+    }
+
+    /**
+     * 한 사람의 지금 상태.
+     *
+     * @param exists    계정이 있는가 — 탈퇴했으면 {@code false} 이고 기록만 남아 있다
+     * @param suspended 지금 정지 중인가
+     * @param since     정지한 시각(UTC) — 정지 중일 때만
+     * @param endsAt    풀리는 시각(UTC) — 무기한이거나 정지 중이 아니면 {@code null}
+     * @param history   받은 조치, 최근 것부터 스무 줄
+     */
+    public record Standing(long userId, boolean exists, boolean suspended, Instant since, Instant endsAt,
+                           List<ModerationActions.Entry> history) {
     }
 }

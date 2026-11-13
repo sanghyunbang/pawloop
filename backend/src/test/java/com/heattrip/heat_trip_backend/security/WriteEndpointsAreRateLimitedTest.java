@@ -75,6 +75,12 @@ class WriteEndpointsAreRateLimitedTest {
                 "운영자 통로다(#718). 앱 컨테이너 안의 루프백 커넥터로만 들어오고 공개 문에서는 403 이라"
                         + " 부르는 사람이 서버에 들어간 운영자뿐이다. 신고가 몰린 날 한꺼번에 처리하는 것을"
                         + " 한도로 막을 이유가 없다 — 한 신고에 판단은 한 번이라 반복해도 줄이 안 는다(409).");
+        UNMETERED_ON_PURPOSE.put("POST /internal/moderation/users/{userId}/suspend",
+                "운영자 통로다(#718). 위 resolve 와 같은 이유 — 루프백 커넥터로만 들어온다. 정지 중에 다시 정지하면"
+                        + " 409 라 반복해도 줄이 안 는다.");
+        UNMETERED_ON_PURPOSE.put("POST /internal/moderation/users/{userId}/lift",
+                "운영자 통로다(#718). 위 resolve 와 같은 이유 — 루프백 커넥터로만 들어온다. 정지 아닌 사람을 풀면"
+                        + " 409 라 반복해도 줄이 안 는다.");
     }
 
     @Test

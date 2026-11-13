@@ -35,6 +35,7 @@ import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.OAuth.service.CustomOAuth2UserService;
 import com.heattrip.heat_trip_backend.OAuth.state.OAuthAppStateFilter;
 import com.heattrip.heat_trip_backend.security.ApiRateLimitFilter;
+import com.heattrip.heat_trip_backend.security.AccountSuspensionFilter;
 import com.heattrip.heat_trip_backend.security.ConsentRequiredFilter;
 import com.heattrip.heat_trip_backend.security.PublicPaths;
 import com.heattrip.heat_trip_backend.security.ChatBodySizeLimitFilter;
@@ -62,6 +63,7 @@ public class SecurityConfig {
     private final PublicSecurityProperties publicSecurityProperties;
     private final ApiRateLimitFilter apiRateLimitFilter;
     private final ConsentRequiredFilter consentRequiredFilter;
+    private final AccountSuspensionFilter accountSuspensionFilter;
 
     /** 채팅 버킷. 사용자 단위로 세야 해서 인증 <b>뒤</b>에 붙는다 (#80). */
     private final ChatRateLimitFilter chatRateLimitFilter;
@@ -112,6 +114,11 @@ public class SecurityConfig {
         var registration = new FilterRegistrationBean<Filter>(filter);
         registration.setEnabled(false);
         return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<Filter> accountSuspensionFilterNotAutoRegistered() {
+        return notAutoRegistered(accountSuspensionFilter);
     }
 
     @Bean
@@ -234,7 +241,12 @@ public class SecurityConfig {
         // 막는 자리가 서버인 이유: 토큰은 동의보다 먼저 발급된다. 소셜 로그인이 끝나는 순간 계정이
         // 생기고 토큰이 나가므로, 앱의 화면 전환(auth_redirect.dart)만으로는 못 막는다 — 앱을
         // 거치지 않고 그 토큰으로 부르면 그만이다.
-        http.addFilterAfter(consentRequiredFilter, JWTAuthenticationFilter.class);
+        //
+        // 정지 검사는 그 둘 **사이**다 (이슈 #718). JWT 뒤여야 누구인지 알고, 동의 앞이어야 정지된 사람에게
+        // "약관에 동의하세요" 가 아니라 정지 안내가 간다. 동의 관문을 JWT 가 아니라 정지 필터 뒤에 붙이는 것이
+        // 그 순서를 못 박는 방법이다 — 둘 다 "JWT 뒤" 로 붙이면 같은 순번이 되어 넣은 순서에 기댄다.
+        http.addFilterAfter(accountSuspensionFilter, JWTAuthenticationFilter.class);
+        http.addFilterAfter(consentRequiredFilter, AccountSuspensionFilter.class);
         // state 캡처는 진입점의 302 보다 **먼저** 일어나야 한다. 이 필터를 시큐리티 체인 밖에
         // 두면(빈으로만 등록하면) 자동 등록 순서상 시큐리티 체인 뒤라, 진입 요청은 이미 302 로
         // 끝난 뒤라서 앱이 붙인 state 를 영영 못 본다. (이슈 #14)

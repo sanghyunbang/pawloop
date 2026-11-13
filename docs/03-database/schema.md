@@ -1765,7 +1765,7 @@ CREATE TABLE moderation_action (
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK | |
-| `kind` | `VARCHAR(8)` | NOT NULL, CHECK | `remove`(글·댓글을 지웠다) · `dismiss`(살펴봤고 지울 것 없음) · `suspend`·`lift`(사람 정지·해제 — 다음 조각) |
+| `kind` | `VARCHAR(8)` | NOT NULL, CHECK | `remove`(글·댓글을 지웠다) · `dismiss`(살펴봤고 지울 것 없음) · `suspend`·`lift`(사람 정지·해제 — 아래) |
 | `report_id` | `BIGINT` | FK → `report`, idx | 어느 신고에 대한 조치인가. 신고는 지워지지 않으므로 FK 를 건다 |
 | `subject_user_id` | `BIGINT` | idx `(subject_user_id, id)` | 조치를 받은 사람. **FK 가 없다** — 아래 |
 | `target_type` · `target_id` | `VARCHAR(24)` · `BIGINT` | CHECK | 지운 대상. §26 신고 사본과 같은 낱말이다 |
@@ -1781,7 +1781,9 @@ CREATE TABLE moderation_action (
 
 > **`users` 로 FK 를 안 건다** — §25 `report` · §27 `user_block` 과 같은 규약이다. 탈퇴가 조치 기록을 지우면 안 된다. 탈퇴한 사람의 글은 남아 있고(`post.user_id` 가 `SET NULL`), 그 글을 지우면 `subject_user_id` 와 `author_name` 이 비어 있다.
 
-> **채팅 메시지는 아직 지우지 않는다.** 채팅 신고를 `remove` 로 처리하면 409 이고 아무것도 쓰지 않는다. 그동안 채팅에서 문제를 일으킨 사람은 정지로 막는다(다음 조각). `target_type` 의 CHECK 이 `chat_message` 를 미리 받아 두는 것은 그때 이 표를 다시 고치지 않으려는 것이다.
+> **채팅 메시지는 아직 지우지 않는다.** 채팅 신고를 `remove` 로 처리하면 409 이고 아무것도 쓰지 않는다. 그동안 채팅에서 문제를 일으킨 사람은 정지로 막는다(아래). `target_type` 의 CHECK 이 `chat_message` 를 미리 받아 두는 것은 그때 이 표를 다시 고치지 않으려는 것이다.
+
+> **정지 — 그 사람의 마지막 `suspend`·`lift` 줄이 지금 상태다**(#718 셋째 조각). 마지막이 `suspend` 이고 `ends_at` 이 비었거나(무기한) 아직 오지 않았으면 정지 중이다. 기한이 지나면 `lift` 줄 없이도 저절로 풀린다 — 풀어 주는 작업을 따로 돌리지 않는다. `idx_moderation_action_subject (subject_user_id, id)` 가 그 한 줄을 찾는 길이고, 로그인한 요청마다 한 번 읽힌다(`security.AccountSuspensionFilter`). 정지된 사람은 계정 삭제(`DELETE /auth/me`)와 로그아웃(`POST /auth/logout`)만 할 수 있고, 나머지는 전부 403 `ACCOUNT_SUSPENDED` 다. 정지하는 순간 그 사람의 refresh 토큰을 전부 폐기한다. 정지 중에 다시 정지하거나 정지 아닌 사람을 풀면 409 — 기간을 바꾸려면 풀고 다시 걸어 줄이 둘 남는다.
 
 > **얼마나 남길지는 아직 정하지 않았다.** 지운 글의 본문이 들어 있으므로 개인정보다. 보관 기간은 개인정보 처리방침과 함께 정한다(#718).
 

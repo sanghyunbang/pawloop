@@ -117,6 +117,9 @@ class SecurityFilterRegistrationIntegrationTest extends AbstractMySqlIntegration
     private ConsentRequiredFilter consentRequiredFilter;
 
     @MockitoSpyBean
+    private AccountSuspensionFilter accountSuspensionFilter;
+
+    @MockitoSpyBean
     private OAuthAppStateFilter oAuthAppStateFilter;
 
     /** 이름 → 스파이. 스파이의 {@code getClass()} 에 기대지 않고 이름을 직접 적는다. */
@@ -126,6 +129,7 @@ class SecurityFilterRegistrationIntegrationTest extends AbstractMySqlIntegration
         spies.put("ChatBodySizeLimitFilter", chatBodySizeLimitFilter);
         spies.put("ChatRateLimitFilter", chatRateLimitFilter);
         spies.put("ConsentRequiredFilter", consentRequiredFilter);
+        spies.put("AccountSuspensionFilter", accountSuspensionFilter);
         spies.put("OAuthAppStateFilter", oAuthAppStateFilter);
         return spies;
     }
