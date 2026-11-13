@@ -2,6 +2,7 @@ package com.heattrip.heat_trip_backend.contract;
 
 import com.heattrip.heat_trip_backend.OAuth.jwt.JWTProvider;
 import com.heattrip.heat_trip_backend.chat.ChatErrorCode;
+import com.heattrip.heat_trip_backend.security.AccountStateCode;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -563,12 +564,17 @@ class AuthContractSpecTest {
         for (ChatErrorCode chatCode : ChatErrorCode.values()) {
             expected.add(chatCode.name());
         }
+        // 세 번째 출처 — 계정 상태 때문에 막는 403 둘(#718). CONSENT_REQUIRED 는 필터 안의 문자열로만 있어서
+        // 이 목록도 계약도 몰랐다. enum 으로 옮기고 여기서 뽑는다 — 같은 이유로 손으로 적지 않는다.
+        for (AccountStateCode accountCode : AccountStateCode.values()) {
+            expected.add(accountCode.name());
+        }
 
         List<String> codes = stringList(asMap(asMap(body.get("properties")).get("code")).get("enum"));
         assertThat(codes)
                 .as("계약의 code 어휘가 서버가 실제로 내보내는 집합과 갈라졌다 — "
-                        + "GlobalExceptionHandler.codeOf 의 여덟 + ChatErrorCode 의 %d 개다",
-                        ChatErrorCode.values().length)
+                        + "GlobalExceptionHandler.codeOf 의 여덟 + ChatErrorCode 의 %d 개 + AccountStateCode 의 %d 개다",
+                        ChatErrorCode.values().length, AccountStateCode.values().length)
                 .containsExactlyInAnyOrderElementsOf(expected);
         assertThat(codes)
                 .as("401 은 본문 자체가 없다 — 코드를 두면 앱이 오지 않는 본문을 기다린다 (#5)")

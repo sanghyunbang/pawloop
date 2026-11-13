@@ -29,7 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
  * ({@link Hidden}). 공개 저장소의 계약을 읽는 사람에게 "부를 수 없는 경로" 를 보여 줄 이유가 없다.
  *
  * <h2>무엇이 되나</h2>
- * <p>신고 한 건을 보고, 신고된 글·댓글을 지우거나 기각한다. 사람을 내보내는 것(정지)은 다음 조각에서 더한다.
+ * <p>신고 한 건을 보고, 신고된 글·댓글을 지우거나 기각한다. 사람을 정지하고 풀며, 한 사람이 받은 조치를 본다.
  */
 @Hidden
 @RestController
@@ -64,5 +64,32 @@ public class OperatorModerationController {
                                                  @RequestParam("reason") String reason,
                                                  @RequestParam("actor") String actor) {
         return moderation.resolve(reportId, decision, reason, actor);
+    }
+
+    /** 한 사람의 지금 상태(정지 중인가)와 받은 조치 스무 줄. */
+    @GetMapping("/users/{userId}")
+    public OperatorModeration.Standing user(@PathVariable("userId") long userId) {
+        return moderation.standing(userId);
+    }
+
+    /**
+     * 사람을 정지한다 — {@code days} 를 비우면 무기한. {@code reportId} 를 주면 그 신고의 대상이 이 사람인지 확인한다.
+     * 정지된 사람은 계정 삭제와 로그아웃만 할 수 있다({@code security.AccountSuspensionFilter}).
+     */
+    @PostMapping(path = "/users/{userId}/suspend", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public OperatorModeration.Standing suspend(@PathVariable("userId") long userId,
+                                               @RequestParam(value = "reportId", required = false) Long reportId,
+                                               @RequestParam(value = "days", required = false) Integer days,
+                                               @RequestParam("reason") String reason,
+                                               @RequestParam("actor") String actor) {
+        return moderation.suspend(userId, reportId, days, reason, actor);
+    }
+
+    /** 정지를 푼다. */
+    @PostMapping(path = "/users/{userId}/lift", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public OperatorModeration.Standing lift(@PathVariable("userId") long userId,
+                                            @RequestParam("reason") String reason,
+                                            @RequestParam("actor") String actor) {
+        return moderation.lift(userId, reason, actor);
     }
 }

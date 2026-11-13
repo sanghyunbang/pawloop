@@ -111,7 +111,7 @@ public class ConsentRequiredFilter extends OncePerRequestFilter {
         // 401 이 아니라 403 이다. 토큰은 멀쩡하고, 모자란 것은 동의다. 앱이 둘을 다르게 다룬다 —
         // 401 이면 로그인 화면으로 보내는데, 그러면 이미 로그인한 사람이 로그인을 다시 하게 되고
         // 그래도 같은 답이 돌아온다. 빠져나올 수 없는 고리다.
-        errors.forbidden(response, "CONSENT_REQUIRED",
+        errors.forbidden(response, AccountStateCode.CONSENT_REQUIRED.name(),
                 "서비스 이용에 필요한 약관에 동의해 주세요.");
     }
 
